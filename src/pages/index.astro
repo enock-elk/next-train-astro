@@ -28,8 +28,8 @@ import HubModals from '../components/HubModals.astro';
     <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
     <HubModals />
 
-    <!-- MAIN APP — grows with content; page scrolls as needed -->
-    <main id="main-content" class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
+    <!-- MAIN APP — fills device height; active tab expands into remaining space -->
+    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
         
         <Header />
 

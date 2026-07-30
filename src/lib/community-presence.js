@@ -154,6 +154,48 @@ function updatePresenceUi(count, live) {
     el.textContent = count <= 1 ? 'Just you here' : `${count} looking at this line`;
 }
 
+function explainCommunityPresence() {
+    let modal = document.getElementById('community-presence-info-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'community-presence-info-modal';
+        modal.className = 'fixed inset-0 bg-black/70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
+                <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">Who’s here</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
+                    This shows how many people currently have this route’s Community open. It’s a live room count — not a contact list — so you can tell when the line is quiet or active.
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-4">
+                    Presence updates while you’re on the page and clears shortly after you leave.
+                </p>
+                <button type="button" id="community-presence-info-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl focus:outline-none">Got it</button>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('community-presence-info-modal');
+                else modal.classList.add('hidden');
+            }
+        });
+        modal.querySelector('#community-presence-info-close')?.addEventListener('click', () => {
+            if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('community-presence-info-modal');
+            else modal.classList.add('hidden');
+        });
+    }
+    if (typeof window.openSmoothModal === 'function') window.openSmoothModal('community-presence-info-modal');
+    else modal.classList.remove('hidden');
+}
+
+export function bindCommunityPresenceInfo() {
+    if (typeof document === 'undefined' || window.__ntCommunityPresenceInfoBound) return;
+    window.__ntCommunityPresenceInfoBound = true;
+    document.getElementById('community-presence')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        explainCommunityPresence();
+    });
+}
+
 function updateTypingUi(names) {
     const el = document.getElementById('community-typing');
     if (!el) return;

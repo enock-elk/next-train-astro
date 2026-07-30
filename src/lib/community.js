@@ -56,7 +56,7 @@ let activeCategoryFilter = 'all';
 let cachedFeedPosts = [];
 /** @type {Record<string, Record<string, { emoji: string, at: number }>>} postId → uid → reaction */
 let cachedReactionsByPost = {};
-/** Posts whose full reaction picker is open */
+/** Posts whose full reaction picker is open (legacy unused) */
 const expandedReactionPosts = new Set();
 /** Guest hint dismissed for current Community visit only */
 let guestHintDismissedThisOpen = false;
@@ -122,6 +122,75 @@ function relativeTime(ts) {
     const hrs = Math.round(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.round(hrs / 24)}d ago`;
+}
+
+function formatClock24(ts) {
+    const d = new Date(ts || Date.now());
+    if (Number.isNaN(d.getTime())) return '--:--';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatDayDivider(ts) {
+    const date = new Date(ts || Date.now());
+    if (Number.isNaN(date.getTime())) return '';
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const msg = date.toDateString();
+    if (msg === today.toDateString()) return 'Today';
+    if (msg === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const NAME_COLORS = ['#02a698', '#53bdeb', '#06cf9c', '#e742a4', '#a281f7', '#ff7b72', '#25d366', '#d97706'];
+
+function nameColorFor(seed) {
+    const s = String(seed || 'x');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+    return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+}
+
+function renderAvatarHtml(photoURL) {
+    if (photoURL) {
+        return `<span class="relative inline-flex w-8 h-8 shrink-0">
+            <img src="${escapeHTML(photoURL)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base" aria-hidden="true">🙍</span>
+        </span>`;
+    }
+    return `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0" aria-hidden="true">🙍</span>`;
+}
+
+/** @type {{ postId: string, routeId: string, displayName: string, body: string } | null} */
+let replyDraft = null;
+
+function setReplyDraft(post, routeId) {
+    if (!post?.postId) {
+        clearReplyDraft();
+        return;
+    }
+    replyDraft = {
+        postId: post.postId,
+        routeId: routeId || $currentRouteId.get(),
+        displayName: post.displayName || 'Passenger',
+        body: String(post.body || '').slice(0, 120),
+    };
+    const bar = document.getElementById('community-reply-bar');
+    const nameEl = document.getElementById('community-reply-bar-name');
+    const snipEl = document.getElementById('community-reply-bar-snippet');
+    if (nameEl) nameEl.textContent = replyDraft.displayName;
+    if (snipEl) snipEl.textContent = replyDraft.body;
+    bar?.classList.remove('hidden');
+    document.getElementById('community-composer')?.focus();
+}
+
+function clearReplyDraft() {
+    replyDraft = null;
+    document.getElementById('community-reply-bar')?.classList.add('hidden');
+}
+
+function findCachedPost(postId) {
+    return cachedFeedPosts.find((p) => p.postId === postId) || null;
 }
 
 export async function fetchRoutePosts(routeId) {
@@ -203,7 +272,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     if (!limit.ok) return limit;
 
     const postId = newId('cp');
-    const category = document.getElementById('community-category')?.value || 'general';
+    const category = 'general';
     const payload = {
         postId,
         routeId,
@@ -212,12 +281,20 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         category: COMMUNITY_CATEGORIES[category] ? category : 'general',
         uid: acct.uid,
         displayName: acct.displayName || 'Passenger',
+        photoURL: acct.photoURL || null,
         deviceId: getDeviceId(),
         timestamp: Date.now(),
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
     };
+    if (replyDraft?.postId) {
+        payload.replyTo = {
+            postId: replyDraft.postId,
+            displayName: replyDraft.displayName,
+            body: replyDraft.body,
+        };
+    }
 
     const banned = await isShadowBanned(acct.uid);
     if (banned) {
@@ -456,31 +533,226 @@ function summarizeReactions(postId) {
     return { counts, myEmoji };
 }
 
-function renderReactionChip(r, postId, routeId, n, mine) {
-    return `<button type="button" class="community-react-btn inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[13px] leading-none border transition-colors focus:outline-none ${
-        mine
-            ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 ring-1 ring-blue-400/40'
-            : 'bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-    }" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="React ${r.emoji}" title="${r.emoji}">${r.emoji}${n > 0 ? `<span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 ml-0.5">${n}</span>` : ''}</button>`;
+function renderReactionSummary(postId, isOwn = false) {
+    const { counts } = summarizeReactions(postId);
+    const pills = WA_REACTIONS
+        .filter((r) => (counts[r.id] || 0) > 0)
+        .map((r) => `<span class="community-reaction-pill">${r.emoji}${counts[r.id] > 1 ? ` ${counts[r.id]}` : ''}</span>`)
+        .join('');
+    if (!pills) return '';
+    return `<div class="community-reaction-pills ${isOwn ? 'ml-auto mr-1' : ''}" data-reactions-for="${escapeHTML(postId)}">${pills}</div>`;
 }
 
-function renderReactionsRow(postId, routeId) {
-    const { counts, myEmoji } = summarizeReactions(postId);
-    const expanded = expandedReactionPosts.has(postId);
-
-    let chips = '';
-    if (expanded) {
-        chips = WA_REACTIONS.map((r) => renderReactionChip(r, postId, routeId, counts[r.id] || 0, myEmoji === r.id)).join('');
-    } else {
-        chips = WA_REACTIONS
-            .filter((r) => (counts[r.id] || 0) > 0)
-            .map((r) => renderReactionChip(r, postId, routeId, counts[r.id] || 0, myEmoji === r.id))
-            .join('');
+function openReactionSheet(postId, routeId) {
+    let sheet = document.getElementById('community-reaction-sheet');
+    if (!sheet) {
+        sheet = document.createElement('div');
+        sheet.id = 'community-reaction-sheet';
+        sheet.className = 'fixed inset-0 z-[145] hidden';
+        sheet.innerHTML = `
+            <div class="absolute inset-0 bg-black/50" data-reaction-scrim></div>
+            <div class="absolute left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 w-[min(92vw,22rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 px-3 py-3">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center mb-2">React</p>
+                <div class="flex items-center justify-between gap-1" id="community-reaction-sheet-emojis"></div>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
+                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
+                </div>
+            </div>`;
+        document.body.appendChild(sheet);
+        sheet.querySelector('[data-reaction-scrim]')?.addEventListener('click', () => sheet.classList.add('hidden'));
     }
 
-    const toggle = `<button type="button" class="community-react-expand inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? 'Hide reactions' : 'Add reaction'}" title="${expanded ? 'Hide' : 'React'}">${expanded ? '−' : '☺+'}</button>`;
+    sheet.dataset.postId = postId;
+    sheet.dataset.routeId = routeId;
+    const { myEmoji } = summarizeReactions(postId);
+    const row = sheet.querySelector('#community-reaction-sheet-emojis');
+    if (row) {
+        row.innerHTML = WA_REACTIONS.map((r) => `
+            <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="React ${r.emoji}">${r.emoji}</button>
+        `).join('');
+    }
+    sheet.classList.remove('hidden');
+    triggerHaptic();
+}
 
-    return `<div class="community-reactions mt-2 flex flex-wrap items-center gap-1" data-reactions-for="${escapeHTML(postId)}">${chips}${toggle}</div>`;
+function closeReactionSheet() {
+    document.getElementById('community-reaction-sheet')?.classList.add('hidden');
+}
+
+function renderPostCard(post, routeId) {
+    const body = escapeHTML(post.body || '');
+    const clock = formatClock24(post.timestamp);
+    const postId = escapeHTML(post.postId || '');
+    const uid = escapeHTML(post.uid || '');
+    const acct = $account.get();
+    const myUid = acct?.status === 'signed-in' ? (acct.uid || '') : '';
+    const isOwn = !!(myUid && post.uid && post.uid === myUid);
+    const photoURL = post.photoURL || (isOwn ? acct.photoURL : null) || '';
+    const nameColor = nameColorFor(post.uid || post.displayName);
+    const replyTo = post.replyTo && typeof post.replyTo === 'object' ? post.replyTo : null;
+    const quoteHtml = replyTo
+        ? `<div class="mb-1.5 rounded-lg px-2 py-1.5 text-left ${isOwn ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100 dark:bg-gray-900/60'} border-l-[3px]" style="border-left-color:${nameColorFor(replyTo.displayName || replyTo.postId)}">
+             <p class="text-[11px] font-bold truncate" style="color:${nameColorFor(replyTo.displayName || replyTo.postId)}">${escapeHTML(replyTo.displayName || 'Passenger')}</p>
+             <p class="text-[11px] opacity-80 truncate">${escapeHTML(String(replyTo.body || '').slice(0, 100))}</p>
+           </div>`
+        : '';
+
+    const avatar = isOwn
+        ? ''
+        : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
+    const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
+    // Always show who posted (commenter) — own messages labelled "You"
+    const displayName = isOwn ? 'You' : (post.displayName || 'Passenger');
+    const nameHtml = `<div class="community-bubble-name-row truncate" style="color:${isOwn ? 'inherit' : nameColor}">${escapeHTML(displayName)}</div>`;
+
+    return `
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}">
+        <div class="community-swipe-hint" aria-hidden="true">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
+        </div>
+        ${avatar}
+        <div class="community-bubble-wrap">
+          <article class="community-post min-w-0" data-post-id="${postId}" data-uid="${uid}" data-category="${escapeHTML(post.category || 'general')}">
+            <div class="${bubbleCls} shadow-sm">
+              ${nameHtml}
+              <div class="community-bubble-body">
+                ${quoteHtml}
+                <div class="community-msg-text">${body}<span class="community-msg-time">${clock}</span></div>
+              </div>
+            </div>
+            ${renderReactionSummary(post.postId || '', isOwn)}
+          </article>
+        </div>
+      </div>`;
+}
+
+function paintCategoryFilters() {
+    // Category chips removed from UI for now; keep no-op for later revive.
+}
+
+function applyFeedFilter(routeId) {
+    const listEl = document.getElementById('community-feed-list');
+    const emptyEl = document.getElementById('community-feed-empty');
+    if (!listEl) return;
+    const posts = cachedFeedPosts;
+
+    if (!posts.length) {
+        listEl.innerHTML = '';
+        if (emptyEl) {
+            emptyEl.classList.remove('hidden');
+            emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
+                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up for fellow passengers. Keep it kind — this is a quiet feed, not a shouting match.</p>`;
+        }
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    let html = '';
+    let lastDate = '';
+    posts.forEach((p) => {
+        const dayKey = new Date(p.timestamp || 0).toDateString();
+        if (dayKey && dayKey !== lastDate) {
+            html += `<div class="flex justify-center w-full my-3">
+                <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-800/70 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">${escapeHTML(formatDayDivider(p.timestamp))}</span>
+            </div>`;
+            lastDate = dayKey;
+        }
+        html += renderPostCard(p, routeId);
+    });
+    listEl.innerHTML = html;
+    wireCommunityChatGestures(listEl);
+}
+
+function wireCommunityChatGestures(listEl) {
+    if (!listEl || listEl.dataset.gesturesBound === '1') {
+        // Rebind after re-render: always attach to current rows via delegation once
+    }
+    if (listEl.dataset.gesturesBound === '1') return;
+    listEl.dataset.gesturesBound = '1';
+
+    let startX = 0;
+    let startY = 0;
+    let activeRow = null;
+    let longTimer = null;
+    let longFired = false;
+    let moved = false;
+
+    const clearLong = () => {
+        if (longTimer) clearTimeout(longTimer);
+        longTimer = null;
+    };
+
+    listEl.addEventListener('touchstart', (e) => {
+        const row = e.target.closest?.('.community-post-row');
+        if (!row || e.touches.length !== 1) return;
+        activeRow = row;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        moved = false;
+        longFired = false;
+        clearLong();
+        longTimer = setTimeout(() => {
+            longFired = true;
+            const postId = row.getAttribute('data-post-id');
+            const routeId = row.getAttribute('data-route');
+            if (postId && routeId) openReactionSheet(postId, routeId);
+        }, 480);
+    }, { passive: true });
+
+    listEl.addEventListener('touchmove', (e) => {
+        if (!activeRow || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+            moved = true;
+            clearLong();
+        }
+        // Swipe right to reply
+        if (dx > 12 && Math.abs(dx) > Math.abs(dy)) {
+            activeRow.classList.add('is-swiping');
+            const shift = Math.min(72, dx * 0.55);
+            activeRow.dataset.swipeDx = String(shift);
+            activeRow.style.transform = `translateX(${shift}px)`;
+        }
+    }, { passive: true });
+
+    listEl.addEventListener('touchend', () => {
+        clearLong();
+        if (!activeRow) return;
+        const row = activeRow;
+        const dx = parseFloat(row.dataset.swipeDx || '0') || 0;
+        row.classList.remove('is-swiping');
+        row.style.transform = '';
+        delete row.dataset.swipeDx;
+        if (!longFired && dx >= 48) {
+            const postId = row.getAttribute('data-post-id');
+            const routeId = row.getAttribute('data-route');
+            const post = findCachedPost(postId);
+            if (post) {
+                triggerHaptic();
+                setReplyDraft(post, routeId);
+            }
+        }
+        activeRow = null;
+    });
+
+    listEl.addEventListener('touchcancel', () => {
+        clearLong();
+        if (activeRow) {
+            activeRow.classList.remove('is-swiping');
+            activeRow.style.transform = '';
+        }
+        activeRow = null;
+    });
+
+    // Desktop: context menu / long-click alternate
+    listEl.addEventListener('contextmenu', (e) => {
+        const row = e.target.closest?.('.community-post-row');
+        if (!row) return;
+        e.preventDefault();
+        openReactionSheet(row.getAttribute('data-post-id'), row.getAttribute('data-route'));
+    });
 }
 
 function getPinnedRouteId() {
@@ -583,83 +855,6 @@ export function startCommunityUnreadWatch() {
     });
 }
 
-function renderPostCard(post, routeId) {
-    const name = escapeHTML(post.displayName || 'Passenger');
-    const body = escapeHTML(post.body || '');
-    const when = relativeTime(post.timestamp);
-    const postId = escapeHTML(post.postId || '');
-    const uid = escapeHTML(post.uid || '');
-    const catKey = COMMUNITY_CATEGORIES[post.category] ? post.category : 'general';
-    const cat = COMMUNITY_CATEGORIES[catKey];
-    const replies = post.replyCount ? `<span class="text-gray-400">${post.replyCount} repl${post.replyCount === 1 ? 'y' : 'ies'}</span>` : '';
-
-    return `
-      <article class="community-post border-b border-gray-100 dark:border-gray-800 py-3.5 px-1" data-post-id="${postId}" data-category="${catKey}">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <div class="min-w-0">
-            <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-              <p class="text-xs font-black text-gray-900 dark:text-white truncate">${name}</p>
-              <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${cat.class}">${cat.label}</span>
-            </div>
-            <p class="text-[10px] text-gray-400 font-medium">${when}${replies ? ` · ${replies}` : ''}</p>
-          </div>
-          <div class="relative shrink-0">
-            <button type="button" class="community-more-btn p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" aria-label="More" data-post-id="${postId}">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
-            </button>
-            <div class="community-menu hidden absolute right-0 top-8 z-20 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 text-left">
-              <button type="button" class="community-report-msg w-full text-left px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700" data-post-id="${postId}" data-uid="${uid}" data-snippet="${body.slice(0, 80)}">Report message</button>
-              <button type="button" class="community-report-user w-full text-left px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40" data-uid="${uid}" data-post-id="${postId}">Report user</button>
-            </div>
-          </div>
-        </div>
-        <p class="text-sm text-gray-800 dark:text-gray-200 leading-snug whitespace-pre-wrap break-words">${body}</p>
-        ${renderReactionsRow(post.postId || '', routeId)}
-        <div class="mt-2 flex items-center gap-3">
-          <button type="button" class="community-toggle-replies text-[11px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none" data-post-id="${postId}" data-route="${escapeHTML(routeId)}">Replies</button>
-        </div>
-        <div class="community-replies hidden mt-2 pl-3 border-l-2 border-gray-200 dark:border-gray-700 space-y-2" data-replies-for="${postId}"></div>
-      </article>`;
-}
-
-function paintCategoryFilters() {
-    document.querySelectorAll('[data-community-filter]').forEach((btn) => {
-        const id = btn.getAttribute('data-community-filter');
-        const on = id === activeCategoryFilter;
-        btn.classList.toggle('is-selected', on);
-        btn.classList.toggle('bg-blue-600', on);
-        btn.classList.toggle('text-white', on);
-        btn.classList.toggle('bg-gray-100', !on);
-        btn.classList.toggle('dark:bg-gray-800', !on);
-        btn.classList.toggle('text-gray-600', !on);
-        btn.classList.toggle('dark:text-gray-300', !on);
-    });
-}
-
-function applyFeedFilter(routeId) {
-    const listEl = document.getElementById('community-feed-list');
-    const emptyEl = document.getElementById('community-feed-empty');
-    if (!listEl) return;
-    const posts = activeCategoryFilter === 'all'
-        ? cachedFeedPosts
-        : cachedFeedPosts.filter((p) => (p.category || 'general') === activeCategoryFilter);
-
-    if (!posts.length) {
-        listEl.innerHTML = '';
-        if (emptyEl) {
-            emptyEl.classList.remove('hidden');
-            emptyEl.innerHTML = activeCategoryFilter === 'all'
-                ? `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
-                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up for fellow passengers. Keep it kind — this is a quiet feed, not a shouting match.</p>`
-                : `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">Nothing in this category</p>
-                   <p class="text-[12px] text-gray-500 dark:text-gray-400">Try All, or be the first to post here.</p>`;
-        }
-        return;
-    }
-    if (emptyEl) emptyEl.classList.add('hidden');
-    listEl.innerHTML = posts.map((p) => renderPostCard(p, routeId)).join('');
-}
-
 export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
@@ -737,10 +932,26 @@ function setCommunityRouteListOpen(open) {
     if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
+const KIND_PLACEHOLDER = 'Please be kind and respectful.';
+
+function syncComposerChrome(signed = $account.get().status === 'signed-in') {
+    const composer = document.getElementById('community-composer');
+    if (!composer) return;
+    composer.disabled = !signed;
+    if (!signed) {
+        composer.placeholder = 'Sign in to post';
+        return;
+    }
+    if (document.activeElement === composer) {
+        composer.placeholder = '';
+    } else {
+        composer.placeholder = KIND_PLACEHOLDER;
+    }
+}
+
 export function openRouteCommunity(opts = {}) {
     const routeId = opts.routeId || $currentRouteId.get() || '';
     const routeSel = document.getElementById('community-route-select');
-    const composer = document.getElementById('community-composer');
     const guestHint = document.getElementById('community-guest-hint');
     const errEl = document.getElementById('community-error');
     const titleEl = document.getElementById('community-route-title');
@@ -751,10 +962,7 @@ export function openRouteCommunity(opts = {}) {
     guestHintDismissedThisOpen = false;
     const signed = $account.get().status === 'signed-in';
     if (guestHint) guestHint.classList.toggle('hidden', signed);
-    if (composer) {
-        composer.disabled = !signed;
-        composer.placeholder = signed ? 'Share something for this line…' : 'Sign in to post';
-    }
+    syncComposerChrome(signed);
     if (errEl) errEl.textContent = '';
 
     const activeRoute = routeSel?.value || routeId;
@@ -799,6 +1007,7 @@ async function handlePostSubmit() {
     }
 
     if (composer) composer.value = '';
+    clearReplyDraft();
     signalCommunityTyping(routeId, false);
     showToast('Posted to the route feed', 'success');
     await renderCommunityFeed(routeId);
@@ -896,20 +1105,22 @@ export function bindCommunityUi() {
         guestHintDismissedThisOpen = true;
         document.getElementById('community-guest-hint')?.classList.add('hidden');
     });
+    document.getElementById('community-reply-bar-clear')?.addEventListener('click', () => clearReplyDraft());
 
     startCommunityUnreadWatch();
+    import('./community-presence.js').then((m) => m.bindCommunityPresenceInfo?.()).catch(() => {});
 
-    document.querySelectorAll('[data-community-filter]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            activeCategoryFilter = btn.getAttribute('data-community-filter') || 'all';
-            paintCategoryFilters();
-            const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
-            applyFeedFilter(rid);
-        });
-    });
+    // Category filter chips removed from UI for now.
 
     let typingTimer = null;
-    document.getElementById('community-composer')?.addEventListener('input', () => {
+    const composerEl = document.getElementById('community-composer');
+    composerEl?.addEventListener('focus', () => {
+        if ($account.get().status === 'signed-in') composerEl.placeholder = '';
+    });
+    composerEl?.addEventListener('blur', () => {
+        syncComposerChrome($account.get().status === 'signed-in');
+    });
+    composerEl?.addEventListener('input', () => {
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         signalCommunityTyping(rid, true);
         if (typingTimer) clearTimeout(typingTimer);
@@ -925,77 +1136,34 @@ export function bindCommunityUi() {
     document.addEventListener('click', async (e) => {
         const t = e.target;
 
-        // Close menus when clicking outside
-        if (!t.closest?.('.community-more-btn') && !t.closest?.('.community-menu')) {
-            document.querySelectorAll('.community-menu').forEach((m) => m.classList.add('hidden'));
-        }
-
-        const more = t.closest?.('.community-more-btn');
-        if (more) {
+        const sheetReply = t.closest?.('.community-sheet-reply');
+        if (sheetReply) {
             e.preventDefault();
-            const menu = more.parentElement?.querySelector('.community-menu');
-            document.querySelectorAll('.community-menu').forEach((m) => {
-                if (m !== menu) m.classList.add('hidden');
-            });
-            menu?.classList.toggle('hidden');
+            const sheet = document.getElementById('community-reaction-sheet');
+            const postId = sheet?.dataset.postId;
+            const routeId = sheet?.dataset.routeId;
+            closeReactionSheet();
+            const post = findCachedPost(postId);
+            if (post) setReplyDraft(post, routeId);
             return;
         }
 
-        const reportMsg = t.closest?.('.community-report-msg');
-        if (reportMsg) {
+        const sheetReport = t.closest?.('.community-sheet-report');
+        if (sheetReport) {
             e.preventDefault();
-            document.querySelectorAll('.community-menu').forEach((m) => m.classList.add('hidden'));
+            const sheet = document.getElementById('community-reaction-sheet');
+            const postId = sheet?.dataset.postId;
+            const routeId = sheet?.dataset.routeId || document.getElementById('community-route-select')?.value || $currentRouteId.get();
+            closeReactionSheet();
+            const post = findCachedPost(postId);
             const result = await submitModerationReport({
                 type: 'message',
-                routeId: document.getElementById('community-route-select')?.value || $currentRouteId.get(),
-                targetPostId: reportMsg.getAttribute('data-post-id'),
-                targetUid: reportMsg.getAttribute('data-uid'),
-                snippet: reportMsg.getAttribute('data-snippet'),
+                routeId,
+                targetPostId: postId,
+                targetUid: post?.uid,
+                snippet: String(post?.body || '').slice(0, 80),
             });
             showToast(result.ok ? 'Thanks — report sent to moderation.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
-            return;
-        }
-
-        const reportUser = t.closest?.('.community-report-user');
-        if (reportUser) {
-            e.preventDefault();
-            document.querySelectorAll('.community-menu').forEach((m) => m.classList.add('hidden'));
-            const result = await submitModerationReport({
-                type: 'user',
-                routeId: document.getElementById('community-route-select')?.value || $currentRouteId.get(),
-                targetUid: reportUser.getAttribute('data-uid'),
-                targetPostId: reportUser.getAttribute('data-post-id'),
-            });
-            showToast(result.ok ? 'User report sent.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
-            return;
-        }
-
-        const toggle = t.closest?.('.community-toggle-replies');
-        if (toggle) {
-            e.preventDefault();
-            const postId = toggle.getAttribute('data-post-id');
-            const routeId = toggle.getAttribute('data-route');
-            const box = document.querySelector(`.community-replies[data-replies-for="${postId}"]`);
-            if (!box) return;
-            if (!box.classList.contains('hidden') && box.dataset.loaded === '1') {
-                box.classList.add('hidden');
-                return;
-            }
-            await expandReplies(postId, routeId, box);
-            box.dataset.loaded = '1';
-            return;
-        }
-
-        const reactExpand = t.closest?.('.community-react-expand');
-        if (reactExpand) {
-            e.preventDefault();
-            const postId = reactExpand.getAttribute('data-post-id');
-            const routeId = reactExpand.getAttribute('data-route');
-            if (!postId) return;
-            if (expandedReactionPosts.has(postId)) expandedReactionPosts.delete(postId);
-            else expandedReactionPosts.add(postId);
-            const row = document.querySelector(`.community-reactions[data-reactions-for="${postId}"]`);
-            if (row) row.outerHTML = renderReactionsRow(postId, routeId);
             return;
         }
 
@@ -1016,10 +1184,9 @@ export function bindCommunityUi() {
                 }
                 return;
             }
-            // Keep picker open after reacting so the user can change/remove
-            if (postId) expandedReactionPosts.add(postId);
-            const row = document.querySelector(`.community-reactions[data-reactions-for="${postId}"]`);
-            if (row) row.outerHTML = renderReactionsRow(postId, routeId);
+            closeReactionSheet();
+            const rid = document.getElementById('community-route-select')?.value || routeId;
+            applyFeedFilter(rid);
             return;
         }
 

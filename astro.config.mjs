@@ -2,25 +2,30 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import AstroPWA from '@vite-pwa/astro';
 
+// GitHub project Pages lives at /next-train-astro/; local + custom-domain root stay at /.
+// CI sets GITHUB_ACTIONS=true. Override with PUBLIC_BASE_PATH if needed.
+const isGitHubPages = process.env.GITHUB_ACTIONS === 'true';
+const base = (process.env.PUBLIC_BASE_PATH || (isGitHubPages ? '/next-train-astro' : '/')).replace(/\/$/, '') || '/';
+const baseWithSlash = base === '/' ? '/' : `${base}/`;
+const site = process.env.PUBLIC_SITE_URL
+  || (isGitHubPages ? 'https://enock-elk.github.io' : 'https://nexttrain.co.za');
+
 // https://astro.build/config
-// Serve from site root (local + custom domain). GitHub project Pages (/repo) needs a separate base later.
 export default defineConfig({
-  site: 'https://nexttrain.co.za',
+  site,
+  base: baseWithSlash,
   trailingSlash: 'never',
-  // Integrate Tailwind CSS and our PWA engine
   integrations: [
     tailwind(),
     AstroPWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        // Pre-cache all core HTML, JS, CSS, and imagery
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        // We will inject our custom Lie-Fi and Network-First overrides here in later phases
-        navigateFallback: '/offline',
+        // Must include the Pages subpath or SW falls back to the wrong URL
+        navigateFallback: `${baseWithSlash}offline`.replace(/\/{2,}/g, '/'),
         runtimeCaching: [
           {
-            // Do NOT cache Firebase RTDB, Cloudflare Workers, or Analytics
             urlPattern: /^https:\/\/(.*?firebaseio\.com|.*?workers\.dev|.*?clarity\.ms)\/.*/i,
             handler: 'NetworkOnly',
           }
@@ -34,23 +39,24 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
-        id: '/?pwa=next-train-2',
-        start_url: '/?pwa=next-train-2',
+        scope: baseWithSlash,
+        id: `${baseWithSlash}?pwa=next-train-2`,
+        start_url: `${baseWithSlash}?pwa=next-train-2`,
         icons: [
           {
-            src: '/icons/icon-192.png',
+            src: `${baseWithSlash}icons/icon-192.png`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/icon-512.png',
+            src: `${baseWithSlash}icons/icon-512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/icon-512.png',
+            src: `${baseWithSlash}icons/icon-512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -60,25 +66,21 @@ export default defineConfig({
     })
   ],
   
-  // Enterprise Build Engine Configuration
   vite: {
     build: {
       minify: 'terser',
       terserOptions: {
         compress: {
-          // Ruthlessly drop console.logs and debuggers in production to hide data from copycats
           drop_console: true,
           drop_debugger: true,
         },
         mangle: {
-          // Scrambles variable and function names to obfuscate logic
           toplevel: true, 
         },
         format: {
-          comments: false, // Strips all JS comments in the final build
+          comments: false,
         }
       },
-      // Break large chunks into smaller files for faster parsing
       rollupOptions: {
         output: {
           manualChunks(id) {

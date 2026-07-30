@@ -1,5 +1,8 @@
 # Build Astro and deploy to GitHub Pages (no Jekyll on source).
 # One-time: Settings → Pages → Build and deployment → Source = GitHub Actions
+#
+# Project site URL: https://enock-elk.github.io/next-train-astro/
+# astro.config.mjs sets base=/next-train-astro/ when GITHUB_ACTIONS=true
 name: Deploy to GitHub Pages
 
 on:
@@ -25,6 +28,10 @@ jobs:
 
       - name: Install, build, and upload site
         uses: withastro/action@v6
+        # base path comes from astro.config.mjs (GITHUB_ACTIONS → /next-train-astro/)
+        env:
+          PUBLIC_SITE_URL: https://enock-elk.github.io
+          PUBLIC_BASE_PATH: /next-train-astro
 
   deploy:
     needs: build

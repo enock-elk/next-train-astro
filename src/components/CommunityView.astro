@@ -6,7 +6,7 @@
 ---
 
 <div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
-    <div class="flex flex-col min-h-[min(70dvh,640px)]">
+    <div class="flex flex-col flex-1 min-h-0 h-full">
         <div class="shrink-0 pt-4 pb-3 space-y-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div class="flex items-start justify-between gap-2 px-4">
                 <div class="min-w-0 flex-1">
@@ -28,46 +28,163 @@
             <h2 id="community-route-title" class="sr-only">Route feed</h2>
 
             <div class="flex items-center justify-between gap-2 px-4">
-                <p id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide">—</p>
+                <button type="button" id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">—</button>
                 <p id="community-typing" class="text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate max-w-[55%]"></p>
             </div>
 
-            <div id="community-category-filters" class="grid grid-cols-5 w-full gap-0 border-y border-gray-200 dark:border-gray-700" role="group" aria-label="Filter by category">
-                <button type="button" data-community-filter="all" class="community-filter-chip is-selected text-[10px] font-bold py-2.5 text-center bg-blue-600 text-white focus:outline-none">All</button>
-                <button type="button" data-community-filter="general" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">General</button>
-                <button type="button" data-community-filter="delay" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Delay</button>
-                <button type="button" data-community-filter="safety" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Safety</button>
-                <button type="button" data-community-filter="other" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Other</button>
-            </div>
-
-            <p id="community-guest-hint" class="hidden relative mx-4 pr-9 text-[11px] text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl px-3 py-2">
-                Anyone can read. <button type="button" id="community-signin-cta" class="font-bold underline focus:outline-none">Sign in</button> to post or reply. Please be kind and respectful.
+            <div id="community-guest-hint" class="hidden relative mx-4 pr-9 text-[11px] text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl px-3 py-2">
+                <p class="leading-snug">Anyone can read. <button type="button" id="community-signin-cta" class="font-bold underline focus:outline-none">Sign in</button> to post or reply.</p>
                 <button type="button" id="community-guest-hint-dismiss" class="absolute top-1.5 right-1.5 p-1 rounded-md text-blue-500/80 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 focus:outline-none" aria-label="Dismiss" title="Dismiss">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
-            </p>
+            </div>
         </div>
 
-        <div class="flex-grow px-4 pt-2 pb-4 custom-scrollbar">
+        <!-- Grows into leftover height; only this area scrolls — header/composer stay full size -->
+        <div class="flex-1 basis-0 min-h-[8rem] overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-gray-100/80 dark:bg-gray-950/40">
             <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-            <div id="community-feed-list" class="pb-2"></div>
+            <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
         </div>
 
-        <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 space-y-2 sticky bottom-0 z-10">
+        <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 space-y-2">
             <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 min-h-[1rem]"></p>
-            <div class="flex gap-2 items-stretch h-[5.25rem]">
-                <textarea id="community-composer" rows="2" maxlength="280" class="flex-1 min-w-0 h-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Share something for this line…"></textarea>
-                <div class="flex flex-col gap-1.5 shrink-0 w-[7.25rem] h-full">
-                    <label for="community-category" class="sr-only">Category</label>
-                    <select id="community-category" class="w-full flex-1 px-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="general">General</option>
-                        <option value="delay">Delay</option>
-                        <option value="safety">Safety</option>
-                        <option value="other">Other</option>
-                    </select>
-                    <button type="button" id="community-post-btn" class="w-full flex-1 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
+            <div id="community-reply-bar" class="hidden mx-0 mb-1 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-start gap-2">
+                <div class="min-w-0 flex-1 border-l-2 border-blue-500 pl-2">
+                    <p id="community-reply-bar-name" class="text-[11px] font-bold text-blue-600 dark:text-blue-400 truncate"></p>
+                    <p id="community-reply-bar-snippet" class="text-[11px] text-gray-500 dark:text-gray-400 truncate"></p>
                 </div>
+                <button type="button" id="community-reply-bar-clear" class="shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none" aria-label="Cancel reply">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="flex gap-2 items-stretch">
+                <textarea id="community-composer" rows="2" maxlength="280" class="flex-1 min-w-0 min-h-[3.25rem] p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Sign in to post"></textarea>
+                <button type="button" id="community-post-btn" class="shrink-0 self-stretch px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
             </div>
         </div>
     </div>
 </div>
+
+<style is:global>
+  .community-post-row {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    position: relative;
+    touch-action: pan-y;
+    transition: transform 0.15s ease;
+  }
+  .community-post-row.is-swiping {
+    transition: none;
+  }
+  .community-swipe-hint {
+    position: absolute;
+    left: 0.25rem;
+    top: 0.75rem;
+    transform: scale(0.85);
+    opacity: 0;
+    color: #64748b;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .community-post-row.is-swiping .community-swipe-hint {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .community-avatar {
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 0;
+  }
+  .community-bubble-wrap {
+    width: 66.666%;
+    max-width: 66.666%;
+    flex: 0 0 66.666%;
+    min-width: 0;
+  }
+  .community-bubble {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .community-bubble-own {
+    background: #d9fdd3;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+  }
+  .dark .community-bubble-own {
+    background: #005c4b;
+    color: #e7f8f5;
+  }
+  .community-bubble-other {
+    background: #ffffff;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+    border: 1px solid rgba(229, 231, 235, 0.9);
+  }
+  .dark .community-bubble-other {
+    background: #1f2937;
+    color: #f3f4f6;
+    border-color: #374151;
+  }
+  .community-bubble-name-row {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.055);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .dark .community-bubble-name-row {
+    background: rgba(255, 255, 255, 0.07);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  .community-bubble-own .community-bubble-name-row {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .dark .community-bubble-own .community-bubble-name-row {
+    background: rgba(0, 0, 0, 0.18);
+  }
+  .community-bubble-body {
+    padding: 0.35rem 0.65rem 0.4rem;
+  }
+  .community-msg-text {
+    font-size: 0.84rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .community-msg-time {
+    float: right;
+    margin: 0.2rem 0 0 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.1;
+    opacity: 0.65;
+    white-space: nowrap;
+  }
+  .community-reaction-pills {
+    display: inline-flex;
+    gap: 0.2rem;
+    margin-top: -0.35rem;
+    margin-left: 0.35rem;
+    position: relative;
+    z-index: 1;
+  }
+  .community-reaction-pill {
+    font-size: 0.7rem;
+    line-height: 1;
+    padding: 0.15rem 0.35rem;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .dark .community-reaction-pill {
+    background: #111827;
+    border-color: #374151;
+  }
+</style>

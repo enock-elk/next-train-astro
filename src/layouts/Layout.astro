@@ -142,13 +142,34 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
         transition: opacity 0.3s ease-out, transform 0.3s ease-out;
       }
       .view-section.active {
-        display: block;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        /* Scroll when content is taller than the shell — never clip UI */
+        overflow-x: hidden;
+        overflow-y: auto;
         opacity: 1;
         transform: translateY(0);
       }
+
+      /* Only Community pins height so the feed scrolls inside (composer stays put) */
       #view-community.view-section.active {
-        display: flex;
-        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* App shell fills the device viewport (minus body padding) */
+      #main-content.app-shell {
+        height: calc(100dvh - 1rem);
+        max-height: calc(100dvh - 1rem);
+        min-height: calc(100dvh - 1rem);
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell {
+          height: calc(100dvh - 2.5rem);
+          max-height: calc(100dvh - 2.5rem);
+          min-height: calc(100dvh - 2.5rem);
+        }
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
@@ -201,7 +222,7 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
     </style>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-stretch justify-center min-h-dvh p-2 sm:p-3 transition-colors duration-300">
     
     <!-- 🛡️ GUARDIAN: Offline Marquee -->
     <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">

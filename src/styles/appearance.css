@@ -17,8 +17,7 @@
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic (default) · midnight · contrast
- * Reserved later: line (soft “Line accent”)
+ * Packs: classic · midnight · contrast · signal · ember
  * ---------------------------------------------------------------------------
  */
 
@@ -176,6 +175,84 @@ html[data-colour-pack="contrast"].dark {
   --nt-blue-900: 239 246 255;
 }
 
+/* Signal — emerald transit green */
+html[data-colour-pack="signal"] {
+  --nt-primary: #059669;
+  --nt-primary-hover: #047857;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #ecfdf5;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #f0fdf4;
+  --nt-text: #052e16;
+  --nt-text-muted: #4b5563;
+  --nt-border: #d1fae5;
+  --nt-theme-meta: #047857;
+
+  --nt-blue-50: 236 253 245;
+  --nt-blue-100: 209 250 229;
+  --nt-blue-200: 167 243 208;
+  --nt-blue-300: 110 231 183;
+  --nt-blue-400: 52 211 153;
+  --nt-blue-500: 16 185 129;
+  --nt-blue-600: 5 150 105;
+  --nt-blue-700: 4 120 87;
+  --nt-blue-800: 6 95 70;
+  --nt-blue-900: 6 78 59;
+}
+
+html.dark[data-colour-pack="signal"],
+html[data-colour-pack="signal"].dark {
+  --nt-primary: #34d399;
+  --nt-primary-hover: #6ee7b7;
+  --nt-primary-fg: #022c22;
+  --nt-primary-soft: rgba(6, 78, 59, 0.45);
+  --nt-surface: #022c22;
+  --nt-surface-muted: #052e16;
+  --nt-text: #ecfdf5;
+  --nt-text-muted: #a7f3d0;
+  --nt-border: #064e3b;
+  --nt-theme-meta: #064e3b;
+}
+
+/* Ember — amber / copper accent */
+html[data-colour-pack="ember"] {
+  --nt-primary: #d97706;
+  --nt-primary-hover: #b45309;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #fffbeb;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #fffbeb;
+  --nt-text: #1c1917;
+  --nt-text-muted: #78716c;
+  --nt-border: #fde68a;
+  --nt-theme-meta: #b45309;
+
+  --nt-blue-50: 255 251 235;
+  --nt-blue-100: 254 243 199;
+  --nt-blue-200: 253 230 138;
+  --nt-blue-300: 252 211 77;
+  --nt-blue-400: 251 191 36;
+  --nt-blue-500: 245 158 11;
+  --nt-blue-600: 217 119 6;
+  --nt-blue-700: 180 83 9;
+  --nt-blue-800: 146 64 14;
+  --nt-blue-900: 120 53 15;
+}
+
+html.dark[data-colour-pack="ember"],
+html[data-colour-pack="ember"].dark {
+  --nt-primary: #fbbf24;
+  --nt-primary-hover: #fcd34d;
+  --nt-primary-fg: #451a03;
+  --nt-primary-soft: rgba(120, 53, 15, 0.45);
+  --nt-surface: #1c1917;
+  --nt-surface-muted: #292524;
+  --nt-text: #fef3c7;
+  --nt-text-muted: #fde68a;
+  --nt-border: #78350f;
+  --nt-theme-meta: #78350f;
+}
+
 /* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
 #main-content {
   background-color: var(--nt-surface);
@@ -208,23 +285,33 @@ html[data-colour-pack="contrast"].dark {
 
 /* Non-classic packs: beat Tailwind gray utilities on shell surfaces */
 html[data-colour-pack="midnight"] #main-content,
-html[data-colour-pack="contrast"] #main-content {
+html[data-colour-pack="contrast"] #main-content,
+html[data-colour-pack="signal"] #main-content,
+html[data-colour-pack="ember"] #main-content {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
 }
 
 html[data-colour-pack="midnight"] .app-header,
 html[data-colour-pack="contrast"] .app-header,
+html[data-colour-pack="signal"] .app-header,
+html[data-colour-pack="ember"] .app-header,
 html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
+html[data-colour-pack="signal"] #app-top-tabs,
+html[data-colour-pack="ember"] #app-top-tabs,
 html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
 }
 
 html[data-colour-pack="midnight"] .view-section,
-html[data-colour-pack="contrast"] .view-section {
+html[data-colour-pack="contrast"] .view-section,
+html[data-colour-pack="signal"] .view-section,
+html[data-colour-pack="ember"] .view-section {
   background-color: var(--nt-surface-muted) !important;
 }
 
@@ -235,6 +322,26 @@ html[data-colour-pack="contrast"] #main-content {
 html[data-colour-pack="contrast"] .tab-btn.active,
 html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
+}
+
+/* Pack-tinted CTAs (GPS, Full timetable) */
+#locate-btn,
+#view-full-timetable-btn {
+  background-color: var(--nt-primary) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
+  color: var(--nt-primary-fg) !important;
+}
+#locate-btn:hover,
+#view-full-timetable-btn:hover {
+  background-color: var(--nt-primary-hover) !important;
+}
+#view-full-timetable-btn #last-updated-date {
+  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
+  font-weight: 700;
+  text-align: center;
+}
+#view-full-timetable-btn {
+  text-align: center;
 }
 
 /* Colour pack picker (Settings) */
@@ -261,8 +368,26 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   transform: translateY(-1px);
 }
 .colour-pack-option[aria-pressed="true"] {
-  border-color: var(--nt-primary);
-  box-shadow: 0 0 0 2px var(--nt-primary);
+  border-color: var(--pack-accent, var(--nt-primary));
+  box-shadow: 0 0 0 2px var(--pack-accent, var(--nt-primary));
+  background: color-mix(in srgb, var(--pack-accent, var(--nt-primary)) 12%, var(--nt-surface));
+}
+.colour-pack-option[aria-pressed="true"]::after {
+  content: "Selected";
+  position: absolute;
+  top: 0.35rem;
+  right: 0.4rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pack-accent, var(--nt-primary));
+  background: color-mix(in srgb, var(--nt-surface) 88%, transparent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+}
+.colour-pack-option.is-selected {
+  border-color: var(--pack-accent, var(--nt-primary));
 }
 .colour-pack-swatch {
   height: 1.75rem;

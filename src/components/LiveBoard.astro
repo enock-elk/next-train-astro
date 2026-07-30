@@ -4,11 +4,11 @@
 ---
 
 <div id="view-next-train" class="view-section active p-4 bg-gray-50 dark:bg-gray-900/50">
-            
+
     <!-- ROUTE PIN & TITLE -->
     <div class="text-center mb-5 flex flex-col justify-center items-center w-full">
         <div class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 overflow-hidden transition-colors">
-            
+
             <button id="pin-route-btn" class="relative flex items-center justify-center w-full h-full text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none group cursor-pointer" title="Pin this route">
                 <svg id="pin-outline" class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
                 <svg id="pin-filled" class="w-5 h-5 hidden text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
@@ -25,7 +25,6 @@
                 <svg class="w-5 h-5 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
         </div>
-        <p id="last-updated-date" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1">Schedule Effective from: --</p>
     </div>
 
     <!-- Commuter delay reports (crowd surface) -->
@@ -60,7 +59,7 @@
     </div>
 
     <!-- LIVE BOARDS -->
-    <div class="space-y-4 mb-6">
+    <div class="space-y-4 mb-4">
         <div class="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 min-h-[120px]">
             <h2 id="pretoria-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">Next train to <span class="text-blue-500 dark:text-blue-400">Dest A</span></h2>
             <div id="pretoria-time" class="text-center flex items-center justify-center">
@@ -75,30 +74,33 @@
         </div>
     </div>
 
-    <div id="grid-trigger-container" class="hidden mb-4 mt-2 px-1"></div>
-
-    <!-- FARE ESTIMATOR -->
-    <div id="fare-container" class="mb-6 p-3.5 bg-blue-50 dark:bg-gray-800 rounded-xl flex items-center justify-between shadow-sm border border-blue-100 dark:border-gray-700 hidden min-h-[58px] pr-10 relative">
-        <div class="flex flex-col items-start justify-center">
-            <div class="flex items-center space-x-1 mb-1">
-                <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Estimated</span>
-                <span id="passenger-type-label" class="text-[10px] text-blue-500 dark:text-blue-400 uppercase font-black tracking-widest">Adult</span>
-                <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Fare</span>
-            </div>
-            <span id="fare-type" class="hidden text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full mt-0.5"></span>
-        </div>
-        <div class="text-right flex flex-col items-end justify-center">
-            <span id="fare-amount" class="text-2xl font-black text-gray-900 dark:text-white leading-none">R--.--</span>
-            <span class="text-[9px] text-gray-400 dark:text-gray-500 italic mt-1">Prices may vary</span>
-        </div>
+    <!-- Full timetable CTA (always under boards) -->
+    <div class="mb-5">
+        <button type="button" id="view-full-timetable-btn" class="w-full flex flex-col items-center justify-center gap-0.5 px-3.5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-center shadow-md transition-colors focus:outline-none group border border-blue-700/40 dark:border-blue-400/30">
+            <span class="block text-sm font-black uppercase tracking-wide text-white leading-tight">View full timetable</span>
+            <span id="last-updated-date" class="block text-[11px] font-bold text-blue-100 tracking-wide truncate max-w-full">Effective from: —</span>
+        </button>
+        <div id="grid-trigger-container" class="hidden" aria-hidden="true"></div>
     </div>
 
-    <!-- FOOTER ACTIONS (delay reporting lives on each train card) -->
-    <div class="mt-4 pt-2 space-y-2">
-        <button type="button" id="route-community-open-btn" class="flex items-center justify-center w-full bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-800 dark:text-blue-300 font-bold py-2.5 px-4 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800/60 transition-colors text-sm focus:outline-none">
-            <svg class="w-4 h-4 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
-            Route Community
+    <!-- Trip tools: fare -->
+    <div id="trip-tools" class="mb-5 space-y-2">
+        <button type="button" id="fare-container" class="w-full text-left px-3.5 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3 focus:outline-none transition-colors hover:border-blue-300 dark:hover:border-blue-700 group min-h-[52px] cursor-pointer">
+            <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                    <span id="passenger-type-label" class="text-blue-600 dark:text-blue-400">Adult</span> fare
+                </p>
+                <p id="fare-type" class="hidden text-[11px] font-medium text-gray-500 dark:text-gray-400 truncate mt-0.5"></p>
+            </div>
+            <div class="text-right shrink-0">
+                <span id="fare-amount" class="text-xl font-black text-gray-900 dark:text-white tabular-nums">R--.--</span>
+            </div>
+            <svg id="fare-chevron" class="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
+    </div>
+
+    <!-- FOOTER ACTIONS -->
+    <div class="mt-2 pt-1 space-y-2">
         <button id="install-app-btn" class="hidden flex items-center justify-center w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors text-sm mb-2">
             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg> Install App
         </button>

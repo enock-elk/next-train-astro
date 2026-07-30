@@ -219,7 +219,7 @@ function flagColorClass(status) {
     return 'text-blue-500';
 }
 
-/** HTML injected into journey description box */
+/** HTML injected into journey description box (live chip host; report CTA is on train title) */
 export function buildTrainReportSlotHtml({
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
 }) {
@@ -235,16 +235,29 @@ export function buildTrainReportSlotHtml({
         reportable ? 'data-reportable="1"' : 'data-reportable="0"',
     ].join(' ');
 
-    if (!reportable) {
-        return `<div class="mt-1.5 w-full px-0.5" ${attrs}></div>`;
-    }
+    // Empty host for hydrateTrainReportSlots live chip; reporting is on the train title button
+    return `<div class="mt-1.5 w-full px-0.5" ${attrs}></div>`;
+}
 
-    return `<div class="mt-1.5 w-full px-0.5" ${attrs}>
-      <button type="button" class="train-report-flag inline-flex items-center justify-center gap-1 mx-auto px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 focus:outline-none border border-transparent hover:border-blue-200 dark:hover:border-blue-800" data-open-train-report title="Report this train">
-        <svg class="w-3.5 h-3.5 ${flagColorClass(null)}" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3a1 1 0 011-1h.5a1 1 0 01.8.4L7 5h8a1 1 0 01.8 1.6l-1.5 2a1 1 0 000 1.2l1.5 2A1 1 0 0115 13H7l-1.7 2.6A1 1 0 014.5 16H4a1 1 0 01-1-1V3z"/></svg>
-        Report
-      </button>
-    </div>`;
+/** Clickable train title with 🏳️ — opens report modal for that train */
+export function buildTrainTitleReportButton({
+    label,
+    routeId, trainId, scheduledTime, arrivalTime, station, destination,
+    className = '',
+}) {
+    const attrs = [
+        `data-open-train-report`,
+        `data-route="${escapeHTML(routeId || '')}"`,
+        `data-train="${escapeHTML(String(trainId || ''))}"`,
+        `data-dep="${escapeHTML(String(scheduledTime || ''))}"`,
+        `data-arr="${escapeHTML(String(arrivalTime || ''))}"`,
+        `data-station="${escapeHTML(station || '')}"`,
+        `data-dest="${escapeHTML(destination || '')}"`,
+    ].join(' ');
+    return `<button type="button" class="${className}" ${attrs} title="Report train ${escapeHTML(String(trainId || ''))}">
+      <span class="truncate">${escapeHTML(label)}</span>
+      <span class="shrink-0 ml-1" aria-hidden="true">🏳️</span>
+    </button>`;
 }
 
 export async function hydrateTrainReportSlots(root = document) {

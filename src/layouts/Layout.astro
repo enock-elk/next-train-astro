@@ -88,7 +88,7 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
         else document.documentElement.classList.remove('dark');
 
         const pack = localStorage.getItem('colourPack');
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic';
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
 
         if (!localStorage.getItem('next_train_device_id')) {
@@ -146,6 +146,10 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
         opacity: 1;
         transform: translateY(0);
       }
+      #view-community.view-section.active {
+        display: flex;
+        flex-direction: column;
+      }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
         padding: 0 !important;
@@ -153,6 +157,17 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
       #map-modal.full-screen > div, #about-modal.full-screen > div, #full-schedule-modal.full-screen > div {
         border-radius: 0 !important;
         max-height: none !important;
+      }
+
+      @keyframes nt-shake {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-3px) rotate(-4deg); }
+        40% { transform: translateX(3px) rotate(4deg); }
+        60% { transform: translateX(-2px) rotate(-2deg); }
+        80% { transform: translateX(2px) rotate(2deg); }
+      }
+      .animate-shake {
+        animation: nt-shake 0.55s ease-in-out infinite;
       }
 
       /* Compact header (returning users) — slim WhatsApp-style bar */
@@ -163,7 +178,8 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
       }
       .chrome-compact .header-title,
       body.chrome-compact .header-title {
-        font-size: 1.2rem !important;
+        font-size: 2rem !important;
+        letter-spacing: -0.035em !important;
       }
       .chrome-compact .header-meta #current-day,
       body.chrome-compact .header-meta #current-day {
@@ -211,6 +227,10 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
       // @ts-nocheck
       import { hydrateStores, $isOffline } from '../store.js';
       import { registerSW } from 'virtual:pwa-register';
+      import { bindPwaInstallPrompt } from '../lib/ui.js';
+
+      // Capture installability before SW registration can race the event
+      bindPwaInstallPrompt();
 
       // 1. Hydrate Nano Stores from LocalStorage
       hydrateStores();

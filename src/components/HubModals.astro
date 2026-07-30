@@ -184,66 +184,6 @@
 
 </div>
 
-<!-- ROUTE COMMUNITY (Phase 6 — chronological feed) -->
-<div id="route-community-modal" class="fixed inset-0 bg-black/70 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] flex flex-col border border-gray-200 dark:border-gray-700 transform transition-all overflow-hidden">
-        <div class="shrink-0 flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur">
-            <div class="min-w-0 pr-2">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
-                <h3 id="community-route-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight truncate">Route feed</h3>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-                <button type="button" id="community-refresh-btn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Refresh" title="Refresh">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </button>
-                <button type="button" id="community-modal-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-        </div>
-
-        <div class="shrink-0 px-4 pt-3 pb-2 space-y-2 border-b border-gray-50 dark:border-gray-800/80">
-            <label for="community-route-select" class="sr-only">Route room</label>
-            <select id="community-route-select" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
-            <div class="flex items-center justify-between gap-2">
-                <p id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide">—</p>
-                <p id="community-typing" class="text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate max-w-[55%]"></p>
-            </div>
-            <div id="community-category-filters" class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
-                <button type="button" data-community-filter="all" class="community-filter-chip is-selected text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-600 text-white">All</button>
-                <button type="button" data-community-filter="general" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">General</button>
-                <button type="button" data-community-filter="delay" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Delay</button>
-                <button type="button" data-community-filter="safety" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Safety</button>
-                <button type="button" data-community-filter="other" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Other</button>
-            </div>
-            <p id="community-be-kind" class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Be kind — chronological feed for your corridor. Use Report if something’s off.</p>
-            <p id="community-guest-hint" class="hidden text-[11px] text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl px-3 py-2">
-                Anyone can read. <button type="button" id="community-signin-cta" class="font-bold underline focus:outline-none">Sign in</button> to post or reply.
-            </p>
-        </div>
-
-        <div class="flex-grow overflow-y-auto px-4 custom-scrollbar min-h-[200px]">
-            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-            <div id="community-feed-list" class="pb-4"></div>
-        </div>
-
-        <div class="shrink-0 border-t border-gray-100 dark:border-gray-800 p-3 bg-gray-50 dark:bg-gray-900/80 space-y-2">
-            <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 min-h-[1rem]"></p>
-            <div class="flex gap-2 items-center">
-                <label for="community-category" class="sr-only">Category</label>
-                <select id="community-category" class="shrink-0 p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[7.5rem]">
-                    <option value="general">General</option>
-                    <option value="delay">Delay</option>
-                    <option value="safety">Safety</option>
-                    <option value="other">Other</option>
-                </select>
-                <textarea id="community-composer" rows="2" maxlength="280" class="flex-1 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Share something for this line…"></textarea>
-                <button type="button" id="community-post-btn" class="shrink-0 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- ACCOUNT (Phase 4 — optional passenger sign-in) -->
 <div id="account-modal" class="fixed inset-0 bg-black/70 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700 transform transition-all">
@@ -423,37 +363,36 @@
 
 <!-- ADMIN REPLY -->
 <div id="developer-reply-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between mb-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm max-h-[85vh] flex flex-col overflow-hidden transform transition-all scale-95 border border-gray-200 dark:border-gray-700 p-0">
+        <div class="flex items-center justify-between p-5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div class="flex items-center space-x-2">
                 <span class="text-2xl">💬</span>
                 <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Message from Admin</h3>
             </div>
-            <button type="button" onclick="closeSmoothModal('developer-reply-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+            <button type="button" onclick="if(location.hash==='#devreply')history.back();else closeSmoothModal('developer-reply-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="developer-reply-content" class="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap mb-6">Loading message...</div>
-        <div id="admin-message-actions" class="w-full">
-            <button type="button" id="mark-reply-read-btn" class="w-full bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none">Got it, Thanks!</button>
+        <div id="developer-reply-content" class="overflow-y-auto custom-scrollbar flex-grow p-5 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap bg-gray-50 dark:bg-gray-900">Loading message...</div>
+        <div id="admin-message-actions" class="flex space-x-3 w-full shrink-0 p-5">
+            <button type="button" id="mark-reply-read-btn" class="flex-1 bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm">Got it, Thanks!</button>
         </div>
     </div>
 </div>
 
 <!-- SERVICE ALERT -->
 <div id="notice-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[110] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100 border-l-4 border-red-500 flex flex-col max-h-[85dvh] overflow-y-auto custom-scrollbar">
+    <div id="notice-modal-card" class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100 border-l-4 border-red-500 flex flex-col max-h-[85dvh] overflow-y-auto custom-scrollbar">
         <div class="flex justify-between items-start mb-4 shrink-0">
             <div class="flex items-center text-red-600 dark:text-red-400">
-                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Service Alert</h3>
+                <h3 id="notice-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Service Alert</h3>
             </div>
-            <button type="button" onclick="closeSmoothModal('notice-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+            <button type="button" onclick="if(location.hash==='#notice')history.back();else closeSmoothModal('notice-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
         <p id="notice-content" class="text-gray-700 dark:text-gray-300 text-sm mb-4 leading-relaxed"></p>
         <p id="notice-timestamp" class="text-xs text-gray-400 dark:text-gray-500 font-mono mb-4 border-t border-gray-100 dark:border-gray-700 pt-2"></p>
-        <button type="button" onclick="closeSmoothModal('notice-modal')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors focus:outline-none">Close</button>
+        <button type="button" id="notice-modal-close-btn" onclick="if(location.hash==='#notice')history.back();else closeSmoothModal('notice-modal')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors focus:outline-none">Close</button>
     </div>
 </div>

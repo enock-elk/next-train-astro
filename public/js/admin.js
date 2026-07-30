@@ -32,20 +32,20 @@
  * * GROWTH SPRINT PHASE 10 [05 Jul 2026]: Swapped telemetry, crash, and routing failure endpoints from '/metrics/' to '/sys_logs/' to secure tracking channels against active client adblockers.
  * * GUARDIAN PHASE 13 [09 Jul 2026]: Built the Action Required active state monitor to scan, list, and instantly resolve expiring/live incidents across the entire system.
  * * GUARDIAN PHASE 14 [09 Jul 2026]: Resolved a malformed URL typo inside 'viewContextAlert' that threw unhandled exceptions during the disruption graveyard sweep.
- * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard [ðŸ“], [â›”], [ðŸš§], and [ðŸ“¢] route cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
+ * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard [📝], [⛔], [🚧], and [📢] route cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
 */
 const Admin = {
     
-    // ðŸ›¡ï¸ GUARDIAN PHASE 2: Dropdown Breadcrumbs State
+    // 🛡️ GUARDIAN PHASE 2: Dropdown Breadcrumbs State
     _routeFlags: {},
     getRouteCues: (routeId) => {
         if (!Admin._routeFlags || !Admin._routeFlags[routeId]) return '';
         const flags = Admin._routeFlags[routeId];
         let cues = [];
-        if (flags.hasNotice) cues.push('[ðŸ“ Notice]');
-        if (flags.hasExclusion) cues.push('[â›” Bans]');
-        if (flags.hasDisruption) cues.push('[ðŸš§ Incident]');
-        if (flags.hasAlert) cues.push('[ðŸ“¢ Alert]');
+        if (flags.hasNotice) cues.push('[📝 Notice]');
+        if (flags.hasExclusion) cues.push('[⛔ Bans]');
+        if (flags.hasDisruption) cues.push('[🚧 Incident]');
+        if (flags.hasAlert) cues.push('[📢 Alert]');
         return cues.length ? ` ${cues.join(' ')}` : '';
     },
 
@@ -56,7 +56,7 @@ const Admin = {
                 // Force token refresh to ensure it's valid for database rules
                 return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
             } catch(e) {
-                console.warn("ðŸ›¡ï¸ Guardian: Failed to securely fetch ID Token", e);
+                console.warn("🛡️ Guardian: Failed to securely fetch ID Token", e);
                 return null;
             }
         }
@@ -248,7 +248,7 @@ const Admin = {
                 const fbBadge = document.getElementById('fb-unread-badge');
                 if (fbBadge) {
                     fbBadge.textContent = `${fbUnread} New`;
-                    // ðŸ›¡ï¸ GUARDIAN FIX: Safely toggle 'hidden' without destroying Tailwind utility classes
+                    // 🛡️ GUARDIAN FIX: Safely toggle 'hidden' without destroying Tailwind utility classes
                     fbBadge.classList.toggle('hidden', fbUnread === 0);
                 }
             }
@@ -339,7 +339,7 @@ const Admin = {
                 else navigator.clearAppBadge();
             }
         } catch(e) {
-            console.warn("ðŸ›¡ï¸ Guardian: Badge sync failed", e);
+            console.warn("🛡️ Guardian: Badge sync failed", e);
         }
     },
 
@@ -349,10 +349,10 @@ const Admin = {
         Admin.telemetryRange = ranges[(ranges.indexOf(Admin.telemetryRange) + 1) % ranges.length];
         
         const cycleBtn = document.getElementById('trend-cycle-btn');
-        if (cycleBtn) cycleBtn.innerHTML = `ðŸ“ˆ ${Admin.telemetryRange} Trend`;
+        if (cycleBtn) cycleBtn.innerHTML = `📈 ${Admin.telemetryRange} Trend`;
         
         const modalCycleBtn = document.getElementById('modal-trend-cycle');
-        if (modalCycleBtn) modalCycleBtn.innerHTML = `ðŸ“ˆ ${Admin.telemetryRange}`;
+        if (modalCycleBtn) modalCycleBtn.innerHTML = `📈 ${Admin.telemetryRange}`;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
         
@@ -377,7 +377,7 @@ const Admin = {
 
         const telBody = document.getElementById('telemetry-body');
         
-        // ðŸ›¡ï¸ GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
+        // 🛡️ GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
         if (telBody && !telBody.dataset.devibed) {
             telBody.dataset.devibed = "true";
             
@@ -387,7 +387,7 @@ const Admin = {
                 const label = box.querySelector('span:first-child');
                 const value = box.querySelector('span:last-child');
                 
-                // ðŸ›¡ï¸ GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
+                // 🛡️ GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
                 if (value && value.id === 'stat-today') {
                     box.classList.add('cursor-pointer', 'hover:border-indigo-400', 'dark:hover:border-indigo-500', 'hover:shadow-md');
                     box.title = "View Regional Breakdown";
@@ -405,12 +405,12 @@ const Admin = {
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 text-base leading-none">âš ï¸</span> Diagnostic Errors (24h)`;
+                    label.innerHTML = `<span class="mr-1.5 text-base leading-none">⚠️</span> Diagnostic Errors (24h)`;
                 }
                 if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200 animate-pulse";
             }
             
-            // ðŸ›¡ï¸ GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native ðŸ“Š emoji to display.
+            // 🛡️ GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native 📊 emoji to display.
         }
 
         // GUARDIAN: Inject HTML elements dynamically if they don't exist
@@ -439,7 +439,7 @@ const Admin = {
             `;
             telBody.appendChild(trendWrapper);
             
-            // ðŸ›¡ï¸ GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
+            // 🛡️ GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
             let chartModal = document.getElementById('telemetry-chart-modal');
             if (!chartModal) {
                 chartModal = document.createElement('div');
@@ -468,9 +468,9 @@ const Admin = {
                         </div>
                         
                         <div id="modal-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95">â—€</button>
+                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95">◀</button>
                             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30">â–¶</button>
+                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30">▶</button>
                         </div>
                         
                         <div class="flex-grow p-2 md:p-6 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0">
@@ -518,7 +518,7 @@ const Admin = {
                     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-slate-200 dark:border-slate-700">
                         <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 rounded-t-2xl shrink-0">
                             <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center tracking-tight">
-                                <span class="mr-2">ðŸŒ</span> Regional Breakdown
+                                <span class="mr-2">🌍</span> Regional Breakdown
                             </h3>
                             <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors focus:outline-none">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -642,7 +642,7 @@ const Admin = {
         const yMax = Math.ceil(maxVal + (spread > 0 ? spread * 0.2 : maxVal * 0.2));
         let yMin = Math.max(0, Math.floor(minVal - (spread > 0 ? spread * 0.2 : minVal * 0.5)));
         
-        // ðŸ›¡ï¸ GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
+        // 🛡️ GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
         if (allData.includes(0)) {
             yMin = 0;
         }
@@ -682,7 +682,7 @@ const Admin = {
             });
         }
         
-        // ðŸ›¡ï¸ COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
+        // 🛡️ COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
         if (compareDataArray && numPoints > 1) {
             let comparePathD = `M ${getX(0)} ${getY(compareDataArray[0] || 0)}`;
             for(let i=1; i<numPoints; i++) {
@@ -737,7 +737,7 @@ const Admin = {
                 const dayColor = isToday ? todayColor : labelColor;
                 svg += `<text x="${vx}" y="${pt+uh+20}" font-family="sans-serif" font-size="11" font-weight="800" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
                 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
+                // 🛡️ GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
                 if (Admin.telemetryRange !== 'INTRADAY') {
                     svg += `<text x="${vx}" y="${vy - 10}" font-family="sans-serif" font-size="11" font-weight="900" fill="${dayColor}" text-anchor="middle">${val}</text>`;
                 }
@@ -763,7 +763,7 @@ const Admin = {
             if (Admin.telemetryInterval) {
                 clearInterval(Admin.telemetryInterval);
                 Admin.telemetryInterval = null;
-                console.log("ðŸ›¡ï¸ Guardian: Dev Modal closed. Telemetry polling suspended.");
+                console.log("🛡️ Guardian: Dev Modal closed. Telemetry polling suspended.");
             }
             return;
         }
@@ -798,7 +798,7 @@ const Admin = {
                 if(statAllTime) statAllTime.textContent = data.allTimeUsers !== undefined ? Admin.formatNumber(data.allTimeUsers) : '--';
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
                 
-                // ðŸ›¡ï¸ GUARDIAN: Store and update regional breakdown seamlessly
+                // 🛡️ GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
                     Admin.currentRegionalBreakdown = data.regionalBreakdown;
                     Admin.updateRegionalModal();
@@ -815,7 +815,7 @@ const Admin = {
                 let rawCountsArray = data.chartData && data.chartData.length > 0 ? data.chartData : (data.sevenDayTrend || []);
                 let rawLabelsArray = data.chartLabels || [];
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 2: RAM Array Slicer Engine
+                // 🛡️ GUARDIAN PHASE 2: RAM Array Slicer Engine
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
@@ -837,7 +837,7 @@ const Admin = {
                     labelsArray = [...Array(padLen).fill(''), ...labelsArray];
                 }
 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 3: Comparison Array Slicer
+                // 🛡️ GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
                 if (Admin.isComparing) {
                     let compareOffset = offset + 1;
@@ -918,7 +918,7 @@ const Admin = {
 
                 let titleStr = "";
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
+                // 🛡️ GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
                 let firstValidRaw = null;
                 let lastValidRaw = null;
                 
@@ -1035,7 +1035,7 @@ const Admin = {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
-            console.warn("ðŸ›¡ï¸ Telemetry Fetch Failed:", e.message);
+            console.warn("🛡️ Telemetry Fetch Failed:", e.message);
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
             if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
@@ -1279,7 +1279,7 @@ const Admin = {
 
     // --- 1. INITIALIZATION ---
     init: () => {
-        // ðŸ›¡ï¸ GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
+        // 🛡️ GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
         if (!Admin._coreEventsBound) {
             Admin.setupLoginAccess();
             Admin._coreEventsBound = true;
@@ -1301,11 +1301,11 @@ const Admin = {
 
     // --- 2. AUTH LISTENER (PHASE 9) ---
     setupAuthListener: () => {
-        // ðŸ›¡ï¸ GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
+        // 🛡️ GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
         const authListenerFn = typeof window.firebaseOnIdTokenChanged === 'function' ? window.firebaseOnIdTokenChanged : window.firebaseOnAuthStateChanged;
         
         if (typeof authListenerFn !== 'function') {
-            console.warn("ðŸ›¡ï¸ Guardian: Firebase Auth not loaded. Skipping auth listener.");
+            console.warn("🛡️ Guardian: Firebase Auth not loaded. Skipping auth listener.");
             return;
         }
 
@@ -1313,13 +1313,13 @@ const Admin = {
             const signoutContainer = document.getElementById('admin-signout-container');
             
             if (user) {
-                console.log("ðŸ›¡ï¸ Guardian: Admin Authenticated. Analytics blocked.");
+                console.log("🛡️ Guardian: Admin Authenticated. Analytics blocked.");
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
-                // ðŸ›¡ï¸ GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
+                // 🛡️ GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
                 Admin.currentUser = user;
 
-                // ðŸ›¡ï¸ GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
+                // 🛡️ GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
                 let displayName = user.email;
                 if (user.email && user.email.includes('@')) {
                     const prefix = user.email.split('@')[0];
@@ -1352,9 +1352,9 @@ const Admin = {
                 Admin.syncAllBadges();
 
             } else {
-                console.log("ðŸ›¡ï¸ Guardian: Admin Logged Out. Analytics restored.");
+                console.log("🛡️ Guardian: Admin Logged Out. Analytics restored.");
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
-                // ðŸ›¡ï¸ GUARDIAN UX: Wipe mirrored session on secure signout
+                // 🛡️ GUARDIAN UX: Wipe mirrored session on secure signout
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
                 if (signoutContainer) signoutContainer.innerHTML = '';
@@ -1404,7 +1404,7 @@ const Admin = {
                     if (typeof showToast === 'function') showToast("Developer Session Active", "info");
                 } else {
                     if (loginModal) {
-                        // ðŸ›¡ï¸ GUARDIAN FIX: Router-aware Smooth Modal Engine integration
+                        // 🛡️ GUARDIAN FIX: Router-aware Smooth Modal Engine integration
                         if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
                         if (typeof openSmoothModal === 'function') openSmoothModal('login-modal');
                         else loginModal.classList.remove('hidden');
@@ -1415,7 +1415,7 @@ const Admin = {
             }
         });
 
-        // ðŸ›¡ï¸ GUARDIAN FIX: Smooth exit via Router/Back Button
+        // 🛡️ GUARDIAN FIX: Smooth exit via Router/Back Button
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => { 
                 if (location.hash === '#login') history.back();
@@ -1440,7 +1440,7 @@ const Admin = {
                     return;
                 }
 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 1: Network-request-failed crash immunity
+                // 🛡️ GUARDIAN PHASE 1: Network-request-failed crash immunity
                 if (!navigator.onLine || window.isLieFi) {
                     if (typeof showToast === 'function') showToast("Network disconnected. Cannot authenticate.", "error");
                     return;
@@ -1451,7 +1451,7 @@ const Admin = {
 
                 window.firebaseSignIn(window.firebaseAuth, email, password)
                     .then((userCredential) => {
-                        // ðŸ›¡ï¸ GUARDIAN FIX: Smooth exit via Router
+                        // 🛡️ GUARDIAN FIX: Smooth exit via Router
                         if (location.hash === '#login') history.back();
                         else if (typeof closeSmoothModal === 'function') closeSmoothModal('login-modal');
                         else loginModal.classList.add('hidden');
@@ -1469,7 +1469,7 @@ const Admin = {
                     })
                     .catch((error) => {
                         if (typeof showToast === 'function') showToast("Authentication Failed", "error");
-                        console.error("ðŸ›¡ï¸ Guardian Login Error:", error);
+                        console.error("🛡️ Guardian Login Error:", error);
                     })
                     .finally(() => {
                         if (spinner) spinner.classList.add('hidden');
@@ -1515,14 +1515,14 @@ const Admin = {
 
     // --- HELPER: RENDER ALL DYNAMIC MODULES ---
     renderAdminModules: () => {
-        // ðŸ›¡ï¸ GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
+        // 🛡️ GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
         if (Admin._modulesRendered) {
             Admin.initGridView(); // Ensure grid is bound if re-opened
             return;
         }
         Admin._modulesRendered = true;
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
+        // 🛡️ GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
         const devModalCard = document.querySelector('#dev-modal > div');
         if (devModalCard) {
             devModalCard.className = "bg-gray-50 dark:bg-gray-900 w-full min-h-screen max-w-5xl mx-auto p-4 sm:p-6 flex flex-col relative transition-all duration-300";
@@ -1534,7 +1534,7 @@ const Admin = {
         }
 
         // --- AFTER ---
-        // ðŸ›¡ï¸ GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
+        // 🛡️ GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
         // Admin will rely purely on the bottom Sign Out button.
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6');
 
@@ -1552,18 +1552,18 @@ const Admin = {
         Admin.setupMaintenanceManager();
         Admin.setupSpecialEventManager(); 
         Admin.setupDiagnosticsManager(); 
-        Admin.setupRoadmapManager(); // ðŸ›¡ï¸ GUARDIAN PHASE: Operations Roadmap
+        Admin.setupRoadmapManager(); // 🛡️ GUARDIAN PHASE: Operations Roadmap
 
-        // ðŸ›¡ï¸ GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
+        // 🛡️ GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
         
         // Final Universal Sync
         Admin.syncAllBadges();
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 14: Action Required Expiry Dashboard
+        // 🛡️ GUARDIAN PHASE 14: Action Required Expiry Dashboard
         Admin.fetchActionRequired();
         
-        // ðŸ›¡ï¸ GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
+        // 🛡️ GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
         // Because the HTML for these elements was moved OUT of the monolithic UI.js string 
         // and IN to the dynamic setup functions, we must manually trigger their setup logic here
         // so they attach to the newly generated DOM elements on first load.
@@ -1663,7 +1663,7 @@ const Admin = {
                         Object.keys(exclData[rId]).forEach(tNum => {
                             const item = exclData[rId][tNum];
                             
-                            // ðŸ›¡ï¸ GUARDIAN PHASE 1: Capture Grid Notices
+                            // 🛡️ GUARDIAN PHASE 1: Capture Grid Notices
                             if (tNum === '_grid_notice') {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     activeItems.push({ type: 'Grid Notice', label: `Grid Notice Active`, expiresAt: item.expiresAt, id: '_grid_notice', panelId: 'exclusion-panel', routeId: rId });
@@ -1699,7 +1699,7 @@ const Admin = {
                 return a.expiresAt - b.expiresAt;
             });
 
-            // ðŸ›¡ï¸ GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
+            // 🛡️ GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
             Admin._routeFlags = {};
             activeItems.forEach(item => {
                 if (!item.routeId || item.routeId === 'all' || item.routeId.startsWith('all_')) return;
@@ -1716,7 +1716,7 @@ const Admin = {
             if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
             if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-            // ðŸ›¡ï¸ GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
+            // 🛡️ GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
             const getRegionBadge = (rId) => {
                 if (!rId) return '';
                 const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
@@ -1881,7 +1881,7 @@ const Admin = {
             const chev = targetPanel.querySelector('[id$="-chevron"]');
             if (chev) chev.classList.remove('-rotate-90');
 
-            // ðŸ›¡ï¸ GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
+            // 🛡️ GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
             const internalHeader = targetPanel.querySelector('[id$="-header-btn"]');
             if (internalHeader) internalHeader.style.setProperty('display', 'none', 'important');
 
@@ -1889,7 +1889,7 @@ const Admin = {
             const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6') || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
             if (devHeaderRow) {
                 devHeaderRow.classList.remove('pb-4', 'mb-6');
-                devHeaderRow.classList.add('pb-2', 'mb-3'); // ðŸ›¡ï¸ GUARDIAN UX: Slim header padding
+                devHeaderRow.classList.add('pb-2', 'mb-3'); // 🛡️ GUARDIAN UX: Slim header padding
 
                 const titleH3 = devHeaderRow.querySelector('h3');
                 if (titleH3) {
@@ -1926,7 +1926,7 @@ const Admin = {
                             container.classList.add('admin-grid-view');
                             container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
                             titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
-                            devHeaderRow.classList.add('pb-4', 'mb-6'); // ðŸ›¡ï¸ GUARDIAN UX: Restore padding
+                            devHeaderRow.classList.add('pb-4', 'mb-6'); // 🛡️ GUARDIAN UX: Restore padding
                             devHeaderRow.classList.remove('pb-2', 'mb-3');
                             const toggleBtn = document.getElementById('grid-view-toggle');
                             if (toggleBtn) toggleBtn.style.display = '';
@@ -1992,7 +1992,7 @@ const Admin = {
                 await fetch(`${dynamicEndpoint}exclusions/${routeId}/_grid_notice.json?auth=${secret}`, { method: 'DELETE' });
                 if (typeof showToast === 'function') showToast("Grid Notice resolved & removed.", "success");
             } else if (type === 'Alert') {
-                // ðŸ›¡ï¸ GUARDIAN FIX: Corrected Firebase path for single-object nodes and integrated Archive + Purge protocol
+                // 🛡️ GUARDIAN FIX: Corrected Firebase path for single-object nodes and integrated Archive + Purge protocol
                 const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${routeId}.json`, {}, 6000);
                 if (fetchRes.ok) {
                     const alertData = await fetchRes.json();
@@ -2048,7 +2048,7 @@ const Admin = {
         crashPanel.innerHTML = `
                 <button id="crash-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                     <span class="flex flex-col items-center">
-                        <span class="text-2xl mb-2">ðŸ”¥</span> 
+                        <span class="text-2xl mb-2">🔥</span> 
                         <span>Crash Analytics</span>
                     </span>
                     <span id="crash-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
@@ -2113,7 +2113,7 @@ const Admin = {
         tabInbox.onclick = () => switchTab('inbox');
         tabArchive.onclick = () => switchTab('archive');
 
-        // ðŸ›¡ï¸ GUARDIAN UX: Native Swipe Navigation for Crash Tabs
+        // 🛡️ GUARDIAN UX: Native Swipe Navigation for Crash Tabs
         let crashTouchStartX = 0;
         let crashTouchStartY = 0;
         if (body) {
@@ -2138,11 +2138,11 @@ const Admin = {
             document.getElementById('crash-status-display').textContent = isInbox ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`;
             
             if (targetData.length === 0) {
-                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'No new crashes! ðŸŽ‰' : 'Archive empty.'}</div>`;
+                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'No new crashes! 🎉' : 'Archive empty.'}</div>`;
                 return;
             }
 
-            // ðŸ›¡ï¸ GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
+            // 🛡️ GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
             const secureEscape = (str) => {
                 if (!str) return '';
                 if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -2170,7 +2170,7 @@ const Admin = {
                 const did = secureEscape(rawDid);
                 const safeJsDid = rawDid.replace(/'/g, "\\'");
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
+                // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
                 const resolveAllHtml = isInbox 
                     ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1">âœ…</span> Resolve All (${groupCrashes.length})</button>` 
                     : '';
@@ -2284,7 +2284,7 @@ const Admin = {
             }
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 1: Bulk Resolve Engine
+        // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Engine
         Admin.resolveAllDeviceCrashes = async (deviceId) => {
             const confirmed = await Admin.secureConfirm("Resolve All Crashes", `Mark all active crashes for device ${deviceId.substring(0,10)}... as resolved?`);
             if (!confirmed) return;
@@ -2409,7 +2409,7 @@ const Admin = {
                 document.head.appendChild(style);
             }
 
-            // ðŸ›¡ï¸ GUARDIAN UX FIX: Drill-Down "X" Interceptor
+            // 🛡️ GUARDIAN UX FIX: Drill-Down "X" Interceptor
             if (closeBtn) {
                 // Remove the inline onclick from index.html that blindly closes the modal
                 closeBtn.removeAttribute('onclick');
@@ -2459,17 +2459,17 @@ const Admin = {
                 container.classList.remove('admin-grid-view');
                 container.style.gridTemplateColumns = ''; // Clear inline styles
                 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Edge-to-Edge Expansion
+                // 🛡️ GUARDIAN UX FIX: Edge-to-Edge Expansion
                 // Strip padding, borders, and margins so the module touches the exact edge of the screen
                 card.dataset.originalClasses = card.className;
                 card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800');
                 card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-transparent');
                 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
+                // 🛡️ GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
                 const signoutContainer = document.getElementById('admin-signout-container');
                 if (signoutContainer) signoutContainer.style.display = 'none';
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 11: Admin Router Bug Fix
+                // 🛡️ GUARDIAN PHASE 11: Admin Router Bug Fix
                 history.pushState({ adminPanel: card.id }, '', `#dev-${card.id}`);
                 
                 // Hide sibling cards
@@ -2485,7 +2485,7 @@ const Admin = {
                 const chev = card.querySelector('[id$="-chevron"]');
                 if (chev) chev.classList.remove('-rotate-90');
 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
+                // 🛡️ GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
                 const innerHeader = card.querySelector('[id$="-header-btn"]');
                 if (innerHeader) innerHeader.style.setProperty('display', 'none', 'important');
                 
@@ -2513,13 +2513,13 @@ const Admin = {
                     document.getElementById('drill-back-btn').onclick = (evt) => {
                         evt.stopPropagation();
                         
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 1: Lightbox Router Trap
+                        // 🛡️ GUARDIAN PHASE 1: Lightbox Router Trap
                         if (window._adminLightboxOpen) {
                             Admin.closeLightbox();
                             return; // Halt cascade, stay in the panel
                         }
 
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
+                        // 🛡️ GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
                         // Temporarily rename the modal ID so ui.js's popstate listener doesn't see it
                         // and close it during the asynchronous history.back() event.
                         window._adminDrillBackLock = true;
@@ -2543,10 +2543,10 @@ const Admin = {
                         titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
                         toggleBtn.style.display = '';
                         
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore Card Borders & Padding
+                        // 🛡️ GUARDIAN UX FIX: Restore Card Borders & Padding
                         card.className = card.dataset.originalClasses;
 
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore Action Required accordion state if it was open
+                        // 🛡️ GUARDIAN UX FIX: Restore Action Required accordion state if it was open
                         if (window._actionRequiredWasOpen) {
                             const actionBody = document.getElementById('action-body');
                             const actionChevron = document.getElementById('action-chevron');
@@ -2555,7 +2555,7 @@ const Admin = {
                             window._actionRequiredWasOpen = false; // Reset lock
                         }
                         
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore Sign Out container when returning to grid
+                        // 🛡️ GUARDIAN UX FIX: Restore Sign Out container when returning to grid
                         if (signoutContainer) signoutContainer.style.display = '';
                         
                         Array.from(container.children).forEach(child => {
@@ -2563,12 +2563,12 @@ const Admin = {
                             const b = child.querySelector('[id$="-body"]');
                             if (b) b.classList.add('hidden');
                             
-                            // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore internal accordion header
+                            // 🛡️ GUARDIAN UX FIX: Restore internal accordion header
                             const h = child.querySelector('[id$="-header-btn"]');
                             if (h) h.style.removeProperty('display');
                         });
                     
-                    // ðŸ›¡ï¸ GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
+                    // 🛡️ GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
                     Admin.syncAllBadges();
                 };
                 
@@ -2577,8 +2577,8 @@ const Admin = {
                 if (card.id === 'delay-reports-panel') Admin.fetchDelayReports();
                 if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
                 if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
-                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // ðŸ›¡ï¸ GUARDIAN PHASE 7
-                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // ðŸ›¡ï¸ GUARDIAN PHASE 14
+                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // 🛡️ GUARDIAN PHASE 7
+                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // 🛡️ GUARDIAN PHASE 14
                 if (card.id === 'alert-panel') {
                     const targetEl = document.getElementById('alert-target');
                     if (targetEl) targetEl.dispatchEvent(new Event('change'));
@@ -2612,7 +2612,7 @@ const Admin = {
 
         growthPanel.innerHTML = `
             <button id="growth-header-btn" class="w-full text-left text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center"><span class="text-2xl mb-2">ðŸš€</span> <span>Growth & Promo</span></span>
+                <span class="flex flex-col items-center"><span class="text-2xl mb-2">🚀</span> <span>Growth & Promo</span></span>
                 <svg id="growth-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             
@@ -2664,7 +2664,7 @@ const Admin = {
         dePanel.innerHTML = `
             <button id="de-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ›‘</span>
+                    <span class="text-2xl mb-2">🚫</span>
                     <span>Dead Ends & Fails</span>
                 </span>
                 <span id="de-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
@@ -2697,7 +2697,7 @@ const Admin = {
         const sortBtn = document.getElementById('de-sort-btn');
         const listDiv = document.getElementById('de-list');
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 2: Dynamic Sorting State
+        // 🛡️ GUARDIAN PHASE 2: Dynamic Sorting State
         Admin._deSortMode = Admin._deSortMode || 'recent'; 
 
         if (sortBtn) {
@@ -2763,7 +2763,7 @@ const Admin = {
                     if (entry.timestamp > heatMap[key].lastSeen) heatMap[key].lastSeen = entry.timestamp;
                 });
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 2: Apply dynamic sort selection
+                // 🛡️ GUARDIAN PHASE 2: Apply dynamic sort selection
                 const sorted = Object.values(heatMap).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
                     return b.count - a.count;
@@ -2771,7 +2771,7 @@ const Admin = {
                 
                 listDiv.innerHTML = '';
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 1: Sanitization Armor for Telemetry
+                // 🛡️ GUARDIAN PHASE 1: Sanitization Armor for Telemetry
                 const secureEscape = (str) => {
                     if (!str) return '';
                     if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -2868,7 +2868,7 @@ const Admin = {
         fbPanel.innerHTML = `
             <div id="fb-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ’¬</span> 
+                    <span class="text-2xl mb-2">💬</span> 
                     <span>Commuter Feedback</span>
                 </span>
                 <span id="fb-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
@@ -2876,7 +2876,7 @@ const Admin = {
             </div>
             
             <div id="fb-body" class="hidden mt-4 flex flex-col">
-                <!-- ðŸ›¡ï¸ GUARDIAN UX FIX: Next Train Style Tabs -->
+                <!-- 🛡️ GUARDIAN UX FIX: Next Train Style Tabs -->
                 <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3">
                     <button id="fb-tab-inbox" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none">
                         Inbox
@@ -2886,21 +2886,21 @@ const Admin = {
                     </button>
                 </div>
 
-                <!-- ðŸ›¡ï¸ GUARDIAN UX FIX: Search Bar -->
+                <!-- 🛡️ GUARDIAN UX FIX: Search Bar -->
                 <div class="mb-3 relative px-1">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span class="text-xs">ðŸ”</span>
+                        <span class="text-xs">🔍</span>
                     </div>
                     <input type="text" id="fb-search-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block pl-10 p-3 shadow-inner outline-none transition-colors" placeholder="Search aliases, IDs, or messages...">
                 </div>
 
-                <!-- ðŸ›¡ï¸ GUARDIAN UX FIX: Relocated Action Buttons -->
+                <!-- 🛡️ GUARDIAN UX FIX: Relocated Action Buttons -->
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center">
-                        <span class="mr-1.5 text-sm leading-none">ðŸ“¥</span> Export All
+                        <span class="mr-1.5 text-sm leading-none">📥</span> Export All
                     </button>
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center">
-                        <span class="mr-1.5 text-sm leading-none">ðŸ”„</span> Refresh
+                        <span class="mr-1.5 text-sm leading-none">🔄</span> Refresh
                     </button>
                 </div>
                 
@@ -2964,7 +2964,7 @@ const Admin = {
         tabInbox.onclick = () => switchTab('inbox');
         tabArchive.onclick = () => switchTab('archive');
 
-        // ðŸ›¡ï¸ GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
+        // 🛡️ GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
         let fbTouchStartX = 0;
         let fbTouchStartY = 0;
         if (body) {
@@ -2995,7 +2995,7 @@ const Admin = {
                 groups[did].push(item);
             });
 
-            // ðŸ›¡ï¸ GUARDIAN UX FIX: Dynamic Tab Counters
+            // 🛡️ GUARDIAN UX FIX: Dynamic Tab Counters
             let totalInbox = 0;
             let totalArchive = 0;
             Object.keys(groups).forEach(did => {
@@ -3033,7 +3033,7 @@ const Admin = {
             });
 
             if (displayGroups.length === 0) {
-                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean! âœ¨' : 'No archived threads yet.'}</div>`;
+                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean! ✨' : 'No archived threads yet.'}</div>`;
                 return;
             }
 
@@ -3052,7 +3052,7 @@ const Admin = {
                 });
             };
             
-            // ðŸ›¡ï¸ GUARDIAN UX FIX: Universal CRM Date Formatter
+            // 🛡️ GUARDIAN UX FIX: Universal CRM Date Formatter
             const formatNiceDateTime = (ts) => {
                 const d = new Date(ts);
                 const day = d.getDate();
@@ -3083,15 +3083,15 @@ const Admin = {
                 const alias = Admin.cachedAliases && Admin.cachedAliases[did] ? Admin.cachedAliases[did] : null;
                 const displayDid = did === 'Anonymous / Legacy' ? did : did.substring(0,15) + '...';
                 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Relocate Alias button into the native Title bar to free up the Action Menu
+                // 🛡️ GUARDIAN UX FIX: Relocate Alias button into the native Title bar to free up the Action Menu
                 const editAliasBtn = did !== 'Anonymous / Legacy' ? `<button onclick="event.stopPropagation(); Admin.setCommuterAlias('${did}', '${alias || ''}')" class="ml-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-800 p-1 rounded-md transition-colors focus:outline-none flex-shrink-0 shadow-sm border border-orange-200 dark:border-orange-800" title="Edit Alias"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>` : '';
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Hide raw device ID entirely if an alias is present
+                // 🛡️ GUARDIAN UX FIX: Hide raw device ID entirely if an alias is present
                 const commuterTitle = alias ? `${alias}${editAliasBtn}` : `${displayDid}${editAliasBtn}`;
                 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Detect attachments in thread for ðŸ“Ž icon
+                // 🛡️ GUARDIAN UX FIX: Detect attachments in thread for 📎 icon
                 const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
+                // 🛡️ GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
                 const allEmails = new Set();
                 const allPhones = new Set();
                 
@@ -3120,13 +3120,13 @@ const Admin = {
                     allEmails.forEach(em => {
                         contactHtml += `
                             <div class="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 max-w-[220px] sm:max-w-[300px]">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate">âœ‰ï¸ ${em}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-blue-500 transition-colors focus:outline-none" title="Copy">ðŸ“‹</button>
+                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate">âœ‰️ ${em}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-blue-500 transition-colors focus:outline-none" title="Copy">📋</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
                         const isNum = /^\d+$/.test(ph);
-                        const icon = isNum ? 'ðŸ’¬' : 'ðŸ“ž';
+                        const icon = isNum ? '💬' : '📞';
                         const link = isNum ? `https://wa.me/${ph}` : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
@@ -3134,18 +3134,18 @@ const Admin = {
                         contactHtml += `
                             <div class="flex items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 max-w-[220px] sm:max-w-[300px] shadow-sm">
                                 <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight truncate">${icon} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none" title="Copy">ðŸ“‹</button>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none" title="Copy">📋</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
                 }
 
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
+                // 🛡️ GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
                             <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full flex items-center">Commuter: <span class="text-blue-600 ml-1 flex items-center">${commuterTitle}</span></span>
-                            <span class="text-[9px] text-gray-500 font-mono mt-1">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''} ${hasAttachments ? 'ðŸ“Ž ' : ''}| Last: ${latestDate}</span>
+                            <span class="text-[9px] text-gray-500 font-mono mt-1">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''} ${hasAttachments ? '📎 ' : ''}| Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center justify-end shrink-0 self-center">
                             <button class="pointer-events-none focus:outline-none p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent">
@@ -3158,7 +3158,7 @@ const Admin = {
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <button onclick="Admin.exportThreadForAI('${did}')" class="shrink-0 flex items-center px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)"><span class="mr-1.5 text-base leading-none">ðŸ“¥</span> Export</button>
+                            <button onclick="Admin.exportThreadForAI('${did}')" class="shrink-0 flex items-center px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)"><span class="mr-1.5 text-base leading-none">📥</span> Export</button>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
                 `;
@@ -3197,7 +3197,7 @@ const Admin = {
                     
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
+                        // 🛡️ GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
                         let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">âœ“</span>';
                         if (item.acknowledged) {
                             receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">âœ“âœ“</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
@@ -3221,13 +3221,13 @@ const Admin = {
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
 
-                        // ðŸ›¡ï¸ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
+                        // 🛡️ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
                         parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
                             if (btnStart || btnEnd) return match; // Already wrapped in a button
                             return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
                         });
 
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
+                        // 🛡️ GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
                         groupHTML += `
                             <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4">
                                 <div class="flex flex-col bg-slate-700 dark:bg-slate-800 text-white pt-1.5 pb-2 px-3 rounded-2xl rounded-tr-sm shadow-md border border-slate-600 dark:border-slate-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
@@ -3245,7 +3245,7 @@ const Admin = {
                         // TRAILING WHITESPACE PURGE: .trim() before replace
                         let rawText = item.text ? secureEscape(item.text.trim()) : "No content";
                         
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
+                        // 🛡️ GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
                         rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
                         
                         // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
@@ -3253,7 +3253,7 @@ const Admin = {
                             const fullNum = `27${p1}${p2}${p3}`;
                             const displayNum = `0${p1} ${p2} ${p3}`;
                             const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : ''; 
-                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline" onclick="event.stopPropagation()">ðŸ’¬ ${displayNum}</a>`;
+                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline" onclick="event.stopPropagation()">💬 ${displayNum}</a>`;
                         });
                         
                         rawText = rawText.replace(/\n/g, "<br>");
@@ -3267,21 +3267,21 @@ const Admin = {
 
                         // REGEX: Extract Context Block ("[Replying to: ...]")
                         let quoteBlockHtml = "";
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Relaxed regex to catch replies without explicit <br> tags
+                        // 🛡️ GUARDIAN UX FIX: Relaxed regex to catch replies without explicit <br> tags
                         const quoteRegex = /^\[(.*?)\](?:\s*<br>\s*|\s+)/i;
                         const quoteMatch = rawText.match(quoteRegex);
                         let isReply = false;
                         
                         if (quoteMatch && quoteMatch[1] !== undefined) {
                             isReply = true;
-                            // ðŸ›¡ï¸ GUARDIAN UX FIX: Force string cast to ensure .replace() and .includes() never throw TypeErrors
+                            // 🛡️ GUARDIAN UX FIX: Force string cast to ensure .replace() and .includes() never throw TypeErrors
                             const rawQuoteContent = String(quoteMatch[1]);
                             let quoteContent = rawQuoteContent
                                 .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_]+/i, 'Reply to Enock:')
                                 .replace(/Replying to:\s*/i, '')
                                 .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ');
                                 
-                            // ðŸ›¡ï¸ GUARDIAN PHASE 7: Clickable Context Bubble
+                            // 🛡️ GUARDIAN PHASE 7: Clickable Context Bubble
                             // Determines if this is an alert reply (either legacy text match or future ID format)
                             let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
                             let isAlertQuote = alertIdMatch || rawQuoteContent.includes('Advisory') || rawQuoteContent.includes('Line Severed') || rawQuoteContent.includes('Expect Delays');
@@ -3311,7 +3311,7 @@ const Admin = {
                         if (typeof rawText !== 'string') rawText = "";
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
 
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
+                        // 🛡️ GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
                         let attachmentHtml = '';
                         if (safeAttachUrls.length > 0) {
                             const gridCols = safeAttachUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
@@ -3321,7 +3321,7 @@ const Admin = {
                                 if (isImageExt) {
                                     attachmentHtml += `<button type="button" onclick="event.stopPropagation(); Admin.openLightbox('${url}')" class="block focus:outline-none w-full text-left"><img src="${url}" class="w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in" alt="Attachment ${idx + 1}"></button>`;
                                 } else {
-                                    attachmentHtml += `<a href="${url}" target="_blank" onclick="event.stopPropagation();" class="flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24"><span class="mr-1">ðŸ“„</span> View Doc ${idx + 1}</a>`;
+                                    attachmentHtml += `<a href="${url}" target="_blank" onclick="event.stopPropagation();" class="flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24"><span class="mr-1">📄</span> View Doc ${idx + 1}</a>`;
                                 }
                             });
                             attachmentHtml += `</div>`;
@@ -3329,13 +3329,13 @@ const Admin = {
 
                         // METADATA: Integrated Bubble Header
                         let typeLabel = "General";
-                        let typeIcon = "ðŸ’¬";
-                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIcon = "â±ï¸"; }
-                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIcon = "ðŸ›"; }
-                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIcon = "ðŸ’¡"; }
+                        let typeIcon = "💬";
+                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIcon = "⏱️"; }
+                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIcon = "🐛"; }
+                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIcon = "💡"; }
 
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
-                        let headerLabelText = isReply ? `â†©ï¸ Reply:` : `${typeIcon} ${typeLabel}`;
+                        // 🛡️ GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
+                        let headerLabelText = isReply ? `â†©️ Reply:` : `${typeIcon} ${typeLabel}`;
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const integratedHeaderHtml = `
@@ -3345,7 +3345,7 @@ const Admin = {
                             </div>
                         `;
 
-                        // ðŸ›¡ï¸ GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
+                        // 🛡️ GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
                         groupHTML += `
                             <div class="flex flex-col items-start mb-1.5 pr-2 sm:pr-4">
                                 <div class="flex flex-col bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 pt-1.5 pb-2 px-3 rounded-2xl rounded-tl-sm shadow-sm border border-gray-200 dark:border-gray-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
@@ -3387,7 +3387,7 @@ const Admin = {
                 listContainer.appendChild(groupCard);
             });
 
-            // ðŸ›¡ï¸ GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
+            // 🛡️ GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
                 const header = e.target.closest('.feedback-group-header');
                 if (!header) return;
@@ -3543,7 +3543,7 @@ const Admin = {
             }
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 11: Restore from Archive
+        // 🛡️ GUARDIAN PHASE 11: Restore from Archive
         Admin.restoreFeedback = async (id) => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -3592,7 +3592,7 @@ const Admin = {
             }
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
+        // 🛡️ GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
         Admin.setCommuterAlias = async (deviceId, currentAlias) => {
             const newName = prompt(`Enter a friendly name/alias for Commuter ${deviceId.substring(0,10)}... (Leave blank to remove):`, currentAlias);
             if (newName === null) return; // Action cancelled by user
@@ -3626,7 +3626,7 @@ const Admin = {
             }
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
+        // 🛡️ GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
         Admin.exportThreadForAI = (did) => {
             const items = Admin.cachedFeedbackData.filter(i => (i.device_id === did || i.deviceId === did || (did === 'Anonymous / Legacy' && !i.device_id && !i.deviceId)));
             items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -3664,7 +3664,7 @@ const Admin = {
             if (typeof showToast === 'function') showToast("Thread exported for AI (.txt)", "success");
         };
 
-        // ðŸ›¡ï¸ GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
+        // 🛡️ GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
         Admin.exportGlobalThreadsForAI = () => {
             const isInbox = Admin.currentFeedbackTab === 'inbox';
             
@@ -4320,7 +4320,7 @@ const Admin = {
             modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-3 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight flex items-center"><span class="mr-2">ðŸ’¬</span> Reply to Commuter</h3>
+                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight flex items-center"><span class="mr-2">💬</span> Reply to Commuter</h3>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2">Message will be delivered to their personal inbox upon next app launch.</p>
                     
                     <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5">
@@ -4334,8 +4334,8 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">ðŸ”—</button>
-                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">ðŸ“Ž Media</label>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">🔗</button>
+                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">📎 Media</label>
                             <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
                         <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
@@ -4361,12 +4361,12 @@ const Admin = {
             modal.firstElementChild.classList.add('scale-95');
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
+        // 🛡️ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
         const replyUploadFile = document.getElementById('admin-reply-upload-file');
         if (replyUploadFile) {
             replyUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('admin-reply-text');
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // 🛡️ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -4394,12 +4394,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.getElementById('admin-reply-upload-label');
-                        const originalLabel = labelEl ? labelEl.innerHTML : 'ðŸ“Ž Insert Media';
+                        const originalLabel = labelEl ? labelEl.innerHTML : '📎 Insert Media';
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `â³ ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -4414,7 +4414,7 @@ const Admin = {
                                     
                                     let htmlToInsert = '';
                                     if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">ðŸ“„ View Attached PDF</a>&nbsp;`;
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">📄 View Attached PDF</a>&nbsp;`;
                                     } else {
                                         htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button><br>`;
                                     }
@@ -4516,7 +4516,7 @@ const Admin = {
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-blue-200 dark:border-blue-900/50 flex flex-col max-h-[85vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <div class="flex items-center space-x-2">
-                            <span class="text-xl">ðŸ”</span>
+                            <span class="text-xl">🔍</span>
                             <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Original Advisory</h3>
                         </div>
                         <button onclick="closeSmoothModal('admin-context-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
@@ -4547,7 +4547,7 @@ const Admin = {
                 if (data && !data.error) Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
                 
                 if (!foundData) {
-                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // ðŸ›¡ï¸ GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
+                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // 🛡️ GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
                     data = await res.json();
                     if (data && !data.error) {
                         Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
@@ -4578,7 +4578,7 @@ const Admin = {
                 }
             }
 
-            // ðŸ›¡ï¸ GUARDIAN PHASE 14: Disruption Graveyard Sweep
+            // 🛡️ GUARDIAN PHASE 14: Disruption Graveyard Sweep
             if (!foundData && fallbackText) {
                 const cleanFallback = fallbackText.replace(/['"]/g, '').toLowerCase().substring(0, 30);
                 
@@ -4625,7 +4625,7 @@ const Admin = {
                 
                 let statusHtml = foundData.archivedAt ? `<span class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived</span>` : `<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
                 
-                // ðŸ›¡ï¸ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy inline images in Alerts
+                // 🛡️ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy inline images in Alerts
                 let parsedMessage = foundData.message || foundData.longExplanation || 'No details provided.';
                 parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
                     if (btnStart || btnEnd) return match; // Already wrapped
@@ -4645,7 +4645,7 @@ const Admin = {
             } else {
                 contentDiv.innerHTML = `
                     <div class="text-center py-4">
-                        <span class="text-3xl mb-2 block">ðŸ“­</span>
+                        <span class="text-3xl mb-2 block">📡</span>
                         <p class="text-gray-500 text-sm font-bold">Alert not found in database.</p>
                         <p class="text-xs text-gray-400 mt-2">It may have been permanently deleted or too old to retrieve. Here is the snippet we have:</p>
                         <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded italic text-xs text-gray-600 dark:text-gray-400">"${fallbackText}"</div>
@@ -4658,7 +4658,7 @@ const Admin = {
         }
     },
 
-// --- ðŸ›¡ï¸ GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
+// --- 🛡️ GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
     _savedRange: null,
     saveCursorRange: () => {
         const sel = window.getSelection();
@@ -4672,7 +4672,7 @@ const Admin = {
         const editor = document.getElementById(targetId);
         if (!editor) return;
         
-        // ðŸ›¡ï¸ GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
+        // 🛡️ GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
         // Without these !important rules, Tailwind's text-sm class squashes all larger <font> tags back to "normal"
         if (!document.getElementById('wysiwyg-extended-sizes')) {
             const style = document.createElement('style');
@@ -4687,7 +4687,7 @@ const Admin = {
 
         editor.focus();
         
-        // ðŸ›¡ï¸ GUARDIAN UX FIX: Restore mobile cursor selection before formatting
+        // 🛡️ GUARDIAN UX FIX: Restore mobile cursor selection before formatting
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -4700,7 +4700,7 @@ const Admin = {
         } else if (tag === 'italic') { 
             document.execCommand('italic', false, null);
         } else if (tag === 'larger' || tag === 'smaller') {
-            // ðŸ›¡ï¸ GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
+            // 🛡️ GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
             let currentSize = 3; // Default to Normal
             const sel = window.getSelection();
@@ -4786,7 +4786,7 @@ const Admin = {
         alertPanel.innerHTML = `
             <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ“¢</span> 
+                    <span class="text-2xl mb-2">📢</span> 
                     <span>Service Alerts Manager</span>
                 </span>
                 <svg id="alert-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -4811,18 +4811,18 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity</label>
                         <div class="relative" id="alert-severity-container">
                             <select id="alert-severity" class="hidden">
-                                <option value="info" selected>ðŸ”µ Info (General)</option>
-                                <option value="warning">ðŸŸ¡ Warning (Delays)</option>
-                                <option value="critical">ðŸ”´ Critical (Suspended)</option>
+                                <option value="info" selected>🔵 Info (General)</option>
+                                <option value="warning">🟡 Warning (Delays)</option>
+                                <option value="critical">🔴 Critical (Suspended)</option>
                             </select>
                             <div onclick="document.getElementById('alert-severity-list').classList.toggle('hidden'); document.getElementById('alert-severity-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="alert-severity-display" class="truncate">ðŸ”µ Info (General)</span>
+                                <span id="alert-severity-display" class="truncate">🔵 Info (General)</span>
                                 <svg id="alert-severity-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="alert-severity-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML='ðŸ”µ Info (General)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">ðŸ”µ Info (General)</li>
-                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML='ðŸŸ¡ Warning (Delays)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">ðŸŸ¡ Warning (Delays)</li>
-                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML='ðŸ”´ Critical (Suspended)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer">ðŸ”´ Critical (Suspended)</li>
+                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML='🔵 Info (General)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🔵 Info (General)</li>
+                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML='🟡 Warning (Delays)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🟡 Warning (Delays)</li>
+                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML='🔴 Critical (Suspended)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer">🔴 Critical (Suspended)</li>
                             </ul>
                         </div>
                     </div>
@@ -4857,8 +4857,8 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">ðŸ”—</button>
-                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">ðŸ“Ž Media</label>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">🔗</button>
+                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">📎 Media</label>
                             <input type="file" id="alert-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
                         <div contenteditable="true" id="alert-msg" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
@@ -4866,7 +4866,7 @@ const Admin = {
                 </div>
 
 
-                <!-- ðŸ›¡ï¸ SUPERCHARGED: Rich Media Inputs with Live Preview (HIDDEN IN ADVANCED TOGGLE) -->
+                <!-- 🛡️ SUPERCHARGED: Rich Media Inputs with Live Preview (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-advanced-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
                         <span>âž• Add Media & Links (Advanced)</span>
@@ -4876,7 +4876,7 @@ const Admin = {
                         <div class="sm:col-span-2">
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Hero Image URL</label>
-                                <label for="alert-image-file" class="cursor-pointer text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors shadow-sm focus:outline-none">ðŸ“¸ Upload</label>
+                                <label for="alert-image-file" class="cursor-pointer text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors shadow-sm focus:outline-none">📷 Upload</label>
                                 <input type="file" id="alert-image-file" class="hidden" accept="image/*">
                             </div>
                             <input type="text" id="alert-image-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://... or click Upload">
@@ -4897,10 +4897,10 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ðŸ›¡ï¸ SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
+                <!-- 🛡️ SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span>ðŸ“° Add Data Source (Advanced)</span>
+                        <span>📰 Add Data Source (Advanced)</span>
                         <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="alert-source-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
@@ -4915,7 +4915,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ðŸ›¡ï¸ SUPERCHARGED: Interactive Poll Manager -->
+                <!-- 🛡️ SUPERCHARGED: Interactive Poll Manager -->
                 <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 mt-2">
                     <div>
                         <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
@@ -4959,7 +4959,7 @@ const Admin = {
                 </div>
 
                 <div id="alert-live-poll-results" class="hidden pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
-                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5">ðŸ“Š</span> Live Poll Results</h4>
+                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5">📊</span> Live Poll Results</h4>
                     <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
                         <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
                         
@@ -5028,7 +5028,7 @@ const Admin = {
         const pollOptA = document.getElementById('alert-poll-opt-a');
         const pollOptB = document.getElementById('alert-poll-opt-b');
 
-        // ðŸ›¡ï¸ GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
+        // 🛡️ GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
         if (alertMsg) {
             alertMsg.addEventListener('paste', (e) => {
                 e.preventDefault();
@@ -5078,7 +5078,7 @@ const Admin = {
             });
         }
 
-        // ðŸ›¡ï¸ GUARDIAN FIX: Admin Native Image Uploader implementation
+        // 🛡️ GUARDIAN FIX: Admin Native Image Uploader implementation
         if (imageFileInput) {
             imageFileInput.addEventListener('change', async function() {
                 if (this.files && this.files.length > 0) {
@@ -5104,12 +5104,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.querySelector('label[for="alert-image-file"]');
-                        const originalLabel = labelEl ? labelEl.innerHTML : 'ðŸ“¸ Upload';
+                        const originalLabel = labelEl ? labelEl.innerHTML : '📷 Upload';
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `â³ ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -5143,12 +5143,12 @@ const Admin = {
             });
         }
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
+        // 🛡️ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
         const inlineUploadFile = document.getElementById('alert-upload-file');
         if (inlineUploadFile) {
             inlineUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('alert-msg');
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // 🛡️ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -5176,12 +5176,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.getElementById('alert-upload-label');
-                        const originalLabel = labelEl ? labelEl.innerHTML : 'ðŸ“Ž Insert Media';
+                        const originalLabel = labelEl ? labelEl.innerHTML : '📎 Insert Media';
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `â³ ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -5196,7 +5196,7 @@ const Admin = {
                                     
                                     let htmlToInsert = '';
                                     if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">ðŸ“„ View Attached PDF</a>&nbsp;`;
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">📄 View Attached PDF</a>&nbsp;`;
                                     } else {
                                         htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button><br>`;
                                     }
@@ -5264,14 +5264,14 @@ const Admin = {
                         severitySelect.value = data.severity;
                         const display = document.getElementById('alert-severity-display');
                         if (display) {
-                            if (data.severity === 'info') display.innerHTML = 'ðŸ”µ Info (General)';
-                            else if (data.severity === 'warning') display.innerHTML = 'ðŸŸ¡ Warning (Delays)';
-                            else if (data.severity === 'critical') display.innerHTML = 'ðŸ”´ Critical (Suspended)';
+                            if (data.severity === 'info') display.innerHTML = '🔵 Info (General)';
+                            else if (data.severity === 'warning') display.innerHTML = '🟡 Warning (Delays)';
+                            else if (data.severity === 'critical') display.innerHTML = '🔴 Critical (Suspended)';
                         }
                     } else if (severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = 'ðŸ”µ Info (General)';
+                        if (display) display.innerHTML = '🔵 Info (General)';
                     }
 
                     if (data.authorName) signoffInput.value = data.authorName;
@@ -5308,7 +5308,7 @@ const Admin = {
                         pollOptA.value = data.poll.optionA || "";
                         pollOptB.value = data.poll.optionB || "";
 
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 7: Fetch Live Poll Results
+                        // 🛡️ GUARDIAN PHASE 7: Fetch Live Poll Results
                         const pollResultsPanel = document.getElementById('alert-live-poll-results');
                         if (pollResultsPanel && data.id) {
                             try {
@@ -5364,7 +5364,7 @@ const Admin = {
                     if(severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = 'ðŸ”µ Info (General)';
+                        if (display) display.innerHTML = '🔵 Info (General)';
                     }
 
                     signoffInput.value = "Next Train Ops";
@@ -5431,11 +5431,11 @@ const Admin = {
             };
 
             const globalGroup = addGroup("Global Alerts");
-            addOption(globalGroup, "all", "ðŸŒ Entire Network (All Regions)", "<span class='truncate'>ðŸŒ Entire Network (All Regions)</span>");
-            addOption(globalGroup, "all_GP", "ðŸ“ Gauteng Only", "<span class='truncate'>ðŸ“ Gauteng Only</span>");
-            addOption(globalGroup, "all_WC", "ðŸ“ Western Cape Only", "<span class='truncate'>ðŸ“ Western Cape Only</span>");
-            addOption(globalGroup, "all_KZN", "ðŸ“ KwaZulu-Natal Only", "<span class='truncate'>ðŸ“ KwaZulu-Natal Only</span>");
-            addOption(globalGroup, "all_EC", "ðŸ“ Eastern Cape Only", "<span class='truncate'>ðŸ“ Eastern Cape Only</span>");
+            addOption(globalGroup, "all", "🌍 Entire Network (All Regions)", "<span class='truncate'>🌍 Entire Network (All Regions)</span>");
+            addOption(globalGroup, "all_GP", "📍 Gauteng Only", "<span class='truncate'>📍 Gauteng Only</span>");
+            addOption(globalGroup, "all_WC", "📍 Western Cape Only", "<span class='truncate'>📍 Western Cape Only</span>");
+            addOption(globalGroup, "all_KZN", "📍 KwaZulu-Natal Only", "<span class='truncate'>📍 KwaZulu-Natal Only</span>");
+            addOption(globalGroup, "all_EC", "📍 Eastern Cape Only", "<span class='truncate'>📍 Eastern Cape Only</span>");
 
             if (typeof ROUTES !== 'undefined') {
                 const regions = [
@@ -5451,16 +5451,16 @@ const Admin = {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
-                            const text = `ðŸš‚ ${r.name}${cues}`;
+                            const text = `🚂 ${r.name}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">ðŸ“</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">â›”</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">ðŸš§</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">ðŸ“¢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1">ðŸš‚ ${r.name}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1">🚂 ${r.name}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -5635,7 +5635,7 @@ const Admin = {
         disrPanel.innerHTML = `
             <button id="disr-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸš§</span> 
+                    <span class="text-2xl mb-2">🚧</span> 
                     <span>Transit Incident Manager</span>
                 </span>
                 <svg id="disr-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -5664,16 +5664,16 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity Tier</label>
                         <div class="relative" id="disr-tier-container">
                             <select id="disr-tier" class="hidden">
-                                <option value="CRITICAL">ðŸ”´ CRITICAL (Sever Line)</option>
-                                <option value="WARNING">ðŸŸ¡ WARNING (Expect Delays)</option>
+                                <option value="CRITICAL">🔴 CRITICAL (Sever Line)</option>
+                                <option value="WARNING">🟡 WARNING (Expect Delays)</option>
                             </select>
                             <div onclick="document.getElementById('disr-tier-list').classList.toggle('hidden'); document.getElementById('disr-tier-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">ðŸ”´ CRITICAL (Sever Line)</span></span>
+                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">🔴 CRITICAL (Sever Line)</span></span>
                                 <svg id="disr-tier-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="disr-tier-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>ðŸ”´ CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">ðŸ”´ CRITICAL (Sever Line)</li>
-                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>ðŸŸ¡ WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">ðŸŸ¡ WARNING (Expect Delays)</li>
+                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>🔴 CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🔴 CRITICAL (Sever Line)</li>
+                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>🟡 WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">🟡 WARNING (Expect Delays)</li>
                             </ul>
                         </div>
                     </div>
@@ -5743,7 +5743,7 @@ const Admin = {
         const saveBtn = document.getElementById('disr-save-btn');
         const listDiv = document.getElementById('disr-list');
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
+        // 🛡️ GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
         if (msgInput) {
             msgInput.addEventListener('input', function() {
                 this.style.height = 'auto'; // Reset to recalculate true scrollHeight
@@ -5829,10 +5829,10 @@ const Admin = {
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">ðŸ“</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">â›”</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">ðŸš§</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">ðŸ“¢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
                             const htmlText = `<span class="truncate mr-1">${r.name}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
@@ -6070,8 +6070,8 @@ const Admin = {
                             document.getElementById('disr-tier').value = data.tier || 'CRITICAL';
                             const tierDisplay = document.getElementById('disr-tier-display');
                             if (tierDisplay) {
-                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">ðŸ”´ CRITICAL (Sever Line)</span>';
-                                else tierDisplay.innerHTML = '<span class="text-yellow-600">ðŸŸ¡ WARNING (Expect Delays)</span>';
+                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">🔴 CRITICAL (Sever Line)</span>';
+                                else tierDisplay.innerHTML = '<span class="text-yellow-600">🟡 WARNING (Expect Delays)</span>';
                             }
 
                             if (data.stations && data.stations.length >= 1) {
@@ -6114,7 +6114,7 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
+                // 🛡️ GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
                 const fetchRes = await window.guardianFetch(`${dynamicEndpoint}disruptions/${rId}/${id}.json`, {}, 6000);
                 if (fetchRes.ok) {
                     const disrData = await fetchRes.json();
@@ -6161,7 +6161,7 @@ const Admin = {
         exclPanel.innerHTML = `
             <button id="excl-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">â›”</span> 
+                    <span class="text-2xl mb-2">⛔</span> 
                     <span>Schedule Exceptions</span>
                 </span>
                 <svg id="excl-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -6199,7 +6199,7 @@ const Admin = {
                         <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
-                    <!-- ðŸ›¡ï¸ GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
+                    <!-- 🛡️ GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
                     <div class="flex items-center justify-between mt-2">
                         <div class="flex-1 pr-2">
                             <label class="block text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Expiry Date (Optional)</label>
@@ -6262,7 +6262,7 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
                     <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                     <p class="text-[9px] text-gray-400 mt-1 mb-2">If set, the train will automatically reappear on the schedule after this date.</p>
-                    <!-- ðŸ›¡ï¸ GUARDIAN PHASE 1: Export Visibility Toggle -->
+                    <!-- 🛡️ GUARDIAN PHASE 1: Export Visibility Toggle -->
                     <label class="flex items-center cursor-pointer bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
                         <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
                         <span class="text-[10px] font-bold text-gray-600 dark:text-gray-300 ml-2 uppercase tracking-wide leading-none">Show "NO SVC" Tag on Export Image</span>
@@ -6390,10 +6390,10 @@ const Admin = {
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">ðŸ“</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">â›”</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">ðŸš§</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">ðŸ“¢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
                             const htmlText = `<span class="truncate mr-1">${r.name}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
@@ -6548,7 +6548,7 @@ const Admin = {
             pickerContainer.classList.remove('hidden');
         };
 
-        // ðŸ›¡ï¸ GUARDIAN Phase 3: Added Notice Save Button Logic
+        // 🛡️ GUARDIAN Phase 3: Added Notice Save Button Logic
         noticeSaveBtn.onclick = async () => {
             const rId = routeSelect.value;
             const text = noticeInput.value.trim();
@@ -6582,7 +6582,7 @@ const Admin = {
                     }, 10000);
                 }
 
-                // ðŸ›¡ï¸ GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
+                // 🛡️ GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
                 try {
                     await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -6616,7 +6616,7 @@ const Admin = {
                 const res = await window.guardianFetch(`${dynamicEndpoint}exclusions/${rId}.json?t=${Date.now()}`, {}, 6000);
                 const data = await res.json();
                 
-                // ðŸ›¡ï¸ GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
+                // 🛡️ GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
                 if (data && data._grid_notice) {
                     noticeInput.value = data._grid_notice.text || "";
                     
@@ -6639,7 +6639,7 @@ const Admin = {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
                     if (noticeExpiryInput) {
-                        // ðŸ›¡ï¸ GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
+                        // 🛡️ GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
                         const defaultExpiry = new Date();
                         defaultExpiry.setHours(defaultExpiry.getHours() + 24);
                         defaultExpiry.setMinutes(defaultExpiry.getMinutes() - defaultExpiry.getTimezoneOffset());
@@ -6671,10 +6671,10 @@ const Admin = {
                         const expStr = `${expDate.toLocaleDateString()} ${expDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                         
                         if (isExpired) {
-                            expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">âš ï¸ EXPIRED: ${expStr}</div>`;
+                            expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">⚠️ EXPIRED: ${expStr}</div>`;
                             rowOpacityClass = 'opacity-60 grayscale';
                         } else {
-                            expiryHtml = `<div class="text-[9px] text-blue-500 font-medium mt-0.5">â³ Expires: ${expStr}</div>`;
+                            expiryHtml = `<div class="text-[9px] text-blue-500 font-medium mt-0.5">⏳ Expires: ${expStr}</div>`;
                         }
                     }
 
@@ -6755,7 +6755,7 @@ const Admin = {
                 });
                 await Promise.all(promises);
 
-                // ðŸ›¡ï¸ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                // 🛡️ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                 try {
                     const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -6790,7 +6790,7 @@ const Admin = {
             try {
                 const res = await fetch(url, { method: 'DELETE' });
                 if (res.ok) {
-                    // ðŸ›¡ï¸ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                    // 🛡️ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                     try {
                         const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                             method: 'POST', 
@@ -6826,7 +6826,7 @@ const Admin = {
         eventPanel.innerHTML = `
             <button id="event-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">â­</span> 
+                    <span class="text-2xl mb-2">⭐</span> 
                     <span>Special Event Route</span>
                 </span>
                 <svg id="event-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -6960,7 +6960,7 @@ const Admin = {
         diagPanel.innerHTML = `
             <button id="diag-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ©º</span> 
+                    <span class="text-2xl mb-2">🩺</span> 
                     <span>System Health Diagnostics</span>
                 </span>
                 <svg id="diag-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -6968,7 +6968,7 @@ const Admin = {
 
             <div id="diag-body" class="hidden mt-4 space-y-4">
                 
-                <!-- ðŸ›¡ï¸ GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
+                <!-- 🛡️ GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
                 <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target Region (Matrix & Scan)</label>
                     <select id="diag-region-select" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
@@ -6980,7 +6980,7 @@ const Admin = {
                     </select>
                 </div>
 
-                <!-- ðŸ›¡ï¸ CACHE PROPAGATION MATRIX ACCORDION -->
+                <!-- 🛡️ CACHE PROPAGATION MATRIX ACCORDION -->
                 <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="matrix-header-btn" class="w-full px-3 py-3 bg-indigo-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-indigo-200/50 dark:hover:bg-indigo-900/60">
                         <span class="flex items-center">
@@ -7016,7 +7016,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ðŸ›¡ï¸ DEEP NETWORK SCAN ACCORDION -->
+                <!-- 🛡️ DEEP NETWORK SCAN ACCORDION -->
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm transition-all">
                     <button id="deepscan-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-blue-900/40 text-left text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-blue-900/60">
                         <span class="flex items-center">
@@ -7047,11 +7047,11 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ðŸ›¡ï¸ GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
+                <!-- 🛡️ GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
                         <span class="flex items-center">
-                            <span class="text-base mr-2">â³</span> Time Simulation Engine
+                            <span class="text-base mr-2">⏳</span> Time Simulation Engine
                         </span>
                         <svg id="sim-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -7154,7 +7154,7 @@ const Admin = {
                 window.isSimMode = true;
                 window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
+                // 🛡️ GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
                     try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch(e){}
                 } else {
@@ -7181,7 +7181,7 @@ const Admin = {
                 if (location.hash === '#dev') history.back();
                 else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
                 
-                // ðŸ›¡ï¸ GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
+                // 🛡️ GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
                 if (typeof loadAllSchedules === 'function') {
                     loadAllSchedules(true).then(() => {
                         if (typeof updateTime === 'function') updateTime(); 
@@ -7199,7 +7199,7 @@ const Admin = {
                 window.isSimMode = false;
                 if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
                 
-                // ðŸ›¡ï¸ GUARDIAN PHASE 4: Clear Pipeline Override on exit
+                // 🛡️ GUARDIAN PHASE 4: Clear Pipeline Override on exit
                 try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
                 const pipelineDropdown = document.getElementById('sim-pipeline-override');
                 if (pipelineDropdown) pipelineDropdown.value = 'AUTO';
@@ -7390,7 +7390,7 @@ const Admin = {
                         }
                     }
 
-                    // ðŸ›¡ï¸ GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
+                    // 🛡️ GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
                     html += `
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                             <td class="px-1.5 py-2 border-r border-gray-100 dark:border-gray-800 align-top">
@@ -7416,7 +7416,7 @@ const Admin = {
         runBtn.onclick = async () => {
             resultsDiv.innerHTML = '<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Initializing scan...</div>';
             
-            // ðŸ›¡ï¸ GUARDIAN PHASE 2: Dynamic Region & Source Engine
+            // 🛡️ GUARDIAN PHASE 2: Dynamic Region & Source Engine
             const regionSelect = document.getElementById('diag-region-select');
             const sourceSelect = document.getElementById('deepscan-source-select');
             const scanRegion = regionSelect ? regionSelect.value : 'CURRENT';
@@ -7575,7 +7575,7 @@ const Admin = {
 
                 const summary = `
                     <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-800/50 mb-3 shadow-sm">
-                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center"><span class="mr-1.5">â±ï¸</span> Source Data Age</span>
+                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center"><span class="mr-1.5">⏱️</span> Source Data Age</span>
                         <span class="font-mono text-[10px] font-black text-blue-700 dark:text-blue-400 bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-700/50">${dataAgeStr}</span>
                     </div>
                     <div class="flex justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl mb-4 border border-gray-100 dark:border-gray-600">
@@ -7610,7 +7610,7 @@ const Admin = {
         maintPanel.innerHTML = `
             <button id="maint-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ› ï¸</span> 
+                    <span class="text-2xl mb-2">🛠️</span> 
                     <span>System Controls</span>
                 </span>
                 <svg id="maint-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -7638,7 +7638,7 @@ const Admin = {
                 <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="promo-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-indigo-900/60">
                         <span class="flex items-center">
-                            <span class="text-base mr-2">ðŸš€</span> Growth & Promo
+                            <span class="text-base mr-2">🚀</span> Growth & Promo
                         </span>
                         <svg id="promo-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -7657,7 +7657,7 @@ const Admin = {
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 overflow-hidden shadow-sm transition-all">
                     <button id="nuke-header-btn" class="w-full px-3 py-3 bg-red-100/50 dark:bg-red-900/40 text-left text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-red-200/50 dark:hover:bg-red-900/60">
                         <span class="flex items-center">
-                            <span class="text-base mr-2">â˜¢ï¸</span> Nuclear Cache Wipe
+                            <span class="text-base mr-2">â˜¢️</span> Nuclear Cache Wipe
                         </span>
                         <svg id="nuke-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -7822,7 +7822,7 @@ const Admin = {
         roadmapPanel.innerHTML = `
             <button id="roadmap-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">ðŸ—ºï¸</span> 
+                    <span class="text-2xl mb-2">🗺️</span> 
                     <span>Operations Roadmap</span>
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -7852,7 +7852,7 @@ const Admin = {
 
                 <!-- Kanban Board Area (Responsive Grid) -->
                 <div class="overflow-x-auto pb-4 custom-scrollbar snap-x flex-grow w-full">
-                    <!-- ðŸ›¡ï¸ GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
+                    <!-- 🛡️ GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
                     <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
@@ -7990,10 +7990,10 @@ const Admin = {
                     sourceBadge = `<div class="mt-1 text-[9px] text-blue-500 dark:text-blue-400 font-mono truncate">Ref: ${safeHTML(ticket.source)}</div>`;
                 }
                 
-                let typeIcon = "ðŸ“Œ"; 
-                if (ticket.type === 'bug') typeIcon = "ðŸ›"; 
-                else if (ticket.type === 'feature') typeIcon = "ðŸš€"; 
-                else if (ticket.type === 'route') typeIcon = "ðŸ—ºï¸";
+                let typeIcon = "📌"; 
+                if (ticket.type === 'bug') typeIcon = "🐛"; 
+                else if (ticket.type === 'feature') typeIcon = "🚀"; 
+                else if (ticket.type === 'route') typeIcon = "🗺️";
 
                 // Native SVG icons replacing FontAwesome
                 const editIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
@@ -8076,7 +8076,7 @@ const Admin = {
             
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                // ðŸ›¡ï¸ GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
+                // 🛡️ GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
                 const res = await window.guardianFetch(`${dynamicEndpoint}roadmap.json?auth=${secret}&t=${Date.now()}`, {}, 10000);
                 
                 if (!res.ok) throw new Error("HTTP " + res.status);
@@ -8106,7 +8106,7 @@ const Admin = {
                     body: JSON.stringify({ status: newStatus, updatedAt: Date.now() })
                 });
                 
-                // ðŸ›¡ï¸ GUARDIAN FIX: Catch silent HTTP rejections
+                // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to patch ticket.");
                 
                 // Update local RAM and re-render instantly
@@ -8131,7 +8131,7 @@ const Admin = {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const res = await fetch(`${dynamicEndpoint}roadmap/${ticketId}.json?auth=${secret}`, { method: 'DELETE' });
                 
-                // ðŸ›¡ï¸ GUARDIAN FIX: Catch silent HTTP rejections
+                // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to delete ticket.");
 
                 Admin.cachedRoadmapData = Admin.cachedRoadmapData.filter(t => t.id !== ticketId);
@@ -8262,7 +8262,7 @@ const Admin = {
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 transform transition-all scale-95 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center">
-                            <span class="mr-2">ðŸ“</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
+                            <span class="mr-2">📝</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
                         </h3>
                         <button onclick="closeSmoothModal('admin-ticket-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none bg-gray-100 dark:bg-gray-700 rounded-full p-1.5">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -8278,24 +8278,24 @@ const Admin = {
                             <div>
                                 <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Type</label>
                                 <select id="tkt-type" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="bug" ${ticket.type === 'bug' ? 'selected' : ''}>ðŸ› Bug</option>
-                                    <option value="feature" ${ticket.type === 'feature' ? 'selected' : ''}>ðŸš€ Feature</option>
-                                    <option value="route" ${ticket.type === 'route' ? 'selected' : ''}>ðŸ—ºï¸ Route Update</option>
+                                    <option value="bug" ${ticket.type === 'bug' ? 'selected' : ''}>🐛 Bug</option>
+                                    <option value="feature" ${ticket.type === 'feature' ? 'selected' : ''}>🚀 Feature</option>
+                                    <option value="route" ${ticket.type === 'route' ? 'selected' : ''}>🗺️ Route Update</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Severity</label>
                                 <select id="tkt-severity" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="low" ${ticket.severity === 'low' ? 'selected' : ''}>ðŸŸ¢ Low</option>
-                                    <option value="high" ${ticket.severity === 'high' ? 'selected' : ''}>ðŸŸ  High</option>
-                                    <option value="critical" ${ticket.severity === 'critical' ? 'selected' : ''}>ðŸ”´ Critical</option>
+                                    <option value="low" ${ticket.severity === 'low' ? 'selected' : ''}>🟢 Low</option>
+                                    <option value="high" ${ticket.severity === 'high' ? 'selected' : ''}>🟠 High</option>
+                                    <option value="critical" ${ticket.severity === 'critical' ? 'selected' : ''}>🔴 Critical</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Status</label>
                                 <select id="tkt-status" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="backlog" ${ticket.status === 'backlog' ? 'selected' : ''}>ðŸ“Œ Backlog</option>
-                                    <option value="progress" ${ticket.status === 'progress' ? 'selected' : ''}>â³ Progress</option>
+                                    <option value="backlog" ${ticket.status === 'backlog' ? 'selected' : ''}>📌 Backlog</option>
+                                    <option value="progress" ${ticket.status === 'progress' ? 'selected' : ''}>⏳ Progress</option>
                                     <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>âœ… Done</option>
                                 </select>
                             </div>
@@ -8350,7 +8350,7 @@ const Admin = {
                         body: JSON.stringify(payload)
                     });
 
-                    // ðŸ›¡ï¸ GUARDIAN FIX: Catch silent HTTP rejections
+                    // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
                     if (!res.ok) throw new Error("Failed to PUT ticket data.");
 
                     if (typeof showToast === 'function') showToast("Ticket saved!", "success");

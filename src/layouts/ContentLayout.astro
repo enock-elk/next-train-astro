@@ -97,7 +97,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           else document.documentElement.classList.remove('dark');
         }
         const pack = localStorage.getItem('colourPack');
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic';
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());

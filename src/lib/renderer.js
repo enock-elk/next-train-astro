@@ -22,7 +22,7 @@ import {
     currentTime, currentDayType, currentDayIndex 
 } from './logic.js';
 
-import { buildTrainReportSlotHtml } from './delay-reports.js';
+import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -609,14 +609,15 @@ export const Renderer = {
         const reportRouteId = (typeof window !== 'undefined' && window._liveRouteId) || '';
         const reportTrainId = journey.train || journey.train1?.train || '';
         const reportArr = journey.arrivalTime || journey.train1?.arrivalAtTransfer || '';
-        const reportSlotHtml = buildTrainReportSlotHtml({
+        const reportCtx = {
             routeId: reportRouteId,
             trainId: reportTrainId,
             scheduledTime: rawTime,
             arrivalTime: reportArr,
             station: reportStation,
             destination: destination || '',
-        });
+        };
+        const reportSlotHtml = buildTrainReportSlotHtml(reportCtx);
 
         if (journey.type === 'direct') {
             let actualDest = journey.actualDestination ? Renderer._applyUIIntercepts(normalizeStationName(journey.actualDestination)) : '';
@@ -641,10 +642,16 @@ export const Renderer = {
                 detailColor = isForceTerminated ? "text-red-600 dark:text-red-400 font-black" : "text-orange-700 dark:text-orange-400 font-bold";
             }
 
+            const titleBtn = buildTrainTitleReportButton({
+                label: trainTitle,
+                ...reportCtx,
+                className: `inline-flex items-center justify-center max-w-full text-[11px] font-bold ${titleColor} leading-tight mb-1 uppercase tracking-wide focus:outline-none hover:opacity-80 active:scale-[0.98] transition`,
+            });
+
             element.innerHTML = `
-                <div class="flex flex-row items-stretch w-full space-x-3">
+                <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
-                    <div class="relative w-1/2 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div class="relative w-[36%] min-w-[6.5rem] max-w-[9rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
                         ${sharedTag}
@@ -652,10 +659,8 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="w-1/2 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden self-stretch">
-                        <div class="text-[11px] font-bold ${titleColor} leading-tight mb-1 uppercase tracking-wide truncate w-full px-1 min-w-0" title="${trainTitle}">
-                            ${trainTitle}
-                        </div>
+                    <div class="flex-1 min-w-0 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden self-stretch">
+                        ${titleBtn}
                         <div class="text-[10px] ${detailColor} leading-tight truncate w-full px-1 min-w-0" title="${detailLine}">
                             ${detailLine}
                         </div>
@@ -680,6 +685,22 @@ export const Renderer = {
             let train1Label = `Train ${safeTrainName}`;
             let titleColor = "text-gray-900 dark:text-white";
             if (journey.isLastTrain) titleColor = "text-red-600 dark:text-red-400";
+
+            const shuttleBtn = buildTrainTitleReportButton({
+                label: `Shuttle ${train1Label}`,
+                ...reportCtx,
+                className: `inline-flex items-center justify-center max-w-full text-[11px] font-black ${titleColor} uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80`,
+            });
+            const connectBtn = buildTrainTitleReportButton({
+                label: `Connect Train ${conn.train}`,
+                routeId: reportRouteId,
+                trainId: conn.train,
+                scheduledTime: conn.departureTime,
+                arrivalTime: '',
+                station: reportStation,
+                destination: conn.actualDestination || destination || '',
+                className: 'inline-flex items-center justify-center max-w-full text-[11px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80',
+            });
             
             let bottomBlock = "";
             
@@ -690,7 +711,7 @@ export const Renderer = {
                 bottomBlock = `
                     <div class="text-[9px] leading-tight w-full space-y-1 min-w-0">
                         <div class="mb-1">
-                             <div class="text-[11px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5 truncate w-full">Connect Train ${connTrain}</div>
+                             ${connectBtn}
                              <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
                         </div>
                         <div class="italic text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 truncate w-full" title="${finalDestTitle}: Train ${nextTrain} from ${nextDep}">
@@ -701,16 +722,16 @@ export const Renderer = {
             } else {
                 bottomBlock = `
                     <div class="text-[10px] leading-tight w-full min-w-0">
-                        <div class="text-[11px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5 truncate w-full">Connect Train ${connTrain}</div>
+                        ${connectBtn}
                         <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
                     </div>
                 `;
             }
             
             element.innerHTML = `
-                <div class="flex flex-row items-stretch w-full space-x-3">
+                <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
-                    <div class="relative w-1/2 h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div class="relative w-[36%] min-w-[6.5rem] max-w-[9rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
                         ${sharedTag}
@@ -718,9 +739,9 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="w-1/2 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] overflow-hidden self-stretch">
+                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] overflow-hidden self-stretch">
                         <div class="border-b border-gray-200 dark:border-gray-700 pb-2 mb-2 w-full min-w-0">
-                            <div class="text-[11px] font-black ${titleColor} uppercase tracking-wide mb-0.5 truncate w-full px-1" title="Shuttle ${train1Label}">Shuttle ${train1Label}</div>
+                            ${shuttleBtn}
                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full px-1" title="To ${displayDest} (Arr ${arrivalAtTransfer})">To ${displayDest} <span class="font-normal opacity-80">(Arr ${arrivalAtTransfer})</span></div>
                         </div>
                         ${bottomBlock}

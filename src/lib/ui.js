@@ -143,14 +143,21 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
 
         // 2. Toggle target and Scrim
         if (isOpening) {
-            const container = list.closest('#sidenav') || list.closest('.transform') || list.closest('.view-section') || list.closest('#main-content') || document.body;
-            
+            const isInlineDropdown = ['main-day-list', 'header-day-list', 'custom-time-list', 'grid-day-list'].includes(listId);
+
+            const gridModal = list.closest('#full-schedule-modal');
+            const container = list.closest('#sidenav')
+                || list.closest('.transform')
+                || gridModal
+                || list.closest('.view-section')
+                || list.closest('#main-content')
+                || document.body;
+
             if (scrim.parentNode !== container) {
                 container.appendChild(scrim);
             }
 
             scrim.classList.remove('bg-black/20', 'bg-black/40', 'bg-black/60', 'bg-transparent');
-            const isInlineDropdown = ['main-day-list', 'header-day-list', 'custom-time-list'].includes(listId);
 
             if (container === document.body) {
                 scrim.classList.remove('absolute', 'rounded-xl', 'rounded-2xl', 'rounded-lg', 'z-[40]', 'z-[90]');
@@ -158,12 +165,13 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             } else {
                 scrim.classList.remove('fixed', 'z-[150]');
                 scrim.classList.add('absolute');
-                
+
                 if (container.id === 'sidenav') scrim.classList.add('z-[40]', 'bg-transparent');
+                else if (container.id === 'full-schedule-modal') scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/40');
                 else if (container.classList.contains('view-section')) scrim.classList.add('z-[40]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
                 else if (container.id === 'main-content') scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
                 else scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
-                
+
                 if (container.classList.contains('rounded-xl')) scrim.classList.add('rounded-xl');
                 else if (container.classList.contains('rounded-2xl')) scrim.classList.add('rounded-2xl');
                 else if (container.id === 'main-content') scrim.classList.add('rounded-lg');
@@ -531,9 +539,15 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
 export function switchTab(tab) {
     if (typeof document === 'undefined') return;
 
+    const prev = safeStorage.getItem('activeTab') || 'next-train';
+
     if (tab === 'trip-planner') {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {
             history.pushState({ tab: 'planner' }, '', '#planner');
+        }
+    } else if (tab === 'community') {
+        if (location.hash !== '#community') {
+            history.pushState({ tab: 'community' }, '', '#community');
         }
     } else if (location.hash !== '#home' && location.hash !== '') {
         history.replaceState({ tab: 'next-train' }, '', '#home');
@@ -545,12 +559,13 @@ export function switchTab(tab) {
     let targetBtn;
     if (tab === 'next-train') {
         targetBtn = document.getElementById('tab-next-train');
-        const view = document.getElementById('view-next-train');
-        if (view) view.classList.add('active');
+        document.getElementById('view-next-train')?.classList.add('active');
+    } else if (tab === 'community') {
+        targetBtn = document.getElementById('tab-community');
+        document.getElementById('view-community')?.classList.add('active');
     } else {
         targetBtn = document.getElementById('tab-trip-planner');
-        const view = document.getElementById('view-trip-planner');
-        if (view) view.classList.add('active');
+        document.getElementById('view-trip-planner')?.classList.add('active');
     }
 
     if (targetBtn) {
@@ -559,8 +574,16 @@ export function switchTab(tab) {
     }
     document.getElementById('tab-next-train')?.setAttribute('aria-selected', tab === 'next-train' ? 'true' : 'false');
     document.getElementById('tab-trip-planner')?.setAttribute('aria-selected', tab === 'trip-planner' ? 'true' : 'false');
+    document.getElementById('tab-community')?.setAttribute('aria-selected', tab === 'community' ? 'true' : 'false');
     safeStorage.setItem('activeTab', tab);
     syncBottomNavActive(tab);
+
+    // Presence only while Community is visible
+    if (tab === 'community') {
+        import('./community.js').then((m) => m.openRouteCommunity?.()).catch(() => {});
+    } else if (prev === 'community') {
+        import('./community.js').then((m) => m.leaveCommunityRoom?.()).catch(() => {});
+    }
 }
 
 export function initTabIndicator() {
@@ -615,8 +638,11 @@ export function setupSwipeNavigation() {
         const diffX = endX - touchStartX;
         const diffY = endY - touchStartY;
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            if (diffX > 0) switchTab('next-train');
-            else switchTab('trip-planner');
+            const order = ['next-train', 'trip-planner', 'community'];
+            const cur = safeStorage.getItem('activeTab') || 'next-train';
+            const idx = Math.max(0, order.indexOf(cur));
+            if (diffX > 0) switchTab(order[Math.max(0, idx - 1)]);
+            else switchTab(order[Math.min(order.length - 1, idx + 1)]);
         }
     }, { passive: true });
 }
@@ -682,6 +708,61 @@ export function hideOfflineToast() {
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
 }
 
+/** Chrome/Edge installability: show footer Install buttons when the browser fires beforeinstallprompt. */
+export function bindPwaInstallPrompt() {
+    if (typeof window === 'undefined' || window.__ntPwaInstallBound) return;
+    window.__ntPwaInstallBound = true;
+
+    const isStandalone = () =>
+        window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+
+    const buttons = () => [
+        document.getElementById('install-app-btn'),
+        document.getElementById('install-app-btn-planner'),
+    ].filter(Boolean);
+
+    const setVisible = (show) => {
+        buttons().forEach((btn) => btn.classList.toggle('hidden', !show));
+    };
+
+    if (isStandalone()) {
+        setVisible(false);
+        return;
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.__ntDeferredInstallPrompt = e;
+        setVisible(true);
+    });
+
+    window.addEventListener('appinstalled', () => {
+        window.__ntDeferredInstallPrompt = null;
+        setVisible(false);
+        showToast('App installed — open it from your home screen.', 'success');
+    });
+
+    const onInstallClick = async (e) => {
+        e?.preventDefault?.();
+        const deferred = window.__ntDeferredInstallPrompt;
+        if (!deferred) {
+            showToast('Use your browser menu → Install app / Add to Home Screen.', 'info');
+            return;
+        }
+        deferred.prompt();
+        try {
+            await deferred.userChoice;
+        } catch { /* dismissed */ }
+        window.__ntDeferredInstallPrompt = null;
+        setVisible(false);
+    };
+
+    buttons().forEach((btn) => {
+        btn.addEventListener('click', onInstallClick);
+    });
+}
+
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
@@ -698,6 +779,7 @@ if (typeof window !== 'undefined') {
     window.switchTab = switchTab;
     window.syncBottomNavActive = syncBottomNavActive;
     window.openLegal = openLegal;
+    window.bindPwaInstallPrompt = bindPwaInstallPrompt;
 
     // Boot the Error Handler immediately
     initGlobalErrorHandler();

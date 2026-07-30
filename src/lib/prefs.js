@@ -12,19 +12,22 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'midnight' | 'contrast'} ColourPackId */
+/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
     MIDNIGHT: 'midnight',
     CONTRAST: 'contrast',
-    // Reserved: LINE: 'line',
+    SIGNAL: 'signal',
+    EMBER: 'ember',
 };
 
 export const COLOUR_PACK_LABELS = {
     classic: 'Classic',
     midnight: 'Midnight',
     contrast: 'High contrast',
+    signal: 'Signal',
+    ember: 'Ember',
 };
 
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));

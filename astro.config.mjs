@@ -2,15 +2,10 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import AstroPWA from '@vite-pwa/astro';
 
-// GitHub Pages project site: https://enock-elk.github.io/next-train-astro/
-// When you attach a custom domain at the site root, set site to that domain and base to '/'.
-const SITE = 'https://enock-elk.github.io';
-const BASE = '/next-train-astro';
-
 // https://astro.build/config
+// Serve from site root (local + custom domain). GitHub project Pages (/repo) needs a separate base later.
 export default defineConfig({
-  site: SITE,
-  base: BASE,
+  site: 'https://nexttrain.co.za',
   trailingSlash: 'never',
   // Integrate Tailwind CSS and our PWA engine
   integrations: [
@@ -18,13 +13,11 @@ export default defineConfig({
     AstroPWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      base: BASE,
-      scope: `${BASE}/`,
       workbox: {
         // Pre-cache all core HTML, JS, CSS, and imagery
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         // We will inject our custom Lie-Fi and Network-First overrides here in later phases
-        navigateFallback: `${BASE}/offline`,
+        navigateFallback: '/offline',
         runtimeCaching: [
           {
             // Do NOT cache Firebase RTDB, Cloudflare Workers, or Analytics
@@ -41,24 +34,23 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
-        id: `${BASE}/?pwa=next-train-2`,
-        start_url: `${BASE}/?pwa=next-train-2`,
-        scope: `${BASE}/`,
+        id: '/?pwa=next-train-2',
+        start_url: '/?pwa=next-train-2',
         icons: [
           {
-            src: `${BASE}/icons/icon-192.png`,
+            src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: `${BASE}/icons/icon-512.png`,
+            src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: `${BASE}/icons/icon-512.png`,
+            src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'

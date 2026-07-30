@@ -4,6 +4,7 @@
  * RTDB:
  *   route_community/{routeId}/posts/{postId}
  *   route_community/{routeId}/posts/{postId}/replies/{replyId}
+ *   route_community/{routeId}/post_reactions/{postId}/{uid} = { emoji, at }
  *   moderation_queue/{reportId}
  *
  * Shadow-ban policy: rules reject writes; client still shows the author's
@@ -13,7 +14,7 @@ import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
     isShadowBanned,
@@ -32,6 +33,16 @@ const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
 const AUTH_COOLDOWN_MS = 20 * 1000;
 
+/** WhatsApp / Channels reaction set */
+export const WA_REACTIONS = [
+    { id: 'thumb', emoji: '👍' },
+    { id: 'heart', emoji: '❤️' },
+    { id: 'laugh', emoji: '😂' },
+    { id: 'wow', emoji: '😮' },
+    { id: 'sad', emoji: '😢' },
+    { id: 'pray', emoji: '🙏' },
+];
+
 export const COMMUNITY_CATEGORIES = {
     general: { label: 'General', class: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300' },
     delay: { label: 'Delay', class: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' },
@@ -43,6 +54,15 @@ export const COMMUNITY_CATEGORIES = {
 let activeCategoryFilter = 'all';
 /** @type {object[]} */
 let cachedFeedPosts = [];
+/** @type {Record<string, Record<string, { emoji: string, at: number }>>} postId → uid → reaction */
+let cachedReactionsByPost = {};
+/** Posts whose full reaction picker is open */
+const expandedReactionPosts = new Set();
+/** Guest hint dismissed for current Community visit only */
+let guestHintDismissedThisOpen = false;
+let unreadPollTimer = null;
+const UNREAD_SEEN_PREFIX = 'communityLastSeen_';
+const UNREAD_POLL_MS = 60 * 1000;
 
 /** @type {Record<string, object[]>} local-only posts for shadow-banned authors */
 const localOverlayByRoute = {};
@@ -53,6 +73,15 @@ function getDeviceId() {
 
 function newId(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Professional corridor label: "A <-> B" → "A – B" */
+export function formatRouteDisplayName(name) {
+    if (!name) return '';
+    return String(name)
+        .replace(/\s*<->\s*/g, ' – ')
+        .replace(/\s*↔\s*/g, ' – ')
+        .trim();
 }
 
 export function checkCommunityRateLimit() {
@@ -357,7 +386,201 @@ export async function submitModerationReport(opts) {
 }
 
 function routeLabel(routeId) {
-    return ROUTES[routeId]?.name || routeId || 'Route';
+    return formatRouteDisplayName(ROUTES[routeId]?.name || routeId || 'Route');
+}
+
+export async function fetchPostReactions(routeId) {
+    if (!routeId || !navigator.onLine) return {};
+    try {
+        const q = await authQuery();
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/post_reactions.json${q}`
+        );
+        if (!res.ok) return {};
+        const data = await res.json();
+        return data && typeof data === 'object' ? data : {};
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * Toggle a WhatsApp-style reaction (one per user). Same emoji again removes it.
+ * @param {string} routeId
+ * @param {string} postId
+ * @param {string} emojiId
+ */
+export async function togglePostReaction(routeId, postId, emojiId) {
+    const acct = $account.get();
+    if (acct.status !== 'signed-in' || !acct.uid) {
+        return { ok: false, message: 'Sign in to react.', needsAuth: true };
+    }
+    if (!WA_REACTIONS.some((r) => r.id === emojiId)) {
+        return { ok: false, message: 'Unknown reaction.' };
+    }
+    if (!routeId || !postId) return { ok: false, message: 'Missing post.' };
+    if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
+
+    const mine = cachedReactionsByPost[postId]?.[acct.uid];
+    const removing = mine && mine.emoji === emojiId;
+
+    try {
+        const q = await authQuery();
+        const url = `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/post_reactions/${encodeURIComponent(postId)}/${encodeURIComponent(acct.uid)}.json${q}`;
+        const res = await fetch(url, {
+            method: removing ? 'DELETE' : 'PUT',
+            headers: removing ? undefined : { 'Content-Type': 'application/json' },
+            body: removing ? undefined : JSON.stringify({ emoji: emojiId, at: Date.now() }),
+        });
+        if (!res.ok) throw new Error(`Reaction failed (${res.status})`);
+
+        if (!cachedReactionsByPost[postId]) cachedReactionsByPost[postId] = {};
+        if (removing) delete cachedReactionsByPost[postId][acct.uid];
+        else cachedReactionsByPost[postId][acct.uid] = { emoji: emojiId, at: Date.now() };
+
+        return { ok: true, removed: removing };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Could not react.' };
+    }
+}
+
+function summarizeReactions(postId) {
+    const byUid = cachedReactionsByPost[postId] || {};
+    const counts = {};
+    WA_REACTIONS.forEach((r) => { counts[r.id] = 0; });
+    Object.values(byUid).forEach((entry) => {
+        if (entry?.emoji && counts[entry.emoji] !== undefined) counts[entry.emoji] += 1;
+    });
+    const acct = $account.get();
+    const myEmoji = acct.status === 'signed-in' ? byUid[acct.uid]?.emoji : null;
+    return { counts, myEmoji };
+}
+
+function renderReactionChip(r, postId, routeId, n, mine) {
+    return `<button type="button" class="community-react-btn inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[13px] leading-none border transition-colors focus:outline-none ${
+        mine
+            ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 ring-1 ring-blue-400/40'
+            : 'bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+    }" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="React ${r.emoji}" title="${r.emoji}">${r.emoji}${n > 0 ? `<span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 ml-0.5">${n}</span>` : ''}</button>`;
+}
+
+function renderReactionsRow(postId, routeId) {
+    const { counts, myEmoji } = summarizeReactions(postId);
+    const expanded = expandedReactionPosts.has(postId);
+
+    let chips = '';
+    if (expanded) {
+        chips = WA_REACTIONS.map((r) => renderReactionChip(r, postId, routeId, counts[r.id] || 0, myEmoji === r.id)).join('');
+    } else {
+        chips = WA_REACTIONS
+            .filter((r) => (counts[r.id] || 0) > 0)
+            .map((r) => renderReactionChip(r, postId, routeId, counts[r.id] || 0, myEmoji === r.id))
+            .join('');
+    }
+
+    const toggle = `<button type="button" class="community-react-expand inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? 'Hide reactions' : 'Add reaction'}" title="${expanded ? 'Hide' : 'React'}">${expanded ? '−' : '☺+'}</button>`;
+
+    return `<div class="community-reactions mt-2 flex flex-wrap items-center gap-1" data-reactions-for="${escapeHTML(postId)}">${chips}${toggle}</div>`;
+}
+
+function getPinnedRouteId() {
+    const region = $userRegion.get() || 'GP';
+    return safeStorage.getItem('defaultRoute_' + region) || '';
+}
+
+function unreadSeenKey(routeId) {
+    return UNREAD_SEEN_PREFIX + routeId;
+}
+
+function getLastSeen(routeId) {
+    if (!routeId) return Date.now();
+    const raw = safeStorage.getItem(unreadSeenKey(routeId));
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) ? n : 0;
+}
+
+export function markCommunityRouteSeen(routeId = getPinnedRouteId()) {
+    if (!routeId) return;
+    safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
+    paintCommunityUnreadBadge(0);
+}
+
+function paintCommunityUnreadBadge(count) {
+    const labels = [document.getElementById('community-unread-badge'), document.getElementById('community-unread-badge-top')];
+    const n = Math.max(0, Number(count) || 0);
+    const text = n > 99 ? '99+' : String(n);
+    labels.forEach((el) => {
+        if (!el) return;
+        if (n <= 0) {
+            el.classList.add('hidden');
+            el.textContent = '0';
+        } else {
+            el.classList.remove('hidden');
+            el.textContent = text;
+        }
+    });
+    const bottom = document.getElementById('bottom-nav-community');
+    if (bottom) {
+        bottom.setAttribute('aria-label', n > 0
+            ? `Community — ${n} unread on pinned route`
+            : 'Community — route feed');
+    }
+}
+
+/**
+ * Count unread posts on the user's pinned route (newer than last visit).
+ */
+export async function refreshCommunityUnreadBadge() {
+    const routeId = getPinnedRouteId();
+    if (!routeId || !ROUTES[routeId]) {
+        paintCommunityUnreadBadge(0);
+        return 0;
+    }
+    // While viewing that room, treat as read
+    if (safeStorage.getItem('activeTab') === 'community') {
+        const viewing = document.getElementById('community-route-select')?.value || $currentRouteId.get();
+        if (viewing === routeId) {
+            markCommunityRouteSeen(routeId);
+            return 0;
+        }
+    }
+
+    try {
+        const raw = safeStorage.getItem(unreadSeenKey(routeId));
+        if (!raw) {
+            // First watch: seed last-seen so historic posts aren't all "unread"
+            safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
+            paintCommunityUnreadBadge(0);
+            return 0;
+        }
+        const posts = await fetchRoutePosts(routeId);
+        const lastSeen = getLastSeen(routeId);
+        const myUid = $account.get()?.uid || '';
+        const unread = posts.filter((p) => {
+            const ts = p.timestamp || 0;
+            if (ts <= lastSeen) return false;
+            if (myUid && p.uid === myUid) return false;
+            return true;
+        }).length;
+        paintCommunityUnreadBadge(unread);
+        return unread;
+    } catch {
+        return 0;
+    }
+}
+
+export function startCommunityUnreadWatch() {
+    if (typeof window === 'undefined' || window.__ntCommunityUnreadWatch) return;
+    window.__ntCommunityUnreadWatch = true;
+    refreshCommunityUnreadBadge();
+    unreadPollTimer = setInterval(() => {
+        if (document.hidden) return;
+        refreshCommunityUnreadBadge();
+    }, UNREAD_POLL_MS);
+    window.addEventListener('focus', () => refreshCommunityUnreadBadge());
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) refreshCommunityUnreadBadge();
+    });
 }
 
 function renderPostCard(post, routeId) {
@@ -391,6 +614,7 @@ function renderPostCard(post, routeId) {
           </div>
         </div>
         <p class="text-sm text-gray-800 dark:text-gray-200 leading-snug whitespace-pre-wrap break-words">${body}</p>
+        ${renderReactionsRow(post.postId || '', routeId)}
         <div class="mt-2 flex items-center gap-3">
           <button type="button" class="community-toggle-replies text-[11px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none" data-post-id="${postId}" data-route="${escapeHTML(routeId)}">Replies</button>
         </div>
@@ -440,18 +664,77 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
-    const softEl = document.getElementById('community-be-kind');
     if (!listEl) return;
 
     if (titleEl) titleEl.textContent = routeLabel(routeId);
-    if (softEl) softEl.classList.remove('hidden');
     paintCategoryFilters();
 
     listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
     if (emptyEl) emptyEl.classList.add('hidden');
 
-    cachedFeedPosts = await fetchRoutePosts(routeId);
+    const [posts, reactionsMap] = await Promise.all([
+        fetchRoutePosts(routeId),
+        fetchPostReactions(routeId),
+    ]);
+    cachedFeedPosts = posts;
+    cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
     applyFeedFilter(routeId);
+}
+
+function syncCommunityRoutePicker(routeId) {
+    const routeSel = document.getElementById('community-route-select');
+    const display = document.getElementById('community-route-display');
+    const list = document.getElementById('community-route-list');
+    if (!routeSel) return;
+
+    const region = $userRegion.get() || 'GP';
+    const routes = Object.values(ROUTES).filter((r) => r.isActive && r.region === region && r.id !== 'special_event');
+    let activeId = routeId || routeSel.value || $currentRouteId.get() || '';
+    if (activeId && !routes.find((r) => r.id === activeId) && ROUTES[activeId]) {
+        // keep foreign route at top of list for deep links
+    }
+
+    routeSel.innerHTML = routes.map((r) =>
+        `<option value="${r.id}" ${r.id === activeId ? 'selected' : ''}>${escapeHTML(formatRouteDisplayName(r.name || r.id))}</option>`
+    ).join('') || '<option value="">No routes</option>';
+
+    if (activeId && !routes.find((r) => r.id === activeId) && ROUTES[activeId]) {
+        routeSel.insertAdjacentHTML('afterbegin', `<option value="${activeId}" selected>${escapeHTML(formatRouteDisplayName(ROUTES[activeId].name))}</option>`);
+    }
+    if (!activeId && routes[0]) {
+        activeId = routes[0].id;
+        routeSel.value = activeId;
+    } else if (activeId) {
+        routeSel.value = activeId;
+    }
+
+    const label = formatRouteDisplayName(ROUTES[routeSel.value]?.name || routeSel.value || 'Select route');
+    if (display) display.textContent = label;
+
+    if (list) {
+        const allRoutes = [...routes];
+        if (activeId && !allRoutes.find((r) => r.id === activeId) && ROUTES[activeId]) {
+            allRoutes.unshift(ROUTES[activeId]);
+        }
+        list.innerHTML = allRoutes.map((r) => {
+            const selected = r.id === routeSel.value;
+            return `<li role="option" data-route-id="${escapeHTML(r.id)}" aria-selected="${selected ? 'true' : 'false'}" class="px-3.5 py-3 text-sm font-bold cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+                selected
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }">${escapeHTML(formatRouteDisplayName(r.name || r.id))}</li>`;
+        }).join('') || `<li class="px-3.5 py-3 text-sm text-gray-400">No routes</li>`;
+    }
+}
+
+function setCommunityRouteListOpen(open) {
+    const list = document.getElementById('community-route-list');
+    const chevron = document.getElementById('community-route-chevron');
+    const trigger = document.getElementById('community-route-trigger');
+    if (!list) return;
+    list.classList.toggle('hidden', !open);
+    if (chevron) chevron.classList.toggle('rotate-180', open);
+    if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 export function openRouteCommunity(opts = {}) {
@@ -460,18 +743,12 @@ export function openRouteCommunity(opts = {}) {
     const composer = document.getElementById('community-composer');
     const guestHint = document.getElementById('community-guest-hint');
     const errEl = document.getElementById('community-error');
+    const titleEl = document.getElementById('community-route-title');
 
-    if (routeSel) {
-        const region = $userRegion.get() || 'GP';
-        const routes = Object.values(ROUTES).filter((r) => r.isActive && r.region === region && r.id !== 'special_event');
-        routeSel.innerHTML = routes.map((r) =>
-            `<option value="${r.id}" ${r.id === routeId ? 'selected' : ''}>${escapeHTML(r.name || r.id)}</option>`
-        ).join('') || '<option value="">No routes</option>';
-        if (routeId && !routes.find((r) => r.id === routeId) && ROUTES[routeId]) {
-            routeSel.insertAdjacentHTML('afterbegin', `<option value="${routeId}" selected>${escapeHTML(ROUTES[routeId].name)}</option>`);
-        }
-    }
+    syncCommunityRoutePicker(routeId);
 
+    // Always re-show guest hint when an unsigned user opens Community
+    guestHintDismissedThisOpen = false;
     const signed = $account.get().status === 'signed-in';
     if (guestHint) guestHint.classList.toggle('hidden', signed);
     if (composer) {
@@ -481,18 +758,23 @@ export function openRouteCommunity(opts = {}) {
     if (errEl) errEl.textContent = '';
 
     const activeRoute = routeSel?.value || routeId;
-    if (typeof window.syncBottomNavActive === 'function') window.syncBottomNavActive('community');
+    if (titleEl) titleEl.textContent = routeLabel(activeRoute);
+
+    // Ensure the Community view is showing (avoid re-entrancy loops)
+    if (safeStorage.getItem('activeTab') !== 'community' && typeof window.switchTab === 'function') {
+        window.switchTab('community');
+        return;
+    }
+
     triggerHaptic();
-    openSmoothModal('route-community-modal');
     renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
+    if (activeRoute && activeRoute === getPinnedRouteId()) markCommunityRouteSeen(activeRoute);
+    else refreshCommunityUnreadBadge();
 }
 
-function closeCommunityRoom() {
+export function leaveCommunityRoom() {
     leaveCommunityPresence();
-    closeSmoothModal('route-community-modal');
-    const tab = safeStorage.getItem('activeTab') || 'next-train';
-    if (typeof window.syncBottomNavActive === 'function') window.syncBottomNavActive(tab);
 }
 
 async function handlePostSubmit() {
@@ -511,7 +793,6 @@ async function handlePostSubmit() {
         if (errEl) errEl.textContent = result.message;
         if (btn) btn.disabled = false;
         if (result.message?.includes('Sign in')) {
-            closeSmoothModal('route-community-modal');
             setTimeout(() => openSmoothModal('account-modal'), 80);
         }
         return;
@@ -553,32 +834,70 @@ export function bindCommunityUi() {
 
     const open = (e) => {
         e?.preventDefault?.();
-        openRouteCommunity({ routeId: $currentRouteId.get() });
+        if (typeof window.switchTab === 'function') window.switchTab('community');
+        else openRouteCommunity({ routeId: $currentRouteId.get() });
     };
 
     document.getElementById('route-community-open-btn')?.addEventListener('click', open);
     document.getElementById('sidenav-community-btn')?.addEventListener('click', () => {
         triggerHaptic();
         if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
-        setTimeout(() => openRouteCommunity({ routeId: $currentRouteId.get() }), 50);
+        setTimeout(() => {
+            if (typeof window.switchTab === 'function') window.switchTab('community');
+            else openRouteCommunity({ routeId: $currentRouteId.get() });
+        }, 50);
     });
 
-    document.getElementById('community-modal-close')?.addEventListener('click', () => closeCommunityRoom());
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
     document.getElementById('community-route-select')?.addEventListener('change', (e) => {
         const rid = e.target.value;
+        const titleEl = document.getElementById('community-route-title');
+        if (titleEl) titleEl.textContent = routeLabel(rid);
+        const display = document.getElementById('community-route-display');
+        if (display) display.textContent = routeLabel(rid);
         renderCommunityFeed(rid);
         joinCommunityPresence(rid);
+        if (rid && rid === getPinnedRouteId()) markCommunityRouteSeen(rid);
+        else refreshCommunityUnreadBadge();
+    });
+    document.getElementById('community-route-trigger')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const list = document.getElementById('community-route-list');
+        const open = list?.classList.contains('hidden');
+        setCommunityRouteListOpen(!!open);
+    });
+    document.getElementById('community-route-list')?.addEventListener('click', (e) => {
+        const item = e.target.closest?.('[data-route-id]');
+        if (!item) return;
+        const rid = item.getAttribute('data-route-id');
+        const routeSel = document.getElementById('community-route-select');
+        if (routeSel && rid) {
+            routeSel.value = rid;
+            routeSel.dispatchEvent(new Event('change'));
+        }
+        setCommunityRouteListOpen(false);
+        syncCommunityRoutePicker(rid);
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest?.('#community-route-dropdown')) {
+            setCommunityRouteListOpen(false);
+        }
     });
     document.getElementById('community-refresh-btn')?.addEventListener('click', () => {
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         renderCommunityFeed(rid);
     });
     document.getElementById('community-signin-cta')?.addEventListener('click', () => {
-        leaveCommunityPresence();
-        closeSmoothModal('route-community-modal');
-        setTimeout(() => openSmoothModal('account-modal'), 80);
+        openSmoothModal('account-modal');
     });
+    document.getElementById('community-guest-hint-dismiss')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        guestHintDismissedThisOpen = true;
+        document.getElementById('community-guest-hint')?.classList.add('hidden');
+    });
+
+    startCommunityUnreadWatch();
 
     document.querySelectorAll('[data-community-filter]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -597,19 +916,11 @@ export function bindCommunityUi() {
         typingTimer = setTimeout(() => signalCommunityTyping(rid, false), 2500);
     });
 
-    // When modal is closed via backdrop/history, leave presence
-    const modal = document.getElementById('route-community-modal');
-    if (modal && !modal.dataset.presenceWatch) {
-        modal.dataset.presenceWatch = '1';
-        const obs = new MutationObserver(() => {
-            if (modal.classList.contains('hidden')) {
-                leaveCommunityPresence();
-                const tab = safeStorage.getItem('activeTab') || 'next-train';
-                if (typeof window.syncBottomNavActive === 'function') window.syncBottomNavActive(tab);
-            }
-        });
-        obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
-    }
+    // Refresh guest/composer chrome when account changes
+    window.addEventListener('accountchange', () => {
+        if (safeStorage.getItem('activeTab') !== 'community') return;
+        openRouteCommunity({ routeId: document.getElementById('community-route-select')?.value || $currentRouteId.get() });
+    });
 
     document.addEventListener('click', async (e) => {
         const t = e.target;
@@ -675,6 +986,43 @@ export function bindCommunityUi() {
             return;
         }
 
+        const reactExpand = t.closest?.('.community-react-expand');
+        if (reactExpand) {
+            e.preventDefault();
+            const postId = reactExpand.getAttribute('data-post-id');
+            const routeId = reactExpand.getAttribute('data-route');
+            if (!postId) return;
+            if (expandedReactionPosts.has(postId)) expandedReactionPosts.delete(postId);
+            else expandedReactionPosts.add(postId);
+            const row = document.querySelector(`.community-reactions[data-reactions-for="${postId}"]`);
+            if (row) row.outerHTML = renderReactionsRow(postId, routeId);
+            return;
+        }
+
+        const reactBtn = t.closest?.('.community-react-btn');
+        if (reactBtn) {
+            e.preventDefault();
+            triggerHaptic();
+            const postId = reactBtn.getAttribute('data-post-id');
+            const routeId = reactBtn.getAttribute('data-route');
+            const emojiId = reactBtn.getAttribute('data-emoji');
+            const result = await togglePostReaction(routeId, postId, emojiId);
+            if (!result.ok) {
+                if (result.needsAuth) {
+                    showToast('Sign in to react', 'info');
+                    setTimeout(() => openSmoothModal('account-modal'), 80);
+                } else {
+                    showToast(result.message || 'Could not react', 'error');
+                }
+                return;
+            }
+            // Keep picker open after reacting so the user can change/remove
+            if (postId) expandedReactionPosts.add(postId);
+            const row = document.querySelector(`.community-reactions[data-reactions-for="${postId}"]`);
+            if (row) row.outerHTML = renderReactionsRow(postId, routeId);
+            return;
+        }
+
         const send = t.closest?.('.community-reply-send');
         if (send) {
             e.preventDefault();
@@ -701,4 +1049,5 @@ export function bindCommunityUi() {
 if (typeof window !== 'undefined') {
     window.openRouteCommunity = openRouteCommunity;
     window.renderCommunityFeed = renderCommunityFeed;
+    window.leaveCommunityRoom = leaveCommunityRoom;
 }

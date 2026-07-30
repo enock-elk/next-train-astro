@@ -597,7 +597,14 @@ export function findNextTrains() {
     if (pretoriaHeaderEl()) pretoriaHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
     if (pienaarspoortHeaderEl()) pienaarspoortHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
     
-    if (!selectedStation) { if(typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl()); return; }
+    if (!selectedStation) {
+        if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
+        const fallbackSheetKey = (getCurrentDayType() === 'weekday')
+            ? currentRoute.sheetKeys.weekday_to_a
+            : currentRoute.sheetKeys.saturday_to_a;
+        if (typeof window.updateFareDisplay === 'function') window.updateFareDisplay(fallbackSheetKey);
+        return;
+    }
     
     if (!(stationSelectEl() && stationSelectEl().options)[stationSelectEl().selectedIndex]) return;
 
@@ -1172,7 +1179,7 @@ export function updateLastUpdatedText() {
     
     displayDate = formatEffectiveDate(displayDate);
     
-    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Schedule effective from: ${displayDate}`;
+    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Effective from: ${displayDate}`;
 }
 
 export function startSmartRefresh() {

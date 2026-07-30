@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -16,8 +16,19 @@ import {
     findNextTrains,
     updateLastUpdatedText,
     attachLiveBoardGlobals,
-    startSmartRefresh
+    startSmartRefresh,
+    findNextJourneyToDestA,
+    findNextJourneyToDestB,
+    currentScheduleData
 } from './live-board.js';
+import {
+    renderFullScheduleGrid,
+    applyRouteDeepLink,
+    parseRouteDeepLink,
+    attachTimetableGridGlobals
+} from './timetable-grid.js';
+
+export { renderFullScheduleGrid, applyRouteDeepLink, parseRouteDeepLink };
 
 const getCurrentTime = () => (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : currentTime;
 
@@ -128,6 +139,7 @@ export function renderNextAvailableTrain(element, destination) {
 
 export function processAndRenderJourney(allJourneys, element, _header, destination) {
     if (!element || !Array.isArray(allJourneys)) return;
+    if (destination) currentScheduleData[destination] = allJourneys;
     const nowInSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
     const remaining = allJourneys.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
     const nextJourney = remaining[0] || null;
@@ -158,47 +170,41 @@ export function updateFareDisplay(sheetKey) {
     if (passengerLabel) passengerLabel.textContent = profile;
 
     const fareData = getRouteFare(sheetKey);
-    const detailed = getDetailedFare(sheetKey);
 
-    fareContainer.className = "mb-6 p-3.5 rounded-xl flex items-center justify-between shadow-sm min-h-[58px] pr-10 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700";
+    fareContainer.className = "w-full text-left px-3.5 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3 focus:outline-none transition-colors group min-h-[52px]";
 
-    if (detailed?.prices) {
-        fareContainer.onclick = () => openFareModal(detailed);
-        fareContainer.classList.add('cursor-pointer', 'hover:bg-blue-100', 'dark:hover:bg-gray-700');
-        if (!document.getElementById('fare-chevron')) {
-            const chevron = document.createElement('div');
-            chevron.id = 'fare-chevron';
-            chevron.className = "absolute right-3 top-1/2 transform -translate-y-1/2 opacity-50 group-hover:opacity-100 transition-opacity flex items-center justify-center shrink-0";
-            chevron.innerHTML = `<svg class="w-5 h-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`;
-            fareContainer.appendChild(chevron);
-        }
-    } else {
-        document.getElementById('fare-chevron')?.remove();
-        fareContainer.onclick = null;
-        fareContainer.classList.remove('cursor-pointer');
-    }
+    const chevron = document.getElementById('fare-chevron');
+    fareContainer.onclick = () => {
+        const live = getDetailedFare(sheetKey) || getDetailedFare(null);
+        if (live?.prices) openFareModal(live);
+    };
+    fareContainer.classList.add('cursor-pointer', 'hover:border-blue-300', 'dark:hover:border-blue-700');
+    fareContainer.setAttribute('aria-label', `${profile} fare details`);
+    if (chevron) chevron.classList.remove('opacity-0');
 
     if (fareData) {
+        fareContainer.classList.remove('hidden');
         if (fareAmount) {
             fareAmount.textContent = `R${fareData.price}`;
-            fareAmount.className = "text-2xl font-black text-gray-900 dark:text-white leading-none";
+            fareAmount.className = "text-xl font-black text-gray-900 dark:text-white tabular-nums leading-none";
         }
         if (fareType) {
+            fareType.classList.remove('hidden');
             if (fareData.isPromo) {
-                fareType.textContent = fareData.discountLabel || "Discounted";
-                fareType.className = "text-[9px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded uppercase tracking-wide whitespace-nowrap inline-block mt-1 shadow-sm border border-purple-200 dark:border-purple-800/50";
+                fareType.textContent = fareData.discountLabel || 'Discounted';
+                fareType.className = "text-[11px] font-medium text-purple-600 dark:text-purple-300 truncate mt-0.5";
             } else if (fareData.isOffPeak) {
-                fareType.textContent = "Off-Peak • 40% Off until 14:30";
-                fareType.className = "text-[9px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-green-200 dark:border-green-800/50";
+                fareType.textContent = 'Off-peak until 14:30';
+                fareType.className = "text-[11px] font-medium text-green-600 dark:text-green-300 truncate mt-0.5";
             } else {
-                fareType.textContent = "Standard Fare";
-                fareType.className = "text-[9px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-gray-300 dark:border-gray-600";
+                fareType.textContent = 'Standard · may vary';
+                fareType.className = "text-[11px] font-medium text-gray-500 dark:text-gray-400 truncate mt-0.5";
             }
         }
     } else {
         if (fareAmount) {
-            fareAmount.textContent = "R --.--";
-            fareAmount.className = "text-2xl font-black text-gray-300 dark:text-gray-600 leading-none";
+            fareAmount.textContent = "R--.--";
+            fareAmount.className = "text-xl font-black text-gray-300 dark:text-gray-600 tabular-nums leading-none";
         }
         if (fareType) fareType.className = "hidden";
     }
@@ -281,35 +287,34 @@ export function loadUserProfile() {
     if (saved) $userProfile.set(saved);
 }
 
-export function updateNextTrainView() {
-    let container = document.getElementById('grid-trigger-container');
-    const liveView = document.getElementById('view-next-train');
-    if (!container && liveView) {
-        container = document.createElement('div');
-        container.id = 'grid-trigger-container';
-        container.className = 'mb-4 mt-2 px-1';
-        const fare = document.getElementById('fare-container');
-        if (fare?.parentNode) fare.parentNode.insertBefore(container, fare);
-        else liveView.appendChild(container);
-    }
-    if (!container) return;
+function formatRouteLabel(raw) {
+    if (typeof raw !== 'string') return 'Select a route';
+    return raw.replace(/\s*<->\s*/g, ' – ').replace(/\s*↔\s*/g, ' – ').trim();
+}
 
+export function updateNextTrainView() {
     const routeId = $currentRouteId.get();
     const route = routeId ? ROUTES[routeId] : null;
-    if (!route || !route.isActive) {
-        container.classList.add('hidden');
-        return;
+    const label = formatRouteLabel(route?.name || 'Select a route');
+
+    const title = document.getElementById('route-subtitle-text');
+    if (title) {
+        title.textContent = label;
+        title.title = label;
+        if (route?.colorClass) {
+            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center`;
+        } else {
+            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center';
+        }
     }
-    container.classList.remove('hidden');
-    container.innerHTML = `
-        <button type="button" id="view-full-timetable-btn" class="w-full flex items-center justify-center space-x-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 group focus:outline-none">
-            <span class="text-xl">📅</span>
-            <span class="tracking-wide">VIEW FULL TIMETABLE</span>
-        </button>`;
-    document.getElementById('view-full-timetable-btn')?.addEventListener('click', () => {
-        triggerHaptic();
-        renderFullScheduleGrid('A');
-    });
+
+    const btn = document.getElementById('view-full-timetable-btn');
+    if (btn) {
+        const active = !!(route && route.isActive);
+        btn.disabled = !active;
+        btn.classList.toggle('opacity-60', !active);
+        btn.classList.toggle('pointer-events-none', !active);
+    }
 }
 
 export function openScheduleModal(destination, dayOverride = null) {
@@ -319,138 +324,179 @@ export function openScheduleModal(destination, dayOverride = null) {
     if (!modalList) return;
 
     const routeId = $currentRouteId.get();
-    const route = ROUTES[routeId];
+    const route = routeId ? ROUTES[routeId] : null;
     if (!route) return;
 
-    const destLabel = window.Renderer?._applyUIIntercepts(destination) || destination.replace(/ STATION/gi, '');
-    if (modalTitle) modalTitle.textContent = `Upcoming to ${destLabel}`;
+    const stationSelect = document.getElementById('station-select');
+    const selectedStation = stationSelect?.value || '';
+    let journeys = [];
+    let titleSuffix = '';
+    let targetDayIdx = (typeof window !== 'undefined' && window.currentDayIndex !== undefined)
+        ? window.currentDayIndex
+        : new Date().getDay();
 
-    // Prefer journeys already computed by findNextTrains via processAndRenderJourney storage
-    // Fallback: list from station board cards' "See Upcoming" uses Renderer-built list if available
-    modalList.innerHTML = `<div class="p-4 text-sm text-gray-500 text-center">Loading schedule…</div>`;
+    if (dayOverride) {
+        let sheetKey = null;
+        const simResult = typeof window.simulateNextActiveService === 'function'
+            ? window.simulateNextActiveService(selectedStation, destination)
+            : null;
+
+        if (simResult && simResult.dayInfo?.type === dayOverride) {
+            targetDayIdx = simResult.dayInfo.idx;
+            titleSuffix = ` (${simResult.dayInfo.name})`;
+        } else if (dayOverride === 'weekday') {
+            targetDayIdx = 1;
+            titleSuffix = ' (Weekday)';
+        } else if (dayOverride === 'saturday') {
+            targetDayIdx = 6;
+            titleSuffix = ' (Weekend/Holiday)';
+        }
+
+        if (dayOverride === 'weekday' || dayOverride === 'sunday') {
+            sheetKey = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'weekday_to_a' : 'weekday_to_b';
+        } else if (dayOverride === 'saturday') {
+            sheetKey = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'saturday_to_a' : 'saturday_to_b';
+        }
+
+        const schedule = ($schedules.get() || {})[sheetKey];
+        if (schedule && selectedStation) {
+            journeys = normalizeStationName(destination) === normalizeStationName(route.destA)
+                ? findNextJourneyToDestA(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys
+                : findNextJourneyToDestB(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys;
+        }
+    } else {
+        journeys = currentScheduleData?.[destination] || [];
+        if ((!journeys || journeys.length === 0) && selectedStation) {
+            const dayType = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+            const sheetKey = dayType === 'weekday'
+                ? (normalizeStationName(destination) === normalizeStationName(route.destA) ? 'weekday_to_a' : 'weekday_to_b')
+                : (normalizeStationName(destination) === normalizeStationName(route.destA) ? 'saturday_to_a' : 'saturday_to_b');
+            const schedule = ($schedules.get() || {})[sheetKey];
+            if (schedule) {
+                journeys = normalizeStationName(destination) === normalizeStationName(route.destA)
+                    ? findNextJourneyToDestA(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys
+                    : findNextJourneyToDestB(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys;
+            }
+        }
+    }
+
+    if (!journeys || journeys.length === 0) {
+        showToast('No trains found for this schedule.', 'error');
+        return;
+    }
+
+    const fromStationName = selectedStation
+        ? (window.Renderer?._applyUIIntercepts(selectedStation) || selectedStation.replace(/ STATION/gi, ''))
+        : 'Upcoming Trains';
+    const destLabel = window.Renderer?._applyUIIntercepts(destination) || destination.replace(/ STATION/gi, '');
+    if (modalTitle) modalTitle.textContent = `${fromStationName} → ${destLabel}${titleSuffix}`;
+
+    const toTitleCase = (str) => {
+        if (!str) return '';
+        return String(str).replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+    };
+
+    modalList.innerHTML = '';
+    const nowSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
+    let firstNextTrainFound = false;
+
+    journeys.forEach((j) => {
+        const dep = j.departureTime || j.train1?.departureTime;
+        const trainName = j.train || j.train1?.train;
+        const type = j.type === 'transfer' ? 'Transfer' : 'Direct';
+        const depSeconds = timeToSeconds(dep);
+        let isPassed = false;
+        if (!dayOverride) isPassed = depSeconds < nowSeconds;
+
+        let divClass = 'p-3 rounded shadow-sm flex justify-between items-center transition-opacity duration-300';
+        divClass += isPassed
+            ? ' bg-gray-50 dark:bg-gray-800 opacity-50 grayscale'
+            : ' bg-white dark:bg-gray-700';
+
+        const div = document.createElement('div');
+        div.className = divClass;
+        if (!isPassed && !firstNextTrainFound && !dayOverride) {
+            div.id = 'next-train-marker';
+            firstNextTrainFound = true;
+        }
+
+        let sharedTag = '';
+        if (j.isShared && j.sourceRoute) {
+            let rawName = String(j.sourceRoute).replace('Route', '').trim();
+            let routeName = rawName;
+            if (rawName.includes('<->')) routeName = rawName.split('<->')[1].trim();
+            else if (rawName.includes('↔')) routeName = rawName.split('↔')[1].trim();
+
+            if (j.isDivergent) {
+                const divDest = window.Renderer?._applyUIIntercepts(j.actualDestName) || j.actualDestName;
+                sharedTag = `<span class="text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">⚠️ To ${escapeHTML(toTitleCase(divDest))}</span>`;
+            } else {
+                sharedTag = `<span class="text-[9px] font-bold text-purple-600 bg-purple-100 dark:text-purple-300 dark:bg-purple-900 px-1.5 py-0.5 rounded uppercase ml-2">From ${escapeHTML(toTitleCase(routeName))}</span>`;
+            }
+        }
+
+        const formattedDep = formatTimeDisplay(dep);
+        let rightPillHTML = '';
+        let isShortTrip = false;
+        let shortDestName = '';
+
+        if (j.type === 'direct' && j.actualDestination) {
+            const actual = normalizeStationName(j.actualDestination);
+            const target = normalizeStationName(destination);
+            if (actual !== target) {
+                isShortTrip = true;
+                shortDestName = toTitleCase(String(j.actualDestination).replace(/ STATION/gi, ''));
+            }
+        }
+
+        if (sharedTag) {
+            rightPillHTML = sharedTag;
+        } else if (type === 'Direct') {
+            rightPillHTML = isShortTrip
+                ? `<span class="text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">To ${escapeHTML(shortDestName)}</span>`
+                : '<span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase">Direct</span>';
+        } else {
+            let transferLabel = '';
+            if (j.train1?.headboardDestination) {
+                transferLabel = `To ${toTitleCase(String(j.train1.headboardDestination).replace(/ STATION/gi, ''))}`;
+            } else if (j.train1?.terminationStation) {
+                transferLabel = `Transfer @ ${toTitleCase(String(j.train1.terminationStation).replace(/ STATION/gi, ''))}`;
+            } else {
+                transferLabel = 'Transfer';
+            }
+            rightPillHTML = `<span class="text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase text-right leading-tight whitespace-nowrap">${escapeHTML(transferLabel)}</span>`;
+        }
+
+        if (j.isLastTrain) {
+            rightPillHTML += ' <span class="text-[10px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-2 py-0.5 rounded-full uppercase border border-red-200 dark:border-red-800 ml-1">LAST TRAIN</span>';
+        }
+
+        div.innerHTML = `
+            <div>
+                <span class="text-lg font-bold text-gray-900 dark:text-white">${escapeHTML(formattedDep)}</span>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Train ${escapeHTML(String(trainName || ''))}</div>
+            </div>
+            <div class="flex flex-col items-end gap-1 text-right shrink-0">
+                ${rightPillHTML}
+            </div>
+        `;
+        modalList.appendChild(div);
+    });
+
     openSmoothModal('schedule-modal');
 
-    // Build simple upcoming list from current schedule sheets
-    try {
-        const scheds = $schedules.get() || {};
-        const dayType = dayOverride || (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
-        const isDestA = normalizeStationName(destination) === normalizeStationName(route.destA);
-        const sheet = dayType === 'weekday'
-            ? (isDestA ? scheds.weekday_to_a : scheds.weekday_to_b)
-            : (isDestA ? scheds.saturday_to_a : scheds.saturday_to_b);
-
-        const station = document.getElementById('station-select')?.value;
-        if (!sheet?.rows || !station) {
-            modalList.innerHTML = `<div class="p-4 text-sm text-gray-500 text-center">No schedule data available.</div>`;
-            return;
-        }
-
-        const stationCol = sheet.stationColumnName || 'STATION';
-        const fromRow = sheet.rows.find(r => normalizeStationName(r[stationCol] || r.STATION) === normalizeStationName(station));
-        if (!fromRow) {
-            modalList.innerHTML = `<div class="p-4 text-sm text-gray-500 text-center">Station not found on this sheet.</div>`;
-            return;
-        }
-
-        const nowSec = timeToSeconds(getCurrentTime() || '00:00:00');
-        const trains = sheet.headers.slice(1).filter(Boolean);
-        const upcoming = [];
-        for (const train of trains) {
-            if (typeof window.isTrainExcluded === 'function' && window.isTrainExcluded(train, routeId, window.currentDayIndex || 0)) continue;
-            const t = fromRow[train];
-            if (!t || String(t).trim() === '-' || String(t).trim() === '') continue;
-            const sec = timeToSeconds(t);
-            if (dayOverride || sec >= nowSec) upcoming.push({ train, time: t, sec });
-        }
-        upcoming.sort((a, b) => a.sec - b.sec);
-
-        if (upcoming.length === 0) {
-            modalList.innerHTML = `<div class="p-4 text-sm text-gray-500 text-center">No more trains today.</div>`;
-            return;
-        }
-
-        modalList.innerHTML = upcoming.map((u, idx) => `
-            <div class="flex justify-between items-center p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 ${idx === 0 ? 'ring-2 ring-blue-500' : ''}">
-                <div>
-                    <div class="text-xs font-bold text-gray-500 uppercase">Train ${escapeHTML(u.train)}</div>
-                    <div class="text-lg font-black text-gray-900 dark:text-white">${escapeHTML(String(u.time).slice(0, 5))}</div>
-                </div>
-                ${idx === 0 ? '<span class="text-[10px] font-black text-blue-600 uppercase">Next</span>' : ''}
-            </div>`).join('');
-    } catch (e) {
-        console.error(e);
-        modalList.innerHTML = `<div class="p-4 text-sm text-red-500 text-center">Could not load schedule.</div>`;
+    if (!dayOverride) {
+        setTimeout(() => {
+            document.getElementById('next-train-marker')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }, 10);
+    } else {
+        modalList.scrollTop = 0;
     }
-}
-
-export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
-    triggerHaptic();
-    const routeId = $currentRouteId.get();
-    const route = ROUTES[routeId];
-    if (!route || !window.Renderer?._buildGridHTML) {
-        showToast('Timetable not ready yet.', 'error');
-        return;
-    }
-
-    const dayType = dayOverride || (typeof window !== 'undefined' && window.currentDayType === 'saturday' ? 'saturday' : 'weekday');
-    const scheds = $schedules.get() || {};
-    const schedule = direction === 'A'
-        ? (dayType === 'weekday' ? scheds.weekday_to_a : scheds.saturday_to_a)
-        : (dayType === 'weekday' ? scheds.weekday_to_b : scheds.saturday_to_b);
-
-    if (!schedule) {
-        showToast('No timetable for this day.', 'error');
-        return;
-    }
-
-    let modal = document.getElementById('full-schedule-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'full-schedule-modal';
-        modal.className = 'fixed inset-0 bg-black bg-opacity-90 z-[90] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
-        modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 shrink-0">
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Full Timetable</h3>
-                    <div class="flex items-center gap-2">
-                        <button type="button" id="grid-export-btn" class="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg">Export</button>
-                        <button type="button" id="close-full-grid-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500" aria-label="Close">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                    </div>
-                </div>
-                <div id="grid-controls" class="px-4 py-2 flex gap-2 shrink-0 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700"></div>
-                <div id="grid-container" class="flex-grow overflow-auto p-2 bg-white dark:bg-gray-900"></div>
-            </div>`;
-        document.body.appendChild(modal);
-        document.getElementById('close-full-grid-btn')?.addEventListener('click', () => closeSmoothModal('full-schedule-modal'));
-        document.getElementById('grid-export-btn')?.addEventListener('click', () => {
-            if (typeof window.takeGridSnapshot === 'function') window.takeGridSnapshot(direction, dayType);
-        });
-    }
-
-    const controls = document.getElementById('grid-controls');
-    if (controls) {
-        controls.innerHTML = `
-            <button type="button" data-dir="A" class="px-3 py-1.5 text-xs font-bold rounded-lg ${direction === 'A' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}">To ${window.Renderer._applyUIIntercepts(route.destA)}</button>
-            <button type="button" data-dir="B" class="px-3 py-1.5 text-xs font-bold rounded-lg ${direction === 'B' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}">To ${window.Renderer._applyUIIntercepts(route.destB)}</button>`;
-        controls.querySelectorAll('button[data-dir]').forEach(btn => {
-            btn.addEventListener('click', () => renderFullScheduleGrid(btn.getAttribute('data-dir'), dayType));
-        });
-    }
-
-    const sheetKey = direction === 'A'
-        ? (dayType === 'weekday' ? route.sheetKeys.weekday_to_a : route.sheetKeys.saturday_to_a)
-        : (dayType === 'weekday' ? route.sheetKeys.weekday_to_b : route.sheetKeys.saturday_to_b);
-
-    const html = window.Renderer._buildGridHTML(schedule, sheetKey, routeId, window.currentDayIndex || 0, true, false);
-    const grid = document.getElementById('grid-container');
-    if (grid) grid.innerHTML = html;
-    openSmoothModal('full-schedule-modal');
 }
 
 export function attachLiveBoardUiGlobals() {
     if (typeof window === 'undefined') return;
+    attachTimetableGridGlobals();
     window._renderNextTrainList = _renderNextTrainList;
     window.processAndRenderJourney = processAndRenderJourney;
     window.renderNoService = renderNoService;
@@ -458,7 +504,6 @@ export function attachLiveBoardUiGlobals() {
     window.updateFareDisplay = updateFareDisplay;
     window.openFareModal = openFareModal;
     window.openScheduleModal = openScheduleModal;
-    window.renderFullScheduleGrid = renderFullScheduleGrid;
     window.selectProfile = selectProfile;
     window.updatePinUI = updatePinUI;
     window.updateNextTrainView = updateNextTrainView;
@@ -471,6 +516,18 @@ export function initLiveBoardUi() {
     loadUserProfile();
     updatePinUI();
     updateNextTrainView();
+
+    if (typeof window !== 'undefined' && !window._gridPopstateBound) {
+        window._gridPopstateBound = true;
+        window.addEventListener('popstate', () => {
+            if (location.hash !== '#grid') {
+                const modal = document.getElementById('full-schedule-modal');
+                if (modal && !modal.classList.contains('hidden')) {
+                    closeSmoothModal('full-schedule-modal');
+                }
+            }
+        });
+    }
 
     // Reactive: schedules load → populate stations + refresh board
     $schedules.subscribe((scheds) => {
@@ -486,12 +543,7 @@ export function initLiveBoardUi() {
     $currentRouteId.subscribe((routeId) => {
         if (!routeId) return;
         updatePinUI();
-        const title = document.getElementById('route-subtitle-text');
-        if (title && ROUTES[routeId]) {
-            title.textContent = ROUTES[routeId].name;
-            const color = ROUTES[routeId].colorClass || 'text-gray-700 dark:text-gray-200';
-            title.className = `text-base sm:text-lg font-medium ${color} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center px-1 min-w-0`;
-        }
+        updateNextTrainView();
         // Reload route-specific schedules when route changes after initial boot
         if ($fullDatabase.get()) {
             loadAllSchedules(true).then(() => {
@@ -501,6 +553,15 @@ export function initLiveBoardUi() {
             });
         }
     });
+
+    const timetableBtn = document.getElementById('view-full-timetable-btn');
+    if (timetableBtn && !timetableBtn.dataset.bound) {
+        timetableBtn.dataset.bound = '1';
+        timetableBtn.addEventListener('click', () => {
+            triggerHaptic();
+            renderFullScheduleGrid('A');
+        });
+    }
 
     const pinBtn = document.getElementById('pin-route-btn');
     if (pinBtn && !pinBtn.dataset.bound) {

@@ -1,0 +1,73 @@
+---
+/**
+ * Full-view Route Community (same chrome as Live Board / Trip Planner).
+ * Behaviour: src/lib/community.js
+ */
+---
+
+<div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
+    <div class="flex flex-col min-h-[min(70dvh,640px)]">
+        <div class="shrink-0 pt-4 pb-3 space-y-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div class="flex items-start justify-between gap-2 px-4">
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Community</p>
+                    <label for="community-route-select" class="sr-only">Route room</label>
+                    <div class="relative min-w-0" id="community-route-dropdown">
+                        <select id="community-route-select" class="sr-only" tabindex="-1" aria-hidden="true"></select>
+                        <button type="button" id="community-route-trigger" class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-left shadow-sm hover:border-blue-300 dark:hover:border-blue-600 hover:bg-white dark:hover:bg-gray-800/80 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-haspopup="listbox" aria-expanded="false">
+                            <span id="community-route-display" class="text-sm sm:text-base font-black text-gray-900 dark:text-white tracking-tight truncate leading-tight">Select route</span>
+                            <svg id="community-route-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <ul id="community-route-list" role="listbox" class="absolute z-[200] left-0 right-0 mt-1.5 max-h-[min(50vh,20rem)] overflow-y-auto custom-scrollbar bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl hidden flex-col text-left"></ul>
+                    </div>
+                </div>
+                <button type="button" id="community-refresh-btn" class="mt-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none shrink-0" aria-label="Refresh" title="Refresh">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+            <h2 id="community-route-title" class="sr-only">Route feed</h2>
+
+            <div class="flex items-center justify-between gap-2 px-4">
+                <p id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide">—</p>
+                <p id="community-typing" class="text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate max-w-[55%]"></p>
+            </div>
+
+            <div id="community-category-filters" class="grid grid-cols-5 w-full gap-0 border-y border-gray-200 dark:border-gray-700" role="group" aria-label="Filter by category">
+                <button type="button" data-community-filter="all" class="community-filter-chip is-selected text-[10px] font-bold py-2.5 text-center bg-blue-600 text-white focus:outline-none">All</button>
+                <button type="button" data-community-filter="general" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">General</button>
+                <button type="button" data-community-filter="delay" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Delay</button>
+                <button type="button" data-community-filter="safety" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Safety</button>
+                <button type="button" data-community-filter="other" class="community-filter-chip text-[10px] font-bold py-2.5 text-center bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 focus:outline-none border-l border-gray-200 dark:border-gray-700">Other</button>
+            </div>
+
+            <p id="community-guest-hint" class="hidden relative mx-4 pr-9 text-[11px] text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl px-3 py-2">
+                Anyone can read. <button type="button" id="community-signin-cta" class="font-bold underline focus:outline-none">Sign in</button> to post or reply. Please be kind and respectful.
+                <button type="button" id="community-guest-hint-dismiss" class="absolute top-1.5 right-1.5 p-1 rounded-md text-blue-500/80 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 focus:outline-none" aria-label="Dismiss" title="Dismiss">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </p>
+        </div>
+
+        <div class="flex-grow px-4 pt-2 pb-4 custom-scrollbar">
+            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+            <div id="community-feed-list" class="pb-2"></div>
+        </div>
+
+        <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 space-y-2 sticky bottom-0 z-10">
+            <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 min-h-[1rem]"></p>
+            <div class="flex gap-2 items-stretch h-[5.25rem]">
+                <textarea id="community-composer" rows="2" maxlength="280" class="flex-1 min-w-0 h-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Share something for this line…"></textarea>
+                <div class="flex flex-col gap-1.5 shrink-0 w-[7.25rem] h-full">
+                    <label for="community-category" class="sr-only">Category</label>
+                    <select id="community-category" class="w-full flex-1 px-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="general">General</option>
+                        <option value="delay">Delay</option>
+                        <option value="safety">Safety</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <button type="button" id="community-post-btn" class="w-full flex-1 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -159,9 +159,11 @@
 
         const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
         const activeRegion = $userRegion.get() || 'GP';
+        const params = new URLSearchParams(window.location.search);
+        const hasRouteDeepLink = params.get('action') === 'route' && params.get('route');
 
         // Brand-new users + legacy map onboarding deep-links
-        if (!welcomeSeen || isOnboardMap) {
+        if ((!welcomeSeen || isOnboardMap) && !hasRouteDeepLink) {
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);

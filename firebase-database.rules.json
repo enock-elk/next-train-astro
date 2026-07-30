@@ -1,0 +1,168 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "config": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+    "schedules": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+    "notices": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+    "exclusions": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+    "disruptions": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "feedback": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$feedbackId": {
+        ".write": "!data.exists() || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+      }
+    },
+
+    "votes": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$voteId": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "newData.hasChildren(['region', 'timestamp']) && newData.child('region').isString() && newData.child('region').val().length < 10"
+      }
+    },
+
+    "inbox": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$deviceId": {
+        ".read": true,
+        "$messageId": {
+          ".write": "newData.hasChild('read')"
+        }
+      }
+    },
+
+    "sys_logs": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "crashes": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$crashId": {
+          ".write": "!data.exists()"
+        }
+      },
+      "routing_fails": {
+        ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'",
+        "$deadEndId": {
+          ".write": "!data.exists()"
+        }
+      }
+    },
+
+    "admin_state": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+    },
+
+    "notices_archive": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+
+    "disruptions_archive": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+    },
+
+    "roadmap": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+    },
+
+    "route_community": {
+      "$routeId": {
+        "posts": {
+          ".read": true,
+          ".indexOn": ["timestamp"],
+          "$postId": {
+            ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && ((!data.exists() && newData.child('uid').val() === auth.uid && !(root.child('users').child(auth.uid).child('flags').child('shadowBanned').val() === true && (!root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').exists() || root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').val() === 0 || root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').val() > now))) || (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['postId', 'routeId', 'body', 'uid', 'timestamp']) && newData.child('body').isString() && newData.child('body').val().length > 0 && newData.child('body').val().length <= 280 && newData.child('timestamp').isNumber() && (newData.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+            "replyCount": {
+              ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000"
+            },
+            "replies": {
+              ".read": true,
+              ".indexOn": ["timestamp"],
+              "$replyId": {
+                ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && ((!data.exists() && newData.child('uid').val() === auth.uid && !(root.child('users').child(auth.uid).child('flags').child('shadowBanned').val() === true && (!root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').exists() || root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').val() === 0 || root.child('users').child(auth.uid).child('flags').child('shadowBannedUntil').val() > now))) || (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+                ".validate": "!newData.exists() || (newData.hasChildren(['replyId', 'postId', 'body', 'uid', 'timestamp']) && newData.child('body').isString() && newData.child('body').val().length > 0 && newData.child('body').val().length <= 280 && newData.child('timestamp').isNumber() && (newData.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+              }
+            }
+          }
+        },
+        "presence": {
+          ".read": true,
+          "$sessionId": {
+            ".write": true,
+            ".validate": "!newData.exists() || (newData.hasChildren(['at']) && newData.child('at').isNumber() && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)))"
+          }
+        },
+        "typing": {
+          ".read": true,
+          "$sessionId": {
+            ".write": true,
+            ".validate": "!newData.exists() || (newData.hasChildren(['at']) && newData.child('at').isNumber() && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)))"
+          }
+        },
+        "post_reactions": {
+          "$postId": {
+            ".read": true,
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous'",
+              ".validate": "!newData.exists() || (newData.hasChildren(['emoji', 'at']) && newData.child('emoji').isString() && (newData.child('emoji').val() === 'thumb' || newData.child('emoji').val() === 'heart' || newData.child('emoji').val() === 'laugh' || newData.child('emoji').val() === 'wow' || newData.child('emoji').val() === 'sad' || newData.child('emoji').val() === 'pray') && newData.child('at').isNumber())"
+            }
+          }
+        }
+      }
+    },
+
+    "moderation_queue": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$reportId": {
+        ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'timestamp', 'status']) && newData.child('timestamp').isNumber() && (newData.child('status').val() === 'open' || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+      }
+    },
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "flags": {
+          ".read": "auth != null",
+          ".write": "(auth != null && auth.uid === $uid && !data.exists() && newData.child('shadowBanned').val() == false && newData.child('role').val() === 'user') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+        },
+        "trustScore": {
+          ".read": "auth != null",
+          ".write": "(auth != null && auth.uid === $uid && !data.exists() && newData.isNumber() && newData.val() === 0) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+        }
+      }
+    },
+
+    "devices": {
+      "$deviceId": {
+        ".read": "auth != null && ((data.exists() && auth.uid === data.child('uid').val()) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && (!data.exists() || data.child('uid').val() === auth.uid) && newData.child('uid').val() === auth.uid"
+      }
+    }
+  }
+}

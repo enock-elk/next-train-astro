@@ -2,7 +2,7 @@
  * App Hub (sidenav) + feedback + notices + cache sync + changelog badge
  */
 import { APP_VERSION, CHANGELOG_DATA, DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
-import { safeStorage } from './utils.js';
+import { safeStorage, escapeHTML } from './utils.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal
 } from './ui.js';
@@ -135,10 +135,11 @@ function syncChangelogBadge() {
     const verLabel = document.querySelector('#settings-app-version .font-mono');
     const latest = CHANGELOG_DATA?.[0];
     if (!latest) return;
-    const ver = String(latest.version).split('<')[0].trim();
-    if (verLabel) verLabel.textContent = ver.replace(/^V/i, 'v');
+    const ver = String(latest.version).split('<')[0].trim().replace(/^V/i, 'v').replace(/_/g, ' ');
+    if (verLabel) verLabel.textContent = ver;
     const seen = safeStorage.getItem('seen_changelog_version');
-    if (badge) badge.classList.toggle('hidden', seen === ver);
+    const seenNorm = seen ? String(seen).replace(/^V/i, 'v').replace(/_/g, ' ') : '';
+    if (badge) badge.classList.toggle('hidden', seenNorm === ver);
 }
 
 function openChangelog() {
@@ -281,96 +282,393 @@ function sanitizeHTML(dirtyHtml) {
     return doc.body.innerHTML;
 }
 
+function trackAlertEvent(name, params) {
+    if (typeof window.trackAnalyticsEvent === 'function') {
+        window.trackAnalyticsEvent(name, params);
+    }
+}
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
+    const modal = document.getElementById('notice-modal');
+    const content = document.getElementById('notice-content');
+    const timestamp = document.getElementById('notice-timestamp');
     if (!bellBtn) return;
 
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
     const routeId = $currentRouteId.get();
 
     try {
-        // Inbox
+        // 1. Commuter inbox (admin replies)
         let adminReply = null;
         if (deviceId) {
-            const inboxRes = await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json?t=${Date.now()}`);
-            if (inboxRes.ok) {
-                const ct = inboxRes.headers.get('content-type') || '';
-                if (!ct.includes('text/html')) {
+            try {
+                const inboxRes = await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json?t=${Date.now()}`);
+                if (inboxRes.ok) {
+                    const ct = inboxRes.headers.get('content-type') || '';
+                    if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => inboxData[k] && !inboxData[k].read);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
+
+                            const undeliveredKeys = unreadKeys.filter((k) => !inboxData[k].delivered);
+                            if (undeliveredKeys.length > 0) {
+                                const updates = {};
+                                undeliveredKeys.forEach((k) => {
+                                    updates[`${k}/delivered`] = true;
+                                    updates[`${k}/deliveredAt`] = Date.now();
+                                });
+                                fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json`, {
+                                    method: 'PATCH',
+                                    body: JSON.stringify(updates)
+                                }).catch(() => {});
+                            }
                         }
                     }
                 }
+            } catch (e) {
+                console.warn('Inbox fetch failed', e);
             }
         }
 
         const replyBanner = document.getElementById('developer-reply-banner');
         const viewReplyBtn = document.getElementById('view-reply-btn');
+
         if (adminReply && replyBanner) {
             replyBanner.classList.remove('hidden');
+
             if (viewReplyBtn) {
                 viewReplyBtn.onclick = () => {
                     triggerHaptic();
+
                     const replyContent = document.getElementById('developer-reply-content');
-                    if (replyContent) replyContent.innerHTML = sanitizeHTML(adminReply.message || '');
                     const markReadBtn = document.getElementById('mark-reply-read-btn');
+
+                    if (replyContent) {
+                        const replyModalCard = document.querySelector('#developer-reply-modal > div');
+                        if (replyModalCard && !replyModalCard.dataset.styled) {
+                            replyModalCard.dataset.styled = 'true';
+                            replyModalCard.classList.add('max-h-[85vh]', 'flex', 'flex-col', 'p-0', 'overflow-hidden');
+                            replyModalCard.classList.remove('p-6');
+
+                            const headerDiv = replyModalCard.querySelector('.flex.items-center.justify-between');
+                            if (headerDiv) {
+                                headerDiv.classList.add('p-5', 'bg-white', 'dark:bg-gray-800', 'border-b', 'border-gray-200', 'dark:border-gray-700', 'shrink-0');
+                                headerDiv.classList.remove('mb-4');
+                            }
+
+                            replyContent.classList.add('overflow-y-auto', 'custom-scrollbar', 'flex-grow', 'p-5', 'rounded-none', 'border-0', 'mb-0');
+                            replyContent.classList.remove('mb-6', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-gray-700');
+                        }
+
+                        replyContent.innerHTML = sanitizeHTML(adminReply.message || '');
+                    }
+
                     if (markReadBtn) {
+                        markReadBtn.textContent = 'Got it, Thanks!';
+                        markReadBtn.disabled = false;
+
+                        const actionsContainer = document.getElementById('admin-message-actions') || markReadBtn.parentNode;
+                        actionsContainer.className = 'flex space-x-3 w-full shrink-0 p-5 pt-0';
+                        markReadBtn.className = 'flex-1 bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm';
+
                         markReadBtn.onclick = async () => {
+                            triggerHaptic();
+                            markReadBtn.disabled = true;
+                            markReadBtn.textContent = 'Marking...';
                             try {
                                 await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}/${adminReply._key}.json`, {
                                     method: 'PATCH',
-                                    body: JSON.stringify({ read: true, readAt: Date.now() })
+                                    body: JSON.stringify({ read: true, readAt: Date.now(), acknowledged: true })
                                 });
                             } catch (e) {}
+
+                            if (location.hash === '#devreply') history.back();
+                            else closeSmoothModal('developer-reply-modal');
                             replyBanner.classList.add('hidden');
-                            closeSmoothModal('developer-reply-modal');
+                        };
+
+                        let replyToAdminBtn = document.getElementById('reply-to-admin-btn');
+                        if (!replyToAdminBtn) {
+                            replyToAdminBtn = document.createElement('button');
+                            replyToAdminBtn.id = 'reply-to-admin-btn';
+                            replyToAdminBtn.type = 'button';
+                            replyToAdminBtn.className = 'flex-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-2 border-blue-600 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none flex items-center justify-center text-sm';
+                            replyToAdminBtn.innerHTML = '<span class="mr-2">💬</span> Reply to Admin';
+                            actionsContainer.appendChild(replyToAdminBtn);
+                        }
+
+                        replyToAdminBtn.onclick = () => {
+                            triggerHaptic();
+
+                            const fText = document.getElementById('feedback-text');
+                            const fType = document.getElementById('feedback-type');
+
+                            if (fText) {
+                                let contextBox = document.getElementById('feedback-reply-context');
+                                if (!contextBox) {
+                                    contextBox = document.createElement('div');
+                                    contextBox.id = 'feedback-reply-context';
+                                    fText.parentNode?.insertBefore(contextBox, fText);
+                                }
+                                contextBox.className = 'mb-0 mx-5 mt-4 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start shadow-inner';
+
+                                let cleanAdminMsg = '';
+                                if (adminReply.message) {
+                                    const tempDoc = new DOMParser().parseFromString(adminReply.message, 'text/html');
+                                    cleanAdminMsg = tempDoc.body.textContent || tempDoc.body.innerText || '';
+                                }
+                                cleanAdminMsg = cleanAdminMsg.replace(/—.*/, '').trim();
+                                const words = cleanAdminMsg.split(/\s+/).filter((w) => w.length > 0);
+                                const truncatedAdminMsg = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+
+                                contextBox.innerHTML = `<span class="mr-2 text-sm leading-none">💬</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Admin:</span><span class="line-clamp-2">"${escapeHTML(truncatedAdminMsg)}"</span></div>`;
+                                contextBox.dataset.rawMsg = `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`;
+                                contextBox.classList.remove('hidden');
+                                fText.value = '';
+                            }
+
+                            if (fType) {
+                                if (!fType.querySelector('option[value="thread_reply"]')) {
+                                    const replyOpt = document.createElement('option');
+                                    replyOpt.value = 'thread_reply';
+                                    replyOpt.textContent = 'Thread Reply';
+                                    fType.appendChild(replyOpt);
+                                }
+                                fType.value = 'thread_reply';
+                            }
+
+                            if (location.hash === '#devreply') history.back();
+                            else closeSmoothModal('developer-reply-modal');
+                            setTimeout(() => {
+                                trackAlertEvent('open_feedback_modal', { location: 'admin_inbox_reply' });
+                                history.pushState({ modal: 'feedback' }, '', '#feedback');
+                                openSmoothModal('feedback-modal');
+                            }, 350);
                         };
                     }
-                    openSmoothModal('developer-reply-modal');
+
+                    history.pushState({ modal: 'devreply' }, '', '#devreply');
+                    openSmoothModal('developer-reply-modal', 'dev-banner');
+                };
+            }
+
+            const devReplyCloseTop = document.querySelector('#developer-reply-modal button.text-gray-400');
+            if (devReplyCloseTop) {
+                devReplyCloseTop.onclick = (e) => {
+                    e.preventDefault();
+                    if (location.hash === '#devreply') history.back();
+                    else closeSmoothModal('developer-reply-modal');
                 };
             }
         } else if (replyBanner) {
             replyBanner.classList.add('hidden');
         }
 
-        // Route notices
+        // 2. Route notices (single object OR array at notices/{routeId}.json)
         if (!routeId || !ROUTES[routeId]) {
             bellBtn.classList.add('hidden');
             return;
         }
+
         const noticeRes = await fetch(`${DYNAMIC_BASE_URL}notices/${routeId}.json?t=${Date.now()}`);
         if (!noticeRes.ok) {
             bellBtn.classList.add('hidden');
             return;
         }
-        const notice = await noticeRes.json();
-        if (!notice || (notice.expiresAt && notice.expiresAt < Date.now())) {
+        const ct = noticeRes.headers.get('content-type') || '';
+        if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
+
+        const rawNotices = await noticeRes.json();
+        if (!rawNotices) {
             bellBtn.classList.add('hidden');
             return;
         }
-        const seenKey = `seen_notice_${routeId}_${notice.id || notice.timestamp || 'x'}`;
-        const unseen = safeStorage.getItem(seenKey) !== 'true';
+
+        const now = Date.now();
+        const severityScore = { critical: 3, warning: 2, info: 1 };
+        let validNotices = [];
+
+        if (Array.isArray(rawNotices)) {
+            validNotices = rawNotices.filter((n) => n && (!n.expiresAt || n.expiresAt > now));
+        } else if (typeof rawNotices === 'object') {
+            // Single notice object, or map of notices keyed by id
+            if (rawNotices.message || rawNotices.text || rawNotices.id || rawNotices.severity) {
+                if (!rawNotices.expiresAt || rawNotices.expiresAt > now) validNotices = [rawNotices];
+            } else {
+                validNotices = Object.values(rawNotices).filter((n) => n && typeof n === 'object' && (!n.expiresAt || n.expiresAt > now));
+            }
+        }
+
+        if (validNotices.length === 0) {
+            bellBtn.classList.add('hidden');
+            return;
+        }
+
+        validNotices.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
+        const activeNotice = validNotices[0];
+        const severity = activeNotice.severity || 'info';
+        const seenKey = `seen_notice_${routeId}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
+        const hasSeen = safeStorage.getItem(seenKey) === 'true';
+        const forcePopup = activeNotice.forcePopup === true;
+
+        const bindModalContent = () => {
+            if (!content || !modal) return;
+
+            const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
+            if (modalCard) {
+                modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500', 'border-red-200', 'dark:border-red-900/50');
+                if (severity === 'critical') modalCard.classList.add('border-red-500');
+                else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
+                else modalCard.classList.add('border-blue-500');
+            }
+
+            const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
+            if (modalHeader) {
+                const headerContainer = modalHeader.parentElement;
+                if (headerContainer) {
+                    const existingIcon = headerContainer.querySelector('svg');
+                    if (existingIcon) existingIcon.remove();
+                    headerContainer.className = `flex items-center shrink-0 ${
+                        severity === 'critical'
+                            ? 'text-red-600 dark:text-red-400'
+                            : severity === 'warning'
+                              ? 'text-yellow-600 dark:text-yellow-400'
+                              : 'text-blue-600 dark:text-blue-400'
+                    }`;
+                }
+                modalHeader.textContent = severity === 'critical'
+                    ? '🔴 CRITICAL ADVISORY'
+                    : severity === 'warning'
+                      ? '🟡 SERVICE WARNING'
+                      : '🔵 SERVICE INFO';
+            }
+
+            let formattedMsg = sanitizeHTML(activeNotice.message || activeNotice.text || '');
+
+            if (activeNotice.sourceName) {
+                const sName = escapeHTML(activeNotice.sourceName);
+                const sUrl = activeNotice.sourceUrl ? escapeHTML(activeNotice.sourceUrl) : null;
+                const innerCitation = sUrl
+                    ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
+                    : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
+                formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+            }
+
+            let mediaHtml = '';
+            if (activeNotice.imageUrl) {
+                const safeUrl = escapeHTML(activeNotice.imageUrl);
+                mediaHtml += `
+                    <button type="button" onclick="window.openLightbox && window.openLightbox('${safeUrl}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">
+                        <img src="${safeUrl}" class="w-full h-auto max-h-48 object-cover hover:opacity-90 transition-opacity" alt="Alert Image" onerror="this.parentElement.style.display='none'">
+                    </button>`;
+            }
+
+            content.innerHTML = mediaHtml + formattedMsg;
+
+            if (activeNotice.ctaUrl && activeNotice.ctaText) {
+                content.innerHTML += `
+                    <a href="${escapeHTML(activeNotice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
+                        ${escapeHTML(activeNotice.ctaText)}
+                    </a>`;
+            }
+
+            if (timestamp) {
+                const posted = activeNotice.postedAt || activeNotice.timestamp;
+                if (posted) {
+                    const date = new Date(posted);
+                    timestamp.textContent = `Posted: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+                } else {
+                    timestamp.textContent = '';
+                }
+            }
+
+            const closeBtn = document.getElementById('notice-modal-close-btn') || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
+            if (closeBtn) {
+                closeBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-blue-600', 'hover:bg-blue-700', 'bg-yellow-600', 'hover:bg-yellow-700');
+                if (severity === 'critical') closeBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                else if (severity === 'warning') closeBtn.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+                else closeBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                closeBtn.onclick = () => {
+                    if (location.hash === '#notice') history.back();
+                    else closeSmoothModal('notice-modal');
+                };
+            }
+        };
+
         bellBtn.classList.remove('hidden');
-        if (dot) dot.classList.toggle('hidden', !unseen);
+
+        // Severity colours on bell / dot (preserve relative positioning from Header)
+        bellBtn.classList.remove(
+            'text-red-600', 'dark:text-red-300', 'hover:bg-red-50', 'dark:hover:bg-red-950/40',
+            'text-yellow-600', 'dark:text-yellow-300', 'hover:bg-yellow-50', 'dark:hover:bg-yellow-950/40',
+            'text-blue-600', 'dark:text-blue-300', 'hover:bg-blue-50', 'dark:hover:bg-blue-950/40',
+            'bg-red-100', 'dark:bg-red-900', 'bg-yellow-100', 'dark:bg-yellow-900', 'bg-blue-100', 'dark:bg-blue-900'
+        );
+        if (dot) {
+            dot.classList.remove('bg-red-600', 'bg-yellow-500', 'bg-blue-600');
+        }
+
+        if (severity === 'critical') {
+            bellBtn.classList.add('text-red-600', 'dark:text-red-300', 'hover:bg-red-50', 'dark:hover:bg-red-950/40');
+            if (dot) dot.classList.add('bg-red-600');
+        } else if (severity === 'warning') {
+            bellBtn.classList.add('text-yellow-600', 'dark:text-yellow-300', 'hover:bg-yellow-50', 'dark:hover:bg-yellow-950/40');
+            if (dot) dot.classList.add('bg-yellow-500');
+        } else {
+            bellBtn.classList.add('text-blue-600', 'dark:text-blue-300', 'hover:bg-blue-50', 'dark:hover:bg-blue-950/40');
+            if (dot) dot.classList.add('bg-blue-600');
+        }
+
+        if (!hasSeen) {
+            if (dot) dot.classList.remove('hidden');
+            if (severity === 'critical') bellBtn.classList.add('animate-shake');
+            else bellBtn.classList.remove('animate-shake');
+
+            const welcomeModal = document.getElementById('welcome-modal');
+            const isWelcomeScreenActive = !routeId || (welcomeModal && !welcomeModal.classList.contains('hidden'));
+
+            if (forcePopup && !window._criticalModalShown && !isWelcomeScreenActive) {
+                window._criticalModalShown = true;
+                setTimeout(() => {
+                    triggerHaptic();
+                    trackAlertEvent('auto_open_alert', { severity, route_id: routeId || 'all' });
+                    safeStorage.setItem(seenKey, 'true');
+                    bellBtn.classList.remove('animate-shake');
+                    if (dot) dot.classList.add('hidden');
+                    bindModalContent();
+                    history.pushState({ modal: 'notice' }, '', '#notice');
+                    openSmoothModal('notice-modal');
+                }, 1200);
+            }
+        } else {
+            bellBtn.classList.remove('animate-shake');
+            if (dot) dot.classList.add('hidden');
+        }
 
         bellBtn.onclick = () => {
             triggerHaptic();
-            const content = document.getElementById('notice-content');
-            const timestamp = document.getElementById('notice-timestamp');
-            if (content) content.innerHTML = sanitizeHTML(notice.message || notice.text || '');
-            if (timestamp) {
-                const ts = notice.timestamp ? new Date(notice.timestamp).toLocaleString() : '';
-                timestamp.textContent = ts;
-            }
+            trackAlertEvent('view_service_alert', { severity, route_id: routeId || 'all' });
             safeStorage.setItem(seenKey, 'true');
+            bellBtn.classList.remove('animate-shake');
             if (dot) dot.classList.add('hidden');
+            bindModalContent();
+            history.pushState({ modal: 'notice' }, '', '#notice');
             openSmoothModal('notice-modal');
         };
+
+        const topCloseBtn = modal?.querySelector('button.text-gray-400');
+        if (topCloseBtn) {
+            topCloseBtn.onclick = (e) => {
+                e.preventDefault();
+                if (location.hash === '#notice') history.back();
+                else closeSmoothModal('notice-modal');
+            };
+        }
     } catch (e) {
         console.warn('Service alerts check failed', e);
     }
@@ -385,6 +683,22 @@ export function initHub() {
     window.performHardCacheClear = performHardCacheClear;
     window.showCacheClearWarning = showCacheClearWarning;
     window.checkServiceAlerts = checkServiceAlerts;
+
+    // Close inbox / notice modals when browser back clears their hash
+    if (!window._hubAlertPopstateBound) {
+        window._hubAlertPopstateBound = true;
+        window.addEventListener('popstate', () => {
+            const hash = location.hash;
+            const replyModal = document.getElementById('developer-reply-modal');
+            const noticeModal = document.getElementById('notice-modal');
+            if (replyModal && !replyModal.classList.contains('hidden') && hash !== '#devreply') {
+                closeSmoothModal('developer-reply-modal');
+            }
+            if (noticeModal && !noticeModal.classList.contains('hidden') && hash !== '#notice') {
+                closeSmoothModal('notice-modal');
+            }
+        });
+    }
 
     syncProfileDisplay();
     syncHapticsToggle();

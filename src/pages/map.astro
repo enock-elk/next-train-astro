@@ -4,6 +4,7 @@ import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION } from
 
 const title = 'Metrorail Network Map — Active Routes | Next Train';
 const description = 'Interactive Metrorail network map for Gauteng, Western Cape, KZN, and Eastern Cape. View active train routes, stations, and live service disruptions.';
+const base = import.meta.env.BASE_URL;
 ---
 
 <ContentLayout
@@ -91,7 +92,7 @@ const description = 'Interactive Metrorail network map for Gauteng, Western Cape
   <h1 class="sr-only">Interactive Metrorail Network Map</h1>
 
   <div class="fixed top-4 left-4 z-[1001]">
-    <a href="/" class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">
+    <a href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">
       <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
       Back
     </a>
@@ -115,7 +116,7 @@ const description = 'Interactive Metrorail network map for Gauteng, Western Cape
     <span class="text-4xl mb-3 block">🗺️</span>
     <h3 class="font-black text-gray-900 dark:text-white text-lg leading-tight mb-2">Interactive Map in Progress</h3>
     <p class="text-gray-500 dark:text-gray-400 text-sm font-medium mb-4">GPS coordinates for this region are currently being mapped. Please use the Static Map view in the meantime.</p>
-    <a href="/" class="inline-block bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition w-full">Go Back</a>
+    <a href={base} class="inline-block bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition w-full">Go Back</a>
   </div>
 
   <div id="map-cold-start" data-nosnippet class="hidden absolute inset-0 z-[60] flex items-center justify-center p-4 bg-gray-100/95 dark:bg-gray-900/95">
@@ -129,7 +130,7 @@ const description = 'Interactive Metrorail network map for Gauteng, Western Cape
         <button type="button" data-region="KZN" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">KZN</button>
         <button type="button" data-region="EC" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">Eastern Cape</button>
       </div>
-      <a href="/" class="inline-block w-full bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition mb-2">Open Next Train</a>
+      <a href={base} class="inline-block w-full bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition mb-2">Open Next Train</a>
       <button type="button" id="map-retry-btn" class="w-full text-sm font-bold text-blue-600 dark:text-blue-400 py-2">Retry</button>
     </div>
   </div>
@@ -167,5 +168,5 @@ const description = 'Interactive Metrorail network map for Gauteng, Western Cape
     window.APP_VERSION = APP_VERSION;
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script is:inline src="/js/map-app.js"></script>
+  <script is:inline src={`${base}js/map-app.js`}></script>
 </ContentLayout>

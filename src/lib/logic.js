@@ -13,7 +13,7 @@ import {
 
 import { 
     ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, PIPELINE_SOURCES, FIREBASE_BASE_URL, 
-    DYNAMIC_BASE_URL, REGIONS, REFRESH_CONFIG, FARE_CONFIG, DEFAULT_EXCLUSIONS 
+    DYNAMIC_BASE_URL, REGIONS, REFRESH_CONFIG, FARE_CONFIG, DEFAULT_EXCLUSIONS, withBase 
 } from './config.js';
 
 import { 
@@ -67,10 +67,10 @@ function applyMapImageForRegion(region) {
     if (typeof document === 'undefined') return;
     const mapImageEl = document.getElementById('map-image');
     if (!mapImageEl) return;
-    if (region === 'WC') mapImageEl.src = '/images/network-map_wc.png';
-    else if (region === 'KZN') mapImageEl.src = '/images/network-map_kzn.png';
-    else if (region === 'EC') mapImageEl.src = '/images/network-map_ec.png';
-    else mapImageEl.src = '/images/network-map.png';
+    if (region === 'WC') mapImageEl.src = withBase('/images/network-map_wc.png');
+    else if (region === 'KZN') mapImageEl.src = withBase('/images/network-map_kzn.png');
+    else if (region === 'EC') mapImageEl.src = withBase('/images/network-map_ec.png');
+    else mapImageEl.src = withBase('/images/network-map.png');
 }
 
 // 🛡️ GUARDIAN PHASE 5: SILENT IP GEOLOCATION HOOK (Client-Side Only)

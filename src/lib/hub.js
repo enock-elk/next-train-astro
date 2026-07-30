@@ -1,7 +1,7 @@
 /**
  * App Hub (sidenav) + feedback + notices + cache sync + changelog badge
  */
-import { APP_VERSION, CHANGELOG_DATA, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { APP_VERSION, CHANGELOG_DATA, DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
 import { safeStorage } from './utils.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal
@@ -447,7 +447,7 @@ export function initHub() {
     });
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
-        window.location.href = '/map';
+        window.location.href = withBase('/map');
     });
 
     // Updates
@@ -465,7 +465,7 @@ export function initHub() {
     document.getElementById('settings-help-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => { window.location.href = '/guide'; }, 150);
+        setTimeout(() => { window.location.href = withBase('/guide'); }, 150);
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 

@@ -8,9 +8,13 @@ const {
   canonicalPath = "/",
 } = Astro.props;
 
-const SITE = "https://nexttrain.co.za";
-const canonical = `${SITE}${canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`}`;
-const ogImage = `${SITE}/icons/loading-logo.png`;
+const base = import.meta.env.BASE_URL;
+const siteOrigin = Astro.site ? Astro.site.origin : "https://enock-elk.github.io";
+const pathForCanonical = canonicalPath === "/"
+  ? base
+  : `${base.replace(/\/$/, "")}${canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`}`;
+const canonical = new URL(pathForCanonical, Astro.site || siteOrigin).href;
+const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Astro.site || siteOrigin).href;
 ---
 
 <!DOCTYPE html>
@@ -27,9 +31,9 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
     <meta name="apple-mobile-web-app-title" content="Train 2.0" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href={`${base}icons/icon-192.png`} />
+    <link rel="apple-touch-icon" href={`${base}icons/icon-192.png`} />
     
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
@@ -44,7 +48,10 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
     <meta name="twitter:image" content={ogImage} />
 
     <!-- PWA Manifest Injection (Astro PWA handles this automatically, but we link the generated asset) -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <script is:inline define:vars={{ base }}>
+      window.__NT_BASE__ = base;
+    </script>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

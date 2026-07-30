@@ -2,7 +2,7 @@
  * Expose SPA globals for public/js/admin.js (classic script), then load + init Admin.
  */
 import {
-    ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG
+    ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase
 } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import {
@@ -97,7 +97,7 @@ function loadClassicAdminScript() {
             return;
         }
         const script = document.createElement('script');
-        script.src = '/js/admin.js';
+        script.src = withBase('/js/admin.js');
         script.async = true;
         script.dataset.adminClassic = '1';
         script.onload = () => resolve(window.Admin);

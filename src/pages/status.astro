@@ -3,6 +3,7 @@ import ContentLayout from '../layouts/ContentLayout.astro';
 
 const title = "Roadmap | Metrorail Next Train";
 const description = "Strategic roadmap and system health for Metrorail Next Train — completed releases and upcoming features.";
+const base = import.meta.env.BASE_URL;
 ---
 
 <ContentLayout
@@ -208,7 +209,7 @@ const description = "Strategic roadmap and system health for Metrorail Next Trai
 
     <!-- FOOTER LINK -->
     <div class="max-w-4xl mx-auto mt-10 text-center">
-        <a href="/" class="inline-flex items-center text-sm font-bold text-gray-500 hover:text-white transition-colors">
+        <a href={base} class="inline-flex items-center text-sm font-bold text-gray-500 hover:text-white transition-colors">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back to App
         </a>

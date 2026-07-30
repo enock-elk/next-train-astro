@@ -2,6 +2,17 @@
 
 // 0. Version Control
 export const APP_VERSION = "V7_06.17"; // v4 - BUMPED: UX Polish, 18-Hour Layover Uncap & Precision Routing.
+
+/** App base path (e.g. `/next-train-astro/` on GitHub Pages, `/` locally / custom domain). */
+export const APP_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+
+/** Prefix a root-absolute path with the Astro `base` (public assets, in-app navigations). */
+export function withBase(path = '/') {
+    const base = String(APP_BASE || '/').replace(/\/$/, '');
+    const p = path.startsWith('/') ? path : `/${path}`;
+    return base ? `${base}${p}` : p;
+}
+
 // GUARDIAN: Set to 'true' to force an immediate hard reload on startup. 
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // V6.00.10: Set to false to prevent infinite reload loops if SW caching fails.

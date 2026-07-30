@@ -1,0 +1,171 @@
+---
+import ContentLayout from '../layouts/ContentLayout.astro';
+import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION } from '../lib/config.js';
+
+const title = 'Metrorail Network Map — Active Routes | Next Train';
+const description = 'Interactive Metrorail network map for Gauteng, Western Cape, KZN, and Eastern Cape. View active train routes, stations, and live service disruptions.';
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath="/map"
+  ogType="website"
+  bodyClass="bg-gray-100 dark:bg-gray-900 m-0 p-0 overflow-hidden h-full"
+  htmlClass="h-full"
+>
+  <link slot="head" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style slot="head" is:global>
+      body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; }
+      .dark body, .dark html { background-color: #111827; }
+      #map { height: 100vh; width: 100%; z-index: 1; position: absolute; top: 0; left: 0; }
+      .legend-container {
+        position: absolute; top: 16px; right: 16px; z-index: 1000;
+        max-width: calc(100vw - 120px); width: 250px; display: none;
+      }
+      .legend-box {
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-radius: 0.75rem; padding: 0.75rem; font-family: 'Inter', sans-serif; color: #1f2937;
+      }
+      .dark .legend-box { background: rgba(31, 41, 55, 0.95); color: #f3f4f6; border: 1px solid #374151; }
+      .legend-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+      .legend-content { overflow: hidden; max-height: 500px; transition: max-height 0.3s ease-in-out; }
+      .legend-content.collapsed { max-height: 0; padding-top: 0; margin-top: 0; }
+      .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; font-weight: 600; }
+      .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+      .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: auto; font-weight: 800; color: white; text-transform: uppercase; }
+      .toggle-icon { transition: transform 0.3s; }
+      .toggle-icon.rotated { transform: rotate(180deg); }
+      #map-placeholder {
+        position: absolute; inset: 0; background-color: #f3f4f6;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 50; transition: opacity 0.5s ease;
+      }
+      .dark #map-placeholder { background-color: #111827; }
+      .gps-pulse {
+        width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
+        box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); animation: pulse 2s infinite; border: 3px solid white;
+      }
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+      }
+      .custom-div-icon { background: transparent; border: none; }
+      .dark .leaflet-tile-pane {
+        filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+      }
+      .tooltip-dynamic {
+        transition: opacity 0.3s ease, font-size 0.2s ease;
+        font-family: 'Inter', sans-serif; opacity: 0;
+      }
+      .leaflet-tooltip.tooltip-halo {
+        background: transparent !important; border: none !important; box-shadow: none !important;
+        white-space: nowrap; color: #1f2937;
+        text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff;
+      }
+      .dark .leaflet-tooltip.tooltip-halo {
+        color: #ffffff !important;
+        text-shadow: -1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.9) !important;
+      }
+      .leaflet-tooltip.tooltip-halo::before { display: none !important; }
+      .disruption-line-overlay { animation: dashPulse 1.5s linear infinite; }
+      @keyframes dashPulse { to { stroke-dashoffset: -22; } }
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+      }
+  </style>
+  <script slot="head" is:inline type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Metrorail Next Train Network Map",
+    "url": "https://nexttrain.co.za/map",
+    "applicationCategory": "TravelApplication",
+    "operatingSystem": "Any",
+    "description": description,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "ZAR" }
+  })} />
+
+  <h1 class="sr-only">Interactive Metrorail Network Map</h1>
+
+  <div class="fixed top-4 left-4 z-[1001]">
+    <a href="/" class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">
+      <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      Back
+    </a>
+  </div>
+
+  <div id="map-placeholder" data-nosnippet aria-hidden="true">
+    <div class="text-center p-6">
+      <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7"></path></svg>
+      </div>
+      <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Loading Network...</h3>
+      <svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400 mx-auto mt-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-4 font-mono">Syncing Regional Data & Live Status...</p>
+    </div>
+  </div>
+
+  <div id="empty-map-warning" data-nosnippet aria-hidden="true" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl text-center border border-gray-200 dark:border-gray-700 max-w-[80%] w-full sm:max-w-sm">
+    <span class="text-4xl mb-3 block">🗺️</span>
+    <h3 class="font-black text-gray-900 dark:text-white text-lg leading-tight mb-2">Interactive Map in Progress</h3>
+    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium mb-4">GPS coordinates for this region are currently being mapped. Please use the Static Map view in the meantime.</p>
+    <a href="/" class="inline-block bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition w-full">Go Back</a>
+  </div>
+
+  <div id="map-cold-start" data-nosnippet class="hidden absolute inset-0 z-[60] flex items-center justify-center p-4 bg-gray-100/95 dark:bg-gray-900/95">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center">
+      <span class="text-4xl mb-3 block">📡</span>
+      <h3 class="font-black text-gray-900 dark:text-white text-lg mb-2">Couldn't load map data</h3>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">New here? Pick a region or open the main app to download schedules first. The map works without a prior visit when you're online.</p>
+      <div class="grid grid-cols-2 gap-2 mb-4" id="map-region-picker">
+        <button type="button" data-region="GP" class="py-2 px-3 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Gauteng</button>
+        <button type="button" data-region="WC" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">Western Cape</button>
+        <button type="button" data-region="KZN" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">KZN</button>
+        <button type="button" data-region="EC" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">Eastern Cape</button>
+      </div>
+      <a href="/" class="inline-block w-full bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition mb-2">Open Next Train</a>
+      <button type="button" id="map-retry-btn" class="w-full text-sm font-bold text-blue-600 dark:text-blue-400 py-2">Retry</button>
+    </div>
+  </div>
+
+  <div class="legend-container" id="legend-container">
+    <div class="legend-box">
+      <div class="legend-header" onclick="toggleLegend()">
+        <h4 class="font-black text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400">Network Lines</h4>
+        <svg id="legend-icon" class="w-4 h-4 text-gray-400 toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+      </div>
+      <div id="legend-content" class="legend-content mt-3"></div>
+    </div>
+  </div>
+
+  <div class="fixed bottom-6 left-4 right-4 z-[1000] flex justify-between items-end pointer-events-none">
+    <div class="flex items-end space-x-3 pointer-events-auto">
+      <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+        <button id="custom-zoom-in" type="button" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-600 transition-colors focus:outline-none">+</button>
+        <button id="custom-zoom-out" type="button" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none">−</button>
+      </div>
+      <button id="custom-theme-btn" type="button" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none">☀️</button>
+    </div>
+    <button id="custom-locate-btn" type="button" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
+      <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+    </button>
+  </div>
+
+  <div id="map" role="application" aria-label="Metrorail network map"></div>
+
+  <script is:inline define:vars={{ ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION }}>
+    window.ROUTES = ROUTES;
+    window.REGIONS = REGIONS;
+    window.PIPELINE_SOURCES = PIPELINE_SOURCES;
+    window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
+    window.APP_VERSION = APP_VERSION;
+  </script>
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script is:inline src="/js/map-app.js"></script>
+</ContentLayout>

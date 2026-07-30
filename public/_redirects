@@ -1,0 +1,11 @@
+# Legacy SPA URLs → clean Astro paths (Cloudflare Pages / Netlify)
+/guide.html   /guide   301
+/map.html     /map     301
+/status.html  /status  301
+/index.html   /        301
+
+# Canonical: no trailing slash
+/guide/       /guide   301
+/map/         /map     301
+/status/      /status  301
+/offline/     /offline 301

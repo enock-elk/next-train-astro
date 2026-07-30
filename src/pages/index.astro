@@ -1,0 +1,154 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Sidenav from '../components/Sidenav.astro';
+import LiveBoard from '../components/LiveBoard.astro';
+import TripPlanner from '../components/TripPlanner.astro';
+import WelcomeModal from '../components/WelcomeModal.astro';
+import PlannerModals from '../components/PlannerModals.astro';
+import LiveBoardModals from '../components/LiveBoardModals.astro';
+import HubModals from '../components/HubModals.astro';
+---
+
+<Layout title="Metrorail Next Train">
+    
+    <!-- SIDENAV COMPONENT -->
+    <Sidenav />
+
+    <!-- WELCOME MODAL COMPONENT -->
+    <WelcomeModal />
+
+    <!-- Planner / shared modals (help, disruption, map lightbox, legal, toast) -->
+    <PlannerModals />
+
+    <!-- Live board modals (route selector, schedule list, profile) -->
+    <LiveBoardModals />
+
+    <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
+    <HubModals />
+
+    <!-- MAIN APP CONTAINER -->
+    <main id="main-content" class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col min-h-[600px] border border-gray-200 dark:border-gray-700">
+        
+        <!-- HEADER COMPONENT -->
+        <Header />
+
+        <!-- TABS (strict clone IDs/classes from old SPA) -->
+        <div class="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-30 relative">
+            <button id="tab-next-train" class="tab-btn active" type="button">
+                Next Train
+            </button>
+            <button id="tab-trip-planner" class="tab-btn" type="button">
+                Trip Planner
+            </button>
+            <div id="tab-sliding-indicator" class="absolute bottom-0 h-0.5 bg-blue-600 dark:bg-blue-400 transition-all duration-300 ease-out z-10 w-1/2 left-0"></div>
+        </div>
+
+        <!-- INBOX BANNER (admin replies via checkServiceAlerts) -->
+        <div id="developer-reply-banner" class="hidden bg-gray-900 dark:bg-black text-white w-full shadow-md z-20 shrink-0 relative transition-all duration-300">
+            <div class="flex items-center justify-between p-3 px-4">
+                <div class="flex items-center space-x-3 min-w-0">
+                    <svg class="w-6 h-6 flex-shrink-0 animate-bounce text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    <div class="flex flex-col min-w-0">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Admin Message</span>
+                        <span class="text-sm font-bold truncate">You have a new message!</span>
+                    </div>
+                </div>
+                <button id="view-reply-btn" class="flex-shrink-0 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm focus:outline-none">Read</button>
+            </div>
+        </div>
+
+        <!-- VIEW 1: NEXT TRAIN -->
+        <LiveBoard />
+
+        <!-- VIEW 2: TRIP PLANNER -->
+        <TripPlanner />
+
+    </main>
+
+</Layout>
+
+<script>
+    // @ts-nocheck
+    // 🚀 PHASE 4 BOOTSTRAP: live board + planner + hub + admin
+    import { loadAllSchedules, startClock, currentTime, currentDayType } from '../lib/logic.js';
+    import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
+    import { ROUTES } from '../lib/config.js';
+    import { safeStorage } from '../lib/utils.js';
+    import { initPlanner } from '../lib/planner-ui.js';
+    import '../lib/renderer.js';
+    import { initLiveBoardUi } from '../lib/live-board-ui.js';
+    import { initHub, checkServiceAlerts } from '../lib/hub.js';
+    import { initAdminBridge } from '../lib/admin-bridge.js';
+    import {
+        switchTab,
+        initTabIndicator,
+        setupSwipeNavigation,
+        bindPlannerShellModals,
+        openLegal
+    } from '../lib/ui.js';
+
+    window.openLegal = openLegal;
+
+    const syncClockShims = () => {
+        window.currentTime = currentTime;
+        window.currentDayType = currentDayType;
+    };
+
+    hydrateStores();
+    startClock();
+    syncClockShims();
+    setInterval(syncClockShims, 1000);
+
+    initTabIndicator();
+    setupSwipeNavigation();
+
+    document.getElementById('tab-next-train')?.addEventListener('click', () => switchTab('next-train'));
+    document.getElementById('tab-trip-planner')?.addEventListener('click', () => switchTab('trip-planner'));
+
+    const hash = location.hash;
+    if (hash === '#planner' || hash === '#planner-results') {
+        switchTab('trip-planner');
+    } else if (hash === '#map') {
+        switchTab('next-train');
+        setTimeout(() => window.openSmoothModal?.('map-modal'), 300);
+    } else {
+        const lastTab = safeStorage.getItem('activeTab');
+        if (lastTab === 'trip-planner') switchTab('trip-planner');
+        else switchTab('next-train');
+    }
+
+    bindPlannerShellModals();
+    initLiveBoardUi();
+    initPlanner();
+    initHub();
+    initAdminBridge();
+
+    const igniteDataEngine = async () => {
+        const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
+        if (!welcomeSeen) {
+            console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
+            return;
+        }
+
+        const region = $userRegion.get() || 'GP';
+        let savedDefault = safeStorage.getItem('defaultRoute_' + region);
+        
+        if (!savedDefault || !ROUTES[savedDefault] || ROUTES[savedDefault].region !== region) {
+            const regionRoutes = Object.values(ROUTES).filter(r => r.region === region && r.isActive && r.id !== 'special_event');
+            if (regionRoutes.length > 0) {
+                savedDefault = regionRoutes[0].id;
+                safeStorage.setItem('defaultRoute_' + region, savedDefault);
+            }
+        }
+
+        if (savedDefault) {
+            $currentRouteId.set(savedDefault);
+            console.log("🛡️ Guardian: Igniting Data Engine...");
+            await loadAllSchedules(true);
+            checkServiceAlerts();
+        }
+    };
+
+    igniteDataEngine();
+</script>

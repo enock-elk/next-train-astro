@@ -1,0 +1,194 @@
+---
+// src/components/WelcomeModal.astro
+// Premium reactive Welcome Screen for selecting the initial region and route on first boot.
+---
+
+<div id="welcome-modal" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 z-[100] hidden flex flex-col items-center justify-start pt-8 sm:pt-12 px-6 pb-6 transition-opacity duration-300">
+    <div class="w-full max-w-sm flex flex-col items-center animate-fade-in-up mt-2 sm:mt-4">
+        <!-- Animated branded logo -->
+        <div class="relative w-20 h-20 sm:w-24 sm:h-24 mb-4 sm:mb-6 shrink-0">
+            <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
+            <div class="relative bg-white dark:bg-gray-800 p-4 rounded-full shadow-xl ring-4 ring-blue-50 dark:ring-gray-700 flex items-center justify-center">
+                <img src="/icons/loading-logo.png" class="w-full h-full object-contain" alt="Logo" onerror="this.style.display='none'" />
+            </div>
+        </div>
+        
+        <h2 class="text-3xl font-black text-gray-900 dark:text-white text-center mb-1 shrink-0 tracking-tight">Next Train</h2>
+        <p class="text-gray-500 dark:text-gray-400 text-center mb-6 px-4 shrink-0 text-sm">Select your regular route to get started.</p>
+        
+        <!-- Region Selector (Gauteng, Western Cape, KwaZulu-Natal, Eastern Cape) -->
+        <div id="welcome-region-selector" class="w-full mb-5 flex flex-col items-center space-y-3 shrink-0">
+            <div class="flex flex-wrap justify-center gap-2 w-full">
+                <button type="button" data-region="GP" class="px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-transparent border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-300 focus:outline-none">Gauteng</button>
+                <button type="button" data-region="WC" class="px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-transparent border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-300 focus:outline-none">Western Cape</button>
+                <button type="button" data-region="KZN" class="px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-transparent border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-300 focus:outline-none">KwaZulu-Natal</button>
+                <button type="button" data-region="EC" class="px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-transparent border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-300 focus:outline-none">Eastern Cape</button>
+            </div>
+        </div>
+
+        <!-- Dynamic route list -->
+        <div id="welcome-route-list" class="w-full space-y-3 overflow-y-auto max-h-[45vh] pr-2 pb-6 custom-scrollbar">
+            <!-- Rendered dynamically on the client-side -->
+        </div>
+        
+        <p class="text-xs text-gray-400 dark:text-gray-600 mt-4 text-center shrink-0">You can change this later in the side menu.</p>
+    </div>
+</div>
+
+<script>
+    // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
+    import { $userRegion, $currentRouteId } from '../store.js';
+    import { ROUTES } from '../lib/config.js';
+    import { safeStorage } from '../lib/utils.js';
+    import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
+
+    // Haptic feedback falls back gracefully
+    const triggerHapticFeedback = () => {
+        try {
+            if (localStorage.getItem('hapticsEnabled') !== 'false' && navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        } catch (e) {}
+    };
+
+    // UI state toggle for region selector buttons
+    const updateRegionButtons = (activeRegion) => {
+        const buttons = document.querySelectorAll('#welcome-region-selector button');
+        const activeClass = "px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-blue-100 dark:bg-blue-900 border-blue-500 text-blue-700 dark:text-blue-300 focus:outline-none shadow-sm";
+        const inactiveClass = "px-4 py-2 rounded-full text-xs font-bold border-2 transition-colors bg-transparent border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-300 focus:outline-none";
+        
+        buttons.forEach(btn => {
+            const regionCode = btn.getAttribute('data-region');
+            if (regionCode === activeRegion) {
+                btn.className = activeClass;
+            } else {
+                btn.className = inactiveClass;
+            }
+        });
+    };
+
+    // Render matching routes to the container based on chosen region
+    const renderWelcomeRoutes = (region) => {
+        const listContainer = document.getElementById('welcome-route-list');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+
+        const regionalRoutes = Object.values(ROUTES).filter(r => r.region === region && r.id !== 'special_event');
+
+        regionalRoutes.forEach(route => {
+            const btn = document.createElement('button');
+            btn.setAttribute('type', 'button');
+            const displayName = route.name.replace('<->', '↔');
+            
+            if (route.isActive) {
+                let borderColor = 'border-gray-500';
+                if (route.colorClass.includes('orange')) borderColor = 'border-orange-500';
+                else if (route.colorClass.includes('purple')) borderColor = 'border-purple-500';
+                else if (route.colorClass.includes('green')) borderColor = 'border-green-500';
+                else if (route.colorClass.includes('blue')) borderColor = 'border-blue-500';
+                else if (route.colorClass.includes('red')) borderColor = 'border-red-500';
+                else if (route.colorClass.includes('yellow')) borderColor = 'border-yellow-500';
+                else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
+
+                btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between group transition-all transform hover:scale-[1.02] active:scale-95 bg-white dark:bg-gray-800 border-l-4 ${borderColor} focus:outline-none`;
+                btn.innerHTML = `
+                    <div class="min-w-0 pr-2">
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate">${displayName}</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">View schedules</span>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                `;
+                btn.onclick = async () => {
+                    triggerHapticFeedback();
+                    
+                    if (typeof window !== 'undefined') {
+                        window._suppressReloads = true;
+                    }
+
+                    // 1. Persist selection to persistent memory
+                    safeStorage.setItem('userRegion', region);
+                    safeStorage.setItem('defaultRoute_' + region, route.id);
+                    safeStorage.setItem('welcomeSeen', 'true');
+                    
+                    // 2. Hydrate global reactive store states
+                    $currentRouteId.set(route.id);
+                    $userRegion.set(region);
+                    
+                    // 3. Dismount the Welcome overlay
+                    const modal = document.getElementById('welcome-modal');
+                    if (modal) modal.classList.add('hidden');
+                    
+                    // 4. Trigger base schedule fetch
+                    console.log(`🛡️ Guardian: Welcome route selected: ${route.id}. Hydrating...`);
+                    await loadAllSchedules(true);
+
+                    if (typeof window !== 'undefined') {
+                        setTimeout(() => { window._suppressReloads = false; }, 2000);
+                    }
+                };
+            } else {
+                btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 border-l-4 border-gray-300 dark:border-gray-700 opacity-80 cursor-not-allowed transition-all focus:outline-none`;
+                btn.innerHTML = `
+                    <div class="min-w-0 pr-2">
+                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate">${displayName}</span>
+                        <span class="text-[10px] font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mt-0.5 inline-block">🚧 Coming Soon</span>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                `;
+                btn.onclick = () => {
+                    if (typeof window !== 'undefined' && window.showToast) {
+                        window.showToast(`The ${displayName} schedule is launching soon!`, 'info', 2500);
+                    }
+                };
+            }
+            listContainer.appendChild(btn);
+        });
+    };
+
+    const initWelcomeScreen = () => {
+        const modal = document.getElementById('welcome-modal');
+        if (!modal) return;
+
+        let isOnboardMap = false;
+        try { isOnboardMap = new URLSearchParams(window.location.search).get('onboard') === 'map'; } catch (e) {}
+
+        const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
+        const activeRegion = $userRegion.get() || 'GP';
+
+        // Brand-new users + legacy map onboarding deep-links
+        if (!welcomeSeen || isOnboardMap) {
+            if (isOnboardMap) {
+                try {
+                    const urlObj = new URL(window.location.href);
+                    urlObj.searchParams.delete('onboard');
+                    window.history.replaceState({}, '', urlObj.toString());
+                } catch (e) {}
+            }
+
+            modal.classList.remove('hidden');
+            
+            updateRegionButtons(activeRegion);
+            renderWelcomeRoutes(activeRegion);
+
+            $userRegion.subscribe(newRegion => {
+                updateRegionButtons(newRegion);
+                renderWelcomeRoutes(newRegion);
+            });
+
+            const regionButtons = document.querySelectorAll('#welcome-region-selector button');
+            regionButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    triggerHapticFeedback();
+                    const target = e.currentTarget || e.target;
+                    const targetRegion = target ? target.getAttribute('data-region') : null;
+                    if (targetRegion && targetRegion !== $userRegion.get()) {
+                        // Welcome path: wipe state but skip auto-assign/download (route pick follows)
+                        executeRegionSwap(targetRegion, true);
+                    }
+                });
+            });
+        }
+    };
+
+    initWelcomeScreen();
+</script>

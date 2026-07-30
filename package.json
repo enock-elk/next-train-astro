@@ -1,0 +1,26 @@
+{
+  "name": "nexttrain-2.0",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "latest",
+    "@astrojs/tailwind": "latest",
+    "@nanostores/preact": "latest",
+    "@vite-pwa/astro": "latest",
+    "astro": "latest",
+    "firebase": "latest",
+    "nanostores": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "workbox-window": "latest"
+  },
+  "devDependencies": {
+    "terser": "latest"
+  }
+}

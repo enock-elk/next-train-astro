@@ -1,0 +1,216 @@
+---
+import ContentLayout from '../layouts/ContentLayout.astro';
+
+const title = "Roadmap | Metrorail Next Train";
+const description = "Strategic roadmap and system health for Metrorail Next Train — completed releases and upcoming features.";
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath="/status"
+  forceDark={true}
+  themeColor="#111827"
+  bodyClass="bg-gray-900 text-gray-100 min-h-screen p-6"
+>
+  <style slot="head" is:global>
+    body { font-family: 'Inter', sans-serif; background-color: #111827; color: #f3f4f6; }
+    .timeline-line { position: absolute; left: 15px; top: 30px; bottom: -20px; width: 2px; background: #4b5563; z-index: 0; }
+    .timeline-dot { z-index: 10; }
+    [hidden] { display: none !important; }
+  </style>
+
+<!-- HEADER -->
+    <header class="max-w-4xl mx-auto mb-10 border-b border-gray-700 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end">
+        <div>
+            <div class="flex items-center space-x-3 mb-2">
+                <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7"></path></svg>
+                </div>
+                <h1 class="text-3xl font-black tracking-tight text-white">
+                    Next Train <span class="text-blue-500">Guardian</span>
+                </h1>
+            </div>
+            <p class="text-gray-400 font-medium ml-1">Strategic Roadmap & System Health</p>
+        </div>
+        <div class="mt-4 md:mt-0 text-right">
+            <div class="inline-flex items-center space-x-2 bg-green-900/50 border border-green-700 text-green-400 px-4 py-2 rounded-full mb-1">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span class="text-sm font-bold uppercase tracking-wider">System Stable</span>
+            </div>
+            <p class="text-xs text-gray-500 font-mono">V7.06.17 (Live)</p>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        <!-- COLUMN 1: COMPLETED / LIVE -->
+        <section>
+            <h2 class="text-xl font-bold text-white mb-6 flex items-center">
+                <span class="bg-gray-800 p-2 rounded-md mr-3 border border-gray-700">✅</span>
+                Completed / Live
+            </h2>
+
+            <div class="space-y-6 relative">
+
+                <!-- GUARDIAN V7.05.28 Card (Latest - Added) -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-sm relative z-10">
+                    <div class="absolute -left-3 top-5 w-6 h-6 rounded-full bg-indigo-500 border-4 border-gray-900 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 class="font-bold text-lg text-white mb-1">Zero-Friction UX & Security (V7.05.28)</h3>
+                    <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide">Data routing & Defense</p>
+                    <ul class="text-sm space-y-2 text-gray-300">
+                        <li class="flex items-start"><span class="text-indigo-500 mr-2">▸</span> <strong>Zero-Click IP Geolocation:</strong> Cloudflare Edge silently detects and pre-selects the user's province without invasive GPS prompts.</li>
+                        <li class="flex items-start"><span class="text-indigo-500 mr-2">▸</span> <strong>Identity Bridge:</strong> Advanced telemetry lock forces Microsoft Clarity and GA4 to share a single immutable PWA device ID, ending inflated unique user counts.</li>
+                        <li class="flex items-start"><span class="text-indigo-500 mr-2">▸</span> <strong>"Frankenstein" Safe Mode:</strong> A resilient crash-handler that survives total DOM destruction to securely route fatal stack traces directly to the Admin.</li>
+                    </ul>
+                </div>
+
+                <!-- GUARDIAN V7.05.24 Card -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-sm relative z-10 opacity-95">
+                    <div class="absolute -left-3 top-5 w-6 h-6 rounded-full bg-blue-500 border-4 border-gray-900 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="font-bold text-lg text-white mb-1">National Expansion (V7.05.24)</h3>
+                    <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide">Scale & Usability</p>
+                    <ul class="text-sm space-y-2 text-gray-300">
+                        <li class="flex items-start"><span class="text-blue-500 mr-2">▸</span> <strong>KZN & EC Launch:</strong> Fully mapped and deployed schedules for KwaZulu-Natal and Eastern Cape.</li>
+                        <li class="flex items-start"><span class="text-blue-500 mr-2">▸</span> <strong>Cinematic Scrim UI:</strong> Universal dropdown engine with background dimming for native-app feel.</li>
+                        <li class="flex items-start"><span class="text-blue-500 mr-2">▸</span> <strong>App Router Parity:</strong> Deep history stack prevents back-button router bleed across all tabs.</li>
+                    </ul>
+                </div>
+
+                <!-- GUARDIAN V6.05.20 Card -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-sm relative z-10 opacity-90">
+                    <div class="absolute -left-3 top-5 w-6 h-6 rounded-full bg-emerald-500 border-4 border-gray-900 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="font-bold text-lg text-white mb-1">Monetization Engine (V6.05.20)</h3>
+                    <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide">Sustainability</p>
+                    <ul class="text-sm space-y-2 text-gray-300">
+                        <li class="flex items-start"><span class="text-emerald-500 mr-2">▸</span> <strong>CleverAds Integration:</strong> Deployed non-intrusive CPM banners to support server costs.</li>
+                        <li class="flex items-start"><span class="text-emerald-500 mr-2">▸</span> <strong>Ad Interceptor:</strong> Custom script guards against the 1/20-hour rule violation via strict injection limits.</li>
+                        <li class="flex items-start"><span class="text-emerald-500 mr-2">▸</span> <strong>Anti-CLS Scaffolding:</strong> Prevents layout shifts while ads load.</li>
+                    </ul>
+                </div>
+
+                <!-- GUARDIAN V6.05.03 Card -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-sm relative z-10 opacity-80">
+                    <div class="absolute -left-3 top-5 w-6 h-6 rounded-full bg-purple-500 border-4 border-gray-900 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                    </div>
+                    <h3 class="font-bold text-lg text-white mb-1">Supercharged Alerts (V6.05.03)</h3>
+                    <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide">Comms & Engagement</p>
+                    <ul class="text-sm space-y-2 text-gray-300">
+                        <li class="flex items-start"><span class="text-purple-500 mr-2">▸</span> <strong>Rich Media:</strong> Hero images and CTA buttons injected into Service Alerts.</li>
+                        <li class="flex items-start"><span class="text-purple-500 mr-2">▸</span> <strong>Interactive Polling:</strong> Commuter voting engine added to live notices.</li>
+                        <li class="flex items-start"><span class="text-purple-500 mr-2">▸</span> <strong>Clarity Identity Lock:</strong> Prevents unique user count inflation across PWA boundaries.</li>
+                    </ul>
+                </div>
+
+                <!-- GUARDIAN V6.04.15 Card -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-sm relative z-10 opacity-70">
+                    <div class="absolute -left-3 top-5 w-6 h-6 rounded-full bg-amber-500 border-4 border-gray-900 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                    </div>
+                    <h3 class="font-bold text-lg text-white mb-1">Hybrid Feedback Pipeline (V6.04.15)</h3>
+                    <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide">Data routing & Defense</p>
+                    <ul class="text-sm space-y-2 text-gray-300">
+                        <li class="flex items-start"><span class="text-amber-500 mr-2">▸</span> <strong>In-House Pipeline:</strong> Native feedback modals with Firebase Storage file attachments.</li>
+                        <li class="flex items-start"><span class="text-amber-500 mr-2">▸</span> <strong>Region Shield:</strong> Geo-interceptors capture user demand without crashing on empty endpoints.</li>
+                    </ul>
+                </div>
+
+                <!-- Vertical Line -->
+                <div class="absolute left-0 top-6 bottom-6 w-0.5 bg-gray-700 -z-0"></div>
+            </div>
+        </section>
+
+        <!-- COLUMN 2: GROWTH ROADMAP -->
+        <section>
+            <h2 class="text-xl font-bold text-blue-400 mb-6 flex items-center">
+                <span class="bg-blue-900/30 p-2 rounded-md mr-3 border border-blue-800">🚀</span>
+                Strategic Roadmap
+            </h2>
+
+            <div class="space-y-4">
+                
+                <!-- PRIORITY 1: High Value Features -->
+                <div class="bg-gradient-to-br from-blue-900/40 to-gray-800 rounded-xl p-5 border border-blue-500/30 shadow-lg">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-white">1. Enterprise Architecture & SEO</h3>
+                        <span class="bg-blue-600 text-[10px] font-bold px-2 py-0.5 rounded text-white tracking-widest uppercase">Active Sprint</span>
+                    </div>
+                    <ul class="text-sm space-y-3 mt-3">
+                        <li class="flex items-start">
+                            <span class="bg-blue-500/20 text-blue-300 p-1 rounded mr-3 text-xs">🌐</span>
+                            <div>
+                                <strong class="block text-gray-200">Astro SSG Migration</strong>
+                                <span class="text-gray-400 text-xs">Rebuild the SPA shell into an Astro Static Site Generation architecture. Generate 500+ physical, lightning-fast HTML pages to completely dominate local SEO search intents.</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="bg-blue-500/20 text-blue-300 p-1 rounded mr-3 text-xs">📄</span>
+                            <div>
+                                <strong class="block text-gray-200">The "Proof of Delay" Generator</strong>
+                                <span class="text-gray-400 text-xs">A viral utility allowing commuters to instantly generate an official, timestamped PDF "Late Note" for their employers during severed line incidents.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- PRIORITY 2: Technical Debt & Infrastructure -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                    <h3 class="font-bold text-blue-400 mb-3">2. Corporate & B2B Setup</h3>
+                    <ul class="text-sm space-y-3">
+                        <li class="flex items-start">
+                            <span class="w-6 h-6 flex items-center justify-center bg-gray-700 rounded-full mr-3 text-xs">🏢</span>
+                            <div>
+                                <strong class="block text-gray-200">Entity Formalization</strong>
+                                <span class="text-gray-400 text-xs">Register the SA Pty Ltd and execute the IP Assignment Agreement to formally prepare for the Mastercard Foundation FAST grant.</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="w-6 h-6 flex items-center justify-center bg-gray-700 rounded-full mr-3 text-xs">🗺️</span>
+                            <div>
+                                <strong class="block text-gray-200">O-D Desire Lines Heatmap</strong>
+                                <span class="text-gray-400 text-xs">Aggregate our silent "Dead Ends" telemetry into a visual heatmap to identify under-served transit corridors for B2B data licensing.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- PRIORITY 3: Long Term Vision -->
+                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 opacity-75">
+                    <h3 class="font-bold text-gray-400 mb-3">3. Future Vision (Commuter Driven)</h3>
+                    <ul class="text-sm space-y-3">
+                        <li class="flex items-center">
+                            <span class="w-6 h-6 flex items-center justify-center bg-gray-700 rounded-full mr-3 text-xs">📢</span>
+                            <span class="text-gray-300 ml-2"><strong>Waze for Metrorail:</strong> 1-tap contextual delay crowdsourcing.</span>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-6 h-6 flex items-center justify-center bg-gray-700 rounded-full mr-3 text-xs">💎</span>
+                            <span class="text-gray-300 ml-2"><strong>Commuter Pro Tier:</strong> Micro-subscription to disable ads via PWA token.</span>
+                        </li>
+                        <li class="flex items-center">
+                            <span class="w-6 h-6 flex items-center justify-center bg-gray-700 rounded-full mr-3 text-xs">🛡️</span>
+                            <span class="text-gray-300 ml-2"><strong>Safety Index:</strong> Crowdsourced data on station security & amenities.</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER LINK -->
+    <div class="max-w-4xl mx-auto mt-10 text-center">
+        <a href="/" class="inline-flex items-center text-sm font-bold text-gray-500 hover:text-white transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            Back to App
+        </a>
+    </div>
+</ContentLayout>

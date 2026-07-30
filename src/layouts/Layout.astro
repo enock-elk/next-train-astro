@@ -1,0 +1,195 @@
+---
+// --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
+// This runs on the server during the build process.
+
+const { 
+  title = "Metrorail Next Train | Live Schedules", 
+  description = "Live Metrorail schedules and route maps for Gauteng, Western Cape, KZN, and Eastern Cape.",
+  canonicalPath = "/",
+} = Astro.props;
+
+const SITE = "https://nexttrain.co.za";
+const canonical = `${SITE}${canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`}`;
+const ogImage = `${SITE}/icons/loading-logo.png`;
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    
+    <!-- SEO & Identity -->
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#1d4ed8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:site_name" content="Metrorail Next Train" />
+    <meta property="og:locale" content="en_ZA" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- PWA Manifest Injection (Astro PWA handles this automatically, but we link the generated asset) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX"></script>
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      var gaConfig = {};
+      try { if (localStorage.getItem('analytics_ignore') === 'true') gaConfig['traffic_type'] = 'internal'; } catch(e) {}
+      gtag('config', 'G-JM5DH6ERVX', gaConfig);
+    </script>
+    <script is:inline>
+      try {
+        if (localStorage.getItem('analytics_ignore') !== 'true') {
+          (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+          })(window, document, "clarity", "script", "v1aj19921i");
+        }
+      } catch(e) {}
+    </script>
+
+    <!-- 🛡️ GUARDIAN: Inline Pre-Boot Script -->
+    <!-- Runs instantly before DOM loads to prevent FOUC (Flash of Unstyled Content) and ensure IDs exist -->
+    <script is:inline>
+      try {
+        const isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+
+        if (!localStorage.getItem('next_train_device_id')) {
+          localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
+        }
+      } catch (e) {}
+    </script>
+
+    <!-- Global CSS Overrides -->
+    <style is:global>
+      body { font-family: 'Inter', sans-serif; }
+      body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
+      
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 20px; }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(75, 85, 99, 0.5); }
+      
+      /* Utilities */
+      .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* --- TAB & VIEW STYLES (strict clone from old SPA custom.css) --- */
+      .tab-btn {
+        flex: 1;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+        text-align: center;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #6b7280;
+        border-bottom-width: 2px;
+        border-color: transparent;
+        transition: all 0.2s;
+        cursor: pointer;
+        background: transparent;
+      }
+      .dark .tab-btn { color: #9ca3af; }
+      .tab-btn.active { color: #2563eb; border-color: #2563eb; }
+      .dark .tab-btn.active { color: #60a5fa; border-color: #60a5fa; }
+      /* Sliding indicator owns the underline visually */
+      .tab-btn, .tab-btn.active { border-bottom-color: transparent !important; }
+
+      .view-section {
+        display: none;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out, padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .view-section.active {
+        display: block;
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
+        padding: 0 !important;
+      }
+      #map-modal.full-screen > div, #about-modal.full-screen > div, #full-schedule-modal.full-screen > div {
+        border-radius: 0 !important;
+        max-height: none !important;
+      }
+    </style>
+  </head>
+
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+    
+    <!-- 🛡️ GUARDIAN: Offline Marquee -->
+    <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">
+      <div id="offline-indicator" style="display: none;" class="pointer-events-auto w-max bg-amber-400 text-gray-900 border-amber-500 border-b border-x dark:bg-gray-900/95 dark:text-amber-400 dark:border-amber-500/80 px-4 py-1 rounded-b-lg shadow-md text-xs font-black uppercase tracking-widest transition-colors">
+        <span class="w-2 h-2 rounded-full mr-2 animate-pulse bg-gray-900 dark:bg-amber-400 inline-block"></span> OFFLINE MODE
+      </div>
+    </div>
+
+    <!-- GUARDIAN: Lie-Fi / offline transition toast (auto-dismiss) -->
+    <div id="offline-toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900/95 dark:bg-gray-800/95 border border-gray-700 dark:border-gray-600 text-white px-4 py-3 rounded-xl shadow-2xl z-[150] transition-all duration-500 translate-y-[150%] opacity-0 flex items-center space-x-3 w-max max-w-[90%] pointer-events-none backdrop-blur-md">
+      <span class="text-xl flex-shrink-0 animate-pulse">📡</span>
+      <div class="flex flex-col">
+        <span class="text-sm font-bold tracking-wide">You are offline.</span>
+        <span class="text-[10px] text-gray-300 leading-snug">Pull down to refresh when signal returns.</span>
+      </div>
+    </div>
+
+    <!-- Page Content Injected Here -->
+    <slot />
+
+    <!-- Client-Side Bootstrapper -->
+    <script>
+      // @ts-nocheck
+      import { hydrateStores, $isOffline } from '../store.js';
+      import { registerSW } from 'virtual:pwa-register';
+
+      // 1. Hydrate Nano Stores from LocalStorage
+      hydrateStores();
+
+      // 2. React to Offline State changes visually
+      $isOffline.subscribe((offline) => {
+        const indicator = document.getElementById('offline-indicator');
+        if (indicator) indicator.style.display = offline ? 'flex' : 'none';
+      });
+
+      // 3. Register Service Worker via Vite PWA
+      registerSW({
+        immediate: true,
+        onRegisteredSW(swUrl) {
+          console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
+        },
+        onRegisterError(error) {
+          console.error('🛡️ Guardian PWA: Registration failed', error);
+        }
+      });
+    </script>
+  </body>
+</html>

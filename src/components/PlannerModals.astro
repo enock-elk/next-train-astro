@@ -1,0 +1,183 @@
+---
+// Planner-critical modals + shared shells (strict clone from old SPA index.html)
+// Admin modals intentionally omitted until Phase 4.
+---
+
+<!-- Dropdown scrim (shared by planner day/time dropdowns) -->
+<div id="global-dropdown-scrim" class="fixed inset-0 z-[150] hidden opacity-0 transition-opacity duration-300" onclick="if(window.toggleDropdownScrim) window.toggleDropdownScrim()"></div>
+
+<!-- Toast host -->
+<div id="toast" class=""></div>
+
+<!-- Ghost settings modal (prevents ui.js null crashes) -->
+<div id="settings-modal" class="hidden"></div>
+
+<!-- NETWORK MAP IMAGE LIGHTBOX -->
+<div id="map-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[70] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative">
+            <div class="flex items-center space-x-3">
+                <h3 id="map-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Network Map</h3>
+            </div>
+            <button id="close-map-btn" onclick="if(location.hash === '#map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close Map">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative cursor-grab active:cursor-grabbing flex items-center justify-center">
+            <img id="map-image" src="/images/network-map.png" alt="Metrorail Network Map" class="w-full h-full object-contain transition-transform duration-75 origin-center" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+            <div class="hidden flex-col items-center justify-center p-8 text-center text-gray-500 absolute inset-0">
+                <svg class="w-12 h-12 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <p class="font-bold">Map image not found.</p>
+            </div>
+        </div>
+
+        <div class="absolute bottom-20 right-4 flex flex-col space-y-2 z-30">
+            <button id="map-zoom-in" class="bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition" aria-label="Zoom In">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </button>
+            <button id="map-zoom-out" class="bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition" aria-label="Zoom Out">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+            </button>
+        </div>
+
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative">
+            <button id="close-map-btn-2" onclick="if(location.hash === '#map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close Map</button>
+        </div>
+    </div>
+</div>
+
+<!-- LEGAL MODAL -->
+<div id="legal-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col transform transition-transform duration-300 scale-95">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl">
+            <h3 id="legal-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Legal</h3>
+            <button id="close-legal-btn" class="p-2 rounded-full hover:bg-gray-200 dark:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close Legal">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="legal-modal-content" class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed"></div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
+            <button id="close-legal-btn-2" class="w-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg shadow-sm transition-colors focus:outline-none">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- HELP / USER GUIDE MODAL -->
+<div id="help-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col transform transition-transform duration-300 scale-95">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                User Guide & Tips
+            </h3>
+            <button id="close-help-btn" class="p-2 rounded-full hover:bg-gray-200 dark:bg-gray-700 text-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close Help">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-6 leading-relaxed">
+            <div>
+                <h4 class="font-bold text-blue-600 dark:text-blue-400 mb-2 flex items-center text-base tracking-tight">
+                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2 shadow-sm">🧭</span>
+                    Trip Planner
+                </h4>
+                <p class="pl-9 mb-2 text-gray-600 dark:text-gray-300 leading-relaxed">Our new Dijkstra routing engine maps out unlimited available connections between your origin and destination, calculating the absolute fastest paths across the entire Metrorail network.</p>
+                <ul class="pl-9 list-disc space-y-1 text-gray-600 dark:text-gray-400 marker:text-blue-400">
+                    <li><strong>Direct Trips:</strong> Uninterrupted service to your destination.</li>
+                    <li><strong>Multi-Transfers:</strong> Dynamic routing bridging multiple lines automatically.</li>
+                </ul>
+                <div class="mt-4 pl-9 space-y-3">
+                    <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg text-xs leading-relaxed">
+                        <p class="font-bold text-blue-800 dark:text-blue-300 mb-1">Sorting Priority</p>
+                        <p class="text-blue-700 dark:text-blue-200 opacity-90">Results are prioritized by <strong>departure time</strong>. We encourage you to review the later options on the list - a direct train departing slightly later is often faster than taking an immediate multi-transfer route.</p>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800/80 border-l-4 border-gray-400 dark:border-gray-600 rounded-r-lg text-xs leading-relaxed">
+                        <p class="font-bold text-gray-700 dark:text-gray-300 mb-1">Smart Connections</p>
+                        <p class="text-gray-600 dark:text-gray-400">The engine is optimized for Metrorail's physical infrastructure. It includes 0-minute platform relays, as trains are often held at hubs (like Koedoespoort or Germiston) for immediate cross-platform connections.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-green-600 dark:text-green-400 mb-2 flex items-center text-base">
+                    <span class="bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2 shadow-sm">🗺️</span>
+                    Using the Map
+                </h4>
+                <p class="pl-9">
+                    Unsure of the path? Check the <strong>Network Map</strong> in the menu. Visually trace your route to see if you need to switch lines (colors).
+                </p>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-purple-600 dark:text-purple-400 mb-2 flex items-center text-base">
+                    <span class="bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2 shadow-sm">⚡</span>
+                    Offline Capable
+                </h4>
+                <p class="pl-9">
+                    Lost signal? No problem. The app automatically saves schedules to your device, so you can check times even in tunnels or dead zones.
+                </p>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
+            <button id="close-help-btn-2" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">
+                Got it!
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- TIERED INCIDENT / DISRUPTION MODAL -->
+<div id="disruption-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[130] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 transform transition-all scale-100 border-l-4 border-red-500 flex flex-col max-h-[90dvh] overflow-hidden" id="disruption-modal-card">
+        <div class="p-5 border-b border-gray-100 dark:border-gray-700/50 flex justify-between items-center shrink-0">
+            <div class="flex items-center text-gray-900 dark:text-white">
+                <svg class="w-5 h-5 mr-2 text-red-500" id="disruption-icon-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <h3 class="text-lg font-bold tracking-tight">NEXT TRAIN ADVISORY</h3>
+            </div>
+            <button onclick="if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('disruption-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none p-1 bg-gray-100 dark:bg-gray-700/50 rounded-full">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="p-5 overflow-y-auto custom-scrollbar flex-grow space-y-4">
+            <div class="font-black text-xs tracking-widest uppercase text-gray-900 dark:text-white flex items-center" id="disruption-modal-source">
+                <svg class="w-4 h-4 mr-1.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                PLEASE NOTE:
+            </div>
+            
+            <h4 class="font-bold text-gray-900 dark:text-white text-base" id="disruption-modal-stations">
+                Loading stations...
+            </h4>
+            
+            <div class="text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap" id="disruption-modal-body">
+                Loading incident details...
+            </div>
+
+            <div class="pt-4 mt-2 border-t border-gray-100 dark:border-gray-700/50">
+                <div id="disruption-modal-tier-badge" class="w-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50">
+                    <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    CRITICAL SERVICE DISRUPTION
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-5 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50 shrink-0">
+            <div class="text-[10px] text-gray-400 dark:text-gray-500 font-mono mb-4 px-1" id="disruption-modal-timestamp">
+                Posted: --:--, --/--/----
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('disruption-modal')" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">
+                    Close
+                </button>
+                <button onclick="if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('disruption-modal'); document.getElementById('feedback-btn')?.click();" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm flex items-center justify-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                    Reply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

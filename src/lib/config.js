@@ -7,7 +7,7 @@ export const APP_VERSION = "V7_06.17"; // v4 - BUMPED: UX Polish, 18-Hour Layove
 // V6.00.10: Set to false to prevent infinite reload loops if SW caching fails.
 export const FORCE_UPDATE_REQUIRED = true;
 
-// --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE ---
+// --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.
 
 export const PIPELINE_SOURCES = {

@@ -14,6 +14,16 @@ import {
 } from './logic.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
+import {
+    isShadowBanned,
+    localBlockList,
+    addToLocalBlockList,
+    removeFromLocalBlockList,
+    fetchUserFlags,
+    fetchTrustScore,
+    SHADOW_BAN_DURATIONS,
+    computeBanUntil,
+} from './trust.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -49,6 +59,16 @@ export function exposeAdminGlobals() {
     window.updateTime = updateTime;
     window.executeRegionSwap = executeRegionSwap;
     window.guardianFetch = guardianFetch;
+
+    // Phase 7 — trust / shadow-ban
+    window.trustIsShadowBanned = isShadowBanned;
+    window.trustLocalBlockList = localBlockList;
+    window.trustAddToBlockList = addToLocalBlockList;
+    window.trustRemoveFromBlockList = removeFromLocalBlockList;
+    window.trustFetchUserFlags = fetchUserFlags;
+    window.trustFetchTrustScore = fetchTrustScore;
+    window.SHADOW_BAN_DURATIONS = SHADOW_BAN_DURATIONS;
+    window.trustComputeBanUntil = computeBanUntil;
 
     defineLive('currentRouteId', () => $currentRouteId.get(), (v) => $currentRouteId.set(v));
     defineLive('currentRegion', () => $userRegion.get() || 'GP', (v) => $userRegion.set(v));

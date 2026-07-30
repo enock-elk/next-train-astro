@@ -113,6 +113,11 @@
                     // 2. Hydrate global reactive store states
                     $currentRouteId.set(route.id);
                     $userRegion.set(region);
+
+                    try {
+                        const { applyReturningUserChrome } = await import('../lib/prefs.js');
+                        applyReturningUserChrome();
+                    } catch (e) {}
                     
                     // 3. Dismount the Welcome overlay
                     const modal = document.getElementById('welcome-modal');

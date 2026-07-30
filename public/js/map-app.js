@@ -788,6 +788,45 @@
                 });
             });
 
+            // --- PHASE 8: COMMUTER DELAY REPORT PINS (recent, by station) ---
+            try {
+                const drEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const drResp = await fetch(`${drEndpoint}delay_reports.json?t=${Date.now()}`);
+                if (drResp.ok) {
+                    const drData = await drResp.json();
+                    const cut = Date.now() - (3 * 60 * 60 * 1000);
+                    const reportIcon = L.divIcon({
+                        className: 'delay-report-pin',
+                        html: '<div style="width:14px;height:14px;border-radius:9999px;background:#f59e0b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
+                    });
+                    if (drData && typeof drData === 'object') {
+                        Object.values(drData).forEach((r) => {
+                            if (!r || r.status === 'closed' || (r.timestamp || 0) < cut) return;
+                            const raw = (r.station || '').toString().trim();
+                            if (!raw) return;
+                            const variants = [
+                                raw.toUpperCase(),
+                                raw.toUpperCase().replace(/ STATION$/i, '') + ' STATION',
+                                raw.toUpperCase().replace(/ STATION$/i, '')
+                            ];
+                            let coords = null;
+                            for (const key of variants) {
+                                if (STATION_COORDINATES[key]) { coords = STATION_COORDINATES[key]; break; }
+                                const found = Object.keys(STATION_COORDINATES).find(k => k.replace(/ STATION$/i, '') === key.replace(/ STATION$/i, ''));
+                                if (found) { coords = STATION_COORDINATES[found]; break; }
+                            }
+                            if (!coords) return;
+                            const sev = (r.severity || 'moderate').toUpperCase();
+                            L.marker(coords, { icon: reportIcon })
+                                .bindPopup(`<b class="text-xs">Commuter delay report</b><br><span class="text-[11px]">${sev}${r.note ? ' — ' + String(r.note).slice(0, 80).replace(/</g, '') : ''}</span>`)
+                                .addTo(map);
+                        });
+                    }
+                }
+            } catch (e) { /* non-fatal */ }
+
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
                 const isHub = hubs.has(name) || data.routes.size > 1;

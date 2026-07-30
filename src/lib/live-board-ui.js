@@ -139,6 +139,7 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         const remainingNames = new Set(remaining.map(j => j.train || j.train1.train));
         nextJourney.isLastTrain = (remainingNames.size === 1);
         window.Renderer.renderJourney(element, nextJourney, destination);
+        import('./delay-reports.js').then((m) => m.hydrateTrainReportSlots(element)).catch(() => {});
     } else if (allJourneys.length === 0) {
         element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No scheduled trains.</div>`;
     } else {
@@ -636,4 +637,7 @@ export function initLiveBoardUi() {
     });
 
     try { startSmartRefresh(); } catch (e) { console.warn('Smart refresh unavailable', e); }
+
+    // Phase 5 — delay report CTA + crowd banner (also bound from hub; safe to double-guard)
+    import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
 }

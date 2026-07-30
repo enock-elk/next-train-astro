@@ -26,23 +26,33 @@ export default defineConfig({
         ]
       },
       manifest: {
-        name: 'Metrorail Next Train',
-        short_name: 'Next Train',
-        description: 'Live Metrorail schedules and route maps for South Africa.',
+        name: 'Next Train 2.0',
+        short_name: 'Train 2.0',
+        description: 'Live Metrorail schedules and route maps for South Africa. (Astro rebuild)',
         theme_color: '#1d4ed8',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
+        id: '/?pwa=next-train-2',
+        start_url: '/?pwa=next-train-2',
         icons: [
           {
             src: '/icons/icon-192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }

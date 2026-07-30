@@ -1,20 +1,25 @@
 /**
- * Firebase Auth + Storage bootstrap (admin / feedback).
+ * Firebase Auth + Storage + RTDB bootstrap (admin / feedback / passenger accounts).
  * Exposes SPA-compatible window.firebase* globals, then fires `firebase-auth-ready`.
  */
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
     signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
     onIdTokenChanged,
     getIdToken,
     signInAnonymously,
     setPersistence,
-    browserLocalPersistence
+    browserLocalPersistence,
+    GoogleAuthProvider,
+    signInWithPopup,
+    updateProfile,
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getDatabase, ref as dbRef, set, update, get, onValue, onDisconnect, remove } from 'firebase/database';
 
 const firebaseConfig = {
     apiKey: 'AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY',
@@ -47,15 +52,30 @@ export async function bootFirebase() {
 
         window.firebaseAuth = auth;
         window.firebaseSignIn = signInWithEmailAndPassword;
+        window.firebaseCreateUser = createUserWithEmailAndPassword;
         window.firebaseSignOut = signOut;
         window.firebaseOnAuthStateChanged = onAuthStateChanged;
         window.firebaseOnIdTokenChanged = onIdTokenChanged;
         window.firebaseGetIdToken = getIdToken;
         window.firebaseSignInAnonymously = signInAnonymously;
+        window.firebaseSignInWithPopup = signInWithPopup;
+        window.firebaseGoogleProvider = GoogleAuthProvider;
+        window.firebaseUpdateProfile = updateProfile;
+
         window.firebaseStorage = getStorage(app);
         window.firebaseStorageRef = ref;
         window.firebaseUploadBytesResumable = uploadBytesResumable;
         window.firebaseGetDownloadURL = getDownloadURL;
+
+        window.firebaseDb = getDatabase(app);
+        window.firebaseDbRef = dbRef;
+        window.firebaseDbSet = set;
+        window.firebaseDbUpdate = update;
+        window.firebaseDbGet = get;
+        window.firebaseDbOnValue = onValue;
+        window.firebaseDbOnDisconnect = onDisconnect;
+        window.firebaseDbRemove = remove;
+
         _ready = true;
     } catch (e) {
         console.warn('🛡️ Guardian: Firebase failed to load (Offline Mode). Cloud features restricted.', e);

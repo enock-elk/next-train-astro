@@ -22,6 +22,8 @@ import {
     currentTime, currentDayType, currentDayIndex 
 } from './logic.js';
 
+import { buildTrainReportSlotHtml } from './delay-reports.js';
+
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
 const getCurrentDayIndex = () => typeof window !== 'undefined' && window.currentDayIndex !== undefined ? window.currentDayIndex : 1;
@@ -603,6 +605,19 @@ export const Renderer = {
         }
         // ---------------------------------------------------------
 
+        const reportStation = (typeof document !== 'undefined' && document.getElementById('station-select')?.value) || '';
+        const reportRouteId = (typeof window !== 'undefined' && window._liveRouteId) || '';
+        const reportTrainId = journey.train || journey.train1?.train || '';
+        const reportArr = journey.arrivalTime || journey.train1?.arrivalAtTransfer || '';
+        const reportSlotHtml = buildTrainReportSlotHtml({
+            routeId: reportRouteId,
+            trainId: reportTrainId,
+            scheduledTime: rawTime,
+            arrivalTime: reportArr,
+            station: reportStation,
+            destination: destination || '',
+        });
+
         if (journey.type === 'direct') {
             let actualDest = journey.actualDestination ? Renderer._applyUIIntercepts(normalizeStationName(journey.actualDestination)) : '';
             if (isForceTerminated && overrideActualDest) {
@@ -645,6 +660,7 @@ export const Renderer = {
                             ${detailLine}
                         </div>
                         ${disruptionHtml}
+                        ${reportSlotHtml}
                     </div>
                 </div>
             `;
@@ -709,6 +725,7 @@ export const Renderer = {
                         </div>
                         ${bottomBlock}
                         ${disruptionHtml}
+                        ${reportSlotHtml}
                     </div>
                 </div>
             `;
@@ -988,7 +1005,7 @@ export const Renderer = {
         const overlay = document.getElementById('sidenav-overlay');
         if (sidenav && sidenav.classList.contains('open')) {
             sidenav.classList.remove('open', 'translate-x-0');
-            sidenav.classList.add('-translate-x-full');
+            sidenav.classList.add('translate-x-full');
             if (overlay) {
                 overlay.classList.add('opacity-0');
                 overlay.classList.add('hidden');

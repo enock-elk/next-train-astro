@@ -3,6 +3,8 @@
  * SEO-first layout for standalone content pages (map, guide, status).
  * Safe for cold visitors — no app store hydration required.
  */
+import '../styles/appearance.css';
+
 interface Props {
   title: string;
   description: string;
@@ -58,7 +60,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content={ogImageWidth} />
     <meta property="og:image:height" content={ogImageHeight} />
-    <meta property="og:site_name" content="Metrorail Next Train" />
+    <meta property="og:site_name" content="Next Train" />
     <meta property="og:locale" content="en_ZA" />
 
     <meta name="twitter:card" content={twitterCard} />
@@ -70,6 +72,8 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="application-name" content="Next Train" />
+    <meta name="apple-mobile-web-app-title" content="Train 2.0" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -84,6 +88,9 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           if (isDark) document.documentElement.classList.add('dark');
           else document.documentElement.classList.remove('dark');
         }
+        const pack = localStorage.getItem('colourPack');
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic';
+        document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
         }

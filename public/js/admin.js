@@ -292,6 +292,46 @@ const Admin = {
                     deBadge.classList.toggle('hidden', deUnread === 0);
                 }
             }
+
+            // 4. Delay reports (Phase 5)
+            const drRes = await window.guardianFetch(`${dynamicEndpoint}delay_reports.json?auth=${secret}`, {}, 6000);
+            if (drRes.ok) {
+                const drData = await drRes.json();
+                let drUnread = 0;
+                const localDrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('dr_last_checked') || '0') : '0');
+                const lastChecked = Math.max(localDrChecked, parseInt(adminState.dr_last_checked || '0'));
+                if (drData && typeof drData === 'object') {
+                    Object.values(drData).forEach((i) => {
+                        if (i && i.status !== 'closed' && (i.timestamp || 0) > lastChecked) drUnread++;
+                    });
+                }
+                totalUnread += drUnread;
+                const drBadge = document.getElementById('dr-unread-badge');
+                if (drBadge) {
+                    drBadge.textContent = `${drUnread} New`;
+                    drBadge.classList.toggle('hidden', drUnread === 0);
+                }
+            }
+
+            // 5. Moderation queue (Phase 6)
+            const mqRes = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}`, {}, 6000);
+            if (mqRes.ok) {
+                const mqData = await mqRes.json();
+                let mqUnread = 0;
+                const localMqChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('mq_last_checked') || '0') : '0');
+                const lastChecked = Math.max(localMqChecked, parseInt(adminState.mq_last_checked || '0'));
+                if (mqData && typeof mqData === 'object') {
+                    Object.values(mqData).forEach((i) => {
+                        if (i && i.status !== 'closed' && i.status !== 'resolved' && (i.timestamp || 0) > lastChecked) mqUnread++;
+                    });
+                }
+                totalUnread += mqUnread;
+                const mqBadge = document.getElementById('mq-unread-badge');
+                if (mqBadge) {
+                    mqBadge.textContent = `${mqUnread} New`;
+                    mqBadge.classList.toggle('hidden', mqUnread === 0);
+                }
+            }
             
             // GUARDIAN 2.4.1: Native PWA App Icon Badging
             if ('setAppBadge' in navigator) {
@@ -1339,7 +1379,7 @@ const Admin = {
         let clickTimer = null;
 
         appTitle.style.cursor = 'pointer'; 
-        appTitle.title = "Metrorail Next Train";
+        appTitle.title = "Next Train 2.0";
 
         appTitle.addEventListener('click', (e) => {
             e.preventDefault(); 
@@ -1501,6 +1541,9 @@ const Admin = {
         // Setup Execution Order
         Admin.setupTelemetry();
         Admin.setupFeedbackManager(); 
+        Admin.setupDelayReportsManager();
+        Admin.setupModerationQueueManager();
+        Admin.setupUserTrustManager();
         Admin.setupDeadEndsManager(); 
         Admin.setupCrashReportsManager();  
         Admin.setupServiceAlertsManager();
@@ -1906,6 +1949,9 @@ const Admin = {
 
             // Auto-Fetch data upon drill-down
             if (targetPanel.id === 'feedback-panel') Admin.fetchFeedback();
+            if (targetPanel.id === 'delay-reports-panel') Admin.fetchDelayReports();
+            if (targetPanel.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
+            if (targetPanel.id === 'user-trust-panel') { /* lookup is on-demand */ }
             if (targetPanel.id === 'deadends-panel') Admin.fetchDeadEnds();
             if (targetPanel.id === 'crashes-panel') Admin.fetchCrashes();
         }
@@ -2528,6 +2574,8 @@ const Admin = {
                 
                 // Auto-Fetch data upon drill-down
                 if (card.id === 'feedback-panel') Admin.fetchFeedback();
+                if (card.id === 'delay-reports-panel') Admin.fetchDelayReports();
+                if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
                 if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
                 if (card.id === 'crashes-panel') Admin.fetchCrashes(); // ðŸ›¡ï¸ GUARDIAN PHASE 7
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // ðŸ›¡ï¸ GUARDIAN PHASE 14
@@ -3705,6 +3753,556 @@ const Admin = {
             URL.revokeObjectURL(url);
             
             if (typeof showToast === 'function') showToast(`Exported ${displayGroups.length} threads!`, "success");
+        };
+    },
+
+    // --- PHASE 5: DELAY / ISSUE REPORTS (CRUDE OPS INBOX) ---
+    setupDelayReportsManager: () => {
+        const alertPanel = document.getElementById('alert-panel');
+        if (!alertPanel || !alertPanel.parentNode) return;
+
+        let drPanel = document.getElementById('delay-reports-panel');
+        if (!drPanel) {
+            drPanel = document.createElement('div');
+            drPanel.id = 'delay-reports-panel';
+            const fb = document.getElementById('feedback-panel');
+            if (fb && fb.parentNode) fb.parentNode.insertBefore(drPanel, fb.nextSibling);
+            else alertPanel.parentNode.insertBefore(drPanel, alertPanel);
+        }
+        if (drPanel.dataset.adminLoaded === 'true') return;
+        drPanel.dataset.adminLoaded = 'true';
+
+        drPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        drPanel.innerHTML = `
+            <div id="dr-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
+                <span class="flex flex-col items-center">
+                    <span class="text-2xl mb-2">⚠️</span>
+                    <span>Delay Reports</span>
+                </span>
+                <span id="dr-unread-badge" class="hidden absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <svg id="dr-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div id="dr-body" class="hidden mt-4 flex flex-col">
+                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                    <button type="button" id="dr-refresh-btn" class="flex-1 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                </div>
+                <div id="dr-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+            </div>
+        `;
+
+        const header = document.getElementById('dr-header-btn');
+        const body = document.getElementById('dr-body');
+        const chevron = document.getElementById('dr-chevron');
+        const refreshBtn = document.getElementById('dr-refresh-btn');
+
+        header.onclick = () => {
+            if (Admin.isGridMode) return;
+            body.classList.toggle('hidden');
+            if (body.classList.contains('hidden')) {
+                chevron.classList.add('-rotate-90');
+                header.classList.remove('mb-4');
+            } else {
+                chevron.classList.remove('-rotate-90');
+                header.classList.add('mb-4');
+                Admin.fetchDelayReports();
+            }
+        };
+        refreshBtn.onclick = () => Admin.fetchDelayReports();
+
+        Admin.fetchDelayReports = async () => {
+            const list = document.getElementById('dr-list');
+            if (!list) return;
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading…</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = secret ? `?auth=${secret}` : '';
+                const res = await window.guardianFetch(`${dynamicEndpoint}delay_reports.json${authQ}`, {}, 8000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const items = data
+                    ? Object.entries(data).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                    : [];
+                Admin.cachedDelayReports = items;
+
+                if (typeof safeStorage !== 'undefined') {
+                    safeStorage.setItem('dr_last_checked', String(Date.now()));
+                }
+                try {
+                    const stateUrl = `${dynamicEndpoint}admin_state/${Admin.currentUser.uid}/dr_last_checked.json?auth=${secret}`;
+                    await fetch(stateUrl, { method: 'PUT', body: JSON.stringify(Date.now()) });
+                } catch (e) { /* optional */ }
+
+                const badge = document.getElementById('dr-unread-badge');
+                if (badge) badge.classList.add('hidden');
+
+                if (!items.length) {
+                    list.innerHTML = '<p class="text-xs text-gray-400 text-center py-6">No delay reports yet.</p>';
+                    return;
+                }
+
+                const routeName = (id) => {
+                    try {
+                        if (typeof ROUTES !== 'undefined' && ROUTES[id]) return ROUTES[id].name || id;
+                    } catch (e) {}
+                    return id || 'Unknown route';
+                };
+
+                list.innerHTML = items.slice(0, 80).map((r) => {
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '—';
+                    const sev = (r.severity || 'moderate').toUpperCase();
+                    const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
+                    const status = r.status || 'open';
+                    const note = r.note ? String(r.note).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '<span class="italic text-gray-400">No note</span>';
+                    const who = r.isGuest ? `guest · ${(r.deviceId || '').slice(0, 8)}` : `uid · ${(r.uid || '').slice(0, 10)}`;
+                    const closedCls = status === 'closed' ? 'opacity-50' : '';
+                    return `
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closedCls}" data-report-id="${r.reportId || r._key}">
+                            <div class="flex justify-between items-start gap-2 mb-1">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-black text-gray-900 dark:text-white truncate">${routeName(r.routeId)}</p>
+                                    <p class="text-[10px] font-bold ${sevColor}">${sev} · ${status} · ${r.source || 'app'}</p>
+                                </div>
+                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-700 dark:text-gray-300 mb-1">${note}</p>
+                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` · near ${String(r.station).replace(/</g, '')}` : ''} · ${r.reportId || r._key}${r.verified ? ' · ✓ verified' : ''}</p>
+                            <div class="flex flex-wrap gap-3">
+                            ${status !== 'closed' ? `<button type="button" class="dr-close-btn text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Mark closed</button>` : '<span class="text-[10px] text-gray-400">Closed</span>'}
+                            ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn text-[10px] font-bold text-green-700 dark:text-green-400 underline" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified (+trust)</button>` : (r.verified ? '<span class="text-[10px] text-green-600">Verified</span>' : '')}
+                            ${r.uid ? `<button type="button" class="dr-flag-user text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.uid}">Flag user</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                list.querySelectorAll('.dr-close-btn').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        btn.disabled = true;
+                        try {
+                            const secret2 = await Admin.getAuthKey();
+                            const url = `${dynamicEndpoint}delay_reports/${id}/status.json?auth=${secret2}`;
+                            const put = await fetch(url, { method: 'PUT', body: JSON.stringify('closed') });
+                            if (!put.ok) throw new Error('Failed');
+                            if (typeof showToast === 'function') showToast('Report marked closed', 'success');
+                            Admin.fetchDelayReports();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Could not update report', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.dr-verify-btn').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        const uid = btn.getAttribute('data-uid');
+                        if (!id || !uid) return;
+                        btn.disabled = true;
+                        try {
+                            await Admin.verifyDelayReport(id, uid);
+                            Admin.fetchDelayReports();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Verify failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.dr-flag-user').forEach((btn) => {
+                    btn.onclick = () => Admin.applyShadowBan(btn.getAttribute('data-uid'));
+                });
+            } catch (e) {
+                list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
+            }
+        };
+    },
+
+    // --- PHASE 6: COMMUNITY MODERATION QUEUE ---
+    setupModerationQueueManager: () => {
+        const alertPanel = document.getElementById('alert-panel');
+        if (!alertPanel || !alertPanel.parentNode) return;
+
+        let mqPanel = document.getElementById('moderation-queue-panel');
+        if (!mqPanel) {
+            mqPanel = document.createElement('div');
+            mqPanel.id = 'moderation-queue-panel';
+            const after = document.getElementById('delay-reports-panel') || document.getElementById('feedback-panel');
+            if (after && after.parentNode) after.parentNode.insertBefore(mqPanel, after.nextSibling);
+            else alertPanel.parentNode.insertBefore(mqPanel, alertPanel);
+        }
+        if (mqPanel.dataset.adminLoaded === 'true') return;
+        mqPanel.dataset.adminLoaded = 'true';
+
+        mqPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        mqPanel.innerHTML = `
+            <div id="mq-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
+                <span class="flex flex-col items-center">
+                    <span class="text-2xl mb-2">🛡️</span>
+                    <span>Moderation Queue</span>
+                </span>
+                <span id="mq-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div id="mq-body" class="hidden mt-4 flex flex-col">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports (message / user). Hide posts or shadow-ban without schema rewrites.</p>
+                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                    <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                </div>
+                <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+            </div>
+        `;
+
+        const header = document.getElementById('mq-header-btn');
+        const body = document.getElementById('mq-body');
+        const chevron = document.getElementById('mq-chevron');
+        const refreshBtn = document.getElementById('mq-refresh-btn');
+
+        header.onclick = () => {
+            if (Admin.isGridMode) return;
+            body.classList.toggle('hidden');
+            if (body.classList.contains('hidden')) {
+                chevron.classList.add('-rotate-90');
+                header.classList.remove('mb-4');
+            } else {
+                chevron.classList.remove('-rotate-90');
+                header.classList.add('mb-4');
+                Admin.fetchModerationQueue();
+            }
+        };
+        refreshBtn.onclick = () => Admin.fetchModerationQueue();
+
+        Admin.fetchModerationQueue = async () => {
+            const list = document.getElementById('mq-list');
+            if (!list) return;
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading…</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = secret ? `?auth=${secret}` : '';
+                const res = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json${authQ}`, {}, 8000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const items = data
+                    ? Object.entries(data).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                    : [];
+
+                if (typeof safeStorage !== 'undefined') safeStorage.setItem('mq_last_checked', String(Date.now()));
+                try {
+                    await fetch(`${dynamicEndpoint}admin_state/${Admin.currentUser.uid}/mq_last_checked.json?auth=${secret}`, {
+                        method: 'PUT', body: JSON.stringify(Date.now())
+                    });
+                } catch (e) { /* optional */ }
+
+                const badge = document.getElementById('mq-unread-badge');
+                if (badge) badge.classList.add('hidden');
+
+                if (!items.length) {
+                    list.innerHTML = '<p class="text-xs text-gray-400 text-center py-6">Queue is empty.</p>';
+                    return;
+                }
+
+                list.innerHTML = items.slice(0, 100).map((r) => {
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '—';
+                    const type = (r.type || 'message').toUpperCase();
+                    const status = r.status || 'open';
+                    const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                    const closed = status === 'closed' || status === 'resolved';
+                    return `
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
+                            <div class="flex justify-between gap-2 mb-1">
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} · ${r.routeId || '—'}</p>
+                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '—').toString().slice(0, 16)} · post: ${(r.targetPostId || '—').toString().slice(0, 18)}</p>
+                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">“${snippet}”</p>` : ''}
+                            ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
+                            <div class="flex flex-wrap gap-2 mt-1">
+                                <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
+                                <button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>
+                                <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
+                            </div>`}
+                        </div>`;
+                }).join('');
+
+                list.querySelectorAll('.mq-close').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        btn.disabled = true;
+                        try {
+                            const s = await Admin.getAuthKey();
+                            const put = await fetch(`${dynamicEndpoint}moderation_queue/${id}/status.json?auth=${s}`, {
+                                method: 'PUT', body: JSON.stringify('closed')
+                            });
+                            if (!put.ok) throw new Error('fail');
+                            if (typeof showToast === 'function') showToast('Report closed', 'success');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Could not close', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-hide-post').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const routeId = btn.getAttribute('data-route');
+                        const postId = btn.getAttribute('data-post');
+                        if (!routeId || !postId) {
+                            if (typeof showToast === 'function') showToast('Missing route/post id', 'error');
+                            return;
+                        }
+                        btn.disabled = true;
+                        try {
+                            const s = await Admin.getAuthKey();
+                            const put = await fetch(`${dynamicEndpoint}route_community/${routeId}/posts/${postId}/hidden.json?auth=${s}`, {
+                                method: 'PUT', body: JSON.stringify(true)
+                            });
+                            if (!put.ok) throw new Error('fail');
+                            if (typeof showToast === 'function') showToast('Post hidden', 'success');
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Hide failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-shadow-ban').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const uid = btn.getAttribute('data-uid');
+                        const mqId = btn.closest('[data-mq-id]')?.getAttribute('data-mq-id');
+                        const ok = await Admin.applyShadowBan(uid);
+                        if (ok && mqId) {
+                            try {
+                                const s = await Admin.getAuthKey();
+                                await fetch(`${dynamicEndpoint}moderation_queue/${mqId}/status.json?auth=${s}`, {
+                                    method: 'PUT', body: JSON.stringify('closed')
+                                });
+                                Admin.fetchModerationQueue();
+                            } catch (e) { /* optional */ }
+                        }
+                    };
+                });
+            } catch (e) {
+                list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
+            }
+        };
+    },
+
+    /** Phase 7 — timed shadow ban with duration picker */
+    applyShadowBan: async (uid) => {
+        if (!uid) {
+            if (typeof showToast === 'function') showToast('No target uid', 'error');
+            return false;
+        }
+        const durations = (typeof SHADOW_BAN_DURATIONS !== 'undefined' && SHADOW_BAN_DURATIONS)
+            ? SHADOW_BAN_DURATIONS
+            : [
+                { label: '1 hour', ms: 3600000 },
+                { label: '6 hours', ms: 21600000 },
+                { label: '24 hours', ms: 86400000 },
+                { label: '7 days', ms: 604800000 },
+                { label: '30 days', ms: 2592000000 },
+                { label: 'Permanent', ms: 0 },
+            ];
+
+        const choice = await new Promise((resolve) => {
+            const modalId = 'admin-shadow-ban-modal';
+            let modal = document.getElementById(modalId);
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'fixed inset-0 bg-black/80 z-[210] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-base font-black text-gray-900 dark:text-white mb-1">Shadow ban user</h3>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 font-mono break-all">${uid}</p>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Duration</label>
+                    <select id="admin-ban-duration" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm mb-4">
+                        ${durations.map((d, i) => `<option value="${i}" ${d.ms === 86400000 ? 'selected' : ''}>${d.label}</option>`).join('')}
+                    </select>
+                    <div class="flex gap-2">
+                        <button type="button" id="admin-ban-cancel" class="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Cancel</button>
+                        <button type="button" id="admin-ban-confirm" class="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">Ban</button>
+                    </div>
+                </div>`;
+            modal.classList.remove('hidden');
+            document.getElementById('admin-ban-cancel').onclick = () => { modal.classList.add('hidden'); resolve(null); };
+            document.getElementById('admin-ban-confirm').onclick = () => {
+                const idx = parseInt(document.getElementById('admin-ban-duration').value, 10) || 0;
+                modal.classList.add('hidden');
+                resolve(durations[idx] || durations[durations.length - 1]);
+            };
+        });
+        if (!choice) return false;
+
+        const confirmed = await Admin.secureConfirm(
+            'Confirm shadow ban',
+            `Ban ${uid.slice(0, 12)}… for ${choice.label}? They will appear silenced on community writes.`
+        );
+        if (!confirmed) return false;
+
+        try {
+            const secret = await Admin.getAuthKey();
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const until = (typeof trustComputeBanUntil === 'function')
+                ? trustComputeBanUntil(choice.ms)
+                : (choice.ms > 0 ? Date.now() + choice.ms : 0);
+            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(true) });
+            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(until) });
+            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Date.now()) });
+            if (Admin.currentUser?.uid) {
+                await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedBy.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Admin.currentUser.uid) });
+            }
+            if (typeof window.trustAddToBlockList === 'function') window.trustAddToBlockList(uid);
+            else if (window.trustLocalBlockList) window.trustLocalBlockList.add(uid);
+            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label})`, 'success');
+            return true;
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('Shadow ban failed', 'error');
+            return false;
+        }
+    },
+
+    liftShadowBan: async (uid) => {
+        if (!uid) return false;
+        const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}…?`);
+        if (!confirmed) return false;
+        try {
+            const secret = await Admin.getAuthKey();
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(false) });
+            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(0) });
+            if (typeof window.trustRemoveFromBlockList === 'function') window.trustRemoveFromBlockList(uid);
+            if (typeof showToast === 'function') showToast('Ban lifted', 'success');
+            return true;
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('Lift failed', 'error');
+            return false;
+        }
+    },
+
+    verifyDelayReport: async (reportId, uid) => {
+        const secret = await Admin.getAuthKey();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const adminUid = Admin.currentUser?.uid || 'admin';
+        const now = Date.now();
+        await fetch(`${dynamicEndpoint}delay_reports/${reportId}/verified.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(true) });
+        await fetch(`${dynamicEndpoint}delay_reports/${reportId}/verifiedBy.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(adminUid) });
+        await fetch(`${dynamicEndpoint}delay_reports/${reportId}/verifiedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(now) });
+        let score = 0;
+        try {
+            const sRes = await fetch(`${dynamicEndpoint}users/${uid}/trustScore.json?auth=${secret}`);
+            if (sRes.ok) {
+                const v = await sRes.json();
+                if (typeof v === 'number') score = v;
+            }
+        } catch (e) {}
+        await fetch(`${dynamicEndpoint}users/${uid}/trustScore.json?auth=${secret}`, {
+            method: 'PUT', body: JSON.stringify(score + 1)
+        });
+        if (typeof showToast === 'function') showToast(`Verified — trust score → ${score + 1}`, 'success');
+    },
+
+    // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
+    setupUserTrustManager: () => {
+        const alertPanel = document.getElementById('alert-panel');
+        if (!alertPanel || !alertPanel.parentNode) return;
+
+        let panel = document.getElementById('user-trust-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'user-trust-panel';
+            const after = document.getElementById('moderation-queue-panel') || document.getElementById('delay-reports-panel');
+            if (after && after.parentNode) after.parentNode.insertBefore(panel, after.nextSibling);
+            else alertPanel.parentNode.insertBefore(panel, alertPanel);
+        }
+        if (panel.dataset.adminLoaded === 'true') return;
+        panel.dataset.adminLoaded = 'true';
+
+        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        panel.innerHTML = `
+            <div id="ut-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
+                <span class="flex flex-col items-center">
+                    <span class="text-2xl mb-2">👤</span>
+                    <span>User Trust &amp; Bans</span>
+                </span>
+                <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Lookup by UID. Flag with optional duration, lift bans, see trust score from verified delay reports.</p>
+                <div class="flex gap-2 mb-3 px-1">
+                    <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="Paste user UID…" />
+                    <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
+                </div>
+                <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
+            </div>
+        `;
+
+        const header = document.getElementById('ut-header-btn');
+        const body = document.getElementById('ut-body');
+        const chevron = document.getElementById('ut-chevron');
+        header.onclick = () => {
+            if (Admin.isGridMode) return;
+            body.classList.toggle('hidden');
+            chevron.classList.toggle('-rotate-90', body.classList.contains('hidden'));
+            header.classList.toggle('mb-4', !body.classList.contains('hidden'));
+        };
+
+        document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
+        document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') Admin.lookupUserTrust();
+        });
+
+        Admin.lookupUserTrust = async () => {
+            const uid = (document.getElementById('ut-uid-input')?.value || '').trim();
+            const out = document.getElementById('ut-result');
+            if (!uid || !out) return;
+            out.innerHTML = '<p class="animate-pulse text-gray-400">Loading…</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await fetch(`${dynamicEndpoint}users/${uid}.json?auth=${secret}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const user = await res.json();
+                if (!user) {
+                    out.innerHTML = '<p class="text-red-500">User not found.</p>';
+                    return;
+                }
+                const flags = user.flags || {};
+                const banned = flags.shadowBanned === true;
+                const until = Number(flags.shadowBannedUntil || 0);
+                const expired = banned && until > 0 && Date.now() > until;
+                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '—');
+                const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
+                const name = (user.displayName || '—').toString().replace(/</g, '&lt;');
+                out.innerHTML = `
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
+                        <p class="font-black text-gray-900 dark:text-white">${name}</p>
+                        <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
+                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> · Trust score: <b>${score}</b></p>
+                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr}` : ''}</p>
+                        <div class="flex flex-wrap gap-3 pt-1">
+                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban…</button>
+                            <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
+                        </div>
+                    </div>`;
+                document.getElementById('ut-ban-btn').onclick = async () => {
+                    await Admin.applyShadowBan(uid);
+                    Admin.lookupUserTrust();
+                };
+                document.getElementById('ut-lift-btn').onclick = async () => {
+                    await Admin.liftShadowBan(uid);
+                    Admin.lookupUserTrust();
+                };
+            } catch (e) {
+                out.innerHTML = `<p class="text-red-500">Lookup failed: ${e.message || e}</p>`;
+            }
         };
     },
 

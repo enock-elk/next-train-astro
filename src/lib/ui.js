@@ -505,6 +505,29 @@ export function moveTabIndicator(element) {
     });
 }
 
+/** Sync Home · Plan · Community active state on the bottom bar (Phase 8). More is hub-only. */
+export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
+    if (typeof document === 'undefined') return;
+    const home = document.getElementById('bottom-nav-home');
+    const plan = document.getElementById('bottom-nav-plan');
+    const community = document.getElementById('bottom-nav-community');
+    if (!home && !plan && !community) return;
+
+    const mode = tab === 'community' ? 'community' : (tab === 'trip-planner' ? 'plan' : 'home');
+    const paint = (el, on) => {
+        if (!el) return;
+        el.classList.toggle('is-active', on);
+        el.classList.toggle('text-blue-600', on);
+        el.classList.toggle('dark:text-blue-400', on);
+        el.classList.toggle('text-gray-400', !on);
+        el.classList.toggle('dark:text-gray-500', !on);
+        el.setAttribute('aria-current', on ? 'page' : 'false');
+    };
+    paint(home, mode === 'home');
+    paint(plan, mode === 'plan');
+    paint(community, mode === 'community');
+}
+
 export function switchTab(tab) {
     if (typeof document === 'undefined') return;
 
@@ -534,7 +557,10 @@ export function switchTab(tab) {
         targetBtn.classList.add('active');
         setTimeout(() => moveTabIndicator(targetBtn), 50);
     }
+    document.getElementById('tab-next-train')?.setAttribute('aria-selected', tab === 'next-train' ? 'true' : 'false');
+    document.getElementById('tab-trip-planner')?.setAttribute('aria-selected', tab === 'trip-planner' ? 'true' : 'false');
     safeStorage.setItem('activeTab', tab);
+    syncBottomNavActive(tab);
 }
 
 export function initTabIndicator() {
@@ -670,6 +696,7 @@ if (typeof window !== 'undefined') {
     window.lockBackgroundScroll = lockBackgroundScroll;
     window.unlockBackgroundScroll = unlockBackgroundScroll;
     window.switchTab = switchTab;
+    window.syncBottomNavActive = syncBottomNavActive;
     window.openLegal = openLegal;
 
     // Boot the Error Handler immediately

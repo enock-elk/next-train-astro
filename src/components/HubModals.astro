@@ -67,6 +67,88 @@
     </div>
 </div>
 
+<!-- PER-TRAIN STATUS REPORT -->
+<div id="delay-report-modal" class="fixed inset-0 bg-gray-900/60 z-[130] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl w-full max-w-sm max-h-[90dvh] flex flex-col transform transition-all scale-95 border border-white/40 dark:border-gray-700/50 overflow-hidden">
+        <div class="p-4 border-b border-gray-200/50 dark:border-gray-800/50 flex justify-between items-center shrink-0">
+            <div class="min-w-0 pr-2">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live board</p>
+                <h3 id="train-report-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight truncate">Report this train</h3>
+            </div>
+            <button type="button" id="delay-report-cancel" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition focus:outline-none shrink-0" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <input type="hidden" id="tr-route" value="" />
+        <input type="hidden" id="tr-train" value="" />
+        <input type="hidden" id="tr-dep" value="" />
+        <input type="hidden" id="tr-arr" value="" />
+        <input type="hidden" id="tr-station" value="" />
+        <input type="hidden" id="tr-dest" value="" />
+        <input type="hidden" id="tr-status" value="" />
+        <input type="hidden" id="tr-late-bucket" value="" />
+
+        <div class="p-5 overflow-y-auto flex-grow custom-scrollbar">
+            <!-- Step 1: status -->
+            <div id="tr-step-status" class="space-y-3">
+                <p class="text-sm font-bold text-gray-800 dark:text-gray-200">How was this train?</p>
+                <button type="button" data-tr-status="early" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50/80 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/40 transition focus:outline-none">
+                    <span class="block text-sm font-black text-green-800 dark:text-green-300">Came early</span>
+                    <span class="block text-[11px] text-green-700/80 dark:text-green-400/80 mt-0.5">It arrived before the scheduled time.</span>
+                </button>
+                <button type="button" data-tr-status="on_time" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition focus:outline-none">
+                    <span class="block text-sm font-black text-amber-800 dark:text-amber-300">On time</span>
+                    <span class="block text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">It arrived around the scheduled time.</span>
+                </button>
+                <button type="button" data-tr-status="late" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-red-200 dark:border-red-800/60 bg-red-50/80 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 transition focus:outline-none">
+                    <span class="block text-sm font-black text-red-700 dark:text-red-300">Running late</span>
+                    <span class="block text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">It arrived after the scheduled time.</span>
+                </button>
+                <button type="button" data-tr-status="cancelled" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800 transition focus:outline-none">
+                    <span class="block text-sm font-black text-gray-800 dark:text-gray-200">Cancelled / not coming</span>
+                    <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">This train won’t run as scheduled.</span>
+                </button>
+                <p class="text-[10px] text-gray-400 pt-1">Anonymous to other passengers. Helps build live updates for this train.</p>
+            </div>
+
+            <!-- Step 2: late detail -->
+            <div id="tr-step-late" class="hidden space-y-3">
+                <p class="text-sm font-bold text-gray-800 dark:text-gray-200">How late was the train?</p>
+                <div class="grid grid-cols-1 gap-2">
+                    <button type="button" data-tr-bucket="1-5" class="tr-bucket-btn w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 hover:border-blue-500 focus:outline-none">1–5 min late</button>
+                    <button type="button" data-tr-bucket="6-10" class="tr-bucket-btn w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 hover:border-blue-500 focus:outline-none">6–10 min late</button>
+                    <button type="button" data-tr-bucket="11-20" class="tr-bucket-btn w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 hover:border-blue-500 focus:outline-none">11–20 min late</button>
+                    <button type="button" data-tr-bucket="21+" class="tr-bucket-btn w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 hover:border-blue-500 focus:outline-none">21+ min late</button>
+                    <button type="button" data-tr-bucket="unsure" class="tr-bucket-btn w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 hover:border-blue-500 focus:outline-none">Not sure</button>
+                </div>
+                <div>
+                    <label for="tr-note" class="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Add a note (optional)</label>
+                    <textarea id="tr-note" rows="2" maxlength="280" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Anything else we should know?"></textarea>
+                </div>
+                <p id="tr-error" class="text-xs font-bold text-red-600 dark:text-red-400 min-h-[1rem]"></p>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" id="tr-late-back" class="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold text-gray-800 dark:text-gray-200 focus:outline-none">Back</button>
+                    <button type="button" id="tr-late-submit" class="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none flex items-center justify-center">
+                        <span id="tr-late-submit-text">Submit report</span>
+                        <svg id="tr-spinner" class="w-4 h-4 ml-2 animate-spin hidden" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: done -->
+            <div id="tr-step-done" class="hidden text-center py-6 space-y-3">
+                <div class="mx-auto w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <p class="text-lg font-black text-gray-900 dark:text-white">Thanks! Report submitted.</p>
+                <p id="tr-done-summary" class="text-sm text-gray-600 dark:text-gray-400"></p>
+                <button type="button" id="tr-done-btn" class="mt-2 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ABOUT -->
 <div id="about-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[120] hidden flex flex-col items-center p-0 full-screen transition-opacity duration-300 overflow-y-auto">
     <div class="w-full max-w-2xl p-6 flex justify-end sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-20">
@@ -97,6 +179,150 @@
             </div>
         </div>
         <p id="about-version-label" class="mt-8 text-[10px] text-gray-400 font-mono">Version (Guardian Edition)</p>
+    </div>
+</div>
+
+</div>
+
+<!-- ROUTE COMMUNITY (Phase 6 — chronological feed) -->
+<div id="route-community-modal" class="fixed inset-0 bg-black/70 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] flex flex-col border border-gray-200 dark:border-gray-700 transform transition-all overflow-hidden">
+        <div class="shrink-0 flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur">
+            <div class="min-w-0 pr-2">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
+                <h3 id="community-route-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight truncate">Route feed</h3>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" id="community-refresh-btn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Refresh" title="Refresh">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+                <button type="button" id="community-modal-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="shrink-0 px-4 pt-3 pb-2 space-y-2 border-b border-gray-50 dark:border-gray-800/80">
+            <label for="community-route-select" class="sr-only">Route room</label>
+            <select id="community-route-select" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+            <div class="flex items-center justify-between gap-2">
+                <p id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide">—</p>
+                <p id="community-typing" class="text-[10px] text-blue-600 dark:text-blue-400 font-medium hidden truncate max-w-[55%]"></p>
+            </div>
+            <div id="community-category-filters" class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
+                <button type="button" data-community-filter="all" class="community-filter-chip is-selected text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-600 text-white">All</button>
+                <button type="button" data-community-filter="general" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">General</button>
+                <button type="button" data-community-filter="delay" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Delay</button>
+                <button type="button" data-community-filter="safety" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Safety</button>
+                <button type="button" data-community-filter="other" class="community-filter-chip text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Other</button>
+            </div>
+            <p id="community-be-kind" class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Be kind — chronological feed for your corridor. Use Report if something’s off.</p>
+            <p id="community-guest-hint" class="hidden text-[11px] text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl px-3 py-2">
+                Anyone can read. <button type="button" id="community-signin-cta" class="font-bold underline focus:outline-none">Sign in</button> to post or reply.
+            </p>
+        </div>
+
+        <div class="flex-grow overflow-y-auto px-4 custom-scrollbar min-h-[200px]">
+            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+            <div id="community-feed-list" class="pb-4"></div>
+        </div>
+
+        <div class="shrink-0 border-t border-gray-100 dark:border-gray-800 p-3 bg-gray-50 dark:bg-gray-900/80 space-y-2">
+            <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 min-h-[1rem]"></p>
+            <div class="flex gap-2 items-center">
+                <label for="community-category" class="sr-only">Category</label>
+                <select id="community-category" class="shrink-0 p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[7.5rem]">
+                    <option value="general">General</option>
+                    <option value="delay">Delay</option>
+                    <option value="safety">Safety</option>
+                    <option value="other">Other</option>
+                </select>
+                <textarea id="community-composer" rows="2" maxlength="280" class="flex-1 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Share something for this line…"></textarea>
+                <button type="button" id="community-post-btn" class="shrink-0 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ACCOUNT (Phase 4 — optional passenger sign-in) -->
+<div id="account-modal" class="fixed inset-0 bg-black/70 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700 transform transition-all">
+        <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+            <div>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Settings</p>
+                <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Account</h3>
+            </div>
+            <button type="button" id="account-modal-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="px-5 py-4 space-y-5">
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                Schedules and trip planning work fully as a guest. An optional account unlocks delay reports and route community — without wiping this device’s saved preferences.
+            </p>
+
+            <!-- Signed-in panel -->
+            <div id="account-signed-in" class="hidden space-y-4">
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700">
+                    <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-lg font-black text-blue-700 dark:text-blue-300 shrink-0 overflow-hidden">
+                        <span id="account-modal-avatar-letter" class="select-none"></span>
+                    </div>
+                    <div class="min-w-0">
+                        <p id="account-modal-display-name" class="text-sm font-bold text-gray-900 dark:text-white truncate">Passenger</p>
+                        <p id="account-modal-email" class="text-[11px] text-gray-500 dark:text-gray-400 truncate"></p>
+                    </div>
+                </div>
+                <button type="button" id="account-signout-btn" data-account-action class="w-full py-3 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-colors">
+                    Sign out
+                </button>
+                <button type="button" id="account-modal-done" class="w-full py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none transition-colors">
+                    Done
+                </button>
+            </div>
+
+            <!-- Guest / sign-in panel -->
+            <div id="account-guest" class="space-y-4">
+                <button type="button" id="account-google-btn" data-account-action class="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-750 shadow-sm focus:outline-none transition-colors">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                    Continue with Google
+                </button>
+
+                <div class="relative flex items-center gap-3">
+                    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">or email</span>
+                    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-display-name">Display name <span class="font-medium normal-case tracking-normal text-gray-400">(new accounts)</span></label>
+                        <input id="account-display-name" type="text" autocomplete="nickname" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Optional">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-email">Email</label>
+                        <input id="account-email" type="email" autocomplete="email" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="you@example.com">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-password">Password</label>
+                        <input id="account-password" type="password" autocomplete="current-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" id="account-email-signin-btn" data-account-action class="py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none transition-colors">Sign in</button>
+                        <button type="button" id="account-email-signup-btn" data-account-action class="py-3 rounded-xl font-bold text-sm border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 focus:outline-none transition-colors">Create account</button>
+                    </div>
+                </div>
+            </div>
+
+            <p id="account-error" class="text-xs font-medium text-red-600 dark:text-red-400 min-h-[1rem]" role="alert"></p>
+
+            <div class="rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3.5">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Privacy</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                    We link your account to this device’s existing ID so preferences and inbox history carry over — we don’t wipe guest data on sign-in. Accounts enable delay reports and route community; schedules stay usable without signing in.
+                </p>
+            </div>
+        </div>
     </div>
 </div>
 

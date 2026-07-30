@@ -1,9 +1,9 @@
 ---
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
-// This runs on the server during the build process.
+import '../styles/appearance.css';
 
 const { 
-  title = "Metrorail Next Train | Live Schedules", 
+  title = "Next Train | Live Schedules", 
   description = "Live Metrorail schedules and route maps for Gauteng, Western Cape, KZN, and Eastern Cape.",
   canonicalPath = "/",
 } = Astro.props;
@@ -23,6 +23,8 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="Next Train" />
+    <meta name="apple-mobile-web-app-title" content="Train 2.0" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -34,7 +36,7 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
-    <meta property="og:site_name" content="Metrorail Next Train" />
+    <meta property="og:site_name" content="Next Train" />
     <meta property="og:locale" content="en_ZA" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
@@ -78,6 +80,10 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
+        const pack = localStorage.getItem('colourPack');
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic';
+        document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
+
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
         }
@@ -117,8 +123,8 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
         background: transparent;
       }
       .dark .tab-btn { color: #9ca3af; }
-      .tab-btn.active { color: #2563eb; border-color: #2563eb; }
-      .dark .tab-btn.active { color: #60a5fa; border-color: #60a5fa; }
+      .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
+      .dark .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
       /* Sliding indicator owns the underline visually */
       .tab-btn, .tab-btn.active { border-bottom-color: transparent !important; }
 
@@ -126,7 +132,7 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
         display: none;
         opacity: 0;
         transform: translateY(10px);
-        transition: opacity 0.3s ease-out, transform 0.3s ease-out, padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out;
       }
       .view-section.active {
         display: block;
@@ -140,6 +146,34 @@ const ogImage = `${SITE}/icons/loading-logo.png`;
       #map-modal.full-screen > div, #about-modal.full-screen > div, #full-schedule-modal.full-screen > div {
         border-radius: 0 !important;
         max-height: none !important;
+      }
+
+      /* Compact header (returning users) — slim WhatsApp-style bar */
+      .chrome-compact .app-header,
+      body.chrome-compact .app-header {
+        padding-top: 0.45rem !important;
+        padding-bottom: 0.45rem !important;
+      }
+      .chrome-compact .header-title,
+      body.chrome-compact .header-title {
+        font-size: 1.2rem !important;
+      }
+      .chrome-compact .header-meta #current-day,
+      body.chrome-compact .header-meta #current-day {
+        font-size: 0.65rem !important;
+      }
+
+      #bottom-nav.bottom-nav-bar {
+        padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+      }
+      #bottom-nav .bottom-nav-item {
+        transition: color 0.15s ease, transform 0.12s ease;
+      }
+      #bottom-nav .bottom-nav-item:active {
+        transform: scale(0.96);
+      }
+      body.nav-bottom #offline-toast {
+        bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
     </style>
   </head>

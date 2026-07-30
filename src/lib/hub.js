@@ -8,19 +8,34 @@ import {
 } from './ui.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
+import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
+import { bindAccountUi, initAccount } from './account.js';
 
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
     if (sidenav) {
         sidenav.classList.remove('translate-x-0', 'open');
-        sidenav.classList.add('-translate-x-full');
+        sidenav.classList.add('translate-x-full');
     }
     if (overlay) {
         overlay.classList.add('opacity-0');
         setTimeout(() => overlay.classList.add('hidden'), 300);
     }
     document.body.classList.remove('sidenav-open', 'modal-active');
+}
+
+export function openAppHub() {
+    triggerHaptic();
+    const sidenav = document.getElementById('sidenav');
+    const overlay = document.getElementById('sidenav-overlay');
+    sidenav?.classList.remove('translate-x-full');
+    sidenav?.classList.add('translate-x-0', 'open');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+        setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+    }
+    document.body.classList.add('sidenav-open', 'modal-active');
 }
 
 export function resetProfile() {
@@ -365,6 +380,7 @@ export function initHub() {
     if (typeof window === 'undefined') return;
 
     window.closeAppHub = closeAppHub;
+    window.openAppHub = openAppHub;
     window.resetProfile = resetProfile;
     window.performHardCacheClear = performHardCacheClear;
     window.showCacheClearWarning = showCacheClearWarning;
@@ -374,6 +390,35 @@ export function initHub() {
     syncHapticsToggle();
     syncChangelogBadge();
     $userProfile.subscribe(syncProfileDisplay);
+
+    // Colour packs (delegated; also bound via hydratePrefs)
+    setColourPack(getColourPack());
+    bindColourPackControls();
+
+    // Account (Phase 4)
+    bindAccountUi();
+    initAccount();
+
+    // Delay reports (Phase 5)
+    import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
+
+    // Route community (Phase 6)
+    import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
+
+    // Notifications pref (Phase 8 stub)
+    import('./prefs.js').then(({ getNotifyPref, setNotifyPref, syncNotifyUi }) => {
+        syncNotifyUi(getNotifyPref());
+        const toggle = document.getElementById('settings-notify-toggle');
+        const cb = document.getElementById('settings-notify-checkbox');
+        const apply = (on) => { setNotifyPref(on); triggerHaptic(); };
+        toggle?.addEventListener('click', (e) => {
+            const t = e.target;
+            if (t.tagName !== 'INPUT' && t.tagName !== 'LABEL') {
+                apply(!(cb?.checked));
+            }
+        });
+        cb?.addEventListener('change', (e) => apply(e.target.checked));
+    }).catch(() => {});
 
     // Profile
     document.getElementById('settings-profile-btn')?.addEventListener('click', resetProfile);
@@ -424,13 +469,15 @@ export function initHub() {
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
-    // Feedback
-    document.getElementById('feedback-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
+    // Feedback (live board CTA + Settings Support row)
+    const openFeedback = (e) => {
+        e?.preventDefault?.();
         triggerHaptic();
         closeAppHub(true);
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
-    });
+    };
+    document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
+    document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         closeSmoothModal('about-modal');

@@ -1,0 +1,279 @@
+/**
+ * Next Train — Appearance packs (Phase 3)
+ * ---------------------------------------------------------------------------
+ * Tokens (semantic):
+ *   --nt-primary          Brand / CTA fill
+ *   --nt-primary-hover    Pressed / hover CTA
+ *   --nt-primary-fg       Text on primary
+ *   --nt-primary-soft     Soft wash behind accents
+ *   --nt-surface          App shell / cards
+ *   --nt-surface-muted    Recessed panels (board bg)
+ *   --nt-text             Primary copy
+ *   --nt-text-muted       Secondary copy
+ *   --nt-border           Hairlines / chrome edges
+ *   --nt-theme-meta       <meta name="theme-color">
+ *
+ * Tailwind blue-* is remapped via --nt-blue-{50…900} (RGB channels) so existing
+ * accent classes follow the pack. Alert semantics (red / amber / yellow / green
+ * / orange) are NOT remapped — disruptions stay fixed.
+ *
+ * Packs: classic (default) · midnight · contrast
+ * Reserved later: line (soft “Line accent”)
+ * ---------------------------------------------------------------------------
+ */
+
+:root {
+  /* Classic defaults (also used when data-colour-pack is missing) */
+  --nt-primary: #2563eb;
+  --nt-primary-hover: #1d4ed8;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #eff6ff;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #f9fafb;
+  --nt-text: #111827;
+  --nt-text-muted: #6b7280;
+  --nt-border: #e5e7eb;
+  --nt-theme-meta: #1d4ed8;
+
+  --nt-blue-50: 239 246 255;
+  --nt-blue-100: 219 234 254;
+  --nt-blue-200: 191 219 254;
+  --nt-blue-300: 147 197 253;
+  --nt-blue-400: 96 165 250;
+  --nt-blue-500: 59 130 246;
+  --nt-blue-600: 37 99 235;
+  --nt-blue-700: 29 78 216;
+  --nt-blue-800: 30 64 175;
+  --nt-blue-900: 30 58 138;
+}
+
+/* Classic dark — only when pack is classic (or unset) */
+html.dark:not([data-colour-pack]),
+html.dark[data-colour-pack="classic"],
+html[data-colour-pack="classic"].dark {
+  --nt-primary: #60a5fa;
+  --nt-primary-hover: #3b82f6;
+  --nt-primary-fg: #0f172a;
+  --nt-primary-soft: rgba(30, 58, 138, 0.35);
+  --nt-surface: #1f2937;
+  --nt-surface-muted: rgba(17, 24, 39, 0.5);
+  --nt-text: #f9fafb;
+  --nt-text-muted: #9ca3af;
+  --nt-border: #374151;
+  --nt-theme-meta: #1e3a8a;
+}
+
+/* Explicit classic light (optional clarity) */
+html[data-colour-pack="classic"]:not(.dark) {
+  --nt-primary: #2563eb;
+  --nt-primary-hover: #1d4ed8;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #eff6ff;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #f9fafb;
+  --nt-text: #111827;
+  --nt-text-muted: #6b7280;
+  --nt-border: #e5e7eb;
+  --nt-theme-meta: #1d4ed8;
+  --nt-blue-50: 239 246 255;
+  --nt-blue-100: 219 234 254;
+  --nt-blue-200: 191 219 254;
+  --nt-blue-300: 147 197 253;
+  --nt-blue-400: 96 165 250;
+  --nt-blue-500: 59 130 246;
+  --nt-blue-600: 37 99 235;
+  --nt-blue-700: 29 78 216;
+  --nt-blue-800: 30 64 175;
+  --nt-blue-900: 30 58 138;
+}
+
+/* Midnight — slate surfaces + sky accent (professional, transit-like) */
+html[data-colour-pack="midnight"] {
+  --nt-primary: #0284c7;
+  --nt-primary-hover: #0369a1;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #f0f9ff;
+  --nt-surface: #f8fafc;
+  --nt-surface-muted: #f1f5f9;
+  --nt-text: #0f172a;
+  --nt-text-muted: #64748b;
+  --nt-border: #e2e8f0;
+  --nt-theme-meta: #0369a1;
+
+  --nt-blue-50: 240 249 255;
+  --nt-blue-100: 224 242 254;
+  --nt-blue-200: 186 230 253;
+  --nt-blue-300: 125 211 252;
+  --nt-blue-400: 56 189 248;
+  --nt-blue-500: 14 165 233;
+  --nt-blue-600: 2 132 199;
+  --nt-blue-700: 3 105 161;
+  --nt-blue-800: 7 89 133;
+  --nt-blue-900: 12 74 110;
+}
+
+html.dark[data-colour-pack="midnight"],
+html[data-colour-pack="midnight"].dark {
+  --nt-primary: #38bdf8;
+  --nt-primary-hover: #7dd3fc;
+  --nt-primary-fg: #0c4a6e;
+  --nt-primary-soft: rgba(12, 74, 110, 0.45);
+  --nt-surface: #0b1220;
+  --nt-surface-muted: #111827;
+  --nt-text: #f1f5f9;
+  --nt-text-muted: #94a3b8;
+  --nt-border: #1e293b;
+  --nt-theme-meta: #0c4a6e;
+}
+
+/* High contrast — crisp neutrals + strong brand blue (WCAG-friendly, not cartoon) */
+html[data-colour-pack="contrast"] {
+  --nt-primary: #1d4ed8;
+  --nt-primary-hover: #1e3a8a;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #eff6ff;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #f8fafc;
+  --nt-text: #0a0a0a;
+  --nt-text-muted: #262626;
+  --nt-border: #171717;
+  --nt-theme-meta: #1d4ed8;
+
+  --nt-blue-50: 239 246 255;
+  --nt-blue-100: 219 234 254;
+  --nt-blue-200: 191 219 254;
+  --nt-blue-300: 147 197 253;
+  --nt-blue-400: 96 165 250;
+  --nt-blue-500: 59 130 246;
+  --nt-blue-600: 29 78 216;
+  --nt-blue-700: 30 64 175;
+  --nt-blue-800: 30 58 138;
+  --nt-blue-900: 23 37 84;
+}
+
+html.dark[data-colour-pack="contrast"],
+html[data-colour-pack="contrast"].dark {
+  --nt-primary: #93c5fd;
+  --nt-primary-hover: #bfdbfe;
+  --nt-primary-fg: #0a0a0a;
+  --nt-primary-soft: rgba(147, 197, 253, 0.16);
+  --nt-surface: #0a0a0a;
+  --nt-surface-muted: #141414;
+  --nt-text: #fafafa;
+  --nt-text-muted: #e5e5e5;
+  --nt-border: #e5e5e5;
+  --nt-theme-meta: #0a0a0a;
+
+  --nt-blue-50: 23 37 84;
+  --nt-blue-100: 30 58 138;
+  --nt-blue-200: 30 64 175;
+  --nt-blue-300: 37 99 235;
+  --nt-blue-400: 96 165 250;
+  --nt-blue-500: 147 197 253;
+  --nt-blue-600: 147 197 253;
+  --nt-blue-700: 191 219 254;
+  --nt-blue-800: 219 234 254;
+  --nt-blue-900: 239 246 255;
+}
+
+/* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
+#main-content {
+  background-color: var(--nt-surface);
+  border-color: var(--nt-border);
+  color: var(--nt-text);
+}
+
+.app-header {
+  background-color: color-mix(in srgb, var(--nt-surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--nt-border) 50%, transparent);
+}
+
+#app-top-tabs,
+#bottom-nav.bottom-nav-bar {
+  background-color: color-mix(in srgb, var(--nt-surface) 95%, transparent);
+  border-color: var(--nt-border);
+}
+
+#tab-sliding-indicator {
+  background-color: var(--nt-primary) !important;
+}
+
+#app-title.header-title {
+  color: var(--nt-primary) !important;
+}
+
+.view-section {
+  background-color: var(--nt-surface-muted);
+}
+
+/* Non-classic packs: beat Tailwind gray utilities on shell surfaces */
+html[data-colour-pack="midnight"] #main-content,
+html[data-colour-pack="contrast"] #main-content {
+  background-color: var(--nt-surface) !important;
+  border-color: var(--nt-border) !important;
+}
+
+html[data-colour-pack="midnight"] .app-header,
+html[data-colour-pack="contrast"] .app-header,
+html[data-colour-pack="midnight"] #app-top-tabs,
+html[data-colour-pack="contrast"] #app-top-tabs,
+html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar {
+  background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
+  border-color: var(--nt-border) !important;
+}
+
+html[data-colour-pack="midnight"] .view-section,
+html[data-colour-pack="contrast"] .view-section {
+  background-color: var(--nt-surface-muted) !important;
+}
+
+html[data-colour-pack="contrast"] #main-content {
+  border-width: 2px;
+}
+
+html[data-colour-pack="contrast"] .tab-btn.active,
+html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
+  font-weight: 900;
+}
+
+/* Colour pack picker (Settings) */
+.colour-pack-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1.5px solid var(--nt-border);
+  background: var(--nt-surface-muted);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.colour-pack-option:hover {
+  transform: translateY(-1px);
+}
+.colour-pack-option[aria-pressed="true"] {
+  border-color: var(--nt-primary);
+  box-shadow: 0 0 0 2px var(--nt-primary);
+}
+.colour-pack-swatch {
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, var(--swatch-a) 0%, var(--swatch-b) 55%, var(--swatch-c) 100%);
+  pointer-events: none;
+}
+.colour-pack-option .pack-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--nt-text);
+  pointer-events: none;
+}

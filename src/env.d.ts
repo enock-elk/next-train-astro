@@ -20,6 +20,11 @@ interface Window {
   _suppressReloads?: boolean;
   MASTER_STATION_LIST?: string[];
   switchTab?: (tab: string) => void;
+  syncBottomNavActive?: (tab?: string) => void;
+  openAppHub?: () => void;
+  closeAppHub?: () => void;
+  openAccountModal?: () => void;
+  signOutAccount?: () => Promise<void>;
   openSmoothModal?: (modalId: string, customOrigin?: unknown) => void;
   closeSmoothModal?: (modalId: string) => void;
   toggleDropdownScrim?: (listId?: string | null, chevronId?: string | null) => void;

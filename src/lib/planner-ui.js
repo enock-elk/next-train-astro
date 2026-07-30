@@ -32,6 +32,33 @@ const getMasterStationList = () => {
     return $masterStationList.get() || [];
 };
 
+/** Phase 5 — inject recent crowd delay reports under an active trip card */
+async function injectPlannerCrowdDelay(trip) {
+    const slot = document.getElementById('planner-crowd-delay-slot');
+    if (!slot || !trip) return;
+    try {
+        const routeIds = [];
+        if (trip.route?.id) routeIds.push(trip.route.id);
+        if (Array.isArray(trip.legs)) {
+            trip.legs.forEach((leg) => {
+                if (leg?.route?.id) routeIds.push(leg.route.id);
+            });
+        }
+        if (Array.isArray(trip.mergedLegs)) {
+            trip.mergedLegs.forEach((leg) => {
+                if (leg?.route?.id) routeIds.push(leg.route.id);
+            });
+        }
+        const { getPlannerCrowdDelayHtml } = await import('./delay-reports.js');
+        const html = await getPlannerCrowdDelayHtml(routeIds);
+        if (document.getElementById('planner-crowd-delay-slot') === slot) {
+            slot.innerHTML = html || '';
+        }
+    } catch (e) {
+        /* non-fatal */
+    }
+}
+
 // --- CLIENT STATE ---
 export let plannerOrigin = null;
 export let plannerDest = null;
@@ -2526,7 +2553,9 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
             `;
         }
 
-    container.innerHTML = partialWarningHtml + PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex);
+    container.innerHTML = partialWarningHtml + PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)
+        + '<div id="planner-crowd-delay-slot"></div>';
+    injectPlannerCrowdDelay(selectedTrip);
 }
 
 export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
@@ -2556,7 +2585,9 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
             </button>
         </div>
         ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)}
+        <div id="planner-crowd-delay-slot"></div>
     `;
+    injectPlannerCrowdDelay(selectedTrip);
 }
 
 export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, title = "No more trains today") {
@@ -2586,7 +2617,9 @@ export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, ti
             </div>
         </div>
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
+        <div id="planner-crowd-delay-slot"></div>
     `;
+    injectPlannerCrowdDelay(selectedTrip);
 }
 
 export function renderSundayRolloverResult(container, trips, selectedIndex = 0) {
@@ -2616,7 +2649,9 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
             </div>
         </div>
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
+        <div id="planner-crowd-delay-slot"></div>
     `;
+    injectPlannerCrowdDelay(selectedTrip);
 }
 
 export function renderImpossibleTodayResult(container, trips, selectedIndex = 0) {
@@ -2646,7 +2681,9 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
             </div>
         </div>
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
+        <div id="planner-crowd-delay-slot"></div>
     `;
+    injectPlannerCrowdDelay(selectedTrip);
 }
 
 export function renderErrorCard(title, message, actionHtml = "") {

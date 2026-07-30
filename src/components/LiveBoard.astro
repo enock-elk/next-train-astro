@@ -3,7 +3,7 @@
 // Next Train view shell — behavior lives in live-board-ui.js (Phase 2)
 ---
 
-<div id="view-next-train" class="view-section active p-4 flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
+<div id="view-next-train" class="view-section active p-4 bg-gray-50 dark:bg-gray-900/50">
             
     <!-- ROUTE PIN & TITLE -->
     <div class="text-center mb-5 flex flex-col justify-center items-center w-full">
@@ -26,6 +26,18 @@
             </button>
         </div>
         <p id="last-updated-date" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1">Schedule Effective from: --</p>
+    </div>
+
+    <!-- Commuter delay reports (crowd surface) -->
+    <div id="delay-report-banner" class="hidden mb-4 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 text-left relative">
+        <span id="delay-report-badge" class="hidden absolute -top-2 -right-1 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm min-w-[1.25rem] text-center">0</span>
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-0.5">Commuter reports</p>
+                <p id="delay-report-banner-text" class="text-xs font-bold text-gray-800 dark:text-gray-200 leading-snug"></p>
+            </div>
+            <button type="button" id="delay-report-banner-cta" class="shrink-0 text-[10px] font-bold text-amber-800 dark:text-amber-300 underline underline-offset-2 focus:outline-none">Report</button>
+        </div>
     </div>
 
     <!-- STATION SELECTOR & GPS -->
@@ -81,21 +93,14 @@
         </div>
     </div>
 
-    <!-- FOOTER ACTIONS -->
-    <div class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-        <div class="grid grid-cols-2 gap-2 mb-3">
-            <button id="share-app-btn" class="flex items-center justify-center w-full bg-transparent border-2 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2 px-3 rounded-lg shadow-sm hover:border-blue-50 hover:text-blue-600 dark:hover:text-blue-400 transition-all text-sm focus:outline-none">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 105.953-1.68l-4.94-2.47a3.027 3.027 0 000-.979l4.94-2.47A3 3 0 0015 8z"></path></svg> Share App
-            </button>
-            <a href="#" id="feedback-btn" class="flex items-center justify-center w-full bg-transparent border-2 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2 px-3 rounded-lg shadow-sm hover:border-blue-50 hover:text-blue-600 dark:hover:text-blue-400 transition-all text-sm focus:outline-none">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg> Feedback
-            </a>
-        </div>
-        <div class="flex justify-center items-center space-x-4 mt-4">
-            <button id="terms-btn" type="button" class="text-[10px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none">Terms of Use</button>
-            <span class="text-gray-300 dark:text-gray-600 text-[10px]">|</span>
-            <button id="privacy-btn" type="button" class="text-[10px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none">Privacy Policy</button>
-        </div>
-        <p class="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">2026 &copy; Kazembe CodeWorks.</p>
+    <!-- FOOTER ACTIONS (delay reporting lives on each train card) -->
+    <div class="mt-4 pt-2 space-y-2">
+        <button type="button" id="route-community-open-btn" class="flex items-center justify-center w-full bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-800 dark:text-blue-300 font-bold py-2.5 px-4 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800/60 transition-colors text-sm focus:outline-none">
+            <svg class="w-4 h-4 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
+            Route Community
+        </button>
+        <button id="install-app-btn" class="hidden flex items-center justify-center w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors text-sm mb-2">
+            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg> Install App
+        </button>
     </div>
 </div>

@@ -33,8 +33,54 @@ export function unlockBackgroundScroll() {
 // --- SPATIAL MODAL ENGINE ---
 if (typeof window !== 'undefined') window._isModalAnimating = false;
 
-export function closeSmoothModal(modalId) {
+/** Modal id → history hash (SPA back-button stack). */
+const MODAL_HASH = {
+    'fare-modal': '#fare',
+    'schedule-modal': '#schedule',
+    'full-schedule-modal': '#grid',
+    'route-modal': '#route',
+    'profile-modal': '#profile',
+    'feedback-modal': '#feedback',
+    'about-modal': '#about',
+    'help-modal': '#help',
+    'legal-modal': '#legal',
+    'map-modal': '#map',
+    'notice-modal': '#notice',
+    'developer-reply-modal': '#devreply',
+    'delay-report-modal': '#delay-report',
+    'disruption-modal': '#disruption',
+    'cache-clear-modal': '#cacheclear',
+    'account-modal': '#account',
+    'login-modal': '#login',
+    'dev-modal': '#dev',
+    'changelog-modal': '#changelog',
+    'welcome-modal': '#welcome',
+    'trip-map-modal': '#trip-map',
+    'community-presence-info-modal': '#community-presence',
+    'region-confirm-modal': '#regionconfirm',
+};
+
+function hashForModal(modalId) {
+    return MODAL_HASH[modalId] || null;
+}
+
+function anyFixedModalOpen() {
+    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
+}
+
+export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
+    if (window._adminDrillBackLock && modalId === 'dev-modal') return;
+
+    const hash = hashForModal(modalId);
+    // Prefer popping history so Back stack stays consistent (popstate closes with fromPopState)
+    if (!fromPopState && hash && location.hash === hash) {
+        try {
+            history.back();
+            return;
+        } catch { /* fall through */ }
+    }
+
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
@@ -55,7 +101,12 @@ export function closeSmoothModal(modalId) {
                 modal.classList.add('hidden');
                 modal.classList.remove('opacity-0');
             }
+            if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+                unlockBackgroundScroll();
+            }
         }, 300);
+    } else if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+        unlockBackgroundScroll();
     }
 }
 
@@ -65,6 +116,8 @@ export function openSmoothModal(modalId, customOrigin = null) {
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
     const modal = document.getElementById(modalId);
+    const wasHidden = !modal || modal.classList.contains('hidden');
+
     if (modal && modal.firstElementChild) {
         const inner = modal.firstElementChild;
         // Clean previous origins
@@ -90,7 +143,104 @@ export function openSmoothModal(modalId, customOrigin = null) {
         // Force reflow
         void modal.offsetWidth;
         modal.classList.remove('opacity-0');
+        lockBackgroundScroll();
     }
+
+    // Push history so Android/iOS Back closes this overlay instead of leaving the tab
+    const hash = hashForModal(modalId);
+    if (wasHidden && hash && location.hash !== hash) {
+        try { history.pushState({ modal: modalId }, '', hash); } catch { /* ignore */ }
+    }
+}
+
+/**
+ * Central Back / popstate handler (Guardian-style): close top overlay, then planner results, then tabs.
+ */
+export function bindHistoryBackNavigation() {
+    if (typeof window === 'undefined' || window.__ntHistoryBackBound) return;
+    window.__ntHistoryBackBound = true;
+
+    window.addEventListener('popstate', () => {
+        setTimeout(() => {
+            if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+                unlockBackgroundScroll();
+            }
+        }, 350);
+
+        if (window._isLightboxMode) {
+            closeLightbox(true);
+            return;
+        }
+
+        const adminLightbox = document.getElementById('admin-lightbox-modal');
+        if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
+            if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
+            else adminLightbox.classList.add('hidden');
+            return;
+        }
+
+        if (window._isModalAnimating) {
+            unlockBackgroundScroll();
+            try { history.pushState(null, '', location.href || '#home'); } catch { /* ignore */ }
+            return;
+        }
+
+        if (window._isSidenavClosing) return;
+
+        if (window.Admin && window.Admin.isGridMode === false) {
+            const drillBackBtn = document.getElementById('drill-back-btn');
+            if (drillBackBtn) {
+                drillBackBtn.click();
+                return;
+            }
+        }
+
+        if (document.body.classList.contains('sidenav-open')) {
+            if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
+            return;
+        }
+
+        const openModals = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)'));
+        if (openModals.length > 0) {
+            let highestZ = -1;
+            let modalToClose = null;
+            openModals.forEach((modal) => {
+                let zIndex = 0;
+                const zMatch = modal.className.match(/z-\[?(\d+)\]?/);
+                if (zMatch?.[1]) zIndex = parseInt(zMatch[1], 10);
+                else {
+                    const computedZ = window.getComputedStyle(modal).zIndex;
+                    if (computedZ !== 'auto') zIndex = parseInt(computedZ, 10) || 0;
+                }
+                if (zIndex >= highestZ) {
+                    highestZ = zIndex;
+                    modalToClose = modal.id;
+                }
+            });
+            if (modalToClose) {
+                closeSmoothModal(modalToClose, true);
+                return;
+            }
+        }
+
+        const resultsSection = document.getElementById('planner-results-section');
+        if (resultsSection && !resultsSection.classList.contains('hidden')) {
+            if (typeof window.hidePlannerResults === 'function') window.hidePlannerResults();
+            return;
+        }
+
+        const hash = location.hash;
+        if (!hash || hash === '#home') {
+            const activeTab = safeStorage.getItem('activeTab');
+            if (activeTab === 'trip-planner' || activeTab === 'community') {
+                switchTab('next-train');
+            }
+        } else if (hash === '#planner' || hash === '#planner-results') {
+            if (safeStorage.getItem('activeTab') !== 'trip-planner') switchTab('trip-planner');
+        } else if (hash === '#community') {
+            if (safeStorage.getItem('activeTab') !== 'community') switchTab('community');
+        }
+    });
 }
 
 
@@ -153,6 +303,12 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
                 || list.closest('#main-content')
                 || document.body;
 
+            // Let Travel Day / time menus paint below the trigger without being clipped by the shell
+            document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
+            if (isInlineDropdown && container?.classList?.contains('view-section')) {
+                container.classList.add('dropdown-escape');
+            }
+
             if (scrim.parentNode !== container) {
                 container.appendChild(scrim);
             }
@@ -197,6 +353,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             list.classList.add('hidden');
             if (chevron) chevron.classList.remove('rotate-180');
             resetAllWrappers();
+            document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
             
             scrim.classList.add('opacity-0');
             setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);
@@ -210,6 +367,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             if (chev) chev.classList.remove('rotate-180');
         });
         resetAllWrappers();
+        document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
         
         scrim.classList.add('opacity-0');
         setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);
@@ -708,7 +866,7 @@ export function hideOfflineToast() {
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
 }
 
-/** Chrome/Edge installability: show footer Install buttons when the browser fires beforeinstallprompt. */
+/** Chrome/Edge installability + WebView fallback (parity with old SPA). */
 export function bindPwaInstallPrompt() {
     if (typeof window === 'undefined' || window.__ntPwaInstallBound) return;
     window.__ntPwaInstallBound = true;
@@ -716,6 +874,11 @@ export function bindPwaInstallPrompt() {
     const isStandalone = () =>
         window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;
+
+    const ua = navigator.userAgent || navigator.vendor || '';
+    const isWebView = /FBAN|FBAV|Instagram|Line\//i.test(ua);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isAndroid = /android/i.test(ua);
 
     const buttons = () => [
         document.getElementById('install-app-btn'),
@@ -726,35 +889,73 @@ export function bindPwaInstallPrompt() {
         buttons().forEach((btn) => btn.classList.toggle('hidden', !show));
     };
 
+    const paintWebViewCta = () => {
+        const escapeIcon = `<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>`;
+        buttons().forEach((btn) => {
+            btn.innerHTML = `${escapeIcon} Open in Browser to Install`;
+            btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+            btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        });
+    };
+
     if (isStandalone()) {
         setVisible(false);
         return;
     }
 
+    // Adopt prompt captured early in <head>
+    if (window.deferredInstallPrompt && !window.__ntDeferredInstallPrompt) {
+        window.__ntDeferredInstallPrompt = window.deferredInstallPrompt;
+    }
+
+    const showInstallButton = () => {
+        if (isWebView && isIOS) {
+            setVisible(false);
+            return;
+        }
+        setVisible(true);
+        if (isWebView) paintWebViewCta();
+    };
+
+    if (window.__ntDeferredInstallPrompt || window.deferredInstallPrompt || isWebView) {
+        showInstallButton();
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         window.__ntDeferredInstallPrompt = e;
-        setVisible(true);
+        window.deferredInstallPrompt = e;
+        showInstallButton();
     });
+
+    window.addEventListener('pwa-install-ready', () => showInstallButton());
 
     window.addEventListener('appinstalled', () => {
         window.__ntDeferredInstallPrompt = null;
+        window.deferredInstallPrompt = null;
         setVisible(false);
         showToast('App installed — open it from your home screen.', 'success');
     });
 
     const onInstallClick = async (e) => {
         e?.preventDefault?.();
-        const deferred = window.__ntDeferredInstallPrompt;
+        triggerHaptic();
+        if (isWebView) {
+            if (isAndroid) {
+                const path = (location.pathname || '/') + (location.search || '');
+                window.location.href = `intent://${location.host}${path}#Intent;scheme=https;package=com.android.chrome;end;`;
+            }
+            return;
+        }
+        const deferred = window.__ntDeferredInstallPrompt || window.deferredInstallPrompt;
         if (!deferred) {
             showToast('Use your browser menu → Install app / Add to Home Screen.', 'info');
             return;
         }
         deferred.prompt();
-        try {
-            await deferred.userChoice;
-        } catch { /* dismissed */ }
+        try { await deferred.userChoice; } catch { /* dismissed */ }
         window.__ntDeferredInstallPrompt = null;
+        window.deferredInstallPrompt = null;
         setVisible(false);
     };
 
@@ -780,9 +981,11 @@ if (typeof window !== 'undefined') {
     window.syncBottomNavActive = syncBottomNavActive;
     window.openLegal = openLegal;
     window.bindPwaInstallPrompt = bindPwaInstallPrompt;
+    window.bindHistoryBackNavigation = bindHistoryBackNavigation;
 
     // Boot the Error Handler immediately
     initGlobalErrorHandler();
+    bindHistoryBackNavigation();
 
     // Offline transition toast (once per offline episode; indicator stays via $isOffline)
     window.addEventListener('online', () => {

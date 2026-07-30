@@ -97,6 +97,7 @@ export function setupNextTrainAutocomplete() {
     }
 
     const chevron = document.getElementById('next-train-chevron');
+    const fieldWrap = document.getElementById('station-field-wrap') || input.closest('.relative') || input.parentElement;
     const toggle = (e) => {
         if (e) e.stopPropagation();
         if (!list) return;
@@ -108,9 +109,19 @@ export function setupNextTrainAutocomplete() {
         input.dataset.acBound = '1';
         input.addEventListener('click', toggle);
         if (chevron) chevron.addEventListener('click', toggle);
+        // Wider hit target: empty padding / wrapper around the field also opens the list.
+        // The list is rendered *inside* this wrapper, so clicks on an option must be
+        // ignored here — otherwise selecting a station closes the list and this
+        // handler immediately toggles it back open.
+        fieldWrap?.addEventListener('click', (e) => {
+            if (list?.contains(e.target)) return;
+            if (e.target.closest('#locate-btn')) return;
+            if (e.target === input || e.target === chevron || chevron?.contains(e.target)) return;
+            toggle(e);
+        });
         document.addEventListener('click', (e) => {
             if (!list || list.classList.contains('hidden')) return;
-            if (!input.contains(e.target) && !list.contains(e.target) && (!chevron || !chevron.contains(e.target))) {
+            if (!fieldWrap?.contains(e.target) && !list.contains(e.target)) {
                 list.classList.add('hidden');
             }
         });

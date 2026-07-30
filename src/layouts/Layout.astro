@@ -1,6 +1,7 @@
 ---
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
 import '../styles/appearance.css';
+import { normalizeBase, withBase } from '../lib/config.js';
 
 const { 
   title = "Next Train | Live Schedules", 
@@ -8,13 +9,13 @@ const {
   canonicalPath = "/",
 } = Astro.props;
 
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 const siteOrigin = Astro.site ? Astro.site.origin : "https://enock-elk.github.io";
 const pathForCanonical = canonicalPath === "/"
   ? base
-  : `${base.replace(/\/$/, "")}${canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`}`;
+  : withBase(canonicalPath);
 const canonical = new URL(pathForCanonical, Astro.site || siteOrigin).href;
-const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Astro.site || siteOrigin).href;
+const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOrigin).href;
 ---
 
 <!DOCTYPE html>
@@ -31,9 +32,9 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
     <meta name="apple-mobile-web-app-title" content="Train 2.0" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
-    <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
-    <link rel="icon" type="image/png" sizes="192x192" href={`${base}icons/icon-192.png`} />
-    <link rel="apple-touch-icon" href={`${base}icons/icon-192.png`} />
+    <link rel="icon" href={withBase('favicon.ico')} sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
+    <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
     
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
@@ -47,8 +48,19 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <!-- PWA Manifest Injection (Astro PWA handles this automatically, but we link the generated asset) -->
-    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <!-- PWA Manifest — always under base with trailing slash. Dev has no PWA
+         plugin output, so linking it there only produces 404 noise. -->
+    {import.meta.env.PROD && <link rel="manifest" href={withBase('manifest.webmanifest')} />}
+    <script is:inline>
+      // Capture install prompt as early as the old SPA (before module scripts / SW race)
+      window.deferredInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.deferredInstallPrompt = e;
+        window.__ntDeferredInstallPrompt = e;
+        try { window.dispatchEvent(new Event('pwa-install-ready')); } catch (_) {}
+      });
+    </script>
     <script is:inline define:vars={{ base }}>
       window.__NT_BASE__ = base;
     </script>
@@ -156,6 +168,11 @@ const ogImage = new URL(`${base.replace(/\/$/, "")}/icons/loading-logo.png`, Ast
       /* Only Community pins height so the feed scrolls inside (composer stays put) */
       #view-community.view-section.active {
         overflow: hidden;
+      }
+
+      /* Travel Day / inline menus must paint below the trigger without clipping */
+      .view-section.active.dropdown-escape {
+        overflow: visible !important;
       }
 
       /* App shell fills the device viewport (minus body padding) */

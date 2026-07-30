@@ -1,7 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  // 1. Tell Tailwind EXACTLY where our class names are located
-  content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
+  // 1. Tell Tailwind EXACTLY where our class names are located.
+  //    public/js/*.js are classic scripts (admin panel, map app) that inject
+  //    Tailwind markup at runtime — omitting them silently drops their classes.
+  content: [
+    './src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}',
+    './public/js/**/*.js',
+  ],
   
   // 2. Enable manual dark mode toggling via the 'dark' class on the <html> tag
   darkMode: 'class',

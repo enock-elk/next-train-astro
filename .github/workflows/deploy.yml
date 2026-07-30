@@ -31,7 +31,7 @@ jobs:
         # base path comes from astro.config.mjs (GITHUB_ACTIONS → /next-train-astro/)
         env:
           PUBLIC_SITE_URL: https://enock-elk.github.io
-          PUBLIC_BASE_PATH: /next-train-astro
+          PUBLIC_BASE_PATH: /next-train-astro/
 
   deploy:
     needs: build

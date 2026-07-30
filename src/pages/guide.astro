@@ -1,9 +1,10 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
+import { normalizeBase, withBase } from '../lib/config.js';
 
 const title = "User Guide & FAQ | Metrorail Next Train (Updated for 2026)";
 const description = "Updated for 2026. Learn how to use Metrorail Next Train to find train times near me. Check live timetables, ticket prices, and routes for Pretoria, Johannesburg, Cape Town, Durban, and East London.";
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 
 const faqJsonLd = {
   "@context": "https://schema.org",
@@ -94,7 +95,7 @@ const faqJsonLd = {
         <!-- Hero Header -->
         <header class="text-center mb-12 animate-fade-in-up">
             <div class="w-20 h-20 bg-white dark:bg-gray-800 rounded-full shadow-xl ring-4 ring-blue-50 dark:ring-gray-700 mx-auto flex items-center justify-center mb-6 p-3">
-                <img src={`${base}icons/loading-logo.png`} class="w-full h-full object-contain" alt="Logo">
+                <img src={withBase('icons/loading-logo.png')} class="w-full h-full object-contain" alt="Logo">
             </div>
             <h1 class="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-3">Commuter Guide & FAQ</h1>
             <p class="text-gray-500 dark:text-gray-400 text-base sm:text-lg max-w-xl mx-auto">Everything you need to know about how Metrorail Next Train routes your trips, processes data, and keeps you moving.</p>

@@ -2,11 +2,14 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import AstroPWA from '@vite-pwa/astro';
 
-// GitHub project Pages lives at /next-train-astro/; local + custom-domain root stay at /.
-// CI sets GITHUB_ACTIONS=true. Override with PUBLIC_BASE_PATH if needed.
+// GitHub project Pages: /next-train-astro/
+// Local + custom domain: /
 const isGitHubPages = process.env.GITHUB_ACTIONS === 'true';
-const base = (process.env.PUBLIC_BASE_PATH || (isGitHubPages ? '/next-train-astro' : '/')).replace(/\/$/, '') || '/';
-const baseWithSlash = base === '/' ? '/' : `${base}/`;
+const rawBase = (process.env.PUBLIC_BASE_PATH || (isGitHubPages ? '/next-train-astro' : '/') || '/').trim();
+/** Always trailing-slash except root stays `/` — prevents `next-train-astromanifest` joins */
+const baseWithSlash = rawBase === '/' || rawBase === ''
+  ? '/'
+  : `/${rawBase.replace(/^\/+|\/+$/g, '')}/`;
 const site = process.env.PUBLIC_SITE_URL
   || (isGitHubPages ? 'https://enock-elk.github.io' : 'https://nexttrain.co.za');
 
@@ -14,17 +17,39 @@ const site = process.env.PUBLIC_SITE_URL
 export default defineConfig({
   site,
   base: baseWithSlash,
-  trailingSlash: 'never',
+  // Keep trailing slash on `base` itself; page URLs can still omit slash
+  trailingSlash: 'ignore',
   integrations: [
     tailwind(),
     AstroPWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      // Align SW + manifest inject with Astro base (must include trailing slash)
+      base: baseWithSlash,
+      scope: baseWithSlash,
+      // Dev server must not register a SW — it intercepts /@vite and /@fs module
+      // URLs and leaves the app stuck on "Loading Route..." (ERR_NAME_NOT_RESOLVED).
+      devOptions: {
+        enabled: false,
+      },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        // Must include the Pages subpath or SW falls back to the wrong URL
-        navigateFallback: `${baseWithSlash}offline`.replace(/\/{2,}/g, '/'),
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        // navigateFallback is NOT "show when offline" — Workbox serves it for ANY
+        // navigation URL missing from the precache (even while online). Pointing it
+        // at /offline made refreshes land on the offline page. Use NetworkFirst +
+        // precacheFallback so /offline only appears when the network truly fails.
         runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pages',
+              networkTimeoutSeconds: 3,
+              precacheFallback: {
+                fallbackURL: baseWithSlash === '/' ? '/offline' : `${baseWithSlash}offline`,
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/(.*?firebaseio\.com|.*?workers\.dev|.*?clarity\.ms)\/.*/i,
             handler: 'NetworkOnly',
@@ -67,6 +92,9 @@ export default defineConfig({
   ],
   
   vite: {
+    // Do NOT set `vite.base` — Astro already derives it from `base`. Setting it
+    // double-prefixes dev module URLs into `//@vite/client`, which the browser
+    // parses as a protocol-relative URL (host `vite`) => ERR_NAME_NOT_RESOLVED.
     build: {
       minify: 'terser',
       terserOptions: {

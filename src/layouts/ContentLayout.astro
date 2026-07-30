@@ -4,6 +4,7 @@
  * Safe for cold visitors — no app store hydration required.
  */
 import '../styles/appearance.css';
+import { normalizeBase, withBase } from '../lib/config.js';
 
 interface Props {
   title: string;
@@ -21,7 +22,7 @@ interface Props {
   robots?: string;
 }
 
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 const siteOrigin = Astro.site ? Astro.site.origin : 'https://enock-elk.github.io';
 const {
   title,
@@ -41,9 +42,9 @@ const {
 
 const pathForCanonical = canonicalPath === '/'
   ? base
-  : `${base.replace(/\/$/, '')}${canonicalPath.startsWith('/') ? canonicalPath : `/${canonicalPath}`}`;
+  : withBase(canonicalPath);
 const canonical = new URL(pathForCanonical, Astro.site || siteOrigin).href;
-const ogImage = ogImageProp || new URL(`${base.replace(/\/$/, '')}/icons/loading-logo.png`, Astro.site || siteOrigin).href;
+const ogImage = ogImageProp || new URL(withBase('icons/loading-logo.png'), Astro.site || siteOrigin).href;
 const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).join(' ');
 ---
 
@@ -73,10 +74,10 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <link rel="icon" href={`${base}favicon.ico`} sizes="any" />
-    <link rel="icon" type="image/png" sizes="192x192" href={`${base}icons/icon-192.png`} />
-    <link rel="apple-touch-icon" href={`${base}icons/icon-192.png`} />
-    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <link rel="icon" href={withBase('favicon.ico')} sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
+    <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
+    {import.meta.env.PROD && <link rel="manifest" href={withBase('manifest.webmanifest')} />}
     <script is:inline define:vars={{ base }}>
       window.__NT_BASE__ = base;
     </script>

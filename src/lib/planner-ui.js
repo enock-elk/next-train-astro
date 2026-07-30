@@ -1461,14 +1461,15 @@ export function initPlanner() {
                 <span id="main-day-display">${selText}</span>
                 <svg id="main-day-chevron" class="w-5 h-5 text-gray-500 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
-            <ul id="main-day-list" class="absolute z-[200] bottom-full mb-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left max-h-[min(40vh,16rem)] overflow-y-auto custom-scrollbar">
+            <ul id="main-day-list" class="absolute z-[200] top-full mt-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left max-h-[min(40vh,16rem)] overflow-y-auto custom-scrollbar">
                 <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'weekday', 'Weekday (Mon-Fri)')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday (Mon-Fri)</li>
                 <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', 'Saturday / Public Holiday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Public Holiday</li>
                 <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'sunday', 'Sunday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
             </ul>
         `;
         inputSection.insertBefore(daySelectDiv, searchBtn);
-        inputSection.classList.add('pb-28');
+        // Keep space under the day picker so the downward menu isn't clipped by the shell
+        inputSection.classList.add('pb-8');
     }
 
     if (inputSection && !document.getElementById('planner-history-container')) {

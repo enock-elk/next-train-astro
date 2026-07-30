@@ -1404,12 +1404,14 @@ const Admin = {
                     if (typeof showToast === 'function') showToast("Developer Session Active", "info");
                 } else {
                     if (loginModal) {
-                        // 🛡️ GUARDIAN FIX: Router-aware Smooth Modal Engine integration
-                        if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
+                        // Set hash first; openSmoothModal skips a second push when already on #login
+                        try {
+                            if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
+                        } catch (e) { /* ignore */ }
                         if (typeof openSmoothModal === 'function') openSmoothModal('login-modal');
                         else loginModal.classList.remove('hidden');
                         
-                        if(emailInput) setTimeout(() => emailInput.focus(), 150); // Delay focus for smooth animation
+                        if(emailInput) setTimeout(() => emailInput.focus(), 150);
                     }
                 }
             }
@@ -1451,14 +1453,15 @@ const Admin = {
 
                 window.firebaseSignIn(window.firebaseAuth, email, password)
                     .then((userCredential) => {
-                        // 🛡️ GUARDIAN FIX: Smooth exit via Router
-                        if (location.hash === '#login') history.back();
-                        else if (typeof closeSmoothModal === 'function') closeSmoothModal('login-modal');
+                        // Close login WITHOUT history.back() — that raced popstate and closed admin
+                        if (typeof closeSmoothModal === 'function') closeSmoothModal('login-modal', true);
                         else loginModal.classList.add('hidden');
+                        try {
+                            history.replaceState({ modal: 'dev' }, '', '#dev');
+                        } catch (e) { /* ignore */ }
 
                         passInput.value = ''; 
                         if (devModal) {
-                            if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
                             if (typeof openSmoothModal === 'function') openSmoothModal('dev-modal');
                             else devModal.classList.remove('hidden');
                             
@@ -1895,14 +1898,16 @@ const Admin = {
                 if (titleH3) {
                     let titleClone = targetPanel.querySelector('[id$="-header-btn"] > span').cloneNode(true);
                     titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
-                    let cardTitle = titleClone.textContent.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
+                    const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
 
                     titleH3.innerHTML = `
                         <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                         </button>
-                        <span class="truncate flex-grow text-lg min-w-0">${cardTitle}</span>
+                        <span class="truncate flex-grow text-lg min-w-0" style="font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif"></span>
                     `;
+                    const titleSpan = titleH3.querySelector('span.truncate');
+                    if (titleSpan) titleSpan.textContent = cardTitle;
 
                     // Rebind the drill-back button to the master logic
                     const newDrillBack = document.getElementById('drill-back-btn');
@@ -2399,8 +2404,15 @@ const Admin = {
                     .admin-grid-view > div:hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; }
-                    .admin-grid-view > div [id$="-header-btn"] > span { flex-direction: column; align-items: center; width: 100%; }
-                    .admin-grid-view > div [id$="-header-btn"] > span > span:first-child { margin-right: 0 !important; margin-bottom: 8px; font-size: 28px; display: block; }
+                    .admin-grid-view > div [id$="-header-btn"] > span { flex-direction: column; align-items: center; width: 100%; display: flex; }
+                    .admin-grid-view > div [id$="-header-btn"] > span > span:first-child {
+                      margin-right: 0 !important;
+                      margin-bottom: 8px;
+                      font-size: 1.75rem;
+                      line-height: 1;
+                      display: block;
+                      font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+                    }
                     .admin-grid-view > div [id$="-header-btn"] svg[id$="-chevron"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-unread-badge"]:not(.hidden) { display: block !important; }
@@ -2493,19 +2505,19 @@ const Admin = {
                 const titleH3 = devHeaderRow.querySelector('h3');
                 devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
                 
-                // Isolate the title by removing trailing badges/timestamps before extracting text
+                // Keep native emoji in drill title (stop stripping — was causing broken headers)
                 let titleClone = card.querySelector('[id$="-header-btn"] > span').cloneNode(true);
                 titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
-                
-                // Strip emojis safely using textContent (innerText behaves unpredictably on unattached clones)
-                let cardTitle = titleClone.textContent.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
+                const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
                 
                 titleH3.innerHTML = `
                     <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                     </button>
-                    <span class="truncate flex-grow text-lg min-w-0">${cardTitle}</span>
+                    <span class="truncate flex-grow text-lg min-w-0" style="font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif"></span>
                 `;
+                const titleSpan = titleH3.querySelector('span.truncate');
+                if (titleSpan) titleSpan.textContent = cardTitle;
                 
                 toggleBtn.style.display = 'none';
                 
@@ -7829,7 +7841,7 @@ const Admin = {
             </button>
             <div id="roadmap-body" class="hidden mt-4 flex flex-col space-y-3">
                 <!-- Controls Header -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 dark:bg-gray-900 p-3 rounded-xl border border-gray-300 dark:border-gray-700 shadow-inner">
                     <div class="flex items-center gap-2 w-full sm:w-auto">
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1" id="roadmap-status-display">Syncing Board...</span>
                     </div>
@@ -7856,8 +7868,8 @@ const Admin = {
                     <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 rounded-t-xl shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-gray-300 dark:border-gray-700 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-gray-300 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-sm"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">To-Do / Backlog</h2>
@@ -7867,14 +7879,14 @@ const Admin = {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
                             </div>
-                            <div id="roadmap-col-backlog" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar bg-gray-50/50 dark:bg-gray-900/20 rounded-b-xl">
+                            <div id="roadmap-col-backlog" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar">
                                 <div class="text-center text-gray-400 dark:text-gray-500 text-xs py-6 italic" id="empty-backlog">No tickets</div>
                             </div>
                         </div>
 
                         <!-- Column: In Progress -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-white dark:bg-gray-800 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-blue-100 dark:border-blue-800/50 flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 rounded-t-xl shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-blue-300 dark:border-blue-800 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-blue-300 dark:border-blue-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200 dark:ring-blue-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">In Progress</h2>
@@ -7884,14 +7896,14 @@ const Admin = {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
                             </div>
-                            <div id="roadmap-col-progress" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar bg-blue-50/10 dark:bg-blue-900/10 rounded-b-xl">
+                            <div id="roadmap-col-progress" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar">
                                 <div class="text-center text-gray-400 dark:text-gray-500 text-xs py-6 italic hidden" id="empty-inprogress">No tickets</div>
                             </div>
                         </div>
 
                         <!-- Column: Completed -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-white dark:bg-gray-800 rounded-xl border border-green-200 dark:border-green-900/50 shadow-sm snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-green-100 dark:border-green-800/50 flex justify-between items-center bg-green-50 dark:bg-green-900/20 rounded-t-xl shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-green-300 dark:border-green-800 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-green-300 dark:border-green-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-200 dark:ring-green-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-green-800 dark:text-green-300">Completed</h2>
@@ -7901,7 +7913,7 @@ const Admin = {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
                             </div>
-                            <div id="roadmap-col-done" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar bg-green-50/10 dark:bg-green-900/10 rounded-b-xl">
+                            <div id="roadmap-col-done" class="flex-1 p-2 overflow-y-auto space-y-2 min-h-[150px] custom-scrollbar">
                                 <div class="text-center text-gray-400 dark:text-gray-500 text-xs py-6 italic hidden" id="empty-completed">No tickets</div>
                             </div>
                         </div>
@@ -8015,13 +8027,13 @@ const Admin = {
                 }
 
                 const cardHtml = `
-                    <div class="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-gray-700 p-3 rounded-lg shadow-sm hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors cursor-pointer group flex flex-col gap-2 relative overflow-hidden" onclick="Admin.openViewModal('${ticket.id}')">
+                    <div class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-3 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 relative overflow-hidden" onclick="Admin.openViewModal('${ticket.id}')">
                         <div class="flex justify-between items-start gap-2">
                             <div class="flex items-start min-w-0 pr-1">
                                 <span class="mr-1.5 text-sm leading-none shrink-0 mt-0.5" title="${ticket.type}">${typeIcon}</span>
                                 <h4 class="font-bold text-gray-900 dark:text-gray-200 text-sm leading-tight line-clamp-2 break-words">${safeTitle}</h4>
                             </div>
-                            <div class="flex gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-white dark:bg-[#1e293b] pl-1 relative z-10">
+                            <div class="flex gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-white dark:bg-gray-800 pl-1 relative z-10">
                                 ${moveControls}
                                 <div class="w-px h-4 bg-gray-200 dark:bg-gray-600 my-auto mx-1 md:mx-0.5"></div>
                                 <button class="text-gray-400 hover:text-blue-500 p-2 md:p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${ticket.id}')" title="Edit Ticket">

@@ -1,9 +1,10 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
+import { normalizeBase } from '../lib/config.js';
 
 const title = "You're Offline | Metrorail Next Train";
 const description = "You appear to be offline. Reconnect to check live Metrorail train times.";
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 ---
 
 <ContentLayout

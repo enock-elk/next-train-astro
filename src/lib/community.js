@@ -692,6 +692,7 @@ function wireCommunityChatGestures(listEl) {
         moved = false;
         longFired = false;
         clearLong();
+        row.classList.add('is-pressing');
         longTimer = setTimeout(() => {
             longFired = true;
             const postId = row.getAttribute('data-post-id');
@@ -707,10 +708,12 @@ function wireCommunityChatGestures(listEl) {
         if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
             moved = true;
             clearLong();
+            activeRow.classList.remove('is-pressing');
         }
         // Swipe right to reply
         if (dx > 12 && Math.abs(dx) > Math.abs(dy)) {
             activeRow.classList.add('is-swiping');
+            activeRow.classList.remove('is-pressing');
             const shift = Math.min(72, dx * 0.55);
             activeRow.dataset.swipeDx = String(shift);
             activeRow.style.transform = `translateX(${shift}px)`;
@@ -722,7 +725,7 @@ function wireCommunityChatGestures(listEl) {
         if (!activeRow) return;
         const row = activeRow;
         const dx = parseFloat(row.dataset.swipeDx || '0') || 0;
-        row.classList.remove('is-swiping');
+        row.classList.remove('is-swiping', 'is-pressing');
         row.style.transform = '';
         delete row.dataset.swipeDx;
         if (!longFired && dx >= 48) {
@@ -740,7 +743,7 @@ function wireCommunityChatGestures(listEl) {
     listEl.addEventListener('touchcancel', () => {
         clearLong();
         if (activeRow) {
-            activeRow.classList.remove('is-swiping');
+            activeRow.classList.remove('is-swiping', 'is-pressing');
             activeRow.style.transform = '';
         }
         activeRow = null;
@@ -751,7 +754,9 @@ function wireCommunityChatGestures(listEl) {
         const row = e.target.closest?.('.community-post-row');
         if (!row) return;
         e.preventDefault();
+        row.classList.add('is-pressing');
         openReactionSheet(row.getAttribute('data-post-id'), row.getAttribute('data-route'));
+        setTimeout(() => row.classList.remove('is-pressing'), 400);
     });
 }
 
@@ -1006,7 +1011,10 @@ async function handlePostSubmit() {
         return;
     }
 
-    if (composer) composer.value = '';
+    if (composer) {
+        composer.value = '';
+        composer.style.height = '';
+    }
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
     showToast('Posted to the route feed', 'success');
@@ -1121,6 +1129,11 @@ export function bindCommunityUi() {
         syncComposerChrome($account.get().status === 'signed-in');
     });
     composerEl?.addEventListener('input', () => {
+        // Auto-grow with new lines (WhatsApp-style), capped
+        composerEl.style.height = 'auto';
+        const next = Math.min(Math.max(composerEl.scrollHeight, 52), 160);
+        composerEl.style.height = `${next}px`;
+
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         signalCommunityTyping(rid, true);
         if (typingTimer) clearTimeout(typingTimer);

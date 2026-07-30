@@ -86,6 +86,15 @@
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 
+    "delay_reports": {
+      ".read": true,
+      ".indexOn": ["routeId", "timestamp", "trainKey"],
+      "$reportId": {
+        ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'routeId', 'timestamp', 'deviceId']) && newData.child('reportId').isString() && newData.child('reportId').val() === $reportId && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
+      }
+    },
+
     "route_community": {
       "$routeId": {
         "posts": {

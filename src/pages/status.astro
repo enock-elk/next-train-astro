@@ -1,9 +1,10 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
+import { normalizeBase } from '../lib/config.js';
 
 const title = "Roadmap | Metrorail Next Train";
 const description = "Strategic roadmap and system health for Metrorail Next Train — completed releases and upcoming features.";
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 ---
 
 <ContentLayout

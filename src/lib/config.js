@@ -3,14 +3,24 @@
 // 0. Version Control
 export const APP_VERSION = "V7_06.17"; // v4 - BUMPED: UX Polish, 18-Hour Layover Uncap & Precision Routing.
 
+/** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
+export function normalizeBase(base) {
+    const raw = String(base == null || base === '' ? '/' : base).trim();
+    if (raw === '/') return '/';
+    return raw.endsWith('/') ? raw : `${raw}/`;
+}
+
 /** App base path (e.g. `/next-train-astro/` on GitHub Pages, `/` locally / custom domain). */
-export const APP_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+export const APP_BASE = normalizeBase(
+    (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/'
+);
 
 /** Prefix a root-absolute path with the Astro `base` (public assets, in-app navigations). */
 export function withBase(path = '/') {
-    const base = String(APP_BASE || '/').replace(/\/$/, '');
-    const p = path.startsWith('/') ? path : `/${path}`;
-    return base ? `${base}${p}` : p;
+    const base = normalizeBase(APP_BASE);
+    const p = String(path || '/').replace(/^\//, '');
+    if (!p) return base;
+    return `${base}${p}`;
 }
 
 // GUARDIAN: Set to 'true' to force an immediate hard reload on startup. 

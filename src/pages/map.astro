@@ -1,10 +1,10 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION } from '../lib/config.js';
+import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, normalizeBase, withBase } from '../lib/config.js';
 
 const title = 'Metrorail Network Map — Active Routes | Next Train';
 const description = 'Interactive Metrorail network map for Gauteng, Western Cape, KZN, and Eastern Cape. View active train routes, stations, and live service disruptions.';
-const base = import.meta.env.BASE_URL;
+const base = normalizeBase(import.meta.env.BASE_URL);
 ---
 
 <ContentLayout
@@ -168,5 +168,5 @@ const base = import.meta.env.BASE_URL;
     window.APP_VERSION = APP_VERSION;
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script is:inline src={`${base}js/map-app.js`}></script>
+  <script is:inline src={withBase('js/map-app.js')}></script>
 </ContentLayout>

@@ -14,6 +14,11 @@ import { bindAccountUi, initAccount } from './account.js';
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
+    if (!skipHistory && location.hash === '#sidenav') {
+        window._isSidenavClosing = true;
+        try { history.back(); } catch { /* ignore */ }
+        setTimeout(() => { window._isSidenavClosing = false; }, 150);
+    }
     if (sidenav) {
         sidenav.classList.remove('translate-x-0', 'open');
         sidenav.classList.add('translate-x-full');
@@ -36,6 +41,9 @@ export function openAppHub() {
         setTimeout(() => overlay.classList.remove('opacity-0'), 10);
     }
     document.body.classList.add('sidenav-open', 'modal-active');
+    if (location.hash !== '#sidenav') {
+        try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
+    }
 }
 
 export function resetProfile() {

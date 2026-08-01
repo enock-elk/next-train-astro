@@ -1,5 +1,5 @@
 ﻿/**
- * METRORAIL NEXT TRAIN - ADMIN TOOLS (V7_07.28 - Performance Polish Edition)
+ * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.02 - Weekend Clarity Edition)
  * -----------------------------------------------------------------------------
  * This module handles Developer Mode features:
  * 1. Service Alerts Manager (God-Mode Regional Sync + Rich Text Formatting + Live Preview)

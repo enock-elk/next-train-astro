@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V7_07.28";
+export const APP_VERSION = "V8_08.02";
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -780,6 +780,18 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.02",
+        title: "Weekend Clarity Edition",
+        date: "02 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>No Weekend Service:</b> Routes without Saturday timetables (e.g. Hercules–Koedoespoort, Eastern Cape) now show a clear empty state and the next weekday train.",
+            "<b>Sunday No Service:</b> The day chip highlights “No Service” in red so Sundays and no-service holidays are obvious at a glance.",
+            "<b>You're Here:</b> Terminus stops use a location pin instead of plain “You are at this station” text.",
+            "<b>Clearer Holiday Guide:</b> FAQ updated — public holidays are not always Saturday schedules, and some routes have no weekend service at all."
+        ]
+    },
     {
         id: "V7_07.28",
         title: "Performance Polish Edition",

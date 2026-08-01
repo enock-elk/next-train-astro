@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.02 — Weekend Clarity Edition (02 Aug 2026)
+
+- Clear empty state for routes with no Saturday timetable, plus next weekday CTA.
+- Sunday / no-service holidays show red “No Service” in the day chip.
+- Terminus board uses a location pin (“You’re here”).
+- Guide FAQ: public holidays are not always Saturday; some routes have no weekend service.
+
 ## V7_07.28 — Performance Polish Edition (28 Jul 2026)
 
 - Smoother navigation under rapid taps and screen transitions.

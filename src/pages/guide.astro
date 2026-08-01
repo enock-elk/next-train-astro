@@ -23,7 +23,7 @@ const faqJsonLd = {
       "name": "Do Metrorail trains run on Public Holidays and Sundays?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Metrorail generally does not operate train services on Sundays. On South African Public Holidays, trains run on a limited Saturday schedule. The Next Train app's True Day Simulator automatically adjusts for all 2026 public holidays so you don't have to guess."
+        "text": "Metrorail generally does not operate train services on Sundays. Public holidays vary: some follow a Saturday/holiday timetable, while others (for example Christmas Day) have no service. A few routes also have no Saturday service at all. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically."
       }
     },
     {
@@ -74,6 +74,104 @@ const faqJsonLd = {
     .prose-custom p { margin-bottom: 1rem; line-height: 1.6; }
     .prose-custom ul { margin-bottom: 1.5rem; list-style-type: disc; padding-left: 1.25rem; }
     .prose-custom li { margin-bottom: 0.5rem; }
+    .guide-ui-chip {
+      display: inline;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #2563eb;
+    }
+    .dark .guide-ui-chip { color: #60a5fa; }
+    /* Matches full-timetable grid Download control */
+    .guide-ui-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3em;
+      vertical-align: middle;
+      padding: 0.15em 0.45em;
+      border-radius: 0.35rem;
+      border: 1px solid #e5e7eb;
+      background: #f3f4f6;
+      color: #374151;
+      font-weight: 700;
+      font-size: inherit;
+      line-height: inherit;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .guide-ui-download svg {
+      width: 0.95em;
+      height: 0.95em;
+      flex-shrink: 0;
+      color: #4b5563;
+    }
+    .dark .guide-ui-download {
+      background: #374151;
+      border-color: #4b5563;
+      color: #d1d5db;
+    }
+    .dark .guide-ui-download svg { color: #9ca3af; }
+    .guide-ui-pill {
+      display: inline-block;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: inherit;
+      line-height: inherit;
+      padding: 0.1em 0.45em;
+      border-radius: 0.35rem;
+      vertical-align: baseline;
+    }
+    .guide-ui-pill-direct {
+      color: #1d4ed8;
+      background: #dbeafe;
+      border: 1px solid #93c5fd;
+    }
+    .dark .guide-ui-pill-direct {
+      color: #93c5fd;
+      background: rgba(30, 58, 138, 0.35);
+      border-color: rgba(96, 165, 250, 0.35);
+    }
+    .guide-ui-pill-transfer {
+      color: #6d28d9;
+      background: #ede9fe;
+      border: 1px solid #c4b5fd;
+    }
+    .dark .guide-ui-pill-transfer {
+      color: #c4b5fd;
+      background: rgba(76, 29, 149, 0.35);
+      border-color: rgba(167, 139, 250, 0.35);
+    }
+    .guide-ui-pill-warn {
+      color: #c2410c;
+      background: #ffedd5;
+      border: 1px solid #fdba74;
+    }
+    .dark .guide-ui-pill-warn {
+      color: #fdba74;
+      background: rgba(124, 45, 18, 0.35);
+      border-color: rgba(251, 146, 60, 0.35);
+    }
+    .guide-ui-pill-danger {
+      color: #b91c1c;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+    }
+    .dark .guide-ui-pill-danger {
+      color: #fca5a5;
+      background: rgba(127, 29, 29, 0.4);
+      border-color: rgba(248, 113, 113, 0.35);
+    }
+    .guide-ui-pill-muted {
+      color: #4b5563;
+      background: #e5e7eb;
+      border: 1px solid #d1d5db;
+    }
+    .dark .guide-ui-pill-muted {
+      color: #d1d5db;
+      background: rgba(55, 65, 81, 0.6);
+      border-color: rgba(107, 114, 128, 0.5);
+    }
     .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(10px); }
@@ -153,24 +251,45 @@ const faqJsonLd = {
                     <h3 class="font-bold text-gray-900 dark:text-white mt-4 mb-2">How to Save Timetables for Offline Viewing</h3>
                     <p>You can save an entire day's timetable directly to your phone's gallery as a high-quality image:</p>
                     <ol class="list-decimal pl-5 space-y-1 mb-4">
-                        <li>Tap the blue <strong>"VIEW FULL TIMETABLE"</strong> button on your dashboard.</li>
+                        <li>Tap the blue <span class="guide-ui-chip">View Full Timetable</span> control on your dashboard.</li>
                         <li>Select your preferred travel day (Weekday or Saturday) using the top-left dropdown.</li>
-                        <li>Tap the <strong>"Download"</strong> button. The app will generate a Commuter Notice and save it as an image to your device.</li>
+                        <li>Tap
+                            <span class="guide-ui-download" aria-hidden="true">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                Download
+                            </span>.
+                            The app will generate a Commuter Notice and save it as an image to your device.
+                        </li>
                     </ol>
 
                     <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">Glossary of App Terms</h3>
                     <ul class="list-none pl-0 space-y-3 mb-3">
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <strong>Direct Trip vs. Transfer Trip:</strong> A "Direct Trip" means you stay on the same train until your destination. A "Transfer Trip" means the Trip Planner has calculated a connection, requiring you to alight at a hub (like Koedoespoort or Germiston) and board a different line.
+                            <span class="guide-ui-pill guide-ui-pill-direct">Direct Trip</span>
+                            <span class="mx-1 text-gray-400">vs</span>
+                            <span class="guide-ui-pill guide-ui-pill-transfer">Transfer Trip</span>
+                            <span class="block mt-2">A direct trip means you stay on the same train until your destination. A transfer trip means the Trip Planner found a connection — you alight at a hub (like Koedoespoort or Germiston) and board a different line.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <strong>Service Alerts (🔵 Info, 🟡 Warning, 🔴 Critical):</strong> The app pushes live service updates. <strong>Info</strong> provides general PRASA news. <strong>Warning</strong> indicates expected delays. <strong>Critical</strong> means a line is severed. Always check the app for active banners.
+                            <strong class="block mb-2">Service Alerts:</strong>
+                            <ul class="list-none pl-0 space-y-2 mb-2">
+                                <li>🔵 <strong>Info</strong> is for sharing general PRASA updates or general information that commuters might want to know about.</li>
+                                <li>🟡 <strong>Warning</strong> is for sharing possible delays or interruption of service.</li>
+                                <li>🔴 <strong>Critical</strong> is for sharing serious updates, like a sink hole, train cancellation and more.</li>
+                            </ul>
+                            <span class="block">Always check the app for active banners.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <strong class="text-red-600 dark:text-red-400">🚫 NO SVC (Ghost Trains):</strong> If you see a train greyed out and marked "NO SVC" in the full timetable, it means Metrorail has temporarily cancelled or suspended that specific train number for the day.
+                            <span class="guide-ui-pill guide-ui-pill-muted">No Svc</span>
+                            <span class="block mt-2">If a train is greyed out and marked this way in the full timetable, Metrorail has temporarily cancelled or suspended that train number for the day.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <strong class="text-red-600 dark:text-red-400">❌ LINE SEVERED:</strong> A critical Service Alert indicating that the physical tracks are blocked (e.g., cable theft or a sinkhole). Trains will terminate early, and the Trip Planner will dynamically adjust your route if a detour exists.
+                            <span class="guide-ui-pill guide-ui-pill-danger">Line Severed</span>
+                            <span class="block mt-2">A critical alert that the tracks are blocked (e.g. cable theft or a sinkhole). Trains may terminate early, and the Trip Planner will adjust your route when a detour exists.</span>
+                        </li>
+                        <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                            <span class="guide-ui-pill guide-ui-pill-warn">Extended Layover</span>
+                            <span class="block mt-2">Shown when a transfer wait is very long (over about four hours). The trip is still listed, but the warning helps you plan around the platform wait.</span>
                         </li>
                     </ul>
                 </div>
@@ -184,7 +303,7 @@ const faqJsonLd = {
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
                     <p>Our Trip Planner actively calculates multi-leg journeys across shared corridors (e.g., transferring at Germiston or Koedoespoort). However, sparse timetables—especially on weekends or holidays—can result in very long wait times.</p>
-                    <p>If a calculated trip requires you to wait at a transfer hub for more than 4 hours for your connecting train, the app will flag this journey with an orange <strong>"Extended Layover"</strong> warning. The trip will still be displayed as an option, but this warning ensures you aren't caught off guard by a long wait on the platform.</p>
+                    <p>If a calculated trip requires you to wait at a transfer hub for more than 4 hours for your connecting train, the app will flag this journey with an orange <span class="guide-ui-pill guide-ui-pill-warn">Extended Layover</span> warning. The trip will still be displayed as an option, but this warning ensures you aren't caught off guard by a long wait on the platform.</p>
                 </div>
             </section>
 
@@ -263,8 +382,9 @@ const faqJsonLd = {
                             <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </summary>
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                            <p>Metrorail generally <strong>does not operate train services on Sundays</strong>. On South African Public Holidays, trains (typically) operate on a limited Saturday schedule.</p>
-                            <p class="mt-2">You don't need to guess, though! The Next Train app features a <strong>True Day Simulator</strong> that automatically adjusts the schedules and trip planner for all 2026 public holidays.</p>
+                            <p>Metrorail generally <strong>does not operate train services on Sundays</strong>.</p>
+                            <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> Some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>. A few routes — including Hercules ↔ Koedoespoort and Eastern Cape — also have <strong>no Saturday service</strong> even when other lines are running.</p>
+                            <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
                         </div>
                     </details>
 

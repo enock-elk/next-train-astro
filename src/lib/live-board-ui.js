@@ -19,7 +19,8 @@ import {
     startSmartRefresh,
     findNextJourneyToDestA,
     findNextJourneyToDestB,
-    currentScheduleData
+    currentScheduleData,
+    routeHasSaturdayService
 } from './live-board.js';
 import {
     renderFullScheduleGrid,
@@ -137,6 +138,15 @@ export function renderNoService(element, destination) {
     window.Renderer.renderNoService(element, destination, simResult?.train || null, simResult?.daysAhead || 1);
 }
 
+export function renderNoWeekendService(element, destination) {
+    if (!element || !window.Renderer) return;
+    const routeId = $currentRouteId.get();
+    if (!routeId || !ROUTES[routeId]) return;
+    const selectedStation = document.getElementById('station-select')?.value || "";
+    const simResult = simulateNextActiveService(selectedStation, destination);
+    window.Renderer.renderNoWeekendService(element, destination, simResult?.train || null, simResult?.daysAhead || 1);
+}
+
 export function renderNextAvailableTrain(element, destination) {
     if (!element || !window.Renderer) return;
     const selectedStation = document.getElementById('station-select')?.value || "";
@@ -164,7 +174,12 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         window.Renderer.renderJourney(element, nextJourney, destination);
         import('./delay-reports.js').then((m) => m.hydrateTrainReportSlots(element)).catch(() => {});
     } else if (allJourneys.length === 0) {
-        element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No scheduled trains.</div>`;
+        const dayType = (typeof window !== 'undefined' && window.currentDayType) ? window.currentDayType : 'weekday';
+        if (dayType === 'saturday' && !routeHasSaturdayService() && typeof window.renderNoWeekendService === 'function') {
+            window.renderNoWeekendService(element, destination);
+        } else {
+            element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No scheduled trains.</div>`;
+        }
     } else {
         renderNextAvailableTrain(element, destination);
     }
@@ -181,46 +196,61 @@ export function updateFareDisplay(sheetKey) {
     if (passengerLabel) passengerLabel.textContent = profile;
 
     const fareData = getRouteFare(sheetKey);
+    const detailed = getDetailedFare(sheetKey) || getDetailedFare(null);
 
-    fareContainer.className = "w-full text-left px-3.5 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3 focus:outline-none transition-colors group min-h-[52px]";
+    // SPA fare chrome: blue wash, absolute chevron, pill fare-type tags
+    fareContainer.className = 'mb-4 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm min-h-[44px] pr-9 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700';
 
     const chevron = document.getElementById('fare-chevron');
-    fareContainer.onclick = () => {
-        const live = getDetailedFare(sheetKey) || getDetailedFare(null);
-        if (live?.prices) openFareModal(live);
-    };
-    fareContainer.classList.add('cursor-pointer', 'hover:border-blue-300', 'dark:hover:border-blue-700');
-    fareContainer.setAttribute('aria-label', `${profile} fare details`);
-    if (chevron) chevron.classList.remove('opacity-0');
+    if (detailed?.prices) {
+        fareContainer.onclick = () => openFareModal(detailed);
+        fareContainer.classList.add('cursor-pointer', 'hover:bg-blue-100', 'dark:hover:bg-gray-700');
+        fareContainer.setAttribute('aria-label', `${profile} fare details`);
+        if (chevron) chevron.classList.remove('hidden');
+    } else {
+        fareContainer.onclick = null;
+        fareContainer.classList.remove('cursor-pointer', 'hover:bg-blue-100', 'dark:hover:bg-gray-700');
+        fareContainer.removeAttribute('aria-label');
+        if (chevron) chevron.classList.add('hidden');
+    }
 
     if (fareData) {
-        fareContainer.classList.remove('hidden');
         if (fareAmount) {
             fareAmount.textContent = `R${fareData.price}`;
-            fareAmount.className = "text-xl font-black text-gray-900 dark:text-white tabular-nums leading-none";
+            fareAmount.className = 'text-xl font-black text-gray-900 dark:text-white leading-none';
         }
         if (fareType) {
             fareType.classList.remove('hidden');
             if (fareData.isPromo) {
                 fareType.textContent = fareData.discountLabel || 'Discounted';
-                fareType.className = "text-[11px] font-medium text-purple-600 dark:text-purple-300 truncate mt-0.5";
+                fareType.className = 'text-[9px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded uppercase tracking-wide whitespace-nowrap inline-block mt-1 shadow-sm border border-purple-200 dark:border-purple-800/50';
             } else if (fareData.isOffPeak) {
-                fareType.textContent = 'Off-peak until 14:30';
-                fareType.className = "text-[11px] font-medium text-green-600 dark:text-green-300 truncate mt-0.5";
+                fareType.textContent = 'Off-Peak • 40% Off until 14:30';
+                fareType.className = 'text-[9px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-green-200 dark:border-green-800/50';
             } else {
-                fareType.textContent = 'Standard · may vary';
-                fareType.className = "text-[11px] font-medium text-gray-500 dark:text-gray-400 truncate mt-0.5";
+                fareType.textContent = 'Standard Fare';
+                fareType.className = 'text-[9px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-gray-300 dark:border-gray-600';
             }
         }
     } else {
         if (fareAmount) {
-            fareAmount.textContent = "R--.--";
-            fareAmount.className = "text-xl font-black text-gray-300 dark:text-gray-600 tabular-nums leading-none";
+            fareAmount.textContent = 'R --.--';
+            fareAmount.className = 'text-xl font-black text-gray-300 dark:text-gray-600 leading-none';
         }
-        if (fareType) fareType.className = "hidden";
+        if (fareType) fareType.className = 'hidden';
     }
 
     fareContainer.classList.remove('hidden');
+}
+
+export function openFareModalForCurrentRoute() {
+    const detailed = getDetailedFare(null);
+    if (detailed?.prices) {
+        openFareModal(detailed);
+        return true;
+    }
+    showToast('Ticket prices unavailable for this route yet.', 'info', 2200);
+    return false;
 }
 
 export function openFareModal(fareDetails) {
@@ -300,7 +330,8 @@ export function loadUserProfile() {
 
 function formatRouteLabel(raw) {
     if (typeof raw !== 'string') return 'Select a route';
-    return raw.replace(/\s*<->\s*/g, ' – ').replace(/\s*↔\s*/g, ' – ').trim();
+    // Match live SPA: keep the ↔ glyph users already see on nexttrain.co.za
+    return raw.replace(/\s*<->\s*/g, ' ↔ ').replace(/\s*↔\s*/g, ' ↔ ').trim();
 }
 
 export function updateNextTrainView() {
@@ -319,12 +350,10 @@ export function updateNextTrainView() {
         }
     }
 
-    const btn = document.getElementById('view-full-timetable-btn');
-    if (btn) {
-        const active = !!(route && route.isActive);
-        btn.disabled = !active;
-        btn.classList.toggle('opacity-60', !active);
-        btn.classList.toggle('pointer-events-none', !active);
+    // SPA: show/hide the timetable CTA with the route, don't leave a disabled ghost button
+    const gridTrigger = document.getElementById('grid-trigger-container');
+    if (gridTrigger) {
+        gridTrigger.classList.toggle('hidden', !(route && route.isActive));
     }
 }
 
@@ -511,9 +540,11 @@ export function attachLiveBoardUiGlobals() {
     window._renderNextTrainList = _renderNextTrainList;
     window.processAndRenderJourney = processAndRenderJourney;
     window.renderNoService = renderNoService;
+    window.renderNoWeekendService = renderNoWeekendService;
     window.renderNextAvailableTrain = renderNextAvailableTrain;
     window.updateFareDisplay = updateFareDisplay;
     window.openFareModal = openFareModal;
+    window.openFareModalForCurrentRoute = openFareModalForCurrentRoute;
     window.openScheduleModal = openScheduleModal;
     window.selectProfile = selectProfile;
     window.updatePinUI = updatePinUI;
@@ -645,28 +676,31 @@ export function initLiveBoardUi() {
         });
     }
 
-    const shareBtn = document.getElementById('share-app-btn');
-    if (shareBtn && !shareBtn.dataset.bound) {
-        shareBtn.dataset.bound = '1';
-        shareBtn.addEventListener('click', async () => {
-            triggerHaptic();
-            const shareData = { title: 'Metrorail Next Train', text: 'Check live Metrorail schedules', url: location.origin + location.pathname };
-            try {
-                if (navigator.share) await navigator.share(shareData);
-                else {
-                    await navigator.clipboard.writeText(shareData.url);
-                    showToast('Link copied to clipboard!', 'success');
-                }
-            } catch {
-                try {
-                    await navigator.clipboard.writeText(shareData.url);
-                    showToast('Link copied to clipboard!', 'success');
-                } catch {
-                    showToast('Could not share', 'error');
-                }
+    const shareApp = async () => {
+        triggerHaptic();
+        const shareData = { title: 'Metrorail Next Train', text: 'Check live Metrorail schedules', url: location.origin + location.pathname };
+        try {
+            if (navigator.share) await navigator.share(shareData);
+            else {
+                await navigator.clipboard.writeText(shareData.url);
+                showToast('Link copied to clipboard!', 'success');
             }
-        });
-    }
+        } catch {
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+                showToast('Link copied to clipboard!', 'success');
+            } catch {
+                showToast('Could not share', 'error');
+            }
+        }
+    };
+    ['share-app-btn', 'share-app-btn-planner'].forEach((id) => {
+        const shareBtn = document.getElementById(id);
+        if (shareBtn && !shareBtn.dataset.bound) {
+            shareBtn.dataset.bound = '1';
+            shareBtn.addEventListener('click', shareApp);
+        }
+    });
 
     document.getElementById('close-modal-btn')?.addEventListener('click', () => closeSmoothModal('schedule-modal'));
     document.getElementById('close-modal-btn-2')?.addEventListener('click', () => closeSmoothModal('schedule-modal'));

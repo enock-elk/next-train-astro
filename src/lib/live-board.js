@@ -56,6 +56,20 @@ function trackAnalyticsEvent(name, params) {
 }
 
 
+/** True when loaded Saturday sheets contain at least one timed departure. */
+export function scheduleHasService(schedule) {
+    if (!schedule?.rows?.length || !Array.isArray(schedule.headers)) return false;
+    const stationCol = schedule.stationColumnName || 'STATION';
+    const trainCols = schedule.headers.filter((h) => h && h !== stationCol && h !== 'STATION' && h !== 'COORDINATES' && h !== 'KM_MARK' && h !== 'row_index');
+    if (trainCols.length === 0) return false;
+    return schedule.rows.some((row) => trainCols.some((col) => row[col] && String(row[col]).trim() !== ''));
+}
+
+/** Current route has usable Saturday timetable data in either direction. */
+export function routeHasSaturdayService(schedules = getSchedules()) {
+    return scheduleHasService(schedules?.saturday_to_a) || scheduleHasService(schedules?.saturday_to_b);
+}
+
 export function getLookaheadDayInfo(daysAhead = 1) {
     let baseDate = new Date();
     
@@ -117,6 +131,12 @@ export function simulateNextActiveService(selectedStation, destination) {
         
         // GUARDIAN BUGFIX: The Sunday Mirage Patch.
         if (nextDayInfo.type === 'sunday') {
+            daysAhead++;
+            continue;
+        }
+
+        // Skip Saturday/holiday sheets when this route has no weekend timetable.
+        if (nextDayInfo.type === 'saturday' && !routeHasSaturdayService()) {
             daysAhead++;
             continue;
         }
@@ -639,6 +659,23 @@ export function findNextTrains() {
                 if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
             } else {
                 window.renderNoService(pienaarspoortTimeEl(), currentRoute.destB); 
+            }
+        }
+        return;
+    }
+
+    // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape)
+    if (getCurrentDayType() === 'saturday' && !routeHasSaturdayService()) {
+        if (typeof window.renderNoWeekendService === 'function') {
+            if (isAtStation(selectedStation, currentRoute.destA)) {
+                if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
+            } else {
+                window.renderNoWeekendService(pretoriaTimeEl(), currentRoute.destA);
+            }
+            if (isAtStation(selectedStation, currentRoute.destB)) {
+                if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
+            } else {
+                window.renderNoWeekendService(pienaarspoortTimeEl(), currentRoute.destB);
             }
         }
         return;
@@ -1179,7 +1216,7 @@ export function updateLastUpdatedText() {
     
     displayDate = formatEffectiveDate(displayDate);
     
-    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Effective from: ${displayDate}`;
+    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Schedule Effective from: ${displayDate}`;
 }
 
 export function startSmartRefresh() {

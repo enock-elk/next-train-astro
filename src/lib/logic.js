@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN LOGIC (V7_06.17 - Astro MPA Migration)
+ * METRORAIL NEXT TRAIN LOGIC (V7_07.28 - Astro MPA Migration)
  * -----------------------------------------------------------
  * This module manages Data Fetching, Caching (IndexedDB), and Synchronization.
  * It has been migrated to use Nano Stores for global state persistence.
@@ -21,6 +21,7 @@ import {
     getDistanceFromLatLonInKm 
 } from './utils.js';
 import { showToast, showOfflineToast } from './ui.js';
+import { markPendingReload } from './session-stability.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -207,6 +208,7 @@ export async function checkKillswitch(force = false) {
                     indexedDB.deleteDatabase('NextTrainDB');
                 }
             } catch (e) {}
+            markPendingReload('killswitch', 500);
             setTimeout(() => { window.location.reload(); }, 500);
         }
         return true;
@@ -722,6 +724,7 @@ export async function loadAllSchedules(force = false) {
         const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
         if (typeof window !== 'undefined' && $currentRouteId.get() && !isWelcomeActive) {
             window._appStabilized = true;
+            if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
         }
     }
 }
@@ -875,12 +878,17 @@ export function updateTime() {
         let displayType = newDayType === 'sunday' ? 'No Service'
             : (newDayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule');
         if (dateKey && HOLIDAY_NAMES[dateKey]) {
-            displayType = `${HOLIDAY_NAMES[dateKey]} Schedule`;
+            displayType = newDayType === 'sunday'
+                ? `${HOLIDAY_NAMES[dateKey]} · No Service`
+                : `${HOLIDAY_NAMES[dateKey]} Schedule`;
         }
         if (typeof document !== 'undefined') {
             const currentDayEl = document.getElementById('current-day');
             if (currentDayEl) {
-                currentDayEl.innerHTML = `${dayNames[day]} <span class="font-bold text-blue-600 dark:text-blue-400 ml-1">${displayType}</span>`;
+                const typeClass = newDayType === 'sunday'
+                    ? 'font-bold text-red-600 dark:text-red-400 ml-1'
+                    : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
+                currentDayEl.innerHTML = `${dayNames[day]} <span class="${typeClass}">${displayType}</span>`;
             }
         }
 

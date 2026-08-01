@@ -260,14 +260,24 @@ export const Renderer = {
     },
 
     renderPlaceholder: (element1, element2) => {
-        const triggerShake = "document.getElementById('station-select').classList.add('animate-shake', 'ring-4', 'ring-blue-300'); setTimeout(() => document.getElementById('station-select').classList.remove('animate-shake', 'ring-4', 'ring-blue-300'), 500); document.getElementById('station-select').focus();";
-        
+        // Shake the *visible* station field (search input). #station-select stays hidden.
+        const triggerShake = `
+            const inp = document.getElementById('station-search-input');
+            const sel = document.getElementById('station-select');
+            const target = (inp && !inp.classList.contains('hidden')) ? inp : sel;
+            if (target) {
+                target.classList.add('animate-shake', 'ring-4', 'ring-blue-300');
+                setTimeout(() => target.classList.remove('animate-shake', 'ring-4', 'ring-blue-300'), 500);
+                target.focus?.();
+            }
+        `.replace(/\n/g, ' ');
+
         const placeholderHTML = `
-            <div onclick="${triggerShake}" class="h-24 flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors group w-full">
+            <div onclick="${triggerShake}" class="min-h-[96px] h-auto flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl transition-colors group w-full shadow-sm border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50">
                 <svg class="w-6 h-6 mb-1 opacity-50 group-hover:scale-110 transition-transform text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 <span class="text-xs font-bold group-hover:text-blue-500 transition-colors">Select station above</span>
             </div>`;
-            
+
         if (element1) element1.innerHTML = placeholderHTML;
         if (element2) element2.innerHTML = placeholderHTML;
     },
@@ -317,7 +327,52 @@ export const Renderer = {
     },
 
     renderAtDestination: (element) => {
-        if (element) element.innerHTML = `<div class="h-24 flex flex-col justify-center items-center text-lg font-bold text-green-500 dark:text-green-400">You are at this station</div>`;
+        if (!element) return;
+        element.innerHTML = `
+            <div class="h-24 flex flex-col justify-center items-center gap-1.5">
+                <svg class="w-7 h-7 text-blue-500 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+                </svg>
+                <div class="text-sm font-bold text-gray-900 dark:text-white">You're here</div>
+            </div>
+        `;
+    },
+
+    renderNoWeekendService: (element, destination, firstNextTrain, dayOffset) => {
+        let timeHTML = 'N/A';
+        const nextDayInfo = typeof window.getLookaheadDayInfo === 'function'
+            ? window.getLookaheadDayInfo(dayOffset || 1)
+            : { name: 'Monday', type: 'weekday' };
+
+        if (firstNextTrain) {
+            const rawTime = firstNextTrain.departureTime || firstNextTrain.train1.departureTime;
+            const departureTime = formatTimeDisplay(rawTime);
+            let timeDiffStr = (typeof window.calculateTimeDiffString === 'function')
+                ? window.calculateTimeDiffString(rawTime, dayOffset)
+                : "";
+            if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+            timeHTML = `<div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div><div class="text-xs text-gray-700 dark:text-gray-300 font-medium">${timeDiffStr}</div>`;
+        } else {
+            timeHTML = `<div class="text-lg font-bold text-gray-500">No Data</div>`;
+        }
+
+        const safeDestForClick = escapeHTML(destination).replace(/&#39;/g, "\\'");
+        const buttonHTML = `<button onclick="window.openScheduleModal('${safeDestForClick}', '${nextDayInfo.type}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${nextDayInfo.name} Schedule</button>`;
+
+        let dayText = nextDayInfo.name;
+        if (dayText !== "Tomorrow") dayText = `on ${dayText}`;
+
+        element.innerHTML = `
+            <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
+                <div class="text-sm font-bold text-red-600 dark:text-red-400">No weekend service</div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">This route does not run on Saturdays</p>
+                <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-2">First train ${dayText} is at:</p>
+                <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
+                    ${timeHTML}
+                </div>
+                ${buttonHTML}
+            </div>
+        `;
     },
 
     renderNoService: (element, destination, firstNextTrain, dayOffset, openModalCallback) => {
@@ -510,8 +565,8 @@ export const Renderer = {
                  routeName = rawName.split('<->')[1].trim();
              } else if (rawName.includes('â€¢')) {
                  routeName = rawName.split('â€¢')[1].trim();
-             } else if (rawName.includes('â†”')) {
-                 routeName = rawName.split('â†”')[1].trim(); // Legacy fallback
+             } else if (rawName.includes('↔')) {
+                 routeName = rawName.split('↔')[1].trim(); // Legacy fallback
              }
 
              if (journey.isDivergent) {
@@ -1067,15 +1122,20 @@ export const Renderer = {
             } else {
                 changelogData.forEach((entry, index) => {
                     const isLatest = index === 0;
+                    const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
+                    const titleHtml = entry.title
+                        ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${entry.title}</span>`
+                        : '';
+                    const features = (entry.features || []).slice(0, 5);
                     listContainer.innerHTML += `
                         <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
                             ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}
-                            <div class="mb-1 flex items-baseline justify-between">
-                                <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${entry.version}</h4>
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-mono">${entry.date}</span>
+                            <div class="mb-1 flex items-baseline justify-between gap-2">
+                                <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${verId}${titleHtml}</h4>
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">${entry.date || ''}</span>
                             </div>
                             <ul class="space-y-2">
-                                ${(entry.features || []).map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
+                                ${features.map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
                             </ul>
                         </div>`;
                 });

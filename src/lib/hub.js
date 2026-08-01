@@ -769,7 +769,7 @@ export function initHub() {
     });
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
-        window.location.href = withBase('/map');
+        window.location.href = withBase('/map.html');
     });
 
     // Updates
@@ -787,7 +787,7 @@ export function initHub() {
     document.getElementById('settings-help-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => { window.location.href = withBase('/guide'); }, 150);
+        setTimeout(() => { window.location.href = withBase('/guide.html'); }, 150);
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 

@@ -19,6 +19,14 @@ export default defineConfig({
   base: baseWithSlash,
   // Keep trailing slash on `base` itself; page URLs can still omit slash
   trailingSlash: 'ignore',
+  build: {
+    // 'file' emits dist/guide.html; the default 'directory' emits dist/guide/index.html.
+    // metrorail-app serves /guide.html, /map.html and /status.html, and those exact
+    // URLs are what Google has indexed (guide.html is priority 0.9 in the live
+    // sitemap). Matching them means the cutover needs no redirects and risks no
+    // ranking transfer. Switch to 'directory' only as a deliberate, separate change.
+    format: 'file',
+  },
   integrations: [
     tailwind(),
     AstroPWA({
@@ -33,7 +41,12 @@ export default defineConfig({
         enabled: false,
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        // Shell only. Including png/svg pulled every network map and icon into the
+        // precache — a 5.2 MB atomic install on first visit, which is punishing on
+        // the 3G connections most of these commuters use, and one 404 fails the
+        // whole install. metrorail-app's worker excludes heavy images for exactly
+        // this reason; the runtime rule below caches them on first view instead.
+        globPatterns: ['**/*.{js,css,html,ico,webmanifest}'],
         // navigateFallback is NOT "show when offline" — Workbox serves it for ANY
         // navigation URL missing from the precache (even while online). Pointing it
         // at /offline made refreshes land on the offline page. Use NetworkFirst +
@@ -51,7 +64,18 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/(.*?firebaseio\.com|.*?workers\.dev|.*?clarity\.ms)\/.*/i,
+            urlPattern: ({ request }) => request.destination === 'image',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images',
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // cleverwebserver must never be cached or ad impressions get swallowed
+            // and stop being billable.
+            urlPattern: /^https:\/\/(.*?firebaseio\.com|.*?workers\.dev|.*?clarity\.ms|.*?cleverwebserver\.com)\/.*/i,
             handler: 'NetworkOnly',
           }
         ]
@@ -61,12 +85,19 @@ export default defineConfig({
         short_name: 'Train 2.0',
         description: 'Live Metrorail schedules and route maps for South Africa. (Astro rebuild)',
         theme_color: '#1d4ed8',
-        background_color: '#ffffff',
+        // Splash-screen colour. Must stay '#1d4ed8' to match the live SPA —
+        // a white splash is the most visible sign of the rewrite on cold launch.
+        background_color: '#1d4ed8',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        orientation: 'portrait',
         scope: baseWithSlash,
         id: `${baseWithSlash}?pwa=next-train-2`,
         start_url: `${baseWithSlash}?pwa=next-train-2`,
+        // Mirrors metrorail-app/manifest.json exactly. The 512 slot points at
+        // loading-logo.png (not icon-512.png) because that is the image already
+        // installed on users' home screens, and no `maskable` entry is declared —
+        // declaring one lets Android re-crop the icon with adaptive-icon treatment,
+        // visibly changing it for every existing install.
         icons: [
           {
             src: `${baseWithSlash}icons/icon-192.png`,
@@ -75,16 +106,10 @@ export default defineConfig({
             purpose: 'any'
           },
           {
-            src: `${baseWithSlash}icons/icon-512.png`,
+            src: `${baseWithSlash}icons/loading-logo.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
-          },
-          {
-            src: `${baseWithSlash}icons/icon-512.png`,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
           }
         ]
       }

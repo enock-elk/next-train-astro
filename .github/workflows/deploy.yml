@@ -1,9 +1,16 @@
-# Build Astro and deploy to GitHub Pages (no Jekyll on source).
+# PREVIEW deploy → https://enock-elk.github.io/next-train-astro/
+#
+# This is the staging surface, not production. It builds with base=/next-train-astro/
+# and is deliberately de-indexed: it serves near-identical content to
+# nexttrain.co.za, so letting Google crawl it would create a full duplicate of the
+# money site on a domain we don't want ranking.
+#
 # One-time: Settings → Pages → Build and deployment → Source = GitHub Actions
 #
-# Project site URL: https://enock-elk.github.io/next-train-astro/
-# astro.config.mjs sets base=/next-train-astro/ when GITHUB_ACTIONS=true
-name: Deploy to GitHub Pages
+# Note: GitHub Pages allows one deployment per repository, so production cannot
+# also be served from here while this workflow owns the Pages environment.
+# See production-build.yml.
+name: Deploy preview to GitHub Pages
 
 on:
   push:
@@ -26,12 +33,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install, build, and upload site
-        uses: withastro/action@v6
-        # base path comes from astro.config.mjs (GITHUB_ACTIONS → /next-train-astro/)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
         env:
           PUBLIC_SITE_URL: https://enock-elk.github.io
           PUBLIC_BASE_PATH: /next-train-astro/
+
+      - name: De-index the preview
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > dist/robots.txt
+          rm -f dist/sitemap.xml
+          node -e "
+            const fs = require('fs');
+            const tag = '<meta name=\"robots\" content=\"noindex, nofollow\">';
+            for (const f of fs.readdirSync('dist').filter((f) => f.endsWith('.html'))) {
+              const p = 'dist/' + f;
+              let html = fs.readFileSync(p, 'utf8');
+              html = html.replace(/<meta name=\"robots\"[^>]*>/g, '');
+              fs.writeFileSync(p, html.replace('<head>', '<head>' + tag));
+            }
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
 
   deploy:
     needs: build

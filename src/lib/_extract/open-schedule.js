@@ -76,8 +76,8 @@ window.openScheduleModal = function(destination, dayOverride = null) {
              
              if (rawName.includes('<->')) {
                  routeName = rawName.split('<->')[1].trim();
-             } else if (rawName.includes('â†”')) {
-                 routeName = rawName.split('â†”')[1].trim();
+             } else if (rawName.includes('↔')) {
+                 routeName = rawName.split('↔')[1].trim();
              }
 
              if (j.isDivergent) {

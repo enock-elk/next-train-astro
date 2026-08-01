@@ -948,11 +948,12 @@ export function filterDominatedTrips(trips) {
     return optimalTrips;
 }
 
-export function runHeuristicFailureProbe(origin, dest) {
+export function runHeuristicFailureProbe(origin, dest, dayType = null) {
     const normOrigin = normalizeStationName(origin);
     const normDest = normalizeStationName(dest);
     const index = $globalStationIndex.get();
     const disr = $globalDisruptions.get();
+    const fullDatabase = $fullDatabase.get();
     
     if (!index || !index[normOrigin] || !index[normDest]) {
         return 'ERR_DISCONNECTED_GRAPH';
@@ -976,7 +977,17 @@ export function runHeuristicFailureProbe(origin, dest) {
         return null;
     };
 
-    const checkConnectivity = (ignoreSuspended) => {
+    const routeHasTrainsToday = (rId) => {
+        if (!dayType || !ROUTES[rId] || !fullDatabase) return true;
+        const directions = getDirectionsForRoute(ROUTES[rId], dayType);
+        return directions.some((dir) => {
+            if (!fullDatabase[dir.key]) return false;
+            const sched = parseJSONSchedule(fullDatabase[dir.key]);
+            return (sched.headers || []).slice(1).length > 0;
+        });
+    };
+
+    const checkConnectivity = (ignoreSuspended, checkSchedule = false) => {
         const queue = [];
         const visited = new Set();
         
@@ -984,6 +995,7 @@ export function runHeuristicFailureProbe(origin, dest) {
         const endRoutes = new Set(Array.from(dData.routes).filter(r => ROUTES[r] && ROUTES[r].isActive));
         
         for (const r of startRoutes) {
+            if (checkSchedule && !routeHasTrainsToday(r)) continue;
             if (ignoreSuspended) {
                 const susp = getRouteSuspension(r);
                 if (susp) {
@@ -1004,6 +1016,7 @@ export function runHeuristicFailureProbe(origin, dest) {
                 if (otherRoute !== curr.route && ROUTES[otherRoute].isActive) {
                     if (!visited.has(otherRoute)) {
                         if (findIntersections(curr.route, otherRoute).length > 0) {
+                            if (checkSchedule && !routeHasTrainsToday(otherRoute)) continue;
                             if (ignoreSuspended) {
                                 const susp = getRouteSuspension(otherRoute);
                                 if (susp) {
@@ -1021,13 +1034,18 @@ export function runHeuristicFailureProbe(origin, dest) {
         return false;
     };
 
-    if (!checkConnectivity(false)) return 'ERR_DISCONNECTED_GRAPH';
+    // Physical path ignoring schedule
+    if (!checkConnectivity(false, false)) return 'ERR_DISCONNECTED_GRAPH';
 
-    const isSevered = !checkConnectivity(true); 
+    // Physical path exists but no trains today on connecting routes
+    if (!checkConnectivity(false, true)) return 'ERR_NO_SERVICE_TODAY';
+
+    // CRITICAL suspension blocking today's path
+    const isSevered = !checkConnectivity(true, true);
 
     if (isSevered && blockingDisruption) {
         return {
-            code: 'ERR_TIMETABLE_MISMATCH',
+            code: 'ERR_ACTIVE_SUSPENSION',
             disruptionId: blockingDisruption.id,
             buttonText: blockingDisruption.buttonText || 'Line Severed',
             hasIncident: true
@@ -1037,7 +1055,7 @@ export function runHeuristicFailureProbe(origin, dest) {
     return 'ERR_TIMETABLE_MISMATCH';
 }
 
-export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
+export async function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
     console.log(`[GUARDIAN] Running Unified Trip Planner for ${origin} -> ${dest} (Requested: ${dayType})`);
 
     const normOrigin = normalizeStationName(origin);
@@ -1078,7 +1096,6 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
     
     let startOffset = 0;
 
-    // 🛡️ GUARDIAN PHASE 4: Manual Rollover Interceptor
     if (typeof window !== 'undefined' && window._forceManualRollover) {
         console.log("[GUARDIAN] Manual Rollover Intercepted. Pushing startOffset to 1.");
         startOffset = 1;
@@ -1087,13 +1104,11 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
 
     const isExplicitOverride = (dayType === 'weekday' || dayType === 'saturday') && dayType !== getCurrentDayType();
 
-    // 🛡️ GUARDIAN BUGFIX: Removed rigid `dayType !== 'sunday'` constraint
-    // Allows the offset scanner to accurately anchor on the very next physical Sunday.
     if (!isExplicitOverride && dayType !== getCurrentDayType()) {
         let baseDate = new Date();
         if ($isSimMode.get() && context.simBaseDate) {
             const parts = context.simBaseDate.split('-');
-            if(parts.length === 3) baseDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            if (parts.length === 3) baseDate = new Date(parts[0], parts[1] - 1, parts[2]);
         }
         
         for (let i = 1; i <= 7; i++) {
@@ -1115,7 +1130,8 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
         }
     }
 
-    const evaluateDay = (offset) => {
+    /** @param {number} offset @param {string} [evalDest] alternate destination for partial journeys */
+    const evaluateDay = (offset, evalDest = dest) => {
         let targetDayType = dayType;
         let targetDayLabel = null;
         let targetDayIdx = getCurrentDayIndex();
@@ -1132,21 +1148,65 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
             targetDayIdx = info.idx;
         }
 
-        if (targetDayType === 'sunday') {
-            return { status: 'SUNDAY_SKIP', trips: [] };
+        if (targetDayType === 'sunday' && !isExplicitOverride) {
+            return { status: 'SUNDAY_SKIP', trips: [], severedTerminus: null };
         }
 
         context.targetDayIdx = targetDayIdx; 
 
-        let allRawTrips = fetchRawTrips(origin, dest, targetDayType, isFutureOffset, context);
+        let allRawTrips = fetchRawTrips(origin, evalDest, targetDayType, isFutureOffset, context);
+
+        let capturedTerminus = null;
+
+        const isTripSevered = (trip) => {
+            const getDisr = (typeof window !== 'undefined' && typeof window.getTripDisruptions === 'function')
+                ? window.getTripDisruptions
+                : null;
+            if (!getDisr) return false;
+
+            const checkLeg = (routeId, stops) => {
+                if (!stops || stops.length === 0) return false;
+                const disrList = getDisr(routeId, stops);
+                const crit = disrList.find((d) => d.tier === 'CRITICAL');
+                if (!crit) return false;
+
+                // Alighting exactly at the disruption boundary is safe for this leg
+                if (crit.triggerStopIndex !== undefined) {
+                    if (crit.triggerStopIndex === stops.length - 1) return false;
+                    if (!capturedTerminus && stops[crit.triggerStopIndex]) {
+                        capturedTerminus = normalizeStationName(stops[crit.triggerStopIndex].station);
+                    }
+                    return true;
+                }
+                return true;
+            };
+
+            if (trip.type === 'DIRECT') return checkLeg(trip.route.id, trip.stops);
+            if (trip.type === 'TRANSFER') {
+                return checkLeg(trip.leg1.route.id, trip.leg1.stops)
+                    || checkLeg(trip.leg2.route.id, trip.leg2.stops);
+            }
+            if (trip.type === 'DOUBLE_TRANSFER') {
+                return checkLeg(trip.leg1.route.id, trip.leg1.stops)
+                    || checkLeg(trip.leg2.route.id, trip.leg2.stops)
+                    || checkLeg(trip.leg3.route.id, trip.leg3.stops);
+            }
+            if (trip.type === 'MULTI_TRANSFER' && trip.legs) {
+                for (const leg of trip.legs) {
+                    if (checkLeg(leg.route.id, leg.stops)) return true;
+                }
+            }
+            return false;
+        };
 
         const hasValidLayovers = (trip) => {
             if (trip.type === 'DIRECT') return true;
 
             const checkLayover = (arrTime, depTime) => {
                 let layover = timeToSeconds(depTime) - timeToSeconds(arrTime);
-                if (layover < 0) layover += 86400; 
-                return layover >= 0 && layover <= 64800; 
+                // SPA parity: block midnight-crossing layovers; allow long same-day waits
+                if (layover < 0) return false;
+                return true;
             };
 
             if (trip.type === 'TRANSFER')
@@ -1166,7 +1226,7 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
             return true;
         };
 
-        const validTrips = allRawTrips.filter(hasValidLayovers);
+        const validTrips = allRawTrips.filter((t) => hasValidLayovers(t) && !isTripSevered(t));
         const optimalTrips = filterDominatedTrips(validTrips);
 
         const masterSort = (a, b) => {
@@ -1202,13 +1262,13 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
             
             if (context.zeroHourProbeActive) {
                 console.warn("🛡️ Guardian: Zero-Hour Probe already active! Aborting recursive call.");
-                return { status: 'IMPOSSIBLE_TODAY', trips: [], targetDayLabel };
+                return { status: 'IMPOSSIBLE_TODAY', trips: [], targetDayLabel, severedTerminus: capturedTerminus };
             }
 
             context.zeroHourProbeActive = true;
             try {
-                const probeTripsRaw = fetchRawTrips(origin, dest, targetDayType, false, context);
-                const validProbeTrips = probeTripsRaw.filter(hasValidLayovers);
+                const probeTripsRaw = fetchRawTrips(origin, evalDest, targetDayType, false, context);
+                const validProbeTrips = probeTripsRaw.filter((t) => hasValidLayovers(t) && !isTripSevered(t));
                 if (validProbeTrips.length === 0) {
                     console.log("[GUARDIAN] Zero-Hour Probe verified 0 valid trips exist from 00:00. Route is IMPOSSIBLE today.");
                     finalStatus = 'IMPOSSIBLE_TODAY';
@@ -1225,7 +1285,7 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
             });
         }
 
-        return { status: finalStatus, trips: optimalTrips, targetDayLabel };
+        return { status: finalStatus, trips: optimalTrips, targetDayLabel, severedTerminus: capturedTerminus };
     };
 
     let loopStatus = 'NO_PATH';
@@ -1234,10 +1294,39 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
     let errorPayload = null; 
     
     const MAX_SAFE_ROLLOVER_DAYS = 7;
-    const maxOffset = isExplicitOverride ? startOffset : startOffset + MAX_SAFE_ROLLOVER_DAYS;
+    let maxOffset = isExplicitOverride ? startOffset : startOffset + MAX_SAFE_ROLLOVER_DAYS;
     
     let executionCounter = 0;
     const MAX_EXECUTION_LIMIT = 14;
+
+    const formatTitle = (s) => {
+        if (!s) return '';
+        return String(s).replace(/ STATION/gi, '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+    };
+
+    // Eager Partial Journey Evaluator — precompute backward station sequence once
+    const getBackwardStationSequence = (dst, targetDay) => {
+        const dNorm = normalizeStationName(dst);
+        const fullDatabase = $fullDatabase.get();
+        const possibleStations = [];
+        for (const route of Object.values(ROUTES)) {
+            if (!route.isActive || route.id === 'special_event') continue;
+            for (const dir of getDirectionsForRoute(route, targetDay)) {
+                if (!fullDatabase || !fullDatabase[dir.key]) continue;
+                const sched = parseJSONSchedule(fullDatabase[dir.key]);
+                if ((sched.headers || []).slice(1).length === 0) continue;
+                const rows = sched.rows;
+                if (!rows) continue;
+                const stationsNorm = rows.map((r) => normalizeStationName(r.STATION));
+                const idxD = stationsNorm.indexOf(dNorm);
+                if (idxD > 0) {
+                    possibleStations.push(...rows.slice(0, idxD).map((r) => r.STATION).reverse());
+                }
+            }
+        }
+        return [...new Set(possibleStations)];
+    };
+    const testStations = getBackwardStationSequence(dest, dayType);
 
     for (let offset = startOffset; offset <= maxOffset; offset++) {
         if (executionCounter++ > MAX_EXECUTION_LIMIT) {
@@ -1246,13 +1335,30 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
             break;
         }
 
+        // Yield so the spinner can paint during partial-station scans
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         try {
-            const evalResult = evaluateDay(offset);
+            const evalResult = evaluateDay(offset, dest);
             
             if (offset === startOffset) {
                 initialStatus = evalResult.status;
                 if (dayType === 'sunday' || evalResult.status === 'SUNDAY_SKIP') {
                     initialStatus = 'SUNDAY_ROLLOVER';
+                }
+
+                // Hard physical block on day 1 → skip pointless 7-day scan (still allow today's partials)
+                if (evalResult.status === 'NO_PATH' && !isExplicitOverride) {
+                    const earlyProbe = runHeuristicFailureProbe(origin, dest, dayType);
+                    if (
+                        typeof earlyProbe === 'object'
+                        || earlyProbe === 'ERR_CROSS_REGION'
+                        || earlyProbe === 'ERR_DISCONNECTED_GRAPH'
+                        || earlyProbe === 'ERR_NO_SERVICE_TODAY'
+                    ) {
+                        console.log("🛡️ Guardian: Hard physical block detected on Day 1. Short-circuiting 7-day loop.");
+                        maxOffset = offset;
+                    }
                 }
             }
 
@@ -1260,6 +1366,59 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
                 loopStatus = (offset > startOffset) ? 'NO_MORE_TODAY' : evalResult.status;
                 loopTrips = evalResult.trips;
                 break; 
+            }
+
+            // Eager partial evaluation before rolling to tomorrow
+            let targetsToTest = [...testStations];
+            if (evalResult.severedTerminus && !targetsToTest.includes(evalResult.severedTerminus)) {
+                targetsToTest.unshift(evalResult.severedTerminus);
+            }
+
+            if ((evalResult.status === 'NO_PATH' || evalResult.status === 'IMPOSSIBLE_TODAY') && targetsToTest.length > 0) {
+                let partialSuccess = false;
+
+                for (const testDest of targetsToTest) {
+                    if (normalizeStationName(testDest) === normalizeStationName(origin)) continue;
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+
+                    const partialResult = evaluateDay(offset, testDest);
+                    if (partialResult.status === 'FOUND' || partialResult.status === 'ALL_DEPARTED') {
+                        console.log(`[GUARDIAN] Partial Journey Found to ${testDest} on offset ${offset}!`);
+                        loopTrips = (partialResult.trips || []).map((t) => ({
+                            ...t,
+                            _isPartialJourney: true,
+                            _partialDest: testDest,
+                            _intendedDest: dest,
+                        }));
+                        loopStatus = 'PARTIAL_JOURNEY';
+                        let disruptionId = null;
+                        let buttonText = 'Line Severed';
+                        try {
+                            const normTerm = normalizeStationName(testDest);
+                            const globalList = Object.values($globalDisruptions.get() || {}).flat();
+                            const crit = globalList.find((d) =>
+                                d.tier === 'CRITICAL'
+                                && d.stations
+                                && d.stations.map((s) => normalizeStationName(s)).includes(normTerm)
+                            );
+                            if (crit) {
+                                disruptionId = crit.id;
+                                buttonText = crit.buttonText || buttonText;
+                            }
+                        } catch { /* ignore */ }
+                        errorPayload = {
+                            intendedDest: formatTitle(dest),
+                            partialDest: formatTitle(testDest),
+                            disruptionId,
+                            buttonText,
+                            hasIncident: !!disruptionId,
+                        };
+                        partialSuccess = true;
+                        break;
+                    }
+                }
+
+                if (partialSuccess) break;
             }
         } catch (e) {
             console.error("🛡️ Guardian: Fatal execution error during rollover evaluation. Aborting loop.", e);
@@ -1269,8 +1428,8 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
     }
 
     if (loopTrips.length === 0) {
-        console.log("[GUARDIAN] Zero trips found after 7-day scan. Initiating Heuristic Failure Probe...");
-        const probeResult = runHeuristicFailureProbe(origin, dest);
+        console.log("[GUARDIAN] Zero trips found after 7-day scan (including partials). Initiating Heuristic Failure Probe...");
+        const probeResult = runHeuristicFailureProbe(origin, dest, dayType);
         
         if (typeof probeResult === 'object' && probeResult !== null) {
             loopStatus = probeResult.code;
@@ -1278,16 +1437,13 @@ export function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
         } else {
             loopStatus = probeResult;
         }
-    } else {
+    } else if (loopStatus !== 'PARTIAL_JOURNEY') {
         if (initialStatus === 'IMPOSSIBLE_TODAY') {
             loopStatus = 'IMPOSSIBLE_TODAY'; 
         } else if (initialStatus === 'SUNDAY_ROLLOVER') {
             loopStatus = 'SUNDAY_ROLLOVER';
         }
     }
-
-    // Note: Analytics tracking for complex routes will be moved to the client-side UI 
-    // to strictly preserve the stateless nature of this Astro Module.
 
     return {
         status: loopStatus,

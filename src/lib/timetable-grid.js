@@ -7,6 +7,11 @@ import { $currentRouteId, $userRegion, $schedules } from '../store.js';
 import { loadAllSchedules, executeRegionSwap } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService } from './live-board.js';
+import {
+    buildRouteShareUrl,
+    parseRouteDeepLinkParams,
+    stripShareParamsFromUrl,
+} from './share-links.js';
 
 function closeFullGridModal() {
     if (typeof location !== 'undefined' && location.hash === '#grid') {
@@ -17,30 +22,33 @@ function closeFullGridModal() {
 }
 
 function buildGridShareUrl(routeId, direction, dayType) {
-    const day = dayType === 'saturday' ? 'saturday' : 'weekday';
+    const day = dayType === 'saturday' || dayType === 'sunday' ? dayType : 'weekday';
     const dir = direction === 'B' ? 'B' : 'A';
-    return `${location.origin}${location.pathname}?action=route&route=${routeId}&view=grid&dir=${dir}&day=${day}`;
+    return buildRouteShareUrl({ routeId, view: 'grid', dir, day });
+}
+
+export function buildFareShareUrl(routeId) {
+    return buildRouteShareUrl({ routeId, view: 'fares' });
 }
 
 export function parseRouteDeepLink() {
     if (typeof location === 'undefined') return null;
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') !== 'route') return null;
-    const routeId = params.get('route');
-    if (!routeId || !ROUTES[routeId]) return null;
-    const dayRaw = (params.get('day') || '').toLowerCase();
+    const link = parseRouteDeepLinkParams(location.search);
+    if (!link || !ROUTES[link.routeId]) return null;
+    // Grid day: weekend board uses saturday schedules for sat/sun deep links
+    const day = link.day === 'saturday' || link.day === 'sunday' ? 'saturday' : 'weekday';
     return {
-        routeId,
-        view: (params.get('view') || '').toLowerCase(),
-        dir: params.get('dir') === 'B' ? 'B' : 'A',
-        day: dayRaw === 'saturday' || dayRaw === 'weekend' || dayRaw === 'sunday' ? 'saturday' : 'weekday',
+        routeId: link.routeId,
+        view: link.view,
+        dir: link.dir,
+        day,
     };
 }
 
 /**
  * Cold-start / share deep link: open the linked route (and grid when view=grid).
- * New users (welcomeSeen !== true): set that route as default for its region.
- * Existing users: open the view but do not overwrite their defaultRoute_*.
+ * If the user has no default for that region (cold start / empty prefs), adopt
+ * the shared route as their default. Never overwrite an existing default.
  */
 export async function applyRouteDeepLink() {
     const link = parseRouteDeepLink();
@@ -49,10 +57,16 @@ export async function applyRouteDeepLink() {
     const route = ROUTES[link.routeId];
     if (!route) return false;
 
-    const isNewUser = safeStorage.getItem('welcomeSeen') !== 'true';
-    if (isNewUser) {
+    const defaultKey = 'defaultRoute_' + route.region;
+    const existingDefault = safeStorage.getItem(defaultKey);
+    const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
-        safeStorage.setItem('defaultRoute_' + route.region, link.routeId);
+    }
+    // Cold start / no defaults: pin the shared route as theirs
+    if (!hasUsableDefault) {
+        safeStorage.setItem(defaultKey, link.routeId);
     }
 
     if (route.region !== ($userRegion.get() || 'GP')) {
@@ -61,18 +75,20 @@ export async function applyRouteDeepLink() {
 
     $currentRouteId.set(link.routeId);
 
-    try {
-        const urlObj = new URL(location.href);
-        ['action', 'route', 'view', 'dir', 'day'].forEach((k) => urlObj.searchParams.delete(k));
-        // Strip hash too — renderFullScheduleGrid will push #grid so Close/Back stays in-app
-        const next = urlObj.pathname + (urlObj.search ? urlObj.search : '');
-        history.replaceState({}, '', next);
-    } catch (_) { /* ignore */ }
+    // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
+    stripShareParamsFromUrl();
 
     await loadAllSchedules(true);
 
     if (link.view === 'grid') {
         setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);
+    } else if (link.view === 'fares' || link.view === 'fare') {
+        setTimeout(async () => {
+            try {
+                const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
+                openFareModalForCurrentRoute();
+            } catch (_) { /* ignore */ }
+        }, 120);
     }
     return true;
 }

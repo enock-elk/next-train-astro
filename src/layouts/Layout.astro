@@ -1,7 +1,7 @@
 ---
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
 import '../styles/appearance.css';
-import { normalizeBase, withBase } from '../lib/config.js';
+import { APP_VERSION, normalizeBase, withBase } from '../lib/config.js';
 
 const { 
   title = "Next Train | Live Schedules", 
@@ -32,6 +32,7 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <meta name="apple-mobile-web-app-title" content="Train 2.0" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
+    <meta name="app-version" content={APP_VERSION} />
     <link rel="icon" href={withBase('favicon.ico')} sizes="any" />
     <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
@@ -41,6 +42,8 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta property="og:site_name" content="Next Train" />
     <meta property="og:locale" content="en_ZA" />
     <meta name="twitter:card" content="summary" />
@@ -50,7 +53,26 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
 
     <!-- PWA Manifest — always under base with trailing slash. Dev has no PWA
          plugin output, so linking it there only produces 404 noise. -->
+    <!-- Manifest + SW only exist after build (astro preview / deploy). Dev has no SW on purpose. -->
     {import.meta.env.PROD && <link rel="manifest" href={withBase('manifest.webmanifest')} />}
+    <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
+    <script is:inline>
+      if (typeof globalThis === 'undefined') { window.globalThis = window; }
+      (function () {
+        function atPolyfill(n) {
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += this.length;
+          if (n < 0 || n >= this.length) return undefined;
+          return this[n];
+        }
+        if (!Array.prototype.at) {
+          Object.defineProperty(Array.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+        }
+        if (!String.prototype.at) {
+          Object.defineProperty(String.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+        }
+      })();
+    </script>
     <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;
@@ -58,8 +80,35 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         e.preventDefault();
         window.deferredInstallPrompt = e;
         window.__ntDeferredInstallPrompt = e;
+        console.log('✅ PWA Install Event captured successfully in HEAD.');
         try { window.dispatchEvent(new Event('pwa-install-ready')); } catch (_) {}
       });
+    </script>
+    <!-- Black Box: capture console into localStorage before app modules boot -->
+    <script is:inline>
+      (function () {
+        var MAX_LOGS = 500;
+        var LOG_KEY = 'nt_blackbox_logs';
+        function saveLog(type, args) {
+          try {
+            var msg = Array.prototype.map.call(args, function (a) {
+              if (a instanceof Error) return a.message + ' ' + (a.stack || '');
+              return typeof a === 'object' ? JSON.stringify(a) : String(a);
+            }).join(' ');
+            var logs = [];
+            try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}
+            logs.push({ t: Date.now(), type: type, msg: msg });
+            var cutoff = Date.now() - (72 * 60 * 60 * 1000);
+            logs = logs.filter(function (l) { return l.t > cutoff; });
+            if (logs.length > MAX_LOGS) logs = logs.slice(logs.length - MAX_LOGS);
+            localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+          } catch (e) { /* quota / recursion guard */ }
+        }
+        var origLog = console.log, origWarn = console.warn, origError = console.error;
+        console.log = function () { saveLog('LOG', arguments); return origLog.apply(console, arguments); };
+        console.warn = function () { saveLog('WARN', arguments); return origWarn.apply(console, arguments); };
+        console.error = function () { saveLog('ERROR', arguments); return origError.apply(console, arguments); };
+      })();
     </script>
     <script is:inline define:vars={{ base }}>
       window.__NT_BASE__ = base;
@@ -70,25 +119,117 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
 
-    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX"></script>
+    <!-- CRITICAL: GA4 + device identity (SPA-parity — same key, format, uid bridge, user_id) -->
+    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX" crossorigin="anonymous"></script>
     <script is:inline>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
+
       var gaConfig = {};
-      try { if (localStorage.getItem('analytics_ignore') === 'true') gaConfig['traffic_type'] = 'internal'; } catch(e) {}
-      gtag('config', 'G-JM5DH6ERVX', gaConfig);
-    </script>
-    <script is:inline>
+      var isDevAnalytics = false;
+      var deviceId = null;
+
       try {
-        if (localStorage.getItem('analytics_ignore') !== 'true') {
-          (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-          })(window, document, "clarity", "script", "v1aj19921i");
+        isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true';
+
+        // SPA Identity Bridge: WebView → Chrome handoff via ?uid=
+        var urlParams = new URLSearchParams(window.location.search);
+        var transferredUid = urlParams.get('uid');
+        var urlDirty = false;
+        if (transferredUid) {
+          deviceId = transferredUid;
+          localStorage.setItem('next_train_device_id', deviceId);
+          urlParams.delete('uid');
+          urlDirty = true;
+        } else {
+          deviceId = localStorage.getItem('next_train_device_id');
+          if (!deviceId) {
+            deviceId = 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            localStorage.setItem('next_train_device_id', deviceId);
+          }
         }
-      } catch(e) {}
+        // Cache-bust (?v=timestamp) must remain on the request; strip after load so shares stay clean
+        if (urlParams.has('v')) {
+          urlParams.delete('v');
+          urlDirty = true;
+        }
+        if (urlDirty) {
+          var cleanUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '') + window.location.hash;
+          window.history.replaceState({}, '', cleanUrl);
+        }
+      } catch (e) {}
+
+      if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
+      if (deviceId) gaConfig['user_id'] = deviceId;
+
+      var userRegion = 'GP';
+      try { userRegion = localStorage.getItem('userRegion') || 'GP'; } catch (e) {}
+      gaConfig['user_properties'] = { crm_region: userRegion, custom_device_id: deviceId };
+
+      gtag('config', 'G-JM5DH6ERVX', gaConfig);
+      window.NEXT_TRAIN_DEVICE_ID = deviceId;
+    </script>
+
+    <!-- Clarity — deferred + identify with same device id (SPA Growth Mode) -->
+    <script is:inline>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var blockClarity = false;
+          try { blockClarity = localStorage.getItem('analytics_ignore') === 'true'; } catch (e) {}
+          if (blockClarity) return;
+          (function (c, l, a, r, i, t, y) {
+            c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+            t = l.createElement(r); t.async = 1; t.src = 'https://www.clarity.ms/tag/' + i;
+            t.crossOrigin = 'anonymous';
+            y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+          })(window, document, 'clarity', 'script', 'v1aj19921i');
+          try {
+            var id = window.NEXT_TRAIN_DEVICE_ID || localStorage.getItem('next_train_device_id');
+            if (id && typeof clarity === 'function') {
+              clarity('identify', id);
+              clarity('set', 'custom_id', id);
+            }
+          } catch (e) {}
+        }, 2500);
+      });
+    </script>
+
+    <!-- GUARDIAN: Sentry (deferred post-Clarity — SPA parity) -->
+    <script is:inline>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          window.sentryOnLoad = function () {
+            Sentry.init({
+              dsn: 'https://ae241b469e4c06ae7644f55c2a796782@o4511038845222912.ingest.us.sentry.io/4511039214518272',
+              sampleRate: 0.3,
+              ignoreErrors: [
+                'ResizeObserver loop limit exceeded',
+                'Network request failed',
+                'Failed to fetch',
+                'Load failed',
+                'QuotaExceededError',
+                'UnknownError: Connection is closing because of: IO error',
+                'Internal error opening backing store',
+                'DOMException',
+                'TimeoutError',
+                'UnknownError',
+                'Failed to update a ServiceWorker',
+                'AbortError',
+                'window.webkit.messageHandlers',
+                'Request timeout',
+                '/api/webviewClick'
+              ]
+            });
+            console.log('🛡️ Guardian: Sentry initialized (Deferred).');
+          };
+          var sentryScript = document.createElement('script');
+          sentryScript.src = 'https://js.sentry-cdn.com/ae241b469e4c06ae7644f55c2a796782.min.js';
+          sentryScript.crossOrigin = 'anonymous';
+          sentryScript.async = true;
+          document.head.appendChild(sentryScript);
+        }, 3500);
+      });
     </script>
 
     <!-- 🛡️ GUARDIAN: Inline Pre-Boot Script -->
@@ -111,6 +252,9 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
 
     <!-- Global CSS Overrides -->
     <style is:global>
+      /* SPA FOUC rule: .hidden must beat utility display:flex on install CTAs */
+      .hidden { display: none !important; }
+
       body { font-family: 'Inter', sans-serif; }
       body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
       
@@ -142,8 +286,9 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         background: transparent;
       }
       .dark .tab-btn { color: #9ca3af; }
-      .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
-      .dark .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
+      /* SPA custom.css parity — not colour-pack tokens */
+      .tab-btn.active { color: #2563eb; border-color: #2563eb; }
+      .dark .tab-btn.active { color: #60a5fa; border-color: #60a5fa; }
       /* Sliding indicator owns the underline visually */
       .tab-btn, .tab-btn.active { border-bottom-color: transparent !important; }
 
@@ -154,19 +299,19 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         transition: opacity 0.3s ease-out, transform 0.3s ease-out;
       }
       .view-section.active {
-        display: flex;
-        flex-direction: column;
+        display: block;
+        /* SPA: content grows; the page (not an inner pane) scrolls — header moves with it */
         flex: 1 1 auto;
-        min-height: 0;
-        /* Scroll when content is taller than the shell — never clip UI */
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: visible;
         opacity: 1;
         transform: translateY(0);
       }
 
-      /* Only Community pins height so the feed scrolls inside (composer stays put) */
+      /* Community keeps an internal feed scroll when that chrome is enabled */
       #view-community.view-section.active {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
         overflow: hidden;
       }
 
@@ -175,18 +320,11 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         overflow: visible !important;
       }
 
-      /* App shell fills the device viewport (minus body padding) */
+      /* SPA shell: min height only — no locked viewport height (that pinned the header) */
       #main-content.app-shell {
-        height: calc(100dvh - 1rem);
-        max-height: calc(100dvh - 1rem);
-        min-height: calc(100dvh - 1rem);
-      }
-      @media (min-width: 640px) {
-        #main-content.app-shell {
-          height: calc(100dvh - 2.5rem);
-          max-height: calc(100dvh - 2.5rem);
-          min-height: calc(100dvh - 2.5rem);
-        }
+        min-height: 600px;
+        height: auto;
+        max-height: none;
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
@@ -197,15 +335,14 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         max-height: none !important;
       }
 
-      @keyframes nt-shake {
-        0%, 100% { transform: translateX(0); }
-        20% { transform: translateX(-3px) rotate(-4deg); }
-        40% { transform: translateX(3px) rotate(4deg); }
-        60% { transform: translateX(-2px) rotate(-2deg); }
-        80% { transform: translateX(2px) rotate(2deg); }
+      /* SPA custom.css shake (bell + station hint) */
+      @keyframes shake {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(-10deg); }
+        75% { transform: rotate(10deg); }
       }
       .animate-shake {
-        animation: nt-shake 0.55s ease-in-out infinite;
+        animation: shake 0.5s ease-in-out infinite;
       }
 
       /* Compact header (returning users) — slim WhatsApp-style bar */
@@ -236,17 +373,34 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
       body.nav-bottom #offline-toast {
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
+
+      /* CleverAds containment — never cover welcome / go fullscreen */
+      #clever-core {
+        max-height: 100px !important;
+        overflow: hidden !important;
+        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+        pointer-events: none;
+      }
+      #clever-core iframe {
+        max-height: 100px !important;
+      }
+      #clever-core.ad-cloaked {
+        transform: translateY(150%) !important;
+        pointer-events: none !important;
+        opacity: 0;
+      }
+      .ad-active-padding {
+        padding-bottom: 108px !important;
+      }
+      .view-section {
+        transition: padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
     </style>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-stretch justify-center min-h-dvh p-2 sm:p-3 transition-colors duration-300">
-    
-    <!-- 🛡️ GUARDIAN: Offline Marquee -->
-    <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">
-      <div id="offline-indicator" style="display: none;" class="pointer-events-auto w-max bg-amber-400 text-gray-900 border-amber-500 border-b border-x dark:bg-gray-900/95 dark:text-amber-400 dark:border-amber-500/80 px-4 py-1 rounded-b-lg shadow-md text-xs font-black uppercase tracking-widest transition-colors">
-        <span class="w-2 h-2 rounded-full mr-2 animate-pulse bg-gray-900 dark:bg-amber-400 inline-block"></span> OFFLINE MODE
-      </div>
-    </div>
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+
+    <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 
     <!-- GUARDIAN: Lie-Fi / offline transition toast (auto-dismiss) -->
     <div id="offline-toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900/95 dark:bg-gray-800/95 border border-gray-700 dark:border-gray-600 text-white px-4 py-3 rounded-xl shadow-2xl z-[150] transition-all duration-500 translate-y-[150%] opacity-0 flex items-center space-x-3 w-max max-w-[90%] pointer-events-none backdrop-blur-md">
@@ -260,12 +414,22 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <!-- Page Content Injected Here -->
     <slot />
 
+    <!-- CleverAds host slot (cloaked until safe zone; contained max-height) -->
+    <div id="clever-core" class="ad-cloaked fixed bottom-0 left-0 w-full z-[80] flex justify-center items-end" aria-hidden="true"></div>
+
     <!-- Client-Side Bootstrapper -->
     <script>
       // @ts-nocheck
       import { hydrateStores, $isOffline } from '../store.js';
       import { registerSW } from 'virtual:pwa-register';
       import { bindPwaInstallPrompt } from '../lib/ui.js';
+      import { initCleverAds } from '../lib/clever-ads.js';
+      import {
+        bindAppUpdateLifecycle,
+        cleanupLegacySpaShell,
+        enforceAppVersion,
+        initNetworkStruggleModal,
+      } from '../lib/app-update.js';
 
       // Capture installability before SW registration can race the event
       bindPwaInstallPrompt();
@@ -279,14 +443,17 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         if (indicator) indicator.style.display = offline ? 'flex' : 'none';
       });
 
-      // 3. Register Service Worker via Vite PWA
-      registerSW({
-        immediate: true,
-        onRegisteredSW(swUrl) {
-          console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
-        },
-        onRegisterError(error) {
-          console.error('🛡️ Guardian PWA: Registration failed', error);
+      // 3. Drop legacy SPA worker/caches, then version-enforce before ads
+      cleanupLegacySpaShell().finally(() => {
+        initNetworkStruggleModal();
+        enforceAppVersion();
+
+        // 4. CleverAds (safe-zone + session-stability; skips queued refresh windows)
+        initCleverAds();
+
+        // 5. Register Service Worker + force-update path (PROD/preview only)
+        if (import.meta.env.PROD) {
+          bindAppUpdateLifecycle(registerSW);
         }
       });
     </script>

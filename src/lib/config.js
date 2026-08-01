@@ -1,7 +1,8 @@
 // --- CONFIGURATION & CONSTANTS ---
 
 // 0. Version Control
-export const APP_VERSION = "V7_06.17"; // v4 - BUMPED: UX Polish, 18-Hour Layover Uncap & Precision Routing.
+/** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
+export const APP_VERSION = "V7_07.28";
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -116,27 +117,33 @@ export const HOLIDAY_NAMES = {
     "12-26": "Day of Goodwill"
 };
 
-// 1. Legal Text Definitions (GUARDIAN V5.01: TWA Compliance & Opaque Infrastructure)
+// 1. Legal Text Definitions
 export const LEGAL_TEXTS = {
     terms: `
-        <h4 class="font-bold text-lg mb-2">1. Independent Service & Disclaimer</h4>
-        <p class="mb-3"><strong>Metrorail Next Train</strong> is an independent digital tool developed by Kazembe CodeWorks. This application is <strong>not affiliated with, endorsed by, or directly associated with PRASA or Metrorail</strong>. The service is provided "as is" without warranties of any kind.</p>
-        
-        <h4 class="font-bold text-lg mb-2 mt-4">2. Schedule Accuracy & Liability</h4>
-        <p class="mb-3">All transit schedules, fares, and routing information presented within this application are aggregated estimations based on publicly available data. We do not guarantee absolute real-time accuracy. Kazembe CodeWorks and its developers shall not be held liable for any missed transit connections, financial losses, disciplinary actions at places of employment, or personal damages arising from the use of this information.</p>
-        
+        <h4 class="font-bold text-lg mb-2">1. Independent Service &amp; Disclaimer</h4>
+        <p class="mb-3"><strong>Next Train</strong> is an independent, crowdsourced digital tool developed by Kazembe CodeWorks. We are <strong>not affiliated with, endorsed by, or directly associated with PRASA, Metrorail, or any government entity</strong>.</p>
+
+        <h4 class="font-bold text-lg mb-2 mt-4">2. Schedule Accuracy &amp; Liability</h4>
+        <p class="mb-3">Transit schedules, fares, and routing information presented in this app are aggregated estimations based on official timetables and commuter crowdsourcing. Because train schedules are subject to sudden delays and infrastructure changes, we do not guarantee absolute real-time accuracy. Kazembe CodeWorks cannot be held liable for any missed trains, financial losses, disciplinary actions at work, or personal damages arising from the use of this app.</p>
+
         <h4 class="font-bold text-lg mb-2 mt-4">3. Acceptable Use</h4>
-        <p class="mb-3">By accessing this application, you agree to use it strictly for personal, non-commercial transit planning. Automated data scraping, reverse-engineering of the application's secure endpoints, or malicious interference with our cloud infrastructure is strictly prohibited and will result in immediate service denial.</p>
+        <p class="mb-3">Next Train is built for personal, non-commercial transit planning. Automated data scraping, reverse-engineering of our databases, or malicious interference with our cloud infrastructure is strictly prohibited.</p>
     `,
     privacy: `
-        <h4 class="font-bold text-lg mb-2">1. Data Collection & Analytics</h4>
-        <p class="mb-3">To continuously improve the commuter experience, we utilize industry-standard analytics tools (including Google Analytics and Microsoft Clarity) to monitor application performance and user engagement. This tracking measures generic usage patterns, origin-destination planning flows, and crash reports. <strong>All data collected is strictly anonymized.</strong> We do not request, process, or store personally identifiable information (PII) such as names or contact details.</p>
-        
-        <h4 class="font-bold text-lg mb-2 mt-4">2. Location Services</h4>
-        <p class="mb-3">Our "Find Nearest Station" feature requires access to your device's GPS coordinates. This location data is processed locally on your device in real-time to calculate distances to nearby stations. <strong>Your exact GPS location is never transmitted to, or stored on, our backend servers for tracking.</strong></p>
-        
-        <h4 class="font-bold text-lg mb-2 mt-4">3. Third-Party Infrastructure</h4>
-        <p class="mb-3">Schedule data and application states are distributed via secure, globally recognized cloud infrastructure providers. While your device downloads data from these secure endpoints, your individual connection metrics are governed by the strict privacy frameworks of those enterprise cloud providers. We do not broker your individual device fingerprints to external marketing agencies.</p>
+        <h4 class="font-bold text-lg mb-2">1. What Information Do We Collect?</h4>
+        <p class="mb-3">We respect your privacy. Next Train is designed to be used without creating an account.</p>
+        <p class="mb-3"><strong>Location Data:</strong> If you use the “Find Nearest Station” feature, your GPS coordinates are processed strictly locally on your device. We never transmit, track, or store your physical location on our servers.</p>
+        <p class="mb-3"><strong>Anonymous Telemetry:</strong> To keep the app fast and crash-free, we automatically collect basic diagnostic data (e.g., device model, operating system, generic region, and crash logs).</p>
+        <p class="mb-3"><strong>Voluntary Information:</strong> If you use the In-App Feedback tool, you may optionally provide your email or WhatsApp number. This is used only to reply to your specific query and is never used for marketing.</p>
+
+        <h4 class="font-bold text-lg mb-2 mt-4">2. Third-Party Tracking &amp; Cookies</h4>
+        <p class="mb-3">To understand how commuters use the app and to keep the servers running, we integrate with industry-standard third-party services:</p>
+        <p class="mb-3"><strong>Analytics:</strong> We use Google Analytics 4 and Microsoft Clarity to track generic usage patterns (e.g., which routes are most popular) and identify UX roadblocks. All data is highly anonymized.</p>
+        <p class="mb-3"><strong>Advertising:</strong> We use third-party ad networks to help cover server costs. These networks may use cookies to serve relevant ads. (Note: We will soon be introducing a cookie consent banner to give you full control over this).</p>
+        <p class="mb-3"><strong>Infrastructure:</strong> Our schedules and live alerts are distributed via secure, globally recognized cloud infrastructure providers.</p>
+
+        <h4 class="font-bold text-lg mb-2 mt-4">3. Your POPIA Rights (South Africa)</h4>
+        <p class="mb-3">Under the Protection of Personal Information Act (POPIA), you have the right to request access to, correction of, or deletion of any personal data you have voluntarily provided to us (such as feedback emails). To exercise these rights, or if you have any privacy concerns, please contact our Admin Team at <a href="mailto:admin@nexttrain.co.za" class="text-blue-600 dark:text-blue-400 underline font-semibold">admin@nexttrain.co.za</a>.</p>
     `
 };
 
@@ -770,85 +777,166 @@ export const DEFAULT_EXCLUSIONS = {
     }
 };
 
-// 7. CHANGELOG 
-// This drives the "What's New" modal.
-// GUARDIAN: HTML spans injected to force flexbox wrapping in renderer.js without altering the parent UI structure.
+// 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
+// Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
     {
-        version: "V7 06.17 <br><span class='text-sm text-blue-600 dark:text-blue-400'>The Precision Update</span>",
+        id: "V7_07.28",
+        title: "Performance Polish Edition",
+        date: "28 Jul 2026",
+        forceShow: false,
+        features: [
+            "<b>Smoother App Navigation:</b> Fine-tuned rapid taps and screen transitions for a faster, more responsive feel.",
+            "<b>Smarter Connectivity Checks:</b> Better detection when the network struggles, with safer fallback to saved offline schedules.",
+            "<b>Cleaner Visuals:</b> Tighter route cards and a simpler timeline view for easier trip reading.",
+            "<b>Background Improvements:</b> Leaner data engine for less battery use and more reliable schedule updates."
+        ]
+    },
+    {
+        id: "V7_07.11",
+        title: "Performance & Precision Polish",
+        date: "11 Jul 2026",
+        forceShow: false,
+        features: [
+            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning — alerts only when your train crosses the danger zone.",
+            "<b>Seamless Navigation:</b> “See Next Available Day” on empty late-night/Sunday boards syncs the day dropdown correctly.",
+            "<b>Sleeker Interface:</b> Trip Planner result cards cleaned up — fewer glitches and misaligned borders."
+        ]
+    },
+    {
+        id: "V7_06.29",
+        title: "Trip Planner Polish",
+        date: "29 Jun 2026",
+        forceShow: false,
+        features: [
+            "<b>Sleeker Timeline:</b> Tighter Trip Planner timeline for more screen space and clearer transfers.",
+            "<b>Clearer Disruptions:</b> Line-severance alerts break out of the timeline to show exactly where a train terminates.",
+            "<b>Official Rebranding:</b> Rebranded to <b>Next Train</b> for legal clarity as an unaffiliated commuter tool."
+        ]
+    },
+    {
+        id: "V7_06.24",
+        title: "The Corporate Glass Update",
+        date: "24 Jun 2026",
+        forceShow: false,
+        features: [
+            "<b>Sleeker Design:</b> Modern icons and cleaner timeline layouts in place of cluttered emoji chrome.",
+            "<b>Smarter Route Status:</b> Impossible connections explain why — incidents or extreme timetable gaps — with quick links.",
+            "<b>Layover Warnings:</b> Unusually long transfer waits are flagged so you are not stranded.",
+            "<b>Smoother Experience:</b> Fixed mobile text clipping and improved station-select prompts."
+        ]
+    },
+    {
+        id: "V7_06.17",
+        title: "The Precision Update",
         date: "17 Jun 2026",
+        forceShow: false,
         features: [
-            "<b>Smarter Trip Planner:</b> The routing engine now actively finds overnight and extended weekend connections that were previously hidden, ensuring you see every possible travel option.",
-            "<b>Clearer Journey Timelines:</b> We've polished the visual timeline with a unified, professional color scheme and fixed text that was getting cut off on smaller mobile screens.",
-            "<b>Accurate Route Status:</b> If a trip is impossible today, the app now specifically tells you why-whether it's due to an active incident, extreme timetable gaps, or disconnected lines."
+            "<b>Smarter Trip Planner:</b> Finds overnight and extended weekend connections that were previously hidden.",
+            "<b>Clearer Journey Timelines:</b> Unified colours and fixed text cut-off on smaller phones.",
+            "<b>Accurate Route Status:</b> Explains why a trip is impossible today (incident, gaps, or disconnected lines)."
         ]
     },
     {
-    version: "V7 05.31 <br><span class='text-sm text-blue-600 dark:text-blue-400'>Performance Polish</span>",
-    date: "31 May 2026",
-    features: [
-        "<b>Instant Loading:</b> Squashed a bug that occasionally caused the Welcome Screen to freeze on 'Loading Route'. The app now drops you straight into your schedule.",
-        "<b>Cleaner Interface:</b> Tightened up the side menus, optimized text for smaller screens, and fixed an issue where popup ads were leaking onto the welcome screen.",
-        "<b>Data Reliability:</b> Upgraded our background sync engines to ensure your timetables update perfectly, even on patchy cell networks."
-    ]
+        id: "V7_05.31",
+        title: "Performance Polish",
+        date: "31 May 2026",
+        forceShow: false,
+        features: [
+            "<b>Instant Loading:</b> Welcome screen no longer freezes on “Loading Route”.",
+            "<b>Cleaner Interface:</b> Tighter menus, better small-screen text, ads no longer leak onto welcome.",
+            "<b>Data Reliability:</b> Stronger background sync on patchy networks."
+        ]
     },
     {
-        version: "V7 05.16 <br><span class='text-sm text-blue-600 dark:text-blue-400'>Western Cape Expansion</span>",
+        id: "V7_05.16",
+        title: "Western Cape Expansion",
         date: "16 May 2026",
+        forceShow: false,
         features: [
-            "<b>Cape Town is Complete:</b> Added 6 massive new routes, ensuring full coverage for the Central Line and Northern Line networks.",
-            "<b>Cinematic UI:</b> Dropdown menus now dim the background for a cleaner, native-app feel."
+            "<b>Cape Town is Complete:</b> Six new routes covering Central and Northern Line networks.",
+            "<b>Cinematic UI:</b> Dropdowns dim the background for a cleaner native feel."
         ]
     },
     {
-        version: "V7 05.12 <br><span class='text-sm text-blue-600 dark:text-blue-400'>KZN & EC Launch</span>",
+        id: "V7_05.12",
+        title: "KZN & EC Launch",
         date: "12 May 2026",
+        forceShow: false,
         features: [
-            "<b>National Expansion:</b> Metrorail Next Train has officially launched in KwaZulu-Natal and the Eastern Cape!",
-            "<b>Cross-Region Support:</b> Easily switch between provinces in the main menu to view local timetables."
+            "<b>National Expansion:</b> Now live in KwaZulu-Natal and the Eastern Cape.",
+            "<b>Cross-Region Support:</b> Switch provinces from the main menu."
         ]
     },
     {
-        version: "V6.05.01 <br><span class='text-sm text-blue-600 dark:text-blue-400'>Growth Edition</span>",
+        id: "V6_05.01",
+        title: "Growth Edition",
         date: "1 May 2026",
+        forceShow: false,
         features: [
-            "<b>Server Support Ads:</b> To help cover our growing server costs and keep the app 100% free, we've introduced small, non-intrusive advertisements. Thank you for supporting the project!",
-            "<b>UI Polish:</b> Smarter timetable auto-scrolling, cleaner action buttons, and better legibility for delayed or severed train routes."
+            "<b>Server Support Ads:</b> Small, non-intrusive ads help keep the app free.",
+            "<b>UI Polish:</b> Smarter timetable scrolling and clearer delayed/severed routes."
         ]
     },
     {
-        version: "V6.04.26 <br><span class='text-sm text-blue-600 dark:text-blue-400'>Guardian Edition</span>",
+        id: "V6_04.26",
+        title: "Guardian Edition",
         date: "26 Apr 2026",
+        forceShow: false,
         features: [
-            "<b>Smart Weekend & Holiday Routing:</b> The Trip Planner now intelligently predicts Public Holidays. If you search on a Sunday, it automatically skips forward to find the next available working train.",
-            "<b>Clearer Disruption Alerts:</b> Redesigned the 'Line Severed' warning blocks to be instantly readable at a glance, so you know exactly where the train terminates.",
-            "<b>Sleeker Look & Feel:</b> Upgraded the time selection menus, fixed text clipping on smaller screens, and smoothed out the overall app experience."
+            "<b>Smart Weekend & Holiday Routing:</b> Planner skips to the next working train on Sundays/holidays.",
+            "<b>Clearer Disruption Alerts:</b> “Line Severed” blocks show where the train terminates.",
+            "<b>Sleeker Look & Feel:</b> Better time menus and less text clipping."
         ]
     },
     {
-        version: "V6.00 <br><span class='text-[13px] text-blue-600 dark:text-blue-400'>Western Cape Launch</span>",
+        id: "V6_00",
+        title: "Western Cape Launch",
         date: "Apr 2026",
+        forceShow: false,
         features: [
-            "<b>Cape Town is Here!:</b> Metrorail Next Train now fully supports Western Cape routes. You can check schedules and plan trips for Cape Town completely offline.",
-            "<b>All-New App Menu:</b> We've combined all your settings, offline syncing, and region selection into a clean, easy-to-use side menu.",
-            "<b>Better Navigation:</b> Swiping back or using your phone's back button now cleanly closes popups instead of accidentally exiting the app."
+            "<b>Cape Town is Here:</b> Full Western Cape schedules and offline trip planning.",
+            "<b>All-New App Menu:</b> Settings, sync, and region in one side menu.",
+            "<b>Better Navigation:</b> Back closes popups instead of exiting the app."
         ]
     },
     {
-        version: "V5.0 <br><span class='text-[13px] text-blue-600 dark:text-blue-400'>The Timetable Update</span>",
+        id: "V5_0",
+        title: "The Timetable Update",
         date: "Mar 2026",
+        forceShow: false,
         features: [
-            "<b>Full Daily Timetables:</b> You can now view the entire day's train schedule at a glance, just like the printed station boards.",
-            "<b>Share Your Trip:</b> Easily send your planned routes and train times to friends or family via WhatsApp with a single tap.",
-            "<b>Offline Memory:</b> The app now remembers your most recent searches, making it easy to find your usual trains even when underground."
+            "<b>Full Daily Timetables:</b> See the whole day like a station board.",
+            "<b>Share Your Trip:</b> Send planned routes via WhatsApp in one tap.",
+            "<b>Offline Memory:</b> Remembers recent searches underground."
         ]
     },
     {
-        version: "V4.0 <br><span class='text-[13px] text-blue-600 dark:text-blue-400'>The Trip Planner</span>",
+        id: "V4_0",
+        title: "The Trip Planner",
         date: "Feb 2026",
+        forceShow: false,
         features: [
-            "<b>Smart Trip Planner:</b> Enter where you are and where you want to go, and the app will calculate the fastest route, including transfers between different lines.",
-            "<b>Fare Calculator:</b> See exactly how much your trip will cost, with built-in discounts for Scholars, Pensioners, and Off-Peak travel."
+            "<b>Smart Trip Planner:</b> Origin, destination, and transfers in one search.",
+            "<b>Fare Calculator:</b> Scholar, pensioner, and off-peak discounts built in."
         ]
     }
 ];
+
+/** Normalize legacy spaced IDs ("V7 06.17") and HTML-bearing version strings to badge form. */
+export function normalizeChangelogId(value) {
+    return String(value || '')
+        .split('<')[0]
+        .trim()
+        .replace(/\s+/g, '_');
+}
+
+export function getLatestChangelog() {
+    return CHANGELOG_DATA[0] || null;
+}
+
+export function getChangelogVersionId(entry) {
+    if (!entry) return '';
+    if (entry.id) return normalizeChangelogId(entry.id);
+    return normalizeChangelogId(entry.version);
+}

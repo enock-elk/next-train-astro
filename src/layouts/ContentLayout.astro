@@ -108,6 +108,13 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
         }
+        // Strip cache-bust ?v= after load so shared secondary-page links stay clean
+        var params = new URLSearchParams(window.location.search);
+        if (params.has('v')) {
+          params.delete('v');
+          var clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+          window.history.replaceState({}, '', clean);
+        }
       } catch (e) {}
     </script>
 
@@ -132,9 +139,46 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         (function(c,l,a,r,i,t,y){
           c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
           t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          t.crossOrigin="anonymous";
           y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
         })(window, document, "clarity", "script", "v1aj19921i");
       }
+    </script>
+
+    <!-- GUARDIAN: Sentry (deferred — SPA parity on secondary pages) -->
+    <script is:inline>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          window.sentryOnLoad = function () {
+            Sentry.init({
+              dsn: 'https://ae241b469e4c06ae7644f55c2a796782@o4511038845222912.ingest.us.sentry.io/4511039214518272',
+              sampleRate: 0.3,
+              ignoreErrors: [
+                'ResizeObserver loop limit exceeded',
+                'Network request failed',
+                'Failed to fetch',
+                'Load failed',
+                'QuotaExceededError',
+                'UnknownError: Connection is closing because of: IO error',
+                'Internal error opening backing store',
+                'DOMException',
+                'TimeoutError',
+                'UnknownError',
+                'Failed to update a ServiceWorker',
+                'AbortError',
+                'window.webkit.messageHandlers',
+                'Request timeout',
+                '/api/webviewClick'
+              ]
+            });
+          };
+          var sentryScript = document.createElement('script');
+          sentryScript.src = 'https://js.sentry-cdn.com/ae241b469e4c06ae7644f55c2a796782.min.js';
+          sentryScript.crossOrigin = 'anonymous';
+          sentryScript.async = true;
+          document.head.appendChild(sentryScript);
+        }, 3500);
+      });
     </script>
 
     <slot name="head" />

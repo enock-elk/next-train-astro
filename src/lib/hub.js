@@ -1,7 +1,16 @@
 /**
  * App Hub (sidenav) + feedback + notices + cache sync + changelog badge
  */
-import { APP_VERSION, CHANGELOG_DATA, DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
+import {
+    APP_VERSION,
+    CHANGELOG_DATA,
+    DYNAMIC_BASE_URL,
+    ROUTES,
+    withBase,
+    getLatestChangelog,
+    getChangelogVersionId,
+    normalizeChangelogId
+} from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal
@@ -10,6 +19,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
 import { bindAccountUi, initAccount } from './account.js';
+import { markPendingReload } from './session-stability.js';
 
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
@@ -20,11 +30,13 @@ export function closeAppHub(skipHistory = false) {
         setTimeout(() => { window._isSidenavClosing = false; }, 150);
     }
     if (sidenav) {
+        // Left drawer (SPA): closed = -translate-x-full / no .open
         sidenav.classList.remove('translate-x-0', 'open');
-        sidenav.classList.add('translate-x-full');
+        sidenav.classList.add('-translate-x-full');
     }
     if (overlay) {
         overlay.classList.add('opacity-0');
+        overlay.classList.remove('open');
         setTimeout(() => overlay.classList.add('hidden'), 300);
     }
     document.body.classList.remove('sidenav-open', 'modal-active');
@@ -34,10 +46,11 @@ export function openAppHub() {
     triggerHaptic();
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
-    sidenav?.classList.remove('translate-x-full');
+    sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
     sidenav?.classList.add('translate-x-0', 'open');
     if (overlay) {
         overlay.classList.remove('hidden');
+        overlay.classList.add('open');
         setTimeout(() => overlay.classList.remove('opacity-0'), 10);
     }
     document.body.classList.add('sidenav-open', 'modal-active');
@@ -90,6 +103,7 @@ export async function performHardCacheClear(source = 'modal_confirm') {
     } catch (e) {
         console.warn('🛡️ Guardian: Failed to fully clear caches', e);
     }
+    markPendingReload('cache_sync', 500);
     setTimeout(() => {
         window.location.href = window.location.pathname + '?v=' + Date.now();
     }, 500);
@@ -141,27 +155,33 @@ function syncHapticsToggle() {
 function syncChangelogBadge() {
     const badge = document.getElementById('whats-new-badge');
     const verLabel = document.querySelector('#settings-app-version .font-mono');
-    const latest = CHANGELOG_DATA?.[0];
-    if (!latest) return;
-    const ver = String(latest.version).split('<')[0].trim().replace(/^V/i, 'v').replace(/_/g, ' ');
+    const latest = getLatestChangelog();
+    const ver = getChangelogVersionId(latest) || APP_VERSION;
     if (verLabel) verLabel.textContent = ver;
-    const seen = safeStorage.getItem('seen_changelog_version');
-    const seenNorm = seen ? String(seen).replace(/^V/i, 'v').replace(/_/g, ' ') : '';
-    if (badge) badge.classList.toggle('hidden', seenNorm === ver);
+    const seenNorm = normalizeChangelogId(safeStorage.getItem('seen_changelog_version'));
+    if (badge) badge.classList.toggle('hidden', seenNorm === normalizeChangelogId(ver));
 }
 
 function openChangelog() {
     triggerHaptic();
     closeAppHub(true);
-    const latest = CHANGELOG_DATA?.[0];
-    if (latest) {
-        const ver = String(latest.version).split('<')[0].trim();
-        safeStorage.setItem('seen_changelog_version', ver);
-    }
+    const latest = getLatestChangelog();
+    const ver = getChangelogVersionId(latest) || APP_VERSION;
+    safeStorage.setItem('seen_changelog_version', ver);
     syncChangelogBadge();
     if (window.Renderer?.renderChangelogModal) {
         window.Renderer.renderChangelogModal(CHANGELOG_DATA);
     }
+}
+
+/** Auto-open What's New only when the latest entry opts in via forceShow. */
+function maybeForceShowChangelog() {
+    const latest = getLatestChangelog();
+    if (!latest?.forceShow) return;
+    const ver = getChangelogVersionId(latest) || APP_VERSION;
+    const seenNorm = normalizeChangelogId(safeStorage.getItem('seen_changelog_version'));
+    if (seenNorm === normalizeChangelogId(ver)) return;
+    openChangelog();
 }
 
 async function submitFeedback() {
@@ -277,6 +297,15 @@ function sanitizeHTML(dirtyHtml) {
                             if (!/^(https?|mailto):/i.test(attr.value)) child.removeAttribute(attr.name);
                         } else if (attrName === 'onclick') {
                             if (!/^window\.openLightbox\(.*\)$/.test(attr.value)) child.removeAttribute(attr.name);
+                        } else if (attrName === 'target' && child.tagName === 'A') {
+                            // Same-origin links must stay in the PWA (no browser handoff)
+                            try {
+                                const href = child.getAttribute('href');
+                                if (href) {
+                                    const u = new URL(href, location.href);
+                                    if (u.origin === location.origin) child.removeAttribute('target');
+                                }
+                            } catch { /* keep target */ }
                         } else if (!['target', 'class', 'rel', 'alt', 'type'].includes(attrName)) {
                             child.removeAttribute(attr.name);
                         }
@@ -649,7 +678,7 @@ export async function checkServiceAlerts() {
                     bellBtn.classList.remove('animate-shake');
                     if (dot) dot.classList.add('hidden');
                     bindModalContent();
-                    history.pushState({ modal: 'notice' }, '', '#notice');
+                    // openSmoothModal pushes #notice once — don't double-push over #planner-results
                     openSmoothModal('notice-modal');
                 }, 1200);
             }
@@ -665,7 +694,7 @@ export async function checkServiceAlerts() {
             bellBtn.classList.remove('animate-shake');
             if (dot) dot.classList.add('hidden');
             bindModalContent();
-            history.pushState({ modal: 'notice' }, '', '#notice');
+            // openSmoothModal owns the #notice history entry
             openSmoothModal('notice-modal');
         };
 
@@ -711,6 +740,7 @@ export function initHub() {
     syncProfileDisplay();
     syncHapticsToggle();
     syncChangelogBadge();
+    maybeForceShowChangelog();
     $userProfile.subscribe(syncProfileDisplay);
 
     // Colour packs (delegated; also bound via hydratePrefs)
@@ -799,8 +829,15 @@ export function initHub() {
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
+    document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
     document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
+    document.getElementById('feedback-privacy-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic();
+        window.openLegal?.('privacy');
+    });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         closeSmoothModal('about-modal');
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
@@ -845,7 +882,8 @@ export function initHub() {
         eyeOpen?.classList.toggle('hidden', show);
         eyeClosed?.classList.toggle('hidden', !show);
     });
-    document.getElementById('admin-cancel-btn')?.addEventListener('click', () => closeSmoothModal('login-modal'));
+    // Admin cancel/login history is owned by public/js/admin.js only.
+    // A second listener here called history.back() twice and skipped the home page.
 
     // Poll notices after boot (and periodically)
     setTimeout(() => checkServiceAlerts(), 1500);

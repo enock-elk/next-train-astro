@@ -50,9 +50,10 @@
 html.dark:not([data-colour-pack]),
 html.dark[data-colour-pack="classic"],
 html[data-colour-pack="classic"].dark {
-  --nt-primary: #60a5fa;
-  --nt-primary-hover: #3b82f6;
-  --nt-primary-fg: #0f172a;
+  /* SPA keeps blue-600 CTAs with white label in dark mode */
+  --nt-primary: #2563eb;
+  --nt-primary-hover: #1d4ed8;
+  --nt-primary-fg: #ffffff;
   --nt-primary-soft: rgba(30, 58, 138, 0.35);
   --nt-surface: #1f2937;
   --nt-surface-muted: rgba(17, 24, 39, 0.5);
@@ -271,12 +272,35 @@ html[data-colour-pack="ember"].dark {
   border-color: var(--nt-border);
 }
 
-#tab-sliding-indicator {
+/* Classic / SPA: keep Tailwind blue-600 / blue-400 on the indicator.
+   Non-classic packs retint below. */
+html[data-colour-pack="midnight"] #tab-sliding-indicator,
+html[data-colour-pack="contrast"] #tab-sliding-indicator,
+html[data-colour-pack="signal"] #tab-sliding-indicator,
+html[data-colour-pack="ember"] #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
 
-#app-title.header-title {
-  color: var(--nt-primary) !important;
+/* Never flatten the SPA title gradient to a solid pack fill */
+#app-title {
+  background-image: linear-gradient(to right, #2563eb, #4f46e5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+html.dark #app-title {
+  background-image: linear-gradient(to right, #60a5fa, #818cf8);
+}
+
+html[data-colour-pack="midnight"] #app-title,
+html[data-colour-pack="contrast"] #app-title,
+html[data-colour-pack="signal"] #app-title,
+html[data-colour-pack="ember"] #app-title {
+  background-image: linear-gradient(
+    to right,
+    var(--nt-primary),
+    color-mix(in srgb, var(--nt-primary) 55%, #4f46e5)
+  );
 }
 
 .view-section {
@@ -324,24 +348,29 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-/* Pack-tinted CTAs (GPS, Full timetable) */
-#locate-btn,
-#view-full-timetable-btn {
+/* Pack-tinted CTAs only for non-classic packs.
+   Classic must keep SPA Tailwind: bg-blue-600 / text-white (also in dark). */
+html[data-colour-pack="midnight"] #locate-btn,
+html[data-colour-pack="contrast"] #locate-btn,
+html[data-colour-pack="signal"] #locate-btn,
+html[data-colour-pack="ember"] #locate-btn,
+html[data-colour-pack="midnight"] #view-full-timetable-btn,
+html[data-colour-pack="contrast"] #view-full-timetable-btn,
+html[data-colour-pack="signal"] #view-full-timetable-btn,
+html[data-colour-pack="ember"] #view-full-timetable-btn {
   background-color: var(--nt-primary) !important;
   border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
 }
-#locate-btn:hover,
-#view-full-timetable-btn:hover {
+html[data-colour-pack="midnight"] #locate-btn:hover,
+html[data-colour-pack="contrast"] #locate-btn:hover,
+html[data-colour-pack="signal"] #locate-btn:hover,
+html[data-colour-pack="ember"] #locate-btn:hover,
+html[data-colour-pack="midnight"] #view-full-timetable-btn:hover,
+html[data-colour-pack="contrast"] #view-full-timetable-btn:hover,
+html[data-colour-pack="signal"] #view-full-timetable-btn:hover,
+html[data-colour-pack="ember"] #view-full-timetable-btn:hover {
   background-color: var(--nt-primary-hover) !important;
-}
-#view-full-timetable-btn #last-updated-date {
-  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
-  font-weight: 700;
-  text-align: center;
-}
-#view-full-timetable-btn {
-  text-align: center;
 }
 
 /* Colour pack picker (Settings) */

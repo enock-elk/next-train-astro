@@ -71,12 +71,14 @@ export function hydrateStores() {
     window.addEventListener('online', () => $isOffline.set(false));
     $isOffline.set(!navigator.onLine);
 
-    // 4. Device Identity (Guardian Protection)
-    let uid = localStorage.getItem('next_train_device_id');
+    // 4. Device Identity — reuse SPA key/format; never mint a second ID if head boot already set one
+    let uid = (typeof window !== 'undefined' && window.NEXT_TRAIN_DEVICE_ID)
+        || localStorage.getItem('next_train_device_id');
     if (!uid) {
         uid = 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
         localStorage.setItem('next_train_device_id', uid);
     }
+    if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = uid;
     $deviceId.set(uid);
 
     console.log("🛡️ Guardian: NextTrain 2.0 State Hydrated Successfully.");

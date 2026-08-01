@@ -144,7 +144,7 @@ export const safeStorage = {
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (exactProtectedKeys.includes(key) || key.startsWith('clever_') || key.startsWith('cws_')) {
+                if (exactProtectedKeys.includes(key) || key.startsWith('clever_') || key.startsWith('cws_') || key.startsWith('firebase:authUser:')) {
                     vault[key] = localStorage.getItem(key);
                 }
             }

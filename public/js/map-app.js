@@ -2,7 +2,7 @@
  * Interactive Leaflet map (ported from SPA map.html)
  * Expects window.ROUTES, window.DYNAMIC_BASE_URL, window.PIPELINE_SOURCES, window.REGIONS
  */
-        // ðŸ›¡ï¸ GUARDIAN PHASE 3: RESTORED STATION COORDINATES DICTIONARY
+        // 🛡️ GUARDIAN PHASE 3: RESTORED STATION COORDINATES DICTIONARY
         const STATION_COORDINATES = {
             // --- GAUTENG ---
             "PRETORIA": [-25.75864361043285, 28.189866445989118],
@@ -261,7 +261,7 @@
             "BERLIN": [-32.881959, 27.583001]
         };
 
-        // ðŸ›¡ï¸ GUARDIAN PHASE 3: STATIC PATH DEFINITIONS
+        // 🛡️ GUARDIAN PHASE 3: STATIC PATH DEFINITIONS
         // Bypasses empty or missing DB coordinate columns to draw lines flawlessly offline
         const STATIC_ROUTE_PATHS = {
             'pta-pien': ["PRETORIA", "MEARS STREET", "DEVENISH STREET", "WALKER STREET", "LOFTUS VERSFELD PARK", "RISSIK", "HARTBEESSPRUIT", "KOEDOESPOORT", "SILVERTON", "WALTLOO", "DENNEBOOM", "EERSTE FABRIEKE", "MAMELODI GARDENS", "GREENVIEW", "PIENAARSPOORT"],
@@ -484,7 +484,7 @@
             if (!rawDb) throw new Error("No Local Database Cached");
             const mergedDb = unwrapDatabase(rawDb, currentRegion);
 
-            // ðŸ›¡ï¸ GUARDIAN PHASE 2: Fetch Live Disruptions for Global Map Overlay
+            // 🛡️ GUARDIAN PHASE 2: Fetch Live Disruptions for Global Map Overlay
             let globalDisruptions = {};
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -552,7 +552,7 @@
                     let coordKey = 'COORDINATES';
                     let startIndex = 0;
 
-                    // ðŸ›¡ï¸ GUARDIAN FIX: Universal Format Detector
+                    // 🛡️ GUARDIAN FIX: Universal Format Detector
                     let foundHeader = false;
                     for (let i = 0; i < Math.min(sheetData.length, 5); i++) {
                         const row = sheetData[i];
@@ -577,7 +577,7 @@
                         const sNameOrig = String(row[stationKey]).trim();
                         if (sNameOrig.toLowerCase().includes('last updated') || sNameOrig.toLowerCase().includes('inter-station')) continue;
 
-                        // ðŸ›¡ï¸ GUARDIAN FIX: Ghost Row Pruning
+                        // 🛡️ GUARDIAN FIX: Ghost Row Pruning
                         const hasData = Object.keys(row).some(k => k !== stationKey && k !== coordKey && k !== 'KM_MARK' && k !== 'row_index' && row[k] && String(row[k]).trim() !== "" && String(row[k]).trim() !== "-");
                         if (!hasData) continue;
 
@@ -617,7 +617,7 @@
                     }
                 }
 
-                // ðŸ›¡ï¸ GUARDIAN HYBRID FALLBACK: Force static definitions
+                // 🛡️ GUARDIAN HYBRID FALLBACK: Force static definitions
                 if (!extractedDynamically) {
                     routeCoords = [];
                     validStops = [];
@@ -647,7 +647,7 @@
                 if (routeCoords.length > 1) {
                      drawnRoutes.push({
                          routeId: route.id,
-                         name: route.name.replace(/<->/g, 'â†”'),
+                         name: route.name.replace(/<->/g, '↔'),
                          color: colorMap[route.colorClass] || '#9ca3af',
                          isActive: route.isActive,
                          coords: routeCoords,
@@ -656,7 +656,7 @@
                 }
             });
 
-            // ðŸ›¡ï¸ GUARDIAN UX FIX: Empty Map Warning
+            // 🛡️ GUARDIAN UX FIX: Empty Map Warning
             if (drawnRoutes.length === 0) {
                 const warningBox = document.getElementById('empty-map-warning');
                 if (warningBox) warningBox.classList.remove('hidden');
@@ -667,7 +667,7 @@
             drawnRoutes.forEach(r => {
                 const isLive = r.isActive;
                 L.polyline(r.coords, {
-                    color: r.color, // ðŸ›¡ï¸ Use actual route color for anticipation
+                    color: r.color, // 🛡️ Use actual route color for anticipation
                     weight: isLive ? 4 : 3,
                     opacity: isLive ? 0.9 : 0.35, // Faded for future routes
                     dashArray: isLive ? null : '8, 12', // Distinct dashed look for "Soon"
@@ -678,13 +678,13 @@
                     <div class="text-center">
                         <b class="uppercase text-sm">${r.name}</b><br>
                         ${isLive 
-                            ? '<span class="text-green-600 font-bold text-xs">â— Active Service</span>' 
-                            : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">ðŸš§ Launching Soon</span>'}
+                            ? '<span class="text-green-600 font-bold text-xs">● Active Service</span>' 
+                            : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">🚧 Launching Soon</span>'}
                     </div>
                 `);
             });
 
-            // --- ðŸ›¡ï¸ GUARDIAN PHASE 2: DRAW DYNAMIC DISRUPTION OVERLAYS ---
+            // --- 🛡️ GUARDIAN PHASE 2: DRAW DYNAMIC DISRUPTION OVERLAYS ---
             const drawnIncidentIds = new Set();
             
             drawnRoutes.forEach(routeObj => {
@@ -697,7 +697,8 @@
                     const currentValidStops = routeObj.validStops;
                     const currentPath = routeObj.coords;
 
-                    const iconHtml = `<div class="flex items-center justify-center bg-white rounded-full shadow-lg border-2 border-white ${isCritical ? 'animate-pulse' : ''}" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? 'âœ•' : '!'}</span></div>`;
+                    // No outward pulse rings on incident markers — solid badge only
+                    const iconHtml = `<div class="flex items-center justify-center rounded-full shadow-md border-2 border-white" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`;
                     const alertIcon = L.divIcon({ className: 'custom-map-dot z-50', html: iconHtml, iconSize: [22, 22], iconAnchor: [11, 11] });
                     const invisibleIcon = L.divIcon({ className: '', html: '', iconSize: [0,0], iconAnchor: [0,0] });
 
@@ -829,7 +830,9 @@
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
-                const isHub = hubs.has(name) || data.routes.size > 1;
+                // Important = corridor terminals + designated transfer/relay hubs only
+                // (multi-route intermediates like Mayfair stay small)
+                const isHub = hubs.has(name);
                 const isEnd = ends.has(name);
                 const isMajor = isHub || isEnd;
 
@@ -895,7 +898,7 @@
                         if (isCritical) { routeStatus = 'SEVERED'; badgeColor = 'bg-red-500'; } 
                         else if (isWarning) { routeStatus = 'DELAYS'; badgeColor = 'bg-yellow-500'; }
                     } else {
-                        // ðŸ›¡ï¸ Future Anticipation Badge
+                        // 🛡️ Future Anticipation Badge
                         routeStatus = 'SOON'; 
                         badgeColor = 'bg-blue-600 animate-pulse'; 
                     }
@@ -910,7 +913,7 @@
                 });
             }
 
-            // --- ðŸ›¡ï¸ GUARDIAN UX: HORIZONTAL ACTION BAR WIRING ---
+            // --- 🛡️ GUARDIAN UX: HORIZONTAL ACTION BAR WIRING ---
             
             // 1. Zoom Controls
             const zoomInBtn = document.getElementById('custom-zoom-in');
@@ -922,17 +925,17 @@
             const themeBtn = document.getElementById('custom-theme-btn');
             let isDarkNow = document.documentElement.classList.contains('dark');
             if (themeBtn) {
-                themeBtn.innerHTML = isDarkNow ? 'ðŸŒ™' : 'â˜€ï¸';
+                themeBtn.innerHTML = isDarkNow ? '🌙' : '☀️';
                 themeBtn.onclick = () => {
                     isDarkNow = !isDarkNow;
                     if (isDarkNow) {
                         document.documentElement.classList.add('dark');
                         try { localStorage.setItem('theme', 'dark'); } catch(e){}
-                        themeBtn.innerHTML = 'ðŸŒ™';
+                        themeBtn.innerHTML = '🌙';
                     } else {
                         document.documentElement.classList.remove('dark');
                         try { localStorage.setItem('theme', 'light'); } catch(e){}
-                        themeBtn.innerHTML = 'â˜€ï¸';
+                        themeBtn.innerHTML = '☀️';
                     }
                 };
             }

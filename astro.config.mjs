@@ -41,6 +41,10 @@ export default defineConfig({
         enabled: false,
       },
       workbox: {
+        // Drop prior Workbox precaches when the revision set changes (Astro SW).
+        // Legacy SPA buckets (`metrorail-next-train-*`) are purged client-side in
+        // cleanupLegacySpaShell() on first Astro boot.
+        cleanupOutdatedCaches: true,
         // Shell only. Including png/svg pulled every network map and icon into the
         // precache — a 5.2 MB atomic install on first visit, which is punishing on
         // the 3G connections most of these commuters use, and one 404 fails the

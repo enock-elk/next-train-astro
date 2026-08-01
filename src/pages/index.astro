@@ -29,22 +29,23 @@ import HubModals from '../components/HubModals.astro';
     <HubModals />
 
     <!-- MAIN APP — fills device height; active tab expands into remaining space -->
-    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
+    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative min-h-[600px] flex flex-col border border-gray-200 dark:border-gray-700">
         
         <Header />
 
-        <div id="app-top-tabs" class="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 relative z-20" role="tablist" aria-label="Primary">
+        <!-- SPA surface: Next Train + Trip Planner only (Community stays in DOM for later, off chrome) -->
+        <div id="app-top-tabs" class="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-30 relative" role="tablist" aria-label="Primary">
             <button id="tab-next-train" class="tab-btn active" type="button" role="tab" aria-selected="true">
                 Next Train
             </button>
             <button id="tab-trip-planner" class="tab-btn" type="button" role="tab" aria-selected="false">
                 Trip Planner
             </button>
-            <button id="tab-community" class="tab-btn relative" type="button" role="tab" aria-selected="false">
+            <button id="tab-community" class="hidden" type="button" tabindex="-1" aria-hidden="true" aria-selected="false">
                 Community
-                <span id="community-unread-badge-top" class="hidden absolute top-1.5 right-2 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm">0</span>
+                <span id="community-unread-badge-top" class="hidden">0</span>
             </button>
-            <div id="tab-sliding-indicator" class="absolute bottom-0 h-0.5 bg-blue-600 dark:bg-blue-400 transition-all duration-300 ease-out z-10 w-1/3 left-0"></div>
+            <div id="tab-sliding-indicator" class="absolute bottom-0 h-0.5 bg-blue-600 dark:bg-blue-400 transition-all duration-300 ease-out z-10 w-1/2 left-0"></div>
         </div>
 
         <div id="developer-reply-banner" class="hidden bg-gray-900 dark:bg-black text-white w-full shadow-md z-20 shrink-0 relative transition-all duration-300">
@@ -102,7 +103,7 @@ import HubModals from '../components/HubModals.astro';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
-    import { initPlanner } from '../lib/planner-ui.js';
+    import { initPlanner, applyPlannerDeepLink } from '../lib/planner-ui.js';
     import '../lib/renderer.js';
     import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
     import { initHub, checkServiceAlerts } from '../lib/hub.js';
@@ -115,8 +116,17 @@ import HubModals from '../components/HubModals.astro';
         openLegal
     } from '../lib/ui.js';
     import { hydratePrefs } from '../lib/prefs.js';
+    import {
+        prepareDeeplinkIntents,
+        consumeHashDeeplinks,
+        flushPendingDeeplinkIntents
+    } from '../lib/deeplink.js';
+    import { setupBlackBoxLogger } from '../lib/blackbox.js';
 
     window.openLegal = openLegal;
+    // Empathy modal "Try Again" (and admin) can call this before/without bridge
+    window.loadAllSchedules = loadAllSchedules;
+    prepareDeeplinkIntents();
 
     const syncClockShims = () => {
         window.currentTime = currentTime;
@@ -173,10 +183,28 @@ import HubModals from '../components/HubModals.astro';
     initPlanner();
     initHub();
     initAdminBridge();
+    setupBlackBoxLogger();
+
+    // Legal docs don't need schedules — open as soon as the shell is ready
+    const bootHash = location.hash || '';
+    if (
+        safeStorage.getItem('welcomeSeen') === 'true' &&
+        (bootHash === '#privacy' || bootHash === '#terms' || bootHash === '#legal')
+    ) {
+        consumeHashDeeplinks().catch(() => {});
+    }
 
     const igniteDataEngine = async () => {
         if (await applyRouteDeepLink()) {
             checkServiceAlerts();
+            await flushPendingDeeplinkIntents();
+            if (location.hash === '#fare') await consumeHashDeeplinks();
+            return;
+        }
+
+        if (await applyPlannerDeepLink()) {
+            checkServiceAlerts();
+            await flushPendingDeeplinkIntents();
             return;
         }
 
@@ -202,6 +230,8 @@ import HubModals from '../components/HubModals.astro';
             console.log("🛡️ Guardian: Igniting Data Engine...");
             await loadAllSchedules(true);
             checkServiceAlerts();
+            await flushPendingDeeplinkIntents();
+            if (location.hash === '#fare') await consumeHashDeeplinks();
         }
     };
 

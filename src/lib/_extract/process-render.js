@@ -184,7 +184,7 @@ window.openFareModal = function(fareDetails) {
     const zoneEl = document.getElementById('fare-zone-badge');
     const tableEl = document.getElementById('fare-table-content');
     
-    const routeName = typeof ROUTES !== 'undefined' && currentRouteId && ROUTES[currentRouteId] ? ROUTES[currentRouteId].name.replace('<->', 'â†”') : '';
+    const routeName = typeof ROUTES !== 'undefined' && currentRouteId && ROUTES[currentRouteId] ? ROUTES[currentRouteId].name.replace('<->', '↔') : '';
     if (zoneEl) {
         zoneEl.innerHTML = `
             <div class="flex items-center">

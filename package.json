@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "0.0.1",
+  "version": "7.7.28",
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",

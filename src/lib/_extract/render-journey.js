@@ -188,8 +188,8 @@
                  routeName = rawName.split('<->')[1].trim();
              } else if (rawName.includes('â€¢')) {
                  routeName = rawName.split('â€¢')[1].trim();
-             } else if (rawName.includes('â†”')) {
-                 routeName = rawName.split('â†”')[1].trim(); // Legacy fallback
+             } else if (rawName.includes('↔')) {
+                 routeName = rawName.split('↔')[1].trim(); // Legacy fallback
              }
 
              if (journey.isDivergent) {

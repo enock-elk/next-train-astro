@@ -42,6 +42,9 @@ import { withBase } from '../lib/config.js';
     import { ROUTES } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
+    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
+
+    prepareDeeplinkIntents();
 
     // Haptic feedback falls back gracefully
     const triggerHapticFeedback = () => {
@@ -128,6 +131,12 @@ import { withBase } from '../lib/config.js';
                     console.log(`🛡️ Guardian: Welcome route selected: ${route.id}. Hydrating...`);
                     await loadAllSchedules(true);
 
+                    // 5. Apply deferred cold-link intents (privacy / terms / fares)
+                    await flushPendingDeeplinkIntents();
+
+                    // 6. Allow CleverAds once welcome is done
+                    try { window.checkAndUnhide?.(); } catch (_) {}
+
                     if (typeof window !== 'undefined') {
                         setTimeout(() => { window._suppressReloads = false; }, 2000);
                     }
@@ -161,10 +170,12 @@ import { withBase } from '../lib/config.js';
         const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
         const activeRegion = $userRegion.get() || 'GP';
         const params = new URLSearchParams(window.location.search);
-        const hasRouteDeepLink = params.get('action') === 'route' && params.get('route');
+        const hasRouteDeepLink = (params.get('action') === 'route' && params.get('route')) || !!params.get('rt');
+        const hasPlannerDeepLink = (params.get('action') === 'planner' && params.get('from') && params.get('to')) || !!params.get('plan');
 
         // Brand-new users + legacy map onboarding deep-links
-        if ((!welcomeSeen || isOnboardMap) && !hasRouteDeepLink) {
+        // Shared route/planner links skip Welcome so the destination opens immediately
+        if ((!welcomeSeen || isOnboardMap) && !hasRouteDeepLink && !hasPlannerDeepLink) {
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);

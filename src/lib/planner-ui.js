@@ -17,6 +17,9 @@ import {
     escapeHTML, getDistanceFromLatLonInKm, safeStorage 
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
+import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import { executeRegionSwap, loadAllSchedules } from './logic.js';
+import { showToast, switchTab } from './ui.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -266,7 +269,9 @@ export function hidePlannerResults() {
     const resultsSection = document.getElementById('planner-results-section');
     if (inputSection) inputSection.classList.remove('hidden');
     if (resultsSection) resultsSection.classList.add('hidden');
-    plannerExpandedState.clear(); 
+    plannerExpandedState.clear();
+    // Recent trips live on the search screen — refresh after leaving results
+    try { renderPlannerHistory(); } catch { /* ignore */ }
 }
 
 export function openDisruptionModal(id) {
@@ -314,11 +319,12 @@ export function openDisruptionModal(id) {
         if (targetDisruption.tier === 'CRITICAL') {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
             badgeEl.innerHTML = "🔴 CRITICAL SERVICE DISRUPTION";
-            if (iconEl) iconEl.className = "w-5 h-5 mr-2 text-red-500";
+            // SVGElement.className is read-only (SVGAnimatedString) — use setAttribute
+            if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
         } else {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 py-2.5 rounded-lg border border-yellow-200 dark:border-yellow-800/50";
             badgeEl.innerHTML = "🟡 EXPECT DELAYS / SINGLE TRACK";
-            if (iconEl) iconEl.className = "w-5 h-5 mr-2 text-yellow-500";
+            if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-yellow-500');
         }
     }
     
@@ -878,6 +884,78 @@ export const PlannerRenderer = {
             
             const finalInj = getInjectionHtml(arrGlobalIdx);
             if (finalInj) html += `<div class="${subIsFinalDest ? 'border-l-2 border-transparent' : 'border-l-2 border-gray-300 dark:border-gray-600'} ml-2">${finalInj}</div>`;
+
+            // Partial journeys alight at the disruption boundary — isTripSevered treats that
+            // as "safe", so the mid-timeline CRITICAL injection never fires. Force the
+            // TRAIN TERMINATES block so users still see the hard stop at the partial dest.
+            const forcePartialTerminus = subIsFinalDest
+                && !isSevered
+                && (
+                    currentPlannerStatus === 'PARTIAL_JOURNEY'
+                    || !!(typeof window !== 'undefined' && window._plannerForcePartialTerminus)
+                );
+            if (forcePartialTerminus) {
+                const cleanStr = (s) => s ? String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                const termStationName = String(
+                    (currentPlannerErrorPayload && currentPlannerErrorPayload.partialDest) || subTo || ''
+                ).replace(/ STATION/gi, '').toUpperCase();
+
+                // Resolve the CRITICAL advisory (SPA parity: "Between CENTURION & IRENE" + button text)
+                let d = null;
+                const payloadId = currentPlannerErrorPayload && currentPlannerErrorPayload.disruptionId;
+                try {
+                    const globalList = Object.values($globalDisruptions.get() || {}).flat();
+                    if (payloadId) d = globalList.find((x) => x.id === payloadId) || null;
+                    if (!d) {
+                        const normTerm = normalizeStationName(termStationName);
+                        d = globalList.find((x) =>
+                            x.tier === 'CRITICAL'
+                            && x.stations
+                            && x.stations.map((s) => normalizeStationName(s)).includes(normTerm)
+                        ) || null;
+                    }
+                } catch { /* ignore */ }
+
+                let locationText = 'Route-Wide Advisory';
+                if (d && d.stations && d.stations.length >= 2) {
+                    locationText = `Between ${cleanStr(d.stations[0].replace(/ STATION/gi, ''))} & ${cleanStr(d.stations[1].replace(/ STATION/gi, ''))}`;
+                } else if (d && d.stations && d.stations.length === 1) {
+                    locationText = `At ${cleanStr(d.stations[0].replace(/ STATION/gi, ''))}`;
+                } else if (d && d.routeId && ROUTES[d.routeId]) {
+                    const r = ROUTES[d.routeId];
+                    locationText = `Between ${cleanStr(r.destA.replace(/ STATION/gi, ''))} & ${cleanStr(r.destB.replace(/ STATION/gi, ''))}`;
+                }
+
+                const safeBtnText = cleanStr(
+                    (d && d.buttonText)
+                    || (currentPlannerErrorPayload && currentPlannerErrorPayload.buttonText)
+                    || 'Line Severed'
+                );
+                const partialDisrId = (d && d.id) || payloadId || '';
+                const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+                const advisoryBtn = partialDisrId
+                    ? `<button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${partialDisrId}')" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-100 dark:text-white px-2.5 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-colors focus:outline-none shadow-sm flex items-center shrink-0"><span class="truncate max-w-[110px]">${safeBtnText}</span></button>`
+                    : '';
+                html += `
+                    <div class="relative -ml-[10px] my-4 z-20 w-[calc(100%+10px)]">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 shadow-md flex flex-col w-full overflow-hidden">
+                            <div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl">
+                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400">🛑 TRAIN TERMINATES @ ${termStationName}</span>
+                            </div>
+                            <div class="p-3 flex justify-between items-end w-full">
+                                <div class="flex flex-col items-start min-w-0 pr-2">
+                                    <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center">❌ LINE SEVERED</span>
+                                    <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-1">
+                                        ${linkSvg} <span class="font-medium text-[10px] truncate">${locationText}</span>
+                                    </div>
+                                </div>
+                                ${advisoryBtn}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             return { html, isSevered };
         };
 
@@ -926,11 +1004,11 @@ export const PlannerRenderer = {
 
     buildCard: (step, isNextDay, allOptions, selectedIndex) => {
         return `
-            <div class="bg-transparent overflow-hidden flex flex-col">
+            <div class="bg-transparent overflow-visible flex flex-col">
                 ${PlannerRenderer.renderHeader(step, isNextDay)}
                 ${PlannerRenderer.renderOptionsSelector(allOptions, selectedIndex, isNextDay)}
                 ${step.type !== 'TRANSFER' && step.type !== 'DOUBLE_TRANSFER' && step.type !== 'MULTI_TRANSFER' ? PlannerRenderer.renderInstruction(step) : ''}
-                <div class="py-3 flex-grow">
+                <div class="py-3 flex-grow overflow-visible">
                     <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 pl-1 border-b border-gray-100 dark:border-gray-800 pb-1">Journey Timeline</p>
                     ${PlannerRenderer.renderTimeline(step)}
                 </div>
@@ -1438,6 +1516,11 @@ export const PlannerRenderer = {
 
 // --- INITIALIZATION ---
 export function initPlanner() {
+    // Vite HMR / re-entry used to stack duplicate click listeners on the swap
+    // button (on top of the old inline onclick) → even swaps looked like a no-op.
+    if (typeof window !== 'undefined' && window.__ntPlannerInitBound) return;
+    if (typeof window !== 'undefined') window.__ntPlannerInitBound = true;
+
     const fromSelect = document.getElementById('planner-from');
     const toSelect = document.getElementById('planner-to');
     const swapBtn = document.getElementById('planner-swap-btn');
@@ -1740,17 +1823,25 @@ export function renderPlannerHistory() {
     const container = document.getElementById('planner-history-container');
     if (!container) return;
     
-    const historyKey = 'plannerHistory_' + $userRegion.get();
-    let rawHistory = JSON.parse(safeStorage.getItem(historyKey) || "[]");
+    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
+    let rawHistory = [];
+    try { rawHistory = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { rawHistory = []; }
 
     let validHistory = rawHistory;
     const masterList = getMasterStationList();
+    // History stores cleaned names (no " STATION"); master list usually includes the suffix.
+    const stationKey = (s) => String(s || '').replace(/ STATION/gi, '').toUpperCase().trim();
     
     if (masterList && masterList.length > 0) {
-        validHistory = rawHistory.filter(item =>
-            masterList.includes(item.from ? item.from.toUpperCase() : '') &&
-            masterList.includes(item.to ? item.to.toUpperCase() : '')
+        const masterKeys = new Set(masterList.map(stationKey));
+        validHistory = rawHistory.filter((item) =>
+            masterKeys.has(stationKey(item.fullFrom || item.from)) &&
+            masterKeys.has(stationKey(item.fullTo || item.to))
         );
+        // Persist cleaned list so dead entries don't stick around forever
+        if (validHistory.length !== rawHistory.length) {
+            safeStorage.setItem(historyKey, JSON.stringify(validHistory));
+        }
     } else if (masterList && masterList.length === 0) {
         container.classList.add('hidden');
         return;
@@ -1880,6 +1971,107 @@ export function setupAutocomplete(inputId, selectId) {
     }
 }
 
+/**
+ * Cold-start / shared planner links (short `plan=` + legacy `action=planner`).
+ * Waits for MASTER_STATION_LIST, then runs executeTripPlan.
+ */
+export async function applyPlannerDeepLink() {
+    if (typeof location === 'undefined') return false;
+    const link = parsePlannerDeepLink(location.search);
+    if (!link) return false;
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+
+    if (link.region && ['GP', 'WC', 'KZN', 'EC'].includes(link.region)) {
+        if (($userRegion.get() || 'GP') !== link.region) {
+            executeRegionSwap(link.region, true);
+        }
+    }
+
+    // Ensure station list exists (region DB loaded)
+    try {
+        await loadAllSchedules(true);
+    } catch (e) { /* continue; poll may still resolve */ }
+
+    if (typeof switchTab === 'function') switchTab('trip-planner');
+    else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+
+    stripShareParamsFromUrl();
+
+    return await new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 24;
+        const checkReady = setInterval(() => {
+            attempts += 1;
+            const list = getMasterStationList();
+            if (list && list.length > 0) {
+                clearInterval(checkReady);
+                const resolveStation = (txt) => {
+                    if (!txt) return '';
+                    let clean = String(txt).trim();
+                    try { clean = decodeURIComponent(clean); } catch { /* keep */ }
+                    clean = clean.toUpperCase().replace(/\+/g, ' ');
+                    const exact = list.find((s) => s.replace(' STATION', '').toUpperCase() === clean);
+                    if (exact) return exact;
+                    const partial = list.find((s) => s.replace(' STATION', '').toUpperCase().includes(clean));
+                    return partial || '';
+                };
+                const fromId = resolveStation(link.from);
+                const toId = resolveStation(link.to);
+                if (!fromId || !toId) {
+                    showToast('Could not resolve stations for shared trip.', 'error');
+                    resolve(false);
+                    return;
+                }
+
+                const fromSelect = document.getElementById('planner-from');
+                const toSelect = document.getElementById('planner-to');
+                const fromInput = document.getElementById('planner-from-search');
+                const toInput = document.getElementById('planner-to-search');
+                if (fromSelect) fromSelect.value = fromId;
+                if (toSelect) toSelect.value = toId;
+                if (fromInput) {
+                    fromInput.value = fromId.replace(' STATION', '');
+                    fromInput.dataset.resolvedValue = fromId;
+                }
+                if (toInput) {
+                    toInput.value = toId.replace(' STATION', '');
+                    toInput.dataset.resolvedValue = toId;
+                }
+
+                if (link.day) {
+                    selectedPlannerDay = link.day;
+                    const mainDayDisplay = document.getElementById('main-day-display');
+                    const headerDayDisplay = document.getElementById('header-day-display');
+                    const mainTxt = link.day === 'weekday' ? 'Weekday (Mon-Fri)'
+                        : (link.day === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
+                    const headerTxt = link.day === 'weekday' ? 'Mon - Fri'
+                        : (link.day === 'saturday' ? 'Saturday / Hol' : 'Sunday');
+                    if (mainDayDisplay) mainDayDisplay.textContent = mainTxt;
+                    if (headerDayDisplay) headerDayDisplay.textContent = headerTxt;
+                }
+
+                let timeParam = link.time || null;
+                if (timeParam && /^\d{1,2}:\d{2}$/.test(timeParam)) timeParam = `${timeParam}:00`;
+
+                savePlannerHistory(fromId, toId);
+                executeTripPlan(fromId, toId, timeParam);
+                showToast('Loaded shared trip plan', 'success');
+                if (typeof window.trackAnalyticsEvent === 'function') {
+                    window.trackAnalyticsEvent('deep_link_open', { type: 'planner', from: fromId, to: toId });
+                }
+                resolve(true);
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkReady);
+                showToast('Connection timeout: Could not load trip data.', 'error');
+                resolve(false);
+            }
+        }, 500);
+    });
+}
+
 // --- ORCHESTRATION ---
 export function executeTripPlan(origin, dest, preferredTime = null) {
     const resultsContainer = document.getElementById('planner-results-list');
@@ -1917,7 +2109,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
 
     if (!selectedPlannerDay) selectedPlannerDay = getCurrentDayType();
 
-    setTimeout(() => {
+    setTimeout(async () => {
         spinnerTimers.forEach(t => clearTimeout(t));
         isSearching = false;
         let plannerResponse = { status: 'NO_PATH', trips: [] };
@@ -1929,7 +2121,12 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     extContext.simBaseDate = dateInput.value;
                 }
             }
-            plannerResponse = planUnifiedTrip(origin, dest, selectedPlannerDay, extContext);
+            try {
+                plannerResponse = await planUnifiedTrip(origin, dest, selectedPlannerDay, extContext);
+            } catch (e) {
+                console.error('🛡️ Guardian: planUnifiedTrip failed', e);
+                plannerResponse = { status: 'NO_PATH', trips: [], errorPayload: null };
+            }
         }
 
         currentTripOptions = plannerResponse.trips || [];
@@ -2015,6 +2212,18 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                             <ul class="list-disc pl-5 space-y-1 text-xs">
                                 <li>Metrorail Next Train currently only supports routing within a single region.</li>
                                 <li>Please check your selected Origin and Destination stations.</li>
+                            </ul>
+                        </div>
+                    `;
+                    break;
+                case 'ERR_NO_SERVICE_TODAY':
+                    errorTitle = "No Service Today";
+                    errorMsg = `
+                        <div class="text-left space-y-2 mt-2">
+                            <p>These stations are connected on the network, but no trains run on this corridor for the selected day.</p>
+                            <ul class="list-disc pl-5 space-y-1 text-xs">
+                                <li>Try Saturday / Holiday or the next weekday.</li>
+                                <li>Check Service Alerts if a temporary suspension is affecting this line.</li>
                             </ul>
                         </div>
                     `;
@@ -2301,6 +2510,12 @@ export function restorePlannerSearch(fullFrom, fullTo) {
 }
 
 export function swapPlannerResults() {
+    if (typeof window !== 'undefined') {
+        if (window.__ntPlannerSwapBusy) return;
+        window.__ntPlannerSwapBusy = true;
+        setTimeout(() => { window.__ntPlannerSwapBusy = false; }, 0);
+    }
+
     if (typeof triggerHaptic === 'function') triggerHaptic();
 
     const fromInput = document.getElementById('planner-from-search');
@@ -2318,23 +2533,20 @@ export function swapPlannerResults() {
         }
     }
 
+    // Snapshot both sides before any writes (avoids resolved-value amnesia).
     const tempFromText = fromInput.value;
-    const tempFromResolved = fromInput.dataset.resolvedValue;
-    
-    fromInput.value = toInput.value;
+    const tempToText = toInput.value;
+    const tempFromResolved = fromInput.dataset.resolvedValue || '';
+    const tempToResolved = toInput.dataset.resolvedValue || '';
+
+    fromInput.value = tempToText;
     toInput.value = tempFromText;
 
-    if (toInput.dataset.resolvedValue) {
-        fromInput.dataset.resolvedValue = toInput.dataset.resolvedValue;
-    } else {
-        delete fromInput.dataset.resolvedValue;
-    }
-    
-    if (tempFromResolved) {
-        toInput.dataset.resolvedValue = tempFromResolved;
-    } else {
-        delete toInput.dataset.resolvedValue;
-    }
+    if (tempToResolved) fromInput.dataset.resolvedValue = tempToResolved;
+    else delete fromInput.dataset.resolvedValue;
+
+    if (tempFromResolved) toInput.dataset.resolvedValue = tempFromResolved;
+    else delete toInput.dataset.resolvedValue;
 
     const resolveStation = (inputEl) => {
         if (!inputEl) return "";
@@ -2479,16 +2691,15 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
                 const safeDay = (selectedPlannerDay || "").trim();
                 const safeRegion = $userRegion.get() || 'GP';
                 
-                const params = new URLSearchParams({
-                    action: 'planner',
+                const shareLink = buildPlannerShareUrl({
                     from: fromStation,
                     to: toStation,
                     time: safeTime,
                     day: safeDay,
-                    region: safeRegion 
+                    region: safeRegion,
+                    origin: 'https://nexttrain.co.za',
+                    pathname: '/',
                 });
-                
-                const shareLink = `https://nexttrain.co.za/?${params.toString()}`;
                 const shareText = `Trip Plan: ${fromStation} to ${toStation}.`;
 
                 const data = { title: 'Next Train Trip Plan', text: shareText, url: shareLink };

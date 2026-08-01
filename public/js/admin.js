@@ -247,7 +247,7 @@ const Admin = {
                 totalUnread += fbUnread;
                 const fbBadge = document.getElementById('fb-unread-badge');
                 if (fbBadge) {
-                    fbBadge.textContent = `${fbUnread} New`;
+                    fbBadge.textContent = fbUnread > 0 ? `${fbUnread} New` : '';
                     // 🛡️ GUARDIAN FIX: Safely toggle 'hidden' without destroying Tailwind utility classes
                     fbBadge.classList.toggle('hidden', fbUnread === 0);
                 }
@@ -268,7 +268,7 @@ const Admin = {
                 totalUnread += crUnread;
                 const crBadge = document.getElementById('crash-unread-badge');
                 if (crBadge) {
-                    crBadge.textContent = `${crUnread} New`;
+                    crBadge.textContent = crUnread > 0 ? `${crUnread} New` : '';
                     crBadge.classList.toggle('hidden', crUnread === 0);
                 }
             }
@@ -288,7 +288,7 @@ const Admin = {
                 totalUnread += deUnread;
                 const deBadge = document.getElementById('de-unread-badge');
                 if (deBadge) {
-                    deBadge.textContent = `${deUnread} New`;
+                    deBadge.textContent = deUnread > 0 ? `${deUnread} New` : '';
                     deBadge.classList.toggle('hidden', deUnread === 0);
                 }
             }
@@ -308,7 +308,7 @@ const Admin = {
                 totalUnread += drUnread;
                 const drBadge = document.getElementById('dr-unread-badge');
                 if (drBadge) {
-                    drBadge.textContent = `${drUnread} New`;
+                    drBadge.textContent = drUnread > 0 ? `${drUnread} New` : '';
                     drBadge.classList.toggle('hidden', drUnread === 0);
                 }
             }
@@ -328,7 +328,7 @@ const Admin = {
                 totalUnread += mqUnread;
                 const mqBadge = document.getElementById('mq-unread-badge');
                 if (mqBadge) {
-                    mqBadge.textContent = `${mqUnread} New`;
+                    mqBadge.textContent = mqUnread > 0 ? `${mqUnread} New` : '';
                     mqBadge.classList.toggle('hidden', mqUnread === 0);
                 }
             }
@@ -2056,7 +2056,7 @@ const Admin = {
                         <span class="text-2xl mb-2">🔥</span> 
                         <span>Crash Analytics</span>
                     </span>
-                    <span id="crash-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                    <span id="crash-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
                     <svg id="crash-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div id="crash-body" class="hidden mt-3 space-y-2">
@@ -2177,7 +2177,7 @@ const Admin = {
                 
                 // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
                 const resolveAllHtml = isInbox 
-                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1">âœ…</span> Resolve All (${groupCrashes.length})</button>` 
+                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1">✅</span> Resolve All (${groupCrashes.length})</button>` 
                     : '';
 
                 let groupHTML = `
@@ -2201,8 +2201,30 @@ const Admin = {
                     const safeOS = secureEscape(crash.userAgent || "Unknown OS");
                     const safeAppVersion = secureEscape(crash.appVersion || 'Unknown');
                     const safeJsCrashId = (crash.id || '').replace(/'/g, "\\'");
+                    const safeLine = secureEscape(crash.line || '');
+                    const safeUrl = secureEscape(crash.url || '');
+
+                    // Full raw details (stack / raw / logs) — never truncate to a one-line summary
+                    let rawDetail = '';
+                    if (crash.stack && crash.stack !== 'N/A') rawDetail = String(crash.stack);
+                    else if (crash.raw) rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
+                    else if (crash.logs) rawDetail = JSON.stringify(crash.logs, null, 2);
+                    else {
+                        try {
+                            const clone = { ...crash };
+                            delete clone.id;
+                            rawDetail = JSON.stringify(clone, null, 2);
+                        } catch (_) {
+                            rawDetail = String(crash.error || '');
+                        }
+                    }
+                    // Pretty-print JSON stacks (blackbox exports)
+                    if (rawDetail && (rawDetail.trim().startsWith('[') || rawDetail.trim().startsWith('{'))) {
+                        try { rawDetail = JSON.stringify(JSON.parse(rawDetail), null, 2); } catch (_) {}
+                    }
+                    const safeRaw = secureEscape(rawDetail);
                     
-                    const safeTicketDesc = safeErr.replace(/['"\n\r]/g, ' ');
+                    const safeTicketDesc = safeErr.replace(/['"\n\r]/g, ' ').slice(0, 240);
                     const actionHtml = isInbox 
                         ? `<div class="flex space-x-2 w-full mt-2">
                              ${rawDid !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${safeJsCrashId}', '${safeJsDid}')">Reply</button>` : ''}
@@ -2214,18 +2236,28 @@ const Admin = {
                              <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-2.5 py-1 rounded transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteCrash('${safeJsCrashId}')">Delete</button>
                            </div>`;
 
+                    const kindLabel = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT')
+                        ? 'BLACK BOX LOG'
+                        : 'FATAL DUMP';
+
                     groupHTML += `
                         <div class="p-2.5 flex flex-col">
                             <div class="flex justify-between items-start mb-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">FATAL DUMP</span>
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">${kindLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">${dateStr}</span>
                             </div>
                             <div class="text-[10px] font-mono text-gray-800 dark:text-gray-200 break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 leading-snug mb-2">
                                 ${safeErr}
                             </div>
+                            <details class="mb-2 group/raw" open>
+                                <summary class="cursor-pointer text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1 select-none">Raw crash details</summary>
+                                <pre class="text-[9px] font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words bg-black/5 dark:bg-black/40 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto custom-scrollbar leading-snug">${safeRaw}</pre>
+                            </details>
                             <div class="flex flex-col space-y-1 bg-gray-50 dark:bg-gray-800/50 p-2 rounded border border-gray-100 dark:border-gray-700">
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Route: <span class="text-blue-500">${safeRoute}</span></span>
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">App: <span class="text-gray-800 dark:text-gray-200">${safeAppVersion.split(' - ')[0]}</span></span>
+                                ${safeLine ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Line: <span class="text-gray-800 dark:text-gray-200">${safeLine}</span></span>` : ''}
+                                ${safeUrl ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">URL: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeUrl}</span></span>` : ''}
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">OS: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeOS}</span></span>
                             </div>
                             ${actionHtml}
@@ -2679,7 +2711,7 @@ const Admin = {
                     <span class="text-2xl mb-2">🚫</span>
                     <span>Dead Ends & Fails</span>
                 </span>
-                <span id="de-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <span id="de-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
                 <svg id="de-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="de-body" class="hidden mt-4 space-y-3">
@@ -2814,7 +2846,7 @@ const Admin = {
                     // GUARDIAN PHASE 11: Decoupled whitespace for long route names so they wrap dynamically instead of truncating
                     card.innerHTML = `
                         <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">â†’</span> ${safeDest}</div>
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
                             <div class="flex items-center mt-1.5 space-x-2">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
@@ -2883,7 +2915,7 @@ const Admin = {
                     <span class="text-2xl mb-2">💬</span> 
                     <span>Commuter Feedback</span>
                 </span>
-                <span id="fb-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <span id="fb-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
                 <svg id="fb-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             
@@ -3132,7 +3164,7 @@ const Admin = {
                     allEmails.forEach(em => {
                         contactHtml += `
                             <div class="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 max-w-[220px] sm:max-w-[300px]">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate">âœ‰️ ${em}</a>
+                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate">✉️ ${em}</a>
                                 <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-blue-500 transition-colors focus:outline-none" title="Copy">📋</button>
                             </div>`;
                     });
@@ -3210,13 +3242,13 @@ const Admin = {
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
                         // 🛡️ GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
-                        let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">âœ“</span>';
+                        let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">✓</span>';
                         if (item.acknowledged) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">âœ“âœ“</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
+                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">✓✓</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
                         } else if (item.read) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">âœ“âœ“</span>';
+                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">✓✓</span>';
                         } else if (item.delivered) {
-                            receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">âœ“âœ“</span>';
+                            receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">✓✓</span>';
                         }
 
                         // REGEX: Extract Admin Signoff Name ("â€” Enock")
@@ -3347,7 +3379,7 @@ const Admin = {
                         else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIcon = "💡"; }
 
                         // 🛡️ GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
-                        let headerLabelText = isReply ? `â†©️ Reply:` : `${typeIcon} ${typeLabel}`;
+                        let headerLabelText = isReply ? `↩️ Reply:` : `${typeIcon} ${typeLabel}`;
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const integratedHeaderHtml = `
@@ -3791,7 +3823,7 @@ const Admin = {
                     <span class="text-2xl mb-2">⚠️</span>
                     <span>Delay Reports</span>
                 </span>
-                <span id="dr-unread-badge" class="hidden absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <span id="dr-unread-badge" class="hidden absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
                 <svg id="dr-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="dr-body" class="hidden mt-4 flex flex-col">
@@ -3955,7 +3987,7 @@ const Admin = {
                     <span class="text-2xl mb-2">🛡️</span>
                     <span>Moderation Queue</span>
                 </span>
-                <span id="mq-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse">0 New</span>
+                <span id="mq-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
@@ -6705,7 +6737,7 @@ const Admin = {
                             <div class="text-[9px] text-gray-400 mt-0.5">${item.reason || 'No reason specified'}</div>
                             ${expiryHtml}
                         </div>
-                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')">âœ•</button>
+                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')">✕</button>
                     `;
                     listDiv.appendChild(row);
                 });
@@ -7873,7 +7905,7 @@ const Admin = {
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-sm"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">To-Do / Backlog</h2>
-                                    <span id="roadmap-count-backlog" class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-[9px] py-0.5 px-2 rounded-full font-bold">0</span>
+                                    <span id="roadmap-count-backlog" class="hidden bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-[9px] py-0.5 px-2 rounded-full font-bold"></span>
                                 </div>
                                 <button onclick="Admin.exportColumn('backlog')" class="text-gray-400 hover:text-blue-500 p-1 focus:outline-none transition-colors" title="Export Backlog">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -7890,7 +7922,7 @@ const Admin = {
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200 dark:ring-blue-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">In Progress</h2>
-                                    <span id="roadmap-count-progress" class="bg-blue-200 dark:bg-blue-800/80 text-blue-800 dark:text-blue-200 text-[9px] py-0.5 px-2 rounded-full font-bold">0</span>
+                                    <span id="roadmap-count-progress" class="hidden bg-blue-200 dark:bg-blue-800/80 text-blue-800 dark:text-blue-200 text-[9px] py-0.5 px-2 rounded-full font-bold"></span>
                                 </div>
                                 <button onclick="Admin.exportColumn('progress')" class="text-blue-400 hover:text-blue-600 p-1 focus:outline-none transition-colors" title="Export In Progress">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -7907,7 +7939,7 @@ const Admin = {
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-200 dark:ring-green-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-green-800 dark:text-green-300">Completed</h2>
-                                    <span id="roadmap-count-done" class="bg-green-200 dark:bg-green-800/80 text-green-800 dark:text-green-200 text-[9px] py-0.5 px-2 rounded-full font-bold">0</span>
+                                    <span id="roadmap-count-done" class="hidden bg-green-200 dark:bg-green-800/80 text-green-800 dark:text-green-200 text-[9px] py-0.5 px-2 rounded-full font-bold"></span>
                                 </div>
                                 <button onclick="Admin.exportColumn('done')" class="text-green-400 hover:text-green-600 p-1 focus:outline-none transition-colors" title="Export Completed">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -8064,10 +8096,16 @@ const Admin = {
                 else if (status === 'done') colDone.insertAdjacentHTML('beforeend', cardHtml);
             });
 
-            // Update Counts
-            document.getElementById('roadmap-count-backlog').textContent = counts.backlog;
-            document.getElementById('roadmap-count-progress').textContent = counts.progress;
-            document.getElementById('roadmap-count-done').textContent = counts.done;
+            // Update Counts — hide badges when zero
+            const setRoadmapCount = (id, n) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = String(n);
+                el.classList.toggle('hidden', !n);
+            };
+            setRoadmapCount('roadmap-count-backlog', counts.backlog);
+            setRoadmapCount('roadmap-count-progress', counts.progress);
+            setRoadmapCount('roadmap-count-done', counts.done);
 
             // Handle Empty States
             document.getElementById('empty-backlog').classList.toggle('hidden', counts.backlog > 0);
@@ -8308,7 +8346,7 @@ const Admin = {
                                 <select id="tkt-status" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
                                     <option value="backlog" ${ticket.status === 'backlog' ? 'selected' : ''}>📌 Backlog</option>
                                     <option value="progress" ${ticket.status === 'progress' ? 'selected' : ''}>⏳ Progress</option>
-                                    <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>âœ… Done</option>
+                                    <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>✅ Done</option>
                                 </select>
                             </div>
                         </div>

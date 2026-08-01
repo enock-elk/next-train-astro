@@ -9,6 +9,7 @@
 import { safeStorage } from './utils.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS } from './config.js';
 import { $deviceId, $currentRouteId } from '../store.js';
+import { markPendingReload } from './session-stability.js';
 
 
 // --- GLOBAL HAPTIC ENGINE ---
@@ -43,7 +44,7 @@ const MODAL_HASH = {
     'feedback-modal': '#feedback',
     'about-modal': '#about',
     'help-modal': '#help',
-    'legal-modal': '#legal',
+    // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
     'map-modal': '#map',
     'notice-modal': '#notice',
     'developer-reply-modal': '#devreply',
@@ -58,10 +59,21 @@ const MODAL_HASH = {
     'trip-map-modal': '#trip-map',
     'community-presence-info-modal': '#community-presence',
     'region-confirm-modal': '#regionconfirm',
+    'blackbox-modal': '#blackbox',
+    'bb-pin-modal': '#bb-pin',
+    'network-struggle-modal': '#network-struggle',
 };
 
 function hashForModal(modalId) {
     return MODAL_HASH[modalId] || null;
+}
+
+function isLegalHash(hash) {
+    return hash === '#privacy' || hash === '#terms' || hash === '#legal';
+}
+
+function legalHashForType(type) {
+    return type === 'terms' ? '#terms' : '#privacy';
 }
 
 function anyFixedModalOpen() {
@@ -74,11 +86,14 @@ export function closeSmoothModal(modalId, fromPopState = false) {
 
     const hash = hashForModal(modalId);
     // Prefer popping history so Back stack stays consistent (popstate closes with fromPopState)
-    if (!fromPopState && hash && location.hash === hash) {
-        try {
-            history.back();
-            return;
-        } catch { /* fall through */ }
+    if (!fromPopState) {
+        const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
+        if (shouldPopLegal || (hash && location.hash === hash)) {
+            try {
+                history.back();
+                return;
+            } catch { /* fall through */ }
+        }
     }
 
     window._isModalAnimating = true;
@@ -225,6 +240,12 @@ export function bindHistoryBackNavigation() {
 
         const resultsSection = document.getElementById('planner-results-section');
         if (resultsSection && !resultsSection.classList.contains('hidden')) {
+            const hashNow = location.hash || '';
+            // Closing notice/disruption/etc. restores #planner-results via history.back().
+            // That must NOT wipe the trip — only leave results when navigating away.
+            if (hashNow === '#planner-results') {
+                return;
+            }
             if (typeof window.hidePlannerResults === 'function') window.hidePlannerResults();
             return;
         }
@@ -589,6 +610,7 @@ export function initGlobalErrorHandler() {
 
         if (!hasReloaded) {
             try { sessionStorage.setItem('error_reloaded', 'true'); } catch(e) {}
+            markPendingReload('error_recovery', 1000);
             setTimeout(() => window.location.reload(), 1000);
             return false;
         }
@@ -598,16 +620,27 @@ export function initGlobalErrorHandler() {
         
         // Secure Firebase PUT Bypass to /sys_logs/
         const crashId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const stackText = error && error.stack ? String(error.stack) : 'N/A';
         const crashPayload = {
             error: String(msg),
             line: `${line}:${col}`,
             url: String(url),
-            stack: error && error.stack ? error.stack : 'N/A',
+            stack: stackText,
+            // Full raw dump for admin Crashlytics (not a one-line summary)
+            raw: JSON.stringify({
+                message: String(msg),
+                line,
+                col,
+                url: String(url),
+                stack: stackText,
+                name: error && error.name ? error.name : undefined,
+            }, null, 2),
             timestamp: Date.now(),
             userAgent: navigator.userAgent,
             routeId: $currentRouteId.get() || 'none',
             appVersion: typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown',
-            deviceId: $deviceId.get() || 'unknown'
+            deviceId: $deviceId.get() || 'unknown',
+            kind: 'runtime_error',
         };
         
         try {
@@ -648,6 +681,7 @@ export function initGlobalErrorHandler() {
                 
                 if (window.indexedDB) indexedDB.deleteDatabase('NextTrainDB'); 
                 
+                markPendingReload('safe_mode_cache_clear', 800);
                 if (window.caches) { 
                     caches.keys().then(k => Promise.all(k.map(n => caches.delete(n)))).finally(() => window.location.href = window.location.pathname + '?v=' + Date.now());
                 } else { 
@@ -796,28 +830,44 @@ export function setupSwipeNavigation() {
         const diffX = endX - touchStartX;
         const diffY = endY - touchStartY;
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            const order = ['next-train', 'trip-planner', 'community'];
+            // SPA chrome is two tabs; skip Community for swipe parity
+            const order = ['next-train', 'trip-planner'];
             const cur = safeStorage.getItem('activeTab') || 'next-train';
-            const idx = Math.max(0, order.indexOf(cur));
+            const idx = Math.max(0, order.indexOf(cur === 'community' ? 'next-train' : cur));
             if (diffX > 0) switchTab(order[Math.max(0, idx - 1)]);
             else switchTab(order[Math.min(order.length - 1, idx + 1)]);
         }
     }, { passive: true });
 }
 
-export function openLegal(type) {
+/**
+ * @param {'privacy'|'terms'} type
+ * @param {{ fromHash?: boolean }} [opts] fromHash: hash already set (cold link / alias normalize)
+ */
+export function openLegal(type, opts = {}) {
     if (typeof document === 'undefined') return;
     const titleEl = document.getElementById('legal-modal-title');
     const contentEl = document.getElementById('legal-modal-content');
     if (!contentEl) return;
 
-    if (type === 'privacy') {
+    const resolved = type === 'terms' ? 'terms' : 'privacy';
+    if (resolved === 'privacy') {
         if (titleEl) titleEl.textContent = 'Privacy Policy';
         contentEl.innerHTML = LEGAL_TEXTS.privacy;
     } else {
         if (titleEl) titleEl.textContent = 'Terms of Use';
         contentEl.innerHTML = LEGAL_TEXTS.terms;
     }
+
+    const targetHash = legalHashForType(resolved);
+    try {
+        if (location.hash === '#legal') {
+            history.replaceState({ modal: 'legal-modal', legal: resolved }, '', targetHash);
+        } else if (!opts.fromHash && location.hash !== targetHash) {
+            history.pushState({ modal: 'legal-modal', legal: resolved }, '', targetHash);
+        }
+    } catch { /* ignore */ }
+
     openSmoothModal('legal-modal');
 }
 
@@ -866,102 +916,114 @@ export function hideOfflineToast() {
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
 }
 
-/** Chrome/Edge installability + WebView fallback (parity with old SPA). */
+/** Chrome/Edge installability + WebView fallback — strict SPA ui.js parity. */
 export function bindPwaInstallPrompt() {
     if (typeof window === 'undefined' || window.__ntPwaInstallBound) return;
     window.__ntPwaInstallBound = true;
 
-    const isStandalone = () =>
-        window.matchMedia('(display-mode: standalone)').matches
-        || window.navigator.standalone === true;
+    const installBtn = document.getElementById('install-app-btn');
+    const installBtnPlanner = document.getElementById('install-app-btn-planner');
 
-    const ua = navigator.userAgent || navigator.vendor || '';
-    const isWebView = /FBAN|FBAV|Instagram|Line\//i.test(ua);
+    const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+    const isWebView = (ua.indexOf('FBAN') > -1) || (ua.indexOf('FBAV') > -1) || (ua.indexOf('Instagram') > -1) || (ua.indexOf('Line') > -1);
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
     const isAndroid = /android/i.test(ua);
 
-    const buttons = () => [
-        document.getElementById('install-app-btn'),
-        document.getElementById('install-app-btn-planner'),
-    ].filter(Boolean);
+    const showInstallButton = () => {
+        // SPA: hide entirely for iOS WebViews
+        if (isWebView && isIOS) {
+            if (installBtn) installBtn.classList.add('hidden');
+            if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+            return;
+        }
 
-    const setVisible = (show) => {
-        buttons().forEach((btn) => btn.classList.toggle('hidden', !show));
+        if (installBtn) installBtn.classList.remove('hidden');
+        if (installBtnPlanner) installBtnPlanner.classList.remove('hidden');
+
+        if (isWebView) {
+            const escapeIcon = `<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>`;
+            if (installBtn) {
+                installBtn.innerHTML = `${escapeIcon} Open in Browser to Install`;
+                installBtn.classList.replace('bg-green-500', 'bg-blue-600');
+                installBtn.classList.replace('hover:bg-green-600', 'hover:bg-blue-700');
+            }
+            if (installBtnPlanner) {
+                installBtnPlanner.innerHTML = `${escapeIcon} Open in Browser to Install`;
+                installBtnPlanner.classList.replace('bg-green-500', 'bg-blue-600');
+                installBtnPlanner.classList.replace('hover:bg-green-600', 'hover:bg-blue-700');
+            }
+        }
     };
 
-    const paintWebViewCta = () => {
-        const escapeIcon = `<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>`;
-        buttons().forEach((btn) => {
-            btn.innerHTML = `${escapeIcon} Open in Browser to Install`;
-            btn.classList.remove('bg-green-500', 'hover:bg-green-600');
-            btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-        });
-    };
-
-    if (isStandalone()) {
-        setVisible(false);
+    // Already-installed standalone session — never offer install again
+    const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    if (isStandalone) {
+        if (installBtn) installBtn.classList.add('hidden');
+        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
         return;
     }
 
-    // Adopt prompt captured early in <head>
-    if (window.deferredInstallPrompt && !window.__ntDeferredInstallPrompt) {
-        window.__ntDeferredInstallPrompt = window.deferredInstallPrompt;
-    }
-
-    const showInstallButton = () => {
-        if (isWebView && isIOS) {
-            setVisible(false);
-            return;
-        }
-        setVisible(true);
-        if (isWebView) paintWebViewCta();
-    };
-
-    if (window.__ntDeferredInstallPrompt || window.deferredInstallPrompt || isWebView) {
+    if (window.deferredInstallPrompt || window.__ntDeferredInstallPrompt || isWebView) {
         showInstallButton();
+    } else {
+        window.addEventListener('pwa-install-ready', () => { showInstallButton(); });
     }
 
+    // Late prompt (SW ready after binder) — keep parity with head capture
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
-        window.__ntDeferredInstallPrompt = e;
         window.deferredInstallPrompt = e;
+        window.__ntDeferredInstallPrompt = e;
         showInstallButton();
     });
 
-    window.addEventListener('pwa-install-ready', () => showInstallButton());
-
     window.addEventListener('appinstalled', () => {
-        window.__ntDeferredInstallPrompt = null;
         window.deferredInstallPrompt = null;
-        setVisible(false);
-        showToast('App installed — open it from your home screen.', 'success');
+        window.__ntDeferredInstallPrompt = null;
+        if (installBtn) installBtn.classList.add('hidden');
+        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
     });
 
-    const onInstallClick = async (e) => {
-        e?.preventDefault?.();
+    const handleInstallClick = () => {
         triggerHaptic();
+        if (typeof window.gtag === 'function') {
+            window.gtag('event', 'install_app_click', { location: 'main_view', is_webview: isWebView });
+        }
+
         if (isWebView) {
             if (isAndroid) {
-                const path = (location.pathname || '/') + (location.search || '');
-                window.location.href = `intent://${location.host}${path}#Intent;scheme=https;package=com.android.chrome;end;`;
+                const deviceId = (() => {
+                    try { return localStorage.getItem('next_train_device_id') || ''; } catch { return ''; }
+                })();
+                const host = location.host || 'nexttrain.co.za';
+                window.location.href = `intent://${host}/?uid=${deviceId}#Intent;scheme=https;package=com.android.chrome;end;`;
             }
             return;
         }
-        const deferred = window.__ntDeferredInstallPrompt || window.deferredInstallPrompt;
-        if (!deferred) {
-            showToast('Use your browser menu → Install app / Add to Home Screen.', 'info');
-            return;
+
+        if (installBtn) installBtn.classList.add('hidden');
+        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+
+        const promptEvent = window.deferredInstallPrompt || window.__ntDeferredInstallPrompt;
+        if (promptEvent) {
+            promptEvent.prompt();
+            Promise.resolve(promptEvent.userChoice).then((choiceResult) => {
+                if (typeof window.gtag === 'function') {
+                    window.gtag('event', choiceResult?.outcome === 'accepted' ? 'install_app_accepted' : 'install_app_dismissed');
+                }
+                window.deferredInstallPrompt = null;
+                window.__ntDeferredInstallPrompt = null;
+            }).catch(() => {
+                window.deferredInstallPrompt = null;
+                window.__ntDeferredInstallPrompt = null;
+            });
         }
-        deferred.prompt();
-        try { await deferred.userChoice; } catch { /* dismissed */ }
-        window.__ntDeferredInstallPrompt = null;
-        window.deferredInstallPrompt = null;
-        setVisible(false);
     };
 
-    buttons().forEach((btn) => {
-        btn.addEventListener('click', onInstallClick);
-    });
+    if (installBtn) installBtn.addEventListener('click', handleInstallClick);
+    if (installBtnPlanner) installBtnPlanner.addEventListener('click', handleInstallClick);
 }
 
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
@@ -986,6 +1048,11 @@ if (typeof window !== 'undefined') {
     // Boot the Error Handler immediately
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
+
+    import('./deeplink.js').then((m) => {
+        m.bindPwaSameOriginLinks();
+        m.bindDeeplinkHashChange();
+    }).catch(() => {});
 
     // Offline transition toast (once per offline episode; indicator stays via $isOffline)
     window.addEventListener('online', () => {

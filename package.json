@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
+    "verify:urls": "node scripts/verify-url-parity.mjs",
     "astro": "astro"
   },
   "dependencies": {

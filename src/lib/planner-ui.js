@@ -2091,7 +2091,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             }
 
             let actionBtn = `
-                <button onclick="if(navigator.onLine) { window.location.href='${withBase('/map')}'; } else { history.pushState({ modal: 'map' }, '', '#map'); if(typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal'); }" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors w-full flex items-center justify-center focus:outline-none">
+                <button onclick="if(navigator.onLine) { window.location.href='${withBase('/map.html')}'; } else { history.pushState({ modal: 'map' }, '', '#map'); if(typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal'); }" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors w-full flex items-center justify-center focus:outline-none">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
                     Open Network Map
                 </button>

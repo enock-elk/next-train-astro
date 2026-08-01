@@ -17,6 +17,8 @@ interface Props {
   twitterCard?: string;
   themeColor?: string;
   forceDark?: boolean;
+  /** Opt out of the theme script entirely — for print assets with a fixed light design. */
+  forceLight?: boolean;
   bodyClass?: string;
   htmlClass?: string;
   robots?: string;
@@ -35,6 +37,7 @@ const {
   twitterCard = 'summary',
   themeColor = '#1d4ed8',
   forceDark = false,
+  forceLight = false,
   bodyClass = '',
   htmlClass = '',
   robots = 'index, follow',
@@ -88,9 +91,11 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
 
-    <script is:inline define:vars={{ forceDark }}>
+    <script is:inline define:vars={{ forceDark, forceLight }}>
       try {
-        if (forceDark) {
+        if (forceLight) {
+          document.documentElement.classList.remove('dark');
+        } else if (forceDark) {
           document.documentElement.classList.add('dark');
         } else {
           const isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);

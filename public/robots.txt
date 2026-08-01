@@ -1,4 +1,25 @@
+# --- GENERAL RULES ---
+
 User-agent: *
 Allow: /
+
+# Keep system pages hidden from search results.
+# Both URL forms are listed so this file stays correct whichever way
+# build.format resolves (guide.html vs guide/).
+
+Disallow: /404.html
+Disallow: /404
+Disallow: /offline.html
+Disallow: /offline
+Disallow: /cdn-cgi/
+
+# Block parameterised route/region deep links. These are functional URLs the
+# app generates for sharing, but indexing them duplicates the canonical pages
+# and bloats the index. Path-based route pages are the ones meant to rank.
+
+Disallow: /*?route=
+Disallow: /*?region=
+
+# Point to the Sitemap
 
 Sitemap: https://nexttrain.co.za/sitemap.xml

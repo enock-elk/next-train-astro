@@ -1,11 +1,17 @@
-# Legacy SPA URLs → clean Astro paths (Cloudflare Pages / Netlify)
-/guide.html   /guide   301
-/map.html     /map     301
-/status.html  /status  301
-/index.html   /        301
+# Cloudflare Pages / Netlify only — GitHub Pages ignores this file entirely.
+#
+# Canonical URLs keep their .html extension so they match what Google already
+# has indexed for nexttrain.co.za (see astro.config.mjs build.format = 'file').
+# These rules fold the extensionless and trailing-slash variants into the
+# canonical form, so no host serves the same page at two addresses. GitHub Pages
+# resolves /guide to guide.html natively, so it needs no equivalent config.
 
-# Canonical: no trailing slash
-/guide/       /guide   301
-/map/         /map     301
-/status/      /status  301
-/offline/     /offline 301
+/guide/   /guide.html   301
+/guide    /guide.html   301
+/map/     /map.html     301
+/map      /map.html     301
+/status/  /status.html  301
+/status   /status.html  301
+/offline/ /offline.html 301
+/offline  /offline.html 301
+/index.html  /  301

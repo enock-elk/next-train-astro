@@ -199,7 +199,7 @@ export function updateFareDisplay(sheetKey) {
     const detailed = getDetailedFare(sheetKey) || getDetailedFare(null);
 
     // SPA fare chrome: blue wash, absolute chevron, pill fare-type tags
-    fareContainer.className = 'mb-4 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm min-h-[44px] pr-9 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700';
+    fareContainer.className = 'mb-6 p-3.5 rounded-xl flex items-center justify-between gap-3 shadow-sm min-h-[58px] pr-10 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700';
 
     const chevron = document.getElementById('fare-chevron');
     if (detailed?.prices) {
@@ -217,25 +217,25 @@ export function updateFareDisplay(sheetKey) {
     if (fareData) {
         if (fareAmount) {
             fareAmount.textContent = `R${fareData.price}`;
-            fareAmount.className = 'text-xl font-black text-gray-900 dark:text-white leading-none';
+            fareAmount.className = 'text-2xl font-black text-gray-900 dark:text-white leading-none';
         }
         if (fareType) {
             fareType.classList.remove('hidden');
             if (fareData.isPromo) {
                 fareType.textContent = fareData.discountLabel || 'Discounted';
-                fareType.className = 'text-[9px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded uppercase tracking-wide whitespace-nowrap inline-block mt-1 shadow-sm border border-purple-200 dark:border-purple-800/50';
+                fareType.className = 'text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else if (fareData.isOffPeak) {
-                fareType.textContent = 'Off-Peak • 40% Off until 14:30';
-                fareType.className = 'text-[9px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-green-200 dark:border-green-800/50';
+                fareType.textContent = 'Off-Peak · 40% Off';
+                fareType.className = 'text-[10px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else {
                 fareType.textContent = 'Standard Fare';
-                fareType.className = 'text-[9px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-gray-300 dark:border-gray-600';
+                fareType.className = 'text-[10px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             }
         }
     } else {
         if (fareAmount) {
             fareAmount.textContent = 'R --.--';
-            fareAmount.className = 'text-xl font-black text-gray-300 dark:text-gray-600 leading-none';
+            fareAmount.className = 'text-2xl font-black text-gray-300 dark:text-gray-600 leading-none';
         }
         if (fareType) fareType.className = 'hidden';
     }

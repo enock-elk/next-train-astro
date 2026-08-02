@@ -4,9 +4,12 @@
   "version": "8.8.2",
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "node scripts/generate-sitemap.mjs",
     "build": "astro check && astro build",
     "preview": "astro preview",
+    "sitemap": "node scripts/generate-sitemap.mjs",
     "verify:urls": "node scripts/verify-url-parity.mjs",
+    "verify:imports": "node scripts/verify-module-imports.mjs",
     "astro": "astro"
   },
   "dependencies": {

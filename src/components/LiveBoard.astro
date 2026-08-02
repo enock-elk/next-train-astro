@@ -82,22 +82,21 @@
         </button>
     </div>
 
-    <!-- Fare box (SPA layout) -->
-    <div id="fare-container" class="mb-6 p-3.5 bg-blue-50 dark:bg-gray-800 rounded-xl flex items-center justify-between gap-3 shadow-sm border border-blue-100 dark:border-gray-700 hidden min-h-[58px] pr-10 relative group">
+    <!-- Fare box (compact; SPA chrome with tighter height) -->
+    <div id="fare-container" class="mb-4 py-2 px-3 bg-blue-50 dark:bg-gray-800 rounded-xl flex items-center justify-between gap-2 shadow-sm border border-blue-100 dark:border-gray-700 hidden min-h-[44px] pr-9 relative group">
         <div class="flex flex-col items-start justify-center min-w-0 flex-1 overflow-hidden">
-            <div class="flex items-center space-x-1 mb-1 flex-wrap">
+            <div class="flex items-center space-x-1 flex-wrap leading-none">
                 <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Estimated</span>
                 <span id="passenger-type-label" class="text-[10px] text-blue-500 dark:text-blue-400 uppercase font-black tracking-widest">Adult</span>
                 <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Fare</span>
             </div>
-            <span id="fare-type" class="hidden text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate"></span>
+            <span id="fare-type" class="hidden text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate"></span>
         </div>
-        <div class="text-right flex flex-col items-end justify-center shrink-0">
-            <span id="fare-amount" class="text-2xl font-black text-gray-900 dark:text-white leading-none">R--.--</span>
-            <span class="text-[9px] text-gray-400 dark:text-gray-500 italic mt-1">Prices may vary</span>
+        <div class="text-right flex items-center justify-center shrink-0">
+            <span id="fare-amount" class="text-xl font-black text-gray-900 dark:text-white leading-none">R--.--</span>
         </div>
-        <div id="fare-chevron" class="absolute right-3 top-1/2 transform -translate-y-1/2 opacity-50 group-hover:opacity-100 transition-opacity flex items-center justify-center shrink-0 pointer-events-none" aria-hidden="true">
-            <svg class="w-5 h-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        <div id="fare-chevron" class="absolute right-2.5 top-1/2 transform -translate-y-1/2 opacity-50 group-hover:opacity-100 transition-opacity flex items-center justify-center shrink-0 pointer-events-none" aria-hidden="true">
+            <svg class="w-4 h-4 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </div>
     </div>
 

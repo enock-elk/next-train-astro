@@ -81,5 +81,5 @@ export function hydrateStores() {
     if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = uid;
     $deviceId.set(uid);
 
-    console.log("🛡️ Guardian: NextTrain 2.0 State Hydrated Successfully.");
+    console.log("🛡️ Guardian: Metrorail Next Train state hydrated successfully.");
 }

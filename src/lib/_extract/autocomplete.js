@@ -63,7 +63,7 @@ function setupNextTrainAutocomplete() {
     if (!list && input.parentNode) {
         list = document.createElement('ul');
         list.id = 'next-train-autocomplete-list';
-        // ðŸ›¡ï¸ GROWTH MODE PHASE 7: Removed scroll-locks (overscroll-contain touch-pan-y) to fix mobile scroll freezing
+        // 🛡️ GROWTH MODE PHASE 7: Removed scroll-locks (overscroll-contain touch-pan-y) to fix mobile scroll freezing
         list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
         input.parentNode.appendChild(list);
         

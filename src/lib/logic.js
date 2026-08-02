@@ -20,7 +20,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm 
 } from './utils.js';
-import { showToast, showOfflineToast } from './ui.js';
+import { showToast, showOfflineToast, openSmoothModal, closeSmoothModal } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 
 // --- MODULE STATE VARIABLES ---
@@ -115,6 +115,21 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     try {
         const response = await fetch(url, { ...options, signal: controller.signal });
         clearTimeout(id);
+
+        // Captive portals often return HTTP 200 with HTML login pages
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+            isLieFi = true;
+            _networkStruggleCount = 0;
+            if (typeof document !== 'undefined') {
+                if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
+                const oi = document.getElementById('offline-indicator');
+                if (oi) oi.style.display = 'flex';
+                showOfflineToast(0);
+            }
+            throw new Error('Captive Portal Detected');
+        }
+
         isLieFi = false;
         _networkStruggleCount = 0;
         
@@ -135,18 +150,27 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
             throw error;
         }
 
-        if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network')))) {
+        if (error.message === 'Captive Portal Detected') throw error;
+
+        if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
             _networkStruggleCount++;
+            // OS may still report online for Wi‑Fi/mobile without a usable internet path
             if (typeof navigator !== 'undefined' && navigator.onLine) {
-                console.warn(`🛡️ Guardian: Request to ${url} timed out. Very slow connection.`);
+                console.warn(`🛡️ Guardian: Request to ${url} timed out / failed while OS reports online (possible Lie-Fi).`);
                 if (_networkStruggleCount >= 3) {
                     const hasRamCache = !!$fullDatabase.get();
                     const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
-                    if (hasRamCache || hasDiskCache) {
-                        _networkStruggleCount = 0;
-                    } else if (typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function') {
+                    // Treat repeated failures as Lie-Fi even when we have cache, so UI goes offline-mode
+                    isLieFi = true;
+                    _networkStruggleCount = 0;
+                    if (typeof document !== 'undefined') {
+                        if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
+                        const oi = document.getElementById('offline-indicator');
+                        if (oi) oi.style.display = 'flex';
+                        showOfflineToast(0);
+                    }
+                    if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function') {
                         window.triggerNetworkStruggleModal();
-                        _networkStruggleCount = 0;
                     }
                 } else {
                     const now = Date.now();
@@ -158,8 +182,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
             } else {
                 isLieFi = true;
                 if (typeof document !== 'undefined') {
-                    const maintBanner = document.getElementById('maintenance-banner');
-                    if (maintBanner) maintBanner.style.display = 'none';
+                    if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
                     const oi = document.getElementById('offline-indicator');
                     if (oi) oi.style.display = 'flex';
                     showOfflineToast(60000);
@@ -639,7 +662,28 @@ export async function loadAllSchedules(force = false) {
             console.warn('Disruptions fetch failed.');
         }
 
+        // GUARDIAN SMART SYNC: ping lastUpdated only — skip the multi-MB payload
+        // when the cached regional DB is already current (critical on metered 3G).
         let needsDownload = true;
+        const fullDatabase = $fullDatabase.get();
+        if (usedCache && !force && fullDatabase && fullDatabase.lastUpdated) {
+            try {
+                const nodePath = String(REGIONS[$userRegion.get()]?.dbNode || '').replace(/\.json$/i, '');
+                if (nodePath) {
+                    const pingUrl = `${DYNAMIC_BASE_URL}${nodePath}/lastUpdated.json?t=${edgeCacheBucket}`;
+                    const pingRes = await guardianFetch(pingUrl, { signal: fetchSignal }, 4000);
+                    if (pingRes.ok) {
+                        const remoteUpdated = await pingRes.json();
+                        if (remoteUpdated && remoteUpdated === fullDatabase.lastUpdated) {
+                            console.log('🛡️ Guardian Smart Sync: Schedule is up-to-date. Skipping heavy payload download.');
+                            needsDownload = false;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Smart Sync Ping failed, proceeding with full data fetch.', e);
+            }
+        }
 
         if (needsDownload) {
             let newDatabase = null;
@@ -830,6 +874,77 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     }
 }
 
+function regionDisplayName(code) {
+    if (code === 'WC') return 'Western Cape';
+    if (code === 'KZN') return 'KwaZulu-Natal';
+    if (code === 'EC') return 'Eastern Cape';
+    return 'Gauteng';
+}
+
+/**
+ * SPA-parity region change: offline cache gate + confirm modal, then executeRegionSwap.
+ * Call this from sidenav / route-modal region pickers — not executeRegionSwap directly.
+ */
+export async function handleRegionChange(newRegion, selectElement = null) {
+    const current = $userRegion.get() || 'GP';
+    if (!newRegion || newRegion === current) return;
+
+    if (selectElement) selectElement.value = current;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const cachedData = await loadFromLocalCache(`full_db_${newRegion}`);
+        if (!cachedData) {
+            showToast(
+                `Internet required to download ${regionDisplayName(newRegion)} schedules for the first time.`,
+                'error',
+                4000
+            );
+            return;
+        }
+    }
+
+    const confirmModal = typeof document !== 'undefined'
+        ? document.getElementById('region-confirm-modal')
+        : null;
+    const title = document.getElementById('region-confirm-title');
+    const desc = document.getElementById('region-confirm-desc');
+    const actionBtn = document.getElementById('region-confirm-action-btn');
+    const cancelBtn = document.getElementById('region-cancel-btn');
+
+    if (!confirmModal || !actionBtn) {
+        safeStorage.setItem('userRegion', newRegion);
+        executeRegionSwap(newRegion);
+        return;
+    }
+
+    try { history.pushState({ modal: 'region-confirm' }, '', '#regionconfirm'); } catch (e) {}
+    if (title) title.textContent = 'Switch Region?';
+    if (desc) desc.textContent = `Are you sure you want to switch to ${regionDisplayName(newRegion)}?`;
+
+    if (typeof window !== 'undefined' && typeof window.closeAppHub === 'function') {
+        window.closeAppHub(true);
+    }
+    setTimeout(() => openSmoothModal('region-confirm-modal'), 50);
+
+    const confirmAction = () => {
+        safeStorage.setItem('userRegion', newRegion);
+        closeSmoothModal('region-confirm-modal');
+        if (typeof location !== 'undefined' && location.hash === '#regionconfirm') {
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch (e) {}
+        }
+        setTimeout(() => executeRegionSwap(newRegion), 350);
+    };
+    const cancelAction = () => {
+        closeSmoothModal('region-confirm-modal');
+        if (typeof location !== 'undefined' && location.hash === '#regionconfirm') {
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch (e) {}
+        }
+    };
+
+    actionBtn.onclick = confirmAction;
+    if (cancelBtn) cancelBtn.onclick = cancelAction;
+}
+
 export function updateTime() {
     try {
         let day, timeString;
@@ -837,8 +952,22 @@ export function updateTime() {
         const simActive = $isSimMode.get();
         
         if (simActive) {
-            day = currentDayIndex; // Need specific admin linking later
-            timeString = $simTime.get() || "12:00:00"; 
+            timeString = $simTime.get() || (typeof window !== 'undefined' ? window.simTimeStr : null) || '12:00:00';
+            // Prefer explicit sim date (SPECIAL_DATES), else admin day index
+            const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
+            if (dateInput instanceof HTMLInputElement && dateInput.value) {
+                const parts = dateInput.value.split('-').map(Number);
+                if (parts.length === 3) {
+                    dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
+                    day = dateToCheck.getDay();
+                }
+            }
+            if (day === undefined || day === null) {
+                const idx = (typeof window !== 'undefined' && window.__ntSimDayIndex != null)
+                    ? Number(window.__ntSimDayIndex)
+                    : (typeof window !== 'undefined' && window.simDayIndex != null ? Number(window.simDayIndex) : currentDayIndex);
+                day = Number.isFinite(idx) ? idx : currentDayIndex;
+            }
         } else {
             const now = new Date();
             day = now.getDay(); 
@@ -909,11 +1038,15 @@ export function updateTime() {
             currentMinute = new Date().getMinutes();
         }
 
-        // Recalculate once per minute or instantly if simulating
-        if (lastRenderedMinute !== currentMinute || simActive) {
-            lastRenderedMinute = currentMinute;
+        // Recalculate once per minute; in sim mode only when sim minute/day changes (not every second)
+        const simDayKey = simActive ? `${day}|${timeString.slice(0, 5)}` : null;
+        const shouldRecalc = simActive
+            ? (window.__ntLastSimKey !== simDayKey)
+            : (lastRenderedMinute !== currentMinute);
+        if (shouldRecalc) {
+            if (simActive) window.__ntLastSimKey = simDayKey;
+            else lastRenderedMinute = currentMinute;
             
-            // Securely look for globally bound view controllers (LiveBoard bridges)
             if (typeof window !== 'undefined') {
                 if (typeof window.findNextTrains === 'function') {
                     window.findNextTrains();
@@ -948,6 +1081,7 @@ if (typeof window !== 'undefined') {
     window.currentDayIndex = currentDayIndex;
     window.guardianFetch = guardianFetch;
     window.executeRegionSwap = executeRegionSwap;
+    window.handleRegionChange = handleRegionChange;
     window.checkKillswitch = checkKillswitch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     Object.defineProperty(window, 'isLieFi', {

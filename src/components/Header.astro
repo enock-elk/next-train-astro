@@ -2,7 +2,8 @@
 // SPA-parity header: hamburger left · centered brand · alert bell right
 ---
 
-<div class="pt-2 px-3 pb-1 bg-white/85 dark:bg-gray-800/95 backdrop-blur-xl z-20 shadow-sm relative flex flex-col justify-center min-h-[85px] dark:border-b dark:border-gray-800/50" id="app-header">
+<!-- z-index omitted on purpose: a z-* here traps the hamburger under an absolute maintenance strip -->
+<div class="pt-2 px-3 pb-1 bg-white/85 dark:bg-gray-800/95 backdrop-blur-xl shadow-sm relative flex flex-col justify-center min-h-[85px] dark:border-b dark:border-gray-800/50" id="app-header">
 
     <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">
         <div id="offline-indicator" style="display: none;" class="pointer-events-auto w-max bg-amber-400 text-gray-900 border-amber-500 border-b border-x border-t-0 dark:bg-gray-900/95 dark:text-amber-400 dark:border-amber-500/80 dark:shadow-[0_4px_12px_rgba(245,158,11,0.15)] backdrop-blur-md text-xs font-black uppercase px-4 py-1 rounded-b-lg shadow-md flex items-center justify-center tracking-widest whitespace-nowrap transition-colors">
@@ -10,13 +11,14 @@
         </div>
     </div>
 
-    <button id="open-nav-btn" type="button" class="absolute top-2 left-4 p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors z-30" aria-label="Open App Hub">
+    <!-- z-[70] > maintenance strip z-[55]; strip is pointer-events-none -->
+    <button id="open-nav-btn" type="button" class="absolute top-2 left-4 p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors z-[70]" aria-label="Open App Hub">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
         </svg>
     </button>
 
-    <button id="notice-bell" type="button" class="hidden absolute top-4 right-4 z-50 p-1.5 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 shadow-md focus:outline-none hover:scale-105 transition-transform" aria-label="Service Alert">
+    <button id="notice-bell" type="button" class="hidden absolute top-4 right-4 z-[70] p-1.5 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 shadow-md focus:outline-none hover:scale-105 transition-transform" aria-label="Service Alert">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
         <span id="notice-dot" class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 bg-red-600 transform translate-x-1/4 -translate-y-1/4 hidden"></span>
     </button>

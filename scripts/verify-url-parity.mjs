@@ -16,10 +16,18 @@ import { join, relative } from 'node:path';
 const DIST = process.argv[2] || 'dist';
 const ORIGIN = 'https://nexttrain.co.za';
 
-/** Indexable pages, mirroring metrorail-app/sitemap.xml. */
-const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'status.html', 'marketing.html'];
-/** System pages that must exist but must never be indexed. */
-const NOINDEX = ['offline.html', '404.html'];
+/** Public indexable pages (must match public/sitemap.xml core set). */
+const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'routes.html'];
+/** Must exist but must never be indexed (private / system). */
+const NOINDEX = ['offline.html', '404.html', 'status.html', 'marketing.html'];
+/** Legacy corridors that must keep stable slugs after SEO expansion. */
+const STABLE_ROUTE_SLUGS = [
+  'routes/pretoria-to-pienaarspoort.html',
+  'routes/pretoria-to-kempton-park.html',
+  'routes/pretoria-to-mabopane.html',
+  'routes/cape-town-to-bellville.html',
+  'routes/durban-to-umlazi.html',
+];
 
 const failures = [];
 const notes = [];
@@ -55,12 +63,21 @@ for (const rel of htmlFiles) {
   }
 }
 
-const unexpected = htmlFiles.filter((f) => ![...INDEXABLE, ...NOINDEX].includes(f));
-if (unexpected.length) notes.push(`extra pages not in the live sitemap: ${unexpected.join(', ')}`);
+const routeLandings = htmlFiles.filter((f) => f.startsWith('routes/') && f !== 'routes.html');
+if (routeLandings.length < 30) {
+  fail(`expected SSG route landings for ~all active corridors (≥30), found ${routeLandings.length}`);
+}
+for (const file of STABLE_ROUTE_SLUGS) {
+  if (!existsSync(join(DIST, file))) fail(`stable SEO slug missing: /${file}`);
+}
+
+const known = new Set([...INDEXABLE, ...NOINDEX, ...routeLandings]);
+const unexpected = htmlFiles.filter((f) => !known.has(f));
+if (unexpected.length) notes.push(`extra HTML pages not in parity lists: ${unexpected.join(', ')}`);
 
 // 3. Canonicals must be self-referencing against the production origin, or Google
 //    consolidates onto a URL that is not the one it has indexed.
-for (const file of [...INDEXABLE, ...NOINDEX]) {
+for (const file of [...INDEXABLE, ...NOINDEX, ...routeLandings]) {
   const path = join(DIST, file);
   if (!existsSync(path)) continue;
   const html = readFileSync(path, 'utf8');
@@ -72,39 +89,99 @@ for (const file of [...INDEXABLE, ...NOINDEX]) {
 
   const robots = html.match(/<meta name="robots" content="([^"]+)"/)?.[1] || '';
   if (NOINDEX.includes(file) && !robots.includes('noindex')) {
-    fail(`/${file} is a system page but is not noindex`);
+    fail(`/${file} is a private/system page but is not noindex`);
   }
-  if (INDEXABLE.includes(file) && robots.includes('noindex')) {
+  if ((INDEXABLE.includes(file) || file.startsWith('routes/')) && robots.includes('noindex')) {
     fail(`/${file} should be indexable but is marked noindex`);
   }
 }
 
-// 4. Manifest fields that change the installed app's appearance. Drift here is
-//    what makes an existing install visibly "become a different app".
-const manifestPath = join(DIST, 'manifest.webmanifest');
+// 4. Sitemap must list public pages + every route landing, omit private docs.
+const sitemapPath = join(DIST, 'sitemap.xml');
+if (!existsSync(sitemapPath)) {
+  fail('sitemap.xml not emitted');
+} else {
+  const sitemap = readFileSync(sitemapPath, 'utf8');
+  for (const file of INDEXABLE) {
+    const loc = file === 'index.html' ? `${ORIGIN}/` : `${ORIGIN}/${file}`;
+    if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing ${loc}`);
+  }
+  for (const file of routeLandings) {
+    const loc = `${ORIGIN}/${file}`;
+    if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing route landing ${loc}`);
+  }
+  for (const file of NOINDEX) {
+    if (file === '404.html' || file === 'offline.html') continue;
+    const loc = `${ORIGIN}/${file}`;
+    if (sitemap.includes(loc)) fail(`sitemap.xml must not list private page ${loc}`);
+  }
+}
+
+// 5. Manifest must match the live SPA identity so existing installs upgrade in place.
+const manifestPath = join(DIST, 'manifest.json');
 if (!existsSync(manifestPath)) {
-  fail('manifest.webmanifest not emitted');
+  fail('manifest.json not emitted (SPA filename — not .webmanifest)');
 } else {
   const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (m.name !== 'Metrorail Next Train') fail(`manifest name is "${m.name}", want "Metrorail Next Train"`);
+  if (m.short_name !== 'Next Train') fail(`manifest short_name is "${m.short_name}", want "Next Train"`);
+  if (m.id !== '/' && m.id !== './') fail(`manifest id is "${m.id}", want "/" (SPA "./")`);
+  if (m.start_url !== '/' && m.start_url !== './') fail(`manifest start_url is "${m.start_url}", want "/"`);
   if (m.background_color !== '#1d4ed8') fail(`manifest background_color is ${m.background_color}, want #1d4ed8`);
   if (m.orientation !== 'portrait') fail(`manifest orientation is ${m.orientation}, want portrait`);
   if (m.icons?.some((i) => i.purpose === 'maskable')) {
     fail('manifest declares a maskable icon — Android will re-crop every existing install');
   }
-  const has512 = m.icons?.some((i) => i.sizes === '512x512' && i.src.endsWith('loading-logo.png'));
+  const has512 = m.icons?.some((i) => i.sizes === '512x512' && String(i.src).endsWith('loading-logo.png'));
   if (!has512) fail('manifest 512 icon must be icons/loading-logo.png to match existing installs');
-
-  // Identity fields are still deliberately distinct so the PWA can be installed
-  // beside the live SPA. Surfaced as a reminder, not a failure.
-  if (m.name !== 'Metrorail Next Train' || m.short_name !== 'Next Train') {
-    notes.push(`manifest identity still in side-by-side mode (name="${m.name}", short_name="${m.short_name}") — revert before cutover`);
-  }
-  if (m.start_url !== '/' || m.id !== '/') {
-    notes.push(`manifest start_url/id still "${m.start_url}" — the SPA uses "./"; revert before cutover`);
+  if (!Array.isArray(m.shortcuts) || m.shortcuts.length < 2) {
+    fail('manifest missing SPA shortcuts (Trip Planner + Network Map)');
   }
 }
 
-if (!existsSync(join(DIST, 'sw.js'))) fail('sw.js not emitted — PWA integration did not run');
+// 6. Built HTML must link the same manifest filename we emit.
+const indexHtml = readFileSync(join(DIST, 'index.html'), 'utf8');
+if (!indexHtml.includes('rel="manifest"') || !indexHtml.includes('manifest.json')) {
+  fail('index.html must <link rel="manifest" href="…manifest.json">');
+}
+if (indexHtml.includes('manifest.webmanifest')) {
+  fail('index.html still links manifest.webmanifest — breaks install after rename to manifest.json');
+}
+if (!indexHtml.includes('apple-mobile-web-app-title" content="Next Train"')) {
+  fail('iOS home-screen title must be "Next Train" (not Train 2.0)');
+}
+
+// 7. Precache must use canonical .html URLs (build.format: 'file').
+const swPath = join(DIST, 'sw.js');
+if (!existsSync(swPath)) {
+  fail('sw.js not emitted — PWA integration did not run');
+} else {
+  const sw = readFileSync(swPath, 'utf8');
+  for (const page of ['guide.html', 'map.html', 'offline.html', 'routes.html']) {
+    if (!sw.includes(`"${page}"`) && !sw.includes(`'${page}'`)) {
+      fail(`sw.js precache missing ${page} — offline cold open will fail`);
+    }
+  }
+  // Extension-less page keys are the old bug (precache /guide, request /guide.html).
+  if (/"url":"guide"/.test(sw) || /\{url:"guide"/.test(sw) || /\{url:\\"guide\\"/.test(sw)) {
+    fail('sw.js still precaches extension-less "guide" — want guide.html');
+  }
+  if (sw.includes('marketing.html') || sw.includes('"marketing"')) {
+    fail('sw.js must not precache private marketing.html');
+  }
+  if (sw.includes('status.html') && /precacheAndRoute|precach/.test(sw)) {
+    // status may appear in comments; only fail if it's a precache url entry
+    if (/\{url:\\?"status(\.html)?\\?"/.test(sw)) {
+      fail('sw.js must not precache private status.html');
+    }
+  }
+  if (!sw.includes('offline.html')) {
+    fail('sw.js must reference offline.html as navigate fallback');
+  }
+  if (/\{url:\\?"js\/admin\.js\\?"/.test(sw) || sw.includes('url:"js/admin.js"') || sw.includes('url:"/js/admin.js"')) {
+    fail('sw.js must not precache js/admin.js — admin is lazy-loaded on unlock only');
+  }
+}
 
 for (const note of notes) console.log(`  note: ${note}`);
 
@@ -114,4 +191,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`\n✓ URL parity OK — ${INDEXABLE.length} indexable + ${NOINDEX.length} system pages match metrorail-app.`);
+console.log(
+  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${routeLandings.length} route landings + ${NOINDEX.length} system pages + SPA identity/precache match.`
+);

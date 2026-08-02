@@ -92,7 +92,7 @@ function findNearestStation(isAuto = false) {
             if (!isAuto) {
                 let msg = "Unable to retrieve location.";
                 if (error.code === 1) msg = "Location permission denied.";
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Handle timeout specifically
+                // 🛡️ GUARDIAN UX FIX: Handle timeout specifically
                 if (error.code === 3) msg = "Location request timed out."; 
                 showToast(msg, "error");
                 stationSelect.value = "";
@@ -100,7 +100,7 @@ function findNearestStation(isAuto = false) {
                 if(icon) icon.classList.remove('spinning');
             }
         },
-        { timeout: 8000, enableHighAccuracy: true } // ðŸ›¡ï¸ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
+        { timeout: 8000, enableHighAccuracy: true } // 🛡️ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
     );
 }
 
@@ -155,7 +155,7 @@ function populateStationList() {
         }
     }
     
-    // ðŸ›¡ï¸ GUARDIAN UX FIX: Reactive Dropdown Engine
+    // 🛡️ GUARDIAN UX FIX: Reactive Dropdown Engine
     // If the user already opened the dropdown while it was "Loading...", refresh it instantly now that data is here.
     const autocompleteList = document.getElementById('next-train-autocomplete-list');
     if (autocompleteList && !autocompleteList.classList.contains('hidden')) {

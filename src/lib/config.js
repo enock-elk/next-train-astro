@@ -16,6 +16,13 @@ export const APP_BASE = normalizeBase(
     (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/'
 );
 
+/**
+ * Web app manifest filename. Matches the live SPA's `/manifest.json` so cached
+ * shells and bookmarks keep resolving after the cutover. Must stay in sync with
+ * `manifestFilename` in astro.config.mjs — verify-url-parity.mjs asserts this.
+ */
+export const MANIFEST_FILENAME = 'manifest.json';
+
 /** Prefix a root-absolute path with the Astro `base` (public assets, in-app navigations). */
 export function withBase(path = '/') {
     const base = normalizeBase(APP_BASE);
@@ -786,10 +793,10 @@ export const CHANGELOG_DATA = [
         date: "02 Aug 2026",
         forceShow: false,
         features: [
-            "<b>No Weekend Service:</b> Routes without Saturday timetables (e.g. Hercules–Koedoespoort, Eastern Cape) now show a clear empty state and the next weekday train.",
+            "<b>No Weekend Service:</b> Routes without Saturday timetables (e.g. Hercules/Koedoespoort, Eastern Cape) show stations with a clear notice, plus the next weekday train on the live board.",
             "<b>Sunday No Service:</b> The day chip highlights “No Service” in red so Sundays and no-service holidays are obvious at a glance.",
             "<b>You're Here:</b> Terminus stops use a location pin instead of plain “You are at this station” text.",
-            "<b>Clearer Holiday Guide:</b> FAQ updated — public holidays are not always Saturday schedules, and some routes have no weekend service at all."
+            "<b>Clearer Holiday Guide:</b> FAQ updated: public holidays are not always Saturday schedules, and some routes have no weekend service at all."
         ]
     },
     {
@@ -810,9 +817,9 @@ export const CHANGELOG_DATA = [
         date: "11 Jul 2026",
         forceShow: false,
         features: [
-            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning — alerts only when your train crosses the danger zone.",
+            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning; alerts only when your train crosses the danger zone.",
             "<b>Seamless Navigation:</b> “See Next Available Day” on empty late-night/Sunday boards syncs the day dropdown correctly.",
-            "<b>Sleeker Interface:</b> Trip Planner result cards cleaned up — fewer glitches and misaligned borders."
+            "<b>Sleeker Interface:</b> Trip Planner result cards cleaned up with fewer glitches and misaligned borders."
         ]
     },
     {
@@ -833,7 +840,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Sleeker Design:</b> Modern icons and cleaner timeline layouts in place of cluttered emoji chrome.",
-            "<b>Smarter Route Status:</b> Impossible connections explain why — incidents or extreme timetable gaps — with quick links.",
+            "<b>Smarter Route Status:</b> Impossible connections explain why (incidents or extreme timetable gaps) with quick links.",
             "<b>Layover Warnings:</b> Unusually long transfer waits are flagged so you are not stranded.",
             "<b>Smoother Experience:</b> Fixed mobile text clipping and improved station-select prompts."
         ]

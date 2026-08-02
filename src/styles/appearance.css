@@ -431,3 +431,38 @@ html[data-colour-pack="ember"] #view-full-timetable-btn:hover {
   color: var(--nt-text);
   pointer-events: none;
 }
+
+/* Keep header chrome (hamburger / bell / maint) below app modals */
+#app-header {
+  position: relative;
+  z-index: 10;
+}
+
+/* Toggle switches (settings + admin maint / alert toggles). Must be global —
+   Sidenav scoped <style> does not reach #admin-panel injected markup. */
+.toggle-checkbox {
+  right: 20px;
+  transition: all 0.3s;
+}
+.toggle-checkbox:checked {
+  right: 0;
+  border-color: #3b82f6;
+}
+.toggle-checkbox:checked + .toggle-label {
+  background-color: #3b82f6;
+}
+
+/* Maintenance strip pinned to top of header; hamburger stays above it (z-[70]) */
+#app-header.nt-maint-active {
+  /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
+  background-color: var(--nt-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html.dark #app-header.nt-maint-active {
+  background-color: rgb(31 41 55) !important; /* gray-800 */
+}
+#app-header.nt-maint-active #open-nav-btn,
+#app-header.nt-maint-active #notice-bell {
+  z-index: 70;
+}

@@ -166,7 +166,17 @@ import { withBase } from '../lib/config.js';
         <h2 id="about-app-title" class="text-3xl font-black text-gray-900 dark:text-white mb-2 select-none cursor-pointer">Next Train</h2>
         <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold uppercase tracking-wider mb-6">Unofficial & Independent</div>
         <div class="text-center space-y-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
-            <p><span class="text-2xl block mb-2">🙋‍♂️</span> The idea for <strong>Next Train</strong> first sparked in 2023, but it was during mid-November 2025 that building began with a simple mission: to replace blurry notice photos and crowded station boards with clear, digital accuracy.</p>
+            <div class="flex flex-col items-center mb-3">
+                <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 mb-2" aria-hidden="true">
+                    <svg class="w-7 h-7" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="16" r="8" stroke="currentColor" stroke-width="2.5"/>
+                        <path d="M10 40c2.5-7 8-11 14-11s11.5 4 14 11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                        <path d="M32 12c2.2-.4 4.2.6 5.2 2.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M33.5 8.5c1.2-1.8 3.4-2.4 5.2-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </span>
+            </div>
+            <p>The idea for <strong>Next Train</strong> first sparked in 2023 while I was a student at the University of Pretoria, travelling via Rissik Station and looking for low-cost, affordable transport. Building began in mid-November 2025 with a simple mission: to replace blurry notice photos and crowded station boards with clear, digital accuracy.</p>
             <p>What began as a tool for family has grown to help thousands of commuters. While this remains an <strong>independent passion project</strong> (not an official PRASA tool), it is built with the reliability our community deserves.</p>
         </div>
         <div class="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6 shadow-inner border border-gray-100 dark:border-gray-700">
@@ -178,12 +188,18 @@ import { withBase } from '../lib/config.js';
                 </div>
                 <div class="h-8 w-px bg-gray-300 dark:bg-gray-700"></div>
                 <div class="flex flex-col space-y-1.5">
-                    <a href="https://www.facebook.com/enock.kazembe/" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center px-3 py-1 bg-[#1877F2] hover:bg-blue-700 text-white rounded font-bold text-[10px] transition-colors shadow-sm">Facebook</a>
-                    <button type="button" id="about-contact-btn" class="flex items-center justify-center px-3 py-1 bg-gray-800 hover:bg-gray-900 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded font-bold text-[10px] transition-colors shadow-sm focus:outline-none"><span class="mr-1.5">✉️</span> Contact Enock</button>
+                    <a href="mailto:enock@nexttrain.co.za" id="about-email-btn" class="flex items-center justify-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] transition-colors shadow-sm" title="enock@nexttrain.co.za">
+                        <svg class="w-3.5 h-3.5 mr-1.5 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        enock@nexttrain.co.za
+                    </a>
+                    <button type="button" id="about-contact-btn" class="flex items-center justify-center px-3 py-1.5 bg-gray-800 hover:bg-gray-900 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded font-bold text-[10px] transition-colors shadow-sm focus:outline-none" aria-label="Send in-app feedback">
+                        <svg class="w-3.5 h-3.5 mr-1.5 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
+                        In-app message
+                    </button>
                 </div>
             </div>
         </div>
-        <p id="about-version-label" class="mt-8 text-[10px] text-gray-400 font-mono">Version (Guardian Edition)</p>
+        <p id="about-version-label" class="mt-8 text-[10px] text-gray-400 font-mono">Version</p>
     </div>
 </div>
 
@@ -225,7 +241,7 @@ import { withBase } from '../lib/config.js';
 
         <div class="px-5 py-4 space-y-5">
             <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                Schedules and trip planning work fully as a guest. An optional account unlocks delay reports and route community — without wiping this device’s saved preferences.
+                Schedules and trip planning work fully as a guest. An optional account unlocks delay reports and route community, without wiping this device’s saved preferences.
             </p>
 
             <!-- Signed-in panel -->
@@ -285,7 +301,7 @@ import { withBase } from '../lib/config.js';
             <div class="rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3.5">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Privacy</p>
                 <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                    We link your account to this device’s existing ID so preferences and inbox history carry over — we don’t wipe guest data on sign-in. Accounts enable delay reports and route community; schedules stay usable without signing in.
+                    We link your account to this device’s existing ID so preferences and inbox history carry over; we don’t wipe guest data on sign-in. Accounts enable delay reports and route community; schedules stay usable without signing in.
                 </p>
             </div>
         </div>
@@ -425,6 +441,57 @@ import { withBase } from '../lib/config.js';
                 <button type="button" id="network-struggle-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-4 rounded-xl transition-colors focus:outline-none text-sm">
                     Dismiss
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LEAVE APP / EXTERNAL REDIRECT -->
+<div id="redirect-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95" id="redirect-modal-content">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
+                <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Leave App?</h3>
+            <p id="redirect-message" class="text-sm text-gray-500 dark:text-gray-400 mb-6">You are about to visit an external website.</p>
+            <div class="flex space-x-3">
+                <button type="button" id="redirect-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors">Cancel</button>
+                <button type="button" id="redirect-confirm-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- REGION SWITCH CONFIRM (SPA parity — avoid accidental multi-MB region downloads) -->
+<div id="region-confirm-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
+                <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2" id="region-confirm-title">Switch Region?</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6" id="region-confirm-desc">Are you sure you want to switch region?</p>
+            <div class="flex space-x-3">
+                <button type="button" id="region-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors">Cancel</button>
+                <button type="button" id="region-confirm-action-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Switch</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EXIT APP (PWA standalone back trap) -->
+<div id="exit-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-xs p-6 transform transition-all scale-95">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </div>
+            <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight">Exit App?</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Are you sure you want to close Next Train?</p>
+            <div class="flex space-x-3">
+                <button type="button" id="exit-cancel-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-4 rounded-lg transition-colors focus:outline-none">Stay</button>
+                <button type="button" id="exit-confirm-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Exit</button>
             </div>
         </div>
     </div>

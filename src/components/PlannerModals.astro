@@ -14,7 +14,7 @@ import { withBase } from '../lib/config.js';
 <div id="settings-modal" class="hidden"></div>
 
 <!-- NETWORK MAP IMAGE LIGHTBOX -->
-<div id="map-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[70] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300">
+<div id="map-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[115] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative">
             <div class="flex items-center space-x-3">
@@ -82,7 +82,7 @@ import { withBase } from '../lib/config.js';
         <div class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-5 leading-relaxed">
             <div>
                 <h4 class="font-bold text-blue-600 dark:text-blue-400 mb-2 text-base tracking-tight">How planning works</h4>
-                <p class="mb-2 text-gray-600 dark:text-gray-300">Pick an origin, destination, and day. The planner searches active Metrorail corridors and shows realistic journeys — including transfers when a single train cannot take you all the way.</p>
+                <p class="mb-2 text-gray-600 dark:text-gray-300">Pick an origin, destination, and day. The planner searches active Metrorail corridors and shows realistic journeys, including transfers when a single train cannot take you all the way.</p>
                 <ul class="list-disc space-y-1.5 text-gray-600 dark:text-gray-400 marker:text-blue-400 pl-5">
                     <li><strong>Direct Trip:</strong> Stay on one train to your destination.</li>
                     <li><strong>Transfer Trip:</strong> Change trains at a hub (e.g. Germiston or Koedoespoort).</li>
@@ -91,12 +91,12 @@ import { withBase } from '../lib/config.js';
 
             <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg text-xs leading-relaxed">
                 <p class="font-bold text-blue-800 dark:text-blue-300 mb-1">How results are sorted</p>
-                <p class="text-blue-700 dark:text-blue-200 opacity-90">Options are ordered by <strong>departure time</strong>. Scroll later results too — a direct train that leaves a bit later is often better than the first multi-transfer option.</p>
+                <p class="text-blue-700 dark:text-blue-200 opacity-90">Options are ordered by <strong>departure time</strong>. Scroll later results too: a direct train that leaves a bit later is often better than the first multi-transfer option.</p>
             </div>
 
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 border-l-4 border-gray-400 dark:border-gray-600 rounded-r-lg text-xs leading-relaxed">
                 <p class="font-bold text-gray-700 dark:text-gray-300 mb-1">Connections &amp; relays</p>
-                <p class="text-gray-600 dark:text-gray-400">Some hubs allow near-immediate platform changes (including 0-minute relays where trains are held for connecting services). Sparse weekend or holiday timetables may show longer waits — those are flagged as <strong>Extended Layover</strong> when the wait is very long.</p>
+                <p class="text-gray-600 dark:text-gray-400">Some hubs allow near-immediate platform changes (including 0-minute relays where trains are held for connecting services). Sparse weekend or holiday timetables may show longer waits; those are flagged as <strong>Extended Layover</strong> when the wait is very long.</p>
             </div>
 
             <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r-lg text-xs leading-relaxed">

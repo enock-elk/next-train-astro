@@ -11,7 +11,7 @@ import {
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
     $globalDisruptions, $masterStationList, $userProfile 
 } from '../store.js';
-import { ROUTES, FARE_CONFIG, withBase } from './config.js';
+import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES } from './config.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage 
@@ -19,7 +19,8 @@ import {
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { executeRegionSwap, loadAllSchedules } from './logic.js';
-import { showToast, switchTab } from './ui.js';
+import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
+import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -68,7 +69,35 @@ export let plannerDest = null;
 export let currentTripOptions = []; 
 export let currentPlannerStatus = 'NO_PATH';
 export let currentPlannerErrorPayload = null; 
-export let selectedPlannerDay = null; 
+export let selectedPlannerDay = null;
+/** ISO date (YYYY-MM-DD) when user picks a specific calendar day */
+export let selectedPlannerDate = null;
+
+function resolveDayTypeFromIso(isoDate) {
+    if (!isoDate || typeof isoDate !== 'string') return null;
+    const parts = isoDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const day = d.getDay();
+    let dayType = day === 0 ? 'sunday' : (day === 6 ? 'saturday' : 'weekday');
+    const key = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (SPECIAL_DATES && SPECIAL_DATES[key]) dayType = SPECIAL_DATES[key];
+    return { dayType, dayIndex: day, label: isoDate };
+}
+
+function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
+    if (value === 'specific' || (isoDate && value !== 'weekday' && value !== 'saturday' && value !== 'sunday')) {
+        return isoDate ? `Date · ${isoDate}` : 'Pick a date…';
+    }
+    if (isoDate && (value === 'weekday' || value === 'saturday' || value === 'sunday')) {
+        // Specific date was resolved into a day-type — still show the date
+        if (selectedPlannerDate) return `Date · ${selectedPlannerDate}`;
+    }
+    if (value === 'weekday') return 'Weekday (Mon-Fri)';
+    if (value === 'saturday') return 'Saturday / Public Holiday';
+    if (value === 'sunday') return 'Sunday';
+    return 'Weekday (Mon-Fri)';
+} 
 export let plannerPulse = null; 
 export let plannerExpandedState = new Set(); 
 export let tripMapInstance = null;
@@ -175,15 +204,59 @@ export function selectMainDay(e, value, text) {
         if (chevron) chevron.classList.remove('rotate-180');
     }
 
-    const display = document.getElementById('main-day-display');
-    if (display) display.textContent = text;
+    const dateWrap = document.getElementById('planner-specific-date-wrap');
+    const dateInput = document.getElementById('planner-specific-date');
+
+    if (value === 'specific') {
+        if (dateWrap) dateWrap.classList.remove('hidden');
+        if (dateInput) {
+            if (!dateInput.value) {
+                const t = new Date();
+                dateInput.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+            }
+            dateInput.focus();
+            applyPlannerSpecificDate(dateInput.value);
+        } else {
+            selectedPlannerDay = 'weekday';
+        }
+        const display = document.getElementById('main-day-display');
+        if (display) display.textContent = plannerDayDisplayText('specific', selectedPlannerDate);
+        return;
+    }
+
+    if (dateWrap) dateWrap.classList.add('hidden');
+    selectedPlannerDate = null;
     selectedPlannerDay = value;
+
+    const display = document.getElementById('main-day-display');
+    if (display) display.textContent = text || plannerDayDisplayText(value);
 
     const list = document.getElementById('main-day-list');
     if (list) {
-        list.querySelectorAll('li').forEach(li => {
+        list.querySelectorAll('li[data-day]').forEach((li) => {
             li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-            if (li.textContent === text) {
+            if (li.getAttribute('data-day') === value) {
+                li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+            }
+        });
+    }
+}
+
+export function applyPlannerSpecificDate(isoDate) {
+    const resolved = resolveDayTypeFromIso(isoDate);
+    if (!resolved) {
+        if (typeof showToast === 'function') showToast('Please pick a valid date.', 'error');
+        return;
+    }
+    selectedPlannerDate = isoDate;
+    selectedPlannerDay = resolved.dayType;
+    const display = document.getElementById('main-day-display');
+    if (display) display.textContent = plannerDayDisplayText('specific', isoDate);
+    const list = document.getElementById('main-day-list');
+    if (list) {
+        list.querySelectorAll('li[data-day]').forEach((li) => {
+            li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+            if (li.getAttribute('data-day') === 'specific') {
                 li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
             }
         });
@@ -535,7 +608,7 @@ export async function openTripMapRenderer(routeData) {
 
             tripMapInstance = window.L.map('trip-leaflet-container', {
                 zoomControl: false,
-                attributionControl: false
+                attributionControl: true
             });
 
             // Mapbox or CartoDB Tiles (Dark mode aware)
@@ -1536,7 +1609,7 @@ export function initPlanner() {
         daySelectDiv.className = "mb-4 relative z-30"; 
         
         let selDay = (typeof selectedPlannerDay !== 'undefined' && selectedPlannerDay) ? selectedPlannerDay : getCurrentDayType();
-        let selText = selDay === 'weekday' ? 'Weekday (Mon-Fri)' : (selDay === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
+        let selText = plannerDayDisplayText(selDay, selectedPlannerDate);
 
         daySelectDiv.innerHTML = `
             <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Travel Day</label>
@@ -1545,14 +1618,21 @@ export function initPlanner() {
                 <svg id="main-day-chevron" class="w-5 h-5 text-gray-500 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <ul id="main-day-list" class="absolute z-[200] top-full mt-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left max-h-[min(40vh,16rem)] overflow-y-auto custom-scrollbar">
-                <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'weekday', 'Weekday (Mon-Fri)')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday (Mon-Fri)</li>
-                <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', 'Saturday / Public Holiday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Public Holiday</li>
-                <li onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'sunday', 'Sunday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
+                <li data-day="weekday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'weekday', 'Weekday (Mon-Fri)')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'weekday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday (Mon-Fri)</li>
+                <li data-day="saturday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', 'Saturday / Public Holiday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'saturday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Public Holiday</li>
+                <li data-day="sunday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'sunday', 'Sunday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'sunday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
+                <li data-day="specific" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'specific', 'Pick a date…')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Pick a date…</li>
             </ul>
+            <div id="planner-specific-date-wrap" class="${selectedPlannerDate ? '' : 'hidden'} mt-2">
+                <input type="date" id="planner-specific-date" value="${selectedPlannerDate || ''}" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+            </div>
         `;
         inputSection.insertBefore(daySelectDiv, searchBtn);
         // Keep space under the day picker so the downward menu isn't clipped by the shell
         inputSection.classList.add('pb-8');
+        document.getElementById('planner-specific-date')?.addEventListener('change', (ev) => {
+            applyPlannerSpecificDate(ev.target.value);
+        });
     }
 
     if (inputSection && !document.getElementById('planner-history-container')) {
@@ -2174,15 +2254,35 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
 
             renderSelectedTrip(resultsContainer, nextTripIndex);
             startPlannerPulse(nextTripIndex);
+            try {
+                const sample = currentTripOptions[nextTripIndex] || currentTripOptions[0];
+                enqueueSuccessfulTripPlan({
+                    origin,
+                    destination: dest,
+                    dayType: selectedPlannerDay || getCurrentDayType(),
+                    specificDate: selectedPlannerDate || null,
+                    depTime: sample?.depTime || null,
+                    arrTime: sample?.arrTime || null,
+                    transfers: Array.isArray(sample?.legs) ? Math.max(0, sample.legs.length - 1) : null,
+                });
+            } catch { /* ignore telemetry */ }
 
         } else {
             if (typeof trackAnalyticsEvent === 'function') {
                 trackAnalyticsEvent('planner_no_result', { 
                     origin: origin, 
                     destination: dest,
-                    failure_reason: currentPlannerStatus
+                    failure_reason: currentPlannerStatus,
+                    day_type: selectedPlannerDay || null,
                 });
             }
+            logRoutingFail({
+                origin,
+                destination: dest,
+                reason: currentPlannerStatus,
+                dayType: selectedPlannerDay || getCurrentDayType(),
+                timeOfDay: (getCurrentTime() || '').slice(0, 5),
+            });
             
             updatePlannerHeader("No Route Found", false);
 
@@ -2380,6 +2480,7 @@ if (typeof window !== 'undefined') {
     window._selectCustomTrip = selectCustomTrip;
     window._toggleMainDayDropdown = toggleMainDayDropdown;
     window._selectMainDay = selectMainDay;
+    window._applyPlannerSpecificDate = applyPlannerSpecificDate;
     window._toggleHeaderDayDropdown = toggleHeaderDayDropdown;
     window._selectHeaderDay = selectHeaderDay;
     window.openTripMapRenderer = openTripMapRenderer;
@@ -2433,25 +2534,59 @@ export async function shareCurrentGrid() {
     const dir = state.dir || 'A';
     const day = state.day || 'weekday';
     const shareUrl = `${location.origin}${location.pathname}?action=route&route=${routeId}&view=grid&dir=${dir}&day=${day}`;
-    const shareText = `Check out the schedule!`;
+    const destName = state.destName || (dir === 'B' ? 'destination B' : 'destination A');
+    const shareText = `Check out the ${day} schedule to ${destName}`;
     const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };
     
     try {
         if (navigator.share) await navigator.share(data);
         else {
-            const textArea = document.createElement('textarea');
-            textArea.value = shareUrl;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            handleCopySuccess();
+            try {
+                await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+                handleCopySuccess();
+            } catch {
+                const textArea = document.createElement('textarea');
+                textArea.value = `${shareText}\n${shareUrl}`;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                handleCopySuccess();
+            }
         }
-    } catch (e) {}
+    } catch (e) {
+        if (typeof window.showToast === 'function') {
+            window.showToast('Could not share link.', 'error');
+        }
+    }
 }
 
 export function executeManualRollover(origin, dest) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+
+    // GUARDIAN PHASE 2: Silent DOM Sync for Dropdown (SPA parity)
+    if (typeof window.getLookaheadDayInfo === 'function') {
+        const nextDayInfo = window.getLookaheadDayInfo(1);
+        if (nextDayInfo) {
+            selectedPlannerDay = nextDayInfo.type;
+            const display = document.getElementById('main-day-display');
+            const mainTxt = nextDayInfo.type === 'weekday'
+                ? 'Weekday (Mon-Fri)'
+                : (nextDayInfo.type === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
+            if (display) display.textContent = mainTxt;
+
+            const mList = document.getElementById('main-day-list');
+            if (mList) {
+                mList.querySelectorAll('li').forEach((li) => {
+                    li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                    if (li.textContent === mainTxt) {
+                        li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                    }
+                });
+            }
+        }
+    }
+
     window._forceManualRollover = true;
     executeTripPlan(origin, dest);
 }

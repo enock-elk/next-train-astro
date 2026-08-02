@@ -49,7 +49,7 @@
         }
     }
     
-    // ðŸ›¡ï¸ GUARDIAN UX FIX: Reactive Dropdown Engine
+    // 🛡️ GUARDIAN UX FIX: Reactive Dropdown Engine
     // If the user already opened the dropdown while it was "Loading...", refresh it instantly now that data is here.
     const autocompleteList = document.getElementById('next-train-autocomplete-list');
     if (autocompleteList && !autocompleteList.classList.contains('hidden')) {

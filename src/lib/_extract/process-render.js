@@ -114,7 +114,7 @@ function updateFareDisplay(sheetKey) {
             }
         } else if (fareData.isOffPeak) {
             if(activeFareType) {
-                activeFareType.textContent = "Off-Peak â€¢ 40% Off until 14:30"; 
+                activeFareType.textContent = "Off-Peak • 40% Off until 14:30"; 
                 activeFareType.className = "text-[9px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap inline-block mt-1 shadow-sm border border-green-200 dark:border-green-800/50";
             }
         } else {

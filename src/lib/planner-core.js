@@ -831,7 +831,14 @@ export function planDijkstraTrip(origin, dest, dayType, isRolloverLoop = false, 
 
     const startSec = 0;
 
-    const baseGraph       = buildTransitGraph(dayType, dayIdx);
+    // GUARDIAN PHASE 16: Transit Graph Memoization — avoid rebuilding the heavy
+    // graph on every Dijkstra run within one unified plan lifecycle.
+    const cacheKey = `graph_${dayType}_${dayIdx}`;
+    if (!context.graphCache) context.graphCache = {};
+    if (!context.graphCache[cacheKey]) {
+        context.graphCache[cacheKey] = buildTransitGraph(dayType, dayIdx);
+    }
+    const baseGraph = context.graphCache[cacheKey];
     const bannedEdges     = new Set();
     const seenTemplates   = new Set();
     const allTrips        = [];
@@ -1268,7 +1275,9 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             context.zeroHourProbeActive = true;
             try {
                 const probeTripsRaw = fetchRawTrips(origin, evalDest, targetDayType, false, context);
-                const validProbeTrips = probeTripsRaw.filter((t) => hasValidLayovers(t) && !isTripSevered(t));
+                // SPA parity: Zero-Hour Probe only checks layover validity. Filtering
+                // severed trips here mislabels disrupted-but-possible routes as IMPOSSIBLE.
+                const validProbeTrips = probeTripsRaw.filter(hasValidLayovers);
                 if (validProbeTrips.length === 0) {
                     console.log("[GUARDIAN] Zero-Hour Probe verified 0 valid trips exist from 00:00. Route is IMPOSSIBLE today.");
                     finalStatus = 'IMPOSSIBLE_TODAY';

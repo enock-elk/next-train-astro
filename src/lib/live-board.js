@@ -1,7 +1,6 @@
 /**
  * METRORAIL NEXT TRAIN - LIVE BOARD ENGINE (Phase 2 port from SPA)
- * Auto-assembled — prefer editing SPA source then re-running assemble script,
- * or patch this file carefully.
+ * Hand-maintained. Do NOT re-run assemble-live-board.mjs without FORCE_ASSEMBLE=1.
  */
 import {
     $userRegion, $currentRouteId, $userProfile, $fullDatabase, $schedules,
@@ -9,7 +8,8 @@ import {
     $isSimMode, $simTime
 } from '../store.js';
 import {
-    ROUTES, SPECIAL_DATES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL
+    ROUTES, SPECIAL_DATES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL,
+    MAX_RADIUS_KM
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage,
@@ -62,7 +62,13 @@ export function scheduleHasService(schedule) {
     const stationCol = schedule.stationColumnName || 'STATION';
     const trainCols = schedule.headers.filter((h) => h && h !== stationCol && h !== 'STATION' && h !== 'COORDINATES' && h !== 'KM_MARK' && h !== 'row_index');
     if (trainCols.length === 0) return false;
-    return schedule.rows.some((row) => trainCols.some((col) => row[col] && String(row[col]).trim() !== ''));
+    const isRealTime = (val) => {
+        if (val == null) return false;
+        const s = String(val).trim();
+        if (!s || s === '-' || s === '—' || s === '–') return false;
+        return /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s);
+    };
+    return schedule.rows.some((row) => trainCols.some((col) => isRealTime(row[col])));
 }
 
 /** Current route has usable Saturday timetable data in either direction. */
@@ -380,7 +386,7 @@ export function getTripDisruptions(routeId, stopsArray) {
 
                     let firstContactIdx = -1;
                     
-                    // ðŸ›¡ï¸ GUARDIAN PHASE 1 (VECTOR MATH): Trace the commuter's physical trip 
+                    // 🛡️ GUARDIAN PHASE 1 (VECTOR MATH): Trace the commuter's physical trip 
                     // to see if the directional vector CROSSES the Danger Zone, granting 
                     // immunity to trains moving away from the segment.
                     for (let i = 0; i < stopsArray.length - 1; i++) {
@@ -427,7 +433,8 @@ export function getTripDisruptions(routeId, stopsArray) {
 
 export function buildMasterStationList() {
     window.MASTER_STATION_LIST = Object.keys(getGlobalStationIndex()).sort();
-    if (typeof renderPlannerHistory === 'function') renderPlannerHistory();
+    // Dynamic import: planner-ui pulls in logic.js, so a static edge here would cycle.
+    import('./planner-ui.js').then((m) => m.renderPlannerHistory?.()).catch(() => {});
 }
 
 export function calculateTimeDiffString(departureTimeStr, dayOffset = 0) {
@@ -478,9 +485,9 @@ export function resolveZoneForRoute(routeId) {
     return null;
 }
 
-// ðŸ›¡ï¸ GUARDIAN PHASE 1: REFACTORED FARE ENGINE (Train-Time Dependency Purged)
+// 🛡️ GUARDIAN PHASE 1: REFACTORED FARE ENGINE (Train-Time Dependency Purged)
 export function getRouteFare(sheetKey) {
-    // ðŸ›¡ï¸ GUARDIAN BUGFIX: Race condition patch to prevent null access during initial load
+    // 🛡️ GUARDIAN BUGFIX: Race condition patch to prevent null access during initial load
     if (!getFullDatabase()) return null;
     
     let zoneCode = null;
@@ -1043,8 +1050,9 @@ export function findNearestStation(isAuto = false) {
     
     if (!isAuto) {
         showToast("Locating nearest station...", "info", 4000);
-        const icon = locateBtnEl().querySelector('svg');
-        if(icon) icon.classList.add('spinning');
+        const icon = locateBtnEl()?.querySelector('svg');
+        // SPA uses `.spinning`; also add Tailwind `animate-spin` so motion always shows
+        if (icon) icon.classList.add('spinning', 'animate-spin');
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -1063,7 +1071,11 @@ export function findNearestStation(isAuto = false) {
             candidates.sort((a, b) => a.dist - b.dist);
 
             if (candidates.length === 0) {
-                 if(!isAuto) showToast("No stations on this route found in database.", "error");
+                 if (!isAuto) {
+                     showToast("No stations on this route found in database.", "error");
+                     const icon = locateBtnEl()?.querySelector('svg');
+                     if (icon) icon.classList.remove('spinning', 'animate-spin');
+                 }
                  return;
             }
 
@@ -1088,13 +1100,16 @@ export function findNearestStation(isAuto = false) {
                 }
 
                 if (matched) {
-                    /* syncPlannerFromMain deferred */
-                    
+                    const selectedVal = stationSelectEl()?.value || '';
+                    if (typeof window.syncPlannerFromMain === 'function') {
+                        window.syncPlannerFromMain(selectedVal);
+                    }
+
                     // GUARDIAN V6.21: Unified Dataset Sync logic absorbed from UI
                     const searchInput = document.getElementById('station-search-input');
                     if (searchInput) {
-                        searchInput.value = (stationSelectEl() && stationSelectEl().value).replace(/ STATION/g, '');
-                        searchInput.dataset.resolvedValue = (stationSelectEl() && stationSelectEl().value);
+                        searchInput.value = selectedVal.replace(/ STATION/g, '');
+                        searchInput.dataset.resolvedValue = selectedVal;
                     }
                     
                     findNextTrains(); 
@@ -1120,23 +1135,23 @@ export function findNearestStation(isAuto = false) {
             }
             
             if (!isAuto) {
-                const icon = locateBtnEl().querySelector('svg');
-                if(icon) icon.classList.remove('spinning');
+                const icon = locateBtnEl()?.querySelector('svg');
+                if (icon) icon.classList.remove('spinning', 'animate-spin');
             }
         },
         (error) => {
             if (!isAuto) {
                 let msg = "Unable to retrieve location.";
                 if (error.code === 1) msg = "Location permission denied.";
-                // ðŸ›¡ï¸ GUARDIAN UX FIX: Handle timeout specifically
+                // 🛡️ GUARDIAN UX FIX: Handle timeout specifically
                 if (error.code === 3) msg = "Location request timed out."; 
                 showToast(msg, "error");
                 if (stationSelectEl()) stationSelectEl().value = "";
-                const icon = locateBtnEl().querySelector('svg');
-                if(icon) icon.classList.remove('spinning');
+                const icon = locateBtnEl()?.querySelector('svg');
+                if (icon) icon.classList.remove('spinning', 'animate-spin');
             }
         },
-        { timeout: 8000, enableHighAccuracy: true } // ðŸ›¡ï¸ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
+        { timeout: 8000, enableHighAccuracy: true } // 🛡️ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
     );
 }
 
@@ -1150,6 +1165,10 @@ export function populateStationList() {
     if (getSchedules().saturday_to_b && getSchedules().saturday_to_b.rows) getSchedules().saturday_to_b.rows.forEach(row => { if (hasTimes(row)) stationSet.add(row.STATION); });
 
     allStations = Array.from(stationSet);
+    // Renderer reads window.allStations to slice the stops between origin and
+    // destination for disruption banners. This is a fresh array every call, so
+    // the global has to be re-pointed here or it keeps the boot-time empty one.
+    if (typeof window !== 'undefined') window.allStations = allStations;
     
     // GUARDIAN UX FIX: Sort by outbound (weekday_to_b) so Hubs (Dest A) appear naturally at the top
     if (getSchedules().weekday_to_b && getSchedules().weekday_to_b.rows) { 
@@ -1191,7 +1210,7 @@ export function populateStationList() {
         }
     }
     
-    // ðŸ›¡ï¸ GUARDIAN UX FIX: Reactive Dropdown Engine
+    // 🛡️ GUARDIAN UX FIX: Reactive Dropdown Engine
     // If the user already opened the dropdown while it was "Loading...", refresh it instantly now that data is here.
     const autocompleteList = document.getElementById('next-train-autocomplete-list');
     if (autocompleteList && !autocompleteList.classList.contains('hidden')) {

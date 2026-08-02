@@ -103,7 +103,7 @@ window.renderFullScheduleGrid = function(direction = 'A', dayOverride = null) {
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                  </button>
                 </div>
-                <!-- ðŸ›¡ï¸ GUARDIAN FIX: Elevated z-index to z-[60] so dropdown completely escapes table stacking context -->
+                <!-- 🛡️ GUARDIAN FIX: Elevated z-index to z-[60] so dropdown completely escapes table stacking context -->
                 <div id="grid-controls" class="px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shadow-sm relative"></div>
                 <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative pb-32 z-10"></div>
                 <div class="p-2.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-20 relative">
@@ -161,7 +161,7 @@ window.renderFullScheduleGrid = function(direction = 'A', dayOverride = null) {
             let wkLabel = "Mon - Fri";
             let satLabel = "Sat / Hol";
 
-            // ðŸ›¡ï¸ GUARDIAN UX: Outside click listener for the custom Grid Dropdown
+            // 🛡️ GUARDIAN UX: Outside click listener for the custom Grid Dropdown
             if (!window._gridOutsideClickListener) {
                 window._gridOutsideClickListener = (e) => {
                     const list = document.getElementById('grid-day-list');

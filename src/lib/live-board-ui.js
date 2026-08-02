@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -32,6 +32,14 @@ import {
 export { renderFullScheduleGrid, applyRouteDeepLink, parseRouteDeepLink };
 
 const getCurrentTime = () => (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : currentTime;
+
+function trackAnalyticsEvent(name, params) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+            window.gtag('event', name, params || {});
+        }
+    } catch (e) {}
+}
 
 export function getRoutesForCurrentRegion() {
     const regionalRoutes = {};
@@ -129,6 +137,24 @@ export function setupNextTrainAutocomplete() {
     }
 }
 
+/** Mirror Live Board station into Trip Planner "From" field (SPA ui.js parity). */
+export function syncPlannerFromMain(stationName) {
+    if (!stationName) return;
+    const plannerInput = document.getElementById('planner-from-search');
+    const plannerSelect = document.getElementById('planner-from');
+    if (!plannerInput || !plannerSelect) return;
+    let opt = Array.from(plannerSelect.options).find((o) => o.value === stationName);
+    if (!opt) {
+        opt = document.createElement('option');
+        opt.value = stationName;
+        opt.textContent = stationName;
+        plannerSelect.appendChild(opt);
+    }
+    plannerSelect.value = stationName;
+    plannerInput.value = stationName.replace(/ STATION/gi, '');
+    plannerInput.dataset.resolvedValue = stationName;
+}
+
 export function renderNoService(element, destination) {
     if (!element || !window.Renderer) return;
     const routeId = $currentRouteId.get();
@@ -199,7 +225,7 @@ export function updateFareDisplay(sheetKey) {
     const detailed = getDetailedFare(sheetKey) || getDetailedFare(null);
 
     // SPA fare chrome: blue wash, absolute chevron, pill fare-type tags
-    fareContainer.className = 'mb-6 p-3.5 rounded-xl flex items-center justify-between gap-3 shadow-sm min-h-[58px] pr-10 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700';
+    fareContainer.className = 'mb-4 py-2 px-3 rounded-xl flex items-center justify-between gap-2 shadow-sm min-h-[44px] pr-9 relative transition-colors group bg-blue-50 dark:bg-gray-800 border border-blue-100 dark:border-gray-700';
 
     const chevron = document.getElementById('fare-chevron');
     if (detailed?.prices) {
@@ -217,25 +243,25 @@ export function updateFareDisplay(sheetKey) {
     if (fareData) {
         if (fareAmount) {
             fareAmount.textContent = `R${fareData.price}`;
-            fareAmount.className = 'text-2xl font-black text-gray-900 dark:text-white leading-none';
+            fareAmount.className = 'text-xl font-black text-gray-900 dark:text-white leading-none';
         }
         if (fareType) {
             fareType.classList.remove('hidden');
             if (fareData.isPromo) {
                 fareType.textContent = fareData.discountLabel || 'Discounted';
-                fareType.className = 'text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
+                fareType.className = 'text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else if (fareData.isOffPeak) {
                 fareType.textContent = 'Off-Peak · 40% Off';
-                fareType.className = 'text-[10px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
+                fareType.className = 'text-[10px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else {
                 fareType.textContent = 'Standard Fare';
-                fareType.className = 'text-[10px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
+                fareType.className = 'text-[10px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             }
         }
     } else {
         if (fareAmount) {
             fareAmount.textContent = 'R --.--';
-            fareAmount.className = 'text-2xl font-black text-gray-300 dark:text-gray-600 leading-none';
+            fareAmount.className = 'text-xl font-black text-gray-300 dark:text-gray-600 leading-none';
         }
         if (fareType) fareType.className = 'hidden';
     }
@@ -283,12 +309,12 @@ export function openFareModal(fareDetails) {
     }
 
     const routeId = $currentRouteId.get();
-    const routeName = routeId && ROUTES[routeId] ? ROUTES[routeId].name.replace('<->', '↔') : '';
+    const routeNameHtml = routeId && ROUTES[routeId] ? formatRouteLabelHtml(ROUTES[routeId].name) : '';
     const zoneEl = document.getElementById('fare-zone-badge');
     if (zoneEl) {
         zoneEl.innerHTML = `
             <div class="flex items-center">Ticket Prices <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 ml-2 px-2 py-0.5 rounded-full uppercase tracking-widest">Zone ${fareDetails.code}</span></div>
-            ${routeName ? `<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">${routeName}</span>` : ''}`;
+            ${routeNameHtml ? `<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">${routeNameHtml}</span>` : ''}`;
     }
 
     const tableEl = document.getElementById('fare-table-content');
@@ -310,9 +336,16 @@ export function openFareModal(fareDetails) {
 export function updatePinUI() {
     const routeId = $currentRouteId.get();
     const region = $userRegion.get() || 'GP';
-    const pinned = safeStorage.getItem('defaultRoute_' + region) === routeId;
+    const pinned = !!routeId && safeStorage.getItem('defaultRoute_' + region) === routeId;
     document.getElementById('pin-outline')?.classList.toggle('hidden', pinned);
     document.getElementById('pin-filled')?.classList.toggle('hidden', !pinned);
+    const pinBtn = document.getElementById('pin-route-btn');
+    if (pinBtn) pinBtn.title = pinned ? 'Unpin this route' : 'Pin this route as default';
+    // SPA parity: the route menu carries the "Pinned:" section, so it must be
+    // repainted whenever the pin or the active route changes.
+    if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
+        window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), routeId);
+    }
 }
 
 export function selectProfile(profileType) {
@@ -328,21 +361,16 @@ export function loadUserProfile() {
     if (saved) $userProfile.set(saved);
 }
 
-function formatRouteLabel(raw) {
-    if (typeof raw !== 'string') return 'Select a route';
-    // Match live SPA: keep the ↔ glyph users already see on nexttrain.co.za
-    return raw.replace(/\s*<->\s*/g, ' ↔ ').replace(/\s*↔\s*/g, ' ↔ ').trim();
-}
-
 export function updateNextTrainView() {
     const routeId = $currentRouteId.get();
     const route = routeId ? ROUTES[routeId] : null;
-    const label = formatRouteLabel(route?.name || 'Select a route');
+    const labelPlain = formatRouteLabelPlain(route?.name || 'Select a route');
+    const labelHtml = formatRouteLabelHtml(route?.name || 'Select a route');
 
     const title = document.getElementById('route-subtitle-text');
     if (title) {
-        title.textContent = label;
-        title.title = label;
+        title.innerHTML = labelHtml;
+        title.title = labelPlain;
         if (route?.colorClass) {
             title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center`;
         } else {
@@ -541,6 +569,7 @@ export function attachLiveBoardUiGlobals() {
     window.processAndRenderJourney = processAndRenderJourney;
     window.renderNoService = renderNoService;
     window.renderNoWeekendService = renderNoWeekendService;
+    window.syncPlannerFromMain = syncPlannerFromMain;
     window.renderNextAvailableTrain = renderNextAvailableTrain;
     window.updateFareDisplay = updateFareDisplay;
     window.openFareModal = openFareModal;
@@ -616,10 +645,12 @@ export function initLiveBoardUi() {
             const key = 'defaultRoute_' + region;
             if (safeStorage.getItem(key) === routeId) {
                 safeStorage.removeItem(key);
-                showToast('Pin removed', 'success', 1500);
+                trackAnalyticsEvent('click_pin_route', { action: 'unpin', route_id: routeId });
+                showToast('Route unpinned.', 'info', 2000);
             } else {
                 safeStorage.setItem(key, routeId);
-                showToast('Route pinned', 'success', 1500);
+                trackAnalyticsEvent('click_pin_route', { action: 'pin', route_id: routeId });
+                showToast('Route pinned!', 'success', 2000);
             }
             updatePinUI();
         });
@@ -663,6 +694,7 @@ export function initLiveBoardUi() {
                 searchInput.value = stationSelect.value.replace(/ STATION/g, '');
                 searchInput.dataset.resolvedValue = stationSelect.value;
             }
+            syncPlannerFromMain(stationSelect.value);
             findNextTrains();
             updateNextTrainView();
         });
@@ -678,7 +710,8 @@ export function initLiveBoardUi() {
 
     const shareApp = async () => {
         triggerHaptic();
-        const shareData = { title: 'Metrorail Next Train', text: 'Check live Metrorail schedules', url: location.origin + location.pathname };
+        const shareText = 'Say Goodbye to Waiting\nUse Next Train to check when your train is due to arrive.';
+        const shareData = { title: 'Metrorail Next Train', text: shareText, url: location.origin + location.pathname };
         try {
             if (navigator.share) await navigator.share(shareData);
             else {
@@ -724,8 +757,9 @@ export function initLiveBoardUi() {
         const id = item.getAttribute('data-route-id');
         if (!id || !ROUTES[id]) return;
         triggerHaptic();
+        // Browsing a route must never re-pin it — the pin is an explicit user
+        // action owned by #pin-route-btn (and the first-run welcome choice).
         $currentRouteId.set(id);
-        safeStorage.setItem('defaultRoute_' + ($userRegion.get() || 'GP'), id);
         closeSmoothModal('route-modal');
     });
 
@@ -734,9 +768,8 @@ export function initLiveBoardUi() {
             const region = li.getAttribute('data-region-target');
             if (!region) return;
             triggerHaptic();
-            const { executeRegionSwap } = await import('./logic.js');
-            // Full wipe + default route + loadAllSchedules lives inside executeRegionSwap
-            executeRegionSwap(region);
+            const { handleRegionChange } = await import('./logic.js');
+            await handleRegionChange(region);
             const disp = document.getElementById('route-modal-region-display');
             if (disp) disp.textContent = li.getAttribute('data-region-name') || ('Region: ' + region);
         });

@@ -9,9 +9,9 @@ import {
     withBase,
     getLatestChangelog,
     getChangelogVersionId,
-    normalizeChangelogId
+    normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal
 } from './ui.js';
@@ -20,6 +20,7 @@ import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
 import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
+import { setupMapLogic } from './map-viewer.js';
 
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
@@ -282,7 +283,7 @@ async function submitFeedback() {
 }
 
 function sanitizeHTML(dirtyHtml) {
-    const doc = new DOMParser().parseFromString(dirtyHtml, 'text/html');
+    const doc = new DOMParser().parseFromString(repairMojibake(dirtyHtml || ''), 'text/html');
     const allowedTags = ['B', 'I', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV', 'UL', 'OL', 'LI', 'IMG', 'BUTTON'];
     const cleanNode = (node) => {
         Array.from(node.childNodes).forEach((child) => {
@@ -323,6 +324,46 @@ function trackAlertEvent(name, params) {
     if (typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent(name, params);
     }
+}
+
+/** SPA parity — notice modal poll votes */
+export function submitPollVote(pollId, optionKey, optionText) {
+    triggerHaptic();
+    if (!pollId) return;
+    if (safeStorage.getItem('poll_voted_' + pollId)) {
+        showToast('You have already voted on this poll.', 'warning');
+        return;
+    }
+    trackAlertEvent('alert_poll_vote', {
+        poll_id: pollId,
+        vote_option: optionKey,
+        vote_text: optionText,
+        route_id: $currentRouteId.get() || 'global',
+    });
+    try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
+    try {
+        const payload = {
+            optionKey,
+            optionText,
+            timestamp: Date.now(),
+            deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
+        };
+        fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }).catch(() => {});
+    } catch { /* ignore */ }
+
+    const container = document.getElementById(`poll-container-${pollId}`);
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center animate-fade-in-up">
+                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
+                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+            </div>`;
+        container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner transition-all';
+    }
+    showToast('Vote recorded successfully!', 'success');
 }
 
 export async function checkServiceAlerts() {
@@ -611,7 +652,31 @@ export async function checkServiceAlerts() {
                 content.innerHTML += `
                     <a href="${escapeHTML(activeNotice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
                         ${escapeHTML(activeNotice.ctaText)}
+                        <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     </a>`;
+            }
+
+            // Interactive poll (SPA parity)
+            if (activeNotice.poll && activeNotice.poll.active) {
+                const pollId = activeNotice.id;
+                const votedOption = safeStorage.getItem('poll_voted_' + pollId);
+                if (votedOption) {
+                    content.innerHTML += `
+                        <div class="mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 text-center shadow-inner">
+                            <span class="text-xl block mb-1">✅</span>
+                            <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
+                            <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+                        </div>`;
+                } else {
+                    content.innerHTML += `
+                        <div id="poll-container-${escapeHTML(String(pollId))}" class="mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
+                            <p class="text-sm font-black text-purple-900 dark:text-purple-100 mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
+                            <div class="flex space-x-3">
+                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="A" data-poll-text="${escapeHTML(activeNotice.poll.optionA || 'A')}" class="nt-poll-vote flex-1 bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionA || 'A')}</button>
+                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="B" data-poll-text="${escapeHTML(activeNotice.poll.optionB || 'B')}" class="nt-poll-vote flex-1 bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionB || 'B')}</button>
+                            </div>
+                        </div>`;
+                }
             }
 
             if (timestamp) {
@@ -624,42 +689,109 @@ export async function checkServiceAlerts() {
                 }
             }
 
-            const closeBtn = document.getElementById('notice-modal-close-btn') || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
-            if (closeBtn) {
-                closeBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-blue-600', 'hover:bg-blue-700', 'bg-yellow-600', 'hover:bg-yellow-700');
-                if (severity === 'critical') closeBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-                else if (severity === 'warning') closeBtn.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
-                else closeBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                closeBtn.onclick = () => {
-                    if (location.hash === '#notice') history.back();
-                    else closeSmoothModal('notice-modal');
-                };
+            // SPA design: Close + Reply footer (severity-coloured Reply)
+            const closeNotice = () => {
+                if (location.hash === '#notice') history.back();
+                else closeSmoothModal('notice-modal');
+            };
+            const oldCloseBtn = document.getElementById('notice-modal-close-btn')
+                || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
+            const oldContainer = modal.querySelector('.nt-notice-actions');
+            if (oldContainer) oldContainer.remove();
+
+            let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
+            if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
+            else if (severity === 'warning') baseColorClass = 'bg-yellow-600 hover:bg-yellow-700';
+
+            const btnContainer = document.createElement('div');
+            btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
+
+            const newCloseBtn = document.createElement('button');
+            newCloseBtn.type = 'button';
+            newCloseBtn.id = 'notice-close-btn';
+            newCloseBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
+            newCloseBtn.textContent = 'Close';
+            newCloseBtn.onclick = closeNotice;
+            btnContainer.appendChild(newCloseBtn);
+
+            const newReplyBtn = document.createElement('button');
+            newReplyBtn.type = 'button';
+            newReplyBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
+            newReplyBtn.innerHTML = '<span class="mr-1.5">💬</span> Reply';
+            newReplyBtn.onclick = () => {
+                triggerHaptic();
+                let cleanMsgText = '';
+                if (activeNotice?.message || activeNotice?.text) {
+                    const tempDoc = new DOMParser().parseFromString(
+                        repairMojibake(activeNotice.message || activeNotice.text || ''),
+                        'text/html'
+                    );
+                    cleanMsgText = tempDoc.body.textContent || tempDoc.body.innerText || '';
+                    cleanMsgText = cleanMsgText.replace(/[—–].*/, '').trim();
+                }
+                const words = cleanMsgText.split(/\s+/).filter((w) => w.length > 0);
+                let truncatedMsg = words.slice(0, 6).join(' ');
+                if (words.length > 6) truncatedMsg += '...';
+
+                const fText = document.getElementById('feedback-text');
+                const fType = document.getElementById('feedback-type');
+                if (fText) {
+                    let contextBox = document.getElementById('feedback-reply-context');
+                    if (!contextBox) {
+                        contextBox = document.createElement('div');
+                        contextBox.id = 'feedback-reply-context';
+                        contextBox.className = 'mb-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start hidden shadow-inner';
+                        fText.parentNode.insertBefore(contextBox, fText);
+                    }
+                    contextBox.innerHTML = `<span class="mr-2 text-sm leading-none">💬</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${escapeHTML(truncatedMsg)}"</span></div>`;
+                    contextBox.dataset.rawMsg = truncatedMsg;
+                    contextBox.dataset.alertId = activeNotice.id || '';
+                    contextBox.classList.remove('hidden');
+                    fText.value = '';
+                }
+                if (fType) {
+                    if (!fType.querySelector('option[value="thread_reply"]')) {
+                        const replyOpt = document.createElement('option');
+                        replyOpt.value = 'thread_reply';
+                        replyOpt.textContent = 'Thread Reply';
+                        fType.appendChild(replyOpt);
+                    }
+                    fType.value = 'thread_reply';
+                }
+                closeNotice();
+                setTimeout(() => {
+                    trackAlertEvent('open_feedback_modal', { location: 'alert_reply' });
+                    history.pushState({ modal: 'feedback' }, '', '#feedback');
+                    openSmoothModal('feedback-modal');
+                }, 350);
+            };
+            btnContainer.appendChild(newReplyBtn);
+
+            if (oldCloseBtn) {
+                oldCloseBtn.style.display = 'none';
+                oldCloseBtn.parentNode?.appendChild(btnContainer);
+            } else {
+                content.parentNode?.appendChild(btnContainer);
             }
         };
 
         bellBtn.classList.remove('hidden');
 
-        // Severity colours on bell / dot (preserve relative positioning from Header)
-        bellBtn.classList.remove(
-            'text-red-600', 'dark:text-red-300', 'hover:bg-red-50', 'dark:hover:bg-red-950/40',
-            'text-yellow-600', 'dark:text-yellow-300', 'hover:bg-yellow-50', 'dark:hover:bg-yellow-950/40',
-            'text-blue-600', 'dark:text-blue-300', 'hover:bg-blue-50', 'dark:hover:bg-blue-950/40',
-            'bg-red-100', 'dark:bg-red-900', 'bg-yellow-100', 'dark:bg-yellow-900', 'bg-blue-100', 'dark:bg-blue-900'
-        );
-        if (dot) {
-            dot.classList.remove('bg-red-600', 'bg-yellow-500', 'bg-blue-600');
-        }
-
+        // SPA design: full className reset so severity bg + text always apply
+        let bellClass = 'absolute top-4 right-4 z-[70] p-1.5 rounded-full shadow-md focus:outline-none hover:scale-105 transition-transform ';
+        let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
         if (severity === 'critical') {
-            bellBtn.classList.add('text-red-600', 'dark:text-red-300', 'hover:bg-red-50', 'dark:hover:bg-red-950/40');
-            if (dot) dot.classList.add('bg-red-600');
+            bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300';
+            dotClass += 'bg-red-600';
         } else if (severity === 'warning') {
-            bellBtn.classList.add('text-yellow-600', 'dark:text-yellow-300', 'hover:bg-yellow-50', 'dark:hover:bg-yellow-950/40');
-            if (dot) dot.classList.add('bg-yellow-500');
+            bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300';
+            dotClass += 'bg-yellow-500';
         } else {
-            bellBtn.classList.add('text-blue-600', 'dark:text-blue-300', 'hover:bg-blue-50', 'dark:hover:bg-blue-950/40');
-            if (dot) dot.classList.add('bg-blue-600');
+            bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300';
+            dotClass += 'bg-blue-600';
         }
+        bellBtn.className = bellClass;
+        if (dot) dot.className = dotClass;
 
         if (!hasSeen) {
             if (dot) dot.classList.remove('hidden');
@@ -714,12 +846,24 @@ export async function checkServiceAlerts() {
 export function initHub() {
     if (typeof window === 'undefined') return;
 
+    window.repairMojibake = repairMojibake;
     window.closeAppHub = closeAppHub;
     window.openAppHub = openAppHub;
     window.resetProfile = resetProfile;
     window.performHardCacheClear = performHardCacheClear;
     window.showCacheClearWarning = showCacheClearWarning;
     window.checkServiceAlerts = checkServiceAlerts;
+    window.submitPollVote = submitPollVote;
+
+    if (!window.__ntPollVoteBound) {
+        window.__ntPollVoteBound = true;
+        document.addEventListener('click', (e) => {
+            const btn = e.target?.closest?.('.nt-poll-vote');
+            if (!btn) return;
+            e.preventDefault();
+            submitPollVote(btn.getAttribute('data-poll-id'), btn.getAttribute('data-poll-opt'), btn.getAttribute('data-poll-text'));
+        });
+    }
 
     // Close inbox / notice modals when browser back clears their hash
     if (!window._hubAlertPopstateBound) {
@@ -731,7 +875,9 @@ export function initHub() {
             if (replyModal && !replyModal.classList.contains('hidden') && hash !== '#devreply') {
                 closeSmoothModal('developer-reply-modal');
             }
-            if (noticeModal && !noticeModal.classList.contains('hidden') && hash !== '#notice') {
+            // Keep notice open while lightbox (#lightbox) or legacy #map preview is on top
+            if (noticeModal && !noticeModal.classList.contains('hidden')
+                && hash !== '#notice' && hash !== '#lightbox' && hash !== '#map') {
                 closeSmoothModal('notice-modal');
             }
         });
@@ -791,12 +937,8 @@ export function initHub() {
     });
     hapticsCb?.addEventListener('change', (e) => applyHaptics(e.target.checked));
 
-    // Maps
-    document.getElementById('view-map-btn')?.addEventListener('click', () => {
-        triggerHaptic();
-        closeAppHub(true);
-        setTimeout(() => openSmoothModal('map-modal'), 50);
-    });
+    // Network map pinch/pan/zoom (SPA map-viewer parity)
+    setupMapLogic();
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
         window.location.href = withBase('/map.html');
@@ -810,7 +952,10 @@ export function initHub() {
         triggerHaptic();
         closeAppHub(true);
         const ver = document.getElementById('about-version-label');
-        if (ver) ver.textContent = `Version ${APP_VERSION} (Guardian Edition)`;
+        if (ver) {
+            const edition = (getLatestChangelog()?.title) || 'Next Train';
+            ver.textContent = `Version ${APP_VERSION} (${edition})`;
+        }
         setTimeout(() => openSmoothModal('about-modal'), 50);
     });
     document.getElementById('close-about-btn')?.addEventListener('click', () => closeSmoothModal('about-modal'));
@@ -839,8 +984,12 @@ export function initHub() {
         window.openLegal?.('privacy');
     });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
-        closeSmoothModal('about-modal');
-        setTimeout(() => openSmoothModal('feedback-modal'), 50);
+        trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
+        // Stack feedback on top of About so Cancel / Back returns to About
+        openSmoothModal('feedback-modal');
+    });
+    document.getElementById('about-email-btn')?.addEventListener('click', () => {
+        trackAlertEvent('click_about_email', { location: 'about_modal' });
     });
 
     const fileInput = document.getElementById('feedback-file');

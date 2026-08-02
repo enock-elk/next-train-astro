@@ -3,7 +3,7 @@ import ContentLayout from '../layouts/ContentLayout.astro';
 import { normalizeBase } from '../lib/config.js';
 
 const title = "Roadmap | Metrorail Next Train";
-const description = "Strategic roadmap and system health for Metrorail Next Train — completed releases and upcoming features.";
+const description = "Strategic roadmap and system health for Metrorail Next Train: completed releases and upcoming features.";
 const base = normalizeBase(import.meta.env.BASE_URL);
 ---
 
@@ -13,6 +13,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   canonicalPath="/status.html"
   forceDark={true}
   themeColor="#111827"
+  robots="noindex, nofollow"
   bodyClass="bg-gray-900 text-gray-100 min-h-screen p-6"
 >
   <style slot="head" is:global>
@@ -40,7 +41,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
                 <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                 <span class="text-sm font-bold uppercase tracking-wider">System Stable</span>
             </div>
-            <p class="text-xs text-gray-500 font-mono">V7.06.17 (Live)</p>
+            <p class="text-xs text-gray-500 font-mono">V8_08.02 (Live)</p>
         </div>
     </header>
 

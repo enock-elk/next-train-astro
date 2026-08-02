@@ -13,6 +13,116 @@ export function escapeHTML(str) {
     });
 }
 
+/**
+ * Repair common UTF-8-as-Latin1/Windows-1252 mojibake in remote HTML/text
+ * (e.g. Firebase notices saved as mojibake em-dash + "Next Train Ops").
+ * Bad-side keys use \u escapes so source scanners cannot "fix" them away.
+ */
+export function repairMojibake(str) {
+    if (str == null) return '';
+    let s = String(str);
+    if (!s) return s;
+
+    // Windows-1252 misread of UTF-8 em dash (E2 80 94) → â + € + ”
+    const mojibakeEmDash = '\u00E2\u20AC\u201D';
+    // Variant where 0x94 was already an em dash glyph
+    const mojibakeEmDashAlt = '\u00E2\u20AC\u2014';
+    // Latin-1 misread of same bytes
+    const latin1EmDash = '\u00E2\u0080\u0094';
+    const exact = [
+        [mojibakeEmDash, '\u2014'],
+        [mojibakeEmDashAlt, '\u2014'],
+        [latin1EmDash, '\u2014'],
+        ['\u00E2\u20AC\u201C', '\u2013'], // en dash via CP1252
+        ['\u00E2\u0080\u0093', '\u2013'],
+        ['\u00E2\u20AC\u00A2', '\u2022'], // bullet via CP1252
+        ['\u00E2\u0080\u00A2', '\u2022'],
+        ['\u00E2\u20AC\u00A6', '\u2026'],
+        ['\u00E2\u0080\u00A6', '\u2026'],
+        ['\u00E2\u20AC\u2122', '\u2019'],
+        ['\u00E2\u0080\u0099', '\u2019'],
+        ['\u00E2\u20AC\u02DC', '\u2018'],
+        ['\u00E2\u0080\u0098', '\u2018'],
+        ['\u00E2\u20AC\u0153', '\u201C'],
+        ['\u00E2\u0080\u009C', '\u201C'],
+        ['\u00E2\u20AC\u009D', '\u201D'],
+        ['\u00E2\u0080\u009D', '\u201D'],
+        ['\u00E2\u2020\u201D', '\u2194'], // â†”
+        ['\u00E2\u0086\u0094', '\u2194'],
+        ['\u00E2\u02C6\u00A0\u00EF\u00B8\u008F', '⚠️'], // âš ï¸
+        ['\u00E2\u009A\u00A0\u00EF\u00B8\u008F', '⚠️'],
+        ['\u00E2\u009A\u00A0\uFE0F', '⚠️'],
+        ['\u00E2\u009A\u00A0', '\u26A0'],
+        ['\u00E2\u02DC\u00A2\uFE0F', '☢️'], // â˜¢️
+        ['\u00E2\u0098\u00A2\uFE0F', '☢️'],
+        ['\u00E2\u0098\u00A2', '\u2622'],
+        ['\u00E2\u009B\u0094', '\u26D4'],
+        ['\u00C3\u0097', '\u00D7'],
+        ['\u00C2\u00A0', ' '],
+        ['\u00C2', ''],
+    ];
+    for (const [bad, good] of exact) {
+        if (bad && s.includes(bad)) s = s.split(bad).join(good);
+    }
+
+    // Generic: decode runs that look like UTF-8 misread as Latin-1
+    s = s.replace(/[\u00C2-\u00F4][\u0080-\u00FF]{1,5}/g, (match) => {
+        try {
+            const bytes = Uint8Array.from([...match].map((c) => c.charCodeAt(0) & 0xff));
+            const out = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+            if (!out || out.includes('\uFFFD') || out === match) return match;
+            return out;
+        } catch {
+            return match;
+        }
+    });
+
+    // CP1252 path: map common high chars back to bytes then UTF-8 decode
+    s = s.replace(/[\u00C2-\u00F4](?:[\u0080-\u00FF]|[\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018\u2019\u201C\u201D\u2020\u2021\u2022\u2026\u2030\u20AC\u2122]){1,6}/g, (match) => {
+        const cp1252 = {
+            0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85,
+            0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A,
+            0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92,
+            0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+            0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C,
+            0x017E: 0x9E, 0x0178: 0x9F,
+        };
+        try {
+            const bytes = Uint8Array.from([...match].map((ch) => {
+                const cp = ch.codePointAt(0);
+                if (cp <= 0xff) return cp;
+                return cp1252[cp] != null ? cp1252[cp] : cp;
+            }).filter((b) => b <= 0xff));
+            const out = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+            if (!out || out.includes('\uFFFD') || out === match) return match;
+            return out;
+        } catch {
+            return match;
+        }
+    });
+
+    return s;
+}
+
+/** Adaptable SVG bidirectional arrow for route labels (replaces ↔ emoji / text). */
+export function routeArrowSvg(className = 'inline-block w-3.5 h-3.5 mx-0.5 align-[-2px] text-current shrink-0') {
+    return `<svg class="${className}" viewBox="0 0 24 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 6h14M8 3L5 6l3 3M16 3l3 3-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/** Plain-text route label for titles / a11y (uses ↔). */
+export function formatRouteLabelPlain(raw) {
+    if (typeof raw !== 'string' || !raw) return 'Select a route';
+    return raw.replace(/\s*<->\s*/g, ' ↔ ').replace(/\s*↔\s*/g, ' ↔ ').trim();
+}
+
+/** HTML route label with SVG arrow between corridor ends. */
+export function formatRouteLabelHtml(raw) {
+    if (typeof raw !== 'string' || !raw) return escapeHTML('Select a route');
+    const parts = raw.split(/\s*<->\s*|\s*↔\s*/);
+    if (parts.length < 2) return escapeHTML(raw.trim());
+    return parts.map((p) => escapeHTML(p.trim())).filter(Boolean).join(routeArrowSvg());
+}
+
 export function formatTimeDisplay(timeStr) {
     if (!timeStr) return "--:--";
     const s = String(timeStr);

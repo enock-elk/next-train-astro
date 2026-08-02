@@ -12,7 +12,7 @@ const versionBadge = String(APP_VERSION);
 <!-- APP HUB SIDENAV (Flat Native UI Edition — slides from left like live SPA) -->
 <div
   id="sidenav"
-  class="fixed inset-y-0 left-0 w-[90vw] sm:w-96 shadow-2xl bg-white dark:bg-gray-900 flex flex-col h-full z-[100] -translate-x-full transition-transform duration-300"
+  class="fixed inset-y-0 left-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col h-full z-[100] -translate-x-full transition-transform duration-300"
   role="dialog"
   aria-label="App Hub"
   style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
@@ -208,8 +208,8 @@ const versionBadge = String(APP_VERSION);
       regionList?.classList.add('hidden');
       regionChevron?.classList.remove('rotate-180');
       if (typeof window.toggleDropdownScrim === 'function') window.toggleDropdownScrim();
-      const { executeRegionSwap } = await import('../lib/logic.js');
-      executeRegionSwap(target);
+      const { handleRegionChange } = await import('../lib/logic.js');
+      await handleRegionChange(target);
       closeNav();
     });
   });
@@ -218,7 +218,9 @@ const versionBadge = String(APP_VERSION);
   const themeCheckbox = document.getElementById('settings-theme-checkbox');
   const applyTheme = (isDark) => {
     document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch (err) { /* Safari private / WebView Access Denied */ }
     if (themeCheckbox) themeCheckbox.checked = isDark;
   };
   if (themeCheckbox) themeCheckbox.checked = document.documentElement.classList.contains('dark');

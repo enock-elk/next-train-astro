@@ -123,7 +123,7 @@ window.getTripDisruptions = function(routeId, stopsArray) {
 
                     let firstContactIdx = -1;
                     
-                    // ðŸ›¡ï¸ GUARDIAN PHASE 1 (VECTOR MATH): Trace the commuter's physical trip 
+                    // 🛡️ GUARDIAN PHASE 1 (VECTOR MATH): Trace the commuter's physical trip 
                     // to see if the directional vector CROSSES the Danger Zone, granting 
                     // immunity to trains moving away from the segment.
                     for (let i = 0; i < stopsArray.length - 1; i++) {

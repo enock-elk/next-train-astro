@@ -67,6 +67,7 @@ const faqJsonLd = {
   description={description}
   canonicalPath="/guide.html"
   ogType="article"
+  robots="index, follow"
   bodyClass="bg-slate-50 dark:bg-gray-900 selection:bg-blue-200 selection:text-blue-900"
 >
   <script slot="head" is:inline type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
@@ -197,6 +198,18 @@ const faqJsonLd = {
             </div>
             <h1 class="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-3">Commuter Guide & FAQ</h1>
             <p class="text-gray-500 dark:text-gray-400 text-base sm:text-lg max-w-xl mx-auto">Everything you need to know about how Metrorail Next Train routes your trips, processes data, and keeps you moving.</p>
+            <!-- Always visible for cold Google visits (no app hydrate required). -->
+            <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center max-w-md mx-auto">
+                <a href={base} class="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-5 rounded-xl shadow-md transition-transform active:scale-95 text-sm">
+                    Check live train times
+                </a>
+                <a href={withBase('map.html')} class="inline-flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-3 px-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-transform active:scale-95 text-sm">
+                    View network map
+                </a>
+            </div>
+            <p id="guide-first-visit-hint" class="hidden mt-3 text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                First time here? The main app will walk you through picking your region — no account needed.
+            </p>
         </header>
 
         <!-- Article Sections -->
@@ -268,7 +281,7 @@ const faqJsonLd = {
                             <span class="guide-ui-pill guide-ui-pill-direct">Direct Trip</span>
                             <span class="mx-1 text-gray-400">vs</span>
                             <span class="guide-ui-pill guide-ui-pill-transfer">Transfer Trip</span>
-                            <span class="block mt-2">A direct trip means you stay on the same train until your destination. A transfer trip means the Trip Planner found a connection — you alight at a hub (like Koedoespoort or Germiston) and board a different line.</span>
+                            <span class="block mt-2">A direct trip means you stay on the same train until your destination. A transfer trip means the Trip Planner found a connection: you alight at a hub (like Koedoespoort or Germiston) and board a different line.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                             <strong class="block mb-2">Service Alerts:</strong>
@@ -302,7 +315,7 @@ const faqJsonLd = {
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Transfers & Extended Layovers</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                    <p>Our Trip Planner actively calculates multi-leg journeys across shared corridors (e.g., transferring at Germiston or Koedoespoort). However, sparse timetables—especially on weekends or holidays—can result in very long wait times.</p>
+                    <p>Our Trip Planner actively calculates multi-leg journeys across shared corridors (e.g., transferring at Germiston or Koedoespoort). However, sparse timetables (especially on weekends or holidays) can result in very long wait times.</p>
                     <p>If a calculated trip requires you to wait at a transfer hub for more than 4 hours for your connecting train, the app will flag this journey with an orange <span class="guide-ui-pill guide-ui-pill-warn">Extended Layover</span> warning. The trip will still be displayed as an option, but this warning ensures you aren't caught off guard by a long wait on the platform.</p>
                 </div>
             </section>
@@ -383,7 +396,7 @@ const faqJsonLd = {
                         </summary>
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                             <p>Metrorail generally <strong>does not operate train services on Sundays</strong>.</p>
-                            <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> Some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>. A few routes — including Hercules ↔ Koedoespoort and Eastern Cape — also have <strong>no Saturday service</strong> even when other lines are running.</p>
+                            <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> Some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
                             <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
                         </div>
                     </details>
@@ -465,8 +478,26 @@ const faqJsonLd = {
 
         <!-- Footer -->
         <footer class="mt-16 text-center border-t border-gray-200 dark:border-gray-700 pt-8">
+            <p class="text-sm mb-3">
+                <a href={withBase('routes.html')} class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Browse route timetables</a>
+                <span class="text-gray-400 mx-2">·</span>
+                <a href={withBase('map.html')} class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Network map</a>
+                <span class="text-gray-400 mx-2">·</span>
+                <a href={base} class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Open Next Train</a>
+            </p>
             <p class="text-xs text-gray-500 dark:text-gray-400 font-mono">Metrorail Next Train • Unofficial Guide</p>
             <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2">&copy; 2026 Kazembe CodeWorks.</p>
         </footer>
     </main>
+
+    <script is:inline>
+      // Soft hint for brand-new visitors (guide itself needs no app storage).
+      try {
+        if (localStorage.getItem('welcomeSeen') !== 'true') {
+          document.getElementById('guide-first-visit-hint')?.classList.remove('hidden');
+        }
+      } catch (e) {
+        document.getElementById('guide-first-visit-hint')?.classList.remove('hidden');
+      }
+    </script>
 </ContentLayout>

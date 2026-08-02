@@ -28,11 +28,12 @@ import { withBase } from '../lib/config.js';
         </div>
 
         <!-- Dynamic route list -->
-        <div id="welcome-route-list" class="w-full space-y-3 overflow-y-auto max-h-[45vh] pr-2 pb-6 custom-scrollbar">
+        <div id="welcome-route-list" class="w-full space-y-3 overflow-y-auto max-h-[min(50vh,22rem)] sm:max-h-[50vh] pr-2 pb-6 custom-scrollbar">
             <!-- Rendered dynamically on the client-side -->
         </div>
         
         <p class="text-xs text-gray-400 dark:text-gray-600 mt-4 text-center shrink-0">You can change this later in the side menu.</p>
+        <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2 text-center shrink-0">Unofficial · Independent of PRASA</p>
     </div>
 </div>
 
@@ -40,7 +41,7 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES } from '../lib/config.js';
-    import { safeStorage } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
 
@@ -82,7 +83,7 @@ import { withBase } from '../lib/config.js';
         regionalRoutes.forEach(route => {
             const btn = document.createElement('button');
             btn.setAttribute('type', 'button');
-            const displayName = route.name.replace('<->', '↔');
+            const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
                 let borderColor = 'border-gray-500';

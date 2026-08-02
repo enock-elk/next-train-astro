@@ -1,5 +1,9 @@
 /**
- * Expose SPA globals for public/js/admin.js (classic script), then load + init Admin.
+ * Admin bridge — SHORT-TERM isolation (lazy unlock).
+ *
+ * Commuters never download public/js/admin.js. The classic Admin module is
+ * fetched only after the 5-tap title unlock (or an explicit ensureAdminLoaded call).
+ * See the ROADMAP block at the top of public/js/admin.js for medium/long-term plans.
  */
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase
@@ -12,7 +16,7 @@ import {
 import {
     loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
-import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode } from '../store.js';
+import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
     isShadowBanned,
@@ -60,7 +64,6 @@ export function exposeAdminGlobals() {
     window.executeRegionSwap = executeRegionSwap;
     window.guardianFetch = guardianFetch;
 
-    // Phase 7 — trust / shadow-ban
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;
     window.trustAddToBlockList = addToLocalBlockList;
@@ -76,6 +79,10 @@ export function exposeAdminGlobals() {
     defineLive('globalStationIndex', () => $globalStationIndex.get() || {}, (v) => $globalStationIndex.set(v));
     defineLive('NEXT_TRAIN_DEVICE_ID', () => $deviceId.get() || safeStorage.getItem('next_train_device_id'));
     defineLive('isSimMode', () => $isSimMode.get(), (v) => $isSimMode.set(!!v));
+    defineLive('simTimeStr', () => $simTime.get(), (v) => $simTime.set(v || null));
+    defineLive('simDayIndex', () => (window.__ntSimDayIndex ?? null), (v) => {
+        window.__ntSimDayIndex = (v === null || v === undefined || v === '') ? null : Number(v);
+    });
 
     if (!window.trackAnalyticsEvent) {
         window.trackAnalyticsEvent = (name, params) => {
@@ -106,26 +113,113 @@ function loadClassicAdminScript() {
     });
 }
 
-export async function initAdminBridge() {
-    if (typeof window === 'undefined') return;
-    exposeAdminGlobals();
-    await bootFirebase();
+let _adminLoadPromise = null;
 
-    const startAdmin = async () => {
+/**
+ * Lazy-load + init Admin once. Safe to call repeatedly.
+ * Sets window.__ntAdminSessionActive so global crash reporting can quarantine admin noise.
+ */
+export function ensureAdminLoaded() {
+    if (typeof window === 'undefined') return Promise.resolve(null);
+    if (window.__ntAdminReady && window.Admin) return Promise.resolve(window.Admin);
+    if (_adminLoadPromise) return _adminLoadPromise;
+
+    _adminLoadPromise = (async () => {
         try {
+            window.__ntAdminSessionActive = true;
+            exposeAdminGlobals();
+            await bootFirebase();
             await loadClassicAdminScript();
-            if (window.Admin?.init) window.Admin.init();
-            console.log('🛡️ Guardian: Admin bridge ready');
+            if (window.Admin?.init && !window.__ntAdminInited) {
+                window.Admin.init();
+                window.__ntAdminInited = true;
+            }
+            window.__ntAdminReady = true;
+            console.log('🛡️ Guardian: Admin island loaded (lazy unlock)');
+            return window.Admin;
         } catch (e) {
-            console.warn('Admin script failed to load', e);
+            console.warn('🛡️ Guardian: Admin island failed to load — commuter app unaffected.', e);
+            _adminLoadPromise = null;
+            return null;
         }
+    })();
+
+    return _adminLoadPromise;
+}
+
+function openAdminEntryUi() {
+    const loginModal = document.getElementById('login-modal');
+    const devModal = document.getElementById('dev-modal');
+    const emailInput = document.getElementById('admin-email');
+
+    if (window.Admin?.currentUser || window.isSimMode) {
+        if (devModal) {
+            try {
+                if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
+            } catch (e) { /* ignore */ }
+            openSmoothModal('dev-modal');
+            try { window.Admin.renderAdminModules?.(); } catch (e) { console.warn(e); }
+            try { window.Admin.initAutoSim?.(); } catch (e) { console.warn(e); }
+        }
+        showToast('Developer Session Active', 'info');
+        return;
+    }
+
+    if (loginModal) {
+        try {
+            if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
+        } catch (e) { /* ignore */ }
+        openSmoothModal('login-modal');
+        if (emailInput) setTimeout(() => emailInput.focus(), 150);
+    }
+}
+
+/**
+ * Arms the 5-tap title unlock. Does NOT fetch admin.js until unlocked.
+ */
+function armAdminUnlock() {
+    const appTitle = document.getElementById('app-title');
+    if (!appTitle || appTitle.dataset.adminUnlockArmed === '1') return;
+    appTitle.dataset.adminUnlockArmed = '1';
+    appTitle.style.cursor = 'pointer';
+    if (!appTitle.title) appTitle.title = 'Metrorail Next Train';
+
+    let clickCount = 0;
+    let clickTimer = null;
+
+    const onUnlockTap = async (e) => {
+        // After Admin.init, its own setupLoginAccess owns subsequent unlocks.
+        if (window.__ntAdminInited) return;
+
+        e.preventDefault();
+        clickCount++;
+        if (clickTimer) clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
+
+        if (clickCount < 5) return;
+        clickCount = 0;
+
+        triggerHaptic?.();
+        showToast('Loading admin tools…', 'info', 1500);
+        const admin = await ensureAdminLoaded();
+        if (!admin) {
+            showToast('Admin tools unavailable', 'error', 2500);
+            return;
+        }
+        // Hand off to Admin's own title listener for future taps.
+        appTitle.removeEventListener('click', onUnlockTap);
+        openAdminEntryUi();
     };
 
-    if (window.firebaseAuth) {
-        await startAdmin();
-    } else {
-        window.addEventListener('firebase-auth-ready', () => { startAdmin(); }, { once: true });
-        // firebase-boot already dispatched; if offline, still start
-        setTimeout(startAdmin, 50);
-    }
+    appTitle.addEventListener('click', onUnlockTap);
+}
+
+/**
+ * Boot hook for the commuter app: arm unlock only — zero admin payload.
+ */
+export function initAdminBridge() {
+    if (typeof window === 'undefined') return;
+    window.ensureAdminLoaded = ensureAdminLoaded;
+    armAdminUnlock();
+    console.log('🛡️ Guardian: Admin unlock armed (admin.js not loaded)');
 }

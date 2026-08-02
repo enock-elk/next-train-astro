@@ -50,7 +50,40 @@ export default defineConfig({
         // the 3G connections most of these commuters use, and one 404 fails the
         // whole install. metrorail-app's worker excludes heavy images for exactly
         // this reason; the runtime rule below caches them on first view instead.
+        // No `json`: the plugin adds the manifest itself, and app-version.json is
+        // the update probe — precaching it would pin the app to a stale version.
         globPatterns: ['**/*.{js,css,html,ico,webmanifest}'],
+        // Private ops/marketing docs are noindex and never needed offline; keeping
+        // them out shrinks the atomic install that every 3G user pays for up front.
+        // admin.js: lazy unlock only. routes/**: SEO landings are crawlable but
+        // must not inflate the atomic offline install for every commuter (NetworkFirst
+        // navigate handler still caches them on first visit).
+        globIgnores: [
+          '**/node_modules/**',
+          'marketing.html',
+          'status.html',
+          '**/admin.js',
+          'routes/**',
+        ],
+        // @vite-pwa/astro strips `.html` from page entries, but build.format is
+        // 'file' so the emitted files — and every internal link and canonical URL —
+        // keep the extension. Left alone, the precache caches `/guide` (never
+        // requested) while `/guide.html` falls through to the offline page.
+        manifestTransforms: [
+          (entries) => {
+            const seen = new Set();
+            const manifest = [];
+            for (const entry of entries) {
+              const isRoot = entry.url === '' || entry.url === '/' || entry.url === baseWithSlash;
+              const hasExt = /\.[a-z0-9]+$/i.test(entry.url);
+              const url = isRoot || hasExt ? entry.url : `${entry.url}.html`;
+              if (seen.has(url)) continue;
+              seen.add(url);
+              manifest.push({ ...entry, url });
+            }
+            return { manifest, warnings: [] };
+          },
+        ],
         // navigateFallback is NOT "show when offline" — Workbox serves it for ANY
         // navigation URL missing from the precache (even while online). Pointing it
         // at /offline made refreshes land on the offline page. Use NetworkFirst +
@@ -63,7 +96,7 @@ export default defineConfig({
               cacheName: 'pages',
               networkTimeoutSeconds: 3,
               precacheFallback: {
-                fallbackURL: baseWithSlash === '/' ? '/offline' : `${baseWithSlash}offline`,
+                fallbackURL: `${baseWithSlash}offline.html`,
               },
             },
           },
@@ -74,6 +107,34 @@ export default defineConfig({
               cacheName: 'images',
               expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
+              // Captive portals return HTTP 200 HTML for any URL — never cache that
+              // over a real image/map asset (SPA service-worker.js PHASE 4A).
+              plugins: [{
+                cacheWillUpdate: async ({ response }) => {
+                  if (!response || response.status !== 200) return null;
+                  const ct = response.headers.get('content-type') || '';
+                  if (ct.includes('text/html')) return null;
+                  return response;
+                },
+              }],
+            },
+          },
+          {
+            urlPattern: ({ request }) =>
+              request.destination === 'script' || request.destination === 'style',
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'static-runtime',
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+              plugins: [{
+                cacheWillUpdate: async ({ response }) => {
+                  if (!response || response.status !== 200) return null;
+                  const ct = response.headers.get('content-type') || '';
+                  if (ct.includes('text/html')) return null;
+                  return response;
+                },
+              }],
             },
           },
           {
@@ -84,10 +145,16 @@ export default defineConfig({
           }
         ]
       },
+      // The live SPA ships /manifest.json. Keeping the filename means any cached
+      // <link rel="manifest"> or bookmark keeps resolving after the cutover.
+      manifestFilename: 'manifest.json',
       manifest: {
-        name: 'Next Train 2.0',
-        short_name: 'Train 2.0',
-        description: 'Live Metrorail schedules and route maps for South Africa. (Astro rebuild)',
+        // Identity fields below are byte-for-byte the live SPA's. An installed PWA
+        // is keyed on `id`, so any drift here registers a *second* app on the home
+        // screen instead of upgrading the one already installed.
+        name: 'Metrorail Next Train',
+        short_name: 'Next Train',
+        description: 'Live Metrorail schedules, trip planning and route maps for South Africa.',
         theme_color: '#1d4ed8',
         // Splash-screen colour. Must stay '#1d4ed8' to match the live SPA —
         // a white splash is the most visible sign of the rewrite on cold launch.
@@ -95,8 +162,10 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         scope: baseWithSlash,
-        id: `${baseWithSlash}?pwa=next-train-2`,
-        start_url: `${baseWithSlash}?pwa=next-train-2`,
+        // SPA used "./" relative to a root manifest, which resolves to the origin
+        // root — same value baseWithSlash produces here.
+        id: baseWithSlash,
+        start_url: baseWithSlash,
         // Mirrors metrorail-app/manifest.json exactly. The 512 slot points at
         // loading-logo.png (not icon-512.png) because that is the image already
         // installed on users' home screens, and no `maskable` entry is declared —
@@ -114,6 +183,24 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
+          }
+        ],
+        // Long-press shortcuts already present on installed SPA home screens.
+        // handleShortcutActions() reads ?action= on boot.
+        shortcuts: [
+          {
+            name: 'Trip Planner',
+            short_name: 'Plan Trip',
+            description: 'Plan a direct or transfer trip',
+            url: `${baseWithSlash}?action=planner`,
+            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192' }]
+          },
+          {
+            name: 'Network Map',
+            short_name: 'View Map',
+            description: 'View the full rail network map',
+            url: `${baseWithSlash}?action=map`,
+            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192' }]
           }
         ]
       }

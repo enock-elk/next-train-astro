@@ -4,7 +4,7 @@
  * Safe for cold visitors — no app store hydration required.
  */
 import '../styles/appearance.css';
-import { normalizeBase, withBase } from '../lib/config.js';
+import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 interface Props {
   title: string;
@@ -80,12 +80,12 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="icon" href={withBase('favicon.ico')} sizes="any" />
     <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
-    {import.meta.env.PROD && <link rel="manifest" href={withBase('manifest.webmanifest')} />}
+    {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
     <script is:inline define:vars={{ base }}>
       window.__NT_BASE__ = base;
     </script>
     <meta name="application-name" content="Next Train" />
-    <meta name="apple-mobile-web-app-title" content="Train 2.0" />
+    <meta name="apple-mobile-web-app-title" content="Next Train" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -98,16 +98,21 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         } else if (forceDark) {
           document.documentElement.classList.add('dark');
         } else {
-          const isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          let theme = null;
+          try { theme = localStorage.getItem('theme'); } catch (e) {}
+          const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (isDark) document.documentElement.classList.add('dark');
           else document.documentElement.classList.remove('dark');
         }
-        const pack = localStorage.getItem('colourPack');
+        let pack = null;
+        try { pack = localStorage.getItem('colourPack'); } catch (e) {}
         const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
-        if (!localStorage.getItem('next_train_device_id')) {
-          localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
-        }
+        try {
+          if (!localStorage.getItem('next_train_device_id')) {
+            localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
+          }
+        } catch (e) {}
         // Strip cache-bust ?v= after load so shared secondary-page links stay clean
         var params = new URLSearchParams(window.location.search);
         if (params.has('v')) {

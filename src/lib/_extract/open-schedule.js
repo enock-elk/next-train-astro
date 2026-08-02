@@ -82,7 +82,7 @@ window.openScheduleModal = function(destination, dayOverride = null) {
 
              if (j.isDivergent) {
                  const divDest = typeof Renderer !== 'undefined' ? Renderer._applyUIIntercepts(j.actualDestName) : j.actualDestName;
-                 sharedTag = `<span class="text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">âš ï¸ To ${toTitleCase(divDest)}</span>`;
+                 sharedTag = `<span class="text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">⚠️ To ${toTitleCase(divDest)}</span>`;
              } else {
                  sharedTag = `<span class="text-[9px] font-bold text-purple-600 bg-purple-100 dark:text-purple-300 dark:bg-purple-900 px-1.5 py-0.5 rounded uppercase ml-2">From ${toTitleCase(routeName)}</span>`;
              }

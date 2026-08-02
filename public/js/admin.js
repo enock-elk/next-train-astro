@@ -1,6 +1,29 @@
 ﻿/**
  * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.02 - Weekend Clarity Edition)
  * -----------------------------------------------------------------------------
+ *
+ * ## ADMIN ISLAND ROADMAP (for future AI / ops)
+ * Current stage: SHORT-TERM isolation via src/lib/admin-bridge.js
+ *   - admin.js is NOT loaded on commuter boot; 5-tap title unlock lazy-fetches it.
+ *   - Excluded from the service-worker precache (astro globIgnores for admin.js).
+ *   - window.__ntAdminSessionActive lets global crash reporting skip admin noise.
+ *   - Admin init failures must never take down the trip planner / live board.
+ *
+ * MEDIUM-TERM (next):
+ *   - Dedicated noindex AdminDashboard page (e.g. /admin.html), robots Disallow,
+ *     not in sitemap; main app has zero admin DOM/modals beyond a tiny unlock stub.
+ *   - Stronger quarantine: run admin UI in a separate tab/window so a hung admin
+ *     panel cannot freeze schedule UI.
+ *
+ * LONG-TERM (ideal OPSEC):
+ *   - Auth-gated delivery of this bundle (Cloudflare Worker / Firebase Hosting
+ *     rewrite) so guessing /js/admin.js without an admin JWT returns 404/401.
+ *   - Until then: Firebase Security Rules + Worker JWT remain the real lock;
+ *     lazy-load only reduces blueprint exposure and payload bloat.
+ *
+ * Do NOT re-add a global <script src="/js/admin.js"> or initAdminBridge() that
+ * eagerly fetches this file — that undoes Zero-Bloat and schema OPSEC.
+ * -----------------------------------------------------------------------------
  * This module handles Developer Mode features:
  * 1. Service Alerts Manager (God-Mode Regional Sync + Rich Text Formatting + Live Preview)
  * 2. Transit Incident Manager (Tiered Graph/Timeline Disruptions)
@@ -49,6 +72,46 @@ const Admin = {
         return cues.length ? ` ${cues.join(' ')}` : '';
     },
 
+    /** Repair UTF-8-as-Latin1 mojibake (delegates to app helper when available). */
+    repairMojibake: (str) => {
+        if (typeof window.repairMojibake === 'function' && window.repairMojibake !== Admin.repairMojibake) {
+            try { return window.repairMojibake(str); } catch { /* fall through */ }
+        }
+        if (str == null) return '';
+        let s = String(str);
+        // Prefer escapes so scanners cannot rewrite the lookup keys
+        const pairs = [
+            ['\u00E2\u20AC\u201D', '\u2014'], // â€" → —
+            ['\u00E2\u0080\u0094', '\u2014'],
+            ['\u00E2\u20AC\u00A2', '\u2022'],
+            ['\u00E2\u02DC\u00A2\uFE0F', '☢️'],
+            ['\u00E2\u0098\u00A2\uFE0F', '☢️'],
+        ];
+        for (const [bad, good] of pairs) {
+            if (s.includes(bad)) s = s.split(bad).join(good);
+        }
+        return s;
+    },
+
+    /** SVG bidirectional arrow for route labels (matches app formatRouteLabelHtml). */
+    routeArrowSvg: (className = 'inline-block w-3.5 h-3.5 mx-0.5 align-[-2px] text-current shrink-0') =>
+        `<svg class="${className}" viewBox="0 0 24 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 6h14M8 3L5 6l3 3M16 3l3 3-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+
+    formatRouteLabelHtml: (raw) => {
+        if (typeof raw !== 'string' || !raw) return '';
+        const esc = (typeof escapeHTML === 'function')
+            ? escapeHTML
+            : (t) => String(t).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        const parts = raw.split(/\s*<->\s*|\s*\u2194\s*/);
+        if (parts.length < 2) return esc(raw.trim());
+        return parts.map((p) => esc(p.trim())).filter(Boolean).join(Admin.routeArrowSvg());
+    },
+
+    formatRouteLabelPlain: (raw) => {
+        if (typeof raw !== 'string' || !raw) return '';
+        return raw.replace(/\s*<->\s*/g, ' \u2194 ').replace(/\s*\u2194\s*/g, ' \u2194 ').trim();
+    },
+
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
     getAuthKey: async () => {
         if (window.firebaseAuth && window.firebaseAuth.currentUser) {
@@ -61,6 +124,108 @@ const Admin = {
             }
         }
         return null;
+    },
+
+    /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError → app reload). */
+    encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
+    copyCrashLog: async (crashId) => {
+        const text = (Admin._crashRawById && Admin._crashRawById[crashId]) || '';
+        if (!text) {
+            if (typeof showToast === 'function') showToast('No log text for this entry', 'warning');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(text);
+            if (typeof showToast === 'function') showToast('Full log copied', 'success');
+        } catch {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (typeof showToast === 'function') showToast('Full log copied', 'success');
+            } catch {
+                if (typeof showToast === 'function') showToast('Copy failed', 'error');
+            }
+        }
+    },
+    openDiagnosticErrorsModal: async () => {
+        const SENTRY_SAMPLE = 0.3;
+        let modal = document.getElementById('admin-diag-errors-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'admin-diag-errors-modal';
+            modal.className = 'fixed inset-0 bg-black/80 z-[220] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200 dark:border-gray-700">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
+                    <div>
+                        <h3 class="text-base font-black text-gray-900 dark:text-white">Diagnostic Errors (24h)</h3>
+                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading…</p>
+                    </div>
+                    <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">✕</button>
+                </div>
+                <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading…</div>
+            </div>`;
+        modal.classList.remove('hidden');
+        document.getElementById('diag-errors-close').onclick = () => modal.classList.add('hidden');
+
+        const list = document.getElementById('diag-errors-list');
+        const meta = document.getElementById('diag-errors-meta');
+        try {
+            const secret = await Admin.getAuthKey();
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 10000);
+            const data = res.ok ? await res.json() : null;
+            const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+            const items = data
+                ? Object.keys(data).map((id) => ({ id, ...data[id] })).filter((c) => (c.timestamp || 0) >= cutoff)
+                : [];
+            items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const n = items.length;
+            const est = Math.round(n / SENTRY_SAMPLE);
+            meta.textContent = `${n} captured · ~${est} estimated at Sentry sampleRate ${SENTRY_SAMPLE} (n ÷ ${SENTRY_SAMPLE})`;
+            if (!n) {
+                list.innerHTML = '<p class="text-xs text-gray-500 text-center py-6">No crash / black-box entries in the last 24h.</p>';
+                return;
+            }
+            list.innerHTML = items.map((c) => {
+                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '—';
+                const err = String(c.error || 'Unknown').replace(/</g, '&lt;').slice(0, 180);
+                return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                    <div class="flex justify-between text-[9px] text-gray-400 font-mono mb-1"><span>${when}</span><span>${(c.routeId || 'global').toString().replace(/</g, '&lt;')}</span></div>
+                    <div class="text-xs font-mono text-gray-800 dark:text-gray-200 break-words">${err}</div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            list.innerHTML = `<p class="text-xs text-red-500 text-center py-6">Failed to load: ${e.message || e}</p>`;
+        }
+    },
+    escalateFromEl: (el) => {
+        try {
+            const raw = el?.getAttribute?.('data-escalate');
+            if (!raw) throw new Error('Missing escalate payload');
+            const data = JSON.parse(decodeURIComponent(raw));
+            if (typeof Admin.escalateToRoadmap === 'function') Admin.escalateToRoadmap(data);
+            else if (typeof Admin.openTicketModal === 'function') Admin.openTicketModal(null, data);
+            else throw new Error('Roadmap UI not ready');
+        } catch (e) {
+            console.error('Escalate failed', e);
+            if (typeof showToast === 'function') showToast('Could not open ticket form', 'error');
+        }
+    },
+    escalateToRoadmap: (prefillData) => {
+        try {
+            if (typeof Admin.openTicketModal === 'function') Admin.openTicketModal(null, prefillData);
+            else if (typeof showToast === 'function') showToast('Roadmap not ready yet', 'warning');
+        } catch (e) {
+            console.error(e);
+            if (typeof showToast === 'function') showToast('Could not open ticket form', 'error');
+        }
     },
 
     // --- 0.15 SECURE ASYNC CONFIRMATION MODAL (PWA SANDBOX SAFE) ---
@@ -398,14 +563,16 @@ const Admin = {
                 if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200 animate-pulse";
             });
 
-            const errorBox = telBody.querySelector('.bg-red-50');
+            const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
-                errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors";
+                errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
+                errorBox.title = 'View diagnostic errors (24h) · Sentry sample rate 0.3';
+                errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 text-base leading-none">⚠️</span> Diagnostic Errors (24h)`;
+                    label.innerHTML = `<span class="mr-1.5 text-base leading-none">⚠️</span> Diagnostic Errors (24h) · tap`;
                 }
                 if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200 animate-pulse";
             }
@@ -1379,7 +1546,7 @@ const Admin = {
         let clickTimer = null;
 
         appTitle.style.cursor = 'pointer'; 
-        appTitle.title = "Next Train 2.0";
+        appTitle.title = "Metrorail Next Train";
 
         appTitle.addEventListener('click', (e) => {
             e.preventDefault(); 
@@ -1730,7 +1897,7 @@ const Admin = {
                 if (rId.includes('_KZN')) return `<span class="${badgeClass}">KZN</span> <span class="${textClass}">Global Network</span>`;
                 if (rId.includes('_EC')) return `<span class="${badgeClass}">EC</span> <span class="${textClass}">Global Network</span>`;
                 if (rId === 'all') return `<span class="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5">ALL</span> <span class="${textClass}">Entire Network</span>`;
-                if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass}">${ROUTES[rId].name.replace('<->', 'â€¢')}</span>`;
+                if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass} inline-flex items-center flex-wrap">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span>`;
                 return '';
             };
 
@@ -2224,21 +2391,37 @@ const Admin = {
                     }
                     const safeRaw = secureEscape(rawDetail);
                     
-                    const safeTicketDesc = safeErr.replace(/['"\n\r]/g, ' ').slice(0, 240);
+                    const isBlackBox = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT');
+                    const ticketDesc = isBlackBox
+                        ? String(rawDetail || crash.stack || crash.raw || crash.error || '').slice(0, 12000)
+                        : String(crash.error || '').slice(0, 240);
+                    const escalateAttr = Admin.encodeEscalatePayload({
+                        type: 'bug',
+                        severity: isBlackBox ? 'medium' : 'high',
+                        title: isBlackBox
+                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) · ${crash.deviceId || crash.routeId || 'device'}`
+                            : `Crash on ${crash.routeId || 'Global'}`,
+                        description: ticketDesc,
+                        source: `Crash ${crash.id || ''}`
+                    });
+                    // Store raw text for copy buttons (avoid huge data-attrs on every button)
+                    if (!Admin._crashRawById) Admin._crashRawById = {};
+                    Admin._crashRawById[crash.id] = String(rawDetail || '');
+
                     const actionHtml = isInbox 
-                        ? `<div class="flex space-x-2 w-full mt-2">
-                             ${rawDid !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${safeJsCrashId}', '${safeJsDid}')">Reply</button>` : ''}
-                             <button class="flex-1 text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateToRoadmap({type:'bug', severity:'high', title:'Crash on ${safeRoute}', description:'${safeTicketDesc}', source:'Crash ${safeJsCrashId}'})">Escalate</button>
-                             <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveCrash('${safeJsCrashId}')">Resolve</button>
+                        ? `<div class="flex flex-wrap gap-2 w-full mt-2">
+                             <button class="flex-1 min-w-[4.5rem] text-slate-700 dark:text-slate-200 hover:text-white hover:bg-slate-700 text-[10px] font-bold bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.copyCrashLog('${safeJsCrashId}')">Copy Log</button>
+                             ${rawDid !== 'Anonymous / Legacy' ? `<button class="flex-1 min-w-[4.5rem] text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${safeJsCrashId}', '${safeJsDid}')">Reply</button>` : ''}
+                             <button class="flex-1 min-w-[4.5rem] text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Escalate</button>
+                             <button class="flex-1 min-w-[4.5rem] text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveCrash('${safeJsCrashId}')">Resolve</button>
                            </div>`
-                        : `<div class="flex justify-between items-center w-full mt-2">
+                        : `<div class="flex justify-between items-center w-full mt-2 gap-2">
                              <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived</span>
+                             <button class="text-slate-600 hover:text-white hover:bg-slate-700 text-[10px] font-bold px-2.5 py-1 rounded transition-colors focus:outline-none uppercase tracking-wide border border-slate-200 shadow-sm" onclick="Admin.copyCrashLog('${safeJsCrashId}')">Copy Log</button>
                              <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-2.5 py-1 rounded transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteCrash('${safeJsCrashId}')">Delete</button>
                            </div>`;
 
-                    const kindLabel = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT')
-                        ? 'BLACK BOX LOG'
-                        : 'FATAL DUMP';
+                    const kindLabel = isBlackBox ? 'BLACK BOX LOG' : 'FATAL DUMP';
 
                     groupHTML += `
                         <div class="p-2.5 flex flex-col">
@@ -2249,7 +2432,7 @@ const Admin = {
                             <div class="text-[10px] font-mono text-gray-800 dark:text-gray-200 break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 leading-snug mb-2">
                                 ${safeErr}
                             </div>
-                            <details class="mb-2 group/raw" open>
+                            <details class="mb-2 group/raw" ${isBlackBox ? 'open' : ''}>
                                 <summary class="cursor-pointer text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1 select-none">Raw crash details</summary>
                                 <pre class="text-[9px] font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words bg-black/5 dark:bg-black/40 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto custom-scrollbar leading-snug">${safeRaw}</pre>
                             </details>
@@ -2724,10 +2907,17 @@ const Admin = {
                         <button id="de-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
                             Refresh
                         </button>
+                        <button id="de-export-btn" class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-800 border border-emerald-200 dark:border-emerald-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
+                            Export All
+                        </button>
                         <button id="de-clear-btn" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800 border border-red-200 dark:border-red-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
                             Clear DB
                         </button>
                     </div>
+                </div>
+                <div class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
+                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
                 </div>
                 <div id="de-list" class="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar"></div>
             </div>
@@ -2738,8 +2928,25 @@ const Admin = {
         const chevron = document.getElementById('de-chevron');
         const refreshBtn = document.getElementById('de-refresh-btn');
         const clearBtn = document.getElementById('de-clear-btn');
+        const exportBtn = document.getElementById('de-export-btn');
         const sortBtn = document.getElementById('de-sort-btn');
         const listDiv = document.getElementById('de-list');
+        Admin._deActiveTab = 'fails';
+        document.getElementById('de-tab-fails')?.addEventListener('click', () => {
+            Admin._deActiveTab = 'fails';
+            document.getElementById('de-tab-fails')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            document.getElementById('de-tab-trips')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            Admin.fetchDeadEnds();
+        });
+        document.getElementById('de-tab-trips')?.addEventListener('click', () => {
+            Admin._deActiveTab = 'trips';
+            document.getElementById('de-tab-trips')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            document.getElementById('de-tab-fails')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            Admin.fetchDeadEnds();
+        });
+        if (exportBtn) {
+            exportBtn.onclick = () => Admin.exportDeadEndsAll();
+        }
 
         // 🛡️ GUARDIAN PHASE 2: Dynamic Sorting State
         Admin._deSortMode = Admin._deSortMode || 'recent'; 
@@ -2795,19 +3002,37 @@ const Admin = {
                     return;
                 }
                 
-                // Aggregate heavily by Origin|Dest|Reason to create a powerful heatmap
+                Admin._cachedRoutingFails = data;
+
+                if (Admin._deActiveTab === 'trips') {
+                    await Admin.renderTripPlanBatches(listDiv, secret);
+                    return;
+                }
+
+                // Aggregate by Origin|Dest|Reason|DayType — hits = unique logged attempts (client debounces retries)
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
-                    const key = `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}`;
+                    const dayType = entry.dayType || 'unknown';
+                    const key = `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${dayType}`;
                     if (!heatMap[key]) {
-                        heatMap[key] = { origin: entry.origin, dest: entry.destination, reason: entry.reason, count: 0, lastSeen: 0 };
+                        heatMap[key] = {
+                            origin: entry.origin,
+                            dest: entry.destination,
+                            reason: entry.reason,
+                            dayType,
+                            timeOfDay: entry.timeOfDay || null,
+                            count: 0,
+                            lastSeen: 0,
+                        };
                     }
                     heatMap[key].count++;
-                    if (entry.timestamp > heatMap[key].lastSeen) heatMap[key].lastSeen = entry.timestamp;
+                    if (entry.timestamp > heatMap[key].lastSeen) {
+                        heatMap[key].lastSeen = entry.timestamp;
+                        if (entry.timeOfDay) heatMap[key].timeOfDay = entry.timeOfDay;
+                    }
                 });
                 
-                // 🛡️ GUARDIAN PHASE 2: Apply dynamic sort selection
                 const sorted = Object.values(heatMap).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
                     return b.count - a.count;
@@ -2815,7 +3040,6 @@ const Admin = {
                 
                 listDiv.innerHTML = '';
                 
-                // 🛡️ GUARDIAN PHASE 1: Sanitization Armor for Telemetry
                 const secureEscape = (str) => {
                     if (!str) return '';
                     if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -2835,20 +3059,28 @@ const Admin = {
                     else if (item.reason === 'ERR_DISCONNECTED_GRAPH') { reasonBadge = "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"; reasonText = "No Physical Link"; }
                     else if (item.reason === 'ERR_CROSS_REGION') { reasonBadge = "bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400"; reasonText = "Cross Region"; }
                     else if (item.reason === 'ERR_ACTIVE_SUSPENSION') { reasonBadge = "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400"; reasonText = "Line Severed"; }
+                    else if (item.reason === 'ERR_NO_SERVICE_TODAY') { reasonBadge = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"; reasonText = "No Service"; }
 
-                    // Apply strict XSS isolation to raw commuter telemetry
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
+                    const dayLabel = secureEscape(item.dayType || 'unknown');
+                    const timeLabel = secureEscape(item.timeOfDay || '—');
                     
-                    const safeOriginRoute = safeOrigin.replace(/['"\n\r]/g, ''); 
-                    const safeDestRoute = safeDest.replace(/['"\n\r]/g, '');
+                    const escalateAttr = Admin.encodeEscalatePayload({
+                        type: 'route',
+                        severity: 'medium',
+                        title: `Routing Fail: ${item.origin} to ${item.dest}`,
+                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). Logged ${item.count} times.`,
+                        source: 'Telemetry Data'
+                    });
 
-                    // GUARDIAN PHASE 11: Decoupled whitespace for long route names so they wrap dynamically instead of truncating
                     card.innerHTML = `
                         <div class="min-w-0 flex-1 pr-2">
                             <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
-                            <div class="flex items-center mt-1.5 space-x-2">
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
                             </div>
                         </div>
@@ -2857,7 +3089,7 @@ const Admin = {
                                 <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">Hits</span>
                                 <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
                             </div>
-                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm shrink-0" onclick="Admin.escalateToRoadmap({type:'route', severity:'medium', title:'Routing Fail: ${safeOriginRoute} to ${safeDestRoute}', description:'Failed with reason: ${item.reason}. Logged ${item.count} times.', source:'Telemetry Data'})">Ticket</button>
+                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm shrink-0" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
                         </div>
                     `;
                     listDiv.appendChild(card);
@@ -2868,8 +3100,64 @@ const Admin = {
             }
         };
 
+        Admin.renderTripPlanBatches = async (listDiv, secret) => {
+            listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plan batches…</div>';
+            try {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                Admin._cachedTripPlans = data;
+                if (!data) {
+                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
+                    return;
+                }
+                const batches = Object.keys(data).map((id) => ({ id, ...data[id] })).sort((a, b) => (b.flushedAt || 0) - (a.flushedAt || 0));
+                listDiv.innerHTML = '';
+                batches.slice(0, 40).forEach((batch) => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm';
+                    const trips = Array.isArray(batch.trips) ? batch.trips : [];
+                    const preview = trips.slice(0, 3).map((t) => `${t.origin || '?'} → ${t.destination || '?'} (${t.dayType || '?'})`).join('<br>');
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-emerald-600">Batch · ${batch.count || trips.length} trips</span>
+                            <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(batch.flushedAt)}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-700 dark:text-gray-300 leading-snug">${preview || '—'}${trips.length > 3 ? `<br><span class="text-gray-400">+${trips.length - 3} more</span>` : ''}</div>
+                    `;
+                    listDiv.appendChild(card);
+                });
+            } catch (e) {
+                listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load trip plans.</div>`;
+            }
+        };
+
+        Admin.exportDeadEndsAll = () => {
+            const fails = Admin._cachedRoutingFails || {};
+            const trips = Admin._cachedTripPlans || {};
+            const payload = {
+                exportedAt: Date.now(),
+                routing_fails: fails,
+                trip_plans: trips,
+            };
+            const jsonStr = JSON.stringify(payload, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `deadends_export_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            if (typeof showToast === 'function') showToast('Exported dead ends + trip plans', 'success');
+        };
+
         clearBtn.onclick = async () => {
-            const confirmed = await Admin.secureConfirm("Clear Telemetry", "Permanently delete all Dead End logs from the server?");
+            const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
+            const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'Dead End logs';
+            const confirmed = await Admin.secureConfirm('Clear Telemetry', `Permanently delete all ${label} from the server?`);
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -2877,11 +3165,11 @@ const Admin = {
             clearBtn.disabled = true;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                await window.guardianFetch(`${dynamicEndpoint}sys_logs/routing_fails.json?auth=${secret}`, { method: 'DELETE' }, 10000);
-                if (typeof showToast === 'function') showToast("Dead End logs wiped.", "success");
+                await window.guardianFetch(`${dynamicEndpoint}${path}.json?auth=${secret}`, { method: 'DELETE' }, 10000);
+                if (typeof showToast === 'function') showToast(`${label} wiped.`, 'success');
                 Admin.fetchDeadEnds();
             } catch (e) {
-                if (typeof showToast === 'function') showToast("Failed to clear logs", "error");
+                if (typeof showToast === 'function') showToast('Failed to clear logs', 'error');
             } finally {
                 clearBtn.disabled = false;
             }
@@ -3251,11 +3539,13 @@ const Admin = {
                             receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">✓✓</span>';
                         }
 
-                        // REGEX: Extract Admin Signoff Name ("â€” Enock")
+                        // REGEX: Extract Admin Signoff Name ("— Enock")
                         let parsedAdminText = item.text || "";
                         let adminName = "Admin";
-                        const signoffRegex = /(?:<br>|\n)*<span[^>]*>â€”\s*(.*?)<\/span>$/i;
-                        const fallbackRegex = /(?:<br>|\n)*â€”\s*([a-zA-Z]+)$/i;
+                        parsedAdminText = Admin.repairMojibake(parsedAdminText);
+                        // Match em dash and legacy UTF-8 mojibake of "—"
+                        const signoffRegex = /(?:<br>|\n)*<span[^>]*>(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*(.*?)<\/span>$/i;
+                        const fallbackRegex = /(?:<br>|\n)*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*([a-zA-Z]+)$/i;
                         
                         let match = parsedAdminText.match(signoffRegex) || parsedAdminText.match(fallbackRegex);
                         if (match) {
@@ -3385,7 +3675,7 @@ const Admin = {
                         const integratedHeaderHtml = `
                             <div class="text-[9px] font-black ${headerColorClass} uppercase tracking-widest mb-1.5 border-b border-gray-200 dark:border-gray-700 pb-1 flex justify-between items-center w-full">
                                 <span class="whitespace-nowrap">${headerLabelText}</span>
-                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} â€¢ ${safeRouteId}</span>
+                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} • ${safeRouteId}</span>
                             </div>
                         `;
 
@@ -3404,14 +3694,20 @@ const Admin = {
                             </div>
                         `;
                 } });
-                const safeTicketDesc = secureEscape(latestCommuterMsg.text || 'No description').replace(/['"\n\r]/g, ' ');
                 const ticketType = latestCommuterMsg.type === 'bug' ? 'bug' : 'feature';
+                const escalateAttr = Admin.encodeEscalatePayload({
+                    type: ticketType,
+                    severity: 'medium',
+                    title: `Feedback from ${String(did).substring(0, 8)}`,
+                    description: String(latestCommuterMsg.text || 'No description').slice(0, 400),
+                    source: `Feedback ${feedbackId}`
+                });
                 
                 // Bottom Action Bar (Contextual)
                 const actionHtml = isInbox 
                     ? `<div class="flex space-x-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                          ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
-                         <button class="flex-1 text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateToRoadmap({type:'${ticketType}', severity:'medium', title:'Feedback from ${did.substring(0,8)}', description:'${safeTicketDesc}', source:'Feedback ${feedbackId}'})">Escalate</button>
+                         <button class="flex-1 text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Escalate</button>
                          <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
                        </div>`
                     : `<div class="flex justify-between items-center w-full mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
@@ -4136,12 +4432,13 @@ const Admin = {
         };
     },
 
-    /** Phase 7 — timed shadow ban with duration picker */
-    applyShadowBan: async (uid) => {
+    /** Phase 7 — timed shadow ban with duration picker. opts.deviceId also writes devices/{id}/flags. */
+    applyShadowBan: async (uid, opts = {}) => {
         if (!uid) {
             if (typeof showToast === 'function') showToast('No target uid', 'error');
             return false;
         }
+        const deviceId = opts.deviceId || (/^usr_/i.test(uid) ? uid : null);
         const durations = (typeof SHADOW_BAN_DURATIONS !== 'undefined' && SHADOW_BAN_DURATIONS)
             ? SHADOW_BAN_DURATIONS
             : [
@@ -4197,14 +4494,29 @@ const Admin = {
             const until = (typeof trustComputeBanUntil === 'function')
                 ? trustComputeBanUntil(choice.ms)
                 : (choice.ms > 0 ? Date.now() + choice.ms : 0);
-            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(true) });
-            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(until) });
-            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Date.now()) });
-            if (Admin.currentUser?.uid) {
-                await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedBy.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Admin.currentUser.uid) });
+            const now = Date.now();
+            const putFlag = async (basePath) => {
+                await fetch(`${dynamicEndpoint}${basePath}/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(true) });
+                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(until) });
+                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(now) });
+                if (Admin.currentUser?.uid) {
+                    await fetch(`${dynamicEndpoint}${basePath}/shadowBannedBy.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Admin.currentUser.uid) });
+                }
+            };
+            // Always write users/{uid}/flags (works for Firebase uid OR device-id stub keys)
+            await putFlag(`users/${encodeURIComponent(uid)}/flags`);
+            // Also stamp device path so guest devices are blocked even before account link
+            if (deviceId) {
+                await putFlag(`devices/${encodeURIComponent(deviceId)}/flags`);
+                await fetch(`${dynamicEndpoint}devices/${encodeURIComponent(deviceId)}/bannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(now) });
             }
-            if (typeof window.trustAddToBlockList === 'function') window.trustAddToBlockList(uid);
-            else if (window.trustLocalBlockList) window.trustLocalBlockList.add(uid);
+            if (typeof window.trustAddToBlockList === 'function') {
+                window.trustAddToBlockList(uid);
+                if (deviceId) window.trustAddToBlockList(deviceId);
+            } else if (window.trustLocalBlockList) {
+                window.trustLocalBlockList.add(uid);
+                if (deviceId) window.trustLocalBlockList.add(deviceId);
+            }
             if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label})`, 'success');
             return true;
         } catch (e) {
@@ -4213,16 +4525,24 @@ const Admin = {
         }
     },
 
-    liftShadowBan: async (uid) => {
+    liftShadowBan: async (uid, opts = {}) => {
         if (!uid) return false;
+        const deviceId = opts.deviceId || (/^usr_/i.test(uid) ? uid : null);
         const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}…?`);
         if (!confirmed) return false;
         try {
             const secret = await Admin.getAuthKey();
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(false) });
-            await fetch(`${dynamicEndpoint}users/${uid}/flags/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(0) });
-            if (typeof window.trustRemoveFromBlockList === 'function') window.trustRemoveFromBlockList(uid);
+            const clearFlag = async (basePath) => {
+                await fetch(`${dynamicEndpoint}${basePath}/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(false) });
+                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(0) });
+            };
+            await clearFlag(`users/${encodeURIComponent(uid)}/flags`);
+            if (deviceId) await clearFlag(`devices/${encodeURIComponent(deviceId)}/flags`);
+            if (typeof window.trustRemoveFromBlockList === 'function') {
+                window.trustRemoveFromBlockList(uid);
+                if (deviceId) window.trustRemoveFromBlockList(deviceId);
+            }
             if (typeof showToast === 'function') showToast('Ban lifted', 'success');
             return true;
         } catch (e) {
@@ -4281,7 +4601,7 @@ const Admin = {
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Lookup by UID. Flag with optional duration, lift bans, see trust score from verified delay reports.</p>
                 <div class="flex gap-2 mb-3 px-1">
-                    <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="Paste user UID…" />
+                    <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email…" />
                     <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
                 </div>
                 <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
@@ -4303,32 +4623,94 @@ const Admin = {
             if (e.key === 'Enter') Admin.lookupUserTrust();
         });
 
+        Admin.resolveTrustTarget = async (query) => {
+            const q = String(query || '').trim();
+            if (!q) return null;
+            const secret = await Admin.getAuthKey();
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const auth = secret ? `?auth=${secret}` : '';
+
+            const fetchJson = async (path) => {
+                const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            };
+
+            // 1) Direct users/{id}
+            let user = await fetchJson(`users/${encodeURIComponent(q)}.json`);
+            if (user) {
+                return { uid: q, user, via: 'uid', deviceId: null };
+            }
+
+            // 2) Device ID → linked Firebase uid (devices/{deviceId}.uid)
+            const looksLikeDevice = /^usr_/i.test(q);
+            if (looksLikeDevice) {
+                const device = await fetchJson(`devices/${encodeURIComponent(q)}.json`);
+                if (device?.uid) {
+                    user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
+                    if (user) {
+                        return { uid: device.uid, user, via: 'device→uid', deviceId: q };
+                    }
+                }
+                // Guest / pre-account: allow banning the device id itself
+                const deviceFlags = device?.flags || null;
+                return {
+                    uid: q,
+                    user: {
+                        displayName: device?.uid ? `Device linked to ${device.uid}` : 'Device (no account yet)',
+                        email: null,
+                        trustScore: 0,
+                        flags: deviceFlags || { shadowBanned: false, shadowBannedUntil: 0, role: 'device' },
+                        deviceIds: { [q]: true },
+                        _isDeviceStub: true,
+                    },
+                    via: 'device',
+                    deviceId: q,
+                };
+            }
+
+            // 3) Email lookup (for future accounts + any already-linked emails)
+            if (q.includes('@')) {
+                const users = await fetchJson('users.json');
+                if (users && typeof users === 'object') {
+                    const needle = q.toLowerCase();
+                    for (const [uid, u] of Object.entries(users)) {
+                        if (u && String(u.email || '').toLowerCase() === needle) {
+                            return { uid, user: u, via: 'email', deviceId: null };
+                        }
+                    }
+                }
+            }
+
+            return null;
+        };
+
         Admin.lookupUserTrust = async () => {
-            const uid = (document.getElementById('ut-uid-input')?.value || '').trim();
+            const query = (document.getElementById('ut-uid-input')?.value || '').trim();
             const out = document.getElementById('ut-result');
-            if (!uid || !out) return;
+            if (!query || !out) return;
             out.innerHTML = '<p class="animate-pulse text-gray-400">Loading…</p>';
             try {
-                const secret = await Admin.getAuthKey();
-                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const res = await fetch(`${dynamicEndpoint}users/${uid}.json?auth=${secret}`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const user = await res.json();
-                if (!user) {
-                    out.innerHTML = '<p class="text-red-500">User not found.</p>';
+                const resolved = await Admin.resolveTrustTarget(query);
+                if (!resolved) {
+                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_…</code>), or account email.</p>';
                     return;
                 }
+                const { uid, user, via, deviceId } = resolved;
                 const flags = user.flags || {};
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
                 const expired = banned && until > 0 && Date.now() > until;
                 const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '—');
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
-                const name = (user.displayName || '—').toString().replace(/</g, '&lt;');
+                const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '—')).toString().replace(/</g, '&lt;');
+                const email = (user.email || '—').toString().replace(/</g, '&lt;');
+                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device→uid' ? 'device → account' : 'user id'));
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
                         <p class="font-black text-gray-900 dark:text-white">${name}</p>
                         <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
+                        <p class="text-[11px]">Email: <b>${email}</b> · Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` · device <span class="font-mono">${deviceId}</span>` : ''}</p>
                         <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> · Trust score: <b>${score}</b></p>
                         <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr}` : ''}</p>
                         <div class="flex flex-wrap gap-3 pt-1">
@@ -4337,11 +4719,11 @@ const Admin = {
                         </div>
                     </div>`;
                 document.getElementById('ut-ban-btn').onclick = async () => {
-                    await Admin.applyShadowBan(uid);
+                    await Admin.applyShadowBan(uid, { deviceId: deviceId || (/^usr_/i.test(uid) ? uid : null) });
                     Admin.lookupUserTrust();
                 };
                 document.getElementById('ut-lift-btn').onclick = async () => {
-                    await Admin.liftShadowBan(uid);
+                    await Admin.liftShadowBan(uid, { deviceId: deviceId || (/^usr_/i.test(uid) ? uid : null) });
                     Admin.lookupUserTrust();
                 };
             } catch (e) {
@@ -4500,7 +4882,7 @@ const Admin = {
             // Auto-Signoff Logic
             const adminEmail = Admin.currentUser?.email || '';
             const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
-            text += `<br><br><span style="color: #9ca3af; font-style: italic;">â€” ${adminName}</span>`;
+            text += `<br><br><span style="color: #9ca3af; font-style: italic;">— ${adminName}</span>`;
             
             const btn = document.getElementById('reply-send');
             btn.textContent = "Sending...";
@@ -5291,7 +5673,7 @@ const Admin = {
                 const data = await res.json();
                 
                 if (data && data.message) {
-                    let cleanedMsg = data.message;
+                    let cleanedMsg = Admin.repairMojibake(data.message);
                     cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
                     cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
                     
@@ -5495,7 +5877,8 @@ const Admin = {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
-                            const text = `🚂 ${r.name}${cues}`;
+                            const plainName = Admin.formatRouteLabelPlain(r.name);
+                            const text = `🚂 ${plainName}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
@@ -5504,7 +5887,7 @@ const Admin = {
                                 if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
                                 if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1">🚂 ${r.name}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">🚂 ${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -5559,7 +5942,8 @@ const Admin = {
             if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast("Message required!", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
-            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">â€” ${signoff}</span>`;
+            msg = Admin.repairMojibake(msg);
+            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">— ${signoff}</span>`;
 
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
@@ -5869,7 +6253,8 @@ const Admin = {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
-                            const text = `${r.name}${cues}`;
+                            const plainName = Admin.formatRouteLabelPlain(r.name);
+                            const text = `${plainName}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
@@ -5878,7 +6263,7 @@ const Admin = {
                                 if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
                                 if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1">${r.name}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -6430,7 +6815,8 @@ const Admin = {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
-                            const text = `${r.name}${cues}`;
+                            const plainName = Admin.formatRouteLabelPlain(r.name);
+                            const text = `${plainName}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
@@ -6439,7 +6825,7 @@ const Admin = {
                                 if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
                                 if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1">${r.name}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -7197,6 +7583,7 @@ const Admin = {
 
                 window.isSimMode = true;
                 window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
+                try { window.__ntLastSimKey = null; } catch (e) {}
                 
                 // 🛡️ GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
@@ -7241,6 +7628,9 @@ const Admin = {
         if (simExitBtn) {
             simExitBtn.addEventListener('click', () => {
                 window.isSimMode = false;
+                window.simTimeStr = null;
+                window.simDayIndex = null;
+                try { window.__ntLastSimKey = null; } catch (e) {}
                 if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
                 
                 // 🛡️ GUARDIAN PHASE 4: Clear Pipeline Override on exit
@@ -7585,7 +7975,7 @@ const Admin = {
                             healthyCount++;
                             html += `
                                 <div class="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg text-xs border border-green-100 dark:border-green-800/50 mt-1.5">
-                                    <span class="font-bold text-green-800 dark:text-green-300">${route.name}</span>
+                                    <span class="font-bold text-green-800 dark:text-green-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
                                     <span class="bg-green-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Healthy</span>
                                 </div>
                             `;
@@ -7598,7 +7988,7 @@ const Admin = {
                             html += `
                                 <div class="flex flex-col bg-red-50 dark:bg-red-900/20 p-2.5 rounded-lg text-xs border border-red-100 dark:border-red-800/50 mt-1.5">
                                     <div class="flex justify-between items-center mb-1.5">
-                                        <span class="font-bold text-red-800 dark:text-red-300">${route.name}</span>
+                                        <span class="font-bold text-red-800 dark:text-red-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
                                         <span class="bg-red-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Errors Found</span>
                                     </div>
                                     ${errorsHtml}
@@ -7701,7 +8091,7 @@ const Admin = {
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 overflow-hidden shadow-sm transition-all">
                     <button id="nuke-header-btn" class="w-full px-3 py-3 bg-red-100/50 dark:bg-red-900/40 text-left text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-red-200/50 dark:hover:bg-red-900/60">
                         <span class="flex items-center">
-                            <span class="text-base mr-2">â˜¢️</span> Nuclear Cache Wipe
+                            <span class="text-base mr-2">☢️</span> Nuclear Cache Wipe
                         </span>
                         <svg id="nuke-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -8414,11 +8804,7 @@ const Admin = {
             };
         };
 
-        // Escalate Hook Export
-        Admin.escalateToRoadmap = (prefillData) => {
-            // Triggered from other panels (like Feedback or Crashes)
-            Admin.openTicketModal(null, prefillData);
-        };
+        // Escalate hook kept on Admin root (see Admin.escalateToRoadmap / escalateFromEl)
 
         // Export Engine
         Admin.exportColumn = (statusColumn, targetArray = null, filenameOverride = null) => {

@@ -164,6 +164,26 @@ export function bindAppUpdateLifecycle(registerSW) {
 
     if (!('serviceWorker' in navigator)) return;
 
+    // GROWTH MODE PHASE 1: Idle Update Protocol — if a waiting SW exists and the
+    // user backgrounds the app for >5 min, apply it silently (no zombie shell).
+    let appBackgroundTimestamp = null;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            appBackgroundTimestamp = Date.now();
+            return;
+        }
+        if (!appBackgroundTimestamp) return;
+        const idleDuration = Date.now() - appBackgroundTimestamp;
+        appBackgroundTimestamp = null;
+        if (idleDuration <= 300000) return;
+        navigator.serviceWorker.getRegistration().then((reg) => {
+            if (reg?.waiting) {
+                console.log('🛡️ Guardian: App was idle for > 5 mins. Forcing silent background update.');
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+        }).catch(() => {});
+    });
+
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;

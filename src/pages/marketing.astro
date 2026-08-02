@@ -1,8 +1,7 @@
 ---
 /**
- * Ported from metrorail-app/marketing.html. This is an internal print asset
- * (A5 flyer + 1:1 social card), but it sits in the live sitemap at priority 0.4,
- * so the URL has to keep resolving after the cutover.
+ * Internal print asset (A5 flyer + 1:1 social card).
+ * Kept at /marketing.html for bookmarks, but must not be indexed.
  */
 import ContentLayout from '../layouts/ContentLayout.astro';
 import { withBase } from '../lib/config.js';
@@ -14,6 +13,7 @@ import { withBase } from '../lib/config.js';
   canonicalPath="/marketing.html"
   themeColor="#f3f4f6"
   forceLight={true}
+  robots="noindex, nofollow"
   bodyClass="marketing-body p-8 text-gray-800"
 >
   <div class="no-print max-w-4xl mx-auto mb-8 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">

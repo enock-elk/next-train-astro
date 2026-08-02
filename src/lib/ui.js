@@ -62,6 +62,8 @@ const MODAL_HASH = {
     'blackbox-modal': '#blackbox',
     'bb-pin-modal': '#bb-pin',
     'network-struggle-modal': '#network-struggle',
+    'redirect-modal': '#redirect',
+    'exit-modal': '#exit-confirm',
 };
 
 function hashForModal(modalId) {
@@ -110,6 +112,11 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     
     const modal = document.getElementById(modalId);
     if (modal) {
+        const inner = modal.firstElementChild;
+        if (inner && inner.classList.contains('scale-100')) {
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-95');
+        }
         modal.classList.add('opacity-0');
         setTimeout(() => {
             if (modal.classList.contains('opacity-0')) {
@@ -155,9 +162,15 @@ export function openSmoothModal(modalId, customOrigin = null) {
         }
         
         modal.classList.remove('hidden');
-        // Force reflow
+        // Force reflow, then spring open (scale-95 → scale-100)
         void modal.offsetWidth;
         modal.classList.remove('opacity-0');
+        if (inner.classList.contains('scale-95')) {
+            requestAnimationFrame(() => {
+                inner.classList.remove('scale-95');
+                inner.classList.add('scale-100');
+            });
+        }
         lockBackgroundScroll();
     }
 
@@ -175,12 +188,44 @@ export function bindHistoryBackNavigation() {
     if (typeof window === 'undefined' || window.__ntHistoryBackBound) return;
     window.__ntHistoryBackBound = true;
 
+    // PWA standalone: SPA exit-trap so Android Back can prompt before leaving
+    try {
+        let exitTrapSet = false;
+        try { exitTrapSet = sessionStorage.getItem('exitTrapSet') === 'true'; } catch { /* ignore */ }
+        if (!exitTrapSet) {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            if (isStandalone) {
+                history.replaceState({ view: 'exit-trap' }, '', '#exit');
+                history.pushState({ view: 'home' }, '', '#home');
+            } else if (!location.hash) {
+                history.replaceState({ view: 'home' }, '', '#home');
+            }
+            try { sessionStorage.setItem('exitTrapSet', 'true'); } catch { /* ignore */ }
+        }
+    } catch { /* ignore */ }
+
     window.addEventListener('popstate', () => {
         setTimeout(() => {
             if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
                 unlockBackgroundScroll();
             }
         }, 350);
+
+        const hashNow = location.hash || '';
+        if (hashNow === '#exit') {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            if (isStandalone) {
+                const activeTab = safeStorage.getItem('activeTab');
+                if (activeTab === 'trip-planner' || activeTab === 'community') {
+                    history.pushState({ view: 'home' }, '', '#home');
+                    switchTab('next-train');
+                    return;
+                }
+                openSmoothModal('exit-modal');
+                history.pushState({ view: 'home' }, '', '#home');
+                return;
+            }
+        }
 
         if (window._isLightboxMode) {
             closeLightbox(true);
@@ -497,7 +542,8 @@ export function openLightbox(url) {
         
         if (mapTitle) mapTitle.textContent = "Image Preview";
         mapImg.setAttribute('src', url);
-        mapImg.style.transform = 'translate(0px, 0px) scale(1)';
+        if (typeof window.resetMap === 'function') window.resetMap();
+        else mapImg.style.transform = 'translate(0px, 0px) scale(1)';
         
         // Temporarily hijack the map modal close buttons
         const closeBtn1 = document.getElementById('close-map-btn');
@@ -518,20 +564,59 @@ export function openLightbox(url) {
         
         if (closeBtn1) closeBtn1.onclick = lightboxCloseHandler;
         if (closeBtn2) closeBtn2.onclick = lightboxCloseHandler;
-        
-        openSmoothModal('map-modal');
+
+        // Show map-modal visually WITHOUT openSmoothModal — that would push a second
+        // #map history entry and break Close Preview back to the alert (#notice).
+        window._isModalAnimating = true;
+        setTimeout(() => { window._isModalAnimating = false; }, 350);
+        mapModal.classList.remove('hidden');
+        void mapModal.offsetWidth;
+        mapModal.classList.remove('opacity-0');
+        const inner = mapModal.firstElementChild;
+        if (inner) {
+            inner.classList.remove('scale-95', 'origin-top-right', 'origin-bottom-left', 'origin-bottom');
+            if (!inner.classList.contains('scale-100')) {
+                inner.classList.add('scale-100', 'origin-center');
+            }
+        }
+        lockBackgroundScroll();
+        // Ensure pinch/pan/zoom bindings are live for alert images too
+        if (typeof window.setupMapLogic === 'function') window.setupMapLogic();
+        if (typeof window.resetMap === 'function') window.resetMap();
     }
 }
 
 export function closeLightbox(fromPopState = false) {
     if (typeof window === 'undefined') return;
-    if (!fromPopState && location.hash === '#lightbox') {
+    // Cover #lightbox and any legacy double-push #map from older builds
+    if (!fromPopState && (location.hash === '#lightbox' || location.hash === '#map')) {
         history.back();
         return;
     }
     
-    unlockBackgroundScroll();
-    closeSmoothModal('map-modal');
+    // Visual teardown only (no history.back here — that would skip past #notice)
+    const mapModal = document.getElementById('map-modal');
+    if (mapModal && !mapModal.classList.contains('hidden')) {
+        window._isModalAnimating = true;
+        setTimeout(() => { window._isModalAnimating = false; }, 350);
+        const inner = mapModal.firstElementChild;
+        if (inner?.classList.contains('scale-100')) {
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-95');
+        }
+        mapModal.classList.add('opacity-0');
+        setTimeout(() => {
+            mapModal.classList.add('hidden');
+            // Keep scroll locked if notice / another overlay is still open
+            if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+                unlockBackgroundScroll();
+            } else {
+                lockBackgroundScroll();
+            }
+        }, 300);
+    } else if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+        unlockBackgroundScroll();
+    }
     
     // Teardown Hook: Restore the regional map image and bindings AFTER the fade out
     setTimeout(() => {
@@ -554,6 +639,9 @@ export function closeLightbox(fromPopState = false) {
             if (closeBtn2 && window._originalMapCloseText) {
                 closeBtn2.textContent = window._originalMapCloseText;
             }
+            if (typeof window.resetMap === 'function') window.resetMap();
+            // Re-bind map viewer close handlers after lightbox hijack
+            if (typeof window.setupMapLogic === 'function') window.setupMapLogic();
             window._isLightboxMode = false;
         }
     }, 350);
@@ -579,6 +667,25 @@ export function initGlobalErrorHandler() {
         if (typeof msg === 'string' && IGNORED_ERRORS.some(err => msg.indexOf(err) > -1)) {
             console.warn("Global Error Suppressed (Ignored Keyword):", msg);
             return false;
+        }
+
+        // Admin island quarantine: ops will see/fix these; never crash-report or
+        // Safe-Mode the commuter shell because an admin panel threw.
+        {
+            const adminStack = error && error.stack ? String(error.stack) : '';
+            const urlText = String(url || '');
+            const hash = (typeof location !== 'undefined' && location.hash) ? location.hash : '';
+            const adminNoise =
+                window.__ntAdminSessionActive === true ||
+                /admin\.js/i.test(urlText) ||
+                /admin\.js/i.test(adminStack) ||
+                hash === '#dev' ||
+                hash === '#login' ||
+                hash.startsWith('#dev-');
+            if (adminNoise) {
+                console.warn('🛡️ Guardian: Admin-island error quarantined (not reported):', msg);
+                return false;
+            }
         }
 
         // Blind-Spot Shield: Ignore invisible eval() scripts (Ad blockers/Extensions)
@@ -916,6 +1023,96 @@ export function hideOfflineToast() {
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
 }
 
+/**
+ * Yellow hazard strip when Firebase config/maintenance.json has active: true.
+ * SPA parity (ui.js checkMaintenanceStatus) — was missing from the Astro port.
+ */
+function clearMaintenanceBanner() {
+    const banner = document.getElementById('maintenance-banner');
+    if (banner) banner.remove();
+    document.getElementById('app-header')?.classList.remove('nt-maint-active');
+}
+
+export async function checkMaintenanceStatus() {
+    // Maintenance is an online ops signal. Never show it while offline / Lie-Fi / captive.
+    if (typeof navigator === 'undefined' || !navigator.onLine) {
+        clearMaintenanceBanner();
+        return;
+    }
+    if (typeof window !== 'undefined' && window.isLieFi) {
+        clearMaintenanceBanner();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}config/maintenance.json?t=${Date.now()}`, {
+            cache: 'no-store',
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) throw new Error('Captive Portal Detected');
+
+        const maintData = await res.json();
+        const existingBanner = document.getElementById('maintenance-banner');
+        const isMaintActive = maintData === true
+            || (maintData !== null && typeof maintData === 'object' && maintData.active === true);
+        const customMessage = (maintData !== null && typeof maintData === 'object' && maintData.message)
+            ? maintData.message
+            : 'MAINTENANCE IN PROGRESS';
+
+        if (isMaintActive) {
+            // Still offline-looking? Prefer the offline badge over maintenance.
+            if (!navigator.onLine || (typeof window !== 'undefined' && window.isLieFi)) {
+                clearMaintenanceBanner();
+                return;
+            }
+            const placeBanner = (banner) => {
+                // Pin to the top of the header chrome (same visual as SPA top strip).
+                // Inside #app-header so hamburger z-[70] shares the stacking context and stays on top.
+                banner.style.background = 'repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #d97706 10px, #d97706 20px)';
+                banner.className = 'absolute top-0 left-0 w-full z-[55] text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1 shadow-lg pointer-events-none';
+                banner.innerHTML = `⚠️ ${String(customMessage).toUpperCase()}`;
+                const header = document.getElementById('app-header');
+                const mainAppNode = document.getElementById('main-content');
+                if (header) {
+                    if (banner.parentNode !== header) header.prepend(banner);
+                    header.classList.add('nt-maint-active');
+                } else if (mainAppNode) {
+                    mainAppNode.prepend(banner);
+                } else if (!banner.parentNode) {
+                    document.body.prepend(banner);
+                }
+            };
+
+            if (!existingBanner) {
+                const banner = document.createElement('div');
+                banner.id = 'maintenance-banner';
+                placeBanner(banner);
+            } else {
+                placeBanner(existingBanner);
+                existingBanner.style.display = '';
+            }
+        } else if (existingBanner) {
+            clearMaintenanceBanner();
+        }
+    } catch (_) {
+        // Fetch failed (offline / captive / blip) — do not keep a stale maintenance strip
+        clearMaintenanceBanner();
+    }
+}
+
+/** Boot + online + light poll so admin toggles appear without a full reload. */
+export function bindMaintenanceBanner() {
+    if (typeof window === 'undefined' || window.__ntMaintBound) return;
+    window.__ntMaintBound = true;
+    window.checkMaintenanceStatus = checkMaintenanceStatus;
+    window.clearMaintenanceBanner = clearMaintenanceBanner;
+
+    checkMaintenanceStatus();
+    window.addEventListener('online', () => { checkMaintenanceStatus(); });
+    window.addEventListener('offline', () => { clearMaintenanceBanner(); });
+    setInterval(() => { checkMaintenanceStatus(); }, 5 * 60 * 1000);
+}
+
 /** Chrome/Edge installability + WebView fallback — strict SPA ui.js parity. */
 export function bindPwaInstallPrompt() {
     if (typeof window === 'undefined' || window.__ntPwaInstallBound) return;
@@ -1026,6 +1223,140 @@ export function bindPwaInstallPrompt() {
     if (installBtnPlanner) installBtnPlanner.addEventListener('click', handleInstallClick);
 }
 
+/** SPA OfflineTracker — queue analytics while offline, flush on reconnect. */
+export const OfflineTracker = {
+    queueKey: 'analytics_queue',
+    enqueue(eventName, params) {
+        try {
+            const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
+            queue.push({ event: eventName, params: params || {}, timestamp: Date.now() });
+            if (queue.length > 50) queue.shift();
+            safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+        } catch (e) {
+            console.warn('OfflineTracker Error:', e);
+        }
+    },
+    flush() {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        try {
+            const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
+            if (queue.length === 0) return;
+            const processNext = () => {
+                if ((typeof navigator !== 'undefined' && !navigator.onLine) || queue.length === 0) {
+                    if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    else safeStorage.removeItem(OfflineTracker.queueKey);
+                    return;
+                }
+                const item = queue.shift();
+                const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
+                if (typeof window.trackAnalyticsEvent === 'function') {
+                    // Call underlying gtag path without re-enqueue
+                    try { window.gtag?.('event', item.event, enriched); } catch { /* ignore */ }
+                }
+                safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                if (queue.length > 0) setTimeout(processNext, 300);
+                else safeStorage.removeItem(OfflineTracker.queueKey);
+            };
+            processNext();
+        } catch (e) {
+            console.warn('OfflineTracker Flush Error:', e);
+        }
+    },
+};
+
+/** Leave-app confirm (SPA showRedirectModal). */
+export function showRedirectModal(url, message) {
+    const msgEl = document.getElementById('redirect-message');
+    if (msgEl && message) msgEl.textContent = message;
+    const confirmBtn = document.getElementById('redirect-confirm-btn');
+    const cancelBtn = document.getElementById('redirect-cancel-btn');
+    history.pushState({ modal: 'redirect' }, '', '#redirect');
+    openSmoothModal('redirect-modal');
+
+    const cleanup = () => {
+        confirmBtn?.removeEventListener('click', confirmHandler);
+        cancelBtn?.removeEventListener('click', cancelHandler);
+    };
+    const confirmHandler = () => {
+        triggerHaptic();
+        window.open(url, '_blank', 'noopener,noreferrer');
+        if (location.hash === '#redirect') history.back();
+        else closeSmoothModal('redirect-modal');
+        cleanup();
+    };
+    const cancelHandler = () => {
+        if (location.hash === '#redirect') history.back();
+        else closeSmoothModal('redirect-modal');
+        cleanup();
+    };
+    confirmBtn?.addEventListener('click', confirmHandler);
+    cancelBtn?.addEventListener('click', cancelHandler);
+}
+
+export function bindExitAndRedirectModals() {
+    if (typeof window === 'undefined' || window.__ntExitRedirectBound) return;
+    window.__ntExitRedirectBound = true;
+
+    document.getElementById('exit-cancel-btn')?.addEventListener('click', () => {
+        closeSmoothModal('exit-modal');
+    });
+    document.getElementById('exit-confirm-btn')?.addEventListener('click', () => {
+        if (navigator.app && typeof navigator.app.exitApp === 'function') {
+            navigator.app.exitApp();
+            return;
+        }
+        closeSmoothModal('exit-modal');
+        setTimeout(() => {
+            document.body.innerHTML = `
+                <div class="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-6 text-center z-[9999]">
+                    <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                        <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-white mb-2 tracking-tight">Session Closed</h2>
+                    <p class="text-gray-400 text-sm">It is now safe to swipe this app away or close the tab.</p>
+                </div>`;
+            try { window.close(); } catch { /* ignore */ }
+        }, 300);
+    });
+}
+
+function installAnalyticsOfflineBridge() {
+    if (typeof window === 'undefined' || window.__ntAnalyticsOfflineBound) return;
+    window.__ntAnalyticsOfflineBound = true;
+    window.OfflineTracker = OfflineTracker;
+
+    const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
+    window.trackAnalyticsEvent = (name, params = {}) => {
+        try {
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                OfflineTracker.enqueue(name, params);
+                return;
+            }
+            if (prior) prior(name, params);
+            else window.gtag?.('event', name, params || {});
+            try {
+                const region = params.region || safeStorage.getItem('userRegion') || '';
+                if (region && typeof window.clarity === 'function') {
+                    window.clarity('set', 'crm_region', region);
+                    window.clarity('event', name);
+                }
+            } catch { /* ignore */ }
+        } catch { /* ignore */ }
+    };
+
+    window.addEventListener('online', () => OfflineTracker.flush());
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        try {
+            const id = window.NEXT_TRAIN_DEVICE_ID || safeStorage.getItem('next_train_device_id');
+            if (id && typeof window.clarity === 'function') {
+                window.clarity('identify', id);
+                window.clarity('set', 'custom_id', id);
+            }
+        } catch { /* ignore */ }
+    });
+}
+
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
@@ -1044,10 +1375,25 @@ if (typeof window !== 'undefined') {
     window.openLegal = openLegal;
     window.bindPwaInstallPrompt = bindPwaInstallPrompt;
     window.bindHistoryBackNavigation = bindHistoryBackNavigation;
+    window.checkMaintenanceStatus = checkMaintenanceStatus;
+    window.bindMaintenanceBanner = bindMaintenanceBanner;
+    window.showRedirectModal = showRedirectModal;
+    window.OfflineTracker = OfflineTracker;
 
     // Boot the Error Handler immediately
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
+    installAnalyticsOfflineBridge();
+    // Defer until #main-content exists (this module can load before the shell)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            bindMaintenanceBanner();
+            bindExitAndRedirectModals();
+        });
+    } else {
+        bindMaintenanceBanner();
+        bindExitAndRedirectModals();
+    }
 
     import('./deeplink.js').then((m) => {
         m.bindPwaSameOriginLinks();
@@ -1058,10 +1404,12 @@ if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         window._hasShownOfflineToast = false;
         hideOfflineToast();
+        OfflineTracker.flush();
         const oi = document.getElementById('offline-indicator');
         if (oi) oi.style.display = 'none';
     });
     window.addEventListener('offline', () => {
+        clearMaintenanceBanner();
         const oi = document.getElementById('offline-indicator');
         if (oi) oi.style.display = 'flex';
         if (!window._hasShownOfflineToast) {

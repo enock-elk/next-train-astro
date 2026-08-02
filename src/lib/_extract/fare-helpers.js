@@ -51,9 +51,9 @@ function resolveZoneForRoute(routeId) {
     return null;
 }
 
-// ðŸ›¡ï¸ GUARDIAN PHASE 1: REFACTORED FARE ENGINE (Train-Time Dependency Purged)
+// 🛡️ GUARDIAN PHASE 1: REFACTORED FARE ENGINE (Train-Time Dependency Purged)
 function getRouteFare(sheetKey) {
-    // ðŸ›¡ï¸ GUARDIAN BUGFIX: Race condition patch to prevent null access during initial load
+    // 🛡️ GUARDIAN BUGFIX: Race condition patch to prevent null access during initial load
     if (!fullDatabase) return null;
     
     let zoneCode = null;

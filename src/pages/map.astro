@@ -2,7 +2,7 @@
 import ContentLayout from '../layouts/ContentLayout.astro';
 import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, normalizeBase, withBase } from '../lib/config.js';
 
-const title = 'Metrorail Network Map — Active Routes | Next Train';
+const title = 'Metrorail Network Map: Active Routes | Next Train';
 const description = 'Interactive Metrorail network map for Gauteng, Western Cape, KZN, and Eastern Cape. View active train routes, stations, and live service disruptions.';
 const base = normalizeBase(import.meta.env.BASE_URL);
 ---
@@ -12,6 +12,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   description={description}
   canonicalPath="/map.html"
   ogType="website"
+  robots="index, follow"
   bodyClass="bg-gray-100 dark:bg-gray-900 m-0 p-0 overflow-hidden h-full"
   htmlClass="h-full"
 >
@@ -82,7 +83,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "Metrorail Next Train Network Map",
-    "url": "https://nexttrain.co.za/map",
+    "url": "https://nexttrain.co.za/map.html",
     "applicationCategory": "TravelApplication",
     "operatingSystem": "Any",
     "description": description,
@@ -90,6 +91,17 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   })} />
 
   <h1 class="sr-only">Interactive Metrorail Network Map</h1>
+  <noscript>
+    <div class="p-6 max-w-lg mx-auto text-center text-gray-800">
+      <p class="font-bold mb-2">Metrorail network map</p>
+      <p class="text-sm mb-4">Enable JavaScript to explore the interactive map, or open the main app for live train times.</p>
+      <p class="text-sm">
+        <a href={base}>Open Next Train</a>
+        ·
+        <a href={withBase('guide.html')}>Commuter guide</a>
+      </p>
+    </div>
+  </noscript>
 
   <div class="fixed top-4 left-4 z-[1001]">
     <a href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">

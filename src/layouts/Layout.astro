@@ -1,7 +1,7 @@
 ---
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
 import '../styles/appearance.css';
-import { APP_VERSION, normalizeBase, withBase } from '../lib/config.js';
+import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 const { 
   title = "Next Train | Live Schedules", 
@@ -29,7 +29,7 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
     <meta name="application-name" content="Next Train" />
-    <meta name="apple-mobile-web-app-title" content="Train 2.0" />
+    <meta name="apple-mobile-web-app-title" content="Next Train" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
     <meta name="app-version" content={APP_VERSION} />
@@ -54,7 +54,7 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <!-- PWA Manifest — always under base with trailing slash. Dev has no PWA
          plugin output, so linking it there only produces 404 noise. -->
     <!-- Manifest + SW only exist after build (astro preview / deploy). Dev has no SW on purpose. -->
-    {import.meta.env.PROD && <link rel="manifest" href={withBase('manifest.webmanifest')} />}
+    {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
     <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
@@ -236,7 +236,10 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <!-- Runs instantly before DOM loads to prevent FOUC (Flash of Unstyled Content) and ensure IDs exist -->
     <script is:inline>
       try {
-        const isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        // try/catch: Safari Private Mode / locked-down WebViews throw on localStorage
+        let theme = null;
+        try { theme = localStorage.getItem('theme'); } catch (e) {}
+        const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
@@ -262,6 +265,19 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 20px; }
       .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(75, 85, 99, 0.5); }
+
+      /* Admin custom dropdowns: grow to widest option, never narrower than the trigger */
+      #alert-target-list,
+      #alert-severity-list,
+      #disr-route-list,
+      #disr-tier-list,
+      #disr-station-a-list,
+      #disr-station-b-list,
+      #excl-route-list,
+      #excl-direction-list {
+        width: max-content;
+        min-width: 100%;
+      }
       
       /* Utilities */
       .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
@@ -335,14 +351,36 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         max-height: none !important;
       }
 
-      /* SPA custom.css shake (bell + station hint) */
+      /* SPA custom.css motion primitives */
       @keyframes shake {
         0%, 100% { transform: rotate(0deg); }
         25% { transform: rotate(-10deg); }
         75% { transform: rotate(10deg); }
       }
-      .animate-shake {
-        animation: shake 0.5s ease-in-out infinite;
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes pop {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+      @keyframes moveTrain {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .animate-shake { animation: shake 0.5s ease-in-out infinite; }
+      /* Used by #locate-btn / #reload-btn (live-board.js & logic.js) */
+      .spinning { animation: spin 1s linear infinite; }
+      .pop-loader { animation: pop 1.5s infinite; }
+      .moving-icon { animation: moveTrain 2s linear infinite; }
+
+      /* Modal cards: spring scale open/close (native app feel) */
+      [id$="-modal"].fixed > div {
+        transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+      }
+      [id$="-modal"].fixed.opacity-0 > div {
+        transform: scale(0.95);
       }
 
       /* Compact header (returning users) — slim WhatsApp-style bar */

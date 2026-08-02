@@ -186,15 +186,15 @@
              // GUARDIAN V6.04.14 FIX: Universal String Split for region-agnostic formatting
              if (rawName.includes('<->')) {
                  routeName = rawName.split('<->')[1].trim();
-             } else if (rawName.includes('â€¢')) {
-                 routeName = rawName.split('â€¢')[1].trim();
+             } else if (rawName.includes('•')) {
+                 routeName = rawName.split('•')[1].trim();
              } else if (rawName.includes('↔')) {
                  routeName = rawName.split('↔')[1].trim(); // Legacy fallback
              }
 
              if (journey.isDivergent) {
                  const divDest = Renderer._applyUIIntercepts(journey.actualDestName);
-                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">âš ï¸ To ${divDest}</span>`;
+                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">⚠️ To ${divDest}</span>`;
              } else {
                  sharedTag = `<span class="block text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 mt-0.5 bg-purple-100 dark:bg-purple-900 px-1 rounded w-fit mx-auto">From ${routeName}</span>`;
              }

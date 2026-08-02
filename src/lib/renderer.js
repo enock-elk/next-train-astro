@@ -15,7 +15,8 @@ import {
 } from './config.js';
 
 import { 
-    normalizeStationName, timeToSeconds, formatTimeDisplay, escapeHTML, safeStorage 
+    normalizeStationName, timeToSeconds, formatTimeDisplay, escapeHTML, safeStorage,
+    formatRouteLabelHtml, formatRouteLabelPlain
 } from './utils.js';
 
 import { 
@@ -23,6 +24,7 @@ import {
 } from './logic.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
+import { showToast, triggerHaptic } from './ui.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -119,7 +121,7 @@ export const Renderer = {
                             <div class="flex items-center min-w-0 pr-2">
                                 <span class="w-3 h-3 rounded-full mr-3 flex-shrink-0 ${dotColor} ${isActive ? 'ring-2 ring-blue-300 dark:ring-blue-700' : ''}"></span>
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
-                                <span class="truncate">${r.name.replace('<->', '↔')}</span>
+                                <span class="truncate">${formatRouteLabelHtml(r.name)}</span>
                             </div>
                             ${isActive ? '<svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
                         </a>
@@ -136,7 +138,7 @@ export const Renderer = {
                 groups[cat].forEach(r => {
                     const isActive = r.id === activeRouteId;
                     const activeBg = isActive ? 'bg-blue-50 dark:bg-blue-900/20 font-black text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-200 font-medium';
-                    const displayName = r.name.replace('<->', '↔');
+                    const displayName = formatRouteLabelHtml(r.name);
                     
                     if (!r.isActive) {
                         html += `
@@ -196,7 +198,7 @@ export const Renderer = {
             if (route.id === 'special_event') return;
 
             const btn = document.createElement('button');
-            const displayName = route.name.replace('<->', '↔');
+            const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
                 let borderColor = 'border-gray-500';
@@ -234,7 +236,7 @@ export const Renderer = {
 
                 btn.onclick = () => {
                     if (typeof showToast === 'function') {
-                        showToast(`The ${displayName} schedule is launching soon!`, 'info', 2500);
+                        showToast(`The ${formatRouteLabelPlain(route.name)} schedule is launching soon!`, 'info', 2500);
                     }
                 };
             }
@@ -295,7 +297,7 @@ export const Renderer = {
                 </div>
                 <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2">Route Under Construction</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-                    We are currently building the digital timetable for the <strong class="text-blue-600 dark:text-blue-400">${routeName.replace('<->', '↔')}</strong> corridor.
+                    We are currently building the digital timetable for the <strong class="text-blue-600 dark:text-blue-400">${formatRouteLabelHtml(routeName)}</strong> corridor.
                 </p>
                 
                 <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800 w-full text-left">
@@ -563,15 +565,15 @@ export const Renderer = {
              // GUARDIAN V6.04.14 FIX: Universal String Split for region-agnostic formatting
              if (rawName.includes('<->')) {
                  routeName = rawName.split('<->')[1].trim();
-             } else if (rawName.includes('â€¢')) {
-                 routeName = rawName.split('â€¢')[1].trim();
+             } else if (rawName.includes('•')) {
+                 routeName = rawName.split('•')[1].trim();
              } else if (rawName.includes('↔')) {
                  routeName = rawName.split('↔')[1].trim(); // Legacy fallback
              }
 
              if (journey.isDivergent) {
                  const divDest = Renderer._applyUIIntercepts(journey.actualDestName);
-                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">âš ï¸ To ${divDest}</span>`;
+                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">⚠️ To ${divDest}</span>`;
              } else {
                  sharedTag = `<span class="block text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 mt-0.5 bg-purple-100 dark:bg-purple-900 px-1 rounded w-fit mx-auto">From ${routeName}</span>`;
              }
@@ -1047,6 +1049,58 @@ export const Renderer = {
         return html;
     },
 
+    /**
+     * Saturday / holiday grid for routes with no weekend timetable:
+     * station list from weekday sheet + professional no-service notice (no train columns).
+     */
+    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '') => {
+        if (!weekdaySchedule?.rows?.length) {
+            return `<div class="flex items-center justify-center h-full p-6 text-center text-sm text-gray-500">No station list available.</div>`;
+        }
+
+        const stations = [];
+        weekdaySchedule.rows.forEach((row) => {
+            if (!row.STATION || String(row.STATION).toLowerCase().includes('updated')) return;
+            const clean = String(row.STATION).replace(/ STATION/gi, '').trim();
+            if (clean && !stations.includes(clean)) stations.push(clean);
+        });
+
+        const stationRows = stations.map((name, i) => {
+            const zebra = i % 2 === 1 ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+            return `<tr class="${zebra}">
+                <td class="sticky left-0 z-10 bg-white dark:bg-gray-900 ${zebra ? 'dark:bg-gray-800' : ''} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
+                ${i === 0 ? `<td rowspan="${Math.max(stations.length, 1)}" class="align-middle border-b border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-white dark:bg-gray-900">
+                    <div class="mx-auto max-w-sm rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 px-4 py-5 sm:px-5 sm:py-6 text-center shadow-sm">
+                        <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        </div>
+                        <p class="text-sm font-black uppercase tracking-wide text-amber-900 dark:text-amber-200">No weekend service</p>
+                        <p class="mt-2 text-xs leading-relaxed text-amber-800/90 dark:text-amber-200/80">Metrorail does not run Saturday or public-holiday trains on this route${routeName ? ` (${escapeHTML(formatRouteLabelPlain(String(routeName)))})` : ''}.</p>
+                        <p class="mt-3 text-[11px] font-medium text-gray-600 dark:text-gray-400">Stations are listed for reference.</p>
+                        <button type="button" onclick="window.renderFullScheduleGrid&&window.renderFullScheduleGrid(window._gridSwapDir||'A','weekday')" class="mt-4 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm focus:outline-none">
+                            Switch to Mon - Fri
+                        </button>
+                    </div>
+                </td>` : ''}
+            </tr>`;
+        }).join('');
+
+        return `
+            <div class="w-full h-full overflow-auto">
+                <table class="w-full border-collapse bg-white dark:bg-gray-900 text-xs">
+                    <thead class="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20">
+                        <tr>
+                            <th class="py-2.5 px-3 border-b border-r border-gray-300 dark:border-gray-700 text-left font-bold min-w-[120px] sticky left-0 z-30 bg-gray-100 dark:bg-gray-800">Station</th>
+                            <th class="py-2.5 px-3 border-b border-gray-300 dark:border-gray-700 text-center font-bold">Weekend timetable</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y border-gray-300 dark:border-gray-700">
+                        ${stationRows || `<tr><td colspan="2" class="p-6 text-center text-gray-500">No stations found.</td></tr>`}
+                    </tbody>
+                </table>
+            </div>`;
+    },
+
     // --- 4. CHANGELOG & EMOJI CORES ---
 
     _toTitleCase: (str) => {
@@ -1099,9 +1153,7 @@ export const Renderer = {
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[85vh]">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
-                        <h3 class="font-bold text-lg text-gray-900 dark:text-white flex items-center">
-                            <span class="mr-2">🚅</span> What's New
-                        </h3>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white">What's New</h3>
                         <button type="button" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="text-gray-500 hover:text-gray-900 dark:hover:text-white p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
@@ -1231,7 +1283,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const scheduleTypeLabel = selectedDay === 'weekday' ? 'WEEKDAY' : 'WEEKEND';
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
-    const displayRouteName = route.name.replace('<->', '↔');
+    const displayRouteName = formatRouteLabelPlain(route.name);
     
     let effectiveDateText = "";
     if (schedA && schedA.lastUpdated) {
@@ -1429,7 +1481,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             link.click();
             
             window._pendingShareFile = file;
-            window._pendingShareText = `Commuter Notice: ${route.name.replace('<->', '↔')} (${selectedDay})`;
+            window._pendingShareText = `Commuter Notice: ${formatRouteLabelPlain(route.name)} (${selectedDay})`;
             
             const canShare = navigator.canShare && navigator.canShare({ files: [file] });
             const shareBtnHTML = canShare 

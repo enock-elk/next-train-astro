@@ -75,7 +75,7 @@ export function checkRateLimit(key, opts) {
     data.global = prune(data.global, windowMs);
 
     if (data.global.length >= max) {
-        return { ok: false, message: 'Slow down — try again in a few minutes.' };
+        return { ok: false, message: 'Slow down. Try again in a few minutes.' };
     }
     const last = data.global[data.global.length - 1];
     if (cooldownMs > 0 && last && now - last < cooldownMs) {
@@ -120,6 +120,13 @@ async function authQuery() {
     return '';
 }
 
+function flagsAreBanned(flags) {
+    if (!flags || flags.shadowBanned !== true) return false;
+    const until = Number(flags.shadowBannedUntil || 0);
+    if (until > 0 && Date.now() > until) return false;
+    return true;
+}
+
 /** Fetch full flags object for a user */
 export async function fetchUserFlags(uid) {
     if (!uid) return null;
@@ -140,22 +147,43 @@ export async function fetchUserFlags(uid) {
     }
 }
 
+/** Device-level ban flags (guests / pre-account device IDs). */
+export async function fetchDeviceFlags(deviceId) {
+    if (!deviceId) return null;
+    try {
+        if (!window.firebaseDb) await bootFirebase();
+        if (window.firebaseDb && window.firebaseDbGet) {
+            const snap = await window.firebaseDbGet(
+                window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}/flags`)
+            );
+            return snap.exists() ? snap.val() : null;
+        }
+        const q = await authQuery();
+        const res = await fetch(`${DYNAMIC_BASE_URL}devices/${encodeURIComponent(deviceId)}/flags.json${q}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Shadow-ban with optional duration.
  * Policy: if shadowBannedUntil > 0 and now > until → treat as not banned (expired).
+ * Also respects device-level bans under devices/{deviceId}/flags.
  */
 export async function isShadowBanned(uid) {
-    if (!uid) return false;
-    if (localBlockList.has(uid)) return true;
+    if (uid && localBlockList.has(uid)) return true;
+    if (uid && flagsAreBanned(await fetchUserFlags(uid))) return true;
 
-    const flags = await fetchUserFlags(uid);
-    if (!flags || flags.shadowBanned !== true) return false;
-
-    const until = Number(flags.shadowBannedUntil || 0);
-    if (until > 0 && Date.now() > until) {
-        return false; // expired — RTDB still has flag; admin lift or next write can clear
+    const deviceId = (typeof window !== 'undefined' && (window.NEXT_TRAIN_DEVICE_ID || safeStorage.getItem('next_train_device_id'))) || null;
+    if (deviceId && deviceId !== uid) {
+        if (localBlockList.has(deviceId)) return true;
+        if (flagsAreBanned(await fetchDeviceFlags(deviceId))) return true;
+        // Guest ban stubs may also live at users/{deviceId}
+        if (flagsAreBanned(await fetchUserFlags(deviceId))) return true;
     }
-    return true;
+    return false;
 }
 
 export function isBlockedLocally(uid) {

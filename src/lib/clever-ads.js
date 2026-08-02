@@ -186,6 +186,10 @@ export function initCleverAds() {
     window._adScriptLoaded = false;
     window._adTelemetryFired = false;
 
+    let adRetryCount = 0;
+    let isAdSleeping = false;
+    let hasUsedForegroundReset = false;
+
     if (window.MutationObserver) {
         const adObserver = new MutationObserver((mutations) => {
             for (const m of mutations) {
@@ -219,22 +223,63 @@ export function initCleverAds() {
         adObserver.observe(adContainer, { attributes: true, childList: true, subtree: true });
     }
 
-    window.checkAndUnhide = () => refreshAdVisibility(adContainer);
+    const tryInjectWithStrikes = () => {
+        if (window._adNetworkDestroyed || !adContainer) return;
+        if (!isSafeZone() || shouldDeferForSessionStability()) return;
+        if (window._adScriptInjected && window._adScriptLoaded) return;
+        if (isAdSleeping) return;
 
-    // Poll until welcome completes / route ready / pending reload clears, then settle.
-    // While deferring for stability, retry faster so we inject soon after stabilize.
+        if (adRetryCount === 4) {
+            console.log('🛡️ Guardian: Pulse 1 complete. Entering 60-second cooldown...');
+            isAdSleeping = true;
+            setTimeout(() => {
+                isAdSleeping = false;
+                adRetryCount += 1;
+                if (window.checkAndUnhide) window.checkAndUnhide();
+            }, 60000);
+            return;
+        }
+        if (adRetryCount >= 8) {
+            handleAdFailure(adContainer, '8_STRIKES_MAX_REACHED', true);
+            return;
+        }
+        if (!window._adScriptInjected) {
+            adRetryCount += 1;
+            console.log(`🛡️ Guardian: Ad inject attempt ${adRetryCount}/8`);
+            injectAdScript(adContainer);
+        }
+    };
+
+    window.checkAndUnhide = () => {
+        refreshAdVisibility(adContainer);
+        tryInjectWithStrikes();
+    };
+
     let ticks = 0;
     const tick = () => {
         ticks += 1;
         const wasDeferring = shouldDeferForSessionStability();
         refreshAdVisibility(adContainer);
+        tryInjectWithStrikes();
         if (window._adTelemetryFired || window._adNetworkDestroyed) return;
         if (window._adScriptInjected && window._adScriptLoaded) return;
         if (ticks < 60) setTimeout(tick, wasDeferring || shouldDeferForSessionStability() ? 500 : 3000);
     };
     setTimeout(tick, 1500);
 
+    // SPA: one-shot foreground reset after a fatal ad kill
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') refreshAdVisibility(adContainer);
+        if (document.visibilityState !== 'visible') return;
+        if (!hasUsedForegroundReset && window._adNetworkDestroyed) {
+            console.log('🛡️ Guardian: Foreground Reset. Giving the Ad Network one more chance...');
+            hasUsedForegroundReset = true;
+            window._adNetworkDestroyed = false;
+            adRetryCount = 0;
+            isAdSleeping = false;
+            window._adScriptInjected = false;
+            window._adScriptLoaded = false;
+        }
+        refreshAdVisibility(adContainer);
+        tryInjectWithStrikes();
     });
 }

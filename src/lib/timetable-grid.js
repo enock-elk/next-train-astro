@@ -2,11 +2,11 @@
  * Full timetable grid UI + route deep-link handling
  */
 import { ROUTES } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, routeArrowSvg } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules } from '../store.js';
 import { loadAllSchedules, executeRegionSwap } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
-import { simulateNextActiveService } from './live-board.js';
+import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
@@ -112,22 +112,11 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
 
     if (!dayOverride) {
         let hasServiceToday = false;
-        if (currentDayType !== 'sunday') {
+        if (currentDayType === 'saturday') {
+            hasServiceToday = routeHasSaturdayService(scheds);
+        } else if (currentDayType !== 'sunday') {
             const testKey = `${currentDayType}_to_${direction.toLowerCase()}`;
-            const testSchedule = scheds[testKey];
-            if (testSchedule?.rows?.length) {
-                for (const t of testSchedule.headers.slice(1)) {
-                    if (typeof window.isTrainExcluded === 'function') {
-                        if (!window.isTrainExcluded(t, routeId, targetDayIdx)) {
-                            hasServiceToday = true;
-                            break;
-                        }
-                    } else {
-                        hasServiceToday = true;
-                        break;
-                    }
-                }
-            }
+            hasServiceToday = scheduleHasService(scheds[testKey]);
         }
         if (!hasServiceToday) {
             const dest = direction === 'A' ? route.destA : route.destB;
@@ -153,9 +142,18 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     // Sunday maps to weekday sheets; saturday uses saturday sheets
     const sheetDayType = selectedDay === 'saturday' ? 'saturday' : 'weekday';
     const sheetKey = `${sheetDayType}_to_${direction.toLowerCase()}`;
-    const schedule = scheds[sheetKey];
-    if (!schedule?.rows?.length) {
+    const noSatService = sheetDayType === 'saturday' && !routeHasSaturdayService(scheds);
+    // Station list for no-weekend routes comes from the matching weekday sheet
+    const weekdaySheetKey = `weekday_to_${direction.toLowerCase()}`;
+    const schedule = noSatService
+        ? (scheds[weekdaySheetKey] || scheds.weekday_to_a || scheds.weekday_to_b)
+        : scheds[sheetKey];
+    if (!noSatService && !schedule?.rows?.length) {
         showToast(`No ${sheetDayType} schedule available for this route.`, 'error');
+        return;
+    }
+    if (noSatService && !schedule?.rows?.length) {
+        showToast('No station list available for this route.', 'error');
         return;
     }
 
@@ -259,24 +257,24 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
                     <span id="grid-day-display" class="truncate mr-1">${isWk ? wkLabel : satLabel}</span>
                     <svg id="grid-day-chevron" class="w-3 h-3 text-gray-500 transform transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
-                <ul id="grid-day-list" class="absolute z-[200] top-[115%] left-0 mt-1 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left min-w-[160px]">
-                    <li data-day="weekday" class="px-3 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 flex items-center ${isWk ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">
+                <ul id="grid-day-list" class="absolute z-[200] top-[115%] left-0 mt-1 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left min-w-[170px]">
+                    <li data-day="weekday" role="option" class="px-4 py-4 text-sm sm:text-base font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 flex items-center ${isWk ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">
                         ${wkLabel}
                     </li>
-                    <li data-day="saturday" class="px-3 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors flex items-center ${!isWk ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">
-                        ${satLabel}
+                    <li data-day="saturday" role="option" class="px-4 py-4 text-sm sm:text-base font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors flex items-center ${!isWk ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">
+                        ${satLabel}${!routeHasSaturdayService(scheds) ? '<span class="ml-2 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">No trains</span>' : ''}
                     </li>
                 </ul>
-                <button type="button" id="grid-swap-dir-btn" class="text-[9px] sm:text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-1 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors whitespace-nowrap shadow-sm truncate shrink-0" title="Swap direction">
-                    ↔ ${escapeHTML(oppositeDestName)}
+                <button type="button" id="grid-swap-dir-btn" class="text-[9px] sm:text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-1 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors whitespace-nowrap shadow-sm truncate shrink-0 inline-flex items-center gap-0.5 max-w-[9rem]" title="Swap direction">
+                    ${routeArrowSvg('inline-block w-3 h-3 shrink-0')} ${escapeHTML(oppositeDestName)}
                 </button>
             </div>
             <div class="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-1.5 ml-1 shrink-0">
-                <button type="button" id="grid-export-btn" class="flex items-center gap-1 px-1.5 py-1 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 transition shadow-sm border border-gray-200 dark:border-gray-600" title="Download">
+                <button type="button" id="grid-export-btn" ${noSatService ? 'disabled aria-disabled="true"' : ''} class="flex items-center gap-1 px-1.5 py-1 rounded shadow-sm border transition ${noSatService ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-40 cursor-not-allowed pointer-events-none' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-200'}" title="${noSatService ? 'Download unavailable (no weekend timetable)' : 'Download'}">
                     <svg class="w-3 h-3 text-gray-600 dark:text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     <span class="text-[9px] font-bold text-gray-700 dark:text-gray-300">Download</span>
                 </button>
-                <button type="button" id="grid-share-btn" class="flex items-center gap-1 px-1.5 py-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded hover:bg-blue-100 transition shadow-sm border border-blue-200 dark:border-blue-800" title="Share Link">
+                <button type="button" id="grid-share-btn" ${noSatService ? 'disabled aria-disabled="true"' : ''} class="flex items-center gap-1 px-1.5 py-1 rounded shadow-sm border transition ${noSatService ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-40 cursor-not-allowed pointer-events-none' : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 hover:bg-blue-100'}" title="${noSatService ? 'Share unavailable (no weekend timetable)' : 'Share Link'}">
                     <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
                     <span class="text-[9px] font-bold">Share</span>
                 </button>
@@ -292,24 +290,29 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
         });
         controlsDiv.querySelectorAll('#grid-day-list li[data-day]').forEach((li) => {
             li.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
+                const day = li.getAttribute('data-day');
                 if (typeof toggleDropdownScrim === 'function') toggleDropdownScrim();
                 else {
                     document.getElementById('grid-day-list')?.classList.add('hidden');
                     document.getElementById('grid-day-chevron')?.classList.remove('rotate-180');
                 }
-                renderFullScheduleGrid(direction, li.getAttribute('data-day'));
+                // Explicit dayOverride so Sat/Hol is never auto-forwarded away
+                renderFullScheduleGrid(direction, day);
             });
         });
         document.getElementById('grid-swap-dir-btn')?.addEventListener('click', () => {
             renderFullScheduleGrid(direction === 'A' ? 'B' : 'A', sheetDayType);
         });
-        document.getElementById('grid-export-btn')?.addEventListener('click', () => {
-            if (typeof window.takeGridSnapshot === 'function') window.takeGridSnapshot(direction, sheetDayType);
-        });
-        document.getElementById('grid-share-btn')?.addEventListener('click', () => {
-            if (typeof window.shareCurrentGrid === 'function') window.shareCurrentGrid();
-        });
+        if (!noSatService) {
+            document.getElementById('grid-export-btn')?.addEventListener('click', () => {
+                if (typeof window.takeGridSnapshot === 'function') window.takeGridSnapshot(direction, sheetDayType);
+            });
+            document.getElementById('grid-share-btn')?.addEventListener('click', () => {
+                if (typeof window.shareCurrentGrid === 'function') window.shareCurrentGrid();
+            });
+        }
     }
 
     const isTodayType = !autoForwarded && (
@@ -317,7 +320,12 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
         (currentDayType !== 'weekday' && sheetDayType === 'saturday')
     );
     const routeSheetKey = route.sheetKeys?.[sheetKey] || sheetKey;
-    const html = window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
+    if (typeof window !== 'undefined') window._gridSwapDir = direction;
+    const html = noSatService
+        ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name)
+            : `<div class="p-6 text-center text-sm text-amber-700 dark:text-amber-300">No weekend service on this route. <button type="button" class="underline font-bold" onclick="window.renderFullScheduleGrid&&window.renderFullScheduleGrid('${direction}','weekday')">Switch to Mon - Fri</button></div>`)
+        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
 

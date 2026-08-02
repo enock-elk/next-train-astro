@@ -3,7 +3,7 @@
 User-agent: *
 Allow: /
 
-# Keep system pages hidden from search results.
+# Keep system / private pages out of search results.
 # Both URL forms are listed so this file stays correct whichever way
 # build.format resolves (guide.html vs guide/).
 
@@ -11,6 +11,10 @@ Disallow: /404.html
 Disallow: /404
 Disallow: /offline.html
 Disallow: /offline
+Disallow: /status.html
+Disallow: /status
+Disallow: /marketing.html
+Disallow: /marketing
 Disallow: /cdn-cgi/
 
 # Block parameterised route/region deep links. These are functional URLs the

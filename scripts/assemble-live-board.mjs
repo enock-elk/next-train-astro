@@ -1,10 +1,28 @@
 /**
  * Assembles Phase 2 live-board modules from SPA extracts + ESM shims.
- * Run: node scripts/assemble-live-board.mjs
+ *
+ * DANGER: live-board.js / live-board-ui.js are now hand-maintained. Re-running
+ * this overwrites ship-blocker patches (MAX_RADIUS_KM, allStations sync, pin
+ * wiring, etc). Refuses unless FORCE_ASSEMBLE=1.
+ *
+ *   FORCE_ASSEMBLE=1 node scripts/assemble-live-board.mjs
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+if (process.env.FORCE_ASSEMBLE !== '1') {
+  console.error(`
+assemble-live-board.mjs is locked.
+
+live-board.js / live-board-ui.js are hand-maintained. Blind reassembly will
+erase MAX_RADIUS_KM imports, window.allStations sync, and pin/analytics fixes.
+
+If you truly need to regenerate from src/lib/_extract, run:
+  FORCE_ASSEMBLE=1 node scripts/assemble-live-board.mjs
+`);
+  process.exit(1);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -15,8 +33,8 @@ const read = (name) => fs.readFileSync(path.join(extract, name), 'utf8').replace
 
 const shimHeader = `/**
  * METRORAIL NEXT TRAIN - LIVE BOARD ENGINE (Phase 2 port from SPA)
- * Auto-assembled — prefer editing SPA source then re-running assemble script,
- * or patch this file carefully.
+ * Hand-maintained. Do NOT re-run assemble-live-board.mjs without FORCE_ASSEMBLE=1
+ * — that script overwrites patches in this file.
  */
 import {
     $userRegion, $currentRouteId, $userProfile, $fullDatabase, $schedules,
@@ -24,7 +42,8 @@ import {
     $isSimMode, $simTime
 } from '../store.js';
 import {
-    ROUTES, SPECIAL_DATES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL
+    ROUTES, SPECIAL_DATES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL,
+    MAX_RADIUS_KM
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage,

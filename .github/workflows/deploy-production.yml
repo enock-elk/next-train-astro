@@ -132,7 +132,7 @@ jobs:
 
       - name: Snapshot protected paths before sync
         id: protect
-        working_directory: site
+        working-directory: site
         run: |
           set -euo pipefail
           test -d data
@@ -222,7 +222,7 @@ jobs:
 
       - name: Commit and push to metrorail-app
         if: ${{ !inputs.dry_run }}
-        working_directory: site
+        working-directory: site
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"

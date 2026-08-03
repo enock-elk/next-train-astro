@@ -1,11 +1,11 @@
 /**
- * Crawlable SSG route landings — one HTML page per active Metrorail corridor.
- * getStaticPaths() in routes/[slug].astro consumes listSeoRoutes().
+ * Crawlable SSG landings — route / region / parent-corridor pages.
+ * getStaticPaths() in routes|regions|corridors/[slug].astro consume these lists.
  *
  * Stable slugs: hand-authored overrides keep URLs already in the wild.
  * Everything else is generated from ROUTES destA/destB.
  */
-import { ROUTES, REGIONS } from './config.js';
+import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './config.js';
 
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string }} SeoRouteSeed */
 
@@ -132,3 +132,67 @@ export function listSeoRoutes() {
 export function getSeoRouteBySlug(slug) {
     return listSeoRoutes().find((entry) => entry.seed.slug === slug) || null;
 }
+
+/** Unique parent corridors that have at least one active route. */
+export function listSeoCorridors() {
+    const bySlug = new Map();
+    for (const [corridorId, meta] of Object.entries(CORRIDOR_META)) {
+        if (!bySlug.has(meta.slug)) {
+            bySlug.set(meta.slug, {
+                slug: meta.slug,
+                label: meta.label,
+                region: meta.region,
+                corridorIds: [corridorId],
+            });
+        } else {
+            bySlug.get(meta.slug).corridorIds.push(corridorId);
+        }
+    }
+
+    return [...bySlug.values()]
+        .map((c) => {
+            const routes = listSeoRoutes().filter(
+                ({ route }) => route.corridorId && c.corridorIds.includes(route.corridorId)
+            );
+            return {
+                ...c,
+                regionLabel: regionName(c.region),
+                blurb: `${c.label} Metrorail routes in ${regionName(c.region)}. Open Next Train for live boards and full weekend/weekday grids.`,
+                routes,
+            };
+        })
+        .filter((c) => c.routes.length > 0)
+        .sort((a, b) => {
+            if (a.region !== b.region) return String(a.region).localeCompare(String(b.region));
+            return a.label.localeCompare(b.label);
+        });
+}
+
+export function getSeoCorridorBySlug(slug) {
+    return listSeoCorridors().find((c) => c.slug === slug) || null;
+}
+
+/** Regional hub pages (Gauteng, Western Cape, …). */
+export function listSeoRegions() {
+    return Object.entries(REGION_SEO)
+        .map(([region, meta]) => {
+            const routes = listSeoRoutes().filter(({ route }) => route.region === region);
+            const corridors = listSeoCorridors().filter((c) => c.region === region);
+            return {
+                region,
+                slug: meta.slug,
+                title: meta.title,
+                blurb: meta.blurb,
+                regionLabel: regionName(region),
+                routes,
+                corridors,
+            };
+        })
+        .filter((r) => r.routes.length > 0);
+}
+
+export function getSeoRegionBySlug(slug) {
+    return listSeoRegions().find((r) => r.slug === slug) || null;
+}
+
+export { getCorridorLabel };

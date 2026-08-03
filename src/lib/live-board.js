@@ -12,7 +12,7 @@ import {
     MAX_RADIUS_KM
 } from './config.js';
 import {
-    normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage,
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML
 } from './utils.js';
 import {
@@ -62,13 +62,13 @@ export function scheduleHasService(schedule) {
     const stationCol = schedule.stationColumnName || 'STATION';
     const trainCols = schedule.headers.filter((h) => h && h !== stationCol && h !== 'STATION' && h !== 'COORDINATES' && h !== 'KM_MARK' && h !== 'row_index');
     if (trainCols.length === 0) return false;
-    const isRealTime = (val) => {
-        if (val == null) return false;
-        const s = String(val).trim();
-        if (!s || s === '-' || s === '—' || s === '–') return false;
-        return /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s);
-    };
     return schedule.rows.some((row) => trainCols.some((col) => isRealTime(row[col])));
+}
+
+/** Journey has a usable clock departure (skips DB text notes like "Monte"). */
+function journeyHasRealDeparture(j) {
+    const dep = j?.departureTime || j?.train1?.departureTime;
+    return isRealTime(dep);
 }
 
 /** Current route has usable Saturday timetable data in either direction. */
@@ -757,6 +757,9 @@ export function findNextTrains() {
              return timeA - timeB;
         });
 
+        // Drop text-note cells; look ahead to the next real clock departure
+        mergedJourneys = mergedJourneys.filter(journeyHasRealDeparture);
+
         const nowInSeconds = timeToSeconds(getCurrentTime());
         const upcoming = mergedJourneys.find(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
         // GUARDIAN PHASE 1: Replaced Train-Time Dependency with Current Time hook
@@ -820,6 +823,8 @@ export function findNextTrains() {
              const timeB = timeToSeconds(b.departureTime || b.train1.departureTime);
              return timeA - timeB;
         });
+
+        mergedJourneys = mergedJourneys.filter(journeyHasRealDeparture);
 
         if(typeof window.processAndRenderJourney === 'function') window.processAndRenderJourney(mergedJourneys, pienaarspoortTimeEl(), pienaarspoortHeaderEl(), currentRoute.destB);
     }
@@ -896,8 +901,8 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
 
         const departureTime = fromRow ? fromRow[train] : null;
 
-        // GUARDIAN BUGFIX: Ignore cells that contain generic dashes indicating no stop
-        if (!departureTime || departureTime.trim() === "-" || departureTime.trim() === "") continue;
+        // Skip dashes and non-clock cells (e.g. "Monte" terminus notes)
+        if (!isRealTime(departureTime)) continue;
 
         let actualLastStop = null;
         let actualArrivalTime = null;
@@ -905,7 +910,7 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
         
         for (let i = schedule.rows.length - 1; i >= 0; i--) {
             const time = schedule.rows[i][train];
-            if (time && time.trim() !== "-" && time.trim() !== "") {
+            if (isRealTime(time)) {
                 actualLastStop = schedule.rows[i][stationCol];
                 actualArrivalTime = time;
                 destRow = schedule.rows[i]; 
@@ -952,18 +957,18 @@ export function findTransfers(fromStation, schedule, terminalStation, finalDesti
 
         const departureTime = fromRow[train1]; 
         const terminationTime = termRow[train1];
-        if (!departureTime || !terminationTime || departureTime.trim() === "-" || terminationTime.trim() === "-") continue;
+        if (!isRealTime(departureTime) || !isRealTime(terminationTime)) continue;
         
         const finalDestRow = findRowFuzzy(finalDestination);
         const destinationTime = finalDestRow ? finalDestRow[train1] : null;
 
-        if (!destinationTime || destinationTime.trim() === "-") {
+        if (!isRealTime(destinationTime)) {
             const connectionData = findConnections(terminationTime, schedule, terminalStation, finalDestination, train1, targetDayIdx, routeId);
             if (connectionData && connectionData.earliest) {
                 let realHeadboardDest = terminalStation;
                 for (let k = termIndex + 1; k < schedule.rows.length; k++) {
                     const nextRow = schedule.rows[k];
-                    if (nextRow[train1] && nextRow[train1] !== '-' && nextRow[train1].trim() !== '') {
+                    if (isRealTime(nextRow[train1])) {
                         realHeadboardDest = nextRow[stationCol];
                     }
                 }
@@ -1004,7 +1009,7 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
         if (isTrainExcluded(train, routeId, targetDayIdx)) continue; 
 
         const connectionTime = connRow[train];
-        if (!connectionTime || connectionTime.trim() === "-" || connectionTime.trim() === "") continue;
+        if (!isRealTime(connectionTime)) continue;
         if (timeToSeconds(connectionTime) < arrivalSeconds) continue;
 
         let goesFurther = false;
@@ -1013,7 +1018,7 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
         
         for (let i = connIndex + 1; i < schedule.rows.length; i++) {
             const time = schedule.rows[i][train];
-            if (time && time.trim() !== "-" && time.trim() !== "") { 
+            if (isRealTime(time)) { 
                 goesFurther = true;
                 actualLastStop = schedule.rows[i][stationCol]; 
                 actualArrivalTime = time; 

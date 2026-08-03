@@ -123,14 +123,33 @@ export function formatRouteLabelHtml(raw) {
     return parts.map((p) => escapeHTML(p.trim())).filter(Boolean).join(routeArrowSvg());
 }
 
+/** True for timetable clock cells (rejects notes like "Monte", dashes, blanks). */
+export function isRealTime(val) {
+    if (val == null) return false;
+    const s = String(val).trim();
+    if (!s || s === '-' || s === '—' || s === '–') return false;
+    return /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s);
+}
+
 export function formatTimeDisplay(timeStr) {
-    if (!timeStr) return "--:--";
-    const s = String(timeStr);
+    if (!isRealTime(timeStr)) return "--:--";
+    const s = String(timeStr).trim();
     const parts = s.split(':');
-    if (parts.length >= 2) {
-        return `${parts[0]}:${parts[1]}`;
-    }
-    return s;
+    return `${parts[0]}:${parts[1]}`;
+}
+
+/**
+ * Shared-corridor pill label: "Cape Town <-> Retreat (Cape Flats)" → "Retreat".
+ * Strips parenthetical line suffixes so the time box stays short.
+ */
+export function shortSharedSourceLabel(sourceRoute) {
+    let rawName = String(sourceRoute || '').replace(/\bRoute\b/gi, '').trim();
+    let routeName = rawName;
+    if (rawName.includes('<->')) routeName = rawName.split('<->')[1].trim();
+    else if (rawName.includes('•')) routeName = rawName.split('•')[1].trim();
+    else if (rawName.includes('↔')) routeName = rawName.split('↔')[1].trim();
+    routeName = routeName.replace(/\s*\([^)]*\)\s*$/g, '').trim();
+    return routeName || rawName;
 }
 
 export function normalizeStationName(name) {

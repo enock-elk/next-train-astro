@@ -1,11 +1,11 @@
 /**
- * Writes public/sitemap.xml from the same SEO route list Astro SSG emits.
+ * Writes public/sitemap.xml from the same SEO lists Astro SSG emits.
  * Run before build: node scripts/generate-sitemap.mjs
  */
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listSeoRoutes } from '../src/lib/seo-routes.js';
+import { listSeoRoutes, listSeoRegions, listSeoCorridors } from '../src/lib/seo-routes.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://nexttrain.co.za';
@@ -18,13 +18,25 @@ const core = [
   { loc: `${ORIGIN}/routes.html`, changefreq: 'weekly', priority: '0.85' },
 ];
 
+const regionUrls = listSeoRegions().map((r) => ({
+  loc: `${ORIGIN}/regions/${r.slug}.html`,
+  changefreq: 'weekly',
+  priority: '0.8',
+}));
+
+const corridorUrls = listSeoCorridors().map((c) => ({
+  loc: `${ORIGIN}/corridors/${c.slug}.html`,
+  changefreq: 'weekly',
+  priority: '0.78',
+}));
+
 const routeUrls = listSeoRoutes().map(({ seed }) => ({
   loc: `${ORIGIN}/routes/${seed.slug}.html`,
   changefreq: 'weekly',
   priority: '0.75',
 }));
 
-const urls = [...core, ...routeUrls];
+const urls = [...core, ...regionUrls, ...corridorUrls, ...routeUrls];
 const body = urls
   .map(
     (u) => `  <url>
@@ -47,4 +59,6 @@ ${body}
 `;
 
 writeFileSync(join(ROOT, 'public', 'sitemap.xml'), xml, 'utf8');
-console.log(`sitemap.xml: ${urls.length} URLs (${routeUrls.length} route landings)`);
+console.log(
+  `sitemap.xml: ${urls.length} URLs (${regionUrls.length} regions, ${corridorUrls.length} corridors, ${routeUrls.length} routes)`
+);

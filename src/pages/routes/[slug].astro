@@ -7,6 +7,9 @@ import {
   displayRouteName,
   stationLabel,
   regionName,
+  getCorridorLabel,
+  listSeoRegions,
+  listSeoCorridors,
 } from '../../lib/seo-routes.js';
 
 export function getStaticPaths() {
@@ -26,12 +29,19 @@ const name = displayRouteName(route);
 const origin = stationLabel(route.destA);
 const dest = stationLabel(route.destB);
 const province = regionName(route.region);
+const corridorLabel = getCorridorLabel(route);
+const regionEntry = listSeoRegions().find((r) => r.region === route.region);
+const corridorEntry = listSeoCorridors().find(
+  (c) => route.corridorId && c.corridorIds.includes(route.corridorId)
+);
 const title = `${origin} to ${dest} Train Times | Metrorail Next Train`;
 const description = `${seed.blurb} Check live ${province} Metrorail schedules offline in Next Train.`;
 const canonicalPath = `/routes/${seed.slug}.html`;
 const appHref = withBase(`/?rt=${encodeURIComponent(route.id)}`);
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
+const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
+const corridorHref = corridorEntry ? withBase(`corridors/${corridorEntry.slug}.html`) : null;
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -46,7 +56,14 @@ const jsonLd = {
   },
 };
 
-const related = listSeoRoutes().filter((r) => r.seed.slug !== seed.slug).slice(0, 4);
+const related = [
+  ...listSeoRoutes().filter(
+    (r) => r.seed.slug !== seed.slug && r.route.corridorId && r.route.corridorId === route.corridorId
+  ),
+  ...listSeoRoutes().filter(
+    (r) => r.seed.slug !== seed.slug && r.route.region === route.region && r.route.corridorId !== route.corridorId
+  ),
+].slice(0, 4);
 ---
 
 <ContentLayout
@@ -62,7 +79,13 @@ const related = listSeoRoutes().filter((r) => r.seed.slug !== seed.slug).slice(0
       <p class="text-xs font-bold uppercase tracking-widest text-blue-400 mb-3">
         <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
         <span class="text-slate-500"> / </span>
-        {province}
+        <a href={regionHref} class="hover:underline">{province}</a>
+        {corridorLabel && (
+          <>
+            <span class="text-slate-500"> / </span>
+            {corridorHref ? <a href={corridorHref} class="hover:underline">{corridorLabel}</a> : corridorLabel}
+          </>
+        )}
       </p>
 
       <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
@@ -88,7 +111,7 @@ const related = listSeoRoutes().filter((r) => r.seed.slug !== seed.slug).slice(0
           </div>
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Corridor</dt>
-            <dd class="mt-1 font-semibold text-white">{route.corridorId?.replace(/_/g, ' ') || 'Metrorail'}</dd>
+            <dd class="mt-1 font-semibold text-white">{corridorLabel || 'Metrorail'}</dd>
           </div>
         </dl>
 

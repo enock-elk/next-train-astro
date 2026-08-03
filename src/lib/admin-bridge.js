@@ -16,6 +16,7 @@ import {
 import {
     loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
+import { runScheduleQaReport, scanScheduleSheet } from './schedule-qa.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
@@ -63,6 +64,8 @@ export function exposeAdminGlobals() {
     window.updateTime = updateTime;
     window.executeRegionSwap = executeRegionSwap;
     window.guardianFetch = guardianFetch;
+    window.runScheduleQaReport = runScheduleQaReport;
+    window.scanScheduleSheet = scanScheduleSheet;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

@@ -2,8 +2,8 @@
  * LIVE BOARD UI ORCHESTRATION (Phase 2)
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
-import { ROUTES, FARE_CONFIG } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml } from './utils.js';
+import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -186,11 +186,13 @@ export function renderNextAvailableTrain(element, destination) {
 
 export function processAndRenderJourney(allJourneys, element, _header, destination) {
     if (!element || !Array.isArray(allJourneys)) return;
-    if (destination) currentScheduleData[destination] = allJourneys;
+    // Look ahead past invalid cells ("Monte", etc.) to the next real clock departure
+    const validJourneys = allJourneys.filter((j) => isRealTime(j.departureTime || j.train1?.departureTime));
+    if (destination) currentScheduleData[destination] = validJourneys;
     const nowInSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
-    const remaining = allJourneys.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
+    const remaining = validJourneys.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
     const nextJourney = remaining[0] || null;
-    const firstTrainName = allJourneys.length > 0 ? (allJourneys[0].train || allJourneys[0].train1.train) : null;
+    const firstTrainName = validJourneys.length > 0 ? (validJourneys[0].train || validJourneys[0].train1.train) : null;
 
     if (nextJourney && window.Renderer) {
         const journeyTrainName = nextJourney.train || nextJourney.train1.train;
@@ -199,7 +201,7 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         nextJourney.isLastTrain = (remainingNames.size === 1);
         window.Renderer.renderJourney(element, nextJourney, destination);
         import('./delay-reports.js').then((m) => m.hydrateTrainReportSlots(element)).catch(() => {});
-    } else if (allJourneys.length === 0) {
+    } else if (validJourneys.length === 0) {
         const dayType = (typeof window !== 'undefined' && window.currentDayType) ? window.currentDayType : 'weekday';
         if (dayType === 'saturday' && !routeHasSaturdayService() && typeof window.renderNoWeekendService === 'function') {
             window.renderNoWeekendService(element, destination);
@@ -372,9 +374,22 @@ export function updateNextTrainView() {
         title.innerHTML = labelHtml;
         title.title = labelPlain;
         if (route?.colorClass) {
-            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center`;
+            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight`;
         } else {
-            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center';
+            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight';
+        }
+    }
+
+    // Parent corridor under home route pill (all regions)
+    const corridorEl = document.getElementById('route-corridor-label');
+    const corridor = getCorridorLabel(route);
+    if (corridorEl) {
+        if (corridor) {
+            corridorEl.textContent = corridor;
+            corridorEl.classList.remove('hidden');
+        } else {
+            corridorEl.textContent = '';
+            corridorEl.classList.add('hidden');
         }
     }
 
@@ -448,7 +463,8 @@ export function openScheduleModal(destination, dayOverride = null) {
         }
     }
 
-    if (!journeys || journeys.length === 0) {
+    journeys = (journeys || []).filter((j) => isRealTime(j.departureTime || j.train1?.departureTime));
+    if (journeys.length === 0) {
         showToast('No trains found for this schedule.', 'error');
         return;
     }
@@ -490,10 +506,7 @@ export function openScheduleModal(destination, dayOverride = null) {
 
         let sharedTag = '';
         if (j.isShared && j.sourceRoute) {
-            let rawName = String(j.sourceRoute).replace('Route', '').trim();
-            let routeName = rawName;
-            if (rawName.includes('<->')) routeName = rawName.split('<->')[1].trim();
-            else if (rawName.includes('↔')) routeName = rawName.split('↔')[1].trim();
+            const routeName = shortSharedSourceLabel(j.sourceRoute);
 
             if (j.isDivergent) {
                 const divDest = window.Renderer?._applyUIIntercepts(j.actualDestName) || j.actualDestName;

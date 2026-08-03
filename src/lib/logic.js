@@ -889,10 +889,30 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         }
         $currentRouteId.set(nextRouteId);
         if (typeof window !== 'undefined' && typeof window.updatePinUI === 'function') window.updatePinUI();
+        if (typeof window !== 'undefined' && typeof window.updateNextTrainView === 'function') {
+            window.updateNextTrainView();
+        }
+
+        // Rewrite destination headers immediately (do not wait for schedules / findNextTrains).
+        const nextRoute = ROUTES[nextRouteId];
+        if (nextRoute && typeof document !== 'undefined') {
+            const uiDestA = (typeof window !== 'undefined' && window.Renderer?._applyUIIntercepts)
+                ? window.Renderer._applyUIIntercepts(nextRoute.destA).toUpperCase()
+                : String(nextRoute.destA || '').replace(/ STATION/gi, '').toUpperCase();
+            const uiDestB = (typeof window !== 'undefined' && window.Renderer?._applyUIIntercepts)
+                ? window.Renderer._applyUIIntercepts(nextRoute.destB).toUpperCase()
+                : String(nextRoute.destB || '').replace(/ STATION/gi, '').toUpperCase();
+            const pretH = document.getElementById('pretoria-header');
+            const pienH = document.getElementById('pienaarspoort-header');
+            if (pretH) pretH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
+            if (pienH) pienH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
+        }
 
         const pret = typeof document !== 'undefined' ? document.getElementById('pretoria-time') : null;
         const pien = typeof document !== 'undefined' ? document.getElementById('pienaarspoort-time') : null;
-        if (window.Renderer?.renderSkeletonLoader) {
+        if (window.Renderer?.renderPlaceholder) {
+            window.Renderer.renderPlaceholder(pret, pien);
+        } else if (window.Renderer?.renderSkeletonLoader) {
             if (pret) window.Renderer.renderSkeletonLoader(pret);
             if (pien) window.Renderer.renderSkeletonLoader(pien);
         }
@@ -900,6 +920,22 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         loadAllSchedules(true).then(() => {
             if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
                 window.checkServiceAlerts();
+            }
+            if (typeof window !== 'undefined' && typeof window.populateStationList === 'function') {
+                window.populateStationList();
+            }
+            if (typeof window !== 'undefined' && typeof window.findNextTrains === 'function') {
+                window.findNextTrains();
+            }
+            if (typeof window !== 'undefined' && typeof window.updateNextTrainView === 'function') {
+                window.updateNextTrainView();
+            }
+            const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
+            if (mainContent) mainContent.style.display = '';
+        }).catch(() => {
+            // Still unlock the board with correct region headers if download fails.
+            if (typeof window !== 'undefined' && typeof window.findNextTrains === 'function') {
+                window.findNextTrains();
             }
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';

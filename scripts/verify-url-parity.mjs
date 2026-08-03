@@ -64,20 +64,35 @@ for (const rel of htmlFiles) {
 }
 
 const routeLandings = htmlFiles.filter((f) => f.startsWith('routes/') && f !== 'routes.html');
+const regionLandings = htmlFiles.filter((f) => f.startsWith('regions/'));
+const corridorLandings = htmlFiles.filter((f) => f.startsWith('corridors/'));
 if (routeLandings.length < 30) {
   fail(`expected SSG route landings for ~all active corridors (≥30), found ${routeLandings.length}`);
+}
+if (regionLandings.length < 4) {
+  fail(`expected ≥4 regional SEO pages, found ${regionLandings.length}`);
+}
+if (corridorLandings.length < 8) {
+  fail(`expected ≥8 corridor SEO pages (Central/Northern/etc), found ${corridorLandings.length}`);
 }
 for (const file of STABLE_ROUTE_SLUGS) {
   if (!existsSync(join(DIST, file))) fail(`stable SEO slug missing: /${file}`);
 }
 
-const known = new Set([...INDEXABLE, ...NOINDEX, ...routeLandings]);
+const seoLandings = [...routeLandings, ...regionLandings, ...corridorLandings];
+const known = new Set([...INDEXABLE, ...NOINDEX, ...seoLandings]);
 const unexpected = htmlFiles.filter((f) => !known.has(f));
 if (unexpected.length) notes.push(`extra HTML pages not in parity lists: ${unexpected.join(', ')}`);
 
+const isIndexableSeo = (file) =>
+  INDEXABLE.includes(file) ||
+  file.startsWith('routes/') ||
+  file.startsWith('regions/') ||
+  file.startsWith('corridors/');
+
 // 3. Canonicals must be self-referencing against the production origin, or Google
 //    consolidates onto a URL that is not the one it has indexed.
-for (const file of [...INDEXABLE, ...NOINDEX, ...routeLandings]) {
+for (const file of [...INDEXABLE, ...NOINDEX, ...seoLandings]) {
   const path = join(DIST, file);
   if (!existsSync(path)) continue;
   const html = readFileSync(path, 'utf8');
@@ -91,12 +106,12 @@ for (const file of [...INDEXABLE, ...NOINDEX, ...routeLandings]) {
   if (NOINDEX.includes(file) && !robots.includes('noindex')) {
     fail(`/${file} is a private/system page but is not noindex`);
   }
-  if ((INDEXABLE.includes(file) || file.startsWith('routes/')) && robots.includes('noindex')) {
+  if (isIndexableSeo(file) && robots.includes('noindex')) {
     fail(`/${file} should be indexable but is marked noindex`);
   }
 }
 
-// 4. Sitemap must list public pages + every route landing, omit private docs.
+// 4. Sitemap must list public pages + every SEO landing, omit private docs.
 const sitemapPath = join(DIST, 'sitemap.xml');
 if (!existsSync(sitemapPath)) {
   fail('sitemap.xml not emitted');
@@ -106,9 +121,9 @@ if (!existsSync(sitemapPath)) {
     const loc = file === 'index.html' ? `${ORIGIN}/` : `${ORIGIN}/${file}`;
     if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing ${loc}`);
   }
-  for (const file of routeLandings) {
+  for (const file of seoLandings) {
     const loc = `${ORIGIN}/${file}`;
-    if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing route landing ${loc}`);
+    if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing SEO landing ${loc}`);
   }
   for (const file of NOINDEX) {
     if (file === '404.html' || file === 'offline.html') continue;
@@ -192,5 +207,5 @@ if (failures.length) {
 }
 
 console.log(
-  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${routeLandings.length} route landings + ${NOINDEX.length} system pages + SPA identity/precache match.`
+  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${regionLandings.length} regions + ${corridorLandings.length} corridors + ${routeLandings.length} routes + ${NOINDEX.length} system pages + SPA identity/precache match.`
 );

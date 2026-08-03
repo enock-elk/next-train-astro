@@ -33,6 +33,7 @@
  * 6. Exceptions Manager (God-Mode + Banned/Special Types + EXPIRY + Grid Notice Engine)
  * 7. Special Event Route Manager
  * 8. System Health / Diagnostics Scanner
+ * 8b. Schedule Data QA (timetable content — standalone from diagnostics)
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
@@ -1871,7 +1872,8 @@ const Admin = {
         Admin.setupExclusionManager();
         Admin.setupMaintenanceManager();
         Admin.setupSpecialEventManager(); 
-        Admin.setupDiagnosticsManager(); 
+        Admin.setupDiagnosticsManager();
+        Admin.setupScheduleQaManager();
         Admin.setupRoadmapManager(); // 🛡️ GUARDIAN PHASE: Operations Roadmap
 
         // 🛡️ GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
@@ -8223,6 +8225,263 @@ const Admin = {
                 resultsDiv.innerHTML = summary + html;
             }, 400);
         };
+    },
+
+    /**
+     * Standalone Schedule QA — data quality (duplicate adjacent times, regressions,
+     * delta variance). Kept separate from System Health Diagnostics (cache/network).
+     */
+    setupScheduleQaManager: () => {
+        const diagPanel = document.getElementById('diag-panel');
+        const alertPanel = document.getElementById('alert-panel');
+        const parent = diagPanel?.parentNode || alertPanel?.parentNode;
+        if (!parent) return;
+
+        let qaPanel = document.getElementById('sched-qa-panel');
+        if (!qaPanel) {
+            qaPanel = document.createElement('div');
+            qaPanel.id = 'sched-qa-panel';
+            if (diagPanel?.nextSibling) parent.insertBefore(qaPanel, diagPanel.nextSibling);
+            else parent.appendChild(qaPanel);
+        }
+
+        if (qaPanel.dataset.loaded === 'true') return;
+        qaPanel.dataset.loaded = 'true';
+
+        qaPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+
+        qaPanel.innerHTML = `
+            <button id="sched-qa-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('search', 'text-violet-500 dark:text-violet-400')}
+                    <span>Schedule Data QA</span>
+                </span>
+                <svg id="sched-qa-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+
+            <div id="sched-qa-body" class="hidden mt-4 space-y-4">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
+                    Flags impossible or suspicious timetable cells: identical adjacent stops, time going backwards,
+                    inconsistent inter-station deltas across trains, non-time cells, and thin trains.
+                    Diagnostics (above) covers cache/network health — this panel is schedule content only.
+                </p>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Region</label>
+                        <select id="sched-qa-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                            <option value="CURRENT">Active region</option>
+                            <option value="GP">Gauteng</option>
+                            <option value="WC">Western Cape</option>
+                            <option value="KZN">KwaZulu-Natal</option>
+                            <option value="EC">Eastern Cape</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Source</label>
+                        <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                            <option value="RAM">RAM cache</option>
+                            <option value="CLOUDFLARE">Cloudflare</option>
+                            <option value="GITHUB">GitHub CDN</option>
+                            <option value="FIREBASE">Firebase</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <input type="checkbox" id="sched-qa-show-info" class="rounded text-violet-600" /> Include info
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <input type="checkbox" id="sched-qa-delta-only" class="rounded text-violet-600" /> Deltas only
+                    </label>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="sched-qa-run-btn" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center gap-1.5">
+                        ${Admin.icon('search', 'w-3.5 h-3.5')} Run QA report
+                    </button>
+                    <button id="sched-qa-export-btn" class="px-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-bold py-2.5 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none inline-flex items-center gap-1" title="Download last report as JSON">
+                        ${Admin.icon('download', 'w-3.5 h-3.5')} Export
+                    </button>
+                </div>
+
+                <div id="sched-qa-summary" class="hidden"></div>
+                <div id="sched-qa-results" class="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar"></div>
+            </div>
+        `;
+
+        const header = document.getElementById('sched-qa-header-btn');
+        const body = document.getElementById('sched-qa-body');
+        const chevron = document.getElementById('sched-qa-chevron');
+        const runBtn = document.getElementById('sched-qa-run-btn');
+        const exportBtn = document.getElementById('sched-qa-export-btn');
+        const resultsDiv = document.getElementById('sched-qa-results');
+        const summaryDiv = document.getElementById('sched-qa-summary');
+
+        let lastReport = null;
+
+        if (header && body) {
+            header.onclick = () => {
+                body.classList.toggle('hidden');
+                if (chevron) {
+                    if (body.classList.contains('hidden')) chevron.classList.add('-rotate-90');
+                    else chevron.classList.remove('-rotate-90');
+                }
+            };
+        }
+
+        const fetchDbForQa = async (targetRegion, scanSource) => {
+            if (scanSource === 'RAM') {
+                if (typeof fullDatabase === 'undefined' || !fullDatabase) {
+                    throw new Error('Offline cache (RAM) is empty for this session.');
+                }
+                return fullDatabase;
+            }
+
+            const paths = {
+                GP: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/gauteng.json',
+                WC: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/westerncape.json',
+                KZN: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/kzn.json',
+                EC: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/easterncape.json',
+            };
+            const dbPath = paths[targetRegion];
+            let fetchUrl = '';
+            if (scanSource === 'GITHUB') {
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+            } else if (scanSource === 'FIREBASE') {
+                fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
+            } else {
+                fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
+            }
+
+            const res = await fetch(fetchUrl);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const rawData = await res.json();
+
+            if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
+            if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
+            if (targetRegion === 'KZN' && rawData.kzn) return rawData.kzn;
+            if (targetRegion === 'EC' && rawData.easterncape) return rawData.easterncape;
+            if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) return rawData.schedules;
+            return rawData;
+        };
+
+        const severityStyles = {
+            error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-300',
+            warn: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200',
+            info: 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
+        };
+
+        const renderReport = (report) => {
+            lastReport = report;
+            const showInfo = !!document.getElementById('sched-qa-show-info')?.checked;
+            const deltaOnly = !!document.getElementById('sched-qa-delta-only')?.checked;
+            let findings = report.findings || [];
+            if (!showInfo) findings = findings.filter((f) => f.severity !== 'info');
+            if (deltaOnly) findings = findings.filter((f) => f.code === 'DELTA_VARIANCE');
+
+            const { summary } = report;
+            if (summaryDiv) {
+                summaryDiv.classList.remove('hidden');
+                summaryDiv.innerHTML = `
+                    <div class="grid grid-cols-4 gap-1.5 mb-2">
+                        <div class="text-center bg-violet-50 dark:bg-violet-900/20 rounded-lg p-2 border border-violet-100 dark:border-violet-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-violet-600 tracking-wider">Sheets</span>
+                            <span class="text-sm font-black text-violet-800 dark:text-violet-200">${summary.sheetsScanned}</span>
+                        </div>
+                        <div class="text-center bg-red-50 dark:bg-red-900/20 rounded-lg p-2 border border-red-100 dark:border-red-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-red-600 tracking-wider">Errors</span>
+                            <span class="text-sm font-black text-red-700 dark:text-red-300">${summary.errors}</span>
+                        </div>
+                        <div class="text-center bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 border border-amber-100 dark:border-amber-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-amber-600 tracking-wider">Warns</span>
+                            <span class="text-sm font-black text-amber-700 dark:text-amber-300">${summary.warnings}</span>
+                        </div>
+                        <div class="text-center bg-slate-50 dark:bg-slate-900/40 rounded-lg p-2 border border-slate-200 dark:border-slate-700">
+                            <span class="block text-[8px] uppercase font-bold text-slate-500 tracking-wider">Shown</span>
+                            <span class="text-sm font-black text-slate-700 dark:text-slate-200">${findings.length}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (!findings.length) {
+                resultsDiv.innerHTML = `<div class="text-xs text-green-700 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center">No issues in the current filter. ${summary.errors + summary.warnings === 0 ? 'Schedule looks clean.' : 'Try enabling Info or clearing Deltas only.'}</div>`;
+                return;
+            }
+
+            resultsDiv.innerHTML = findings.map((f) => {
+                const style = severityStyles[f.severity] || severityStyles.info;
+                const routeBit = f.routeName ? Admin.formatRouteLabelHtml(f.routeName) : (f.routeId || '');
+                const meta = [f.sheetKey, f.dayDir, f.train].filter(Boolean).join(' · ');
+                return `
+                    <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} · ${f.code}</span>
+                            <span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>
+                        </div>
+                        <div class="font-semibold mb-0.5">${routeBit}</div>
+                        <div>${String(f.message || '').replace(/</g, '&lt;')}</div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        if (runBtn) {
+            runBtn.onclick = async () => {
+                const regionSelect = document.getElementById('sched-qa-region');
+                const sourceSelect = document.getElementById('sched-qa-source');
+                const scanRegion = regionSelect?.value || 'CURRENT';
+                const scanSourceRaw = sourceSelect?.value || 'RAM';
+                const activeRegion = typeof currentRegion !== 'undefined' ? currentRegion : 'GP';
+                const targetRegion = scanRegion === 'CURRENT' ? activeRegion : scanRegion;
+                const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'CLOUDFLARE' : scanSourceRaw;
+
+                resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}…</div>`;
+                if (summaryDiv) summaryDiv.classList.add('hidden');
+
+                try {
+                    if (typeof runScheduleQaReport !== 'function') {
+                        throw new Error('QA engine not loaded (runScheduleQaReport missing).');
+                    }
+                    const db = await fetchDbForQa(targetRegion, scanSource);
+                    const report = runScheduleQaReport(db, targetRegion, typeof parseJSONSchedule === 'function' ? parseJSONSchedule : null);
+                    report.meta = {
+                        region: targetRegion,
+                        source: scanSource,
+                        generatedAt: new Date().toISOString(),
+                        dataAge: db?.lastUpdated || null,
+                    };
+                    renderReport(report);
+                    if (typeof showToast === 'function') {
+                        showToast(`QA: ${report.summary.errors} errors, ${report.summary.warnings} warnings`, report.summary.errors ? 'error' : 'success', 2500);
+                    }
+                } catch (e) {
+                    resultsDiv.innerHTML = `<div class="text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">QA failed: ${String(e.message || e)}</div>`;
+                }
+            };
+        }
+
+        ['sched-qa-show-info', 'sched-qa-delta-only'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.onchange = () => { if (lastReport) renderReport(lastReport); };
+        });
+
+        if (exportBtn) {
+            exportBtn.onclick = () => {
+                if (!lastReport) {
+                    if (typeof showToast === 'function') showToast('Run a QA report first', 'info', 1500);
+                    return;
+                }
+                const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `schedule-qa-${lastReport.meta?.region || 'region'}-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+        }
     },
 
 // --- 8. MAINTENANCE MODE MANAGER ---

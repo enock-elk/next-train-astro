@@ -88,6 +88,52 @@ export const REGIONS = {
         name: 'Eastern Cape' 
     }
 };
+
+/**
+ * Parent corridor metadata for home pill, route picker, and SEO landings.
+ * Labels match official line names where PRASA publishes them.
+ */
+export const CORRIDOR_META = {
+    EAST_LINE: { label: 'Northern Corridor', region: 'GP', slug: 'gauteng-northern-corridor' },
+    NORTH_LINE: { label: 'Northern Corridor', region: 'GP', slug: 'gauteng-northern-corridor' },
+    SAUL_LINE: { label: 'Northern Corridor', region: 'GP', slug: 'gauteng-northern-corridor' },
+    SOUTH_LINE: { label: 'Pretoria–JHB Line', region: 'GP', slug: 'gauteng-pretoria-jhb-line' },
+    JHB_EAST: { label: 'Pretoria–JHB Line', region: 'GP', slug: 'gauteng-pretoria-jhb-line' },
+    JHB_CORE: { label: 'Pretoria–JHB Line', region: 'GP', slug: 'gauteng-pretoria-jhb-line' },
+    JHB_WEST: { label: 'JHB West Line', region: 'GP', slug: 'gauteng-jhb-west-line' },
+    JHB_SOUTH: { label: 'JHB West Line', region: 'GP', slug: 'gauteng-jhb-west-line' },
+    WC_CENTRAL: { label: 'Central Line', region: 'WC', slug: 'western-cape-central-line' },
+    WC_NORTHERN: { label: 'Northern Line', region: 'WC', slug: 'western-cape-northern-line' },
+    WC_SOUTHERN: { label: 'Southern Line', region: 'WC', slug: 'western-cape-southern-line' },
+    WC_FLATS: { label: 'Cape Flats Line', region: 'WC', slug: 'western-cape-cape-flats-line' },
+    WC_REGIONAL: { label: 'Malmesbury Line', region: 'WC', slug: 'western-cape-malmesbury-line' },
+    KZN_NORTH: { label: 'KZN North', region: 'KZN', slug: 'kwazulu-natal-north' },
+    KZN_SOUTH: { label: 'KZN South', region: 'KZN', slug: 'kwazulu-natal-south' },
+    KZN_WEST: { label: 'KZN Inland', region: 'KZN', slug: 'kwazulu-natal-inland' },
+    EC_CENTRAL: { label: 'Eastern Cape Central', region: 'EC', slug: 'eastern-cape-central' },
+};
+
+/** @deprecated Use CORRIDOR_META / getCorridorLabel */
+export const WC_CORRIDOR_LABELS = Object.fromEntries(
+    Object.entries(CORRIDOR_META).filter(([, m]) => m.region === 'WC').map(([id, m]) => [id, m.label])
+);
+
+export function getCorridorLabel(routeOrCorridorId) {
+    if (!routeOrCorridorId) return '';
+    if (typeof routeOrCorridorId === 'string') {
+        return CORRIDOR_META[routeOrCorridorId]?.label || '';
+    }
+    const id = routeOrCorridorId.corridorId;
+    if (!id || id === 'SPECIAL') return '';
+    return CORRIDOR_META[id]?.label || '';
+}
+
+export const REGION_SEO = {
+    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
+    WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
+    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City and inland KZN Metrorail corridor pages.' },
+    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
+};
 export const MAX_RADIUS_KM = 6;
 
 // SA public holidays → schedule day-type overrides (ported from SPA logic.js)

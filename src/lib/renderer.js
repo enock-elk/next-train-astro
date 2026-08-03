@@ -11,14 +11,14 @@ import {
 } from '../store.js';
 
 import { 
-    ROUTES, CHANGELOG_DATA 
+    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel
 } from './config.js';
 
 import { MANUAL_GRID_ORDER } from './grid-order.js';
 
 import { 
-    normalizeStationName, timeToSeconds, formatTimeDisplay, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
+    formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel
 } from './utils.js';
 
 import { 
@@ -43,44 +43,14 @@ export const Renderer = {
         const container = document.getElementById(containerId);
         if (!container) return;
 
-        const categoryMap = {
-            "EAST_LINE": "Northern Corridor (Pretoria)",
-            "NORTH_LINE": "Northern Corridor (Pretoria)",
-            "SAUL_LINE": "Northern Corridor (Pretoria)",
-            "SOUTH_LINE": "Pretoria - JHB Line",
-            "JHB_EAST": "Pretoria - JHB Line",
-            "JHB_CORE": "Pretoria - JHB Line",
-            "JHB_WEST": "JHB West Line",
-            "JHB_SOUTH": "JHB West Line",
-            "WC_CENTRAL": "Cape Town Central Line",
-            "WC_SOUTHERN": "Cape Town Southern Line",
-            "WC_FLATS": "Cape Flats Line",
-            "WC_NORTHERN": "Cape Town Northern Line",
-            "WC_REGIONAL": "Cape Town Regional",
-            "KZN_NORTH": "KwaZulu-Natal North", 
-            "KZN_SOUTH": "KwaZulu-Natal South", 
-            "KZN_WEST": "KwaZulu-Natal Inland",  
-            "EC_CENTRAL": "Eastern Cape Central"
-        };
-
         const categoryOrder = [
-            "Northern Corridor (Pretoria)",
-            "Pretoria - JHB Line",
-            "JHB West Line",
-            "Cape Town Central Line",
-            "Cape Town Southern Line",
-            "Cape Flats Line",
-            "Cape Town Northern Line",
-            "Cape Town Regional",
-            "KwaZulu-Natal North",
-            "KwaZulu-Natal South",
-            "KwaZulu-Natal Inland",
-            "Eastern Cape Central"
+            ...new Set(Object.values(CORRIDOR_META).map((m) => m.label)),
+            'Other Routes',
         ];
         const groups = {};
         Object.values(routes).forEach(route => {
             if (route.id === 'special_event') return;
-            const cat = categoryMap[route.corridorId] || "Other Routes";
+            const cat = getCorridorLabel(route) || 'Other Routes';
             if (!groups[cat]) groups[cat] = [];
             groups[cat].push(route);
         });
@@ -560,17 +530,7 @@ export const Renderer = {
 
         let sharedTag = "";
         if (journey.isShared && journey.sourceRoute) {
-             let rawName = journey.sourceRoute.replace("Route", "").trim();
-             let routeName = rawName;
-             
-             // GUARDIAN V6.04.14 FIX: Universal String Split for region-agnostic formatting
-             if (rawName.includes('<->')) {
-                 routeName = rawName.split('<->')[1].trim();
-             } else if (rawName.includes('•')) {
-                 routeName = rawName.split('•')[1].trim();
-             } else if (rawName.includes('↔')) {
-                 routeName = rawName.split('↔')[1].trim(); // Legacy fallback
-             }
+             const routeName = shortSharedSourceLabel(journey.sourceRoute);
 
              if (journey.isDivergent) {
                  const divDest = Renderer._applyUIIntercepts(journey.actualDestName);
@@ -827,13 +787,12 @@ export const Renderer = {
             sortedCols = [...sortedCols, ...remainingCols];
         } else {
             // Earliest-time fallback when no manual order exists for this sheet
-            const isValidTime = (val) => val && val !== '-' && /^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/.test(String(val).trim());
             const colStats = trainCols.map(colId => {
                 let earliestTime = 86400 * 2;
                 let hasData = false;
                 for (const row of schedule.rows) {
                     const val = row[colId];
-                    if (isValidTime(val)) {
+                    if (isRealTime(val)) {
                         const t = timeToSeconds(val);
                         if (t > 0) {
                             if (t < earliestTime) earliestTime = t;
@@ -1006,8 +965,7 @@ export const Renderer = {
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         if (val !== "-") {
-                            const isValidTime = /^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/.test(String(val).trim());
-                            if (isValidTime) {
+                            if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
                             } else {
                                 val = "-";

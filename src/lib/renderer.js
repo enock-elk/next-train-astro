@@ -125,7 +125,6 @@ export const Renderer = {
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
                                 <span class="truncate">${formatRouteLabelHtml(r.name)}</span>
                             </div>
-                            ${isActive ? '<svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
                         </a>
                     </li>
                 </div>
@@ -557,7 +556,7 @@ export const Renderer = {
         if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
-        const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-wide font-bold py-1 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors truncate focus:outline-none">See Upcoming Trains</button>`;
+        const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-tight font-bold py-1.5 px-0.5 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors leading-tight focus:outline-none">See Upcoming Trains</button>`;
 
         let sharedTag = "";
         if (journey.isShared && journey.sourceRoute) {
@@ -710,7 +709,7 @@ export const Renderer = {
             element.innerHTML = `
                 <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
-                    <div class="relative w-[36%] min-w-[6.5rem] max-w-[9rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
                         ${sharedTag}
@@ -790,7 +789,7 @@ export const Renderer = {
             element.innerHTML = `
                 <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
-                    <div class="relative w-[36%] min-w-[6.5rem] max-w-[9rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-6 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
                         ${sharedTag}

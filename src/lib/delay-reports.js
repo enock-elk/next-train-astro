@@ -24,6 +24,9 @@ import {
     checkContentSafety,
 } from './trust.js';
 
+/** Commuter-facing real-time alert reporting — off for SPA→Astro parity cutover. */
+export const DELAY_REPORTS_UI_ENABLED = false;
+
 const GUEST_GLOBAL_MS = 45 * 60 * 1000;
 const GUEST_ROUTE_MS = 2 * 60 * 60 * 1000;
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
@@ -223,6 +226,7 @@ function flagColorClass(status) {
 export function buildTrainReportSlotHtml({
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
 }) {
+    if (!DELAY_REPORTS_UI_ENABLED) return '';
     const reportable = isTrainInReportWindow(scheduledTime);
     const attrs = [
         `data-train-report-slot`,
@@ -239,12 +243,15 @@ export function buildTrainReportSlotHtml({
     return `<div class="mt-1.5 w-full px-0.5" ${attrs}></div>`;
 }
 
-/** Clickable train title with 🏳️ — opens report modal for that train */
+/** Clickable train title — opens report modal for that train (disabled during parity cutover). */
 export function buildTrainTitleReportButton({
     label,
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
     className = '',
 }) {
+    if (!DELAY_REPORTS_UI_ENABLED) {
+        return `<span class="${className}"><span class="truncate">${escapeHTML(label)}</span></span>`;
+    }
     const attrs = [
         `data-open-train-report`,
         `data-route="${escapeHTML(routeId || '')}"`,
@@ -256,11 +263,11 @@ export function buildTrainTitleReportButton({
     ].join(' ');
     return `<button type="button" class="${className}" ${attrs} title="Report train ${escapeHTML(String(trainId || ''))}">
       <span class="truncate">${escapeHTML(label)}</span>
-      <span class="shrink-0 ml-1" aria-hidden="true">🏳️</span>
     </button>`;
 }
 
 export async function hydrateTrainReportSlots(root = document) {
+    if (!DELAY_REPORTS_UI_ENABLED) return;
     const slots = (root || document).querySelectorAll?.('[data-train-report-slot][data-reportable="1"]');
     if (!slots?.length) return;
 
@@ -314,6 +321,7 @@ function showTrainReportStep(step) {
 }
 
 export function openTrainReportModal(opts = {}) {
+    if (!DELAY_REPORTS_UI_ENABLED) return;
     const routeId = opts.routeId || $currentRouteId.get() || '';
     const trainId = opts.trainId || '';
     const scheduledTime = opts.scheduledTime || '';
@@ -502,6 +510,12 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
     const text = document.getElementById('delay-report-banner-text');
     if (!banner) return;
 
+    if (!DELAY_REPORTS_UI_ENABLED) {
+        banner.classList.add('hidden');
+        badge?.classList.add('hidden');
+        return;
+    }
+
     if (!routeId) {
         banner.classList.add('hidden');
         return;
@@ -532,6 +546,7 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
 }
 
 export async function getPlannerCrowdDelayHtml(routeIds = []) {
+    if (!DELAY_REPORTS_UI_ENABLED) return '';
     const ids = [...new Set((routeIds || []).filter(Boolean))];
     if (!ids.length) return '';
     const batches = await Promise.all(ids.slice(0, 4).map((id) => fetchRecentRouteReports(id)));
@@ -552,6 +567,10 @@ export async function getPlannerCrowdDelayHtml(routeIds = []) {
 export function bindDelayReportUi() {
     if (typeof document === 'undefined' || window.__ntDelayReportBound) return;
     window.__ntDelayReportBound = true;
+    if (!DELAY_REPORTS_UI_ENABLED) {
+        document.getElementById('delay-report-banner')?.classList.add('hidden');
+        return;
+    }
 
     document.getElementById('delay-report-cancel')?.addEventListener('click', () => closeSmoothModal('delay-report-modal'));
     document.getElementById('tr-done-btn')?.addEventListener('click', () => closeSmoothModal('delay-report-modal'));

@@ -14,26 +14,26 @@
         
         <div class="p-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 shrink-0 z-10 relative" id="route-modal-region-container">
             <div class="relative shadow-sm rounded-lg cursor-pointer group" onclick="if(window.toggleDropdownScrim) window.toggleDropdownScrim('route-modal-region-list', 'route-modal-region-chevron');">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                    <span class="text-base">🌍</span>
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10 text-green-500">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M2 12h20"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10 15 15 0 014-10z"/></svg>
                 </div>
                 <select id="route-modal-region-select" class="hidden">
-                    <option value="GP">Region: Gauteng</option>
-                    <option value="WC">Region: Western Cape</option>
-                    <option value="KZN">Region: KwaZulu-Natal</option>
-                    <option value="EC">Region: Eastern Cape</option>
+                    <option value="GP">Gauteng</option>
+                    <option value="WC">Western Cape</option>
+                    <option value="KZN">KwaZulu-Natal</option>
+                    <option value="EC">Eastern Cape</option>
                 </select>
                 <div class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 py-2.5 pl-10 pr-10 rounded-lg text-sm font-bold text-gray-900 dark:text-white transition-colors shadow-sm group-hover:border-blue-400 dark:group-hover:border-blue-500 flex items-center justify-between">
-                    <span id="route-modal-region-display" class="truncate">Region: Gauteng</span>
+                    <span id="route-modal-region-display" class="truncate">Gauteng</span>
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500 dark:text-gray-400">
                         <svg id="route-modal-region-chevron" class="w-4 h-4 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </div>
                 </div>
                 <ul id="route-modal-region-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl hidden mt-1 flex-col overflow-hidden text-left">
-                    <li data-region-target="GP" data-region-name="Region: Gauteng" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Region: Gauteng</li>
-                    <li data-region-target="WC" data-region-name="Region: Western Cape" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Region: Western Cape</li>
-                    <li data-region-target="KZN" data-region-name="Region: KwaZulu-Natal" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Region: KwaZulu-Natal</li>
-                    <li data-region-target="EC" data-region-name="Region: Eastern Cape" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors cursor-pointer">Region: Eastern Cape</li>
+                    <li data-region-target="GP" data-region-name="Gauteng" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Gauteng</li>
+                    <li data-region-target="WC" data-region-name="Western Cape" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Western Cape</li>
+                    <li data-region-target="KZN" data-region-name="KwaZulu-Natal" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">KwaZulu-Natal</li>
+                    <li data-region-target="EC" data-region-name="Eastern Cape" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors cursor-pointer">Eastern Cape</li>
                 </ul>
             </div>
         </div>

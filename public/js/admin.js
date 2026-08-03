@@ -65,10 +65,10 @@ const Admin = {
         if (!Admin._routeFlags || !Admin._routeFlags[routeId]) return '';
         const flags = Admin._routeFlags[routeId];
         let cues = [];
-        if (flags.hasNotice) cues.push('[📝 Notice]');
-        if (flags.hasExclusion) cues.push('[⛔ Bans]');
-        if (flags.hasDisruption) cues.push('[🚧 Incident]');
-        if (flags.hasAlert) cues.push('[📢 Alert]');
+        if (flags.hasNotice) cues.push('[Notice]');
+        if (flags.hasExclusion) cues.push('[Bans]');
+        if (flags.hasDisruption) cues.push('[Incident]');
+        if (flags.hasAlert) cues.push('[Alert]');
         return cues.length ? ` ${cues.join(' ')}` : '';
     },
 
@@ -96,6 +96,40 @@ const Admin = {
     /** SVG bidirectional arrow for route labels (matches app formatRouteLabelHtml). */
     routeArrowSvg: (className = 'inline-block w-3.5 h-3.5 mx-0.5 align-[-2px] text-current shrink-0') =>
         `<svg class="${className}" viewBox="0 0 24 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 6h14M8 3L5 6l3 3M16 3l3 3-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+
+    /** Lucide-style stroke icons for admin grid tiles and in-panel chrome. */
+    icon: (name, className = 'w-7 h-7') => {
+        const paths = {
+            flame: '<path d="M12 3c1.5 3 4 4.2 4 8a4 4 0 01-8 0c0-2.2 1.2-3.8 2.2-5.2.4 1.8 1.6 2.8 1.8 2.8"/><path d="M9.5 15.5A3.5 3.5 0 0012 19a3.5 3.5 0 002.5-3.5"/>',
+            rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-9.5c4 0 7.5 3.5 7.5 7.5a22 22 0 01-9.5 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
+            ban: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5l13 13"/>',
+            message: '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',
+            alert: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+            shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+            user: '<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+            megaphone: '<path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/>',
+            construction: '<rect x="2" y="6" width="20" height="8" rx="1"/><path d="M17 14v7"/><path d="M7 14v7"/><path d="M17 3v3"/><path d="M7 3v3"/><path d="M10 14l4-4"/><path d="M6 10l4 4"/><path d="M14 10l4 4"/>',
+            stop: '<path d="M12 2l9 4.5v6.7c0 5.4-3.7 10.1-9 11.3-5.3-1.2-9-5.9-9-11.3V6.5L12 2z"/><path d="M9 12h6"/>',
+            star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+            activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+            wrench: '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>',
+            map: '<path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
+            chart: '<path d="M3 3v18h18"/><path d="M7 14v4"/><path d="M12 10v8"/><path d="M17 6v12"/>',
+            trending: '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
+            plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+            check: '<path d="M20 6L9 17l-5-5"/>',
+            note: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
+            globe: '<circle cx="12" cy="12" r="9"/><path d="M2 12h20"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10 15 15 0 014-10z"/>',
+            camera: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+            siren: '<path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/>',
+        };
+        const body = paths[name];
+        if (!body) return '';
+        return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+    },
+
+    tileIcon: (name, colorClass = 'text-blue-600 dark:text-blue-400') =>
+        `<span class="admin-tile-icon mb-2 inline-flex items-center justify-center ${colorClass}">${Admin.icon(name, 'w-7 h-7')}</span>`,
 
     formatRouteLabelHtml: (raw) => {
         if (typeof raw !== 'string' || !raw) return '';
@@ -514,10 +548,10 @@ const Admin = {
         Admin.telemetryRange = ranges[(ranges.indexOf(Admin.telemetryRange) + 1) % ranges.length];
         
         const cycleBtn = document.getElementById('trend-cycle-btn');
-        if (cycleBtn) cycleBtn.innerHTML = `📈 ${Admin.telemetryRange} Trend`;
+        if (cycleBtn) cycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-[-2px]')} ${Admin.telemetryRange} Trend`;
         
         const modalCycleBtn = document.getElementById('modal-trend-cycle');
-        if (modalCycleBtn) modalCycleBtn.innerHTML = `📈 ${Admin.telemetryRange}`;
+        if (modalCycleBtn) modalCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-[-2px]')} ${Admin.telemetryRange}`;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
         
@@ -572,7 +606,7 @@ const Admin = {
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 text-base leading-none">⚠️</span> Diagnostic Errors (24h) · tap`;
+                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> Diagnostic Errors (24h) · tap`;
                 }
                 if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200 animate-pulse";
             }
@@ -685,7 +719,7 @@ const Admin = {
                     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-slate-200 dark:border-slate-700">
                         <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 rounded-t-2xl shrink-0">
                             <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center tracking-tight">
-                                <span class="mr-2">🌍</span> Regional Breakdown
+                                <span class="mr-2 inline-flex">${Admin.icon('globe', 'w-4 h-4')}</span> Regional Breakdown
                             </h3>
                             <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors focus:outline-none">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -2220,7 +2254,7 @@ const Admin = {
         crashPanel.innerHTML = `
                 <button id="crash-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                     <span class="flex flex-col items-center">
-                        <span class="text-2xl mb-2">🔥</span> 
+                        ${Admin.tileIcon('flame', 'text-orange-500 dark:text-orange-400')}
                         <span>Crash Analytics</span>
                     </span>
                     <span id="crash-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
@@ -2310,7 +2344,7 @@ const Admin = {
             document.getElementById('crash-status-display').textContent = isInbox ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`;
             
             if (targetData.length === 0) {
-                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'No new crashes! 🎉' : 'Archive empty.'}</div>`;
+                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'No new crashes.' : 'Archive empty.'}</div>`;
                 return;
             }
 
@@ -2344,7 +2378,7 @@ const Admin = {
                 
                 // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
                 const resolveAllHtml = isInbox 
-                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1">✅</span> Resolve All (${groupCrashes.length})</button>` 
+                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>` 
                     : '';
 
                 let groupHTML = `
@@ -2620,13 +2654,18 @@ const Admin = {
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; }
                     .admin-grid-view > div [id$="-header-btn"] > span { flex-direction: column; align-items: center; width: 100%; display: flex; }
+                    .admin-grid-view > div [id$="-header-btn"] > span > span.admin-tile-icon,
                     .admin-grid-view > div [id$="-header-btn"] > span > span:first-child {
                       margin-right: 0 !important;
                       margin-bottom: 8px;
-                      font-size: 1.75rem;
                       line-height: 1;
-                      display: block;
-                      font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                    }
+                    .admin-grid-view > div [id$="-header-btn"] .admin-tile-icon svg {
+                      width: 1.75rem;
+                      height: 1.75rem;
                     }
                     .admin-grid-view > div [id$="-header-btn"] svg[id$="-chevron"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
@@ -2839,7 +2878,7 @@ const Admin = {
 
         growthPanel.innerHTML = `
             <button id="growth-header-btn" class="w-full text-left text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center"><span class="text-2xl mb-2">🚀</span> <span>Growth & Promo</span></span>
+                <span class="flex flex-col items-center">${Admin.tileIcon('rocket', 'text-violet-500 dark:text-violet-400')} <span>Growth & Promo</span></span>
                 <svg id="growth-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             
@@ -2891,7 +2930,7 @@ const Admin = {
         dePanel.innerHTML = `
             <button id="de-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🚫</span>
+                    ${Admin.tileIcon('ban', 'text-red-500 dark:text-red-400')}
                     <span>Dead Ends & Fails</span>
                 </span>
                 <span id="de-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
@@ -3200,7 +3239,7 @@ const Admin = {
         fbPanel.innerHTML = `
             <div id="fb-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">💬</span> 
+                    ${Admin.tileIcon('message', 'text-sky-500 dark:text-sky-400')}
                     <span>Commuter Feedback</span>
                 </span>
                 <span id="fb-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
@@ -4116,7 +4155,7 @@ const Admin = {
         drPanel.innerHTML = `
             <div id="dr-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">⚠️</span>
+                    ${Admin.tileIcon('alert', 'text-amber-500 dark:text-amber-400')}
                     <span>Delay Reports</span>
                 </span>
                 <span id="dr-unread-badge" class="hidden absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
@@ -4280,7 +4319,7 @@ const Admin = {
         mqPanel.innerHTML = `
             <div id="mq-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🛡️</span>
+                    ${Admin.tileIcon('shield', 'text-emerald-500 dark:text-emerald-400')}
                     <span>Moderation Queue</span>
                 </span>
                 <span id="mq-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
@@ -4593,7 +4632,7 @@ const Admin = {
         panel.innerHTML = `
             <div id="ut-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">👤</span>
+                    ${Admin.tileIcon('user', 'text-indigo-500 dark:text-indigo-400')}
                     <span>User Trust &amp; Bans</span>
                 </span>
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -5212,7 +5251,7 @@ const Admin = {
         alertPanel.innerHTML = `
             <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">📢</span> 
+                    ${Admin.tileIcon('megaphone', 'text-rose-500 dark:text-rose-400')}
                     <span>Service Alerts Manager</span>
                 </span>
                 <svg id="alert-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -5295,14 +5334,14 @@ const Admin = {
                 <!-- 🛡️ SUPERCHARGED: Rich Media Inputs with Live Preview (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-advanced-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span>âž• Add Media & Links (Advanced)</span>
+                        <span class="inline-flex items-center gap-1.5">${Admin.icon('plus', 'w-3.5 h-3.5')} Add Media & Links (Advanced)</span>
                         <svg id="alert-advanced-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="alert-advanced-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
                         <div class="sm:col-span-2">
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Hero Image URL</label>
-                                <label for="alert-image-file" class="cursor-pointer text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors shadow-sm focus:outline-none">📷 Upload</label>
+                                <label for="alert-image-file" class="cursor-pointer text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors shadow-sm focus:outline-none inline-flex items-center gap-1">${Admin.icon('camera', 'w-3 h-3')} Upload</label>
                                 <input type="file" id="alert-image-file" class="hidden" accept="image/*">
                             </div>
                             <input type="text" id="alert-image-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://... or click Upload">
@@ -5385,7 +5424,7 @@ const Admin = {
                 </div>
 
                 <div id="alert-live-poll-results" class="hidden pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
-                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5">📊</span> Live Poll Results</h4>
+                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5 inline-flex">${Admin.icon('chart', 'w-3.5 h-3.5')}</span> Live Poll Results</h4>
                     <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
                         <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
                         
@@ -5530,7 +5569,7 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.querySelector('label[for="alert-image-file"]');
-                        const originalLabel = labelEl ? labelEl.innerHTML : '📷 Upload';
+                        const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('camera', 'w-3 h-3')} Upload`;
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
@@ -5857,7 +5896,7 @@ const Admin = {
             };
 
             const globalGroup = addGroup("Global Alerts");
-            addOption(globalGroup, "all", "🌍 Entire Network (All Regions)", "<span class='truncate'>🌍 Entire Network (All Regions)</span>");
+            addOption(globalGroup, "all", "Entire Network (All Regions)", `<span class='truncate inline-flex items-center gap-1'>${Admin.icon('globe', 'w-3.5 h-3.5 shrink-0')} Entire Network (All Regions)</span>`);
             addOption(globalGroup, "all_GP", "📍 Gauteng Only", "<span class='truncate'>📍 Gauteng Only</span>");
             addOption(globalGroup, "all_WC", "📍 Western Cape Only", "<span class='truncate'>📍 Western Cape Only</span>");
             addOption(globalGroup, "all_KZN", "📍 KwaZulu-Natal Only", "<span class='truncate'>📍 KwaZulu-Natal Only</span>");
@@ -5882,10 +5921,10 @@ const Admin = {
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">Ban</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
                             }
                             const htmlText = `<span class="truncate mr-1 inline-flex items-center">🚂 ${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
@@ -6063,7 +6102,7 @@ const Admin = {
         disrPanel.innerHTML = `
             <button id="disr-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🚧</span> 
+                    ${Admin.tileIcon('construction', 'text-orange-600 dark:text-orange-400')}
                     <span>Transit Incident Manager</span>
                 </span>
                 <svg id="disr-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -6258,10 +6297,10 @@ const Admin = {
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">Ban</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
                             }
                             const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
@@ -6590,7 +6629,7 @@ const Admin = {
         exclPanel.innerHTML = `
             <button id="excl-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">⛔</span> 
+                    ${Admin.tileIcon('stop', 'text-red-600 dark:text-red-400')}
                     <span>Schedule Exceptions</span>
                 </span>
                 <svg id="excl-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -6820,10 +6859,10 @@ const Admin = {
                             
                             let badgeHtml = '';
                             if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">📝</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">⛔</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">🚧</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">📢</span>';
+                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
+                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">Ban</span>';
+                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
+                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
                             }
                             const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
@@ -7101,7 +7140,7 @@ const Admin = {
                         const expStr = `${expDate.toLocaleDateString()} ${expDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                         
                         if (isExpired) {
-                            expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">⚠️ EXPIRED: ${expStr}</div>`;
+                            expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">EXPIRED: ${expStr}</div>`;
                             rowOpacityClass = 'opacity-60 grayscale';
                         } else {
                             expiryHtml = `<div class="text-[9px] text-blue-500 font-medium mt-0.5">⏳ Expires: ${expStr}</div>`;
@@ -7256,7 +7295,7 @@ const Admin = {
         eventPanel.innerHTML = `
             <button id="event-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">⭐</span> 
+                    ${Admin.tileIcon('star', 'text-amber-500 dark:text-amber-400')}
                     <span>Special Event Route</span>
                 </span>
                 <svg id="event-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -7390,7 +7429,7 @@ const Admin = {
         diagPanel.innerHTML = `
             <button id="diag-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🩺</span> 
+                    ${Admin.tileIcon('activity', 'text-teal-500 dark:text-teal-400')}
                     <span>System Health Diagnostics</span>
                 </span>
                 <svg id="diag-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -8044,7 +8083,7 @@ const Admin = {
         maintPanel.innerHTML = `
             <button id="maint-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🛠️</span> 
+                    ${Admin.tileIcon('wrench', 'text-slate-500 dark:text-slate-300')}
                     <span>System Controls</span>
                 </span>
                 <svg id="maint-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -8256,7 +8295,7 @@ const Admin = {
         roadmapPanel.innerHTML = `
             <button id="roadmap-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
-                    <span class="text-2xl mb-2">🗺️</span> 
+                    ${Admin.tileIcon('map', 'text-blue-600 dark:text-blue-400')}
                     <span>Operations Roadmap</span>
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -8279,7 +8318,7 @@ const Admin = {
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                         </button>
                         <button onclick="Admin.openTicketModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-md focus:outline-none shrink-0">
-                            <span>âž•</span> New Ticket
+                            ${Admin.icon('plus', 'w-3.5 h-3.5')} New Ticket
                         </button>
                     </div>
                 </div>
@@ -8702,7 +8741,7 @@ const Admin = {
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 transform transition-all scale-95 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center">
-                            <span class="mr-2">📝</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
+                            <span class="mr-2 inline-flex text-blue-500">${Admin.icon('note', 'w-5 h-5')}</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
                         </h3>
                         <button onclick="closeSmoothModal('admin-ticket-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none bg-gray-100 dark:bg-gray-700 rounded-full p-1.5">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -8736,7 +8775,7 @@ const Admin = {
                                 <select id="tkt-status" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
                                     <option value="backlog" ${ticket.status === 'backlog' ? 'selected' : ''}>📌 Backlog</option>
                                     <option value="progress" ${ticket.status === 'progress' ? 'selected' : ''}>⏳ Progress</option>
-                                    <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>✅ Done</option>
+                                    <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>Done</option>
                                 </select>
                             </div>
                         </div>

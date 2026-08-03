@@ -64,6 +64,24 @@ async function ensurePlannerDatabase(timeoutMs = 12000) {
     });
 }
 
+/** Lucide-style icons for planner error cards / disruption chrome (replaces emoji). */
+function plannerIcon(name, className = 'w-4 h-4') {
+    const paths = {
+        calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+        ban: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5l13 13"/>',
+        moon: '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
+        sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+        alert: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        xCircle: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
+        stop: '<path d="M12 2l9 4.5v6.7c0 5.4-3.7 10.1-9 11.3-5.3-1.2-9-5.9-9-11.3V6.5L12 2z"/><path d="M9 12h6"/>',
+        message: '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',
+        circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
+    };
+    const body = paths[name];
+    if (!body) return '';
+    return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
@@ -467,12 +485,12 @@ export function openDisruptionModal(id) {
     if (badgeEl) {
         if (targetDisruption.tier === 'CRITICAL') {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
-            badgeEl.innerHTML = "🔴 CRITICAL SERVICE DISRUPTION";
+            badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} CRITICAL SERVICE DISRUPTION`;
             // SVGElement.className is read-only (SVGAnimatedString) — use setAttribute
             if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
         } else {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 py-2.5 rounded-lg border border-yellow-200 dark:border-yellow-800/50";
-            badgeEl.innerHTML = "🟡 EXPECT DELAYS / SINGLE TRACK";
+            badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-yellow-500')} EXPECT DELAYS / SINGLE TRACK`;
             if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-yellow-500');
         }
     }
@@ -511,7 +529,7 @@ export function openDisruptionModal(id) {
                         contextBox.className = 'mb-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start hidden shadow-inner';
                         fText.parentNode.insertBefore(contextBox, fText);
                     }
-                    contextBox.innerHTML = `<span class="mr-2 text-sm leading-none">💬</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${rawMsg}"</span></div>`;
+                    contextBox.innerHTML = `<span class="mr-2 shrink-0 text-sky-500">${plannerIcon('message', 'w-4 h-4')}</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${rawMsg}"</span></div>`;
                     contextBox.dataset.rawMsg = rawMsg;
                     contextBox.classList.remove('hidden');
                     fText.value = ''; 
@@ -672,9 +690,8 @@ export async function openTripMapRenderer(routeData) {
             <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0 shadow-sm">
                     <div class="flex items-center space-x-3 min-w-0 pr-2">
-                        <span class="text-2xl shrink-0" aria-hidden="true">🗺️</span>
                         <div class="flex flex-col min-w-0">
-                            <h3 class="text-base font-black text-gray-900 dark:text-white truncate uppercase tracking-tight mb-0.5" id="trip-map-title">Route Map</h3>
+                            <h3 class="text-base font-black text-gray-900 dark:text-white truncate tracking-tight mb-0.5" id="trip-map-title">Route Map</h3>
                             <p class="text-xs text-blue-600 dark:text-blue-400 font-bold truncate" id="trip-map-subtitle">Loading...</p>
                         </div>
                     </div>
@@ -692,7 +709,7 @@ export async function openTripMapRenderer(routeData) {
                                 <button type="button" id="custom-zoom-in" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-600 transition-colors focus:outline-none" aria-label="Zoom in">+</button>
                                 <button type="button" id="custom-zoom-out" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Zoom out">−</button>
                             </div>
-                            <button type="button" id="custom-theme-btn" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">☀️</button>
+                            <button type="button" id="custom-theme-btn" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">${plannerIcon('sun', 'w-5 h-5')}</button>
                         </div>
                         <button type="button" id="custom-locate-btn" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
                             <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
@@ -761,7 +778,14 @@ export async function openTripMapRenderer(routeData) {
                 const currentValidStops = routeData.validStops || [];
 
                 const titleEl = document.getElementById('trip-map-title');
-                if (titleEl) titleEl.textContent = `${currentOrigin.replace(/ STATION/gi, '')} to ${currentDest.replace(/ STATION/gi, '')}`;
+                if (titleEl) {
+                    const titleCase = (s) => String(s || '')
+                        .replace(/ STATION/gi, '')
+                        .trim()
+                        .toLowerCase()
+                        .replace(/\b\w/g, (c) => c.toUpperCase());
+                    titleEl.textContent = `${titleCase(currentOrigin)} To ${titleCase(currentDest)}`;
+                }
                 const subTitleEl = document.getElementById('trip-map-subtitle');
                 if (subTitleEl) {
                     const stopCount = currentValidStops.length || currentPath.length;
@@ -875,13 +899,19 @@ export async function openTripMapRenderer(routeData) {
 
             const themeBtn = document.getElementById('custom-theme-btn');
             let isDarkNow = document.documentElement.classList.contains('dark');
+            const paintThemeBtn = () => {
+                if (!themeBtn) return;
+                themeBtn.innerHTML = isDarkNow ? plannerIcon('moon', 'w-5 h-5') : plannerIcon('sun', 'w-5 h-5');
+                themeBtn.classList.toggle('text-indigo-400', isDarkNow);
+                themeBtn.classList.toggle('text-amber-500', !isDarkNow);
+            };
             if (themeBtn) {
-                themeBtn.textContent = isDarkNow ? '🌙' : '☀️';
+                paintThemeBtn();
                 themeBtn.onclick = () => {
                     isDarkNow = !isDarkNow;
                     document.documentElement.classList.toggle('dark', isDarkNow);
                     try { localStorage.setItem('theme', isDarkNow ? 'dark' : 'light'); } catch (e) { /* ignore */ }
-                    themeBtn.textContent = isDarkNow ? '🌙' : '☀️';
+                    paintThemeBtn();
                 };
             }
 
@@ -1104,7 +1134,7 @@ export const PlannerRenderer = {
                         const termStationName = cleanStr(fullValidStops[idx].station.replace(' STATION', '')).toUpperCase();
                         
                         let terminationTag = justSevered 
-                            ? `<div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl"><span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400">🛑 TRAIN TERMINATES @ ${termStationName}</span></div>` 
+                            ? `<div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl"><span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span></div>` 
                             : ``;
 
                         const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
@@ -1117,8 +1147,8 @@ export const PlannerRenderer = {
                                     ${terminationTag}
                                     <div class="p-3 flex justify-between items-end w-full">
                                         <div class="flex flex-col items-start min-w-0 pr-2">
-                                            <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center">
-                                                ❌ LINE SEVERED
+                                            <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center gap-1">
+                                                ${plannerIcon('xCircle', 'w-3.5 h-3.5')} LINE SEVERED
                                             </span>
                                             <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-1">
                                                 ${linkSvg} <span class="font-medium text-[10px] truncate">${locationText}</span>
@@ -1138,8 +1168,8 @@ export const PlannerRenderer = {
                             <div class="relative py-2 z-20 w-full">
                                 <div class="bg-slate-50 dark:bg-slate-800/40 rounded-r-lg border-l-4 border-yellow-500 p-2.5 flex items-center justify-between w-[calc(100%+2px)] -ml-[2px] shadow-sm">
                                     <div class="flex flex-col items-start min-w-0 pr-2">
-                                        <span class="text-yellow-600 dark:text-yellow-500 font-bold uppercase tracking-wide text-[10px] leading-none mb-1 flex items-center">
-                                            ⚠️ EXPECT DELAYS
+                                        <span class="text-yellow-600 dark:text-yellow-500 font-bold uppercase tracking-wide text-[10px] leading-none mb-1 flex items-center gap-1">
+                                            ${plannerIcon('alert', 'w-3.5 h-3.5')} EXPECT DELAYS
                                         </span>
                                         <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-0.5">
                                             ${linkSvg} <span class="font-medium text-[9px] truncate">${locationText}</span>
@@ -1301,11 +1331,11 @@ export const PlannerRenderer = {
                     <div class="relative -ml-[10px] my-4 z-20 w-[calc(100%+10px)]">
                         <div class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 shadow-md flex flex-col w-full overflow-hidden">
                             <div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl">
-                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400">🛑 TRAIN TERMINATES @ ${termStationName}</span>
+                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
                             </div>
                             <div class="p-3 flex justify-between items-end w-full">
                                 <div class="flex flex-col items-start min-w-0 pr-2">
-                                    <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center">❌ LINE SEVERED</span>
+                                    <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center gap-1">${plannerIcon('xCircle', 'w-3.5 h-3.5')} LINE SEVERED</span>
                                     <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-1">
                                         ${linkSvg} <span class="font-medium text-[10px] truncate">${locationText}</span>
                                     </div>
@@ -2646,7 +2676,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                         suspensionAlertHtml = `
                             <div class="mt-4 flex justify-center w-full">
                                 <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${errorPayload.disruptionId}')" class="bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center animate-pulse focus:outline-none">
-                                    <span class="mr-1.5 text-sm">🔴</span> <span>${escapeHTML(btnText)}</span>
+                                    <span class="mr-1.5 inline-flex text-red-500">${plannerIcon('circle', 'w-2.5 h-2.5')}</span> <span>${escapeHTML(btnText)}</span>
                                 </button>
                             </div>
                         `;
@@ -2673,7 +2703,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                             <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-left text-[11px] text-red-800 dark:text-red-300 rounded-r shadow-sm">
                                 <b>Note:</b> There is also an active incident on this line:<br>
                                 <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${errorPayload.disruptionId}')" class="mt-2 w-full bg-white dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex justify-center items-center">
-                                    <span class="mr-1">🔴</span> ${escapeHTML(btnText)}
+                                    <span class="mr-1 inline-flex text-red-500">${plannerIcon('circle', 'w-2.5 h-2.5')}</span> ${escapeHTML(btnText)}
                                 </button>
                             </div>
                         `;
@@ -3236,8 +3266,8 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
                     <h3 class="font-black text-gray-800 dark:text-gray-200 text-lg tracking-tight">All Trains Departed</h3>
                     <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">There are no more scheduled trains for today. You can review past trips below, or check the next available schedule.</p>
                 </div>
-                <div class="shrink-0">
-                    <span class="text-3xl">🌙</span>
+                <div class="shrink-0 text-indigo-400 dark:text-indigo-300">
+                    ${plannerIcon('moon', 'w-8 h-8')}
                 </div>
             </div>
             <button onclick="executeManualRollover('${origin.replace(/'/g, "\\'")}', '${dest.replace(/'/g, "\\'")}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs mt-4">
@@ -3272,8 +3302,8 @@ export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, ti
                     <h3 class="font-bold text-orange-800 dark:text-orange-200 text-lg">${title}</h3>
                     <p class="text-xs text-orange-700 dark:text-orange-300 mt-1 leading-snug">${explanationText}</p>
                 </div>
-                <div class="shrink-0">
-                    <span class="text-2xl">🚫</span>
+                <div class="shrink-0 text-orange-500 dark:text-orange-400">
+                    ${plannerIcon('ban', 'w-7 h-7')}
                 </div>
             </div>
         </div>
@@ -3304,8 +3334,8 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
                     <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-lg">No Sunday Service</h3>
                     <p class="text-xs text-indigo-700 dark:text-indigo-400 mt-1 leading-snug">${explanationText}</p>
                 </div>
-                <div class="shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-800/50 rounded-full flex items-center justify-center mt-0.5">
-                    <span class="text-base">📅</span>
+                <div class="shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-800/50 rounded-full flex items-center justify-center mt-0.5 text-indigo-600 dark:text-indigo-300">
+                    ${plannerIcon('calendar', 'w-4 h-4')}
                 </div>
             </div>
         </div>
@@ -3336,8 +3366,8 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
                     <h3 class="font-bold text-gray-900 dark:text-white text-lg">Route Unavailable Today</h3>
                     <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">${explanationText}</p>
                 </div>
-                <div class="shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mt-0.5 shadow-sm border border-gray-200 dark:border-gray-700">
-                    <span class="text-base">📅</span>
+                <div class="shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mt-0.5 shadow-sm border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                    ${plannerIcon('calendar', 'w-4 h-4')}
                 </div>
             </div>
         </div>

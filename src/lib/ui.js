@@ -368,10 +368,17 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             const isInlineDropdown = ['main-day-list', 'header-day-list', 'custom-time-list', 'grid-day-list'].includes(listId);
 
             const gridModal = list.closest('#full-schedule-modal');
-            // Prefer the schedule modal over a nested `.transform` card so scrim
-            // z-index / append target match the modal rules (not the inner shell).
+            // For inline Travel Day menus inside the full timetable, the scrim MUST
+            // live inside the modal's `.transform` shell (same stacking context as
+            // #grid-controls). Appending it to #full-schedule-modal makes the scrim
+            // a sibling ABOVE that shell, so elevating controls to z-160 cannot
+            // escape and Saturday / Hol stays untappable.
+            const gridShell = gridModal
+                ? (list.closest('.transform') || gridModal.querySelector(':scope > .transform') || gridModal.firstElementChild)
+                : null;
             const container = list.closest('#sidenav')
-                || gridModal
+                || (isInlineDropdown && gridShell)
+                || (!isInlineDropdown && gridModal)
                 || list.closest('.transform')
                 || list.closest('.view-section')
                 || list.closest('#main-content')
@@ -1084,7 +1091,7 @@ export async function checkMaintenanceStatus() {
                 // Inside #app-header so hamburger z-[70] shares the stacking context and stays on top.
                 banner.style.background = 'repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #d97706 10px, #d97706 20px)';
                 banner.className = 'absolute top-0 left-0 w-full z-[55] text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1 shadow-lg pointer-events-none';
-                banner.innerHTML = `⚠️ ${String(customMessage).toUpperCase()}`;
+                banner.innerHTML = String(customMessage).toUpperCase();
                 const header = document.getElementById('app-header');
                 const mainAppNode = document.getElementById('main-content');
                 if (header) {

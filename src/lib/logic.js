@@ -50,7 +50,7 @@ function syncRegionDisplayDom(region) {
     const sideSel = document.getElementById('app-hub-region-select');
     const modalSel = document.getElementById('route-modal-region-select');
     if (sideDisp) sideDisp.textContent = name;
-    if (modalDisp) modalDisp.textContent = 'Region: ' + name;
+    if (modalDisp) modalDisp.textContent = name;
     if (sideSel) sideSel.value = region;
     if (modalSel) modalSel.value = region;
 }
@@ -1011,7 +1011,19 @@ export function updateTime() {
         // DOM Updates are safe if we check window
         if (typeof document !== 'undefined') {
             const currentTimeEl = document.getElementById('current-time');
-            if (currentTimeEl) currentTimeEl.textContent = `${timeString} ${simActive ? '(SIM)' : ''}`;
+            if (currentTimeEl) {
+                if (simActive) {
+                    // HH:MM is enough for ops; seconds would jitter without adding clarity
+                    const short = String(timeString || '').slice(0, 5);
+                    currentTimeEl.textContent = `${short} · SIM`;
+                    currentTimeEl.classList.remove('hidden');
+                    currentTimeEl.setAttribute('aria-hidden', 'false');
+                } else {
+                    currentTimeEl.textContent = '';
+                    currentTimeEl.classList.add('hidden');
+                    currentTimeEl.setAttribute('aria-hidden', 'true');
+                }
+            }
         }
         
         let newDayType = (day === 0) ? 'sunday' : (day === 6 ? 'saturday' : 'weekday');

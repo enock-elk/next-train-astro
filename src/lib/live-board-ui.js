@@ -771,7 +771,7 @@ export function initLiveBoardUi() {
             const { handleRegionChange } = await import('./logic.js');
             await handleRegionChange(region);
             const disp = document.getElementById('route-modal-region-display');
-            if (disp) disp.textContent = li.getAttribute('data-region-name') || ('Region: ' + region);
+            if (disp) disp.textContent = li.getAttribute('data-region-name') || region;
         });
     });
 

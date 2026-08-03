@@ -7,7 +7,7 @@
 
     <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">
         <div id="offline-indicator" style="display: none;" class="pointer-events-auto w-max bg-amber-400 text-gray-900 border-amber-500 border-b border-x border-t-0 dark:bg-gray-900/95 dark:text-amber-400 dark:border-amber-500/80 dark:shadow-[0_4px_12px_rgba(245,158,11,0.15)] backdrop-blur-md text-xs font-black uppercase px-4 py-1 rounded-b-lg shadow-md flex items-center justify-center tracking-widest whitespace-nowrap transition-colors">
-            <span class="w-2 h-2 rounded-full mr-2 animate-pulse bg-gray-900 dark:bg-amber-400"></span> WORKING OFFLINE
+            WORKING OFFLINE
         </div>
     </div>
 
@@ -28,7 +28,8 @@
 
         <div class="flex flex-col items-center mt-0.5">
             <p id="current-day" class="text-sm font-bold text-gray-500 dark:text-gray-400 leading-tight">Loading...</p>
-            <p id="current-time" class="hidden" aria-hidden="true">--:--:--</p>
+            <!-- Sim clock only — diagnostic, shown by logic.js when $isSimMode -->
+            <p id="current-time" class="hidden mt-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400 tabular-nums" aria-hidden="true"></p>
         </div>
         <p id="last-updated-date-hidden" class="hidden text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1"></p>
     </div>

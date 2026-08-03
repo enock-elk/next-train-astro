@@ -9,15 +9,31 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { normalizeStationName, timeToSeconds } from './utils.js';
+import {
+    getScheduleFromDb,
+    currentTime as logicCurrentTime,
+    currentDayType as logicCurrentDayType,
+    currentDayIndex as logicCurrentDayIndex,
+} from './logic.js';
+import { getLookaheadDayInfo, isTrainExcluded } from './live-board.js';
 
-// 🛡️ GUARDIAN: Astro MPA Migration Shims
-// We mock/import these dynamically to prevent the planner from breaking during the SSG build.
-const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
-const getCurrentDayIndex = () => typeof window !== 'undefined' && window.currentDayIndex !== undefined ? window.currentDayIndex : 1;
-const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
-const getLookaheadDayInfo = (days) => typeof window !== 'undefined' && window.getLookaheadDayInfo ? window.getLookaheadDayInfo(days) : { type: 'weekday', name: 'Future', idx: 1 };
-const parseJSONSchedule = (rows, meta) => typeof window !== 'undefined' && window.parseJSONSchedule ? window.parseJSONSchedule(rows, meta) : { headers: [], rows: [] };
-const isTrainExcluded = (train, route, day) => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day) : false;
+/** Sheet day used for timetable lookups — Sunday has no sheets; probes must use weekday. */
+function scheduleDayType(dayType) {
+    if (!dayType || dayType === 'sunday') return 'weekday';
+    return dayType;
+}
+
+// SPA used script-scope globals. Prefer live window clock when the boot clock
+// has written it; otherwise fall back to the logic.js module exports — never a
+// hard-coded weekday/noon stub that invents "no service" on a real Monday.
+const getCurrentDayType = () =>
+    (typeof window !== 'undefined' && window.currentDayType) ? window.currentDayType : (logicCurrentDayType || 'weekday');
+const getCurrentDayIndex = () =>
+    (typeof window !== 'undefined' && window.currentDayIndex !== undefined)
+        ? window.currentDayIndex
+        : (logicCurrentDayIndex ?? 1);
+const getCurrentTime = () =>
+    (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : (logicCurrentTime || '12:00:00');
 
 // --- 1. LEGACY CORE ALGORITHMS (Preserved for Safety & Exhaustive Fallbacks) ---
 
@@ -40,7 +56,7 @@ export function planDirectTrip(origin, dest, dayType, isRollover = false, contex
         
         for (let dir of directions) {
             if (!db || !db[dir.key]) continue;
-            const schedule = parseJSONSchedule(db[dir.key]);
+            const schedule = getScheduleFromDb(db, dir.key);
             const originRow = schedule.rows.find(r => normalizeStationName(r.STATION) === normalizeStationName(origin));
             const destRow = schedule.rows.find(r => normalizeStationName(r.STATION) === normalizeStationName(dest));
 
@@ -303,7 +319,7 @@ export function isTrainFasterDirect(route, trainName, targetStation, dayType, li
     
     for (let dir of directions) {
         if (!db || !db[dir.key]) continue;
-        const schedule = parseJSONSchedule(db[dir.key]);
+        const schedule = getScheduleFromDb(db, dir.key);
         const targetRow = schedule.rows.find(r => normalizeStationName(r.STATION) === normalizeStationName(targetStation));
         
         if (targetRow && targetRow[trainName]) {
@@ -459,7 +475,7 @@ export function findAllLegsBetween(stationA, stationB, routeSet, dayType, contex
         let directions = getDirectionsForRoute(routeConfig, dayType);
         for (let dir of directions) {
             if (!db || !db[dir.key]) continue;
-            const schedule = parseJSONSchedule(db[dir.key]);
+            const schedule = getScheduleFromDb(db, dir.key);
             const rowA = schedule.rows.find(r => normalizeStationName(r.STATION) === normalizeStationName(stationA));
             const rowB = schedule.rows.find(r => normalizeStationName(r.STATION) === normalizeStationName(stationB));
             if (rowA && rowB) {
@@ -477,9 +493,20 @@ export function findAllLegsBetween(stationA, stationB, routeSet, dayType, contex
 }
 
 export function getDirectionsForRoute(route, dayType) {
-    if (dayType === 'weekday') return [{ key: route.sheetKeys.weekday_to_a }, { key: route.sheetKeys.weekday_to_b }];
-    if (dayType === 'saturday') return [{ key: route.sheetKeys.saturday_to_a }, { key: route.sheetKeys.saturday_to_b }];
-    return []; 
+    if (!route?.sheetKeys) return [];
+    // Sunday has no dedicated sheets — connectivity / graph builds use weekday.
+    // planUnifiedTrip still short-circuits real Sunday planning via SUNDAY_SKIP.
+    const sheetDay = scheduleDayType(dayType);
+    if (sheetDay === 'saturday') {
+        return [
+            { key: route.sheetKeys.saturday_to_a },
+            { key: route.sheetKeys.saturday_to_b },
+        ].filter((d) => !!d.key);
+    }
+    return [
+        { key: route.sheetKeys.weekday_to_a },
+        { key: route.sheetKeys.weekday_to_b },
+    ].filter((d) => !!d.key);
 }
 
 export function createTripObject(route, trainInfo, schedule, startIdx, endIdx, origin, dest) {
@@ -581,7 +608,7 @@ export function buildTransitGraph(dayType, dayIdx) {
 
         for (const dir of directions) {
             if (!db || !db[dir.key]) continue;
-            const schedule = parseJSONSchedule(db[dir.key]);
+            const schedule = getScheduleFromDb(db, dir.key);
             const rows     = schedule.rows;
 
             for (const trainName of schedule.headers.slice(1)) {
@@ -985,11 +1012,15 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
     };
 
     const routeHasTrainsToday = (rId) => {
-        if (!dayType || !ROUTES[rId] || !fullDatabase) return true;
-        const directions = getDirectionsForRoute(ROUTES[rId], dayType);
+        if (!ROUTES[rId] || !fullDatabase) return true;
+        // Always probe real timetable sheets (weekday on Sundays) — empty
+        // getDirectionsForRoute('sunday') previously made every corridor look dead
+        // and falsely returned ERR_NO_SERVICE_TODAY.
+        const directions = getDirectionsForRoute(ROUTES[rId], scheduleDayType(dayType));
+        if (directions.length === 0) return false;
         return directions.some((dir) => {
             if (!fullDatabase[dir.key]) return false;
-            const sched = parseJSONSchedule(fullDatabase[dir.key]);
+            const sched = getScheduleFromDb(fullDatabase, dir.key);
             return (sched.headers || []).slice(1).length > 0;
         });
     };
@@ -1322,7 +1353,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             if (!route.isActive || route.id === 'special_event') continue;
             for (const dir of getDirectionsForRoute(route, targetDay)) {
                 if (!fullDatabase || !fullDatabase[dir.key]) continue;
-                const sched = parseJSONSchedule(fullDatabase[dir.key]);
+                const sched = getScheduleFromDb(fullDatabase, dir.key);
                 if ((sched.headers || []).slice(1).length === 0) continue;
                 const rows = sched.rows;
                 if (!rows) continue;
@@ -1356,15 +1387,16 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
                     initialStatus = 'SUNDAY_ROLLOVER';
                 }
 
-                // Hard physical block on day 1 → skip pointless 7-day scan (still allow today's partials)
+                // Hard physical block on day 1 → skip pointless 7-day scan (still allow today's partials).
+                // Do NOT short-circuit on ERR_NO_SERVICE_TODAY when the request day is Sunday —
+                // that status is about today's sheets; rollover must still search weekdays.
                 if (evalResult.status === 'NO_PATH' && !isExplicitOverride) {
                     const earlyProbe = runHeuristicFailureProbe(origin, dest, dayType);
-                    if (
-                        typeof earlyProbe === 'object'
+                    const hardBlock = typeof earlyProbe === 'object'
                         || earlyProbe === 'ERR_CROSS_REGION'
                         || earlyProbe === 'ERR_DISCONNECTED_GRAPH'
-                        || earlyProbe === 'ERR_NO_SERVICE_TODAY'
-                    ) {
+                        || (earlyProbe === 'ERR_NO_SERVICE_TODAY' && dayType !== 'sunday');
+                    if (hardBlock) {
                         console.log("🛡️ Guardian: Hard physical block detected on Day 1. Short-circuiting 7-day loop.");
                         maxOffset = offset;
                     }

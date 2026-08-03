@@ -1042,7 +1042,5 @@
         }
         window.toggleLegend = toggleLegend;
 
-        if (window.innerWidth < 640) {
-            toggleLegend();
-        }
+        // Network Lines starts collapsed on entry (all viewports) — see map.astro markup.
     

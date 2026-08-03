@@ -353,13 +353,26 @@ export async function loadFromLocalCache(key, signal = null) {
 
 export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
     try {
-        if (!jsonRows || !Array.isArray(jsonRows) || jsonRows.length === 0) 
+        // Firebase / cache may hand back an object map instead of a dense array.
+        let rowsIn = jsonRows;
+        if (rowsIn && !Array.isArray(rowsIn) && typeof rowsIn === 'object') {
+            if (Array.isArray(rowsIn.rows) && Array.isArray(rowsIn.headers)) {
+                return rowsIn;
+            }
+            rowsIn = Object.keys(rowsIn)
+                .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+                .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+                .map((k) => rowsIn[k])
+                .filter((r) => r && typeof r === 'object');
+        }
+
+        if (!rowsIn || !Array.isArray(rowsIn) || rowsIn.length === 0) 
             return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: externalMetaDate };
 
         let extractedLastUpdated = externalMetaDate;
         
-        if (jsonRows.length > 0) {
-            const firstRow = jsonRows[0];
+        if (rowsIn.length > 0) {
+            const firstRow = rowsIn[0];
             const values = Object.values(firstRow).map(String);
             const dateValueIndex = values.findIndex(v => /last updated/i.test(v));
             if (dateValueIndex !== -1) {
@@ -369,14 +382,14 @@ export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
             }
         }
 
-        const cleanRows = jsonRows.filter(row => {
+        const cleanRows = rowsIn.filter(row => {
             const s = row['STATION'];
-            if (!s || typeof s !== 'string') return false;
-            const lower = s.toLowerCase().trim();
+            if (s == null || s === '') return false;
+            const lower = String(s).toLowerCase().trim();
             if (lower.startsWith('last updated') || lower.startsWith('updated:')) return false; 
             if (lower.includes('inter-station') || lower.includes('trip')) return false; 
             return true;
-        });
+        }).map((row) => (typeof row.STATION === 'string' ? row : { ...row, STATION: String(row.STATION) }));
 
         if (cleanRows.length === 0) return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: extractedLastUpdated };
 
@@ -392,6 +405,12 @@ export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
     } catch (e) {
         return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: externalMetaDate };
     }
+}
+
+/** Resolve a sheet from the regional fullDatabase (raw array, object map, or pre-parsed). */
+export function getScheduleFromDb(db, key) {
+    if (!db || !key) return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: null };
+    return parseJSONSchedule(db[key], db[`${key}_meta`] ?? null);
 }
 
 export async function processRouteDataFromDBAsync(route, targetDB) {
@@ -430,8 +449,19 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         Object.values(route.sheetKeys).forEach(dbKey => {
-            const sheetData = targetDB[dbKey];
-            if (!sheetData || !Array.isArray(sheetData)) return;
+            let sheetData = targetDB[dbKey];
+            if (!sheetData) return;
+            if (!Array.isArray(sheetData) && typeof sheetData === 'object') {
+                if (Array.isArray(sheetData.rows)) sheetData = sheetData.rows;
+                else {
+                    sheetData = Object.keys(sheetData)
+                        .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+                        .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+                        .map((k) => sheetData[k])
+                        .filter((r) => r && typeof r === 'object');
+                }
+            }
+            if (!Array.isArray(sheetData)) return;
             
             let headerIndex = -1;
             for (let j = 0; j < Math.min(sheetData.length, 5); j++) {
@@ -1079,6 +1109,9 @@ if (typeof window !== 'undefined') {
     window.currentTime = currentTime;
     window.currentDayType = currentDayType;
     window.currentDayIndex = currentDayIndex;
+    // Planner + classic scripts must not depend on admin-bridge for this.
+    window.parseJSONSchedule = parseJSONSchedule;
+    window.getScheduleFromDb = getScheduleFromDb;
     window.guardianFetch = guardianFetch;
     window.executeRegionSwap = executeRegionSwap;
     window.handleRegionChange = handleRegionChange;

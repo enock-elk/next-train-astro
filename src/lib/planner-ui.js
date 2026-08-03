@@ -9,7 +9,7 @@
 
 import { 
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
-    $globalDisruptions, $masterStationList, $userProfile 
+    $globalDisruptions, $masterStationList, $userProfile, $fullDatabase 
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES } from './config.js';
 import { 
@@ -21,6 +21,48 @@ import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } f
 import { executeRegionSwap, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
+
+/** True when regional DB + station index are usable for routing. */
+function plannerDatabaseReady() {
+    const db = $fullDatabase.get();
+    const idx = $globalStationIndex.get();
+    return !!(db && idx && Object.keys(idx).length > 0);
+}
+
+/** Ensure a route is pinned so loadAllSchedules does not no-op. */
+function ensurePlannerRoutePinned() {
+    if ($currentRouteId.get()) return;
+    const region = $userRegion.get() || 'GP';
+    let saved = safeStorage.getItem('defaultRoute_' + region);
+    if (!saved || !ROUTES[saved] || ROUTES[saved].region !== region) {
+        const regionRoutes = Object.values(ROUTES).filter(
+            (r) => r.region === region && r.isActive && r.id !== 'special_event'
+        );
+        saved = regionRoutes[0]?.id || null;
+        if (saved) safeStorage.setItem('defaultRoute_' + region, saved);
+    }
+    if (saved) $currentRouteId.set(saved);
+}
+
+/** SPA always planned against a hydrated regional DB. Wait / nudge load if cold. */
+async function ensurePlannerDatabase(timeoutMs = 12000) {
+    if (plannerDatabaseReady()) return true;
+    ensurePlannerRoutePinned();
+    try { await loadAllSchedules(true); } catch (e) { /* poll below */ }
+    if (plannerDatabaseReady()) return true;
+    const started = Date.now();
+    return await new Promise((resolve) => {
+        const id = setInterval(() => {
+            if (plannerDatabaseReady()) {
+                clearInterval(id);
+                resolve(true);
+            } else if (Date.now() - started >= timeoutMs) {
+                clearInterval(id);
+                resolve(false);
+            }
+        }, 200);
+    });
+}
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -103,6 +145,46 @@ export let plannerExpandedState = new Set();
 export let tripMapInstance = null;
 export let tripMapRouteLine = null;
 export let tripMapMarkers = [];
+let tripMapInitTimeout = null;
+let tripMapDestroyTimeout = null;
+
+function destroyTripMapInstance() {
+    if (tripMapInitTimeout) clearTimeout(tripMapInitTimeout);
+    if (tripMapDestroyTimeout) clearTimeout(tripMapDestroyTimeout);
+    tripMapInitTimeout = null;
+    tripMapDestroyTimeout = null;
+    if (tripMapInstance) {
+        try {
+            tripMapInstance.stopLocate();
+            tripMapInstance.off();
+            tripMapInstance.remove();
+        } catch (e) { /* ignore */ }
+        tripMapInstance = null;
+    }
+    tripMapRouteLine = null;
+    tripMapMarkers = [];
+    const mapCanvas = document.getElementById('trip-map-canvas');
+    if (mapCanvas) mapCanvas.innerHTML = '';
+    if (typeof window !== 'undefined') window._isMapInitializing = false;
+}
+
+function closeTripMapModal() {
+    if (typeof location !== 'undefined' && location.hash === '#trip-map') {
+        try { history.back(); } catch (e) { closeSmoothModal('trip-map-modal'); }
+    } else {
+        closeSmoothModal('trip-map-modal');
+    }
+    destroyTripMapInstance();
+}
+
+if (typeof window !== 'undefined' && !window.__ntTripMapPopBound) {
+    window.__ntTripMapPopBound = true;
+    window.addEventListener('popstate', () => {
+        if (location.hash !== '#trip-map' && (tripMapInstance || document.getElementById('trip-map-modal'))) {
+            destroyTripMapInstance();
+        }
+    });
+}
 
 // --- GUARDIAN PHASE 1: ROUTER BLEED & GREY SCREEN INTERCEPTOR ---
 if (typeof document !== 'undefined') {
@@ -116,19 +198,9 @@ if (typeof document !== 'undefined') {
                 return;
             }
             tripMapCloseBtn.dataset.isClosing = "true";
-            
             setTimeout(() => { delete tripMapCloseBtn.dataset.isClosing; }, 1000);
-
-            const modal = document.getElementById('trip-map-modal');
-            if (modal) {
-                modal.classList.add('opacity-0');
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                    if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
-                }, 300);
-            }
         }
-    }, true); 
+    }, true);
 }
 
 // --- INTERACTIVE SELECTORS & ACTIONS ---
@@ -193,7 +265,11 @@ export function toggleMainDayDropdown(e) {
 }
 
 export function selectMainDay(e, value, text) {
-    if (e) e.stopPropagation();
+    if (e) {
+        e.preventDefault?.();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+    }
     
     if (typeof window !== 'undefined' && window.toggleDropdownScrim) {
         window.toggleDropdownScrim(); 
@@ -530,154 +606,366 @@ export function extractTripCoordinates(tripIndex) {
     }
 }
 
-// --- CLIENT-SIDE LAZY-LOADED LEAFLET MAP DRAWING ISLAND ---
+// --- CLIENT-SIDE LAZY-LOADED LEAFLET MAP (parity with map.html chrome) ---
 export async function openTripMapRenderer(routeData) {
     if (typeof window === 'undefined') return;
+    triggerHaptic();
 
-    // Mutex Lock
-    if (window._isMapInitializing) return;
+    if (window._isMapInitializing || window._isRenderingHeavy) {
+        console.warn('🛡️ Guardian: Suppressed rapid map initialization (Mutex Lock or Canvas Render active).');
+        return;
+    }
     window._isMapInitializing = true;
 
-    const modal = document.getElementById('trip-map-modal');
+    if (!navigator.onLine && !window.L) {
+        showToast('Internet connection required to load live map.', 'error');
+        window._isMapInitializing = false;
+        return;
+    }
+
+    showToast('Loading live map...', 'info', 1500);
+
+    if (!document.getElementById('live-map-custom-styles')) {
+        const style = document.createElement('style');
+        style.id = 'live-map-custom-styles';
+        style.textContent = `
+            .gps-pulse { width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); animation: ntGpsPulse 2s infinite; border: 3px solid white; }
+            @keyframes ntGpsPulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+            .custom-div-icon { background: transparent; border: none; }
+            .dark .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+            .tooltip-dynamic { transition: opacity 0.3s ease, font-size 0.2s ease; font-family: inherit; opacity: 0; }
+            .leaflet-tooltip.tooltip-halo { background: transparent !important; border: none !important; box-shadow: none !important; white-space: nowrap; color: #1f2937; text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff; }
+            .dark .leaflet-tooltip.tooltip-halo { color: #ffffff !important; text-shadow: -1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.9) !important; }
+            .leaflet-tooltip.tooltip-halo::before { display: none !important; }
+            .disruption-line-overlay { animation: ntDashPulse 1.5s linear infinite; }
+            @keyframes ntDashPulse { to { stroke-dashoffset: -22; } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    if (!window.L) {
+        try {
+            await new Promise((resolve, reject) => {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+                document.head.appendChild(link);
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        } catch (e) {
+            showToast('Failed to load map engine.', 'error');
+            window._isMapInitializing = false;
+            return;
+        }
+    }
+
+    let modal = document.getElementById('trip-map-modal');
     if (!modal) {
-        const mapModalDiv = document.createElement('div');
-        mapModalDiv.id = 'trip-map-modal';
-        mapModalDiv.className = 'fixed inset-0 bg-black/80 z-[120] hidden flex items-center justify-center p-0 backdrop-blur-sm transition-opacity duration-300';
-        mapModalDiv.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-all scale-100 overflow-hidden relative">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0">
-                    <div>
-                        <h3 class="text-sm font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest" id="trip-map-title-primary">Live Journey Map</h3>
-                        <p class="text-[10px] text-gray-400 font-mono mt-0.5" id="trip-map-title-sub">GPS CORRIDOR TRACE</p>
+        modal = document.createElement('div');
+        modal.id = 'trip-map-modal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0 shadow-sm">
+                    <div class="flex items-center space-x-3 min-w-0 pr-2">
+                        <span class="text-2xl shrink-0" aria-hidden="true">🗺️</span>
+                        <div class="flex flex-col min-w-0">
+                            <h3 class="text-base font-black text-gray-900 dark:text-white truncate uppercase tracking-tight mb-0.5" id="trip-map-title">Route Map</h3>
+                            <p class="text-xs text-blue-600 dark:text-blue-400 font-bold truncate" id="trip-map-subtitle">Loading...</p>
+                        </div>
                     </div>
-                    <button id="close-trip-map-btn" class="p-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition focus:outline-none shrink-0 border border-gray-200 dark:border-gray-700">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                
-                <div id="trip-leaflet-container" class="flex-grow bg-gray-100 dark:bg-gray-900 relative"></div>
-                
-                <div class="absolute bottom-20 left-4 flex flex-col space-y-2 z-30">
-                    <button id="trip-map-locate-btn" class="bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition" aria-label="Center GPS">
-                        <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <button type="button" id="close-trip-map-btn" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition focus:outline-none shrink-0" aria-label="Close Map">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
 
-                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative shrink-0">
-                    <button id="close-trip-map-btn-2" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors text-sm uppercase tracking-wide">Close Map</button>
+                <div class="flex-grow w-full bg-gray-200 dark:bg-gray-800 relative z-10 min-h-0">
+                    <div id="trip-map-canvas" class="absolute inset-0"></div>
+
+                    <div class="absolute bottom-6 left-4 right-4 z-[1000] flex justify-between items-end pointer-events-none">
+                        <div class="flex items-end space-x-3 pointer-events-auto">
+                            <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                                <button type="button" id="custom-zoom-in" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-600 transition-colors focus:outline-none" aria-label="Zoom in">+</button>
+                                <button type="button" id="custom-zoom-out" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Zoom out">−</button>
+                            </div>
+                            <button type="button" id="custom-theme-btn" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">☀️</button>
+                        </div>
+                        <button type="button" id="custom-locate-btn" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
+                            <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0">
+                    <button type="button" id="close-trip-map-btn-2" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">Close Map</button>
                 </div>
             </div>
         `;
-        document.body.appendChild(mapModalDiv);
+        document.body.appendChild(modal);
+
+        document.getElementById('close-trip-map-btn')?.addEventListener('click', closeTripMapModal);
+        document.getElementById('close-trip-map-btn-2')?.addEventListener('click', closeTripMapModal);
     }
 
-    const loadLeaflet = () => {
-        return new Promise((resolve, reject) => {
-            if (window.L) return resolve();
-            
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-            document.head.appendChild(link);
-
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
-        });
-    };
-
     try {
-        await loadLeaflet();
-        
-        const titlePrimary = document.getElementById('trip-map-title-primary');
-        const titleSub = document.getElementById('trip-map-title-sub');
-        if (titlePrimary) titlePrimary.textContent = `${routeData.origin.replace(' STATION','')} ➔ ${routeData.destination.replace(' STATION','')}`;
-        if (titleSub) titleSub.textContent = `TRAIN TRACK: ${routeData.stationNames.length} STATIONS`;
+        if (location.hash !== '#trip-map') history.pushState({ modal: 'trip-map' }, '', '#trip-map');
+    } catch (e) { /* ignore */ }
+    openSmoothModal('trip-map-modal');
 
-        if (typeof openSmoothModal === 'function') openSmoothModal('trip-map-modal');
-        else document.getElementById('trip-map-modal').classList.remove('hidden');
+    if (tripMapInitTimeout) clearTimeout(tripMapInitTimeout);
+    if (tripMapDestroyTimeout) clearTimeout(tripMapDestroyTimeout);
 
-        // Allow DOM layout container transition to finish before Leaflet sizes coordinates
-        setTimeout(() => {
-            if (tripMapInstance) {
+    tripMapInitTimeout = setTimeout(() => {
+        if (tripMapInstance) {
+            try {
+                tripMapInstance.stopLocate();
+                tripMapInstance.off();
                 tripMapInstance.remove();
-                tripMapInstance = null;
-            }
+            } catch (e) { /* ignore */ }
+            tripMapInstance = null;
+            const mapCanvas = document.getElementById('trip-map-canvas');
+            if (mapCanvas) mapCanvas.innerHTML = '';
+        }
+        tripMapRouteLine = null;
+        tripMapMarkers = [];
 
-            tripMapInstance = window.L.map('trip-leaflet-container', {
+        try {
+            const L = window.L;
+            tripMapInstance = L.map('trip-map-canvas', {
                 zoomControl: false,
                 attributionControl: true
             });
 
-            // Mapbox or CartoDB Tiles (Dark mode aware)
-            const isDark = document.documentElement.classList.contains('dark');
-            const tileUrl = isDark 
-                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
-                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-            
-            window.L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(tripMapInstance);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(tripMapInstance);
 
-            const cleanPath = routeData.path.filter(p => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+            const routeLayerGroup = L.layerGroup().addTo(tripMapInstance);
+            const createDot = (bgColor, size) => L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color:${bgColor}; width: ${size}px; height: ${size}px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2]
+            });
 
-            if (cleanPath.length > 0) {
-                // Vector Track Line
-                tripMapRouteLine = window.L.polyline(cleanPath, {
-                    color: '#2563eb',
-                    weight: 5,
+            const drawRouteElements = () => {
+                routeLayerGroup.clearLayers();
+                const currentPath = (routeData.path || []).filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+                const currentOrigin = routeData.origin || '';
+                const currentDest = routeData.destination || '';
+                const currentValidStops = routeData.validStops || [];
+
+                const titleEl = document.getElementById('trip-map-title');
+                if (titleEl) titleEl.textContent = `${currentOrigin.replace(/ STATION/gi, '')} to ${currentDest.replace(/ STATION/gi, '')}`;
+                const subTitleEl = document.getElementById('trip-map-subtitle');
+                if (subTitleEl) {
+                    const stopCount = currentValidStops.length || currentPath.length;
+                    subTitleEl.textContent = `${stopCount} stops along route`;
+                }
+
+                if (currentPath.length === 0) return null;
+
+                const polyline = L.polyline(currentPath, {
+                    color: '#3b82f6',
+                    weight: 6,
                     opacity: 0.8,
-                    dashArray: '10, 10',
+                    lineCap: 'round',
                     lineJoin: 'round'
-                }).addTo(tripMapInstance);
+                }).addTo(routeLayerGroup);
+                tripMapRouteLine = polyline;
 
-                // Add Markers for each station node
+                const majorLabelClass = 'font-bold text-[11px] text-gray-900 dark:text-white z-50 tooltip-dynamic tooltip-halo';
+                const minorLabelClass = 'font-medium text-[9.5px] text-gray-700 dark:text-gray-300 tooltip-dynamic tooltip-halo minor-station-tooltip';
+
                 tripMapMarkers = [];
-                routeData.validStops.forEach((stop, idx) => {
-                    const isOrigin = idx === 0;
-                    const isDest = idx === routeData.validStops.length - 1;
-                    
-                    let pinColor = '#3b82f6'; // standard blue
-                    if (isOrigin) pinColor = '#22c55e'; // green origin
-                    if (isDest) pinColor = '#ef4444'; // red destination
-
-                    const customSvgIcon = window.L.divIcon({
-                        className: 'custom-map-icon',
-                        html: `<div style="background-color: ${pinColor}; width: 14px; height: 14px; border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.4);"></div>`,
-                        iconSize: [14, 14],
-                        iconAnchor: [7, 7]
+                if (currentValidStops.length > 0) {
+                    currentValidStops.forEach((stop, idx) => {
+                        if (idx !== 0 && idx !== currentValidStops.length - 1) {
+                            const m = L.circleMarker([stop.lat, stop.lon], {
+                                radius: 2.5, color: '#3b82f6', weight: 1, fillColor: '#ffffff', fillOpacity: 1
+                            }).bindTooltip(String(stop.name || '').replace(/ STATION/gi, ''), {
+                                permanent: true, direction: 'top', offset: [0, -5], className: minorLabelClass
+                            }).addTo(routeLayerGroup);
+                            tripMapMarkers.push(m);
+                        }
                     });
+                }
 
-                    const marker = window.L.marker([stop.lat, stop.lon], { icon: customSvgIcon }).addTo(tripMapInstance);
-                    
-                    const tooltipClass = isOrigin || isDest ? 'tooltip-dynamic font-bold' : 'tooltip-dynamic minor-station-tooltip';
-                    marker.bindTooltip(stop.name.replace(' STATION',''), {
-                        permanent: true,
-                        direction: 'top',
-                        offset: [0, -8],
-                        className: `bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-0 shadow-md text-[9px] px-1.5 py-0.5 rounded ${tooltipClass}`
+                L.marker(currentPath[0], { icon: createDot('#22c55e', 14) })
+                    .bindTooltip(`<b>Start:</b> ${currentOrigin.replace(/ STATION/gi, '')}`, {
+                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                    }).addTo(routeLayerGroup);
+
+                L.marker(currentPath[currentPath.length - 1], { icon: createDot('#ef4444', 14) })
+                    .bindTooltip(`<b>End:</b> ${currentDest.replace(/ STATION/gi, '')}`, {
+                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                    }).addTo(routeLayerGroup);
+
+                const activeDisruptions = routeData.globalDisruptions || {};
+                if (currentValidStops.length > 0) {
+                    const drawnIds = new Set();
+                    Object.values(activeDisruptions).flat().forEach((d) => {
+                        if (!d || drawnIds.has(d.id) || !d.stations || d.stations.length === 0) return;
+                        const normStations = d.stations.map((s) => normalizeStationName(s));
+                        const isCritical = d.tier === 'CRITICAL';
+                        const color = isCritical ? '#ef4444' : '#eab308';
+
+                        if (normStations.length >= 2) {
+                            const idx1 = currentValidStops.findIndex((vs) => normalizeStationName(vs.name) === normStations[0]);
+                            const idx2 = currentValidStops.findIndex((vs) => normalizeStationName(vs.name) === normStations[1]);
+                            if (idx1 === -1 || idx2 === -1) return;
+                            drawnIds.add(d.id);
+                            const start = Math.min(idx1, idx2);
+                            const end = Math.max(idx1, idx2);
+                            const segment = currentPath.slice(start, end + 1);
+                            L.polyline(segment, {
+                                color, weight: 10, opacity: 0.8, dashArray: '10, 12',
+                                lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
+                            }).addTo(routeLayerGroup);
+                            const midPoint = currentPath[Math.floor((start + end) / 2)];
+                            if (midPoint) {
+                                L.marker(midPoint, {
+                                    icon: L.divIcon({
+                                        className: 'custom-div-icon',
+                                        html: `<div class="flex items-center justify-center rounded-full shadow-lg border-2 border-white" style="width:22px;height:22px;background-color:${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`,
+                                        iconSize: [22, 22], iconAnchor: [11, 11]
+                                    })
+                                }).bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, {
+                                    permanent: true, direction: 'top', offset: [0, -10],
+                                    className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                                }).addTo(routeLayerGroup);
+                            }
+                        } else if (normStations.length === 1) {
+                            const idx1 = currentValidStops.findIndex((vs) => normalizeStationName(vs.name) === normStations[0]);
+                            if (idx1 === -1) return;
+                            drawnIds.add(d.id);
+                            const s1 = currentValidStops[idx1];
+                            L.marker([s1.lat, s1.lon], {
+                                icon: L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div class="flex items-center justify-center rounded-full shadow-lg border-2 border-white" style="width:24px;height:24px;background-color:${color};"><span class="text-xs text-white font-black">${isCritical ? '✕' : '!'}</span></div>`,
+                                    iconSize: [24, 24], iconAnchor: [12, 12]
+                                })
+                            }).bindTooltip(`<b>${isCritical ? 'STATION INCIDENT' : 'STATION DELAYS'}</b>`, {
+                                permanent: true, direction: 'top', offset: [0, -12],
+                                className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                            }).addTo(routeLayerGroup);
+                        }
                     });
-                    
-                    tripMapMarkers.push(marker);
-                });
+                }
 
-                // Auto-fit screen bounds
-                tripMapInstance.fitBounds(tripMapRouteLine.getBounds(), { padding: [40, 40] });
-            }
-
-            // Bind Center GPS Button
-            const locateBtn = document.getElementById('trip-map-locate-btn');
-            locateBtn.onclick = () => {
-                tripMapInstance.locate({ setView: true, maxZoom: 15 });
+                return polyline;
             };
 
-            window._isMapInitializing = false;
-        }, 350);
+            const initialPolyline = drawRouteElements();
+            if (initialPolyline) {
+                tripMapInstance.fitBounds(initialPolyline.getBounds(), { padding: [50, 50] });
+            }
 
-    } catch (e) {
-        console.error("Leaflet Initialization Failed", e);
-        window._isMapInitializing = false;
-    }
+            // map.html-parity action bar
+            const zoomInBtn = document.getElementById('custom-zoom-in');
+            const zoomOutBtn = document.getElementById('custom-zoom-out');
+            if (zoomInBtn) zoomInBtn.onclick = () => tripMapInstance.zoomIn();
+            if (zoomOutBtn) zoomOutBtn.onclick = () => tripMapInstance.zoomOut();
+
+            const themeBtn = document.getElementById('custom-theme-btn');
+            let isDarkNow = document.documentElement.classList.contains('dark');
+            if (themeBtn) {
+                themeBtn.textContent = isDarkNow ? '🌙' : '☀️';
+                themeBtn.onclick = () => {
+                    isDarkNow = !isDarkNow;
+                    document.documentElement.classList.toggle('dark', isDarkNow);
+                    try { localStorage.setItem('theme', isDarkNow ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+                    themeBtn.textContent = isDarkNow ? '🌙' : '☀️';
+                };
+            }
+
+            let lastKnownLatLng = null;
+            let userMarker = null;
+            let userRadius = null;
+            let isManualLocate = false;
+            const pulsingIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="gps-pulse"></div>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            const locateBtn = document.getElementById('custom-locate-btn');
+            const locateIcon = locateBtn ? locateBtn.querySelector('svg') : null;
+
+            tripMapInstance.on('locationfound', (e) => {
+                lastKnownLatLng = e.latlng;
+                const radius = e.accuracy / 2;
+                if (!userMarker) {
+                    userMarker = L.marker(e.latlng, { icon: pulsingIcon, zIndexOffset: 1000 }).addTo(tripMapInstance)
+                        .bindPopup(`<div class="text-xs font-bold text-center text-gray-900">You are here<br><span class="text-[10px] text-gray-500 font-normal">Within ${Math.round(radius)} meters</span></div>`);
+                    userRadius = L.circle(e.latlng, radius, {
+                        color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.15, weight: 1
+                    }).addTo(tripMapInstance);
+                } else {
+                    userMarker.setLatLng(e.latlng);
+                    userRadius.setLatLng(e.latlng);
+                    userRadius.setRadius(radius);
+                }
+                if (locateIcon) {
+                    locateIcon.classList.remove('animate-spin', 'text-gray-400');
+                    locateIcon.classList.add('text-blue-600', 'dark:text-blue-400');
+                }
+                if (isManualLocate) {
+                    tripMapInstance.flyTo(e.latlng, 15, { duration: 1.5 });
+                    isManualLocate = false;
+                }
+            });
+
+            tripMapInstance.on('locationerror', (e) => {
+                if (locateIcon) {
+                    locateIcon.classList.remove('animate-spin', 'text-blue-600', 'dark:text-blue-400');
+                    locateIcon.classList.add('text-gray-400');
+                }
+                if (e.code !== 1) console.warn('Location error:', e.message);
+            });
+
+            tripMapInstance.locate({ setView: false, watch: true, enableHighAccuracy: true });
+
+            if (locateBtn) {
+                locateBtn.onclick = () => {
+                    triggerHaptic();
+                    if (lastKnownLatLng) {
+                        tripMapInstance.flyTo(lastKnownLatLng, 15, { duration: 1.5 });
+                    } else {
+                        if (locateIcon) {
+                            locateIcon.classList.remove('text-gray-400');
+                            locateIcon.classList.add('animate-spin', 'text-blue-600', 'dark:text-blue-400');
+                        }
+                        isManualLocate = true;
+                        tripMapInstance.locate({ setView: false, enableHighAccuracy: true, maxZoom: 15 });
+                    }
+                };
+            }
+
+            const updateTooltipSize = () => {
+                const zoom = tripMapInstance.getZoom();
+                document.querySelectorAll('.tooltip-dynamic').forEach((t) => {
+                    t.style.opacity = zoom < 11 ? '0' : '1';
+                });
+                if (zoom >= 11 && zoom < 13) {
+                    document.querySelectorAll('.minor-station-tooltip').forEach((t) => { t.style.opacity = '0'; });
+                }
+            };
+            tripMapInstance.on('zoomend', updateTooltipSize);
+            updateTooltipSize();
+        } catch (e) {
+            console.error('Map Init Error:', e);
+            showToast('Could not open live map.', 'error');
+        } finally {
+            window._isMapInitializing = false;
+        }
+    }, 350);
 }
 
 // --- TIMELINE BUILDER VIEW ENGINE ---
@@ -1606,7 +1894,9 @@ export function initPlanner() {
     if (inputSection && !document.getElementById('planner-day-select-container')) {
         const daySelectDiv = document.createElement('div');
         daySelectDiv.id = "planner-day-select-container";
-        daySelectDiv.className = "mb-4 relative z-30"; 
+        // z-10 baseline — toggleDropdownScrim elevates to z-[160] while open.
+        // Do not use z-30 here; a leftover scale class can fight the elevate pass.
+        daySelectDiv.className = "mb-4 relative z-10"; 
         
         let selDay = (typeof selectedPlannerDay !== 'undefined' && selectedPlannerDay) ? selectedPlannerDay : getCurrentDayType();
         let selText = plannerDayDisplayText(selDay, selectedPlannerDate);
@@ -2190,9 +2480,28 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     if (!selectedPlannerDay) selectedPlannerDay = getCurrentDayType();
 
     setTimeout(async () => {
+        let plannerResponse = { status: 'NO_PATH', trips: [] };
+        const dbReady = await ensurePlannerDatabase();
+        if (!dbReady) {
+            spinnerTimers.forEach(t => clearTimeout(t));
+            isSearching = false;
+            showToast('Schedules still loading — try again in a moment.', 'error', 3500);
+            if (resultsContainer) {
+                resultsContainer.innerHTML = `
+                    <div class="min-h-[400px] flex flex-col justify-center items-center text-center p-6">
+                        <p class="text-base font-bold text-gray-800 dark:text-gray-100 mb-2">Schedules still loading</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">The regional timetable has not finished downloading yet. Please try your search again.</p>
+                        <button type="button" id="planner-retry-after-load" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl text-sm">Try again</button>
+                    </div>`;
+                document.getElementById('planner-retry-after-load')?.addEventListener('click', () => {
+                    executeTripPlan(origin, dest, preferredTime);
+                });
+            }
+            return;
+        }
+
         spinnerTimers.forEach(t => clearTimeout(t));
         isSearching = false;
-        let plannerResponse = { status: 'NO_PATH', trips: [] };
         if (typeof planUnifiedTrip === 'function') {
             const extContext = {};
             if ($isSimMode.get()) {

@@ -113,7 +113,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   <div id="map-placeholder" data-nosnippet aria-hidden="true">
     <div class="text-center p-6">
       <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7"></path></svg>
+        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7"></path></svg>
       </div>
       <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Loading Network...</h3>
       <svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400 mx-auto mt-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -151,9 +151,9 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     <div class="legend-box">
       <div class="legend-header" onclick="toggleLegend()">
         <h4 class="font-black text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400">Network Lines</h4>
-        <svg id="legend-icon" class="w-4 h-4 text-gray-400 toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+        <svg id="legend-icon" class="w-4 h-4 text-gray-400 toggle-icon rotated" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
       </div>
-      <div id="legend-content" class="legend-content mt-3"></div>
+      <div id="legend-content" class="legend-content mt-3 collapsed"></div>
     </div>
   </div>
 

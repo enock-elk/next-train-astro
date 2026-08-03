@@ -179,7 +179,7 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-[60] shrink-0"></div>
+                <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
                 <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
             </div>`;
         document.body.appendChild(modal);

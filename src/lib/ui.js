@@ -319,15 +319,21 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
     const allLists = ['sidenav-region-list', 'route-modal-region-list', 'custom-time-list', 'main-day-list', 'header-day-list', 'grid-day-list'];
     const allChevrons = ['sidenav-region-chevron', 'route-modal-region-chevron', 'custom-time-chevron', 'main-day-chevron', 'header-day-chevron', 'grid-day-chevron'];
 
-    // Maps each dropdown list to the specific outer wrapper that controls its CSS stacking context
+    // Maps each dropdown list to the outer wrapper that owns the stacking context.
+    // grid-day-list must elevate #grid-controls (not the inner chip) — a child z-index
+    // cannot escape a parent stacking context, and the scrim sits at z-90 in the modal.
     const wrapperMap = {
         'sidenav-region-list': 'sidenav-region-wrapper',
         'route-modal-region-list': 'route-modal-region-container',
         'custom-time-list': 'custom-time-dropdown-container',
         'main-day-list': 'planner-day-select-container',
         'header-day-list': 'planner-header-badge',
-        'grid-day-list': 'grid-day-dropdown-container'
+        'grid-day-list': 'grid-controls'
     };
+
+    const Z_ELEVATED = 'z-[160]';
+    const Z_BASELINE = 'z-10';
+    const Z_STALE = ['z-[160]', 'z-[60]', 'z-30', 'z-10'];
 
     const resetAllWrappers = () => {
         allLists.forEach((id) => {
@@ -336,8 +342,8 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             const el = document.getElementById(id);
             const targetEl = wrapper || (el ? el.parentElement : null);
             if (targetEl) {
-                targetEl.classList.remove('z-[160]');
-                targetEl.classList.add('z-10');
+                Z_STALE.forEach((cls) => targetEl.classList.remove(cls));
+                targetEl.classList.add(Z_BASELINE);
             }
         });
     };
@@ -362,24 +368,28 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             const isInlineDropdown = ['main-day-list', 'header-day-list', 'custom-time-list', 'grid-day-list'].includes(listId);
 
             const gridModal = list.closest('#full-schedule-modal');
+            // Prefer the schedule modal over a nested `.transform` card so scrim
+            // z-index / append target match the modal rules (not the inner shell).
             const container = list.closest('#sidenav')
-                || list.closest('.transform')
                 || gridModal
+                || list.closest('.transform')
                 || list.closest('.view-section')
                 || list.closest('#main-content')
                 || document.body;
 
             // Let Travel Day / time menus paint below the trigger without being clipped by the shell
             document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
+            document.getElementById('main-content')?.classList.remove('dropdown-escape');
             if (isInlineDropdown && container?.classList?.contains('view-section')) {
                 container.classList.add('dropdown-escape');
+                document.getElementById('main-content')?.classList.add('dropdown-escape');
             }
 
             if (scrim.parentNode !== container) {
                 container.appendChild(scrim);
             }
 
-            scrim.classList.remove('bg-black/20', 'bg-black/40', 'bg-black/60', 'bg-transparent');
+            scrim.classList.remove('bg-black/20', 'bg-black/40', 'bg-black/60', 'bg-transparent', 'z-[40]', 'z-[90]');
 
             if (container === document.body) {
                 scrim.classList.remove('absolute', 'rounded-xl', 'rounded-2xl', 'rounded-lg', 'z-[40]', 'z-[90]');
@@ -388,11 +398,13 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
                 scrim.classList.remove('fixed', 'z-[150]');
                 scrim.classList.add('absolute');
 
+                // Inline menus use a transparent dismiss layer BELOW the elevated
+                // trigger (z-160). Opaque modal dims can sit higher.
                 if (container.id === 'sidenav') scrim.classList.add('z-[40]', 'bg-transparent');
-                else if (container.id === 'full-schedule-modal') scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/40');
+                else if (container.id === 'full-schedule-modal') scrim.classList.add(isInlineDropdown ? 'z-[40]' : 'z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/40');
                 else if (container.classList.contains('view-section')) scrim.classList.add('z-[40]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
-                else if (container.id === 'main-content') scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
-                else scrim.classList.add('z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
+                else if (container.id === 'main-content') scrim.classList.add(isInlineDropdown ? 'z-[40]' : 'z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
+                else scrim.classList.add(isInlineDropdown ? 'z-[40]' : 'z-[90]', isInlineDropdown ? 'bg-transparent' : 'bg-black/60');
 
                 if (container.classList.contains('rounded-xl')) scrim.classList.add('rounded-xl');
                 else if (container.classList.contains('rounded-2xl')) scrim.classList.add('rounded-2xl');
@@ -405,8 +417,8 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             const targetActiveEl = activeWrapper || list.parentElement;
             
             if (targetActiveEl) {
-                targetActiveEl.classList.remove('z-10');
-                targetActiveEl.classList.add('z-[160]', 'relative');
+                Z_STALE.forEach((cls) => targetActiveEl.classList.remove(cls));
+                targetActiveEl.classList.add(Z_ELEVATED, 'relative');
             }
 
             list.classList.remove('hidden');
@@ -420,6 +432,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             if (chevron) chevron.classList.remove('rotate-180');
             resetAllWrappers();
             document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
+            document.getElementById('main-content')?.classList.remove('dropdown-escape');
             
             scrim.classList.add('opacity-0');
             setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);
@@ -434,6 +447,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
         });
         resetAllWrappers();
         document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
+        document.getElementById('main-content')?.classList.remove('dropdown-escape');
         
         scrim.classList.add('opacity-0');
         setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);

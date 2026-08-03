@@ -53,13 +53,19 @@ Later (not today): province pages, station pages, auto-sitemap from all `ROUTES`
 - [ ] Preview (`github.io`) stays `noindex`; production indexes
 - [ ] Production deploy + GSC sitemap submit
 
-## Deploy steps
+## Deploy steps (dual-repo, zero-downtime)
 
-1. Merge/push production Astro build to the host that serves `nexttrain.co.za`.
-2. Confirm build emits `dist/routes/*.html` and `dist/routes.html`.
-3. Smoke test mobile: GP home, one WC route, one KZN route, share link, guide.
-4. In GSC: submit updated sitemap; URL-inspect 1–2 seed landings.
-5. Watch Sentry/Clarity 48–72h (Phase 1).
+Host stays `enock-elk/metrorail-app` (CNAME `nexttrain.co.za`). Astro source stays in `next-train-astro`.
+
+1. **One-time secret** on `next-train-astro`: `METRORAIL_APP_DEPLOY_TOKEN` — PAT with Contents write on `metrorail-app`.
+2. Optional dry run: Actions → **Deploy production → metrorail-app** → `confirm=DEPLOY`, `dry_run=true`.
+3. Go live: same workflow with `confirm=DEPLOY`, `dry_run=false`. Publishes `dist/` only; **`data/` is never touched**.
+4. Purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker).
+5. Smoke test mobile: GP home, one WC route, one KZN route, share link, guide.
+6. In GSC: submit updated sitemap; URL-inspect 1–2 seed landings.
+7. Watch Sentry/Clarity 48–72h (Phase 1).
+
+Rollback: redeploy the previous `metrorail-app` commit (or re-run an older known-good Astro SHA through the same workflow).
 
 ## Done when
 

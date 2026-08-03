@@ -1,0 +1,263 @@
+# PRODUCTION cutover / release → https://nexttrain.co.za
+#
+# Dual-repo strategy:
+#   next-train-astro  = Astro source + github.io preview
+#   metrorail-app     = live GitHub Pages host (CNAME nexttrain.co.za) + schedule data/
+#
+# This workflow builds with base=/ , verifies URL parity, then publishes ONLY the
+# Astro dist/ into metrorail-app/main while protecting data/ and host metadata.
+#
+# ONE-TIME SETUP (repo secrets on next-train-astro):
+#   METRORAIL_APP_DEPLOY_TOKEN
+#     Fine-grained PAT (or classic) with Contents: Read & Write on enock-elk/metrorail-app.
+#     Do not use GITHUB_TOKEN — it cannot push to a different repository.
+#
+# AFTER a successful run: purge Cloudflare cache for nexttrain.co.za (HTML + SW).
+name: Deploy production → metrorail-app
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to publish dist/ to metrorail-app (live site)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build + sync locally in the runner but do not push'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production-metrorail-app
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TARGET_REPO: enock-elk/metrorail-app
+  TARGET_BRANCH: main
+  SITE_ORIGIN: https://nexttrain.co.za
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require confirmation phrase
+        if: ${{ inputs.confirm != 'DEPLOY' }}
+        run: |
+          echo "::error::Refusing to deploy. Set confirm input to exactly: DEPLOY"
+          exit 1
+
+      - name: Require deploy token (unless dry-run)
+        if: ${{ !inputs.dry_run }}
+        env:
+          TOKEN: ${{ secrets.METRORAIL_APP_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Missing secret METRORAIL_APP_DEPLOY_TOKEN on this repository."
+            echo "Create a PAT with Contents write on ${{ env.TARGET_REPO }} and add it as that secret."
+            exit 1
+          fi
+
+  build:
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Astro source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for production (base=/)
+        run: npm run build
+        env:
+          PUBLIC_SITE_URL: ${{ env.SITE_ORIGIN }}
+          PUBLIC_BASE_PATH: /
+
+      - name: Verify URL parity
+        run: npm run verify:urls
+
+      - name: Assert production base (not preview /next-train-astro/)
+        run: |
+          set -euo pipefail
+          if grep -Rsn '/next-train-astro/' dist/index.html dist/manifest.json >/dev/null 2>&1; then
+            echo "::error::Build still references /next-train-astro/ — PUBLIC_BASE_PATH override failed"
+            exit 1
+          fi
+          if ! grep -q 'rel="canonical" href="https://nexttrain.co.za/"' dist/index.html; then
+            echo "::error::dist/index.html canonical is not ${SITE_ORIGIN}/"
+            exit 1
+          fi
+          test -f dist/index.html
+          test -f dist/sw.js
+          test -f dist/sitemap.xml
+          test -d dist/routes
+          echo "Production build surface looks correct."
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexttrain-production-dist
+          path: dist
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: nexttrain-production-dist
+          path: dist
+
+      - name: Checkout live host (metrorail-app)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TARGET_REPO }}
+          ref: ${{ env.TARGET_BRANCH }}
+          # dry-run: read-only clone via GITHUB_TOKEN (public repo). live: PAT with write.
+          token: ${{ inputs.dry_run && github.token || secrets.METRORAIL_APP_DEPLOY_TOKEN }}
+          path: site
+          persist-credentials: true
+
+      - name: Snapshot protected paths before sync
+        id: protect
+        working_directory: site
+        run: |
+          set -euo pipefail
+          test -d data
+          DATA_COUNT=$(find data -type f | wc -l)
+          echo "data_files=$DATA_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$DATA_COUNT" -lt 1 ]; then
+            echo "::error::metrorail-app/data/ is empty — aborting to protect CDN fallback"
+            exit 1
+          fi
+          # Stash CNAME bytes (may include BOM / trailing spaces historically)
+          if [ -f CNAME ]; then
+            cp CNAME /tmp/live-CNAME.bak
+          fi
+          echo "Protected data/ has $DATA_COUNT files."
+
+      - name: Sync dist → host (protect data/ + repo metadata)
+        run: |
+          set -euo pipefail
+          # --delete removes obsolete SPA files (js/, service-worker.js, *.min.html, etc.)
+          # Excludes keep schedule CDN payload + host/repo scaffolding intact.
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'data/' \
+            --exclude 'CNAME' \
+            --exclude 'LICENSE' \
+            --exclude 'tools/' \
+            --exclude '.cursor/' \
+            --exclude '.cursorignore' \
+            --exclude '.cursorrules' \
+            --exclude '.gitignore' \
+            dist/ site/
+
+          # Always pin the production hostname (do not trust whatever was in dist)
+          printf 'nexttrain.co.za\n' > site/CNAME
+
+          # Provenance for ops / rollback forensics
+          cat > site/astro-deploy.json <<EOF
+          {
+            "sourceRepo": "enock-elk/next-train-astro",
+            "sourceSha": "${{ github.sha }}",
+            "sourceRef": "${{ github.ref_name }}",
+            "deployedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflowRun": "${{ github.run_id }}",
+            "site": "https://nexttrain.co.za"
+          }
+          EOF
+
+      - name: Post-sync safety checks
+        run: |
+          set -euo pipefail
+          test -d site/data
+          AFTER=$(find site/data -type f | wc -l)
+          BEFORE=${{ steps.protect.outputs.data_files }}
+          if [ "$AFTER" -ne "$BEFORE" ]; then
+            echo "::error::data/ file count changed ($BEFORE → $AFTER). Aborting."
+            exit 1
+          fi
+          # Critical schedule payloads used by PIPELINE_SOURCES.GITHUB
+          test -f site/data/full-database.json || test -d site/data/schedules
+          test -f site/index.html
+          test -f site/sw.js
+          test -f site/CNAME
+          grep -qx 'nexttrain.co.za' site/CNAME
+          # Must not leave Astro source tree on the live host
+          if [ -d site/src ] || [ -f site/package.json ] || [ -f site/astro.config.mjs ]; then
+            echo "::error::Astro source leaked into metrorail-app — aborting"
+            exit 1
+          fi
+          echo "Safety checks passed (data/ untouched: $AFTER files)."
+
+      - name: Summarise publish delta
+        run: |
+          {
+            echo '### Production publish'
+            echo
+            echo "- Source: \`${{ github.repository }}@${{ github.sha }}\`"
+            echo "- Target: \`${{ env.TARGET_REPO }}@${{ env.TARGET_BRANCH }}\`"
+            echo "- Dry run: \`${{ inputs.dry_run }}\`"
+            echo "- Protected \`data/\` files: ${{ steps.protect.outputs.data_files }}"
+            echo
+            echo '#### Top-level after sync'
+            echo '```'
+            ls -la site | head -n 60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit and push to metrorail-app
+        if: ${{ !inputs.dry_run }}
+        working_directory: site
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          # Explicitly keep data/ if somehow unstaged; never delete it
+          git add -f data || true
+
+          if git diff --staged --quiet; then
+            echo "No site changes to publish."
+            exit 0
+          fi
+
+          # Hard refuse if staged diff touches data/
+          if git diff --staged --name-only | grep -E '^data(/|$)' >/dev/null; then
+            echo "::error::Staged changes touch data/ — refusing push"
+            git diff --staged --name-only | grep -E '^data(/|$)' || true
+            exit 1
+          fi
+
+          SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)
+          git commit -m "$(cat <<EOF
+          deploy: Astro production cutover from next-train-astro@${SHORT_SHA}
+
+          Built with PUBLIC_BASE_PATH=/ for nexttrain.co.za.
+          data/ left untouched (schedule CDN allowlist).
+          EOF
+          )"
+
+          git push origin "HEAD:${{ env.TARGET_BRANCH }}"
+          echo "Pushed to ${{ env.TARGET_REPO }}@${{ env.TARGET_BRANCH }}"
+
+      - name: Dry-run notice
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "::notice::Dry run complete — nothing was pushed. Re-run with dry_run=false and confirm=DEPLOY to go live."
+          echo "Next: purge Cloudflare cache for nexttrain.co.za after a real deploy."

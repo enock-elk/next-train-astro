@@ -1,16 +1,13 @@
 # PRODUCTION build for nexttrain.co.za — manual trigger only.
 #
-# This workflow deliberately builds and verifies but does NOT deploy. The live
-# domain currently points at the metrorail-app SPA, and the cutover should be a
-# conscious act, not a side effect of pushing to a branch. It produces a
-# downloadable `dist` artifact you can inspect or hand to a host.
+# Builds + verifies + uploads a dist artifact. Does NOT publish to the live host.
+# For the zero-downtime cutover (push dist → metrorail-app), use:
+#   .github/workflows/deploy-production.yml
 #
 # Why the env vars are explicit: astro.config.mjs treats GITHUB_ACTIONS=true as
 # "GitHub project Pages" and defaults to base=/next-train-astro/ on the
 # github.io origin. A production build must override both, or every asset URL and
 # canonical comes out pointing at the preview site.
-#
-# When you pick a host, add one of the deploy paths at the bottom.
 name: Production build (nexttrain.co.za)
 
 on:
@@ -56,6 +53,8 @@ jobs:
               canonical=$(grep -o '<link rel="canonical" href="[^"]*"' "$f" | head -1 | sed 's/.*href="//;s/"//')
               echo "| /$name | ${canonical:-none} |"
             done
+            echo
+            echo 'To publish live: run workflow **Deploy production → metrorail-app** with confirm=`DEPLOY`.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload production build
@@ -64,25 +63,3 @@ jobs:
           name: nexttrain-production-dist
           path: dist
           retention-days: 14
-
-      # ── Deploy: pick ONE once the host is decided ────────────────────────────
-      #
-      # Option A — GitHub Pages on this repo. Requires moving the nexttrain.co.za
-      # CNAME off metrorail-app, and this repo's Pages environment is currently
-      # owned by the preview workflow, so retire deploy.yml first.
-      #
-      #   - name: Add CNAME
-      #     run: echo 'nexttrain.co.za' > dist/CNAME
-      #   - uses: actions/upload-pages-artifact@v3
-      #     with: { path: dist }
-      #
-      # Option B — Cloudflare Pages. Honours public/_redirects, and lets the
-      # preview deploy keep GitHub Pages. Needs CLOUDFLARE_API_TOKEN and
-      # CLOUDFLARE_ACCOUNT_ID repository secrets.
-      #
-      #   - name: Deploy to Cloudflare Pages
-      #     uses: cloudflare/wrangler-action@v3
-      #     with:
-      #       apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      #       accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      #       command: pages deploy dist --project-name=nexttrain

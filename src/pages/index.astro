@@ -11,7 +11,7 @@ import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
 ---
 
-<Layout title="Next Train | Live Schedules">
+<Layout title="Next Train | Live Schedules" unlockShellEarly={true}>
     
     <!-- SIDENAV / SETTINGS HUB -->
     <Sidenav />
@@ -28,10 +28,10 @@ import HubModals from '../components/HubModals.astro';
     <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
     <HubModals />
 
-    <!-- Boot gate: hidden until schedules/welcome ready (GAP-018). Inline style beats FOUC. -->
+    <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
     <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
         <img src="/icons/loading-logo.png" alt="" class="w-16 h-16 mb-4 animate-pulse" width="64" height="64" />
-        <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Loading schedules…</p>
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
     </div>
 
     <!-- MAIN APP — fills device height; active tab expands into remaining space -->
@@ -115,10 +115,17 @@ import HubModals from '../components/HubModals.astro';
         const overlay = document.getElementById('loading-overlay');
         if (main) main.style.visibility = '';
         if (overlay) overlay.style.display = 'none';
+        try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
+        try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
     };
     // Fix loader image base path for GitHub Pages preview
     const loaderImg = document.querySelector('#loading-overlay img');
     if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo.png'));
+
+    // Never lock the UI behind schedule downloads (slow/offline must still reach chrome).
+    revealAppShell();
+    setTimeout(revealAppShell, 900);
+
     import { initPlanner, applyPlannerDeepLink } from '../lib/planner-ui.js';
     import '../lib/renderer.js';
     import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
@@ -215,6 +222,8 @@ import HubModals from '../components/HubModals.astro';
     window.revealAppShell = revealAppShell;
 
     const igniteDataEngine = async () => {
+        // Shell is already visible — schedules hydrate in the background.
+        revealAppShell();
         try {
             if (await applyRouteDeepLink()) {
                 checkServiceAlerts();
@@ -232,8 +241,6 @@ import HubModals from '../components/HubModals.astro';
             const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
             if (!welcomeSeen) {
                 console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
-                // Welcome modal is outside #main-content — reveal shell under it
-                revealAppShell();
                 return;
             }
 
@@ -259,11 +266,15 @@ import HubModals from '../components/HubModals.astro';
 
             if (savedDefault) {
                 $currentRouteId.set(savedDefault);
-                console.log("🛡️ Guardian: Igniting Data Engine...");
-                await loadAllSchedules(true);
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                if (location.hash === '#fare') await consumeHashDeeplinks();
+                console.log("🛡️ Guardian: Igniting Data Engine (background)…");
+                // Do not await — poor networks must not block chrome / map→home return.
+                loadAllSchedules(false)
+                    .then(async () => {
+                        checkServiceAlerts();
+                        await flushPendingDeeplinkIntents();
+                        if (location.hash === '#fare') await consumeHashDeeplinks();
+                    })
+                    .catch((e) => console.warn('🛡️ Guardian: Background schedule load failed', e));
             }
         } finally {
             revealAppShell();

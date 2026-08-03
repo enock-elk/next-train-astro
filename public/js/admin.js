@@ -122,6 +122,21 @@ const Admin = {
             globe: '<circle cx="12" cy="12" r="9"/><path d="M2 12h20"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10 15 15 0 014-10z"/>',
             camera: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
             siren: '<path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/>',
+            refresh: '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
+            download: '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+            search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+            mail: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/>',
+            phone: '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>',
+            paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>',
+            bug: '<path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6.53 9C4.6 9.9 3 11.6 3 14M17.47 9c1.93.9 3.53 2.6 3.53 5M3 13h2M19 13h2M4 18h2M18 18h2"/>',
+            lightbulb: '<path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/>',
+            clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+            hourglass: '<path d="M5 2h14M5 22h14M5 2v4l5.5 6L5 18v4M19 2v4l-5.5 6L19 18v4"/>',
+            pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16h14v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 00-1-1H10a1 1 0 00-1 1v3.76z"/>',
+            copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
+            reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 00-4-4H4"/>',
+            file: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
+            circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
         };
         const body = paths[name];
         if (!body) return '';
@@ -392,8 +407,30 @@ const Admin = {
     // injection was already purged; this vestigial property had no remaining references.
     
     isGridMode: true,
-    gridCols: 2, 
+    gridCols: 3,
     _modulesRendered: false,
+
+    /** Compact unread count for tile badges (number only). */
+    formatBadgeCount: (n) => {
+        const c = Number(n) || 0;
+        if (c <= 0) return '';
+        return c > 99 ? '99+' : String(c);
+    },
+
+    /** Keep the column-cycle button icon in sync with Admin.gridCols. */
+    syncGridToggleIcon: (btn = document.getElementById('grid-view-toggle')) => {
+        if (!btn) return;
+        if (Admin.gridCols === 1) {
+            btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
+            btn.title = 'List view · tap for 2 columns';
+        } else if (Admin.gridCols === 2) {
+            btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>`;
+            btn.title = '2 columns · tap for 3 columns';
+        } else {
+            btn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z"></path></svg>`;
+            btn.title = '3 columns · tap for list view';
+        }
+    },
 
     // --- UNIVERSAL NUMBER FORMATTER ---
     formatNumber: (val) => {
@@ -446,8 +483,7 @@ const Admin = {
                 totalUnread += fbUnread;
                 const fbBadge = document.getElementById('fb-unread-badge');
                 if (fbBadge) {
-                    fbBadge.textContent = fbUnread > 0 ? `${fbUnread} New` : '';
-                    // 🛡️ GUARDIAN FIX: Safely toggle 'hidden' without destroying Tailwind utility classes
+                    fbBadge.textContent = Admin.formatBadgeCount(fbUnread);
                     fbBadge.classList.toggle('hidden', fbUnread === 0);
                 }
             }
@@ -467,7 +503,7 @@ const Admin = {
                 totalUnread += crUnread;
                 const crBadge = document.getElementById('crash-unread-badge');
                 if (crBadge) {
-                    crBadge.textContent = crUnread > 0 ? `${crUnread} New` : '';
+                    crBadge.textContent = Admin.formatBadgeCount(crUnread);
                     crBadge.classList.toggle('hidden', crUnread === 0);
                 }
             }
@@ -487,7 +523,7 @@ const Admin = {
                 totalUnread += deUnread;
                 const deBadge = document.getElementById('de-unread-badge');
                 if (deBadge) {
-                    deBadge.textContent = deUnread > 0 ? `${deUnread} New` : '';
+                    deBadge.textContent = Admin.formatBadgeCount(deUnread);
                     deBadge.classList.toggle('hidden', deUnread === 0);
                 }
             }
@@ -507,7 +543,7 @@ const Admin = {
                 totalUnread += drUnread;
                 const drBadge = document.getElementById('dr-unread-badge');
                 if (drBadge) {
-                    drBadge.textContent = drUnread > 0 ? `${drUnread} New` : '';
+                    drBadge.textContent = Admin.formatBadgeCount(drUnread);
                     drBadge.classList.toggle('hidden', drUnread === 0);
                 }
             }
@@ -527,7 +563,7 @@ const Admin = {
                 totalUnread += mqUnread;
                 const mqBadge = document.getElementById('mq-unread-badge');
                 if (mqBadge) {
-                    mqBadge.textContent = mqUnread > 0 ? `${mqUnread} New` : '';
+                    mqBadge.textContent = Admin.formatBadgeCount(mqUnread);
                     mqBadge.classList.toggle('hidden', mqUnread === 0);
                 }
             }
@@ -844,23 +880,32 @@ const Admin = {
         let yMin = Math.max(0, Math.floor(minVal - (spread > 0 ? spread * 0.2 : minVal * 0.5)));
         
         // 🛡️ GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
-        if (allData.includes(0)) {
+        if (allData.some((v) => v === 0)) {
             yMin = 0;
         }
 
         const yRange = yMax - yMin || 10;
 
         const getX = (i) => pl + (i * (uw / Math.max(1, numPoints - 1)));
-        const getY = (v) => pt + uh - (((v - yMin) / yRange) * uh);
-        
-        // Start Path
-        let pathD = `M ${getX(0)} ${getY(dataArray[0])}`;
-        for(let i=1; i<numPoints; i++) {
-            pathD += ` L ${getX(i)} ${getY(dataArray[i])}`;
+        const getY = (v) => pt + uh - ((((Number(v) || 0) - yMin) / yRange) * uh);
+
+        // Build path only across known buckets (null = future / unreported — do not draw to 0)
+        const knownIdx = [];
+        for (let i = 0; i < numPoints; i++) {
+            if (dataArray[i] !== null && dataArray[i] !== undefined) knownIdx.push(i);
         }
-        
-        // Area Fill Path
-        let areaD = pathD + ` L ${getX(numPoints - 1)} ${pt+uh} L ${getX(0)} ${pt+uh} Z`;
+        let pathD = '';
+        if (knownIdx.length > 0) {
+            pathD = `M ${getX(knownIdx[0])} ${getY(dataArray[knownIdx[0]])}`;
+            for (let k = 1; k < knownIdx.length; k++) {
+                pathD += ` L ${getX(knownIdx[k])} ${getY(dataArray[knownIdx[k]])}`;
+            }
+        }
+        const firstKnown = knownIdx[0] ?? 0;
+        const lastKnown = knownIdx[knownIdx.length - 1] ?? 0;
+        let areaD = pathD
+            ? `${pathD} L ${getX(lastKnown)} ${pt+uh} L ${getX(firstKnown)} ${pt+uh} Z`
+            : '';
         
         // Colors & Theme Independence (hardcoded hex for perfect exportability)
         const lineColor = '#3b82f6';
@@ -885,15 +930,21 @@ const Admin = {
         
         // 🛡️ COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
         if (compareDataArray && numPoints > 1) {
-            let comparePathD = `M ${getX(0)} ${getY(compareDataArray[0] || 0)}`;
-            for(let i=1; i<numPoints; i++) {
-                comparePathD += ` L ${getX(i)} ${getY(compareDataArray[i] || 0)}`;
+            const cKnown = [];
+            for (let i = 0; i < numPoints; i++) {
+                if (compareDataArray[i] !== null && compareDataArray[i] !== undefined) cKnown.push(i);
             }
-            svg += `<path d="${comparePathD}" fill="none" stroke="#94a3b8" stroke-width="${isMini ? '2' : '3'}" stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />`;
+            if (cKnown.length > 0) {
+                let comparePathD = `M ${getX(cKnown[0])} ${getY(compareDataArray[cKnown[0]])}`;
+                for (let k = 1; k < cKnown.length; k++) {
+                    comparePathD += ` L ${getX(cKnown[k])} ${getY(compareDataArray[cKnown[k]])}`;
+                }
+                svg += `<path d="${comparePathD}" fill="none" stroke="#94a3b8" stroke-width="${isMini ? '2' : '3'}" stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />`;
+            }
         }
 
         // Fill Area & Stroke Line (Hide area if only 1 point exists)
-        if (numPoints > 1) {
+        if (knownIdx.length > 1 && pathD) {
             svg += `<path d="${areaD}" fill="url(#lineGrad_${isMini ? 'mini' : 'full'})" />`;
             svg += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="${isMini ? '3' : '4'}" stroke-linecap="round" stroke-linejoin="round" />`;
         }
@@ -901,7 +952,10 @@ const Admin = {
         // Points and X-Axis
         for(let i=0; i<numPoints; i++) {
             const val = dataArray[i];
-            const compareVal = compareDataArray ? (compareDataArray[i] || 0) : null;
+            if (val === null || val === undefined) continue;
+            const compareVal = compareDataArray && compareDataArray[i] !== null && compareDataArray[i] !== undefined
+                ? compareDataArray[i]
+                : null;
             const vx = getX(i);
             const vy = getY(val);
             const isToday = (i === isTodayIdx);
@@ -918,7 +972,11 @@ const Admin = {
                 hoverLabel = `${hh}:${mm}`;
             }
             
-            const tooltipText = compareVal !== null ? `${val} Sessions (Prev: ${compareVal}) [${hoverLabel}]` : `${val} Sessions (${hoverLabel})`;
+            // Worker metric is GA4 activeUsers. INTRADAY = actives in that half-hour bucket.
+            const metricWord = Admin.telemetryRange === 'INTRADAY' ? 'active / 30m' : 'Active users';
+            const tooltipText = compareVal !== null
+                ? `${val} ${metricWord} (Prev: ${compareVal}) [${hoverLabel}]`
+                : `${val} ${metricWord} (${hoverLabel})`;
             
             // GUARDIAN: Numbers hidden by default to declutter. Click dot to reveal exact stats!
             svg += `
@@ -1015,24 +1073,78 @@ const Admin = {
                 // GROWTH SPRINT PHASE 8: Dynamic Multi-Range Scalable SVG Line Graph Engine
                 let rawCountsArray = data.chartData && data.chartData.length > 0 ? data.chartData : (data.sevenDayTrend || []);
                 let rawLabelsArray = data.chartLabels || [];
+
+                // Legacy workers emitted cumulative INTRADAY totals. Convert to per-bucket
+                // velocity until the edge sets intradayMode: 'perBucket'.
+                const toPerBucket = (arr) => {
+                    if (!Array.isArray(arr) || arr.length === 0) return arr;
+                    const out = new Array(arr.length);
+                    let prev = 0;
+                    for (let i = 0; i < arr.length; i++) {
+                        const v = arr[i];
+                        if (v === null || v === undefined) {
+                            out[i] = v;
+                            continue;
+                        }
+                        const n = Number(v) || 0;
+                        out[i] = Math.max(0, n - prev);
+                        prev = n;
+                    }
+                    return out;
+                };
+                if (Admin.telemetryRange === 'INTRADAY' && data.intradayMode !== 'perBucket') {
+                    if (rawCountsArray.length > 48) {
+                        rawCountsArray = [
+                            ...toPerBucket(rawCountsArray.slice(0, 48)),
+                            ...toPerBucket(rawCountsArray.slice(48)),
+                        ];
+                    } else {
+                        rawCountsArray = toPerBucket(rawCountsArray);
+                    }
+                }
                 
                 // 🛡️ GUARDIAN PHASE 2: RAM Array Slicer Engine
+                // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
+                // "last 48" for Today — that straddles midnight and draws a fake cliff.
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
                 let masterLen = rawCountsArray.length;
-                let endIndex = masterLen - (offset * pointsPerView);
-                let startIndex = endIndex - pointsPerView;
-                
-                // Pagination bounds
-                if (startIndex < 0) startIndex = 0;
-                if (endIndex < 0) endIndex = 0;
+                let endIndex, startIndex;
+                if (Admin.telemetryRange === 'INTRADAY') {
+                    const todayStart = masterLen > 48 ? 48 : 0;
+                    if (offset === 0) {
+                        startIndex = todayStart;
+                        endIndex = masterLen;
+                    } else if (offset === 1 && masterLen > 48) {
+                        startIndex = 0;
+                        endIndex = 48;
+                    } else {
+                        startIndex = 0;
+                        endIndex = 0;
+                    }
+                } else {
+                    endIndex = masterLen - (offset * pointsPerView);
+                    startIndex = endIndex - pointsPerView;
+                    if (startIndex < 0) startIndex = 0;
+                    if (endIndex < 0) endIndex = 0;
+                }
                 
                 let activeCountsArray = rawCountsArray.slice(startIndex, endIndex);
                 let labelsArray = rawLabelsArray.slice(startIndex, endIndex);
                 
                 // Keep chart consistently scaled even if data runs out early
-                if (activeCountsArray.length < pointsPerView && masterLen > 0) {
+                if (Admin.telemetryRange === 'INTRADAY') {
+                    // Pad FUTURE buckets (end), not the morning — zeros at the start fake a dawn climb.
+                    if (activeCountsArray.length < 48) {
+                        const padLen = 48 - activeCountsArray.length;
+                        activeCountsArray = [...activeCountsArray, ...Array(padLen).fill(null)];
+                        labelsArray = [...labelsArray, ...Array(padLen).fill('')];
+                    } else if (activeCountsArray.length > 48) {
+                        activeCountsArray = activeCountsArray.slice(0, 48);
+                        labelsArray = labelsArray.slice(0, 48);
+                    }
+                } else if (activeCountsArray.length < pointsPerView && masterLen > 0) {
                     const padLen = pointsPerView - activeCountsArray.length;
                     activeCountsArray = [...Array(padLen).fill(0), ...activeCountsArray];
                     labelsArray = [...Array(padLen).fill(''), ...labelsArray];
@@ -1041,37 +1153,33 @@ const Admin = {
                 // 🛡️ GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
                 if (Admin.isComparing) {
-                    let compareOffset = offset + 1;
-                    let compEndIndex = masterLen - (compareOffset * pointsPerView);
-                    let compStartIndex = compEndIndex - pointsPerView;
-                    
-                    if (compStartIndex < 0) compStartIndex = 0;
-                    if (compEndIndex < 0) compEndIndex = 0;
-                    
-                    // If we have any data to compare against
-                    if (compEndIndex > compStartIndex) {
-                        compareCountsArray = rawCountsArray.slice(compStartIndex, compEndIndex);
-                        if (compareCountsArray.length < pointsPerView) {
-                            const padLen = pointsPerView - compareCountsArray.length;
-                            compareCountsArray = [...Array(padLen).fill(0), ...compareCountsArray];
+                    if (Admin.telemetryRange === 'INTRADAY' && offset === 0 && masterLen > 48) {
+                        compareCountsArray = rawCountsArray.slice(0, 48);
+                        if (compareCountsArray.length < 48) {
+                            compareCountsArray = [...compareCountsArray, ...Array(48 - compareCountsArray.length).fill(null)];
                         }
                     } else {
-                        // Out of historical bounds for comparison
-                        compareCountsArray = Array(pointsPerView).fill(0);
+                        let compareOffset = offset + 1;
+                        let compEndIndex = masterLen - (compareOffset * pointsPerView);
+                        let compStartIndex = compEndIndex - pointsPerView;
+                        
+                        if (compStartIndex < 0) compStartIndex = 0;
+                        if (compEndIndex < 0) compEndIndex = 0;
+                        
+                        if (compEndIndex > compStartIndex) {
+                            compareCountsArray = rawCountsArray.slice(compStartIndex, compEndIndex);
+                            if (compareCountsArray.length < pointsPerView) {
+                                const padLen = pointsPerView - compareCountsArray.length;
+                                compareCountsArray = [...Array(padLen).fill(0), ...compareCountsArray];
+                            }
+                        } else {
+                            compareCountsArray = Array(pointsPerView).fill(0);
+                        }
                     }
                 }
                 
                 let displayLabels = [];
                 if (Admin.telemetryRange === 'INTRADAY') {
-                    // Safety check, array is already padded by RAM Slicer
-                    if (activeCountsArray.length !== 48) {
-                        const padded = Array(48).fill(0);
-                        for(let i=0; i<Math.min(activeCountsArray.length, 48); i++) {
-                            padded[i] = activeCountsArray[i] || 0;
-                        }
-                        activeCountsArray = padded;
-                    }
-
                     // Generate exact 3-hour labels at buckets 0, 6, 12, 18, 24, 30, 36, 42
                     displayLabels = activeCountsArray.map((_, idx) => {
                         if (idx % 6 === 0) { 
@@ -1160,14 +1268,14 @@ const Admin = {
 
                 if (Admin.telemetryRange === 'INTRADAY') {
                     if (Admin.telemetryWeeksAgo === 0) {
-                        titleStr = "Intraday Hourly Trend (Today)";
+                        titleStr = "Intraday activity / 30 min (Today)";
                     } else if (Admin.telemetryWeeksAgo === 1) {
-                        titleStr = "Intraday Hourly Trend (Yesterday)";
+                        titleStr = "Intraday activity / 30 min (Yesterday)";
                     } else {
                         const d = new Date();
                         d.setDate(d.getDate() - Admin.telemetryWeeksAgo);
                         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                        titleStr = `Intraday Trend (${d.getDate()} ${monthNames[d.getMonth()]})`;
+                        titleStr = `Intraday activity / 30 min (${d.getDate()} ${monthNames[d.getMonth()]})`;
                     }
                 } else if (Admin.telemetryRange === 'DAU' || !Admin.telemetryRange) {
                     titleStr = `Daily Active Users${rangeStr}`;
@@ -1201,7 +1309,13 @@ const Admin = {
                 
                 // Backward-in-time guard (Prev)
                 if (prevBtn) {
-                    if (masterLen === 0 || (masterLen - ((Admin.telemetryWeeksAgo + 1) * pointsPerView)) <= 0) {
+                    let canGoPrev = false;
+                    if (Admin.telemetryRange === 'INTRADAY') {
+                        canGoPrev = Admin.telemetryWeeksAgo === 0 && masterLen > 48;
+                    } else {
+                        canGoPrev = masterLen > 0 && (masterLen - ((Admin.telemetryWeeksAgo + 1) * pointsPerView)) > 0;
+                    }
+                    if (!canGoPrev) {
                         prevBtn.classList.add('opacity-30', 'cursor-not-allowed');
                         prevBtn.disabled = true;
                     } else {
@@ -1210,13 +1324,15 @@ const Admin = {
                     }
                 }
 
-                // Lock the orange "Today" indicator to the correct 30-minute bucket
+                // Orange marker = last known INTRADAY bucket (worker clips ~3h of lag)
                 let isTodayIdx = -1;
                 if (Admin.telemetryRange === 'INTRADAY' && Admin.telemetryWeeksAgo === 0) {
-                    const now = new Date();
-                    const h = now.getHours();
-                    const mBucket = Math.floor(now.getMinutes() / 30);
-                    isTodayIdx = (h * 2) + mBucket;
+                    for (let i = activeCountsArray.length - 1; i >= 0; i--) {
+                        if (activeCountsArray[i] !== null && activeCountsArray[i] !== undefined) {
+                            isTodayIdx = i;
+                            break;
+                        }
+                    }
                 } else if (Admin.telemetryRange !== 'INTRADAY' && (Admin.telemetryWeeksAgo === 0 || Admin.telemetryRange === 'MAU' || Admin.telemetryRange === 'ALL')) {
                     isTodayIdx = activeCountsArray.length - 1;
                 }
@@ -2257,7 +2373,7 @@ const Admin = {
                         ${Admin.tileIcon('flame', 'text-orange-500 dark:text-orange-400')}
                         <span>Crash Analytics</span>
                     </span>
-                    <span id="crash-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
+                    <span id="crash-unread-badge" class="admin-unread-badge hidden" aria-label="Unread crashes"></span>
                     <svg id="crash-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
                 <div id="crash-body" class="hidden mt-3 space-y-2">
@@ -2633,8 +2749,9 @@ const Admin = {
             // Inject Grid Toggle Button
             const toggleBtn = document.createElement('button');
             toggleBtn.id = 'grid-view-toggle';
+            toggleBtn.type = 'button';
             toggleBtn.className = "ml-auto mr-3 p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-blue-500 transition-colors focus:outline-none shadow-sm flex items-center";
-            toggleBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>`;
+            Admin.syncGridToggleIcon(toggleBtn);
             
             const closeBtn = devHeaderRow.querySelector('button[aria-label="Close Dev Modal"]');
             if (closeBtn) {
@@ -2649,11 +2766,11 @@ const Admin = {
                 style.id = 'admin-grid-styles';
                 style.innerHTML = `
                     .admin-grid-view { display: grid; gap: 12px; align-items: start; padding-bottom: 20px; transition: grid-template-columns 0.3s ease; }
-                    .admin-grid-view > div { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; }
+                    .admin-grid-view > div { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
                     .admin-grid-view > div:hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
-                    .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; }
-                    .admin-grid-view > div [id$="-header-btn"] > span { flex-direction: column; align-items: center; width: 100%; display: flex; }
+                    .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }
+                    .admin-grid-view > div [id$="-header-btn"] > span:not(.admin-unread-badge) { flex-direction: column; align-items: center; width: 100%; display: flex; }
                     .admin-grid-view > div [id$="-header-btn"] > span > span.admin-tile-icon,
                     .admin-grid-view > div [id$="-header-btn"] > span > span:first-child {
                       margin-right: 0 !important;
@@ -2669,8 +2786,43 @@ const Admin = {
                     }
                     .admin-grid-view > div [id$="-header-btn"] svg[id$="-chevron"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
-                    .admin-grid-view > div [id$="-header-btn"] span[id$="-unread-badge"]:not(.hidden) { display: block !important; }
                     .admin-grid-view .grid-hidden-actions { display: none !important; }
+
+                    /* Compact corner unread pills — never stretch across the tile */
+                    .admin-unread-badge {
+                      position: absolute;
+                      top: 6px;
+                      right: 6px;
+                      z-index: 5;
+                      min-width: 1.35rem;
+                      height: 1.35rem;
+                      padding: 0 5px;
+                      display: none;
+                      align-items: center;
+                      justify-content: center;
+                      border-radius: 9999px;
+                      font-size: 10px;
+                      font-weight: 800;
+                      letter-spacing: -0.02em;
+                      line-height: 1;
+                      color: #fff;
+                      background: #ef4444;
+                      box-shadow: 0 0 0 2px #ffffff, 0 1px 2px rgba(0,0,0,0.18);
+                      pointer-events: none;
+                      white-space: nowrap;
+                      flex: none !important;
+                      width: auto !important;
+                      max-width: none !important;
+                    }
+                    .dark .admin-unread-badge {
+                      box-shadow: 0 0 0 2px #1f2937, 0 1px 2px rgba(0,0,0,0.45);
+                    }
+                    .admin-unread-badge.admin-unread-badge--amber {
+                      background: #f59e0b;
+                    }
+                    .admin-unread-badge:not(.hidden) {
+                      display: inline-flex !important;
+                    }
                 `;
                 document.head.appendChild(style);
             }
@@ -2703,14 +2855,7 @@ const Admin = {
                 
                 Admin.gridCols = Admin.gridCols === 1 ? 2 : (Admin.gridCols === 2 ? 3 : 1);
                 container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
-                
-                if (Admin.gridCols === 1) {
-                    toggleBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
-                } else if (Admin.gridCols === 2) {
-                    toggleBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>`;
-                } else {
-                    toggleBtn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z"></path></svg>`;
-                }
+                Admin.syncGridToggleIcon(toggleBtn);
             };
 
             // Global Interceptor: The Drill-Down Engine
@@ -2933,7 +3078,7 @@ const Admin = {
                     ${Admin.tileIcon('ban', 'text-red-500 dark:text-red-400')}
                     <span>Dead Ends & Fails</span>
                 </span>
-                <span id="de-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
+                <span id="de-unread-badge" class="admin-unread-badge hidden" aria-label="Unread dead ends"></span>
                 <svg id="de-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="de-body" class="hidden mt-4 space-y-3">
@@ -3242,7 +3387,7 @@ const Admin = {
                     ${Admin.tileIcon('message', 'text-sky-500 dark:text-sky-400')}
                     <span>Commuter Feedback</span>
                 </span>
-                <span id="fb-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
+                <span id="fb-unread-badge" class="admin-unread-badge hidden" aria-label="Unread feedback"></span>
                 <svg id="fb-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             
@@ -3259,19 +3404,19 @@ const Admin = {
 
                 <!-- 🛡️ GUARDIAN UX FIX: Search Bar -->
                 <div class="mb-3 relative px-1">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span class="text-xs">🔍</span>
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                        ${Admin.icon('search', 'w-3.5 h-3.5')}
                     </div>
                     <input type="text" id="fb-search-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block pl-10 p-3 shadow-inner outline-none transition-colors" placeholder="Search aliases, IDs, or messages...">
                 </div>
 
                 <!-- 🛡️ GUARDIAN UX FIX: Relocated Action Buttons -->
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
-                    <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center">
-                        <span class="mr-1.5 text-sm leading-none">📥</span> Export All
+                    <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
+                        ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
                     </button>
-                    <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center">
-                        <span class="mr-1.5 text-sm leading-none">🔄</span> Refresh
+                    <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
+                        ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
                 </div>
                 
@@ -3404,7 +3549,7 @@ const Admin = {
             });
 
             if (displayGroups.length === 0) {
-                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean! ✨' : 'No archived threads yet.'}</div>`;
+                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.'}</div>`;
                 return;
             }
 
@@ -3454,12 +3599,13 @@ const Admin = {
                 const alias = Admin.cachedAliases && Admin.cachedAliases[did] ? Admin.cachedAliases[did] : null;
                 const displayDid = did === 'Anonymous / Legacy' ? did : did.substring(0,15) + '...';
                 
-                // 🛡️ GUARDIAN UX FIX: Relocate Alias button into the native Title bar to free up the Action Menu
-                const editAliasBtn = did !== 'Anonymous / Legacy' ? `<button onclick="event.stopPropagation(); Admin.setCommuterAlias('${did}', '${alias || ''}')" class="ml-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-800 p-1 rounded-md transition-colors focus:outline-none flex-shrink-0 shadow-sm border border-orange-200 dark:border-orange-800" title="Edit Alias"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>` : '';
-                // 🛡️ GUARDIAN UX FIX: Hide raw device ID entirely if an alias is present
-                const commuterTitle = alias ? `${alias}${editAliasBtn}` : `${displayDid}${editAliasBtn}`;
-                
-                // 🛡️ GUARDIAN UX FIX: Detect attachments in thread for 📎 icon
+                // Clickable ID / alias opens rename modal (no separate pencil chrome)
+                const titleText = alias || displayDid;
+                const titleTitle = alias ? `Alias for ${displayDid} — click to rename` : 'Click to set alias';
+                const commuterTitle = did !== 'Anonymous / Legacy'
+                    ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${did}', '${(alias || '').replace(/'/g, "\\'")}')" class="text-blue-600 dark:text-blue-400 hover:underline font-mono truncate max-w-full text-left focus:outline-none" title="${titleTitle}">${titleText}</button>`
+                    : `<span class="text-blue-600 dark:text-blue-400 font-mono truncate">${displayDid}</span>`;
+
                 const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
 
                 // 🛡️ GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
@@ -3485,27 +3631,41 @@ const Admin = {
                     }
                 });
 
+                // Scan chips outside the open thread (email / phone / both)
+                let contactScanHtml = '';
+                if (allEmails.size > 0) {
+                    contactScanHtml += `<span class="inline-flex text-blue-500 dark:text-blue-400" title="${allEmails.size} email${allEmails.size > 1 ? 's' : ''}">${Admin.icon('mail', 'w-3 h-3')}</span>`;
+                }
+                if (allPhones.size > 0) {
+                    contactScanHtml += `<span class="inline-flex text-emerald-600 dark:text-emerald-400" title="${allPhones.size} phone${allPhones.size > 1 ? 's' : ''}">${Admin.icon('phone', 'w-3 h-3')}</span>`;
+                }
+                if (hasAttachments) {
+                    contactScanHtml += `<span class="inline-flex text-purple-500 dark:text-purple-400" title="Has attachments">${Admin.icon('paperclip', 'w-3 h-3')}</span>`;
+                }
+                const contactScanBlock = contactScanHtml
+                    ? `<span class="inline-flex items-center gap-1 mx-1 align-middle">${contactScanHtml}</span>`
+                    : '';
+
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
                     contactHtml = '<div class="flex flex-wrap gap-1.5">';
                     allEmails.forEach(em => {
                         contactHtml += `
                             <div class="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 max-w-[220px] sm:max-w-[300px]">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate">✉️ ${em}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-blue-500 transition-colors focus:outline-none" title="Copy">📋</button>
+                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate inline-flex items-center gap-1">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
                         const isNum = /^\d+$/.test(ph);
-                        const icon = isNum ? '💬' : '📞';
                         const link = isNum ? `https://wa.me/${ph}` : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
                         
                         contactHtml += `
                             <div class="flex items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 max-w-[220px] sm:max-w-[300px] shadow-sm">
-                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight truncate">${icon} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-[10px] text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none" title="Copy">📋</button>
+                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight truncate inline-flex items-center gap-1">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
@@ -3515,8 +3675,8 @@ const Admin = {
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full flex items-center">Commuter: <span class="text-blue-600 ml-1 flex items-center">${commuterTitle}</span></span>
-                            <span class="text-[9px] text-gray-500 font-mono mt-1">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''} ${hasAttachments ? '📎 ' : ''}| Last: ${latestDate}</span>
+                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full flex items-center">${commuterTitle}</span>
+                            <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center justify-end shrink-0 self-center">
                             <button class="pointer-events-none focus:outline-none p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent">
@@ -3529,7 +3689,7 @@ const Admin = {
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <button onclick="Admin.exportThreadForAI('${did}')" class="shrink-0 flex items-center px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)"><span class="mr-1.5 text-base leading-none">📥</span> Export</button>
+                            <button onclick="Admin.exportThreadForAI('${did}')" class="shrink-0 flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
                 `;
@@ -3626,7 +3786,7 @@ const Admin = {
                             const fullNum = `27${p1}${p2}${p3}`;
                             const displayNum = `0${p1} ${p2} ${p3}`;
                             const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : ''; 
-                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline" onclick="event.stopPropagation()">💬 ${displayNum}</a>`;
+                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
                         });
                         
                         rawText = rawText.replace(/\n/g, "<br>");
@@ -3694,7 +3854,7 @@ const Admin = {
                                 if (isImageExt) {
                                     attachmentHtml += `<button type="button" onclick="event.stopPropagation(); Admin.openLightbox('${url}')" class="block focus:outline-none w-full text-left"><img src="${url}" class="w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in" alt="Attachment ${idx + 1}"></button>`;
                                 } else {
-                                    attachmentHtml += `<a href="${url}" target="_blank" onclick="event.stopPropagation();" class="flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24"><span class="mr-1">📄</span> View Doc ${idx + 1}</a>`;
+                                    attachmentHtml += `<a href="${url}" target="_blank" onclick="event.stopPropagation();" class="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24">${Admin.icon('file', 'w-4 h-4')} View Doc ${idx + 1}</a>`;
                                 }
                             });
                             attachmentHtml += `</div>`;
@@ -3702,18 +3862,20 @@ const Admin = {
 
                         // METADATA: Integrated Bubble Header
                         let typeLabel = "General";
-                        let typeIcon = "💬";
-                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIcon = "⏱️"; }
-                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIcon = "🐛"; }
-                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIcon = "💡"; }
+                        let typeIconName = "message";
+                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIconName = "clock"; }
+                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIconName = "bug"; }
+                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIconName = "lightbulb"; }
 
                         // 🛡️ GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
-                        let headerLabelText = isReply ? `↩️ Reply:` : `${typeIcon} ${typeLabel}`;
+                        const headerLabelText = isReply
+                            ? `${Admin.icon('reply', 'w-3 h-3')} Reply:`
+                            : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const integratedHeaderHtml = `
                             <div class="text-[9px] font-black ${headerColorClass} uppercase tracking-widest mb-1.5 border-b border-gray-200 dark:border-gray-700 pb-1 flex justify-between items-center w-full">
-                                <span class="whitespace-nowrap">${headerLabelText}</span>
+                                <span class="whitespace-nowrap inline-flex items-center gap-1">${headerLabelText}</span>
                                 <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} • ${safeRouteId}</span>
                             </div>
                         `;
@@ -4158,7 +4320,7 @@ const Admin = {
                     ${Admin.tileIcon('alert', 'text-amber-500 dark:text-amber-400')}
                     <span>Delay Reports</span>
                 </span>
-                <span id="dr-unread-badge" class="hidden absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
+                <span id="dr-unread-badge" class="admin-unread-badge admin-unread-badge--amber hidden" aria-label="Unread delay reports"></span>
                 <svg id="dr-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="dr-body" class="hidden mt-4 flex flex-col">
@@ -4322,7 +4484,7 @@ const Admin = {
                     ${Admin.tileIcon('shield', 'text-emerald-500 dark:text-emerald-400')}
                     <span>Moderation Queue</span>
                 </span>
-                <span id="mq-unread-badge" class="hidden absolute top-2 right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm font-black tracking-normal animate-pulse"></span>
+                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread moderation items"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
@@ -4785,7 +4947,7 @@ const Admin = {
             modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-3 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight flex items-center"><span class="mr-2">💬</span> Reply to Commuter</h3>
+                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight flex items-center gap-2"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> Reply to Commuter</h3>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2">Message will be delivered to their personal inbox upon next app launch.</p>
                     
                     <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5">
@@ -4800,7 +4962,7 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">🔗</button>
-                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">📎 Media</label>
+                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
                         <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
@@ -4859,12 +5021,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.getElementById('admin-reply-upload-label');
-                        const originalLabel = labelEl ? labelEl.innerHTML : '📎 Insert Media';
+                        const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media`;
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `${Admin.icon('hourglass', 'w-3.5 h-3.5')} ${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -4879,7 +5041,7 @@ const Admin = {
                                     
                                     let htmlToInsert = '';
                                     if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">📄 View Attached PDF</a>&nbsp;`;
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
                                     } else {
                                         htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button><br>`;
                                     }
@@ -7143,7 +7305,7 @@ const Admin = {
                             expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">EXPIRED: ${expStr}</div>`;
                             rowOpacityClass = 'opacity-60 grayscale';
                         } else {
-                            expiryHtml = `<div class="text-[9px] text-blue-500 font-medium mt-0.5">⏳ Expires: ${expStr}</div>`;
+                            expiryHtml = `<div class="text-[9px] text-blue-500 font-medium mt-0.5 inline-flex items-center gap-1">${Admin.icon('hourglass', 'w-3 h-3')} Expires: ${expStr}</div>`;
                         }
                     }
 
@@ -7519,8 +7681,8 @@ const Admin = {
                 <!-- 🛡️ GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
-                        <span class="flex items-center">
-                            <span class="text-base mr-2">⏳</span> Time Simulation Engine
+                        <span class="flex items-center gap-2">
+                            <span class="text-amber-600 dark:text-amber-400">${Admin.icon('hourglass', 'w-4 h-4')}</span> Time Simulation Engine
                         </span>
                         <svg id="sim-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -8048,7 +8210,7 @@ const Admin = {
 
                 const summary = `
                     <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-800/50 mb-3 shadow-sm">
-                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center"><span class="mr-1.5">⏱️</span> Source Data Age</span>
+                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center gap-1.5">${Admin.icon('clock', 'w-3.5 h-3.5')} Source Data Age</span>
                         <span class="font-mono text-[10px] font-black text-blue-700 dark:text-blue-400 bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-700/50">${dataAgeStr}</span>
                     </div>
                     <div class="flex justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl mb-4 border border-gray-100 dark:border-gray-600">
@@ -8110,8 +8272,8 @@ const Admin = {
                 <!-- Transplanted Growth & Promo -->
                 <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="promo-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-indigo-900/60">
-                        <span class="flex items-center">
-                            <span class="text-base mr-2">🚀</span> Growth & Promo
+                        <span class="flex items-center gap-2">
+                            <span class="text-indigo-600 dark:text-indigo-300">${Admin.icon('rocket', 'w-4 h-4')}</span> Growth & Promo
                         </span>
                         <svg id="promo-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -8130,7 +8292,7 @@ const Admin = {
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 overflow-hidden shadow-sm transition-all">
                     <button id="nuke-header-btn" class="w-full px-3 py-3 bg-red-100/50 dark:bg-red-900/40 text-left text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-red-200/50 dark:hover:bg-red-900/60">
                         <span class="flex items-center">
-                            <span class="text-base mr-2">☢️</span> Nuclear Cache Wipe
+                            <span class="text-red-500 dark:text-red-400 mr-2 inline-flex">${Admin.icon('siren', 'w-4 h-4')}</span> Nuclear Cache Wipe
                         </span>
                         <svg id="nuke-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -8463,10 +8625,11 @@ const Admin = {
                     sourceBadge = `<div class="mt-1 text-[9px] text-blue-500 dark:text-blue-400 font-mono truncate">Ref: ${safeHTML(ticket.source)}</div>`;
                 }
                 
-                let typeIcon = "📌"; 
-                if (ticket.type === 'bug') typeIcon = "🐛"; 
-                else if (ticket.type === 'feature') typeIcon = "🚀"; 
-                else if (ticket.type === 'route') typeIcon = "🗺️";
+                let typeIconName = 'pin';
+                if (ticket.type === 'bug') typeIconName = 'bug';
+                else if (ticket.type === 'feature') typeIconName = 'rocket';
+                else if (ticket.type === 'route') typeIconName = 'map';
+                const typeIcon = `<span class="inline-flex text-gray-500 dark:text-gray-400 shrink-0 mt-0.5" title="${ticket.type || 'task'}">${Admin.icon(typeIconName, 'w-3.5 h-3.5')}</span>`;
 
                 // Native SVG icons replacing FontAwesome
                 const editIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
@@ -8490,8 +8653,8 @@ const Admin = {
                 const cardHtml = `
                     <div class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-3 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 relative overflow-hidden" onclick="Admin.openViewModal('${ticket.id}')">
                         <div class="flex justify-between items-start gap-2">
-                            <div class="flex items-start min-w-0 pr-1">
-                                <span class="mr-1.5 text-sm leading-none shrink-0 mt-0.5" title="${ticket.type}">${typeIcon}</span>
+                            <div class="flex items-start min-w-0 pr-1 gap-1.5">
+                                ${typeIcon}
                                 <h4 class="font-bold text-gray-900 dark:text-gray-200 text-sm leading-tight line-clamp-2 break-words">${safeTitle}</h4>
                             </div>
                             <div class="flex gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-white dark:bg-gray-800 pl-1 relative z-10">
@@ -8737,11 +8900,32 @@ const Admin = {
                 });
             };
 
+            const typeOpts = [
+                { value: 'bug', label: 'Bug', icon: 'bug', active: 'border-rose-400 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300' },
+                { value: 'feature', label: 'Feature', icon: 'rocket', active: 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300' },
+                { value: 'route', label: 'Route', icon: 'map', active: 'border-sky-400 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300' },
+            ];
+            const sevOpts = [
+                { value: 'low', label: 'Low', icon: 'circle', active: 'border-gray-400 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300' },
+                { value: 'high', label: 'High', icon: 'alert', active: 'border-orange-400 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300' },
+                { value: 'critical', label: 'Critical', icon: 'flame', active: 'border-red-400 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' },
+            ];
+            const statusOpts = [
+                { value: 'backlog', label: 'Backlog', icon: 'pin', active: 'border-gray-400 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300' },
+                { value: 'progress', label: 'Progress', icon: 'hourglass', active: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' },
+                { value: 'done', label: 'Done', icon: 'check', active: 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' },
+            ];
+            const chipBtn = (group, opt, selected) => {
+                const base = 'tkt-chip flex flex-col items-center justify-center gap-1 px-1 py-2 rounded-lg border text-[9px] font-bold uppercase tracking-wide transition-colors focus:outline-none';
+                const idle = 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:border-gray-300';
+                return `<button type="button" data-group="${group}" data-value="${opt.value}" class="${base} ${selected === opt.value ? opt.active : idle}">${Admin.icon(opt.icon, 'w-4 h-4')}<span>${opt.label}</span></button>`;
+            };
+
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 transform transition-all scale-95 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
-                        <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center">
-                            <span class="mr-2 inline-flex text-blue-500">${Admin.icon('note', 'w-5 h-5')}</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                            <span class="inline-flex text-blue-500">${Admin.icon('note', 'w-5 h-5')}</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
                         </h3>
                         <button onclick="closeSmoothModal('admin-ticket-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none bg-gray-100 dark:bg-gray-700 rounded-full p-1.5">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -8753,30 +8937,25 @@ const Admin = {
                             <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Title</label>
                             <input type="text" id="tkt-title" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none" value="${safeHTML(ticket.title)}" placeholder="Short summary">
                         </div>
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            <div>
-                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Type</label>
-                                <select id="tkt-type" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="bug" ${ticket.type === 'bug' ? 'selected' : ''}>🐛 Bug</option>
-                                    <option value="feature" ${ticket.type === 'feature' ? 'selected' : ''}>🚀 Feature</option>
-                                    <option value="route" ${ticket.type === 'route' ? 'selected' : ''}>🗺️ Route Update</option>
-                                </select>
+                        <input type="hidden" id="tkt-type" value="${safeHTML(ticket.type || 'bug')}">
+                        <input type="hidden" id="tkt-severity" value="${safeHTML(ticket.severity || 'low')}">
+                        <input type="hidden" id="tkt-status" value="${safeHTML(ticket.status || 'backlog')}">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">Type</label>
+                            <div class="grid grid-cols-3 gap-1.5" id="tkt-type-chips">
+                                ${typeOpts.map((o) => chipBtn('type', o, ticket.type || 'bug')).join('')}
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Severity</label>
-                                <select id="tkt-severity" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="low" ${ticket.severity === 'low' ? 'selected' : ''}>🟢 Low</option>
-                                    <option value="high" ${ticket.severity === 'high' ? 'selected' : ''}>🟠 High</option>
-                                    <option value="critical" ${ticket.severity === 'critical' ? 'selected' : ''}>🔴 Critical</option>
-                                </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">Severity</label>
+                            <div class="grid grid-cols-3 gap-1.5" id="tkt-severity-chips">
+                                ${sevOpts.map((o) => chipBtn('severity', o, ticket.severity || 'low')).join('')}
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Status</label>
-                                <select id="tkt-status" class="w-full h-10 px-2 sm:px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-[10px] sm:text-xs text-gray-900 dark:text-white outline-none">
-                                    <option value="backlog" ${ticket.status === 'backlog' ? 'selected' : ''}>📌 Backlog</option>
-                                    <option value="progress" ${ticket.status === 'progress' ? 'selected' : ''}>⏳ Progress</option>
-                                    <option value="done" ${ticket.status === 'done' ? 'selected' : ''}>Done</option>
-                                </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">Status</label>
+                            <div class="grid grid-cols-3 gap-1.5" id="tkt-status-chips">
+                                ${statusOpts.map((o) => chipBtn('status', o, ticket.status || 'backlog')).join('')}
                             </div>
                         </div>
                         <div>
@@ -8795,6 +8974,23 @@ const Admin = {
                     </div>
                 </div>
             `;
+
+            // Wire chip selectors → hidden inputs
+            const chipMaps = { type: typeOpts, severity: sevOpts, status: statusOpts };
+            modal.querySelectorAll('.tkt-chip').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const group = btn.dataset.group;
+                    const value = btn.dataset.value;
+                    const hidden = document.getElementById(`tkt-${group}`);
+                    if (hidden) hidden.value = value;
+                    const opts = chipMaps[group] || [];
+                    modal.querySelectorAll(`.tkt-chip[data-group="${group}"]`).forEach((b) => {
+                        const opt = opts.find((o) => o.value === b.dataset.value);
+                        const idle = 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:border-gray-300';
+                        b.className = `tkt-chip flex flex-col items-center justify-center gap-1 px-1 py-2 rounded-lg border text-[9px] font-bold uppercase tracking-wide transition-colors focus:outline-none ${b.dataset.value === value && opt ? opt.active : idle}`;
+                    });
+                });
+            });
 
             openSmoothModal('admin-ticket-modal');
 

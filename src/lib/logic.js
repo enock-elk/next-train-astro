@@ -597,6 +597,11 @@ export async function loadAllSchedules(force = false) {
                 if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                 
                 usedCache = true;
+                // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
+                // do not hold the shell for the background network waterfall.
+                if (typeof window !== 'undefined' && typeof window.revealAppShell === 'function') {
+                    window.revealAppShell();
+                }
             } catch(err) { console.error("🛡️ Guardian: Cached DB shadow-clone parsing failed.", err); }
         }
 

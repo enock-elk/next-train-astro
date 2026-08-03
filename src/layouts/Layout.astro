@@ -7,6 +7,8 @@ const {
   title = "Next Train | Live Schedules", 
   description = "Live Metrorail schedules and route maps for Gauteng, Western Cape, KZN, and Eastern Cape.",
   canonicalPath = "/",
+  /** Home shell: skip full-screen boot gate for returning sessions (map→home, etc.). */
+  unlockShellEarly = false,
 } = Astro.props;
 
 const base = normalizeBase(import.meta.env.BASE_URL);
@@ -73,6 +75,25 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
         }
       })();
     </script>
+    {unlockShellEarly && (
+      <>
+        <script is:inline>
+          // Returning users / same-session navigations (e.g. map.html → home) must not
+          // sit behind "Loading schedules…". Decide before first paint.
+          (function () {
+            try {
+              var seen = localStorage.getItem('welcomeSeen') === 'true';
+              var warm = sessionStorage.getItem('nt_shell_warm') === '1';
+              if (seen || warm) document.documentElement.classList.add('nt-shell-ready');
+            } catch (e) {}
+          })();
+        </script>
+        <style is:inline>
+          html.nt-shell-ready #loading-overlay { display: none !important; }
+          html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
+        </style>
+      </>
+    )}
     <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;

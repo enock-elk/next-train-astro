@@ -169,6 +169,10 @@ jobs:
           # Always pin the production hostname (do not trust whatever was in dist)
           printf 'nexttrain.co.za\n' > site/CNAME
 
+          # GitHub Pages (branch deploy) runs Jekyll unless this file exists.
+          # Without it, /_astro/ is unpublished → unstyled broken site.
+          : > site/.nojekyll
+
           # Provenance for ops / rollback forensics
           cat > site/astro-deploy.json <<EOF
           {
@@ -196,6 +200,8 @@ jobs:
           test -f site/index.html
           test -f site/sw.js
           test -f site/CNAME
+          test -f site/.nojekyll
+          test -d site/_astro
           grep -qx 'nexttrain.co.za' site/CNAME
           # Must not leave Astro source tree on the live host
           if [ -d site/src ] || [ -f site/package.json ] || [ -f site/astro.config.mjs ]; then

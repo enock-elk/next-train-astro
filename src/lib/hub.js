@@ -794,18 +794,19 @@ export async function checkServiceAlerts() {
         }
 
         // Scope wins over severity: Route > Region (all_GP…) > Global (all).
-        // Within the same scope, higher severity still ranks first.
+        // If any route-level alert exists for the pinned route, region/global are ignored.
         const scopeScore = (key) => {
             if (!key || key === 'all') return 1;
             if (String(key).startsWith('all_')) return 2;
             return 3; // concrete routeId
         };
-        validNotices.sort((a, b) => {
-            const scopeDiff = scopeScore(b._sourceKey) - scopeScore(a._sourceKey);
-            if (scopeDiff !== 0) return scopeDiff;
-            return (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1);
-        });
-        const activeNotice = validNotices[0];
+        const routeScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 3);
+        const regionScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 2);
+        const pool = routeScoped.length
+            ? routeScoped
+            : (regionScoped.length ? regionScoped : validNotices);
+        pool.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
+        const activeNotice = pool[0];
         const severity = activeNotice.severity || 'info';
         const seenKey = `seen_notice_${activeNotice._sourceKey || 'x'}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
         const hasSeen = safeStorage.getItem(seenKey) === 'true';
@@ -1158,9 +1159,60 @@ export function initHub() {
 
     // Network map pinch/pan/zoom (SPA map-viewer parity)
     setupMapLogic();
+
+    /** In-app sheet for guide / interactive map — keeps planner state (no full remount). */
+    const openInAppSheet = (url, title) => {
+        let overlay = document.getElementById('nt-inapp-sheet');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'nt-inapp-sheet';
+            overlay.className = 'fixed inset-0 z-[220] hidden flex flex-col bg-gray-50 dark:bg-gray-900';
+            overlay.innerHTML = `
+                <div class="shrink-0 flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+                    <button type="button" id="nt-inapp-sheet-close" class="inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+                        Back
+                    </button>
+                    <span id="nt-inapp-sheet-title" class="text-sm font-black text-gray-900 dark:text-white truncate"></span>
+                    <span class="w-16" aria-hidden="true"></span>
+                </div>
+                <iframe id="nt-inapp-sheet-frame" title="In-app page" class="flex-1 w-full border-0 bg-white dark:bg-gray-900"></iframe>`;
+            document.body.appendChild(overlay);
+            const closeSheet = () => {
+                overlay.classList.add('hidden');
+                const frame = document.getElementById('nt-inapp-sheet-frame');
+                if (frame) frame.src = 'about:blank';
+                document.body.classList.remove('overflow-hidden');
+                if (location.hash === '#sheet') {
+                    try { history.back(); } catch { /* ignore */ }
+                }
+            };
+            document.getElementById('nt-inapp-sheet-close')?.addEventListener('click', closeSheet);
+            window.addEventListener('popstate', () => {
+                if (location.hash !== '#sheet' && !overlay.classList.contains('hidden')) {
+                    overlay.classList.add('hidden');
+                    const frame = document.getElementById('nt-inapp-sheet-frame');
+                    if (frame) frame.src = 'about:blank';
+                    document.body.classList.remove('overflow-hidden');
+                }
+            });
+            window.__ntCloseInAppSheet = closeSheet;
+        }
+        const frame = document.getElementById('nt-inapp-sheet-frame');
+        const titleEl = document.getElementById('nt-inapp-sheet-title');
+        if (titleEl) titleEl.textContent = title || '';
+        if (frame) frame.src = url;
+        overlay.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        if (location.hash !== '#sheet') {
+            try { history.pushState({ ntSheet: true }, '', '#sheet'); } catch { /* ignore */ }
+        }
+    };
+
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
-        window.location.href = withBase('/map.html');
+        closeAppHub(true);
+        setTimeout(() => openInAppSheet(withBase('/map.html'), 'Network Map'), 120);
     });
 
     // Updates
@@ -1181,7 +1233,7 @@ export function initHub() {
     document.getElementById('settings-help-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => { window.location.href = withBase('/guide.html'); }, 150);
+        setTimeout(() => openInAppSheet(withBase('/guide.html'), 'Commuter Guide'), 120);
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 

@@ -474,9 +474,6 @@ html.dark #app-header.nt-maint-active {
   text-align: left;
 }
 .planner-notice-icon {
-  position: absolute;
-  top: 0.875rem;
-  right: 0.875rem;
   width: 2.25rem;
   height: 2.25rem;
   display: flex;
@@ -488,13 +485,7 @@ html.dark #app-header.nt-maint-active {
   display: flex;
 }
 
-/* Results view: kill gap under “Advanced Multi-Transfer Routing” */
+/* Results view: hide Advanced Multi-Transfer chrome entirely */
 #view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-title-block {
-  margin-bottom: 0.35rem;
-}
-#view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-schedule-phantom {
   display: none;
-}
-#view-trip-planner:has(#planner-results-section:not(.hidden)) #planner-info-btn {
-  margin-bottom: 0;
 }

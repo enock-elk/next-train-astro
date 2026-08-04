@@ -321,8 +321,9 @@
                     ? window.APP_BASE
                     : '/';
                 const root = base.endsWith('/') ? base : `${base}/`;
-                const url = `${root}data/rail-tracks-${region}.geojson`;
-                const res = await fetch(url, { cache: 'force-cache' });
+                // /tracks/ (not /data/) — production rsync excludes metrorail-app/data/
+                const url = `${root}tracks/rail-tracks-${region}.geojson`;
+                const res = await fetch(url, { cache: 'default' });
                 if (!res.ok) return byId;
                 const fc = await res.json();
                 for (const f of fc.features || []) {

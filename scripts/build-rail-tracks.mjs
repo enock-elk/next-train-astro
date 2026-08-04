@@ -2,7 +2,9 @@
  * Build per-region rail track GeoJSON for the network map.
  *
  * Pulls OSM railway ways via Overpass, snaps Next Train station sequences onto
- * the rail graph, and writes public/data/rail-tracks-{REGION}.geojson.
+ * the rail graph, and writes public/tracks/rail-tracks-{REGION}.geojson.
+ * (Kept outside public/data/ so production sync can ship tracks without
+ * touching the protected schedule CDN folder on metrorail-app.)
  *
  * Usage: node scripts/build-rail-tracks.mjs [GP|WC|KZN|EC|all]
  *
@@ -15,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const MAP_APP = path.join(ROOT, 'public', 'js', 'map-app.js');
-const OUT_DIR = path.join(ROOT, 'public', 'data');
+const OUT_DIR = path.join(ROOT, 'public', 'tracks');
 
 const OVERPASS_URLS = [
     'https://overpass.private.coffee/api/interpreter',

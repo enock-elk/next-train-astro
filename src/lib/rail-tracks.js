@@ -1,6 +1,6 @@
 /**
  * Smooth trip / network paths using cached OSM rail GeoJSON
- * (public/data/rail-tracks-{REGION}.geojson from scripts/build-rail-tracks.mjs).
+ * (public/tracks/rail-tracks-{REGION}.geojson from scripts/build-rail-tracks.mjs).
  *
  * © OpenStreetMap contributors (ODbL).
  */
@@ -135,8 +135,8 @@ async function loadRegionBundle(region) {
     if (cache.has(key)) return cache.get(key);
 
     try {
-        const url = withBase(`data/rail-tracks-${key}.geojson`);
-        const res = await fetch(url, { cache: 'force-cache' });
+        const url = withBase(`tracks/rail-tracks-${key}.geojson`);
+        const res = await fetch(url, { cache: 'default' });
         if (!res.ok) {
             cache.set(key, null);
             return null;

@@ -166,6 +166,13 @@ jobs:
             --exclude '.gitignore' \
             dist/ site/
 
+          # OSM rail tracks live under /tracks/ (not /data/) so schedule CDN stays protected
+          if [ -d dist/tracks ]; then
+            mkdir -p site/tracks
+            rsync -a dist/tracks/ site/tracks/
+            echo "Synced tracks/ ($(find site/tracks -type f | wc -l) files)."
+          fi
+
           # Always pin the production hostname (do not trust whatever was in dist)
           printf 'nexttrain.co.za\n' > site/CNAME
 

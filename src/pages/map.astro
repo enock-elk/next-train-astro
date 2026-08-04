@@ -184,4 +184,20 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script is:inline src={withBase('js/map-app.js')}></script>
+  <script is:inline>
+    // When embedded in the main app sheet, Back/Home closes the sheet instead of remounting.
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      if (!a) return;
+      try {
+        if (window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function') {
+          var href = a.getAttribute('href') || '';
+          if (href === '/' || href === './' || /index\.html?$/i.test(href) || href === (window.APP_BASE || '/')) {
+            e.preventDefault();
+            window.parent.__ntCloseInAppSheet();
+          }
+        }
+      } catch (_) {}
+    }, true);
+  </script>
 </ContentLayout>

@@ -180,13 +180,23 @@ const faqJsonLd = {
     }
   </style>
 
-<!-- Back Button Overlay -->
+<!-- Back Button Overlay — closes in-app sheet when embedded; else goes home -->
     <div class="fixed top-4 left-4 z-50">
-        <a href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm backdrop-blur-md bg-opacity-90 dark:bg-opacity-90">
+        <a id="guide-home-btn" href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm backdrop-blur-md bg-opacity-90 dark:bg-opacity-90">
             <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
             Home
         </a>
     </div>
+    <script is:inline>
+      document.getElementById('guide-home-btn')?.addEventListener('click', function (e) {
+        try {
+          if (window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function') {
+            e.preventDefault();
+            window.parent.__ntCloseInAppSheet();
+          }
+        } catch (_) {}
+      });
+    </script>
 
     <!-- Main Content Container -->
     <main class="max-w-3xl mx-auto px-5 pt-24 pb-16">

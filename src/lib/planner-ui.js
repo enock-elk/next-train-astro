@@ -264,20 +264,22 @@ function buildPlannerNotice({
     const chevronSvg = `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
     const detailsLabel = interactive?.detailsLabel || 'Details';
     const detailsHtml = interactive?.onclickAttr
-        ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} transition-colors">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
+        ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon + colour wash all sit on the right.
+    // Accent bar + icon on the right; Details sits under the SVG (not in the title row).
+    // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
+    const bodyPad = interactive?.onclickAttr ? 'pr-[4.75rem]' : 'pr-14';
     const inner = `
         <div class="flex items-stretch">
-            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 pr-14 text-left">
-                <div class="planner-notice-icon absolute top-3.5 right-3.5 w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
-                    ${iconSvg}
-                </div>
-                <div class="flex items-start justify-between gap-2 mb-1.5 pr-1">
-                    <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight">${escapeHTML(title)}</h4>
+            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 ${bodyPad} text-left">
+                <div class="absolute top-3.5 right-3.5 flex flex-col items-end gap-1">
+                    <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
+                        ${iconSvg}
+                    </div>
                     ${detailsHtml}
                 </div>
+                <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5 pr-1">${escapeHTML(title)}</h4>
                 <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
@@ -285,10 +287,10 @@ function buildPlannerNotice({
         </div>
     `;
 
-    const shellClass = `planner-notice group w-full text-left mb-3 rounded-xl overflow-hidden border ${t.border} ${t.wash} shadow-sm animate-fade-in-up`;
+    const shellClass = `planner-notice group w-full text-left mb-3 rounded-xl overflow-hidden border ${t.border} ${t.wash} shadow-sm`;
     if (interactive?.onclickAttr) {
         return `
-            <button ${interactive.onclickAttr} class="${shellClass} hover:brightness-[0.99] dark:hover:brightness-110 transition-all focus:outline-none ${t.ring}">
+            <button ${interactive.onclickAttr} class="${shellClass} focus:outline-none ${t.ring}">
                 ${inner}
             </button>
         `;
@@ -1460,10 +1462,12 @@ export const PlannerRenderer = {
                         if (!justSevered) return;
                         const termStationName = cleanStr(fullValidStops[idx].station.replace(' STATION', '')).toUpperCase();
                         inj += `
-                            <div class="relative my-3 z-20 w-full">
-                                <div class="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-900/50 px-3 py-2 flex items-center justify-center w-full">
-                                    <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center justify-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
-                                </div>
+                            <div class="relative my-3 z-20 w-full flex items-center gap-2 pointer-events-none select-none" aria-hidden="false" role="status">
+                                <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
+                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0">
+                                    ${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}
+                                </span>
+                                <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
                             </div>
                         `;
                     } else {
@@ -1594,10 +1598,12 @@ export const PlannerRenderer = {
                     (currentPlannerErrorPayload && currentPlannerErrorPayload.partialDest) || subTo || ''
                 ).replace(/ STATION/gi, '').replace(/</g, '&lt;').replace(/>/g, '&gt;').toUpperCase();
                 html += `
-                    <div class="relative my-3 z-20 w-full">
-                        <div class="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-900/50 px-3 py-2 flex items-center justify-center w-full">
-                            <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center justify-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
-                        </div>
+                    <div class="relative my-3 z-20 w-full flex items-center gap-2 pointer-events-none select-none" role="status">
+                        <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
+                        <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0">
+                            ${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}
+                        </span>
+                        <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
                     </div>
                 `;
             }

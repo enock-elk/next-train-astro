@@ -4665,6 +4665,14 @@ const Admin = {
                 { label: 'Permanent', ms: 0 },
             ];
 
+        const banModes = (typeof SHADOW_BAN_MODES !== 'undefined' && Array.isArray(SHADOW_BAN_MODES) && SHADOW_BAN_MODES.length)
+            ? SHADOW_BAN_MODES
+            : [
+                { id: 'offline', label: 'Fake offline / lie-fi' },
+                { id: 'freeze', label: 'Freeze / unresponsive' },
+                { id: 'fouc', label: 'True FOUC (unstyled)' },
+            ];
+
         const choice = await new Promise((resolve) => {
             const modalId = 'admin-shadow-ban-modal';
             let modal = document.getElementById(modalId);
@@ -4679,9 +4687,14 @@ const Admin = {
                     <h3 class="text-base font-black text-gray-900 dark:text-white mb-1">Shadow ban user</h3>
                     <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 font-mono break-all">${uid}</p>
                     <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Duration</label>
-                    <select id="admin-ban-duration" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm mb-4">
+                    <select id="admin-ban-duration" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm mb-3">
                         ${durations.map((d, i) => `<option value="${i}" ${d.ms === 86400000 ? 'selected' : ''}>${d.label}</option>`).join('')}
                     </select>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Ban experience</label>
+                    <select id="admin-ban-mode" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm mb-2">
+                        ${banModes.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}
+                    </select>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-4 leading-snug">They are never told they are banned. Offline = lie-fi banner. Freeze = no taps work. FOUC = styles stripped (raw HTML).</p>
                     <div class="flex gap-2">
                         <button type="button" id="admin-ban-cancel" class="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Cancel</button>
                         <button type="button" id="admin-ban-confirm" class="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">Ban</button>
@@ -4691,15 +4704,21 @@ const Admin = {
             document.getElementById('admin-ban-cancel').onclick = () => { modal.classList.add('hidden'); resolve(null); };
             document.getElementById('admin-ban-confirm').onclick = () => {
                 const idx = parseInt(document.getElementById('admin-ban-duration').value, 10) || 0;
+                const modeEl = document.getElementById('admin-ban-mode');
+                const mode = (typeof trustNormalizeShadowBanMode === 'function')
+                    ? trustNormalizeShadowBanMode(modeEl?.value)
+                    : (modeEl?.value || 'offline');
                 modal.classList.add('hidden');
-                resolve(durations[idx] || durations[durations.length - 1]);
+                const duration = durations[idx] || durations[durations.length - 1];
+                resolve({ ...duration, mode });
             };
         });
         if (!choice) return false;
 
+        const modeLabel = banModes.find((m) => m.id === choice.mode)?.label || choice.mode;
         const confirmed = await Admin.secureConfirm(
             'Confirm shadow ban',
-            `Ban ${uid} for ${choice.label}? Their app will look broken (bad network / FOUC) — they won’t be told they’re banned.`
+            `Ban ${uid} for ${choice.label} with “${modeLabel}”? They won’t be told they’re banned.`
         );
         if (!confirmed) return false;
 
@@ -4710,11 +4729,15 @@ const Admin = {
                 ? trustComputeBanUntil(choice.ms)
                 : (choice.ms > 0 ? Date.now() + choice.ms : 0);
             const now = Date.now();
+            const banMode = (typeof trustNormalizeShadowBanMode === 'function')
+                ? trustNormalizeShadowBanMode(choice.mode)
+                : (choice.mode || 'offline');
             const putFlag = async (basePath) => {
                 const paths = [
                     [`${basePath}/shadowBanned.json`, true],
                     [`${basePath}/shadowBannedUntil.json`, until],
                     [`${basePath}/shadowBannedAt.json`, now],
+                    [`${basePath}/shadowBanMode.json`, banMode],
                 ];
                 if (Admin.currentUser?.uid) {
                     paths.push([`${basePath}/shadowBannedBy.json`, Admin.currentUser.uid]);
@@ -4747,7 +4770,7 @@ const Admin = {
                 window.trustLocalBlockList.add(uid);
                 if (deviceId) window.trustLocalBlockList.add(deviceId);
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) — cloaked as bad network`, 'success');
+            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) — mode: ${modeLabel}`, 'success');
             return true;
         } catch (e) {
             console.error('Shadow ban failed', e);
@@ -4768,6 +4791,7 @@ const Admin = {
                 for (const [path, body] of [
                     [`${basePath}/shadowBanned.json`, false],
                     [`${basePath}/shadowBannedUntil.json`, 0],
+                    [`${basePath}/shadowBanMode.json`, 'offline'],
                 ]) {
                     const res = await fetch(`${dynamicEndpoint}${path}?auth=${secret}`, {
                         method: 'PUT',
@@ -8581,6 +8605,18 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Shadow-ban default experience -->
+                <div class="bg-violet-50 dark:bg-violet-900/20 p-4 rounded-xl border border-violet-200 dark:border-violet-800">
+                    <span class="font-bold text-violet-800 dark:text-violet-200 text-sm">Shadow-ban default mode</span>
+                    <p class="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5 mb-3 leading-snug">Used when a ban has no per-user mode set. Per-ban choice in the Shadow ban dialog always wins.</p>
+                    <select id="shadow-ban-default-mode" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none shadow-sm mb-2">
+                        <option value="offline">Fake offline / lie-fi</option>
+                        <option value="freeze">Freeze / unresponsive</option>
+                        <option value="fouc">True FOUC (unstyled)</option>
+                    </select>
+                    <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
+                </div>
+
                 <!-- Transplanted Growth & Promo -->
                 <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="promo-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-indigo-900/60">
@@ -8634,6 +8670,8 @@ const Admin = {
         const promoHeader = document.getElementById('promo-header-btn');
         const promoBody = document.getElementById('promo-body');
         const promoChevron = document.getElementById('promo-chevron');
+        const banModeSelect = document.getElementById('shadow-ban-default-mode');
+        const banModeSave = document.getElementById('shadow-ban-default-save');
 
         if (nukeHeader) {
             nukeHeader.onclick = () => {
@@ -8678,9 +8716,48 @@ const Admin = {
                     if (maintMsg) maintMsg.value = "";
                 }
 
+                try {
+                    const resBan = await fetch(`${dynamicEndpoint}config/shadow_ban_mode.json`);
+                    if (resBan.ok) {
+                        const banCfg = await resBan.json();
+                        const mode = (typeof trustNormalizeShadowBanMode === 'function')
+                            ? trustNormalizeShadowBanMode(banCfg?.mode || banCfg)
+                            : (banCfg?.mode || 'offline');
+                        if (banModeSelect) banModeSelect.value = mode;
+                    }
+                } catch (be) { /* optional config */ }
+
                 } catch(e) { console.warn("Failed to check system status"); }
         }
         checkStatus();
+
+        if (banModeSave && banModeSelect) {
+            banModeSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const mode = (typeof trustNormalizeShadowBanMode === 'function')
+                        ? trustNormalizeShadowBanMode(banModeSelect.value)
+                        : (banModeSelect.value || 'offline');
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/shadow_ban_mode.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            mode,
+                            updatedAt: Date.now(),
+                            updatedBy: Admin.currentUser ? Admin.currentUser.email : 'Admin',
+                        }),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    if (typeof showToast === 'function') showToast(`Shadow-ban default: ${mode}`, 'success');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save ban mode.', 'error');
+                }
+            };
+        }
 
         if (toggle) {
             toggle.addEventListener('change', async () => {

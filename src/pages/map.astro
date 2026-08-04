@@ -174,12 +174,13 @@ const base = normalizeBase(import.meta.env.BASE_URL);
 
   <div id="map" role="application" aria-label="Metrorail network map"></div>
 
-  <script is:inline define:vars={{ ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION }}>
+  <script is:inline define:vars={{ ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, APP_BASE: base }}>
     window.ROUTES = ROUTES;
     window.REGIONS = REGIONS;
     window.PIPELINE_SOURCES = PIPELINE_SOURCES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.APP_VERSION = APP_VERSION;
+    window.APP_BASE = APP_BASE;
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script is:inline src={withBase('js/map-app.js')}></script>

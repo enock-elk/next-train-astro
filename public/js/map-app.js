@@ -313,6 +313,38 @@
             'ec-berlin': ["EAST LONDON", "SOUTHERNWOOD", "PANMURE", "CHISELHURST", "VINCENT", "CAMBRIDGE", "HIGHGATE", "HORSESHOE", "DAWN", "WILSONIA", "ARNOLDTON", "MTSOTSO", "MDANTSANE", "MOUNT RUTH", "EGERTON", "FORT JACKSON", "LONETREE", "BERLIN"]
         };
 
+        // --- OSM rail tracks (static GeoJSON from scripts/build-rail-tracks.mjs) ---
+        async function loadRailTrackPaths(region) {
+            const byId = new Map();
+            try {
+                const base = (typeof window.APP_BASE === 'string' && window.APP_BASE)
+                    ? window.APP_BASE
+                    : '/';
+                const root = base.endsWith('/') ? base : `${base}/`;
+                const url = `${root}data/rail-tracks-${region}.geojson`;
+                const res = await fetch(url, { cache: 'force-cache' });
+                if (!res.ok) return byId;
+                const fc = await res.json();
+                for (const f of fc.features || []) {
+                    const id = f.properties?.routeId;
+                    const geom = f.geometry;
+                    if (!id || !geom) continue;
+                    let latlngs = [];
+                    if (geom.type === 'LineString') {
+                        latlngs = geom.coordinates.map(([lon, lat]) => [lat, lon]);
+                    } else if (geom.type === 'MultiLineString') {
+                        for (const line of geom.coordinates) {
+                            for (const [lon, lat] of line) latlngs.push([lat, lon]);
+                        }
+                    }
+                    if (latlngs.length > 1) byId.set(id, latlngs);
+                }
+            } catch (e) {
+                console.warn('Guardian: OSM track GeoJSON unavailable, using station chords.', e);
+            }
+            return byId;
+        }
+
         // --- MAP LOGIC (Dynamic Region & DB Sync) ---
         function showMapColdStartPanel(err) {
             console.warn("Guardian: Map Init Failed (cold-start safe).", err);
@@ -677,10 +709,16 @@
                 return; // Stop drawing Leaflet elements
             }
 
+            // --- OSM TRACK GEOMETRY (cached GeoJSON; station chords as fallback) ---
+            // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
+            const trackByRouteId = await loadRailTrackPaths(currentRegion);
+
             // --- DRAW BASE ROUTES ---
             drawnRoutes.forEach(r => {
                 const isLive = r.isActive;
-                L.polyline(r.coords, {
+                const osmLatLngs = trackByRouteId.get(r.routeId);
+                const lineCoords = (osmLatLngs && osmLatLngs.length > 1) ? osmLatLngs : r.coords;
+                L.polyline(lineCoords, {
                     color: r.color, // 🛡️ Use actual route color for anticipation
                     weight: isLive ? 4 : 3,
                     opacity: isLive ? 0.9 : 0.35, // Faded for future routes
@@ -696,6 +734,8 @@
                             : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">🚧 Launching Soon</span>'}
                     </div>
                 `);
+                // Keep station-chord coords for disruption segment matching
+                if (osmLatLngs && osmLatLngs.length > 1) r.trackCoords = osmLatLngs;
             });
 
             // --- 🛡️ GUARDIAN PHASE 2: DRAW DYNAMIC DISRUPTION OVERLAYS ---
@@ -709,7 +749,11 @@
                     const isCritical = d.tier === 'CRITICAL';
                     const color = isCritical ? '#ef4444' : '#eab308';
                     const currentValidStops = routeObj.validStops;
+                    // Station chords for stop-index matching; OSM tracks for full-route paint
                     const currentPath = routeObj.coords;
+                    const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
+                        ? routeObj.trackCoords
+                        : currentPath;
 
                     // No outward pulse rings on incident markers — solid badge only
                     const iconHtml = `<div class="flex items-center justify-center rounded-full shadow-md border-2 border-white" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`;
@@ -720,26 +764,26 @@
                     if (!d.stations || d.stations.length === 0) {
                         if (d.routeId === routeObj.routeId) {
                             drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                            L.polyline(currentPath, {
+                            L.polyline(trackPath, {
                                 color: color, weight: 10, opacity: 0.8, dashArray: '10, 12', lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
                             }).addTo(map);
                             
                             const startIdx = 0;
-                            const endIdx = currentPath.length - 1;
+                            const endIdx = trackPath.length - 1;
                             
-                            L.marker(currentPath[startIdx], { icon: alertIcon }).addTo(map);
-                            L.marker(currentPath[endIdx], { icon: alertIcon }).addTo(map);
+                            L.marker(trackPath[startIdx], { icon: alertIcon }).addTo(map);
+                            L.marker(trackPath[endIdx], { icon: alertIcon }).addTo(map);
 
                             const midIndexExact = (startIdx + endIdx) / 2;
                             let midLat = 0, midLon = 0;
                             if (midIndexExact % 1 === 0) {
-                                midLat = currentPath[midIndexExact][0];
-                                midLon = currentPath[midIndexExact][1];
+                                midLat = trackPath[midIndexExact][0];
+                                midLon = trackPath[midIndexExact][1];
                             } else {
                                 const f = Math.floor(midIndexExact);
                                 const c = Math.ceil(midIndexExact);
-                                midLat = (currentPath[f][0] + currentPath[c][0]) / 2;
-                                midLon = (currentPath[f][1] + currentPath[c][1]) / 2;
+                                midLat = (trackPath[f][0] + trackPath[c][0]) / 2;
+                                midLon = (trackPath[f][1] + trackPath[c][1]) / 2;
                             }
 
                             L.marker([midLat, midLon], { icon: invisibleIcon, interactive: false })

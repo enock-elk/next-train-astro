@@ -12,6 +12,7 @@ import {
     $globalDisruptions, $masterStationList, $userProfile, $fullDatabase 
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
+import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage 
@@ -1021,7 +1022,7 @@ export async function openTripMapRenderer(routeData) {
     if (tripMapInitTimeout) clearTimeout(tripMapInitTimeout);
     if (tripMapDestroyTimeout) clearTimeout(tripMapDestroyTimeout);
 
-    tripMapInitTimeout = setTimeout(() => {
+    tripMapInitTimeout = setTimeout(async () => {
         if (tripMapInstance) {
             try {
                 tripMapInstance.stopLocate();
@@ -1055,9 +1056,20 @@ export async function openTripMapRenderer(routeData) {
                 iconAnchor: [size / 2, size / 2]
             });
 
+            // Prefer OSM rail geometry for the blue journey line (station dots stay on coords)
+            const stationPath = (routeData.path || []).filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+            const region = $userRegion.get() || 'GP';
+            let drawPath = stationPath;
+            try {
+                const smoothed = await smoothPathFromStops(routeData.validStops || [], region);
+                if (smoothed && smoothed.length > 1) drawPath = smoothed;
+            } catch (e) {
+                console.warn('Guardian: trip map rail snap failed, using station chords.', e);
+            }
+
             const drawRouteElements = () => {
                 routeLayerGroup.clearLayers();
-                const currentPath = (routeData.path || []).filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+                const currentPath = drawPath;
                 const currentOrigin = routeData.origin || '';
                 const currentDest = routeData.destination || '';
                 const currentValidStops = routeData.validStops || [];
@@ -1073,7 +1085,7 @@ export async function openTripMapRenderer(routeData) {
                 }
                 const subTitleEl = document.getElementById('trip-map-subtitle');
                 if (subTitleEl) {
-                    const stopCount = currentValidStops.length || currentPath.length;
+                    const stopCount = currentValidStops.length || stationPath.length;
                     subTitleEl.textContent = `${stopCount} stops along route`;
                 }
 
@@ -1105,12 +1117,19 @@ export async function openTripMapRenderer(routeData) {
                     });
                 }
 
-                L.marker(currentPath[0], { icon: createDot('#22c55e', 14) })
+                const startLatLng = currentValidStops[0]
+                    ? [currentValidStops[0].lat, currentValidStops[0].lon]
+                    : currentPath[0];
+                const endLatLng = currentValidStops.length
+                    ? [currentValidStops[currentValidStops.length - 1].lat, currentValidStops[currentValidStops.length - 1].lon]
+                    : currentPath[currentPath.length - 1];
+
+                L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
                     .bindTooltip(`<b>Start:</b> ${currentOrigin.replace(/ STATION/gi, '')}`, {
                         permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
                     }).addTo(routeLayerGroup);
 
-                L.marker(currentPath[currentPath.length - 1], { icon: createDot('#ef4444', 14) })
+                L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
                     .bindTooltip(`<b>End:</b> ${currentDest.replace(/ STATION/gi, '')}`, {
                         permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
                     }).addTo(routeLayerGroup);
@@ -1125,13 +1144,17 @@ export async function openTripMapRenderer(routeData) {
                         const color = isCritical ? '#ef4444' : '#eab308';
 
                         if (normStations.length >= 2) {
-                            const idx1 = currentValidStops.findIndex((vs) => normalizeStationName(vs.name) === normStations[0]);
-                            const idx2 = currentValidStops.findIndex((vs) => normalizeStationName(vs.name) === normStations[1]);
-                            if (idx1 === -1 || idx2 === -1) return;
+                            const s1 = currentValidStops.find((vs) => normalizeStationName(vs.name) === normStations[0]);
+                            const s2 = currentValidStops.find((vs) => normalizeStationName(vs.name) === normStations[1]);
+                            if (!s1 || !s2) return;
                             drawnIds.add(d.id);
-                            const start = Math.min(idx1, idx2);
-                            const end = Math.max(idx1, idx2);
+                            const i1 = nearestPathIndex(currentPath, s1.lat, s1.lon);
+                            const i2 = nearestPathIndex(currentPath, s2.lat, s2.lon);
+                            if (i1 < 0 || i2 < 0) return;
+                            const start = Math.min(i1, i2);
+                            const end = Math.max(i1, i2);
                             const segment = currentPath.slice(start, end + 1);
+                            if (segment.length < 2) return;
                             L.polyline(segment, {
                                 color, weight: 10, opacity: 0.8, dashArray: '10, 12',
                                 lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
@@ -1751,8 +1774,8 @@ export const PlannerRenderer = {
             `;
         } else {
             stateBadge = `<div class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            ${countdown}
+                            <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>${countdown}</span>
                           </div>`;
         }
 
@@ -2116,7 +2139,8 @@ export const PlannerRenderer = {
                 const diff = effectiveDepSec - nowSec;
                 const h = Math.floor(diff / 3600);
                 const m = Math.floor((diff % 3600) / 60);
-                countdown = h > 0 ? `Departs in ${h}h ${m}m` : (m === 0 ? "Departs in < 1 min" : `Departs in ${m} min`);
+                // Use &lt; so innerHTML never treats "< 1" as a broken tag (garbled/CJK glyphs)
+                countdown = h > 0 ? `Departs in ${h}h ${m}m` : (m === 0 ? "Departs in &lt; 1 min" : `Departs in ${m} min`);
             } else { countdown = "Departed"; isDeparted = true; }
         }
         

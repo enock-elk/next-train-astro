@@ -356,6 +356,18 @@ export async function saveToLocalCache(key, data, signal = null) {
     }
 }
 
+function readLocalStorageCache(key) {
+    try {
+        const item = safeStorage.getItem(key);
+        if (!item) return null;
+        const parsed = JSON.parse(item);
+        memoryFallbackCache[key] = parsed;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
 export async function loadFromLocalCache(key, signal = null) {
     if (signal && signal.aborted) return null;
     if (memoryFallbackCache[key]) return memoryFallbackCache[key];
@@ -364,7 +376,7 @@ export async function loadFromLocalCache(key, signal = null) {
         const db = await initDB();
         if (signal && signal.aborted) return null;
         
-        return new Promise((resolve, reject) => {
+        const fromIdb = await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readonly');
             const request = tx.objectStore(STORE_NAME).get(key);
             request.onsuccess = () => {
@@ -376,16 +388,12 @@ export async function loadFromLocalCache(key, signal = null) {
             }
             request.onerror = () => reject(request.error);
         });
+        // IDB open success with a missing key used to skip localStorage entirely —
+        // that broke offline relaunch when only the localStorage fallback was written.
+        if (fromIdb) return fromIdb;
+        return readLocalStorageCache(key);
     } catch (e) {
-        try { 
-            const item = safeStorage.getItem(key); 
-            if (item) {
-                const parsed = JSON.parse(item);
-                memoryFallbackCache[key] = parsed;
-                return parsed;
-            }
-            return null;
-        } catch (ex) { return null; }
+        return readLocalStorageCache(key);
     }
 }
 
@@ -583,17 +591,6 @@ export async function buildGlobalStationIndexAsync(targetDB) {
 export async function loadAllSchedules(force = false) {
     if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
 
-    // Cloaked shadow-ban: pretend the network is dying (never mention a ban)
-    if (typeof window !== 'undefined' && !window.__ntShadowBanCloak && typeof window.trustApplyShadowBanCloak === 'function') {
-        try { await window.trustApplyShadowBanCloak(); } catch { /* ignore */ }
-    }
-    if (typeof window !== 'undefined' && window.__ntShadowBanCloak) {
-        await new Promise((r) => setTimeout(r, 2200 + Math.random() * 2800));
-        try { $isOffline.set(true); } catch { /* ignore */ }
-        // Always fail schedule refresh while cloaked (cached board may still show)
-        throw new Error('Network request failed');
-    }
-
     let usedCache = false; 
     const currentGen = regionSwapGeneration; 
     
@@ -625,7 +622,9 @@ export async function loadAllSchedules(force = false) {
 
         if (!currentRoute.isActive) return; 
 
-        // 1. EAGER RENDER CACHE LOAD
+        // 1. EAGER RENDER CACHE LOAD — must run BEFORE any Firebase/trust network calls.
+        // Offline PWA relaunch was hanging forever on shadow-ban RTDB get() and never
+        // reached IndexedDB, so the board stayed on "Loading stations…".
         const cacheKey = `full_db_${$userRegion.get()}`;
         const cachedDB = await loadFromLocalCache(cacheKey, fetchSignal);
 
@@ -660,6 +659,23 @@ export async function loadAllSchedules(force = false) {
         if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) {
             console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
             return;
+        }
+
+        // Cloaked shadow-ban: only when online (Firebase get can hang offline).
+        // Never block cached board paint — cloak runs after eager cache above.
+        if (typeof window !== 'undefined' && !window.__ntShadowBanCloak && typeof window.trustApplyShadowBanCloak === 'function') {
+            try {
+                await Promise.race([
+                    window.trustApplyShadowBanCloak(),
+                    new Promise((r) => setTimeout(r, 3000)),
+                ]);
+            } catch { /* ignore */ }
+        }
+        if (typeof window !== 'undefined' && window.__ntShadowBanCloak) {
+            await new Promise((r) => setTimeout(r, 2200 + Math.random() * 2800));
+            try { $isOffline.set(true); } catch { /* ignore */ }
+            // Cached board may already be showing; fail only the network refresh path
+            throw new Error('Network request failed');
         }
 
         // Captive portal pre-flight (HTML injected instead of JSON)

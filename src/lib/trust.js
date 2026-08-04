@@ -128,16 +128,52 @@ function flagsAreBanned(flags) {
     return true;
 }
 
+/** Avoid hanging Firebase RTDB get() when offline (blocks schedule cache boot). */
+function trustNetworkAvailable() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+function withTimeout(promise, ms, label = 'trust') {
+    return new Promise((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            console.warn(`🛡️ Guardian: ${label} timed out after ${ms}ms`);
+            resolve(null);
+        }, ms);
+        Promise.resolve(promise).then(
+            (v) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(v);
+            },
+            () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(null);
+            }
+        );
+    });
+}
+
 /** Fetch full flags object for a user */
 export async function fetchUserFlags(uid) {
     if (!uid) return null;
+    if (!trustNetworkAvailable()) return null;
     try {
         if (!window.firebaseDb) await bootFirebase();
         if (window.firebaseDb && window.firebaseDbGet) {
-            const snap = await window.firebaseDbGet(
-                window.firebaseDbRef(window.firebaseDb, `users/${uid}/flags`)
+            const snap = await withTimeout(
+                window.firebaseDbGet(
+                    window.firebaseDbRef(window.firebaseDb, `users/${uid}/flags`)
+                ),
+                2500,
+                'fetchUserFlags'
             );
-            return snap.exists() ? snap.val() : null;
+            return snap && snap.exists() ? snap.val() : null;
         }
         const q = await authQuery();
         const res = await fetch(`${DYNAMIC_BASE_URL}users/${uid}/flags.json${q}`);
@@ -151,13 +187,18 @@ export async function fetchUserFlags(uid) {
 /** Device-level ban flags (guests / pre-account device IDs). */
 export async function fetchDeviceFlags(deviceId) {
     if (!deviceId) return null;
+    if (!trustNetworkAvailable()) return null;
     try {
         if (!window.firebaseDb) await bootFirebase();
         if (window.firebaseDb && window.firebaseDbGet) {
-            const snap = await window.firebaseDbGet(
-                window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}/flags`)
+            const snap = await withTimeout(
+                window.firebaseDbGet(
+                    window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}/flags`)
+                ),
+                2500,
+                'fetchDeviceFlags'
             );
-            return snap.exists() ? snap.val() : null;
+            return snap && snap.exists() ? snap.val() : null;
         }
         const q = await authQuery();
         const res = await fetch(`${DYNAMIC_BASE_URL}devices/${encodeURIComponent(deviceId)}/flags.json${q}`);
@@ -274,25 +315,88 @@ export const SHADOW_BAN_DURATIONS = [
     { label: 'Permanent', ms: 0 },
 ];
 
+/**
+ * How a shadow ban feels to the target (never says “banned”).
+ * - offline: current lie-fi / offline flicker
+ * - freeze: UI captures input and feels frozen
+ * - fouc: strip stylesheets → browser-default “true FOUC”
+ */
+export const SHADOW_BAN_MODES = [
+    { id: 'offline', label: 'Fake offline / lie-fi', hint: 'Offline banner + flaky connection feel' },
+    { id: 'freeze', label: 'Freeze / unresponsive', hint: 'App looks loaded but ignores all input' },
+    { id: 'fouc', label: 'True FOUC (unstyled)', hint: 'CSS disabled — raw HTML like a failed stylesheet load' },
+];
+
+const VALID_BAN_MODES = new Set(SHADOW_BAN_MODES.map((m) => m.id));
+let _globalBanModeCache = null;
+let _globalBanModeFetchedAt = 0;
+
+export function normalizeShadowBanMode(mode) {
+    const m = String(mode || '').trim().toLowerCase();
+    return VALID_BAN_MODES.has(m) ? m : 'offline';
+}
+
 export function computeBanUntil(durationMs) {
     if (!durationMs || durationMs <= 0) return 0;
     return Date.now() + durationMs;
 }
 
+async function fetchGlobalShadowBanMode() {
+    const now = Date.now();
+    if (_globalBanModeCache && now - _globalBanModeFetchedAt < 60_000) {
+        return _globalBanModeCache;
+    }
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}config/shadow_ban_mode.json?t=${Math.floor(now / 60_000)}`);
+        if (!res.ok) throw new Error('no config');
+        const data = await res.json();
+        const mode = normalizeShadowBanMode(
+            (data && typeof data === 'object' ? data.mode : data) || 'offline'
+        );
+        _globalBanModeCache = mode;
+        _globalBanModeFetchedAt = now;
+        return mode;
+    } catch {
+        _globalBanModeCache = 'offline';
+        _globalBanModeFetchedAt = now;
+        return 'offline';
+    }
+}
+
 /**
- * Cloaked enforcement for shadow-banned devices/accounts.
- * Looks like flaky network / FOUC — never tells the user they are banned.
+ * @returns {Promise<{ banned: boolean, mode: string }|null>}
  */
-export async function applyShadowBanCloak() {
-    if (typeof window === 'undefined' || window.__ntBanCloakApplied) return false;
+async function resolveShadowBanEnforcement() {
     const uid = safeStorage.getItem('authUid') || null;
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || window.NEXT_TRAIN_DEVICE_ID || null;
-    const banned = (await isShadowBanned(uid)) || (deviceId ? await isShadowBanned(deviceId) : false);
-    if (!banned) return false;
 
-    window.__ntBanCloakApplied = true;
-    window.__ntShadowBanCloak = true;
+    let banned = false;
+    let modeFromFlags = null;
 
+    const considerFlags = (flags) => {
+        if (!flagsAreBanned(flags)) return;
+        banned = true;
+        if (flags?.shadowBanMode) modeFromFlags = flags.shadowBanMode;
+    };
+
+    if (uid && localBlockList.has(uid)) banned = true;
+    if (uid) considerFlags(await fetchUserFlags(uid));
+
+    if (deviceId && deviceId !== uid) {
+        if (localBlockList.has(deviceId)) banned = true;
+        considerFlags(await fetchDeviceFlags(deviceId));
+        considerFlags(await fetchUserFlags(deviceId));
+    }
+
+    if (!banned) return null;
+
+    const mode = normalizeShadowBanMode(
+        modeFromFlags || (await fetchGlobalShadowBanMode())
+    );
+    return { banned: true, mode };
+}
+
+function applyBanModeOffline() {
     const pulseOffline = () => {
         try { $isOffline.set(true); } catch { /* ignore */ }
         const ind = document.getElementById('offline-indicator');
@@ -302,7 +406,6 @@ export async function applyShadowBanCloak() {
     };
     pulseOffline();
 
-    // Intermittent "lie-fi": flicker offline chrome so it feels like a bad connection
     const flicker = () => {
         if (!window.__ntShadowBanCloak) return;
         pulseOffline();
@@ -314,7 +417,6 @@ export async function applyShadowBanCloak() {
     };
     setInterval(flicker, 7000);
 
-    // Soft FOUC: briefly strip the shell-ready class so layout looks broken on load
     try {
         document.documentElement.classList.remove('nt-shell-ready');
         setTimeout(() => {
@@ -322,13 +424,121 @@ export async function applyShadowBanCloak() {
         }, 1800 + Math.random() * 1200);
     } catch { /* ignore */ }
 
-    // Schedule loads look like they fail / never settle
     const weak = document.getElementById('weak-signal-modal');
     if (weak && typeof window.openSmoothModal === 'function') {
         setTimeout(() => {
             try { window.openSmoothModal('weak-signal-modal'); } catch { /* ignore */ }
         }, 2200);
     }
+}
+
+function applyBanModeFreeze() {
+    try { $isOffline.set(true); } catch { /* ignore */ }
+    const ind = document.getElementById('offline-indicator');
+    if (ind) ind.style.display = '';
+
+    let freeze = document.getElementById('nt-ban-freeze-overlay');
+    if (!freeze) {
+        freeze = document.createElement('div');
+        freeze.id = 'nt-ban-freeze-overlay';
+        freeze.setAttribute('aria-hidden', 'true');
+        freeze.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:2147483646',
+            'background:transparent', 'touch-action:none', 'cursor:wait',
+            'pointer-events:auto',
+        ].join(';');
+        const block = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation?.();
+        };
+        ['click', 'pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend',
+            'mousedown', 'mouseup', 'keydown', 'keyup', 'wheel', 'contextmenu', 'submit',
+        ].forEach((ev) => freeze.addEventListener(ev, block, true));
+        document.documentElement.addEventListener('scroll', block, { capture: true, passive: false });
+        document.body.appendChild(freeze);
+    }
+    try {
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+    } catch { /* ignore */ }
+}
+
+function applyBanModeFouc() {
+    try {
+        document.documentElement.classList.remove('dark', 'nt-shell-ready');
+    } catch { /* ignore */ }
+
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((el) => {
+        try {
+            el.disabled = true;
+            el.setAttribute('data-nt-ban-fouc', '1');
+            el.setAttribute('media', 'not all');
+        } catch { /* ignore */ }
+    });
+    document.querySelectorAll('style').forEach((el) => {
+        try {
+            el.disabled = true;
+            el.setAttribute('data-nt-ban-fouc', '1');
+            if (!el.dataset.ntBanFoucPrev) {
+                el.dataset.ntBanFoucPrev = el.textContent || '';
+                el.textContent = '';
+            }
+        } catch { /* ignore */ }
+    });
+
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+    const main = document.getElementById('main-content');
+    if (main) {
+        main.style.visibility = 'visible';
+        main.style.display = 'block';
+    }
+
+    let strip = document.getElementById('nt-ban-fouc-offline');
+    if (!strip) {
+        strip = document.createElement('div');
+        strip.id = 'nt-ban-fouc-offline';
+        strip.textContent = '📡 You are offline. Pull down to refresh when signal returns.';
+        document.body.insertBefore(strip, document.body.firstChild);
+    }
+
+    // Keep fighting late-injected styles (PWA / Vite HMR / ads)
+    if (!window.__ntBanFoucWatch) {
+        window.__ntBanFoucWatch = setInterval(() => {
+            if (!window.__ntShadowBanCloak || window.__ntShadowBanMode !== 'fouc') return;
+            document.querySelectorAll('link[rel="stylesheet"]:not([data-nt-ban-fouc])').forEach((el) => {
+                try {
+                    el.disabled = true;
+                    el.setAttribute('data-nt-ban-fouc', '1');
+                    el.setAttribute('media', 'not all');
+                } catch { /* ignore */ }
+            });
+        }, 1500);
+    }
+}
+
+/**
+ * Cloaked enforcement for shadow-banned devices/accounts.
+ * Mode comes from per-ban flags.shadowBanMode, else config/shadow_ban_mode.json.
+ * Never tells the user they are banned.
+ */
+export async function applyShadowBanCloak() {
+    if (typeof window === 'undefined' || window.__ntBanCloakApplied) return false;
+    // Offline: do not touch Firebase — RTDB get() can hang and block boot.
+    if (!trustNetworkAvailable()) return false;
+
+    const verdict = await resolveShadowBanEnforcement();
+    if (!verdict?.banned) return false;
+
+    const mode = normalizeShadowBanMode(verdict.mode);
+    window.__ntBanCloakApplied = true;
+    window.__ntShadowBanCloak = true;
+    window.__ntShadowBanMode = mode;
+
+    if (mode === 'freeze') applyBanModeFreeze();
+    else if (mode === 'fouc') applyBanModeFouc();
+    else applyBanModeOffline();
 
     return true;
 }
@@ -342,5 +552,7 @@ if (typeof window !== 'undefined') {
     window.trustFetchUserFlags = fetchUserFlags;
     window.trustFetchTrustScore = fetchTrustScore;
     window.SHADOW_BAN_DURATIONS = SHADOW_BAN_DURATIONS;
+    window.SHADOW_BAN_MODES = SHADOW_BAN_MODES;
     window.trustComputeBanUntil = computeBanUntil;
+    window.trustNormalizeShadowBanMode = normalizeShadowBanMode;
 }

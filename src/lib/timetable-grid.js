@@ -47,8 +47,8 @@ export function parseRouteDeepLink() {
 
 /**
  * Cold-start / share deep link: open the linked route (and grid when view=grid).
- * If the user has no default for that region (cold start / empty prefs), adopt
- * the shared route as their default. Never overwrite an existing default.
+ * Returning users (welcomeSeen): never override region / pinned defaults — their
+ * settings beat SEO/share automation. First-time / empty prefs may adopt the link.
  */
 export async function applyRouteDeepLink() {
     const link = parseRouteDeepLink();
@@ -57,11 +57,20 @@ export async function applyRouteDeepLink() {
     const route = ROUTES[link.routeId];
     if (!route) return false;
 
+    const returning = safeStorage.getItem('welcomeSeen') === 'true';
+    const hasSavedRegion = !!safeStorage.getItem('userRegion');
+
+    // Established users browsing SEO/share links: keep their setup, drop params.
+    if (returning && hasSavedRegion) {
+        stripShareParamsFromUrl();
+        return false;
+    }
+
     const defaultKey = 'defaultRoute_' + route.region;
     const existingDefault = safeStorage.getItem(defaultKey);
     const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+    if (!returning) {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     // Cold start / no defaults: pin the shared route as theirs
@@ -181,12 +190,29 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
                 </div>
                 <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
                 <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
+                    <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
+                </div>
             </div>`;
         document.body.appendChild(modal);
-        document.getElementById('close-full-grid-btn')?.addEventListener('click', () => {
+        const closeGrid = () => {
             triggerHaptic();
             closeFullGridModal();
-        });
+        };
+        document.getElementById('close-full-grid-btn')?.addEventListener('click', closeGrid);
+        document.getElementById('close-timetable-footer-btn')?.addEventListener('click', closeGrid);
+    } else if (!document.getElementById('close-timetable-footer-btn')) {
+        const shell = modal.firstElementChild;
+        if (shell && !shell.querySelector('#close-timetable-footer-btn')) {
+            const footer = document.createElement('div');
+            footer.className = 'shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20';
+            footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>';
+            shell.appendChild(footer);
+            document.getElementById('close-timetable-footer-btn')?.addEventListener('click', () => {
+                triggerHaptic();
+                closeFullGridModal();
+            });
+        }
     }
 
     const destName = window.Renderer._applyUIIntercepts(direction === 'A' ? route.destA : route.destB).toUpperCase();

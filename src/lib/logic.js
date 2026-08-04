@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN LOGIC (V8_08.02 - Astro MPA Migration)
+ * METRORAIL NEXT TRAIN LOGIC (V8_08.04 - Astro MPA Migration)
  * -----------------------------------------------------------
  * This module manages Data Fetching, Caching (IndexedDB), and Synchronization.
  * It has been migrated to use Nano Stores for global state persistence.
@@ -42,17 +42,18 @@ let _lastSlowNetworkToastTime = 0;
 
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
-function syncRegionDisplayDom(region) {
+export function syncRegionDisplayDom(region) {
     if (typeof document === 'undefined') return;
-    const name = REGION_DISPLAY_NAMES[region] || 'Gauteng';
+    const code = region || 'GP';
+    const name = REGION_DISPLAY_NAMES[code] || 'Gauteng';
     const sideDisp = document.getElementById('sidenav-region-display');
     const modalDisp = document.getElementById('route-modal-region-display');
     const sideSel = document.getElementById('app-hub-region-select');
     const modalSel = document.getElementById('route-modal-region-select');
     if (sideDisp) sideDisp.textContent = name;
     if (modalDisp) modalDisp.textContent = name;
-    if (sideSel) sideSel.value = region;
-    if (modalSel) modalSel.value = region;
+    if (sideSel) sideSel.value = code;
+    if (modalSel) modalSel.value = code;
 }
 
 function getRoutesForCurrentRegion() {
@@ -543,6 +544,15 @@ export async function buildGlobalStationIndexAsync(targetDB) {
 export async function loadAllSchedules(force = false) {
     if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
 
+    // Cloaked shadow-ban: pretend the network is dying (never mention a ban)
+    if (typeof window !== 'undefined' && window.__ntShadowBanCloak) {
+        await new Promise((r) => setTimeout(r, 2200 + Math.random() * 2800));
+        try { $isOffline.set(true); } catch { /* ignore */ }
+        if (Math.random() < 0.75) {
+            throw new Error('Network request failed');
+        }
+    }
+
     let usedCache = false; 
     const currentGen = regionSwapGeneration; 
     
@@ -1006,6 +1016,8 @@ export async function handleRegionChange(newRegion, selectElement = null) {
         setTimeout(() => executeRegionSwap(newRegion), 350);
     };
     const cancelAction = () => {
+        // Restore labels to the still-active region (never leave the attempted pick showing)
+        syncRegionDisplayDom(current);
         closeSmoothModal('region-confirm-modal');
         if (typeof location !== 'undefined' && location.hash === '#regionconfirm') {
             try { history.replaceState({ view: 'home' }, '', '#home'); } catch (e) {}
@@ -1168,6 +1180,7 @@ if (typeof window !== 'undefined') {
     window.guardianFetch = guardianFetch;
     window.executeRegionSwap = executeRegionSwap;
     window.handleRegionChange = handleRegionChange;
+    window.syncRegionDisplayDom = syncRegionDisplayDom;
     window.checkKillswitch = checkKillswitch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     Object.defineProperty(window, 'isLieFi', {

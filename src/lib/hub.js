@@ -21,6 +21,7 @@ import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js
 import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
+import { applyShadowBanCloak } from './trust.js';
 
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
@@ -326,8 +327,57 @@ function trackAlertEvent(name, params) {
     }
 }
 
-/** SPA parity — notice modal poll votes */
-export function submitPollVote(pollId, optionKey, optionText) {
+/** Fetch poll tallies and render percentages (no raw vote lists). */
+async function renderPollResultsInto(container, pollId, poll, votedOption) {
+    if (!container || !pollId || !poll) return;
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?t=${Date.now()}`);
+        const data = res.ok ? await res.json() : null;
+        let countA = 0, countB = 0, countC = 0;
+        if (data && typeof data === 'object') {
+            Object.values(data).forEach((vote) => {
+                if (!vote || typeof vote !== 'object') return;
+                if (vote.optionKey === 'A') countA++;
+                else if (vote.optionKey === 'B') countB++;
+                else if (vote.optionKey === 'C') countC++;
+            });
+        }
+        const total = countA + countB + countC;
+        const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
+        const row = (key, label, n) => {
+            if (!label) return '';
+            const p = pct(n);
+            const mine = votedOption === key ? ' ring-1 ring-purple-400' : '';
+            return `
+                <div class="mb-2${mine}">
+                    <div class="flex justify-between text-[10px] font-bold text-purple-800 dark:text-purple-200 mb-1">
+                        <span>${escapeHTML(label)}${votedOption === key ? ' · your vote' : ''}</span>
+                        <span>${p}%</span>
+                    </div>
+                    <div class="w-full bg-purple-100 dark:bg-purple-950 rounded-full h-2">
+                        <div class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width:${p}%"></div>
+                    </div>
+                </div>`;
+        };
+        container.innerHTML = `
+            <p class="text-xs font-black text-purple-900 dark:text-purple-100 mb-3 text-center leading-tight">${escapeHTML(poll.question || 'Poll results')}</p>
+            ${row('A', poll.optionA, countA)}
+            ${row('B', poll.optionB, countB)}
+            ${poll.optionC ? row('C', poll.optionC, countC) : ''}
+            <p class="text-[9px] text-center text-purple-500 dark:text-purple-400 font-bold uppercase tracking-wider mt-1">Live percentages</p>`;
+        container.className = 'mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-inner';
+    } catch {
+        container.innerHTML = `
+            <div class="text-center">
+                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
+                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+            </div>`;
+        container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner';
+    }
+}
+
+/** SPA parity — notice modal poll votes (one vote per device via localStorage). */
+export function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
     triggerHaptic();
     if (!pollId) return;
     if (safeStorage.getItem('poll_voted_' + pollId)) {
@@ -356,12 +406,16 @@ export function submitPollVote(pollId, optionKey, optionText) {
 
     const container = document.getElementById(`poll-container-${pollId}`);
     if (container) {
-        container.innerHTML = `
-            <div class="text-center animate-fade-in-up">
-                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
-                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
-            </div>`;
-        container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner transition-all';
+        if (pollMeta?.showResults) {
+            renderPollResultsInto(container, pollId, pollMeta, optionKey);
+        } else {
+            container.innerHTML = `
+                <div class="text-center animate-fade-in-up">
+                    <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
+                    <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+                </div>`;
+            container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner transition-all';
+        }
     }
     showToast('Vote recorded successfully!', 'success');
 }
@@ -476,7 +530,7 @@ export async function checkServiceAlerts() {
                             replyToAdminBtn.id = 'reply-to-admin-btn';
                             replyToAdminBtn.type = 'button';
                             replyToAdminBtn.className = 'flex-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-2 border-blue-600 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none flex items-center justify-center text-sm';
-                            replyToAdminBtn.innerHTML = '<span class="mr-2">💬</span> Reply to Admin';
+                            replyToAdminBtn.innerHTML = '<svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> Reply to Admin';
                             actionsContainer.appendChild(replyToAdminBtn);
                         }
 
@@ -504,7 +558,7 @@ export async function checkServiceAlerts() {
                                 const words = cleanAdminMsg.split(/\s+/).filter((w) => w.length > 0);
                                 const truncatedAdminMsg = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
 
-                                contextBox.innerHTML = `<span class="mr-2 text-sm leading-none">💬</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Admin:</span><span class="line-clamp-2">"${escapeHTML(truncatedAdminMsg)}"</span></div>`;
+                                contextBox.innerHTML = `<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Admin:</span><span class="line-clamp-2">"${escapeHTML(truncatedAdminMsg)}"</span></div>`;
                                 contextBox.dataset.rawMsg = `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`;
                                 contextBox.classList.remove('hidden');
                                 fText.value = '';
@@ -547,40 +601,45 @@ export async function checkServiceAlerts() {
             replyBanner.classList.add('hidden');
         }
 
-        // 2. Route notices (single object OR array at notices/{routeId}.json)
-        if (!routeId || !ROUTES[routeId]) {
-            bellBtn.classList.add('hidden');
-            return;
-        }
-
-        const noticeRes = await fetch(`${DYNAMIC_BASE_URL}notices/${routeId}.json?t=${Date.now()}`);
-        if (!noticeRes.ok) {
-            bellBtn.classList.add('hidden');
-            return;
-        }
-        const ct = noticeRes.headers.get('content-type') || '';
-        if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
-
-        const rawNotices = await noticeRes.json();
-        if (!rawNotices) {
-            bellBtn.classList.add('hidden');
-            return;
-        }
-
+        // 2. Notices: global + region-wide + current route (admin targets: all, all_GP, …, routeId)
         const now = Date.now();
         const severityScore = { critical: 3, warning: 2, info: 1 };
-        let validNotices = [];
+        const region = $userRegion.get() || 'GP';
+        const noticeKeys = ['all', `all_${region}`];
+        if (routeId && ROUTES[routeId]) noticeKeys.push(routeId);
 
-        if (Array.isArray(rawNotices)) {
-            validNotices = rawNotices.filter((n) => n && (!n.expiresAt || n.expiresAt > now));
-        } else if (typeof rawNotices === 'object') {
-            // Single notice object, or map of notices keyed by id
-            if (rawNotices.message || rawNotices.text || rawNotices.id || rawNotices.severity) {
-                if (!rawNotices.expiresAt || rawNotices.expiresAt > now) validNotices = [rawNotices];
-            } else {
-                validNotices = Object.values(rawNotices).filter((n) => n && typeof n === 'object' && (!n.expiresAt || n.expiresAt > now));
+        const parseNoticeBucket = (raw, sourceKey) => {
+            if (!raw) return [];
+            const stamp = (n) => (n && typeof n === 'object' ? { ...n, _sourceKey: sourceKey } : null);
+            if (Array.isArray(raw)) {
+                return raw.map((n) => stamp(n)).filter((n) => n && (!n.expiresAt || n.expiresAt > now));
             }
-        }
+            if (typeof raw === 'object') {
+                if (raw.message || raw.text || raw.id || raw.severity) {
+                    return (!raw.expiresAt || raw.expiresAt > now) ? [stamp(raw)] : [];
+                }
+                return Object.values(raw)
+                    .map((n) => stamp(n))
+                    .filter((n) => n && (!n.expiresAt || n.expiresAt > now));
+            }
+            return [];
+        };
+
+        const fetchBucket = async (key) => {
+            try {
+                const res = await fetch(`${DYNAMIC_BASE_URL}notices/${key}.json?t=${Date.now()}`);
+                if (!res.ok) return [];
+                const ct = res.headers.get('content-type') || '';
+                if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
+                return parseNoticeBucket(await res.json(), key);
+            } catch (e) {
+                if (e?.message === 'Captive Portal Detected') throw e;
+                return [];
+            }
+        };
+
+        const buckets = await Promise.all(noticeKeys.map(fetchBucket));
+        const validNotices = buckets.flat();
 
         if (validNotices.length === 0) {
             bellBtn.classList.add('hidden');
@@ -590,9 +649,10 @@ export async function checkServiceAlerts() {
         validNotices.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
         const activeNotice = validNotices[0];
         const severity = activeNotice.severity || 'info';
-        const seenKey = `seen_notice_${routeId}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
+        const seenKey = `seen_notice_${activeNotice._sourceKey || 'x'}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
         const hasSeen = safeStorage.getItem(seenKey) === 'true';
-        const forcePopup = activeNotice.forcePopup === true;
+        const forcePopup = activeNotice.forcePopup === true
+            || (activeNotice.forcePopup == null && severity === 'critical');
 
         const bindModalContent = () => {
             if (!content || !modal) return;
@@ -637,16 +697,7 @@ export async function checkServiceAlerts() {
                 formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
             }
 
-            let mediaHtml = '';
-            if (activeNotice.imageUrl) {
-                const safeUrl = escapeHTML(activeNotice.imageUrl);
-                mediaHtml += `
-                    <button type="button" onclick="window.openLightbox && window.openLightbox('${safeUrl}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">
-                        <img src="${safeUrl}" class="w-full h-auto max-h-48 object-cover hover:opacity-90 transition-opacity" alt="Alert Image" onerror="this.parentElement.style.display='none'">
-                    </button>`;
-            }
-
-            content.innerHTML = mediaHtml + formattedMsg;
+            content.innerHTML = formattedMsg;
 
             if (activeNotice.ctaUrl && activeNotice.ctaText) {
                 content.innerHTML += `
@@ -656,26 +707,47 @@ export async function checkServiceAlerts() {
                     </a>`;
             }
 
-            // Interactive poll (SPA parity)
+            // Interactive poll (SPA parity) — one local vote; optional live % results
             if (activeNotice.poll && activeNotice.poll.active) {
                 const pollId = activeNotice.id;
                 const votedOption = safeStorage.getItem('poll_voted_' + pollId);
-                if (votedOption) {
-                    content.innerHTML += `
-                        <div class="mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 text-center shadow-inner">
-                            <span class="text-xl block mb-1">✅</span>
-                            <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
-                            <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
-                        </div>`;
-                } else {
-                    content.innerHTML += `
-                        <div id="poll-container-${escapeHTML(String(pollId))}" class="mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
+                const pollMeta = {
+                    question: activeNotice.poll.question || '',
+                    optionA: activeNotice.poll.optionA || '',
+                    optionB: activeNotice.poll.optionB || '',
+                    optionC: activeNotice.poll.optionC || '',
+                    showResults: !!activeNotice.poll.showResults,
+                };
+                content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm"></div>`;
+                const pollEl = document.getElementById(`poll-container-${pollId}`);
+                if (pollEl) {
+                    try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
+                    if (votedOption && activeNotice.poll.showResults) {
+                        renderPollResultsInto(pollEl, pollId, activeNotice.poll, votedOption);
+                    } else if (votedOption) {
+                        pollEl.innerHTML = `
+                            <div class="text-center">
+                                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
+                                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+                            </div>`;
+                        pollEl.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner';
+                    } else {
+                        const optC = activeNotice.poll.optionC
+                            ? `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="C" data-poll-text="${escapeHTML(activeNotice.poll.optionC)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionC)}</button>`
+                            : '';
+                        pollEl.innerHTML = `
                             <p class="text-sm font-black text-purple-900 dark:text-purple-100 mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
-                            <div class="flex space-x-3">
-                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="A" data-poll-text="${escapeHTML(activeNotice.poll.optionA || 'A')}" class="nt-poll-vote flex-1 bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionA || 'A')}</button>
-                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="B" data-poll-text="${escapeHTML(activeNotice.poll.optionB || 'B')}" class="nt-poll-vote flex-1 bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionB || 'B')}</button>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="A" data-poll-text="${escapeHTML(activeNotice.poll.optionA || 'A')}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionA || 'A')}</button>
+                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="B" data-poll-text="${escapeHTML(activeNotice.poll.optionB || 'B')}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionB || 'B')}</button>
+                                ${optC}
                             </div>
-                        </div>`;
+                            <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${activeNotice.poll.showResults ? '' : 'hidden'}"></div>`;
+                        if (activeNotice.poll.showResults) {
+                            const liveBox = document.getElementById(`poll-live-results-${pollId}`);
+                            if (liveBox) renderPollResultsInto(liveBox, pollId, activeNotice.poll, null);
+                        }
+                    }
                 }
             }
 
@@ -717,7 +789,8 @@ export async function checkServiceAlerts() {
             const newReplyBtn = document.createElement('button');
             newReplyBtn.type = 'button';
             newReplyBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
-            newReplyBtn.innerHTML = '<span class="mr-1.5">💬</span> Reply';
+            const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+            newReplyBtn.innerHTML = `${replySvg} Reply`;
             newReplyBtn.onclick = () => {
                 triggerHaptic();
                 let cleanMsgText = '';
@@ -743,7 +816,7 @@ export async function checkServiceAlerts() {
                         contextBox.className = 'mb-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start hidden shadow-inner';
                         fText.parentNode.insertBefore(contextBox, fText);
                     }
-                    contextBox.innerHTML = `<span class="mr-2 text-sm leading-none">💬</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${escapeHTML(truncatedMsg)}"</span></div>`;
+                    contextBox.innerHTML = `<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${escapeHTML(truncatedMsg)}"</span></div>`;
                     contextBox.dataset.rawMsg = truncatedMsg;
                     contextBox.dataset.alertId = activeNotice.id || '';
                     contextBox.classList.remove('hidden');
@@ -861,7 +934,15 @@ export function initHub() {
             const btn = e.target?.closest?.('.nt-poll-vote');
             if (!btn) return;
             e.preventDefault();
-            submitPollVote(btn.getAttribute('data-poll-id'), btn.getAttribute('data-poll-opt'), btn.getAttribute('data-poll-text'));
+            const wrap = btn.closest('[id^="poll-container-"]');
+            let pollMeta = null;
+            try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+            submitPollVote(
+                btn.getAttribute('data-poll-id'),
+                btn.getAttribute('data-poll-opt'),
+                btn.getAttribute('data-poll-text'),
+                pollMeta
+            );
         });
     }
 
@@ -896,6 +977,9 @@ export function initHub() {
     // Account (Phase 4)
     bindAccountUi();
     initAccount();
+
+    // Cloaked shadow-ban UX (looks like bad connectivity — never disclose ban)
+    applyShadowBanCloak().catch(() => {});
 
     // Delay reports (Phase 5)
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});

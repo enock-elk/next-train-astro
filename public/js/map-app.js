@@ -935,21 +935,24 @@
             if (zoomInBtn) zoomInBtn.onclick = () => map.zoomIn();
             if (zoomOutBtn) zoomOutBtn.onclick = () => map.zoomOut();
 
-            // 2. Theme Toggle
+            // 2. Theme Toggle (SVG parity with planner map — no emoji)
             const themeBtn = document.getElementById('custom-theme-btn');
+            const themeSunSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+            const themeMoonSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
             let isDarkNow = document.documentElement.classList.contains('dark');
             if (themeBtn) {
-                themeBtn.innerHTML = isDarkNow ? '🌙' : '☀️';
+                themeBtn.classList.add('text-amber-500');
+                themeBtn.innerHTML = isDarkNow ? themeMoonSvg : themeSunSvg;
                 themeBtn.onclick = () => {
                     isDarkNow = !isDarkNow;
                     if (isDarkNow) {
                         document.documentElement.classList.add('dark');
                         try { localStorage.setItem('theme', 'dark'); } catch(e){}
-                        themeBtn.innerHTML = '🌙';
+                        themeBtn.innerHTML = themeMoonSvg;
                     } else {
                         document.documentElement.classList.remove('dark');
                         try { localStorage.setItem('theme', 'light'); } catch(e){}
-                        themeBtn.innerHTML = '☀️';
+                        themeBtn.innerHTML = themeSunSvg;
                     }
                 };
             }

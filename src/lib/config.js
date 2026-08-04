@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.02";
+export const APP_VERSION = "V8_08.04";
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -834,15 +834,15 @@ export const DEFAULT_EXCLUSIONS = {
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.02",
-        title: "Weekend Clarity Edition",
-        date: "02 Aug 2026",
+        id: "V8_08.04",
+        title: "Next Train: System Upgrade",
+        date: "04 Aug 2026",
         forceShow: false,
         features: [
-            "<b>No Weekend Service:</b> Routes without Saturday timetables (e.g. Hercules/Koedoespoort, Eastern Cape) show stations with a clear notice, plus the next weekday train on the live board.",
-            "<b>Sunday No Service:</b> The day chip highlights “No Service” in red so Sundays and no-service holidays are obvious at a glance.",
-            "<b>You're Here:</b> Terminus stops use a location pin instead of plain “You are at this station” text.",
-            "<b>Clearer Holiday Guide:</b> FAQ updated: public holidays are not always Saturday schedules, and some routes have no weekend service at all."
+            "Massive under-the-hood upgrade for a faster, more reliable Next Train.",
+            "<b>Weekend clarity:</b> Clear notices when a route has no Saturday service, with the next weekday train on the board.",
+            "<b>Sunday & holidays:</b> Red “No Service” on the day chip; guide notes that holidays aren’t always Saturday schedules.",
+            "<b>You're here:</b> Terminus stops use a location pin instead of plain “at this station” text."
         ]
     },
     {

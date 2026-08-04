@@ -2380,14 +2380,19 @@ export async function applyPlannerDeepLink() {
     const link = parsePlannerDeepLink(location.search);
     if (!link) return false;
 
-    if (safeStorage.getItem('welcomeSeen') !== 'true') {
-        safeStorage.setItem('welcomeSeen', 'true');
+    const returning = safeStorage.getItem('welcomeSeen') === 'true';
+    const hasSavedRegion = !!safeStorage.getItem('userRegion');
+
+    // Established users: open planner with their region — don't force SEO/share region.
+    if (!(returning && hasSavedRegion)
+        && link.region
+        && ['GP', 'WC', 'KZN', 'EC'].includes(link.region)
+        && ($userRegion.get() || 'GP') !== link.region) {
+        executeRegionSwap(link.region, true);
     }
 
-    if (link.region && ['GP', 'WC', 'KZN', 'EC'].includes(link.region)) {
-        if (($userRegion.get() || 'GP') !== link.region) {
-            executeRegionSwap(link.region, true);
-        }
+    if (!returning) {
+        safeStorage.setItem('welcomeSeen', 'true');
     }
 
     // Ensure station list exists (region DB loaded)

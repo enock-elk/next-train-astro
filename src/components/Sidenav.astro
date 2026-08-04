@@ -193,12 +193,16 @@ const versionBadge = String(APP_VERSION);
     }
   });
 
-  const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
   $userRegion.subscribe((region) => {
-    const disp = document.getElementById('sidenav-region-display');
-    if (disp) disp.textContent = regionNames[region] || 'Gauteng';
-    const sel = document.getElementById('app-hub-region-select');
-    if (sel) sel.value = region || 'GP';
+    import('../lib/logic.js').then(({ syncRegionDisplayDom }) => {
+      syncRegionDisplayDom(region || 'GP');
+    }).catch(() => {
+      const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+      const disp = document.getElementById('sidenav-region-display');
+      if (disp) disp.textContent = regionNames[region] || 'Gauteng';
+      const sel = document.getElementById('app-hub-region-select');
+      if (sel) sel.value = region || 'GP';
+    });
   });
 
   document.querySelectorAll('#sidenav-region-list [data-region-target]').forEach((item) => {

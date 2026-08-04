@@ -315,7 +315,7 @@ export function openFareModal(fareDetails) {
     const zoneEl = document.getElementById('fare-zone-badge');
     if (zoneEl) {
         zoneEl.innerHTML = `
-            <div class="flex items-center">Ticket Prices <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 ml-2 px-2 py-0.5 rounded-full uppercase tracking-widest">Zone ${fareDetails.code}</span></div>
+            <div class="flex items-center">Ticket Prices <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 ml-2 px-2 py-0.5 rounded-full uppercase tracking-widest">Zone ${String(fareDetails.code || '').replace(/^Z/i, '')}</span></div>
             ${routeNameHtml ? `<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">${routeNameHtml}</span>` : ''}`;
     }
 
@@ -391,6 +391,23 @@ export function updateNextTrainView() {
             corridorEl.textContent = '';
             corridorEl.classList.add('hidden');
         }
+    }
+
+    // Direction headers: real dest names as soon as a route is known (not "Dest A/B")
+    const pretH = document.getElementById('pretoria-header');
+    const pienH = document.getElementById('pienaarspoort-header');
+    if (route?.destA && route?.destB) {
+        const uiA = window.Renderer?._applyUIIntercepts
+            ? window.Renderer._applyUIIntercepts(route.destA).toUpperCase()
+            : String(route.destA).replace(/ STATION/gi, '').toUpperCase();
+        const uiB = window.Renderer?._applyUIIntercepts
+            ? window.Renderer._applyUIIntercepts(route.destB).toUpperCase()
+            : String(route.destB).replace(/ STATION/gi, '').toUpperCase();
+        if (pretH) pretH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiA}</span>`;
+        if (pienH) pienH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiB}</span>`;
+    } else {
+        if (pretH) pretH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
+        if (pienH) pienH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
     }
 
     // SPA: show/hide the timetable CTA with the route, don't leave a disabled ghost button
@@ -671,8 +688,12 @@ export function initLiveBoardUi() {
 
     const routeBtn = document.getElementById('route-selector-btn');
     const routeChevron = document.getElementById('route-selector-chevron');
-    const openRouteModal = () => {
+    const openRouteModal = async () => {
         triggerHaptic();
+        try {
+            const { syncRegionDisplayDom } = await import('./logic.js');
+            syncRegionDisplayDom($userRegion.get() || 'GP');
+        } catch { /* ignore */ }
         if (window.Renderer?.renderRouteMenu) {
             window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
         }
@@ -781,14 +802,20 @@ export function initLiveBoardUi() {
             const region = li.getAttribute('data-region-target');
             if (!region) return;
             triggerHaptic();
+            // Do not optimistically change the label — cancel must leave the active region shown.
             const { handleRegionChange } = await import('./logic.js');
             await handleRegionChange(region);
-            const disp = document.getElementById('route-modal-region-display');
-            if (disp) disp.textContent = li.getAttribute('data-region-name') || region;
         });
     });
 
     try { startSmartRefresh(); } catch (e) { console.warn('Smart refresh unavailable', e); }
+
+    // Keep route-modal region label in sync whenever the store changes
+    $userRegion.subscribe((region) => {
+        import('./logic.js').then(({ syncRegionDisplayDom }) => {
+            syncRegionDisplayDom(region || 'GP');
+        }).catch(() => {});
+    });
 
     // Phase 5 — delay report CTA + crowd banner (also bound from hub; safe to double-guard)
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});

@@ -105,7 +105,7 @@ import HubModals from '../components/HubModals.astro';
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
@@ -158,6 +158,8 @@ import HubModals from '../components/HubModals.astro';
     };
 
     hydrateStores();
+    // Align sidenav + route-modal region labels with hydrated localStorage region
+    syncRegionDisplayDom($userRegion.get() || 'GP');
     hydratePrefs();
     startClock();
     syncClockShims();

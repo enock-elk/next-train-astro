@@ -1,5 +1,5 @@
 ﻿/**
- * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.02 - Weekend Clarity Edition)
+ * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.04 - System Upgrade)
  * -----------------------------------------------------------------------------
  *
  * ## ADMIN ISLAND ROADMAP (for future AI / ops)
@@ -2068,24 +2068,22 @@ const Admin = {
                 listHtml += `
                     <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
                         
-                        <!-- Top Row: Route Context -->
-                        <div class="flex items-center mb-1.5 w-full">
-                            ${getRegionBadge(item.routeId)}
+                        <!-- Row 1: region + type/expiry -->
+                        <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
+                            <div class="min-w-0 shrink">${getRegionBadge(item.routeId)}</div>
+                            <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                                <span class="uppercase tracking-widest text-slate-500">${item.type}</span>
+                                <span class="mx-1.5 text-gray-300 dark:text-gray-600">|</span>
+                                <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
+                            </div>
                         </div>
-                        
-                        <!-- Second Row: Bold Payload -->
-                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-1.5">
+
+                        <!-- Row 2: Bold Payload -->
+                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
                             ${item.label}
                         </span>
 
-                        <!-- Third Row: Type & Expiry -->
-                        <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-3 w-full">
-                            <span class="uppercase tracking-widest text-slate-500">Type: ${item.type}</span>
-                            <span class="mx-2 text-gray-300 dark:text-gray-600">|</span>
-                            <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
-                        </div>
-                        
-                        <!-- Action Row -->
+                        <!-- Row 3: Actions -->
                         <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
                             <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                                 <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
@@ -2830,23 +2828,27 @@ const Admin = {
             }
 
             // 🛡️ GUARDIAN UX FIX: Drill-Down "X" Interceptor
+            // Drilled-in → X acts as Back. Grid (or missing drill-back) → always close.
+            // Previously X silently no-oped when !isGridMode but #drill-back-btn was gone,
+            // and history.back() on #dev sometimes left the modal open.
             if (closeBtn) {
-                // Remove the inline onclick from index.html that blindly closes the modal
                 closeBtn.removeAttribute('onclick');
                 
-                // Bind intelligent routing logic
                 closeBtn.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    
-                    if (!Admin.isGridMode) {
-                        // If drilled down, press the virtual back button
-                        const drillBack = document.getElementById('drill-back-btn');
-                        if (drillBack) drillBack.click();
-                    } else {
-                        // If on the grid, behave normally and close the modal
-                        if (location.hash === '#dev') history.back();
-                        else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+
+                    const drillBack = document.getElementById('drill-back-btn');
+                    if (!Admin.isGridMode && drillBack) {
+                        drillBack.click();
+                        return;
+                    }
+
+                    if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+                    else document.getElementById('dev-modal')?.classList.add('hidden');
+
+                    if (location.hash === '#dev' || location.hash.startsWith('#dev-')) {
+                        try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
                     }
                 };
             }
@@ -3599,14 +3601,19 @@ const Admin = {
                 const latestDate = formatNiceDateTime(groupItems[groupItems.length - 1].timestamp);
                 
                 const alias = Admin.cachedAliases && Admin.cachedAliases[did] ? Admin.cachedAliases[did] : null;
-                const displayDid = did === 'Anonymous / Legacy' ? did : did.substring(0,15) + '...';
-                
-                // Clickable ID / alias opens rename modal (no separate pencil chrome)
-                const titleText = alias || displayDid;
-                const titleTitle = alias ? `Alias for ${displayDid} — click to rename` : 'Click to set alias';
+                const displayDid = did;
+                const safeDidAttr = String(did).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const safeAliasAttr = String(alias || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                // Always show full Next Train ID (copyable) + optional alias rename
                 const commuterTitle = did !== 'Anonymous / Legacy'
-                    ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${did}', '${(alias || '').replace(/'/g, "\\'")}')" class="text-blue-600 dark:text-blue-400 hover:underline font-mono truncate max-w-full text-left focus:outline-none" title="${titleTitle}">${titleText}</button>`
-                    : `<span class="text-blue-600 dark:text-blue-400 font-mono truncate">${displayDid}</span>`;
+                    ? `<div class="min-w-0 w-full space-y-1">
+                        ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
+                        <div class="flex items-start gap-2 min-w-0">
+                            <code class="flex-1 min-w-0 font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 select-all" title="Next Train user ID">${displayDid.replace(/</g, '&lt;')}</code>
+                            <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 focus:outline-none" title="Copy full user ID">Copy</button>
+                        </div>
+                      </div>`
+                    : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
                 const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
 
@@ -3677,7 +3684,7 @@ const Admin = {
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full flex items-center">${commuterTitle}</span>
+                            <div class="text-xs font-bold text-gray-900 dark:text-white w-full min-w-0">${commuterTitle}</div>
                             <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center justify-end shrink-0 self-center">
@@ -3691,7 +3698,10 @@ const Admin = {
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <button onclick="Admin.exportThreadForAI('${did}')" class="shrink-0 flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="flex items-center gap-1 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Shadow-ban this Next Train ID (app looks broken to them)">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
+                                <button onclick="Admin.exportThreadForAI('${did}')" class="flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                            </div>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
                 `;
@@ -4137,7 +4147,13 @@ const Admin = {
 
         // 🛡️ GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
         Admin.setCommuterAlias = async (deviceId, currentAlias) => {
-            const newName = prompt(`Enter a friendly name/alias for Commuter ${deviceId.substring(0,10)}... (Leave blank to remove):`, currentAlias);
+            // Prefill with existing alias, else the full Next Train ID so admin can
+            // copy/edit/clear it instead of starting from a blank field.
+            const initial = (currentAlias && String(currentAlias).trim()) ? String(currentAlias) : String(deviceId || '');
+            const newName = prompt(
+                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID — delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
+                initial
+            );
             if (newName === null) return; // Action cancelled by user
             
             const secret = await Admin.getAuthKey();
@@ -4145,20 +4161,19 @@ const Admin = {
 
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                
-                if (newName.trim() === '') {
-                    // Delete Alias
+                const trimmed = newName.trim();
+                // Saving the raw device ID as "alias" is pointless — treat as no alias
+                if (trimmed === '' || trimmed === deviceId) {
                     await fetch(`${dynamicEndpoint}admin_state/aliases/${deviceId}.json?auth=${secret}`, { method: 'DELETE' });
                     if (Admin.cachedAliases) delete Admin.cachedAliases[deviceId];
-                    if (typeof showToast === 'function') showToast("Alias removed.", "info");
+                    if (typeof showToast === 'function') showToast(trimmed === deviceId ? "Kept ID only (no alias)." : "Alias removed.", "info");
                 } else {
-                    // Save Alias
                     await fetch(`${dynamicEndpoint}admin_state/aliases/${deviceId}.json?auth=${secret}`, { 
                         method: 'PUT', 
-                        body: JSON.stringify(newName.trim()) 
+                        body: JSON.stringify(trimmed) 
                     });
                     if (!Admin.cachedAliases) Admin.cachedAliases = {};
-                    Admin.cachedAliases[deviceId] = newName.trim();
+                    Admin.cachedAliases[deviceId] = trimmed;
                     if (typeof showToast === 'function') showToast("Alias saved!", "success");
                 }
                 
@@ -4687,7 +4702,7 @@ const Admin = {
 
         const confirmed = await Admin.secureConfirm(
             'Confirm shadow ban',
-            `Ban ${uid.slice(0, 12)}… for ${choice.label}? They will appear silenced on community writes.`
+            `Ban ${uid} for ${choice.label}? Their app will look broken (bad network / FOUC) — they won’t be told they’re banned.`
         );
         if (!confirmed) return false;
 
@@ -4720,7 +4735,7 @@ const Admin = {
                 window.trustLocalBlockList.add(uid);
                 if (deviceId) window.trustLocalBlockList.add(deviceId);
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label})`, 'success');
+            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) — cloaked as bad network`, 'success');
             return true;
         } catch (e) {
             if (typeof showToast === 'function') showToast('Shadow ban failed', 'error');
@@ -5495,37 +5510,6 @@ const Admin = {
                 </div>
 
 
-                <!-- 🛡️ SUPERCHARGED: Rich Media Inputs with Live Preview (HIDDEN IN ADVANCED TOGGLE) -->
-                <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
-                    <button type="button" id="alert-advanced-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span class="inline-flex items-center gap-1.5">${Admin.icon('plus', 'w-3.5 h-3.5')} Add Media & Links (Advanced)</span>
-                        <svg id="alert-advanced-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="alert-advanced-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
-                        <div class="sm:col-span-2">
-                            <div class="flex items-center justify-between mb-1">
-                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Hero Image URL</label>
-                                <label for="alert-image-file" class="cursor-pointer text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors shadow-sm focus:outline-none inline-flex items-center gap-1">${Admin.icon('camera', 'w-3 h-3')} Upload</label>
-                                <input type="file" id="alert-image-file" class="hidden" accept="image/*">
-                            </div>
-                            <input type="text" id="alert-image-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://... or click Upload">
-                            
-                            <div id="alert-image-preview-container" class="hidden mt-3 border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-white dark:bg-gray-800 shadow-inner text-center">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Live Image Preview</p>
-                                <img id="alert-image-preview" src="" class="max-h-32 w-auto mx-auto rounded-md object-contain border border-gray-100 dark:border-gray-700 shadow-sm" onerror="this.parentElement.classList.add('hidden')">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">CTA Button Text</label>
-                            <input type="text" id="alert-cta-text" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="e.g. Read Statement">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">CTA Button Link</label>
-                            <input type="text" id="alert-cta-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://...">
-                        </div>
-                    </div>
-                </div>
-
                 <!-- 🛡️ SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
@@ -5571,6 +5555,21 @@ const Admin = {
                             <input type="text" id="alert-poll-opt-b" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. No">
                         </div>
                     </div>
+                    <div id="alert-poll-opt-c-wrap" class="hidden">
+                        <label class="block text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase mb-1">Option C</label>
+                        <input type="text" id="alert-poll-opt-c" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Not sure">
+                    </div>
+                    <button type="button" id="alert-poll-add-c-btn" class="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:underline focus:outline-none">+ Add third option</button>
+                    <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div>
+                            <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only · after they vote (or while viewing)</p>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="alert-poll-show-results" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="alert-poll-show-results" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -5602,13 +5601,23 @@ const Admin = {
                             </div>
                         </div>
                         
-                        <div>
+                        <div class="mb-2">
                             <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
                                 <span id="poll-result-label-b">Option B</span>
                                 <span id="poll-result-count-b">0 votes (0%)</span>
                             </div>
                             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                 <div id="poll-result-bar-b" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div id="poll-result-c-wrap" class="hidden mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-c">Option C</span>
+                                <span id="poll-result-count-c">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-c" class="bg-purple-300 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                             </div>
                         </div>
                         
@@ -5634,17 +5643,6 @@ const Admin = {
         const signoffInput = document.getElementById('alert-signoff');
         const forcePopupToggle = document.getElementById('alert-force-popup');
 
-        const imageUrlInput = document.getElementById('alert-image-url');
-        const imagePreviewContainer = document.getElementById('alert-image-preview-container');
-        const imagePreview = document.getElementById('alert-image-preview');
-        const imageFileInput = document.getElementById('alert-image-file'); 
-        const ctaUrlInput = document.getElementById('alert-cta-url');
-        const ctaTextInput = document.getElementById('alert-cta-text');
-        
-        const advToggleBtn = document.getElementById('alert-advanced-toggle-btn');
-        const advBody = document.getElementById('alert-advanced-body');
-        const advChevron = document.getElementById('alert-advanced-chevron');
-
         const srcToggleBtn = document.getElementById('alert-source-toggle-btn');
         const srcBody = document.getElementById('alert-source-body');
         const srcChevron = document.getElementById('alert-source-chevron');
@@ -5656,6 +5654,19 @@ const Admin = {
         const pollQuestion = document.getElementById('alert-poll-question');
         const pollOptA = document.getElementById('alert-poll-opt-a');
         const pollOptB = document.getElementById('alert-poll-opt-b');
+        const pollOptC = document.getElementById('alert-poll-opt-c');
+        const pollOptCWrap = document.getElementById('alert-poll-opt-c-wrap');
+        const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
+        const pollShowResults = document.getElementById('alert-poll-show-results');
+        let existingAlertId = null;
+
+        if (pollAddCBtn && pollOptCWrap) {
+            pollAddCBtn.onclick = () => {
+                pollOptCWrap.classList.remove('hidden');
+                pollAddCBtn.classList.add('hidden');
+                pollOptC?.focus();
+            };
+        }
 
         // 🛡️ GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
         if (alertMsg) {
@@ -5679,97 +5690,12 @@ const Admin = {
             }
         };
 
-        if (advToggleBtn) {
-            advToggleBtn.onclick = () => {
-                advBody.classList.toggle('hidden');
-                if (advBody.classList.contains('hidden')) advChevron.classList.add('-rotate-90');
-                else advChevron.classList.remove('-rotate-90');
-            };
-        }
-
         if (srcToggleBtn) {
             srcToggleBtn.onclick = () => {
                 srcBody.classList.toggle('hidden');
                 if (srcBody.classList.contains('hidden')) srcChevron.classList.add('-rotate-90');
                 else srcChevron.classList.remove('-rotate-90');
             };
-        }
-
-        if (imageUrlInput) {
-            imageUrlInput.addEventListener('input', () => {
-                const url = imageUrlInput.value.trim();
-                if (url && url.startsWith('http')) {
-                    imagePreview.src = url;
-                    imagePreview.onload = () => imagePreviewContainer.classList.remove('hidden');
-                } else {
-                    imagePreviewContainer.classList.add('hidden');
-                }
-            });
-        }
-
-        // 🛡️ GUARDIAN FIX: Admin Native Image Uploader implementation
-        if (imageFileInput) {
-            imageFileInput.addEventListener('change', async function() {
-                if (this.files && this.files.length > 0) {
-                    const file = this.files[0];
-                    if (file.size > 5242880) { // Strict 5MB limit
-                        if (typeof showToast === 'function') showToast("Image is too large. Max 5MB.", "error");
-                        this.value = '';
-                        return;
-                    }
-                    
-                    if (typeof showToast === 'function') showToast("Uploading Hero Image...", "info", 30000);
-                    
-                    if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
-                        if (typeof showToast === 'function') showToast("Storage SDK not ready. Check connection.", "error");
-                        this.value = '';
-                        return;
-                    }
-
-                    try {
-                        const fileExt = file.name.split('.').pop();
-                        const fileName = `alerts_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
-                        const storageReference = window.firebaseStorageRef(window.firebaseStorage, `alert_images/${fileName}`);
-                        
-                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
-                        const labelEl = document.querySelector('label[for="alert-image-file"]');
-                        const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('camera', 'w-3 h-3')} Upload`;
-                        
-                        uploadTask.on('state_changed', 
-                            (snapshot) => {
-                                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
-                            }, 
-                            (error) => {
-                                if (typeof showToast === 'function') showToast("Upload failed", "error");
-                                console.error("Admin Image Upload error:", error);
-                                if (labelEl) labelEl.innerHTML = originalLabel;
-                                this.value = '';
-                            }, 
-                            async () => {
-                                if (labelEl) labelEl.innerHTML = originalLabel;
-                                try {
-                                    const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    if (imageUrlInput) {
-                                        imageUrlInput.value = url;
-                                        imageUrlInput.dispatchEvent(new Event('input')); // Triggers preview automatically
-                                    }
-                                    if (typeof showToast === 'function') showToast("Upload complete!", "success");
-                                    
-                                    // Auto-expand advanced options if uploaded
-                                    if (advBody && advBody.classList.contains('hidden')) advToggleBtn.click();
-                                } catch(e) {
-                                    if (typeof showToast === 'function') showToast("Failed to get image link", "error");
-                                }
-                                this.value = '';
-                            }
-                        );
-                    } catch(e) {
-                        if (typeof showToast === 'function') showToast("Upload system error.", "error");
-                        this.value = '';
-                    }
-                }
-            });
         }
 
         // 🛡️ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
@@ -5876,6 +5802,7 @@ const Admin = {
                 const data = await res.json();
                 
                 if (data && data.message) {
+                    existingAlertId = data.id || null;
                     let cleanedMsg = Admin.repairMojibake(data.message);
                     cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
                     cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
@@ -5909,35 +5836,23 @@ const Admin = {
                     if (data.forcePopup !== undefined) forcePopupToggle.checked = data.forcePopup;
                     else forcePopupToggle.checked = (data.severity === 'critical');
 
-                    if (data.imageUrl || data.ctaUrl || data.ctaText) {
-                        if (advBody && advBody.classList.contains('hidden')) advToggleBtn.click();
-                        
-                        if (data.imageUrl) {
-                            imageUrlInput.value = data.imageUrl;
-                            imageUrlInput.dispatchEvent(new Event('input')); 
-                        } else {
-                            imageUrlInput.value = "";
-                            if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-                        }
-
-                        if (data.ctaUrl) ctaUrlInput.value = data.ctaUrl; else ctaUrlInput.value = "";
-                        if (data.ctaText) ctaTextInput.value = data.ctaText; else ctaTextInput.value = "";
-                    } else {
-                        if (advBody && !advBody.classList.contains('hidden')) advToggleBtn.click();
-                        imageUrlInput.value = "";
-                        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-                        ctaUrlInput.value = "";
-                        ctaTextInput.value = "";
-                    }
-                    
                     if (data.poll && data.poll.active) {
                         pollToggle.checked = true;
                         pollContainer.classList.remove('hidden');
                         pollQuestion.value = data.poll.question || "";
                         pollOptA.value = data.poll.optionA || "";
                         pollOptB.value = data.poll.optionB || "";
+                        if (pollShowResults) pollShowResults.checked = !!data.poll.showResults;
+                        if (data.poll.optionC) {
+                            if (pollOptC) pollOptC.value = data.poll.optionC;
+                            pollOptCWrap?.classList.remove('hidden');
+                            pollAddCBtn?.classList.add('hidden');
+                        } else {
+                            if (pollOptC) pollOptC.value = "";
+                            pollOptCWrap?.classList.add('hidden');
+                            pollAddCBtn?.classList.remove('hidden');
+                        }
 
-                        // 🛡️ GUARDIAN PHASE 7: Fetch Live Poll Results
                         const pollResultsPanel = document.getElementById('alert-live-poll-results');
                         if (pollResultsPanel && data.id) {
                             try {
@@ -5945,32 +5860,39 @@ const Admin = {
                                 const pollRes = await fetch(`${dynamicEndpoint}polls/${data.id}.json?auth=${secret}`);
                                 const pollData = await pollRes.json();
                                 
-                                let countA = 0;
-                                let countB = 0;
-                                
+                                let countA = 0, countB = 0, countC = 0;
                                 if (pollData) {
                                     Object.values(pollData).forEach(vote => {
                                         if (vote.optionKey === 'A') countA++;
                                         else if (vote.optionKey === 'B') countB++;
+                                        else if (vote.optionKey === 'C') countC++;
                                     });
                                 }
                                 
-                                const total = countA + countB;
+                                const total = countA + countB + countC;
                                 const pctA = total > 0 ? Math.round((countA / total) * 100) : 0;
                                 const pctB = total > 0 ? Math.round((countB / total) * 100) : 0;
+                                const pctC = total > 0 ? Math.round((countC / total) * 100) : 0;
                                 
                                 document.getElementById('poll-result-question').textContent = data.poll.question;
                                 document.getElementById('poll-result-label-a').textContent = data.poll.optionA;
                                 document.getElementById('poll-result-label-b').textContent = data.poll.optionB;
-                                
                                 document.getElementById('poll-result-count-a').textContent = `${countA} votes (${pctA}%)`;
                                 document.getElementById('poll-result-count-b').textContent = `${countB} votes (${pctB}%)`;
-                                
                                 document.getElementById('poll-result-bar-a').style.width = `${pctA}%`;
                                 document.getElementById('poll-result-bar-b').style.width = `${pctB}%`;
+
+                                const cWrap = document.getElementById('poll-result-c-wrap');
+                                if (data.poll.optionC) {
+                                    cWrap?.classList.remove('hidden');
+                                    document.getElementById('poll-result-label-c').textContent = data.poll.optionC;
+                                    document.getElementById('poll-result-count-c').textContent = `${countC} votes (${pctC}%)`;
+                                    document.getElementById('poll-result-bar-c').style.width = `${pctC}%`;
+                                } else {
+                                    cWrap?.classList.add('hidden');
+                                }
                                 
                                 document.getElementById('poll-result-total').textContent = `Total Votes: ${total}`;
-                                
                                 pollResultsPanel.classList.remove('hidden');
                             } catch(e) { console.warn("Could not fetch poll results", e); }
                         }
@@ -5980,12 +5902,17 @@ const Admin = {
                         pollQuestion.value = "";
                         pollOptA.value = "";
                         pollOptB.value = "";
+                        if (pollOptC) pollOptC.value = "";
+                        if (pollShowResults) pollShowResults.checked = false;
+                        pollOptCWrap?.classList.add('hidden');
+                        pollAddCBtn?.classList.remove('hidden');
                         const pollResultsPanel = document.getElementById('alert-live-poll-results');
                         if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
                     }
 
                     sendBtn.textContent = "Update Alert"; 
                 } else {
+                    existingAlertId = null;
                     alertMsg.innerHTML = "";
                     
                     const pollResultsPanel = document.getElementById('alert-live-poll-results');
@@ -5998,16 +5925,16 @@ const Admin = {
 
                     signoffInput.value = "Next Train Ops";
                     forcePopupToggle.checked = false;
-                    
-                    imageUrlInput.value = "";
-                    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-                    ctaUrlInput.value = "";
-                    ctaTextInput.value = "";
+
                     pollToggle.checked = false;
                     pollContainer.classList.add('hidden');
                     pollQuestion.value = "";
                     pollOptA.value = "";
                     pollOptB.value = "";
+                    if (pollOptC) pollOptC.value = "";
+                    if (pollShowResults) pollShowResults.checked = false;
+                    pollOptCWrap?.classList.add('hidden');
+                    pollAddCBtn?.classList.remove('hidden');
 
                     sendBtn.textContent = "Post Alert";
                 }
@@ -6151,24 +6078,29 @@ const Admin = {
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
 
+            const optCVal = pollToggle.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
+                ? (pollOptC.value.trim() || null)
+                : null;
             const payload = {
-                id: Date.now().toString(), 
+                id: existingAlertId || Date.now().toString(),
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
                 postedAt: Date.now(),
                 expiresAt: expiresAtVal,
                 severity: severity,
-                imageUrl: imageUrlInput.value.trim() || null,
-                ctaUrl: ctaUrlInput.value.trim() || null,
-                ctaText: ctaTextInput.value.trim() || null,
+                imageUrl: null,
+                ctaUrl: null,
+                ctaText: null,
                 sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                 sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                 poll: {
                     active: pollToggle.checked,
                     question: pollToggle.checked ? pollQuestion.value.trim() : null,
                     optionA: pollToggle.checked ? pollOptA.value.trim() : null,
-                    optionB: pollToggle.checked ? pollOptB.value.trim() : null
+                    optionB: pollToggle.checked ? pollOptB.value.trim() : null,
+                    optionC: optCVal,
+                    showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
                 }
             };
 
@@ -6181,6 +6113,7 @@ const Admin = {
                 // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
                 const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
                 if (res.ok) {
+                    existingAlertId = payload.id;
                     if (typeof showToast === 'function') showToast("Alert Posted!", "success");
                     if (typeof checkServiceAlerts === 'function') checkServiceAlerts(); 
                 } else {
@@ -6225,20 +6158,20 @@ const Admin = {
 
                     if (typeof showToast === 'function') showToast("Cleared & Archived!", "info");
                     
+                    existingAlertId = null;
                     alertMsg.innerHTML = "";
                     signoffInput.value = "Next Train Ops";
                     forcePopupToggle.checked = false;
-                    imageUrlInput.value = "";
-                    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-                    ctaUrlInput.value = "";
-                    ctaTextInput.value = "";
                     pollToggle.checked = false;
                     pollContainer.classList.add('hidden');
                     pollQuestion.value = "";
                     pollOptA.value = "";
                     pollOptB.value = "";
-                    if (advBody && !advBody.classList.contains('hidden')) advToggleBtn.click();
-                    
+                    if (pollOptC) pollOptC.value = "";
+                    if (pollShowResults) pollShowResults.checked = false;
+                    pollOptCWrap?.classList.add('hidden');
+                    pollAddCBtn?.classList.remove('hidden');
+
                     sendBtn.textContent = "Post Alert";
                     if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500); 
                 } else { if (typeof showToast === 'function') showToast("Failed to clear alert.", "error"); }
@@ -8261,9 +8194,9 @@ const Admin = {
 
             <div id="sched-qa-body" class="hidden mt-4 space-y-4">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Flags impossible or suspicious timetable cells: identical adjacent stops, time going backwards,
-                    inconsistent inter-station deltas across trains, non-time cells, and thin trains.
-                    Diagnostics (above) covers cache/network health — this panel is schedule content only.
+                    Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
+                    delta variance, missing coordinates, day mismatches, and more.
+                    Diagnostics (above) covers cache/network — this panel is schedule content only.
                 </p>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -8280,21 +8213,28 @@ const Admin = {
                     <div>
                         <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Source</label>
                         <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                            <option value="RAM">RAM cache</option>
+                            <option value="FIREBASE" selected>Firebase</option>
                             <option value="CLOUDFLARE">Cloudflare</option>
                             <option value="GITHUB">GitHub CDN</option>
-                            <option value="FIREBASE">Firebase</option>
+                            <option value="RAM">RAM cache</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap gap-2">
-                    <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <input type="checkbox" id="sched-qa-show-info" class="rounded text-violet-600" /> Include info
-                    </label>
-                    <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <input type="checkbox" id="sched-qa-delta-only" class="rounded text-violet-600" /> Deltas only
-                    </label>
+                <div class="relative" id="sched-qa-filter-wrap">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Issue types to show</label>
+                    <button type="button" id="sched-qa-filter-btn" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none flex items-center justify-between">
+                        <span id="sched-qa-filter-label">All default issue types</span>
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="sched-qa-filter-menu" class="hidden absolute z-20 mt-1 w-full max-h-56 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 space-y-0.5">
+                        <div class="flex gap-2 px-1 pb-2 mb-1 border-b border-gray-100 dark:border-gray-800">
+                            <button type="button" id="sched-qa-filter-all" class="text-[9px] font-bold uppercase text-violet-600 hover:underline">All</button>
+                            <button type="button" id="sched-qa-filter-defaults" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">Defaults</button>
+                            <button type="button" id="sched-qa-filter-none" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">None</button>
+                        </div>
+                        <div id="sched-qa-filter-list" class="space-y-0.5"></div>
+                    </div>
                 </div>
 
                 <div class="flex gap-2">
@@ -8318,8 +8258,70 @@ const Admin = {
         const exportBtn = document.getElementById('sched-qa-export-btn');
         const resultsDiv = document.getElementById('sched-qa-results');
         const summaryDiv = document.getElementById('sched-qa-summary');
+        const filterList = document.getElementById('sched-qa-filter-list');
+        const filterBtn = document.getElementById('sched-qa-filter-btn');
+        const filterMenu = document.getElementById('sched-qa-filter-menu');
+        const filterLabel = document.getElementById('sched-qa-filter-label');
 
         let lastReport = null;
+        const issueTypes = (typeof QA_ISSUE_TYPES !== 'undefined' && Array.isArray(QA_ISSUE_TYPES))
+            ? QA_ISSUE_TYPES
+            : [
+                { code: 'DUPLICATE_ADJACENT', label: 'Identical adjacent times', defaultOn: true },
+                { code: 'TIME_REGRESSION', label: 'Time goes backwards', defaultOn: true },
+                { code: 'DELTA_VARIANCE', label: 'Inconsistent deltas', defaultOn: true },
+                { code: 'MISSING_COORDS', label: 'Missing coordinates', defaultOn: true },
+            ];
+
+        const syncFilterLabel = () => {
+            const boxes = filterList?.querySelectorAll('input[data-qa-code]') || [];
+            const on = [...boxes].filter((b) => b.checked).length;
+            if (filterLabel) filterLabel.textContent = on === boxes.length ? 'All issue types' : `${on} of ${boxes.length} types selected`;
+        };
+
+        if (filterList) {
+            filterList.innerHTML = issueTypes.map((t) => `
+                <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 cursor-pointer text-[11px] text-gray-700 dark:text-gray-200">
+                    <input type="checkbox" data-qa-code="${t.code}" class="rounded text-violet-600" ${t.defaultOn ? 'checked' : ''} />
+                    <span class="font-medium">${t.label}</span>
+                    <span class="ml-auto font-mono text-[9px] text-gray-400">${t.code}</span>
+                </label>
+            `).join('');
+            filterList.querySelectorAll('input').forEach((el) => el.addEventListener('change', () => {
+                syncFilterLabel();
+                if (lastReport) renderReport(lastReport);
+            }));
+            syncFilterLabel();
+        }
+
+        if (filterBtn && filterMenu) {
+            filterBtn.onclick = (e) => {
+                e.stopPropagation();
+                filterMenu.classList.toggle('hidden');
+            };
+            document.addEventListener('click', (e) => {
+                const wrap = document.getElementById('sched-qa-filter-wrap');
+                if (wrap && !wrap.contains(e.target)) filterMenu.classList.add('hidden');
+            });
+        }
+        document.getElementById('sched-qa-filter-all')?.addEventListener('click', () => {
+            filterList?.querySelectorAll('input').forEach((b) => { b.checked = true; });
+            syncFilterLabel();
+            if (lastReport) renderReport(lastReport);
+        });
+        document.getElementById('sched-qa-filter-none')?.addEventListener('click', () => {
+            filterList?.querySelectorAll('input').forEach((b) => { b.checked = false; });
+            syncFilterLabel();
+            if (lastReport) renderReport(lastReport);
+        });
+        document.getElementById('sched-qa-filter-defaults')?.addEventListener('click', () => {
+            filterList?.querySelectorAll('input[data-qa-code]').forEach((b) => {
+                const meta = issueTypes.find((t) => t.code === b.dataset.qaCode);
+                b.checked = !!(meta && meta.defaultOn);
+            });
+            syncFilterLabel();
+            if (lastReport) renderReport(lastReport);
+        });
 
         if (header && body) {
             header.onclick = () => {
@@ -8373,13 +8375,17 @@ const Admin = {
             info: 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
         };
 
+        const selectedCodes = () => {
+            const boxes = filterList?.querySelectorAll('input[data-qa-code]:checked') || [];
+            return new Set([...boxes].map((b) => b.dataset.qaCode));
+        };
+
         const renderReport = (report) => {
             lastReport = report;
-            const showInfo = !!document.getElementById('sched-qa-show-info')?.checked;
-            const deltaOnly = !!document.getElementById('sched-qa-delta-only')?.checked;
-            let findings = report.findings || [];
-            if (!showInfo) findings = findings.filter((f) => f.severity !== 'info');
-            if (deltaOnly) findings = findings.filter((f) => f.code === 'DELTA_VARIANCE');
+            const allowed = selectedCodes();
+            let findings = (report.findings || []).filter((f) => allowed.has(f.code) || (f.code === 'NO_DB' && allowed.size === 0));
+            // If nothing selected, show empty intentionally
+            if (allowed.size === 0) findings = [];
 
             const { summary } = report;
             if (summaryDiv) {
@@ -8407,14 +8413,14 @@ const Admin = {
             }
 
             if (!findings.length) {
-                resultsDiv.innerHTML = `<div class="text-xs text-green-700 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center">No issues in the current filter. ${summary.errors + summary.warnings === 0 ? 'Schedule looks clean.' : 'Try enabling Info or clearing Deltas only.'}</div>`;
+                resultsDiv.innerHTML = `<div class="text-xs text-green-700 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center">${allowed.size === 0 ? 'Select at least one issue type above.' : (summary.errors + summary.warnings === 0 ? 'Schedule looks clean for this region.' : 'No findings match the selected issue types.')}</div>`;
                 return;
             }
 
             resultsDiv.innerHTML = findings.map((f) => {
                 const style = severityStyles[f.severity] || severityStyles.info;
                 const routeBit = f.routeName ? Admin.formatRouteLabelHtml(f.routeName) : (f.routeId || '');
-                const meta = [f.sheetKey, f.dayDir, f.train].filter(Boolean).join(' · ');
+                const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' · ');
                 return `
                     <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}">
                         <div class="flex items-center justify-between gap-2 mb-1">
@@ -8433,10 +8439,10 @@ const Admin = {
                 const regionSelect = document.getElementById('sched-qa-region');
                 const sourceSelect = document.getElementById('sched-qa-source');
                 const scanRegion = regionSelect?.value || 'CURRENT';
-                const scanSourceRaw = sourceSelect?.value || 'RAM';
+                const scanSourceRaw = sourceSelect?.value || 'FIREBASE';
                 const activeRegion = typeof currentRegion !== 'undefined' ? currentRegion : 'GP';
                 const targetRegion = scanRegion === 'CURRENT' ? activeRegion : scanRegion;
-                const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'CLOUDFLARE' : scanSourceRaw;
+                const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'FIREBASE' : scanSourceRaw;
 
                 resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}…</div>`;
                 if (summaryDiv) summaryDiv.classList.add('hidden');
@@ -8462,11 +8468,6 @@ const Admin = {
                 }
             };
         }
-
-        ['sched-qa-show-info', 'sched-qa-delta-only'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.onchange = () => { if (lastReport) renderReport(lastReport); };
-        });
 
         if (exportBtn) {
             exportBtn.onclick = () => {

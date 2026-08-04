@@ -172,10 +172,26 @@ import { withBase } from '../lib/config.js';
         try { isOnboardMap = new URLSearchParams(window.location.search).get('onboard') === 'map'; } catch (e) {}
 
         const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
-        const activeRegion = $userRegion.get() || 'GP';
+        let activeRegion = $userRegion.get() || 'GP';
         const params = new URLSearchParams(window.location.search);
         const hasRouteDeepLink = (params.get('action') === 'route' && params.get('route')) || !!params.get('rt');
         const hasPlannerDeepLink = (params.get('action') === 'planner' && params.get('from') && params.get('to')) || !!params.get('plan');
+        // Soft SEO hint for first-time only — never override a returning user's region
+        const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
+        if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
+            activeRegion = seoRegion;
+            $userRegion.set(seoRegion);
+            try { safeStorage.setItem('userRegion', seoRegion); } catch (e) {}
+        }
+        // Strip region query so it can't re-apply later
+        if (params.has('region') || params.has('r')) {
+            try {
+                const urlObj = new URL(window.location.href);
+                urlObj.searchParams.delete('region');
+                urlObj.searchParams.delete('r');
+                window.history.replaceState({}, '', urlObj.toString());
+            } catch (e) {}
+        }
 
         // Brand-new users + legacy map onboarding deep-links
         // Shared route/planner links skip Welcome so the destination opens immediately

@@ -11,6 +11,7 @@
 import { DYNAMIC_BASE_URL } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
+import { $isOffline, $deviceId } from '../store.js';
 
 /** In-session block list (admin ban takes effect without reload) */
 export const localBlockList = new Set();
@@ -278,8 +279,63 @@ export function computeBanUntil(durationMs) {
     return Date.now() + durationMs;
 }
 
+/**
+ * Cloaked enforcement for shadow-banned devices/accounts.
+ * Looks like flaky network / FOUC — never tells the user they are banned.
+ */
+export async function applyShadowBanCloak() {
+    if (typeof window === 'undefined' || window.__ntBanCloakApplied) return false;
+    const uid = safeStorage.getItem('authUid') || null;
+    const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || window.NEXT_TRAIN_DEVICE_ID || null;
+    const banned = (await isShadowBanned(uid)) || (deviceId ? await isShadowBanned(deviceId) : false);
+    if (!banned) return false;
+
+    window.__ntBanCloakApplied = true;
+    window.__ntShadowBanCloak = true;
+
+    const pulseOffline = () => {
+        try { $isOffline.set(true); } catch { /* ignore */ }
+        const ind = document.getElementById('offline-indicator');
+        if (ind) ind.style.display = '';
+        const wrap = document.getElementById('offline-wrapper');
+        if (wrap) wrap.classList.remove('hidden');
+    };
+    pulseOffline();
+
+    // Intermittent "lie-fi": flicker offline chrome so it feels like a bad connection
+    const flicker = () => {
+        if (!window.__ntShadowBanCloak) return;
+        pulseOffline();
+        const ind = document.getElementById('offline-indicator');
+        if (ind && Math.random() < 0.35) {
+            ind.style.display = 'none';
+            setTimeout(() => { if (window.__ntShadowBanCloak) pulseOffline(); }, 900 + Math.random() * 1600);
+        }
+    };
+    setInterval(flicker, 7000);
+
+    // Soft FOUC: briefly strip the shell-ready class so layout looks broken on load
+    try {
+        document.documentElement.classList.remove('nt-shell-ready');
+        setTimeout(() => {
+            try { document.documentElement.classList.add('nt-shell-ready'); } catch { /* ignore */ }
+        }, 1800 + Math.random() * 1200);
+    } catch { /* ignore */ }
+
+    // Schedule loads look like they fail / never settle
+    const weak = document.getElementById('weak-signal-modal');
+    if (weak && typeof window.openSmoothModal === 'function') {
+        setTimeout(() => {
+            try { window.openSmoothModal('weak-signal-modal'); } catch { /* ignore */ }
+        }, 2200);
+    }
+
+    return true;
+}
+
 if (typeof window !== 'undefined') {
     window.trustIsShadowBanned = isShadowBanned;
+    window.trustApplyShadowBanCloak = applyShadowBanCloak;
     window.trustLocalBlockList = localBlockList;
     window.trustAddToBlockList = addToLocalBlockList;
     window.trustRemoveFromBlockList = removeFromLocalBlockList;

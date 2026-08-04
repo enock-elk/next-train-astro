@@ -443,9 +443,60 @@ function trackAlertEvent(name, params) {
     }
 }
 
+/** Alert-severity palette for poll chrome (info=blue, warning=amber, critical=red). */
+function pollTone(severity) {
+    if (severity === 'critical') {
+        return {
+            wrap: 'mt-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 shadow-sm',
+            title: 'text-red-900 dark:text-red-100',
+            label: 'text-red-800 dark:text-red-200',
+            muted: 'text-red-500 dark:text-red-400',
+            track: 'bg-red-100 dark:bg-red-950',
+            bar: 'bg-red-500',
+            ring: 'ring-red-400',
+            btn: 'border-red-300 dark:border-red-700 hover:border-red-500 text-red-700 dark:text-red-300',
+        };
+    }
+    if (severity === 'warning') {
+        return {
+            wrap: 'mt-4 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800 shadow-sm',
+            title: 'text-amber-900 dark:text-amber-100',
+            label: 'text-amber-800 dark:text-amber-200',
+            muted: 'text-amber-600 dark:text-amber-400',
+            track: 'bg-amber-100 dark:bg-amber-950',
+            bar: 'bg-amber-500',
+            ring: 'ring-amber-400',
+            btn: 'border-amber-300 dark:border-amber-700 hover:border-amber-500 text-amber-800 dark:text-amber-300',
+        };
+    }
+    return {
+        wrap: 'mt-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm',
+        title: 'text-blue-900 dark:text-blue-100',
+        label: 'text-blue-800 dark:text-blue-200',
+        muted: 'text-blue-500 dark:text-blue-400',
+        track: 'bg-blue-100 dark:bg-blue-950',
+        bar: 'bg-blue-500',
+        ring: 'ring-blue-400',
+        btn: 'border-blue-300 dark:border-blue-700 hover:border-blue-500 text-blue-700 dark:text-blue-300',
+    };
+}
+
+async function ensurePollAuthToken() {
+    try {
+        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+            await window.firebaseSignInAnonymously(window.firebaseAuth);
+        }
+        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
+        }
+    } catch { /* ignore */ }
+    return '';
+}
+
 /** Fetch poll tallies and render percentages (no raw vote lists). */
-async function renderPollResultsInto(container, pollId, poll, votedOption) {
+async function renderPollResultsInto(container, pollId, poll, votedOption, severity = 'info', seedVote = null) {
     if (!container || !pollId || !poll) return;
+    const tone = pollTone(severity || poll.severity || 'info');
     try {
         const res = await fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?t=${Date.now()}`);
         const data = res.ok ? await res.json() : null;
@@ -458,82 +509,100 @@ async function renderPollResultsInto(container, pollId, poll, votedOption) {
                 else if (vote.optionKey === 'C') countC++;
             });
         }
+        // Seed the just-cast vote if the write hasn't appeared in the GET yet
+        if (seedVote === 'A' && countA === 0) countA = 1;
+        else if (seedVote === 'B' && countB === 0) countB = 1;
+        else if (seedVote === 'C' && countC === 0) countC = 1;
+
         const total = countA + countB + countC;
         const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
         const row = (key, label, n) => {
             if (!label) return '';
             const p = pct(n);
-            const mine = votedOption === key ? ' ring-1 ring-purple-400' : '';
+            const mine = votedOption === key ? ` ring-1 ${tone.ring}` : '';
             return `
                 <div class="mb-2${mine}">
-                    <div class="flex justify-between text-[10px] font-bold text-purple-800 dark:text-purple-200 mb-1">
+                    <div class="flex justify-between text-[10px] font-bold ${tone.label} mb-1">
                         <span>${escapeHTML(label)}${votedOption === key ? ' · your vote' : ''}</span>
                         <span>${p}%</span>
                     </div>
-                    <div class="w-full bg-purple-100 dark:bg-purple-950 rounded-full h-2">
-                        <div class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width:${p}%"></div>
+                    <div class="w-full ${tone.track} rounded-full h-2">
+                        <div class="${tone.bar} h-2 rounded-full transition-all duration-500" style="width:${p}%"></div>
                     </div>
                 </div>`;
         };
+        const nested = String(container.id || '').startsWith('poll-live-results');
         container.innerHTML = `
-            <p class="text-xs font-black text-purple-900 dark:text-purple-100 mb-3 text-center leading-tight">${escapeHTML(poll.question || 'Poll results')}</p>
+            ${nested ? '' : `<p class="text-xs font-black ${tone.title} mb-3 text-center leading-tight">${escapeHTML(poll.question || 'Poll results')}</p>`}
             ${row('A', poll.optionA, countA)}
             ${row('B', poll.optionB, countB)}
             ${poll.optionC ? row('C', poll.optionC, countC) : ''}
-            <p class="text-[9px] text-center text-purple-500 dark:text-purple-400 font-bold uppercase tracking-wider mt-1">Live percentages</p>`;
-        container.className = 'mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-inner';
+            <p class="text-[9px] text-center ${tone.muted} font-bold uppercase tracking-wider mt-1">Live percentages</p>`;
+        container.className = nested ? 'mt-1' : `${tone.wrap} shadow-inner`;
     } catch {
         container.innerHTML = `
             <div class="text-center">
-                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
-                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
+                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
             </div>`;
-        container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner';
+        container.className = tone.wrap;
     }
 }
 
 /** SPA parity — notice modal poll votes (one vote per device via localStorage). */
-export function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
+export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
     triggerHaptic();
-    if (!pollId) return;
+    if (!pollId || !optionKey) return;
     if (safeStorage.getItem('poll_voted_' + pollId)) {
         showToast('You have already voted on this poll.', 'warning');
         return;
     }
-    trackAlertEvent('alert_poll_vote', {
-        poll_id: pollId,
-        vote_option: optionKey,
-        vote_text: optionText,
-        route_id: $currentRouteId.get() || 'global',
-    });
-    try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
+
+    const severity = pollMeta?.severity || 'info';
+    const tone = pollTone(severity);
+    const container = document.getElementById(`poll-container-${pollId}`);
+
     try {
+        const token = await ensurePollAuthToken();
+        if (!token) throw new Error('Auth required to vote');
+
         const payload = {
             optionKey,
-            optionText,
+            optionText: optionText || optionKey,
             timestamp: Date.now(),
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
         };
-        fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        }).catch(() => {});
-    } catch { /* ignore */ }
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?auth=${encodeURIComponent(token)}`,
+            { method: 'POST', body: JSON.stringify(payload) }
+        );
+        if (!res.ok) throw new Error(`Vote write failed (${res.status})`);
 
-    const container = document.getElementById(`poll-container-${pollId}`);
-    if (container) {
-        if (pollMeta?.showResults) {
-            renderPollResultsInto(container, pollId, pollMeta, optionKey);
-        } else {
-            container.innerHTML = `
-                <div class="text-center animate-fade-in-up">
-                    <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
-                    <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
-                </div>`;
-            container.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner transition-all';
+        try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
+        trackAlertEvent('alert_poll_vote', {
+            poll_id: pollId,
+            vote_option: optionKey,
+            vote_text: optionText,
+            route_id: $currentRouteId.get() || 'global',
+        });
+
+        if (container) {
+            if (pollMeta?.showResults) {
+                await renderPollResultsInto(container, pollId, pollMeta, optionKey, severity, optionKey);
+            } else {
+                container.innerHTML = `
+                    <div class="text-center animate-fade-in-up">
+                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
+                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
+                    </div>`;
+                container.className = tone.wrap;
+            }
         }
+        showToast('Vote recorded successfully!', 'success');
+    } catch (e) {
+        console.warn('Poll vote failed', e);
+        showToast('Could not record your vote. Please try again.', 'error');
     }
-    showToast('Vote recorded successfully!', 'success');
 }
 
 export async function checkServiceAlerts() {
@@ -724,7 +793,18 @@ export async function checkServiceAlerts() {
             return;
         }
 
-        validNotices.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
+        // Scope wins over severity: Route > Region (all_GP…) > Global (all).
+        // Within the same scope, higher severity still ranks first.
+        const scopeScore = (key) => {
+            if (!key || key === 'all') return 1;
+            if (String(key).startsWith('all_')) return 2;
+            return 3; // concrete routeId
+        };
+        validNotices.sort((a, b) => {
+            const scopeDiff = scopeScore(b._sourceKey) - scopeScore(a._sourceKey);
+            if (scopeDiff !== 0) return scopeDiff;
+            return (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1);
+        });
         const activeNotice = validNotices[0];
         const severity = activeNotice.severity || 'info';
         const seenKey = `seen_notice_${activeNotice._sourceKey || 'x'}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
@@ -785,45 +865,51 @@ export async function checkServiceAlerts() {
                     </a>`;
             }
 
-            // Interactive poll (SPA parity) — one local vote; optional live % results
+            // Interactive poll — colours follow alert severity (info/warning/critical)
             if (activeNotice.poll && activeNotice.poll.active) {
                 const pollId = activeNotice.id;
                 const votedOption = safeStorage.getItem('poll_voted_' + pollId);
+                const pollSeverity = severity || 'info';
+                const tone = pollTone(pollSeverity);
                 const pollMeta = {
                     question: activeNotice.poll.question || '',
                     optionA: activeNotice.poll.optionA || '',
                     optionB: activeNotice.poll.optionB || '',
                     optionC: activeNotice.poll.optionC || '',
                     showResults: !!activeNotice.poll.showResults,
+                    severity: pollSeverity,
                 };
-                content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="mt-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm"></div>`;
+                content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
                 const pollEl = document.getElementById(`poll-container-${pollId}`);
                 if (pollEl) {
                     try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
                     if (votedOption && activeNotice.poll.showResults) {
-                        renderPollResultsInto(pollEl, pollId, activeNotice.poll, votedOption);
+                        renderPollResultsInto(pollEl, pollId, { ...activeNotice.poll, ...pollMeta }, votedOption, pollSeverity);
                     } else if (votedOption) {
                         pollEl.innerHTML = `
                             <div class="text-center">
-                                <p class="text-xs font-bold text-green-800 dark:text-green-300">Thanks for voting!</p>
-                                <p class="text-[10px] text-green-600 dark:text-green-500 mt-0.5">Your response has been recorded.</p>
+                                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
+                                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
                             </div>`;
-                        pollEl.className = 'mt-4 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800 shadow-inner';
                     } else {
+                        const voteBtn = (key, text) =>
+                            `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
                         const optC = activeNotice.poll.optionC
-                            ? `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="C" data-poll-text="${escapeHTML(activeNotice.poll.optionC)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionC)}</button>`
+                            ? voteBtn('C', activeNotice.poll.optionC)
                             : '';
                         pollEl.innerHTML = `
-                            <p class="text-sm font-black text-purple-900 dark:text-purple-100 mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
+                            <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
                             <div class="flex flex-wrap gap-2 mb-3">
-                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="A" data-poll-text="${escapeHTML(activeNotice.poll.optionA || 'A')}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionA || 'A')}</button>
-                                <button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="B" data-poll-text="${escapeHTML(activeNotice.poll.optionB || 'B')}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 hover:border-purple-500 text-purple-700 dark:text-purple-300 font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(activeNotice.poll.optionB || 'B')}</button>
+                                ${voteBtn('A', activeNotice.poll.optionA || 'A')}
+                                ${voteBtn('B', activeNotice.poll.optionB || 'B')}
                                 ${optC}
                             </div>
                             <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${activeNotice.poll.showResults ? '' : 'hidden'}"></div>`;
                         if (activeNotice.poll.showResults) {
                             const liveBox = document.getElementById(`poll-live-results-${pollId}`);
-                            if (liveBox) renderPollResultsInto(liveBox, pollId, activeNotice.poll, null);
+                            if (liveBox) {
+                                renderPollResultsInto(liveBox, pollId, { ...activeNotice.poll, ...pollMeta }, null, pollSeverity);
+                            }
                         }
                     }
                 }

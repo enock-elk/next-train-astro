@@ -3,7 +3,7 @@
 ---
 
 <div id="view-trip-planner" class="view-section p-4 pb-6 bg-gray-50 dark:bg-gray-900/50">
-    <div class="text-center mb-5 flex flex-col justify-center items-center w-full shrink-0">
+    <div class="planner-title-block text-center mb-5 flex flex-col justify-center items-center w-full shrink-0">
         <button id="planner-info-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-center bg-white dark:bg-gray-800 h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors overflow-hidden group focus:outline-none">
             <div class="w-full h-full"></div>
             <h2 class="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-200 group-hover:opacity-80 transition-colors truncate w-full px-1 text-center">
@@ -13,7 +13,8 @@
                 <svg class="w-5 h-5 text-blue-500 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
         </button>
-        <p class="text-[10px] text-transparent font-medium uppercase tracking-wide select-none mt-1">Schedule updated: --</p>
+        <!-- Phantom line matches Live Board “Schedule updated” height on the search form only -->
+        <p class="planner-schedule-phantom text-[10px] text-transparent font-medium uppercase tracking-wide select-none mt-1">Schedule updated: --</p>
     </div>
     
     <div id="planner-input-section" class="space-y-7 shrink-0">
@@ -55,16 +56,16 @@
     </div>
 
     <!-- Results Section -->
-    <div id="planner-results-section" class="hidden mt-4 space-y-4 shrink-0">
-        <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center mb-4 gap-2">
+    <div id="planner-results-section" class="hidden mt-0 space-y-3 shrink-0">
+        <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-3 min-h-[32px]">
             <div class="justify-self-start">
-                <button id="planner-back-btn" class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-shrink-0 shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none">
-                    <svg class="w-4 h-4 mr-1 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+                <button id="planner-back-btn" type="button" class="inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none h-8">
+                    <svg class="w-4 h-4 mr-1 transform group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
                     Back
                 </button>
             </div>
-            <h4 class="text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1">Your Journey</h4>
-            <div class="planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end"></div>
+            <h4 class="text-lg font-bold text-gray-900 dark:text-white m-0 justify-self-center text-center px-1">Your Journey</h4>
+            <div class="planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end"></div>
         </div>
         <div id="planner-results-list" class="space-y-4"></div>
     </div>

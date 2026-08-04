@@ -15,6 +15,16 @@
       ".read": true,
       ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
     },
+
+    "polls": {
+      "$pollId": {
+        ".read": true,
+        "$voteId": {
+          ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['optionKey', 'timestamp', 'deviceId']) && (newData.child('optionKey').val() === 'A' || newData.child('optionKey').val() === 'B' || newData.child('optionKey').val() === 'C') && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('optionText') || (newData.child('optionText').isString() && newData.child('optionText').val().length <= 120)))"
+        }
+      }
+    },
     "exclusions": {
       ".read": true,
       ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"

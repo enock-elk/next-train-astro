@@ -211,11 +211,12 @@ function buildPlannerNotice({
     icon = 'alert',
     interactive = null, // { onclickAttr, detailsLabel }
 }) {
+    // Wash + accent bar sit on the right with the icon (gradient originates top-right).
     const tones = {
         schedule: {
             border: 'border-blue-200/90 dark:border-blue-900/60',
             bar: 'bg-blue-500',
-            wash: 'bg-gradient-to-br from-blue-50 via-white to-white dark:from-blue-950/40 dark:via-gray-900 dark:to-gray-900',
+            wash: 'bg-gradient-to-bl from-blue-50 via-white to-white dark:from-blue-950/40 dark:via-gray-900 dark:to-gray-900',
             title: 'text-blue-800 dark:text-blue-300',
             iconWrap: 'bg-blue-100 dark:bg-blue-900/50 border-blue-200/80 dark:border-blue-800/60',
             icon: 'text-blue-600 dark:text-blue-300',
@@ -225,7 +226,7 @@ function buildPlannerNotice({
         critical: {
             border: 'border-red-200/90 dark:border-red-900/60',
             bar: 'bg-red-500',
-            wash: 'bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/50 dark:via-gray-900 dark:to-gray-900',
+            wash: 'bg-gradient-to-bl from-red-50 via-white to-white dark:from-red-950/50 dark:via-gray-900 dark:to-gray-900',
             title: 'text-red-700 dark:text-red-300',
             iconWrap: 'bg-red-100 dark:bg-red-900/50 border-red-200/80 dark:border-red-800/60',
             icon: 'text-red-600 dark:text-red-300',
@@ -235,7 +236,7 @@ function buildPlannerNotice({
         warning: {
             border: 'border-amber-200/90 dark:border-amber-900/60',
             bar: 'bg-amber-500',
-            wash: 'bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900',
+            wash: 'bg-gradient-to-bl from-amber-50 via-white to-white dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900',
             title: 'text-amber-800 dark:text-amber-300',
             iconWrap: 'bg-amber-100 dark:bg-amber-900/50 border-amber-200/80 dark:border-amber-800/60',
             icon: 'text-amber-600 dark:text-amber-300',
@@ -245,7 +246,7 @@ function buildPlannerNotice({
         layover: {
             border: 'border-orange-200/90 dark:border-orange-900/60',
             bar: 'bg-orange-500',
-            wash: 'bg-gradient-to-br from-orange-50 via-white to-white dark:from-orange-950/40 dark:via-gray-900 dark:to-gray-900',
+            wash: 'bg-gradient-to-bl from-orange-50 via-white to-white dark:from-orange-950/40 dark:via-gray-900 dark:to-gray-900',
             title: 'text-orange-800 dark:text-orange-300',
             iconWrap: 'bg-orange-100 dark:bg-orange-900/50 border-orange-200/80 dark:border-orange-800/60',
             icon: 'text-orange-600 dark:text-orange-300',
@@ -266,22 +267,21 @@ function buildPlannerNotice({
         ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} transition-colors">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
+    // Accent bar + icon + colour wash all sit on the right.
     const inner = `
         <div class="flex items-stretch">
-            <div class="w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
-            <div class="flex-1 min-w-0 p-3.5 flex items-start gap-3">
-                <div class="w-10 h-10 rounded-full ${t.iconWrap} border flex items-center justify-center shrink-0 shadow-sm">
+            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 pr-14 text-left">
+                <div class="planner-notice-icon absolute top-3.5 right-3.5 w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
                     ${iconSvg}
                 </div>
-                <div class="flex-1 min-w-0 pt-0.5">
-                    <div class="flex items-center justify-between gap-2 mb-1.5">
-                        <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em]">${escapeHTML(title)}</h4>
-                        ${detailsHtml}
-                    </div>
-                    <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1">${bodyHtml}</div>
-                    ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
+                <div class="flex items-start justify-between gap-2 mb-1.5 pr-1">
+                    <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight">${escapeHTML(title)}</h4>
+                    ${detailsHtml}
                 </div>
+                <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
+            <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
         </div>
     `;
 
@@ -300,6 +300,23 @@ function buildPlannerNotice({
 function showingTrainsForLine(trip) {
     const label = trip?.dayLabel || 'Tomorrow';
     return `Showing the next available option for <b>${escapeHTML(String(label))}</b>.`;
+}
+
+/** Compact day label for tight chrome (dropdown / Departure badge). Full name stays in notices. */
+function compactPlannerDayLabel(label, trip = null) {
+    if (!label) return label;
+    const trimmed = String(label).trim();
+    const shortDays = new Set([
+        'Tomorrow', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+    ]);
+    if (shortDays.has(trimmed)) return trimmed;
+    if (trip?.isHoliday) return 'Holiday';
+    if (/^Tomorrow\s*\(/i.test(trimmed)) return 'Holiday';
+    const holidays = Object.values(HOLIDAY_NAMES || {});
+    if (holidays.some((h) => trimmed === h || trimmed.includes(h))) return 'Holiday';
+    // Any other long non-weekday label (observed holidays, etc.)
+    if (trimmed.length > 9) return 'Holiday';
+    return trimmed;
 }
 
 /**
@@ -1755,9 +1772,10 @@ export const PlannerRenderer = {
         let stateBadge = "";
         
         if (isNextDay) {
-             const dynamicDayText = step.dayLabel ? `Departure: ${step.dayLabel}` : "Departure: Tomorrow";
+             const dayShown = step.dayLabel ? compactPlannerDayLabel(step.dayLabel, step) : 'Tomorrow';
+             const dynamicDayText = `Departure: ${escapeHTML(String(dayShown))}`;
              stateBadge = `<div class="flex items-center text-sm font-bold text-orange-600 dark:text-orange-400">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                             ${dynamicDayText}
                           </div>`;
         } else if (isDeparted) {
@@ -1845,9 +1863,9 @@ export const PlannerRenderer = {
 
             let typeLabel = transferCount === 0 ? "Direct" : `${transferCount} Transfer${transferCount > 1 ? 's' : ''}`;
             
-            // GUARDIAN PHASE 14: Dynamic future label injection
+            // GUARDIAN PHASE 14: Dynamic future label injection (compact on narrow screens)
             if (opt.dayLabel) {
-                label = ` (${opt.dayLabel})`;
+                label = ` (${compactPlannerDayLabel(opt.dayLabel, opt)})`;
             } else if (midnightRollover) {
                 label = " (Tomorrow)";
             }
@@ -2744,12 +2762,12 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     // Keep loading header as centred "Your Journey" (not the day/share toolbar)
     const headerTitle = document.querySelector('#planner-results-section h4');
     if (headerTitle) {
-        headerTitle.className = 'text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1';
+        headerTitle.className = 'text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1 m-0';
         headerTitle.textContent = 'Your Journey';
     }
     const shareSlot = document.querySelector('#planner-results-section .planner-share-slot');
     if (shareSlot) {
-        shareSlot.className = 'planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end';
+        shareSlot.className = 'planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end';
         shareSlot.innerHTML = '';
     }
 
@@ -3073,7 +3091,9 @@ export function renderSelectedTrip(container, index) {
         } else if (currentPlannerStatus === 'IMPOSSIBLE_TODAY') {
             renderImpossibleTodayResult(container, currentTripOptions, index);
         } else {
-            renderNoMoreTrainsResult(container, currentTripOptions, index, "No more trains today");
+            // After "See Next Available Day" (or any next-day FOUND), show a
+            // forward-looking bridge — not another "no more trains today" wall.
+            renderNextDayResult(container, currentTripOptions, index);
         }
     } else {
         renderTripResult(container, currentTripOptions, index);
@@ -3404,11 +3424,11 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
     
     if (headerTitle) {
         headerTitle.innerHTML = "";
-        headerTitle.className = "flex justify-center items-center justify-self-center px-1"; 
+        headerTitle.className = "m-0 justify-self-center flex items-center justify-center"; 
         
         const badge = document.createElement("div");
         badge.id = "planner-header-badge";
-        badge.className = "relative bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm flex items-center transition-colors w-full max-w-[150px] cursor-pointer group h-[38px]"; 
+        badge.className = "relative bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm flex items-center transition-colors cursor-pointer group h-8"; 
         
         let selDay = selectedPlannerDay || getCurrentDayType();
         const holiday = getPlannerHolidayContext();
@@ -3418,11 +3438,11 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         }
 
         badge.innerHTML = `
-            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-3 relative">
-                <span id="header-day-display" class="truncate font-bold text-[12px] pr-1.5">${selText}</span>
-                <svg id="header-day-chevron" class="w-4 h-4 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-2 relative">
+                <span id="header-day-display" class="truncate font-bold text-[12px] pr-1">${selText}</span>
+                <svg id="header-day-chevron" class="w-3.5 h-3.5 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 
-                <ul id="header-day-list" class="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden z-[200] text-left">
+                <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden z-[200] text-left">
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Mon - Fri')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Mon - Fri</li>
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday / Hol')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Hol</li>
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
@@ -3439,9 +3459,10 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         if (spacer instanceof HTMLElement) spacer.style.display = 'flex'; 
         
         if (showShare) {
-            spacer.className = "planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end"; 
+            spacer.className = "planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end"; 
             const shareBtn = document.createElement("button");
-            shareBtn.className = "flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none";
+            shareBtn.type = "button";
+            shareBtn.className = "inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none h-8";
             shareBtn.title = "Share Trip Plan";
             
             shareBtn.onclick = async () => {
@@ -3504,14 +3525,14 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
             };
             
             shareBtn.innerHTML = `
-                Share Trip
-                <svg class="w-4 h-4 ml-1.5 transform transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                Share
+                <svg class="w-3.5 h-3.5 ml-1 transform transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
             `;
             
             spacer.appendChild(shareBtn);
         } else {
-            spacer.className = "planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end invisible";
-            spacer.innerHTML = `<div class="w-24"></div>`;
+            spacer.className = "planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end invisible";
+            spacer.innerHTML = `<div class="w-14" aria-hidden="true"></div>`;
         }
     }
 }
@@ -3543,46 +3564,53 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
     const safeO = origin.replace(/'/g, "\\'");
     const safeD = dest.replace(/'/g, "\\'");
 
+    // Notice only — CTA must stay a sibling outside the notice card chrome.
     const departedNotice = buildPlannerNotice({
         tone: 'schedule',
         title: 'All Trains Departed',
         bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">There are no more scheduled trains for today.</p>
             <p>Review past trips below, or check the next available schedule.</p>`,
         icon: 'moon',
-        footerHtml: `
-            <button type="button" onclick="executeManualRollover('${safeO}', '${safeD}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs">
-                See Next Available Day
-                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
-            </button>
-        `,
+        footerHtml: '',
     });
 
+    const nextDayCta = `
+        <button type="button" onclick="executeManualRollover('${safeO}', '${safeD}')" class="planner-next-day-cta w-full mb-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs">
+            See Next Available Day
+            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+        </button>
+    `;
+
     container.innerHTML = `
-        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), departedNotice)}
+        <div class="planner-departed-notice mb-3 [&>.planner-notice]:!mb-0 [&>.planner-notice-stack]:!mb-0">
+            ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), departedNotice)}
+        </div>
+        ${nextDayCta}
         ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
 }
 
-export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, title = "No more trains today") {
+/** Next-day trips after rollover — positive bridge, not a second "all departed" notice. */
+export function renderNextDayResult(container, trips, selectedIndex = 0) {
     const selectedTrip = trips[selectedIndex];
-    if (!selectedTrip) return; 
+    if (!selectedTrip) return;
 
     const dayLabel = getPlanningDayLabel();
-    
     updatePlannerHeader(dayLabel, true);
-    
-    let bodyHtml = `<p>${showingTrainsForLine(selectedTrip)}</p>`;
+
+    let bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">${showingTrainsForLine(selectedTrip)}</p>`;
     if (selectedTrip.dayOffset > 1) {
-        bodyHtml = `<p>No valid connections found for tomorrow.</p><p>${showingTrainsForLine(selectedTrip)}</p>`;
+        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">No valid connections found for tomorrow.</p>
+            <p>${showingTrainsForLine(selectedTrip)}</p>`;
     }
 
     const scheduleNotice = buildPlannerNotice({
-        tone: 'warning',
-        title,
-        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">No more scheduled trains for today.</p>${bodyHtml}`,
-        icon: 'ban',
+        tone: 'schedule',
+        title: 'Next Available Day',
+        bodyHtml,
+        icon: 'calendar',
     });
 
     container.innerHTML = `
@@ -3591,6 +3619,11 @@ export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, ti
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
+}
+
+/** @deprecated Use renderNextDayResult — kept for any external callers. */
+export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, _title = 'No more trains today') {
+    return renderNextDayResult(container, trips, selectedIndex);
 }
 
 export function renderSundayRolloverResult(container, trips, selectedIndex = 0) {

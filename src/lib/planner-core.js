@@ -1270,6 +1270,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             targetDayType = info.type;
             targetDayLabel = info.name;
             targetDayIdx = info.idx;
+            context._targetIsHoliday = !!info.isHoliday;
         }
 
         if (targetDayType === 'sunday' && !isExplicitOverride) {
@@ -1408,6 +1409,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             optimalTrips.forEach(t => {
                 if (!t.dayLabel) t.dayLabel = targetDayLabel;
                 if (!t.dayOffset) t.dayOffset = offset;
+                if (context._targetIsHoliday) t.isHoliday = true;
             });
         }
 

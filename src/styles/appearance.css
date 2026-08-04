@@ -466,3 +466,35 @@ html.dark #app-header.nt-maint-active {
 #app-header.nt-maint-active #notice-bell {
   z-index: 70;
 }
+
+/* Planner notices: icon + accent bar + wash all live on the right. */
+.planner-notice-body {
+  position: relative;
+  padding-right: 3.25rem;
+  text-align: left;
+}
+.planner-notice-icon {
+  position: absolute;
+  top: 0.875rem;
+  right: 0.875rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.planner-next-day-cta {
+  display: flex;
+}
+
+/* Results view: kill gap under “Advanced Multi-Transfer Routing” */
+#view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-title-block {
+  margin-bottom: 0.35rem;
+}
+#view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-schedule-phantom {
+  display: none;
+}
+#view-trip-planner:has(#planner-results-section:not(.hidden)) #planner-info-btn {
+  margin-bottom: 0;
+}

@@ -8,7 +8,7 @@ import {
     $isSimMode, $simTime
 } from '../store.js';
 import {
-    ROUTES, SPECIAL_DATES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL,
+    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL,
     MAX_RADIUS_KM
 } from './config.js';
 import {
@@ -96,8 +96,7 @@ export function getLookaheadDayInfo(daysAhead = 1) {
     const dayOfWeek = baseDate.getDay(); // 0 = Sunday, 6 = Saturday
     let dayType = (dayOfWeek === 0) ? 'sunday' : (dayOfWeek === 6 ? 'saturday' : 'weekday');
     
-    // GUARDIAN BUGFIX: Do not overwrite physical day names with Holiday Titles.
-    // Commuters need to read "First train on Monday is at", not "Public Holiday".
+    // Calendar weekday name for the physical date (e.g. Monday).
     let dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dayOfWeek];
     if (daysAhead === 1) dayName = "Tomorrow";
 
@@ -107,15 +106,29 @@ export function getLookaheadDayInfo(daysAhead = 1) {
     const dateKey = `${m}-${d}`;
 
     // Override the Schedule Type if it's a Special Date (Public Holiday)
+    const holidayName = (typeof HOLIDAY_NAMES !== 'undefined' && HOLIDAY_NAMES[dateKey]) || null;
     if (typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey]) {
         dayType = SPECIAL_DATES[dateKey];
+        // When the sheet is not the usual weekday (e.g. Women's Day Observed →
+        // Saturday timetable on a Monday), surface the holiday so the UI does
+        // not claim "Monday" while showing weekend trains.
+        if (holidayName) {
+            if (daysAhead === 1) {
+                dayName = `Tomorrow (${holidayName})`;
+            } else if (dayType === 'saturday' && dayOfWeek !== 6) {
+                dayName = `${holidayName}`;
+            } else if (dayType === 'sunday' && dayOfWeek !== 0) {
+                dayName = holidayName;
+            }
+        }
     }
 
     return {
         type: dayType,
         name: dayName,
         idx: dayOfWeek,
-        isHoliday: !!(typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey])
+        isHoliday: !!(typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey]),
+        holidayName: holidayName || null,
     };
 };
 

@@ -35,6 +35,9 @@ function updateTransform() {
 function openMap() {
     if (!mapModal) return;
     resetMap();
+    if (typeof window.ensureMapImageLoaded === 'function') {
+        try { window.ensureMapImageLoaded(); } catch { /* ignore */ }
+    }
     if (typeof window.closeAppHub === 'function') {
         try { window.closeAppHub(true); } catch { /* ignore */ }
     } else {
@@ -58,6 +61,12 @@ function openMap() {
 }
 
 function closeMap() {
+    const closeBtn2 = document.getElementById('close-map-btn-2');
+    if (closeBtn2?.dataset.plannerReturnLabel) {
+        closeBtn2.textContent = closeBtn2.dataset.plannerReturnLabel;
+        delete closeBtn2.dataset.plannerReturnLabel;
+    }
+    try { sessionStorage.removeItem('nt_map_from_planner'); } catch { /* ignore */ }
     if (location.hash === '#map') {
         try { history.back(); return; } catch { /* fall through */ }
     }

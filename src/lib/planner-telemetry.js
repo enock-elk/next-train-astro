@@ -1,10 +1,12 @@
 /**
  * Planner telemetry: routing fails + batched successful trip plans.
  * Batches successful plans (flush at 10) to limit RTDB write cost.
+ * RTDB sys_logs requires auth — anonymous sign-in + id token (same as delay reports).
  */
 import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';
 import { safeStorage } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
+import { bootFirebase } from './firebase-boot.js';
 
 const FAIL_DEBOUNCE_MS = 45_000;
 const TRIP_FLUSH_SIZE = 10;
@@ -21,11 +23,32 @@ function uid() {
     return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+async function ensureAuthToken() {
+    if (typeof window === 'undefined') return '';
+    try {
+        if (!window.firebaseAuth) await bootFirebase();
+        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+            await window.firebaseSignInAnonymously(window.firebaseAuth);
+        }
+        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
+        }
+    } catch {
+        /* ignore */
+    }
+    return '';
+}
+
+async function authQuery() {
+    const token = await ensureAuthToken();
+    return token ? `?auth=${encodeURIComponent(token)}` : '';
+}
+
 /**
  * Log a planner failure once per origin|dest|reason|day within the debounce window
  * (prevents double-count from double-invoked search / rapid retries).
  */
-export function logRoutingFail({ origin, destination, reason, dayType, timeOfDay }) {
+export async function logRoutingFail({ origin, destination, reason, dayType, timeOfDay }) {
     const key = `${origin}|${destination}|${reason || 'UNKNOWN'}|${dayType || 'unknown'}`;
     const now = Date.now();
     if (key === lastFailKey && now - lastFailAt < FAIL_DEBOUNCE_MS) {
@@ -47,10 +70,18 @@ export function logRoutingFail({ origin, destination, reason, dayType, timeOfDay
     };
 
     const failId = uid();
-    fetch(`${DYNAMIC_BASE_URL}sys_logs/routing_fails/${failId}.json`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-    }).catch(() => {});
+    try {
+        const q = await authQuery();
+        const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/routing_fails/${failId}.json${q}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            console.warn('🛡️ Guardian: routing_fails write failed', res.status);
+        }
+    } catch (e) {
+        console.warn('🛡️ Guardian: routing_fails write error', e);
+    }
 }
 
 function readTripQueue() {
@@ -83,7 +114,7 @@ export function enqueueSuccessfulTripPlan(entry) {
     }
 }
 
-export function flushTripPlanQueue(queue = readTripQueue()) {
+export async function flushTripPlanQueue(queue = readTripQueue()) {
     if (!queue.length) return;
     writeTripQueue([]);
     const batchId = uid();
@@ -95,13 +126,19 @@ export function flushTripPlanQueue(queue = readTripQueue()) {
         appVersion: APP_VERSION,
         trips: queue,
     };
-    fetch(`${DYNAMIC_BASE_URL}sys_logs/trip_plans/${batchId}.json`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-    }).catch(() => {
-        // On failure, put back so we don't lose the sample
+    try {
+        const q = await authQuery();
+        const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/trip_plans/${batchId}.json${q}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            console.warn('🛡️ Guardian: trip_plans write failed', res.status);
+            writeTripQueue([...queue, ...readTripQueue()].slice(0, 50));
+        }
+    } catch {
         writeTripQueue([...queue, ...readTripQueue()].slice(0, 50));
-    });
+    }
 }
 
 if (typeof window !== 'undefined') {

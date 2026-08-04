@@ -1086,11 +1086,97 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
             code: 'ERR_ACTIVE_SUSPENSION',
             disruptionId: blockingDisruption.id,
             buttonText: blockingDisruption.buttonText || 'Line Severed',
-            hasIncident: true
+            hasIncident: true,
+            stations: blockingDisruption.stations || [],
         };
     }
 
     return 'ERR_TIMETABLE_MISMATCH';
+}
+
+function titleCaseStation(s) {
+    if (!s) return '';
+    return String(s).replace(/ STATION/gi, '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+}
+
+/** Resolve a display/index station name to a key present in the station index. */
+function resolveIndexedStation(name) {
+    const index = $globalStationIndex.get() || {};
+    const norm = normalizeStationName(name);
+    if (index[norm]) return Object.keys(index).find((k) => normalizeStationName(k) === norm) || norm;
+    const withSuffix = `${norm} STATION`;
+    if (index[withSuffix] || index[normalizeStationName(withSuffix)]) return withSuffix;
+    // Fuzzy: match cleaned keys
+    for (const key of Object.keys(index)) {
+        if (normalizeStationName(key) === norm) return key;
+    }
+    return name;
+}
+
+/**
+ * When origin sits on the disrupted side of a cut, find stations beyond the
+ * severance that can still reach the destination (alternate boarding).
+ */
+export function findAlternateBoardOrigins(origin, dest, dayType = null) {
+    const sheetDay = scheduleDayType(dayType || getCurrentDayType());
+    const normOrigin = normalizeStationName(origin);
+    const normDest = normalizeStationName(dest);
+    const candidates = [];
+    const seen = new Set();
+
+    const pushCand = (raw) => {
+        if (!raw) return;
+        const resolved = resolveIndexedStation(raw);
+        const n = normalizeStationName(resolved);
+        if (!n || n === normOrigin || n === normDest || seen.has(n)) return;
+        seen.add(n);
+        candidates.push(resolved);
+    };
+
+    try {
+        const disr = $globalDisruptions.get() || {};
+        Object.values(disr).flat().forEach((d) => {
+            if (d?.tier !== 'CRITICAL') return;
+            (d.stations || []).forEach(pushCand);
+        });
+    } catch { /* ignore */ }
+
+    const viable = [];
+    for (const cand of candidates.slice(0, 8)) {
+        try {
+            const probe = runHeuristicFailureProbe(cand, dest, sheetDay);
+            const blocked = probe === 'ERR_ACTIVE_SUSPENSION'
+                || (probe && typeof probe === 'object' && probe.code === 'ERR_ACTIVE_SUSPENSION');
+            if (blocked) continue;
+            if (probe === 'ERR_DISCONNECTED_GRAPH' || probe === 'ERR_CROSS_REGION') continue;
+
+            let raw = [];
+            try {
+                const dijkstraResult = planDijkstraTrip(cand, dest, sheetDay, false, {});
+                raw = [...(dijkstraResult.trips || [])];
+            } catch { /* ignore */ }
+            if (raw.length === 0) {
+                try {
+                    const directResult = planDirectTrip(cand, dest, sheetDay, false, {});
+                    raw = [...(directResult.trips || [])];
+                } catch { /* ignore */ }
+            }
+
+            // Accept if we found any itinerary, or connectivity exists without an active cut
+            if (raw.length === 0 && probe === 'ERR_NO_SERVICE_TODAY') continue;
+
+            viable.push({
+                station: cand,
+                label: titleCaseStation(cand),
+                hasTrips: raw.length > 0,
+            });
+            if (viable.length >= 2) break;
+        } catch { /* try next */ }
+    }
+
+    // Prefer candidates that actually produced trips
+    viable.sort((a, b) => Number(b.hasTrips) - Number(a.hasTrips));
+    return viable;
 }
 
 export async function planUnifiedTrip(origin, dest, dayType, externalContext = {}) {
@@ -1477,6 +1563,25 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             errorPayload = probeResult;
         } else {
             loopStatus = probeResult;
+        }
+
+        // Origin on the disrupted side: suggest boarding beyond the cut
+        if (loopStatus === 'ERR_ACTIVE_SUSPENSION') {
+            try {
+                const alts = findAlternateBoardOrigins(origin, dest, dayType);
+                if (alts.length > 0) {
+                    errorPayload = {
+                        ...(typeof errorPayload === 'object' && errorPayload ? errorPayload : {}),
+                        code: 'ERR_ACTIVE_SUSPENSION',
+                        boardingBlocked: true,
+                        alternateOrigins: alts,
+                        intendedDest: formatTitle(dest),
+                        blockedOrigin: formatTitle(origin),
+                    };
+                }
+            } catch (e) {
+                console.warn('[GUARDIAN] Alternate boarding probe failed', e);
+            }
         }
     } else if (loopStatus !== 'PARTIAL_JOURNEY') {
         if (initialStatus === 'IMPOSSIBLE_TODAY') {

@@ -11,7 +11,7 @@ import {
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
     $globalDisruptions, $masterStationList, $userProfile, $fullDatabase 
 } from '../store.js';
-import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES } from './config.js';
+import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage 
@@ -21,6 +21,10 @@ import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } f
 import { executeRegionSwap, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
+import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
+
+/** Last planner results view — survive map modal / hash pops */
+let lastPlannerSnapshot = null;
 
 /** True when regional DB + station index are usable for routing. */
 function plannerDatabaseReady() {
@@ -145,6 +149,70 @@ function resolveDayTypeFromIso(isoDate) {
     return { dayType, dayIndex: day, label: isoDate };
 }
 
+/** MM-DD key for the planner's active calendar day (picked date, sim date, or today). */
+function plannerActiveDateKey() {
+    if (selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate)) {
+        return selectedPlannerDate.slice(5);
+    }
+    try {
+        if ($isSimMode.get()) {
+            const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
+            if (dateInput instanceof HTMLInputElement && dateInput.value && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) {
+                return dateInput.value.slice(5);
+            }
+        }
+    } catch { /* ignore */ }
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * When the active planner day is a mapped public holiday, return name + schedule override.
+ * Only surfaces when planning "that" calendar day (picked date, or today/sim — not a generic Sat/Sun override).
+ */
+function getPlannerHolidayContext() {
+    const hasPickedDate = !!(selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate));
+    const planningGenericDayType = !hasPickedDate
+        && selectedPlannerDay
+        && selectedPlannerDay !== getCurrentDayType();
+    // User explicitly picked Mon–Fri / Sat / Sun for a different day-type — don't claim a holiday.
+    if (planningGenericDayType) return null;
+
+    const dateKey = plannerActiveDateKey();
+    if (!dateKey || !SPECIAL_DATES?.[dateKey]) return null;
+    return {
+        dateKey,
+        name: HOLIDAY_NAMES?.[dateKey] || 'Public Holiday',
+        scheduleType: SPECIAL_DATES[dateKey],
+    };
+}
+
+function buildHolidayNoticeHtml() {
+    const holiday = getPlannerHolidayContext();
+    if (!holiday) return '';
+    let body;
+    if (holiday.scheduleType === 'sunday') {
+        body = `Metrorail has <b>no service</b> on ${escapeHTML(holiday.name)}.`;
+    } else if (holiday.scheduleType === 'saturday') {
+        body = `Metrorail is running trains on the <b>Saturday schedule</b> for ${escapeHTML(holiday.name)}.`;
+    } else {
+        body = `Metrorail is running the <b>weekday schedule</b> for ${escapeHTML(holiday.name)}.`;
+    }
+    return `
+        <div class="bg-transparent border-b-4 border-blue-200 dark:border-blue-800/50 pb-4 mb-4 text-left animate-fade-in-up">
+            <div class="flex justify-between items-start w-full gap-2">
+                <div class="flex-1 min-w-0 pr-2">
+                    <h4 class="text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest mb-0.5">Public Holiday</h4>
+                    <p class="text-xs text-blue-700 dark:text-blue-300/90 leading-snug">${body}</p>
+                </div>
+                <div class="shrink-0 text-blue-500 dark:text-blue-400 mt-0.5">
+                    ${plannerIcon('calendar', 'w-5 h-5')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     if (value === 'specific' || (isoDate && value !== 'weekday' && value !== 'saturday' && value !== 'sunday')) {
         return isoDate ? `Date · ${isoDate}` : 'Pick a date…';
@@ -157,7 +225,7 @@ function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     if (value === 'saturday') return 'Saturday / Public Holiday';
     if (value === 'sunday') return 'Sunday';
     return 'Weekday (Mon-Fri)';
-} 
+}
 export let plannerPulse = null; 
 export let plannerExpandedState = new Set(); 
 export let tripMapInstance = null;
@@ -441,6 +509,95 @@ export function hidePlannerResults() {
     try { renderPlannerHistory(); } catch { /* ignore */ }
 }
 
+/** Open network map in-app (never hard-nav to /map.html) so Back restores planner results. */
+export function openPlannerNetworkMap() {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const resultsSection = document.getElementById('planner-results-section');
+    if (resultsSection) resultsSection.classList.remove('hidden');
+    // Ensure results hash is under the map entry
+    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#map') {
+        try { history.pushState({ view: 'planner-results' }, '', '#planner-results'); } catch { /* ignore */ }
+    }
+    try {
+        sessionStorage.setItem('nt_map_from_planner', '1');
+    } catch { /* ignore */ }
+    const closeBtn2 = document.getElementById('close-map-btn-2');
+    if (closeBtn2 && !closeBtn2.dataset.plannerReturnLabel) {
+        closeBtn2.dataset.plannerReturnLabel = closeBtn2.textContent || 'Close Map';
+        closeBtn2.textContent = 'Back to trip';
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('map-modal');
+    else if (typeof window.setupMapLogic === 'function') {
+        window.setupMapLogic();
+        document.getElementById('view-map-btn')?.click();
+    }
+}
+
+function capturePlannerSnapshot(extra = {}) {
+    lastPlannerSnapshot = {
+        origin: plannerOrigin,
+        dest: plannerDest,
+        status: currentPlannerStatus,
+        errorPayload: currentPlannerErrorPayload,
+        tripCount: (currentTripOptions || []).length,
+        tripIndex: window._plannerCurrentTripIndex || 0,
+        at: Date.now(),
+        ...extra,
+    };
+    try {
+        sessionStorage.setItem('nt_planner_snap', JSON.stringify({
+            origin: lastPlannerSnapshot.origin,
+            dest: lastPlannerSnapshot.dest,
+            status: lastPlannerSnapshot.status,
+            errorPayload: lastPlannerSnapshot.errorPayload,
+            tripIndex: lastPlannerSnapshot.tripIndex,
+        }));
+    } catch { /* ignore */ }
+}
+
+/** Re-show results after map/modal back if the shell was cleared. */
+export function restorePlannerResultsView() {
+    const resultsSection = document.getElementById('planner-results-section');
+    const inputSection = document.getElementById('planner-input-section');
+    if (!resultsSection) return false;
+
+    // Already showing with content — keep it
+    const list = document.getElementById('planner-results-list');
+    if (!resultsSection.classList.contains('hidden') && list && list.innerHTML.trim()) {
+        return true;
+    }
+
+    const snap = lastPlannerSnapshot;
+    if (!snap && (currentTripOptions?.length || currentPlannerErrorPayload || currentPlannerStatus)) {
+        // In-memory state still present
+        resultsSection.classList.remove('hidden');
+        if (inputSection) inputSection.classList.add('hidden');
+        if (currentTripOptions?.length) {
+            renderSelectedTrip(list, window._plannerCurrentTripIndex || 0);
+        }
+        return true;
+    }
+    if (!snap) return false;
+
+    plannerOrigin = snap.origin;
+    plannerDest = snap.dest;
+    currentPlannerStatus = snap.status;
+    currentPlannerErrorPayload = snap.errorPayload;
+    resultsSection.classList.remove('hidden');
+    if (inputSection) inputSection.classList.add('hidden');
+
+    if (currentTripOptions?.length) {
+        renderSelectedTrip(list, snap.tripIndex || 0);
+        return true;
+    }
+    // Error-only snapshot: re-run plan to rebuild the card (schedules still in memory)
+    if (snap.origin && snap.dest) {
+        executeTripPlan(snap.origin, snap.dest);
+        return true;
+    }
+    return false;
+}
+
 export function openDisruptionModal(id) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
     
@@ -518,23 +675,11 @@ export function openDisruptionModal(id) {
                 let advisoryTitle = targetDisruption.buttonText || (targetDisruption.tier === 'CRITICAL' ? 'Line Severed' : 'Expect Delays');
                 let rawMsg = `${advisoryTitle} - ${shortLocation}`;
 
-                const fText = document.getElementById('feedback-text');
-                const fType = document.getElementById('feedback-type');
-
-                if (fText) {
-                    let contextBox = document.getElementById('feedback-reply-context');
-                    if (!contextBox) {
-                        contextBox = document.createElement('div');
-                        contextBox.id = 'feedback-reply-context';
-                        contextBox.className = 'mb-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start hidden shadow-inner';
-                        fText.parentNode.insertBefore(contextBox, fText);
-                    }
-                    contextBox.innerHTML = `<span class="mr-2 shrink-0 text-sky-500">${plannerIcon('message', 'w-4 h-4')}</span><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${rawMsg}"</span></div>`;
-                    contextBox.dataset.rawMsg = rawMsg;
-                    contextBox.classList.remove('hidden');
-                    fText.value = ''; 
-                }
-                if (fType) fType.value = 'general';
+                enterFeedbackReplyMode({
+                    label: 'Replying to Advisory:',
+                    snippet: rawMsg,
+                    rawMsg,
+                });
 
                 if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
                 setTimeout(() => {
@@ -1131,33 +1276,13 @@ export const PlannerRenderer = {
                             }
                         }
 
+                        // Compact terminus marker only — LINE SEVERED details live in the top warning.
+                        if (!justSevered) return;
                         const termStationName = cleanStr(fullValidStops[idx].station.replace(' STATION', '')).toUpperCase();
-                        
-                        let terminationTag = justSevered 
-                            ? `<div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl"><span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span></div>` 
-                            : ``;
-
-                        const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
-
-                        // 🛡️ GUARDIAN UX FIX: The Breakout Disruption
-                        // -ml-[10px] exactly counteracts the parent's ml-2 (8px) + border-l-2 (2px), snapping the card flush left.
                         inj += `
-                            <div class="relative -ml-[10px] my-4 z-20 w-[calc(100%+10px)]">
-                                <div class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 shadow-md flex flex-col w-full overflow-hidden">
-                                    ${terminationTag}
-                                    <div class="p-3 flex justify-between items-end w-full">
-                                        <div class="flex flex-col items-start min-w-0 pr-2">
-                                            <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center gap-1">
-                                                ${plannerIcon('xCircle', 'w-3.5 h-3.5')} LINE SEVERED
-                                            </span>
-                                            <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-1">
-                                                ${linkSvg} <span class="font-medium text-[10px] truncate">${locationText}</span>
-                                            </div>
-                                        </div>
-                                        <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${d.id}')" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-100 dark:text-white px-2.5 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-colors focus:outline-none shadow-sm flex items-center shrink-0">
-                                            <span class="truncate max-w-[110px]">${safeBtnText}</span>
-                                        </button>
-                                    </div>
+                            <div class="relative my-3 z-20 w-full">
+                                <div class="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-900/50 px-3 py-2 flex items-center justify-center w-full">
+                                    <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center justify-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
                                 </div>
                             </div>
                         `;
@@ -1286,62 +1411,13 @@ export const PlannerRenderer = {
                     || !!(typeof window !== 'undefined' && window._plannerForcePartialTerminus)
                 );
             if (forcePartialTerminus) {
-                const cleanStr = (s) => s ? String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
                 const termStationName = String(
                     (currentPlannerErrorPayload && currentPlannerErrorPayload.partialDest) || subTo || ''
-                ).replace(/ STATION/gi, '').toUpperCase();
-
-                // Resolve the CRITICAL advisory (SPA parity: "Between CENTURION & IRENE" + button text)
-                let d = null;
-                const payloadId = currentPlannerErrorPayload && currentPlannerErrorPayload.disruptionId;
-                try {
-                    const globalList = Object.values($globalDisruptions.get() || {}).flat();
-                    if (payloadId) d = globalList.find((x) => x.id === payloadId) || null;
-                    if (!d) {
-                        const normTerm = normalizeStationName(termStationName);
-                        d = globalList.find((x) =>
-                            x.tier === 'CRITICAL'
-                            && x.stations
-                            && x.stations.map((s) => normalizeStationName(s)).includes(normTerm)
-                        ) || null;
-                    }
-                } catch { /* ignore */ }
-
-                let locationText = 'Route-Wide Advisory';
-                if (d && d.stations && d.stations.length >= 2) {
-                    locationText = `Between ${cleanStr(d.stations[0].replace(/ STATION/gi, ''))} & ${cleanStr(d.stations[1].replace(/ STATION/gi, ''))}`;
-                } else if (d && d.stations && d.stations.length === 1) {
-                    locationText = `At ${cleanStr(d.stations[0].replace(/ STATION/gi, ''))}`;
-                } else if (d && d.routeId && ROUTES[d.routeId]) {
-                    const r = ROUTES[d.routeId];
-                    locationText = `Between ${cleanStr(r.destA.replace(/ STATION/gi, ''))} & ${cleanStr(r.destB.replace(/ STATION/gi, ''))}`;
-                }
-
-                const safeBtnText = cleanStr(
-                    (d && d.buttonText)
-                    || (currentPlannerErrorPayload && currentPlannerErrorPayload.buttonText)
-                    || 'Line Severed'
-                );
-                const partialDisrId = (d && d.id) || payloadId || '';
-                const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
-                const advisoryBtn = partialDisrId
-                    ? `<button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${partialDisrId}')" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-100 dark:text-white px-2.5 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-colors focus:outline-none shadow-sm flex items-center shrink-0"><span class="truncate max-w-[110px]">${safeBtnText}</span></button>`
-                    : '';
+                ).replace(/ STATION/gi, '').replace(/</g, '&lt;').replace(/>/g, '&gt;').toUpperCase();
                 html += `
-                    <div class="relative -ml-[10px] my-4 z-20 w-[calc(100%+10px)]">
-                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 shadow-md flex flex-col w-full overflow-hidden">
-                            <div class="bg-red-50 dark:bg-red-900/20 px-3 py-2 border-b border-red-100 dark:border-red-900/50 flex justify-between items-center rounded-t-xl">
-                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
-                            </div>
-                            <div class="p-3 flex justify-between items-end w-full">
-                                <div class="flex flex-col items-start min-w-0 pr-2">
-                                    <span class="text-red-600 dark:text-red-500 font-bold uppercase tracking-wide text-[11px] leading-none mb-1 flex items-center gap-1">${plannerIcon('xCircle', 'w-3.5 h-3.5')} LINE SEVERED</span>
-                                    <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-1">
-                                        ${linkSvg} <span class="font-medium text-[10px] truncate">${locationText}</span>
-                                    </div>
-                                </div>
-                                ${advisoryBtn}
-                            </div>
+                    <div class="relative my-3 z-20 w-full">
+                        <div class="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-900/50 px-3 py-2 flex items-center justify-center w-full">
+                            <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center justify-center gap-1.5">${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}</span>
                         </div>
                     </div>
                 `;
@@ -1398,7 +1474,6 @@ export const PlannerRenderer = {
             <div class="bg-transparent overflow-visible flex flex-col">
                 ${PlannerRenderer.renderHeader(step, isNextDay)}
                 ${PlannerRenderer.renderOptionsSelector(allOptions, selectedIndex, isNextDay)}
-                ${step.type !== 'TRANSFER' && step.type !== 'DOUBLE_TRANSFER' && step.type !== 'MULTI_TRANSFER' ? PlannerRenderer.renderInstruction(step) : ''}
                 <div class="py-3 flex-grow overflow-visible">
                     <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 pl-1 border-b border-gray-100 dark:border-gray-800 pb-1">Journey Timeline</p>
                     ${PlannerRenderer.renderTimeline(step)}
@@ -1447,19 +1522,12 @@ export const PlannerRenderer = {
             }
         }
 
+        // Critical severances use the partial "Line Severed" card (or timeline TERMINATES block).
+        // Only keep the compact yellow banner for non-critical delays.
         let alertBanner = '';
-        if (activeDisr) {
-            const isCrit = activeDisr.tier === 'CRITICAL';
-            const colorClass = isCrit ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-yellow-500 text-yellow-900 hover:bg-yellow-600';
-            
-            // 🛡️ GUARDIAN UX FIX: Replaced vibe-coded emojis with premium Lucide-style SVGs
-            const criticalIcon = `<svg class="w-4 h-4 shrink-0 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+        if (activeDisr && activeDisr.tier !== 'CRITICAL') {
             const warningIcon = `<svg class="w-4 h-4 shrink-0 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-            
-            const icon = isCrit ? criticalIcon : warningIcon;
-            const text = isCrit ? 'CRITICAL SERVICE DISRUPTION' : 'MINOR SERVICE DELAYS';
-            
-            alertBanner = `<button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${activeDisr.id}')" class="w-full flex items-center justify-center ${colorClass} text-[10px] font-black uppercase tracking-wider text-center py-1.5 shadow-sm mb-3 rounded transition-colors focus:outline-none">${icon} <span class="ml-1.5">${text}</span></button>`;
+            alertBanner = `<button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${activeDisr.id}')" class="w-full flex items-center justify-center bg-yellow-500 text-yellow-900 hover:bg-yellow-600 text-[10px] font-black uppercase tracking-wider text-center py-1.5 shadow-sm mb-3 rounded transition-colors focus:outline-none">${warningIcon} <span class="ml-1.5">MINOR SERVICE DELAYS</span></button>`;
         }
 
         let transferCount = 0;
@@ -2174,7 +2242,6 @@ export function initPlanner() {
                 });
             }
 
-            if (typeof savePlannerHistory === 'function') savePlannerHistory(from, to);
             executeTripPlan(from, to);
         });
     }
@@ -2202,18 +2269,27 @@ export function initPlanner() {
     }
 }
 
-export function savePlannerHistory(from, to) {
+/** Persist every Plan Trip attempt (success or error). */
+export function savePlannerHistory(from, to, opts = {}) {
     if (!from || !to || typeof from !== 'string' || typeof to !== 'string') return;
     const cleanFrom = from.replace(/ STATION/gi, '');
     const cleanTo = to.replace(/ STATION/gi, '');
     const routeKey = `${cleanFrom}|${cleanTo}`;
     
-    const historyKey = 'plannerHistory_' + $userRegion.get();
+    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
     
-    let history = JSON.parse(safeStorage.getItem(historyKey) || "[]");
-    history = history.filter(item => `${item.from}|${item.to}` !== routeKey);
-    history.unshift({ from: cleanFrom, to: cleanTo, fullFrom: from, fullTo: to });
-    if (history.length > 4) history = history.slice(0, 4);
+    let history = [];
+    try { history = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { history = []; }
+    if (!Array.isArray(history)) history = [];
+    history = history.filter((item) => `${item.from}|${item.to}` !== routeKey);
+    history.unshift({
+        from: cleanFrom,
+        to: cleanTo,
+        fullFrom: from,
+        fullTo: to,
+        at: Date.now(),
+    });
+    if (history.length > 8) history = history.slice(0, 8);
     
     safeStorage.setItem(historyKey, JSON.stringify(history));
     renderPlannerHistory();
@@ -2259,15 +2335,16 @@ export function renderPlannerHistory() {
              <button id="planner-history-clear-btn" class="text-[10px] text-gray-400 hover:text-red-500 focus:outline-none">Clear</button>
         </div>
         <div class="flex flex-col gap-2">
-            ${validHistory.map(item => `
-                <button class="planner-history-item-btn w-full flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
+            ${validHistory.map((item) => `
+                <button class="planner-history-item-btn w-full flex items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
                     data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}">
-                    <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center">
-                        ${item.from} <svg class="w-3 h-3 mx-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg> ${item.to}
+                    <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center min-w-0">
+                        <span class="truncate">${escapeHTML(item.from)}</span>
+                        <svg class="w-3 h-3 mx-1.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        <span class="truncate">${escapeHTML(item.to)}</span>
                     </span>
-                    <svg class="w-3 h-3 text-gray-300 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                </button>
-            `).join('')}
+                    <svg class="w-3 h-3 text-gray-300 group-hover:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>`).join('')}
         </div>
     `;
 }
@@ -2461,7 +2538,6 @@ export async function applyPlannerDeepLink() {
                 let timeParam = link.time || null;
                 if (timeParam && /^\d{1,2}:\d{2}$/.test(timeParam)) timeParam = `${timeParam}:00`;
 
-                savePlannerHistory(fromId, toId);
                 executeTripPlan(fromId, toId, timeParam);
                 showToast('Loaded shared trip plan', 'success');
                 if (typeof window.trackAnalyticsEvent === 'function') {
@@ -2596,8 +2672,12 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                 }
             }
 
+            plannerOrigin = origin;
+            plannerDest = dest;
             renderSelectedTrip(resultsContainer, nextTripIndex);
             startPlannerPulse(nextTripIndex);
+            capturePlannerSnapshot({ kind: 'trips' });
+            try { savePlannerHistory(origin, dest, { status: currentPlannerStatus }); } catch { /* ignore */ }
             try {
                 const sample = currentTripOptions[nextTripIndex] || currentTripOptions[0];
                 enqueueSuccessfulTripPlan({
@@ -2629,143 +2709,159 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             });
             
             updatePlannerHeader("No Route Found", false);
+            plannerOrigin = origin;
+            plannerDest = dest;
 
             let errorTitle = "No Valid Route";
             let errorMsg = "";
             let showFeedbackBtn = false;
+            let errorTone = 'warn';
+            const cleanO = origin.replace(/ STATION/gi, '').trim();
+            const cleanD = dest.replace(/ STATION/gi, '').trim();
+            const safeO = cleanO.replace(/'/g, "\\'");
+            const safeD = cleanD.replace(/'/g, "\\'");
 
             switch (currentPlannerStatus) {
                 case 'SAME_STATION':
-                    errorTitle = "Same Station Selected";
-                    errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>You are already at your destination.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>Your Origin and Destination stations are exactly the same.</li>
-                                <li>Please select a different destination to plan a trip.</li>
-                            </ul>
-                        </div>
-                    `;
-                    showFeedbackBtn = false;
+                    errorTitle = "Same station";
+                    errorTone = 'info';
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Origin and destination are the same. Pick a different stop to plan a trip.</p>`;
                     break;
                 case 'ERR_CROSS_REGION':
-                    errorTitle = "Cross-Region Travel Not Supported";
-                    errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>You are attempting to route between two different province networks.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>Metrorail Next Train currently only supports routing within a single region.</li>
-                                <li>Please check your selected Origin and Destination stations.</li>
-                            </ul>
-                        </div>
-                    `;
+                    errorTitle = "Cross-region trip";
+                    errorTone = 'info';
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Next Train routes within one province network at a time. Choose stations in the same region.</p>`;
                     break;
                 case 'ERR_NO_SERVICE_TODAY':
-                    errorTitle = "No Service Today";
-                    errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>These stations are connected on the network, but no trains run on this corridor for the selected day.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>Try Saturday / Holiday or the next weekday.</li>
-                                <li>Check Service Alerts if a temporary suspension is affecting this line.</li>
-                            </ul>
-                        </div>
-                    `;
+                    errorTitle = "No service today";
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
                     break;
-                case 'ERR_ACTIVE_SUSPENSION':
-                    errorTitle = "Route Suspended";
-                    
-                    let suspensionAlertHtml = '';
-                    if (errorPayload && errorPayload.disruptionId) {
-                        const btnText = errorPayload.buttonText || "Line Severed";
-                        suspensionAlertHtml = `
-                            <div class="mt-4 flex justify-center w-full">
-                                <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${errorPayload.disruptionId}')" class="bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center animate-pulse focus:outline-none">
-                                    <span class="mr-1.5 inline-flex text-red-500">${plannerIcon('circle', 'w-2.5 h-2.5')}</span> <span>${escapeHTML(btnText)}</span>
-                                </button>
-                            </div>
-                        `;
+                case 'ERR_ACTIVE_SUSPENSION': {
+                    errorTitle = errorPayload?.boardingBlocked ? "Boarding blocked" : "Route suspended";
+                    errorTone = 'danger';
+                    const btnText = errorPayload?.buttonText || 'Line Severed';
+                    const disrId = errorPayload?.disruptionId || '';
+                    const stationHint = (errorPayload?.stations || [])
+                        .map((s) => String(s).replace(/ STATION/gi, ''))
+                        .filter(Boolean)
+                        .slice(0, 2);
+                    const between = stationHint.length >= 2
+                        ? ` between <b>${escapeHTML(stationHint[0])}</b> and <b>${escapeHTML(stationHint[1])}</b>`
+                        : '';
+                    const blockedOrigin = errorPayload?.blockedOrigin || cleanO;
+                    const intended = errorPayload?.intendedDest || cleanD;
+
+                    let primaryCard = '';
+                    if (disrId) {
+                        primaryCard = `
+                            <button type="button" onclick="if(typeof window.openDisruptionModal==='function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"
+                                class="w-full text-left mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800/60 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300">
+                                        ${plannerIcon('circle', 'w-2.5 h-2.5 text-red-500')} ${escapeHTML(btnText)}
+                                    </span>
+                                    <svg class="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </div>
+                                <p class="text-[11px] text-red-700/90 dark:text-red-300/90 mt-1.5 leading-snug">Tap for incident details</p>
+                            </button>`;
                     }
-                    
+
+                    let altHtml = '';
+                    const alts = errorPayload?.alternateOrigins || [];
+                    if (alts.length) {
+                        altHtml = `
+                            <div class="mt-4 space-y-2">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Board beyond the cut</p>
+                                ${alts.map((a) => {
+                                    const st = String(a.station || '').replace(/'/g, "\\'");
+                                    const destSt = String(dest).replace(/'/g, "\\'");
+                                    return `<button type="button" onclick="if(typeof window.planFromAlternateOrigin==='function') window.planFromAlternateOrigin('${st}','${destSt}')"
+                                        class="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors focus:outline-none text-left">
+                                        <span class="text-xs font-bold text-gray-800 dark:text-gray-100">Plan from <span class="text-blue-600 dark:text-blue-400">${escapeHTML(a.label || a.station)}</span> → ${escapeHTML(intended)}</span>
+                                        <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>`;
+                                }).join('')}
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">You may need other transport to reach the alternate station first.</p>
+                            </div>`;
+                    }
+
+                    const lead = errorPayload?.boardingBlocked
+                        ? `You can’t depart from <b>${escapeHTML(blockedOrigin)}</b> toward <b>${escapeHTML(intended)}</b>${between} while this segment is cut.`
+                        : `Service is halted${between}. A physical path exists, but trains can’t complete this journey right now.`;
+
                     errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>A physical connection exists, but service is currently halted due to an active incident.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>Check the <strong>Network Map</strong> to visualize active lines and severed segments.</li>
-                                <li>Refer to the Service Alerts tab for more details.</li>
-                            </ul>
-                        </div>
-                        ${suspensionAlertHtml}
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${lead}</p>
+                        ${primaryCard}
+                        ${altHtml}
                     `;
                     break;
+                }
                 case 'ERR_TIMETABLE_MISMATCH':
-                    errorTitle = "Extreme Schedule Gaps";
-                    
-                    let incidentNoteHtml = '';
-                    if (errorPayload && errorPayload.hasIncident) {
-                        const btnText = errorPayload.buttonText || "Line Severed";
-                        incidentNoteHtml = `
-                            <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-left text-[11px] text-red-800 dark:text-red-300 rounded-r shadow-sm">
-                                <b>Note:</b> There is also an active incident on this line:<br>
-                                <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${errorPayload.disruptionId}')" class="mt-2 w-full bg-white dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex justify-center items-center">
-                                    <span class="mr-1 inline-flex text-red-500">${plannerIcon('circle', 'w-2.5 h-2.5')}</span> ${escapeHTML(btnText)}
-                                </button>
-                            </div>
-                        `;
-                    }
-                    
-                    errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>A physical path exists, but the connecting trains have layovers exceeding 4 hours.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>We couldn't find a viable connection on today's schedule (Max 4-hour layover limit reached).</li>
-                                <li>If you know a better way to make this trip, please report it below.</li>
-                            </ul>
-                        </div>
-                        ${incidentNoteHtml}
-                    `;
+                    errorTitle = "Connection too long";
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">A path exists, but transfers need more than a 4-hour wait on today’s schedule. If you know a better connection, report it below.</p>`;
                     showFeedbackBtn = true;
+                    if (errorPayload?.hasIncident && errorPayload?.disruptionId) {
+                        const btnText = errorPayload.buttonText || 'Line Severed';
+                        errorMsg += `
+                            <button type="button" onclick="if(typeof window.openDisruptionModal==='function') window.openDisruptionModal('${String(errorPayload.disruptionId).replace(/'/g, "\\'")}')"
+                                class="mt-3 w-full text-left px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs font-bold text-red-700 dark:text-red-300 focus:outline-none">
+                                Active incident: ${escapeHTML(btnText)}
+                            </button>`;
+                    }
                     break;
                 case 'ERR_DISCONNECTED_GRAPH':
                 default:
-                    errorTitle = "No Physical Connection";
-                    errorMsg = `
-                        <div class="text-left space-y-2 mt-2">
-                            <p>We couldn't find a viable connection on today's schedule.</p>
-                            <ul class="list-disc pl-5 space-y-1 text-xs">
-                                <li>The stations might be on disconnected corridors or require a layover exceeding 4 hours.</li>
-                                <li>Check the <strong>Network Map</strong> to visualize active lines.</li>
-                                <li>If a connection does exist, please report it to us below.</li>
-                            </ul>
-                        </div>
-                    `;
+                    errorTitle = "No connection found";
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">We couldn’t find a viable path on the current schedules. Check the network map, or report the route if you believe it should exist.</p>`;
                     showFeedbackBtn = true;
                     break;
             }
 
             let actionBtn = `
-                <button onclick="if(navigator.onLine) { window.location.href='${withBase('/map.html')}'; } else { history.pushState({ modal: 'map' }, '', '#map'); if(typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal'); }" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors w-full flex items-center justify-center focus:outline-none">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                <button type="button" onclick="if(typeof window.openPlannerNetworkMap==='function') window.openPlannerNetworkMap()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center focus:outline-none text-sm">
+                    <svg class="w-5 h-5 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
                     Open Network Map
                 </button>
             `;
 
             if (showFeedbackBtn) {
-                const cleanO = origin.replace(/ STATION/gi, '').trim();
-                const cleanD = dest.replace(/ STATION/gi, '').trim();
                 actionBtn += `
-                    <button onclick="if(typeof window.openFeedbackForMissingRoute === 'function') window.openFeedbackForMissingRoute('${cleanO.replace(/'/g, "\\'")}', '${cleanD.replace(/'/g, "\\'")}')" class="mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full flex items-center justify-center focus:outline-none text-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+                    <button type="button" onclick="if(typeof window.openFeedbackForMissingRoute==='function') window.openFeedbackForMissingRoute('${safeO}', '${safeD}')" class="mt-2 w-full bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2.5 px-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center focus:outline-none text-sm">
                         Report Missing Route
                     </button>
                 `;
             }
 
             if (resultsContainer) {
-                resultsContainer.innerHTML = renderErrorCard(errorTitle, errorMsg, actionBtn);
+                resultsContainer.innerHTML = renderErrorCard(errorTitle, errorMsg, actionBtn, errorTone);
             }
+            capturePlannerSnapshot({ kind: 'error' });
+            try { savePlannerHistory(origin, dest, { status: currentPlannerStatus }); } catch { /* ignore */ }
         }
     }, 100); 
+}
+
+/** Re-plan using an alternate origin beyond a line cut. */
+export function planFromAlternateOrigin(newOrigin, dest) {
+    if (!newOrigin || !dest) return;
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const fromSelect = document.getElementById('planner-from');
+    const toSelect = document.getElementById('planner-to');
+    const fromInput = document.getElementById('planner-from-search');
+    const toInput = document.getElementById('planner-to-search');
+    const fullFrom = String(newOrigin);
+    const fullTo = String(dest);
+    if (fromSelect) fromSelect.value = fullFrom;
+    if (toSelect) toSelect.value = fullTo;
+    if (fromInput) {
+        fromInput.value = fullFrom.replace(/ STATION/gi, '');
+        fromInput.dataset.resolvedValue = fullFrom;
+    }
+    if (toInput) {
+        toInput.value = fullTo.replace(/ STATION/gi, '');
+        toInput.dataset.resolvedValue = fullTo;
+    }
+    executeTripPlan(fullFrom, fullTo);
 }
 
 export function renderSelectedTrip(container, index) {
@@ -2820,6 +2916,9 @@ if (typeof window !== 'undefined') {
     window.openDisruptionModal = openDisruptionModal;
     window.extractTripCoordinates = extractTripCoordinates;
     window.hidePlannerResults = hidePlannerResults;
+    window.openPlannerNetworkMap = openPlannerNetworkMap;
+    window.restorePlannerResultsView = restorePlannerResultsView;
+    window.planFromAlternateOrigin = planFromAlternateOrigin;
     window._toggleCustomTimeDropdown = toggleCustomTimeDropdown;
     window._selectCustomTrip = selectCustomTrip;
     window._toggleMainDayDropdown = toggleMainDayDropdown;
@@ -2937,6 +3036,7 @@ export function executeManualRollover(origin, dest) {
 
 export function openFeedbackForMissingRoute(origin, dest) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    clearFeedbackReplyMode();
     
     if (typeof openSmoothModal === 'function') {
         openSmoothModal('feedback-modal');
@@ -2983,7 +3083,7 @@ export function restorePlannerSearch(fullFrom, fullTo) {
             trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo });
         }
 
-        savePlannerHistory(fullFrom, fullTo);
+        // History is recorded when executeTripPlan finishes (with status)
         executeTripPlan(fullFrom, fullTo);
     }
 }
@@ -3098,6 +3198,12 @@ export function swapPlannerResults() {
 }
 
 export function getPlanningDayLabel() {
+    const holiday = getPlannerHolidayContext();
+    if (holiday) {
+        if (holiday.scheduleType === 'sunday') return `${holiday.name} · No Service`;
+        if (holiday.scheduleType === 'saturday') return `${holiday.name} · Saturday Schedule`;
+        return `${holiday.name} Schedule`;
+    }
     const day = selectedPlannerDay || getCurrentDayType();
     if (day === 'sunday') return "Sunday";
     if (day === 'saturday') return "Saturday / Public Holiday Schedule";
@@ -3117,7 +3223,11 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         badge.className = "relative bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm flex items-center transition-colors w-full max-w-[150px] cursor-pointer group h-[38px]"; 
         
         let selDay = selectedPlannerDay || getCurrentDayType();
+        const holiday = getPlannerHolidayContext();
         let selText = selDay === 'weekday' ? 'Mon - Fri' : (selDay === 'saturday' ? 'Saturday / Hol' : 'Sunday');
+        if (holiday) {
+            selText = holiday.scheduleType === 'sunday' ? 'Holiday · None' : 'Holiday · Sat';
+        }
 
         badge.innerHTML = `
             <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-3 relative">
@@ -3230,26 +3340,41 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
         if (isPartial && currentPlannerErrorPayload) {
             const intended = currentPlannerErrorPayload.intendedDest || "Destination";
             const partial = currentPlannerErrorPayload.partialDest || selectedTrip.to;
-            // 🛡️ GUARDIAN UX FIX: Replaced vibe-coded emoji with premium SVG and stripped right-margin
-            const alertSvg = `<svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+            const disrId = currentPlannerErrorPayload.disruptionId || '';
+            const alertSvg = `<svg class="w-5 h-5 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+            const chevronSvg = `<svg class="w-4 h-4 text-red-400 dark:text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
+            const openAttrs = disrId
+                ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+                : `type="button"`;
+            const safeIntended = escapeHTML(String(intended).replace(/ STATION/gi, ''));
+            const safePartial = escapeHTML(String(partial).replace(/ STATION/gi, ''));
             partialWarningHtml = `
-                <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-3 mb-4 rounded-r shadow-sm animate-fade-in-up">
-                    <div class="flex justify-between items-start w-full">
-                        <div class="flex-1 min-w-0 pr-3">
-                            <h4 class="text-xs font-black text-red-800 dark:text-red-400 uppercase tracking-widest mb-0.5">Line Severed</h4>
-                            <p class="text-xs text-red-700 dark:text-red-300 leading-snug">
-                                Cannot reach <b>${intended}</b>.<br>Showing trains terminating at <b>${partial}</b>.
-                            </p>
-                        </div>
-                        <div class="shrink-0 scale-125 origin-top-right">
-                            ${alertSvg}
+                <button ${openAttrs} class="group w-full text-left mb-4 rounded-xl overflow-hidden border border-red-200/90 dark:border-red-900/60 bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/50 dark:via-gray-900 dark:to-gray-900 shadow-sm animate-fade-in-up hover:border-red-300 dark:hover:border-red-800 hover:shadow-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                    <div class="flex items-stretch">
+                        <div class="w-1.5 bg-red-500 shrink-0" aria-hidden="true"></div>
+                        <div class="flex-1 min-w-0 p-3.5 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 border border-red-200/80 dark:border-red-800/60 flex items-center justify-center shrink-0 shadow-sm">
+                                ${alertSvg}
+                            </div>
+                            <div class="flex-1 min-w-0 pt-0.5">
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <h4 class="text-[11px] font-black text-red-700 dark:text-red-300 uppercase tracking-[0.14em]">Line Severed</h4>
+                                    ${disrId ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-500/80 dark:text-red-400/80 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors">Details ${chevronSvg}</span>` : ''}
+                                </div>
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">
+                                    Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>.
+                                </p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">
+                                    Showing trains terminating at <span class="font-bold text-gray-800 dark:text-gray-200">${safePartial}</span>.
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </button>
             `;
         }
 
-    container.innerHTML = partialWarningHtml + PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)
+    container.innerHTML = buildHolidayNoticeHtml() + partialWarningHtml + PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)
         + '<div id="planner-crowd-delay-slot"></div>';
     injectPlannerCrowdDelay(selectedTrip);
 }
@@ -3265,6 +3390,7 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
     const dest = (selectedTrip.to || "").replace(/ STATION/gi, '').trim();
 
     container.innerHTML = `
+        ${buildHolidayNoticeHtml()}
         <div class="bg-transparent border-b-4 border-gray-200 dark:border-gray-800 pb-6 mb-6 text-left animate-fade-in-up">
             <div class="flex justify-between items-start w-full mb-3">
                 <div class="flex-1 min-w-0 pr-3">
@@ -3301,6 +3427,7 @@ export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, ti
     }
 
     container.innerHTML = `
+        ${buildHolidayNoticeHtml()}
         <div class="bg-transparent border-b-4 border-orange-200 dark:border-orange-800/50 pb-6 mb-6 text-left">
             <div class="flex justify-between items-start w-full mb-3">
                 <div class="flex-1 min-w-0 pr-3">
@@ -3324,19 +3451,24 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
 
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
-    
-    // GUARDIAN Phase 5: Typography Line Breaks Injected
-    let explanationText = `Metrorail does not operate on Sundays.<br>`;
+
+    const holiday = getPlannerHolidayContext();
+    let explanationText = holiday && holiday.scheduleType === 'sunday'
+        ? `Metrorail has no service on <b>${escapeHTML(holiday.name)}</b>.<br>`
+        : `Metrorail does not operate on Sundays.<br>`;
     if (selectedTrip.dayOffset > 1) {
         explanationText += `No valid connections were found for tomorrow.<br>`;
     }
     explanationText += `Showing the next available option for <b>${selectedTrip.dayLabel || 'Tomorrow'}</b>.`;
+    const rolloverTitle = holiday && holiday.scheduleType === 'sunday'
+        ? `No Service · ${holiday.name}`
+        : 'No Sunday Service';
 
     container.innerHTML = `
         <div class="bg-transparent border-b-4 border-indigo-200 dark:border-indigo-800/50 pb-6 mb-6 text-left">
             <div class="flex justify-between items-start w-full mb-3">
                 <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-lg">No Sunday Service</h3>
+                    <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-lg">${escapeHTML(rolloverTitle)}</h3>
                     <p class="text-xs text-indigo-700 dark:text-indigo-400 mt-1 leading-snug">${explanationText}</p>
                 </div>
                 <div class="shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-800/50 rounded-full flex items-center justify-center mt-0.5 text-indigo-600 dark:text-indigo-300">
@@ -3365,6 +3497,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     explanationText += `Showing the next available option for <b>${selectedTrip.dayLabel || 'Tomorrow'}</b>.`;
 
     container.innerHTML = `
+        ${buildHolidayNoticeHtml()}
         <div class="bg-transparent border-b-4 border-gray-200 dark:border-gray-800 pb-6 mb-6 text-left">
             <div class="flex justify-between items-start w-full mb-3">
                 <div class="flex-1 min-w-0 pr-3">
@@ -3382,22 +3515,39 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     injectPlannerCrowdDelay(selectedTrip);
 }
 
-export function renderErrorCard(title, message, actionHtml = "") {
-    const errorAlertSvg = `<svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+export function renderErrorCard(title, message, actionHtml = "", tone = 'warn') {
+    const tones = {
+        danger: {
+            bar: 'border-red-500',
+            title: 'text-red-800 dark:text-red-400',
+            icon: 'text-red-500',
+            wash: 'bg-gradient-to-b from-red-50/80 to-transparent dark:from-red-950/40 dark:to-transparent',
+        },
+        warn: {
+            bar: 'border-amber-500',
+            title: 'text-amber-900 dark:text-amber-400',
+            icon: 'text-amber-500',
+            wash: 'bg-gradient-to-b from-amber-50/70 to-transparent dark:from-amber-950/30 dark:to-transparent',
+        },
+        info: {
+            bar: 'border-blue-500',
+            title: 'text-blue-900 dark:text-blue-400',
+            icon: 'text-blue-500',
+            wash: 'bg-gradient-to-b from-blue-50/70 to-transparent dark:from-blue-950/30 dark:to-transparent',
+        },
+    };
+    const t = tones[tone] || tones.warn;
+    const iconSvg = `<svg class="w-6 h-6 ${t.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
     return `
-        <div class="bg-transparent border-b-4 border-yellow-200 dark:border-yellow-800/50 pb-6 mb-4 text-left">
-            <div class="flex justify-between items-start w-full mb-3">
-                <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-black text-yellow-800 dark:text-yellow-400 text-xl">${title}</h3>
-                </div>
-                <div class="shrink-0">
-                    ${errorAlertSvg}
-                </div>
+        <div class="rounded-2xl border-l-4 ${t.bar} ${t.wash} p-4 mb-3 text-left">
+            <div class="flex items-start justify-between gap-3 mb-2">
+                <h3 class="font-black tracking-tight text-lg leading-tight ${t.title}">${title}</h3>
+                <div class="shrink-0 mt-0.5">${iconSvg}</div>
             </div>
-            <div class="text-sm text-gray-700 dark:text-gray-300 pt-2">
+            <div class="pt-1">
                 ${message}
             </div>
-            <div class="mt-5">
+            <div class="mt-4 space-y-0">
                 ${actionHtml}
             </div>
         </div>

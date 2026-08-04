@@ -23,6 +23,80 @@ import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak } from './trust.js';
 
+/** Plain text from HTML notices — insert spaces between block tags so title+body don't glue. */
+function htmlToPlainSnippet(html, maxWords = 8) {
+    if (!html) return '';
+    const spaced = String(html)
+        .replace(/<\s*br\s*\/?>/gi, ' ')
+        .replace(/<\/\s*(h[1-6]|p|div|li|tr|section|article)\s*>/gi, ' ')
+        .replace(/<\s*(h[1-6]|p|div|li|tr|section|article)(\s[^>]*)?>/gi, ' ');
+    let text = '';
+    try {
+        const doc = new DOMParser().parseFromString(spaced, 'text/html');
+        text = doc.body?.textContent || doc.body?.innerText || '';
+    } catch {
+        text = spaced.replace(/<[^>]+>/g, ' ');
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    const words = text.split(/\s+/).filter(Boolean);
+    return words.slice(0, maxWords).join(' ') + (words.length > maxWords ? '...' : '');
+}
+
+function feedbackReplySvg() {
+    return '<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+}
+
+/** Reset reply chrome so a fresh Feedback open is a normal form. */
+export function clearFeedbackReplyMode() {
+    const contextBox = document.getElementById('feedback-reply-context');
+    if (contextBox) {
+        contextBox.classList.add('hidden');
+        contextBox.innerHTML = '';
+        delete contextBox.dataset.rawMsg;
+        delete contextBox.dataset.alertId;
+    }
+    const typeWrap = document.getElementById('feedback-type-wrap');
+    if (typeWrap) typeWrap.classList.remove('hidden');
+    const fType = document.getElementById('feedback-type');
+    if (fType) {
+        fType.querySelector('option[value="thread_reply"]')?.remove();
+        if (fType.value === 'thread_reply') fType.value = 'general';
+    }
+}
+
+/** Show reply context chip and lock type to Thread Reply. */
+export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '' } = {}) {
+    const fText = document.getElementById('feedback-text');
+    const fType = document.getElementById('feedback-type');
+    const typeWrap = document.getElementById('feedback-type-wrap');
+    if (typeWrap) typeWrap.classList.add('hidden');
+
+    let contextBox = document.getElementById('feedback-reply-context');
+    if (!contextBox && fText?.parentNode) {
+        contextBox = document.createElement('div');
+        contextBox.id = 'feedback-reply-context';
+        fText.parentNode.insertBefore(contextBox, fText);
+    }
+    if (contextBox) {
+        contextBox.className = 'mb-1 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start shadow-inner';
+        contextBox.innerHTML = `${feedbackReplySvg()}<div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">${escapeHTML(label)}</span><span class="line-clamp-2">"${escapeHTML(snippet)}"</span></div>`;
+        contextBox.dataset.rawMsg = rawMsg || snippet;
+        if (alertId) contextBox.dataset.alertId = alertId;
+        else delete contextBox.dataset.alertId;
+        contextBox.classList.remove('hidden');
+    }
+    if (fText) fText.value = '';
+    if (fType) {
+        if (!fType.querySelector('option[value="thread_reply"]')) {
+            const replyOpt = document.createElement('option');
+            replyOpt.value = 'thread_reply';
+            replyOpt.textContent = 'Thread Reply';
+            fType.appendChild(replyOpt);
+        }
+        fType.value = 'thread_reply';
+    }
+}
+
 export function closeAppHub(skipHistory = false) {
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
@@ -267,6 +341,7 @@ async function submitFeedback() {
 
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
+        clearFeedbackReplyMode();
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -536,44 +611,13 @@ export async function checkServiceAlerts() {
 
                         replyToAdminBtn.onclick = () => {
                             triggerHaptic();
-
-                            const fText = document.getElementById('feedback-text');
-                            const fType = document.getElementById('feedback-type');
-
-                            if (fText) {
-                                let contextBox = document.getElementById('feedback-reply-context');
-                                if (!contextBox) {
-                                    contextBox = document.createElement('div');
-                                    contextBox.id = 'feedback-reply-context';
-                                    fText.parentNode?.insertBefore(contextBox, fText);
-                                }
-                                contextBox.className = 'mb-0 mx-5 mt-4 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start shadow-inner';
-
-                                let cleanAdminMsg = '';
-                                if (adminReply.message) {
-                                    const tempDoc = new DOMParser().parseFromString(adminReply.message, 'text/html');
-                                    cleanAdminMsg = tempDoc.body.textContent || tempDoc.body.innerText || '';
-                                }
-                                cleanAdminMsg = cleanAdminMsg.replace(/—.*/, '').trim();
-                                const words = cleanAdminMsg.split(/\s+/).filter((w) => w.length > 0);
-                                const truncatedAdminMsg = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
-
-                                contextBox.innerHTML = `<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Admin:</span><span class="line-clamp-2">"${escapeHTML(truncatedAdminMsg)}"</span></div>`;
-                                contextBox.dataset.rawMsg = `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`;
-                                contextBox.classList.remove('hidden');
-                                fText.value = '';
-                            }
-
-                            if (fType) {
-                                if (!fType.querySelector('option[value="thread_reply"]')) {
-                                    const replyOpt = document.createElement('option');
-                                    replyOpt.value = 'thread_reply';
-                                    replyOpt.textContent = 'Thread Reply';
-                                    fType.appendChild(replyOpt);
-                                }
-                                fType.value = 'thread_reply';
-                            }
-
+                            let truncatedAdminMsg = htmlToPlainSnippet(adminReply.message || '', 8);
+                            truncatedAdminMsg = truncatedAdminMsg.replace(/—.*/, '').trim();
+                            enterFeedbackReplyMode({
+                                label: 'Replying to Admin:',
+                                snippet: truncatedAdminMsg,
+                                rawMsg: `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`,
+                            });
                             if (location.hash === '#devreply') history.back();
                             else closeSmoothModal('developer-reply-modal');
                             setTimeout(() => {
@@ -793,44 +837,15 @@ export async function checkServiceAlerts() {
             newReplyBtn.innerHTML = `${replySvg} Reply`;
             newReplyBtn.onclick = () => {
                 triggerHaptic();
-                let cleanMsgText = '';
-                if (activeNotice?.message || activeNotice?.text) {
-                    const tempDoc = new DOMParser().parseFromString(
-                        repairMojibake(activeNotice.message || activeNotice.text || ''),
-                        'text/html'
-                    );
-                    cleanMsgText = tempDoc.body.textContent || tempDoc.body.innerText || '';
-                    cleanMsgText = cleanMsgText.replace(/[—–].*/, '').trim();
-                }
-                const words = cleanMsgText.split(/\s+/).filter((w) => w.length > 0);
-                let truncatedMsg = words.slice(0, 6).join(' ');
-                if (words.length > 6) truncatedMsg += '...';
-
-                const fText = document.getElementById('feedback-text');
-                const fType = document.getElementById('feedback-type');
-                if (fText) {
-                    let contextBox = document.getElementById('feedback-reply-context');
-                    if (!contextBox) {
-                        contextBox = document.createElement('div');
-                        contextBox.id = 'feedback-reply-context';
-                        contextBox.className = 'mb-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start hidden shadow-inner';
-                        fText.parentNode.insertBefore(contextBox, fText);
-                    }
-                    contextBox.innerHTML = `<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">Replying to Advisory:</span><span class="line-clamp-2">"${escapeHTML(truncatedMsg)}"</span></div>`;
-                    contextBox.dataset.rawMsg = truncatedMsg;
-                    contextBox.dataset.alertId = activeNotice.id || '';
-                    contextBox.classList.remove('hidden');
-                    fText.value = '';
-                }
-                if (fType) {
-                    if (!fType.querySelector('option[value="thread_reply"]')) {
-                        const replyOpt = document.createElement('option');
-                        replyOpt.value = 'thread_reply';
-                        replyOpt.textContent = 'Thread Reply';
-                        fType.appendChild(replyOpt);
-                    }
-                    fType.value = 'thread_reply';
-                }
+                const rawHtml = repairMojibake(activeNotice?.message || activeNotice?.text || '');
+                let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
+                truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
+                enterFeedbackReplyMode({
+                    label: 'Replying to Advisory:',
+                    snippet: truncatedMsg,
+                    rawMsg: truncatedMsg,
+                    alertId: activeNotice?.id || '',
+                });
                 closeNotice();
                 setTimeout(() => {
                     trackAlertEvent('open_feedback_modal', { location: 'alert_reply' });
@@ -980,6 +995,10 @@ export function initHub() {
 
     // Cloaked shadow-ban UX (looks like bad connectivity — never disclose ban)
     applyShadowBanCloak().catch(() => {});
+    // Re-check periodically so bans applied mid-session still take effect
+    setInterval(() => {
+        applyShadowBanCloak().catch(() => {});
+    }, 90_000);
 
     // Delay reports (Phase 5)
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
@@ -1053,7 +1072,9 @@ export function initHub() {
     // Feedback (live board CTA + Settings Support row)
     const openFeedback = (e) => {
         e?.preventDefault?.();
+        e?.stopPropagation?.();
         triggerHaptic();
+        clearFeedbackReplyMode();
         closeAppHub(true);
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
     };
@@ -1061,6 +1082,10 @@ export function initHub() {
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
     document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
+    // Clear reply mode when modal is cancelled/closed via footer/X
+    document.querySelectorAll('#feedback-modal [onclick*="feedback-modal"]').forEach((btn) => {
+        btn.addEventListener('click', () => setTimeout(clearFeedbackReplyMode, 0));
+    });
     document.getElementById('feedback-privacy-link')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();

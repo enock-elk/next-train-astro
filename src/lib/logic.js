@@ -54,6 +54,7 @@ export function syncRegionDisplayDom(region) {
     if (modalDisp) modalDisp.textContent = name;
     if (sideSel) sideSel.value = code;
     if (modalSel) modalSel.value = code;
+    applyMapImageForRegion(code);
 }
 
 function getRoutesForCurrentRegion() {
@@ -69,10 +70,48 @@ function applyMapImageForRegion(region) {
     if (typeof document === 'undefined') return;
     const mapImageEl = document.getElementById('map-image');
     if (!mapImageEl) return;
-    if (region === 'WC') mapImageEl.src = withBase('/images/network-map_wc.png');
-    else if (region === 'KZN') mapImageEl.src = withBase('/images/network-map_kzn.png');
-    else if (region === 'EC') mapImageEl.src = withBase('/images/network-map_ec.png');
-    else mapImageEl.src = withBase('/images/network-map.png');
+    let url = withBase('/images/network-map.png');
+    if (region === 'WC') url = withBase('/images/network-map_wc.png');
+    else if (region === 'KZN') url = withBase('/images/network-map_kzn.png');
+    else if (region === 'EC') url = withBase('/images/network-map_ec.png');
+    mapImageEl.dataset.mapSrc = url;
+    // Only swap the real src if the map was already loaded (modal opened before).
+    const current = mapImageEl.getAttribute('src') || '';
+    if (current && !window._isLightboxMode) {
+        mapImageEl.src = url;
+    }
+}
+
+/** Load regional network map only when the map modal opens (lazy). */
+export function ensureMapImageLoaded() {
+    if (typeof document === 'undefined') return;
+    const mapImageEl = document.getElementById('map-image');
+    if (!mapImageEl || window._isLightboxMode) return;
+    const wanted = mapImageEl.dataset.mapSrc || withBase('/images/network-map.png');
+    const current = mapImageEl.getAttribute('src') || '';
+    if (!current || current !== wanted) {
+        mapImageEl.style.display = '';
+        mapImageEl.src = wanted;
+    }
+}
+
+function showRegionSwapLoader() {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('loading-overlay');
+    if (!overlay) return;
+    const label = overlay.querySelector('p');
+    if (label) label.textContent = 'Loading schedules…';
+    overlay.style.display = '';
+    overlay.classList.remove('hidden');
+}
+
+function hideRegionSwapLoader() {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('loading-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    const label = overlay.querySelector('p');
+    if (label) label.textContent = 'Starting Next Train…';
 }
 
 // 🛡️ GUARDIAN PHASE 5: SILENT IP GEOLOCATION HOOK (Client-Side Only)
@@ -545,12 +584,14 @@ export async function loadAllSchedules(force = false) {
     if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
 
     // Cloaked shadow-ban: pretend the network is dying (never mention a ban)
+    if (typeof window !== 'undefined' && !window.__ntShadowBanCloak && typeof window.trustApplyShadowBanCloak === 'function') {
+        try { await window.trustApplyShadowBanCloak(); } catch { /* ignore */ }
+    }
     if (typeof window !== 'undefined' && window.__ntShadowBanCloak) {
         await new Promise((r) => setTimeout(r, 2200 + Math.random() * 2800));
         try { $isOffline.set(true); } catch { /* ignore */ }
-        if (Math.random() < 0.75) {
-            throw new Error('Network request failed');
-        }
+        // Always fail schedule refresh while cloaked (cached board may still show)
+        throw new Error('Network request failed');
     }
 
     let usedCache = false; 
@@ -835,8 +876,10 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     $currentRouteId.set(null);
 
     if (typeof document !== 'undefined') {
+        // Keep shell visible; show Loading schedules… instead of a blank board
+        showRegionSwapLoader();
         const mainContent = document.getElementById('main-content');
-        if (mainContent) mainContent.style.display = 'none';
+        if (mainContent) mainContent.style.display = '';
 
         const stationSelect = document.getElementById('station-select');
         if (stationSelect) {
@@ -879,6 +922,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     // Welcome-screen swaps must not auto-assign / download (race with route pick)
     if (isFromWelcomeScreen) {
         console.log("🛡️ Guardian: Region swapped from Welcome Screen. Skipping auto-assign to prevent race condition.");
+        hideRegionSwapLoader();
         return;
     }
 
@@ -928,6 +972,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         }
 
         loadAllSchedules(true).then(() => {
+            hideRegionSwapLoader();
             if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
                 window.checkServiceAlerts();
             }
@@ -943,6 +988,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';
         }).catch(() => {
+            hideRegionSwapLoader();
             // Still unlock the board with correct region headers if download fails.
             if (typeof window !== 'undefined' && typeof window.findNextTrains === 'function') {
                 window.findNextTrains();
@@ -951,6 +997,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             if (mainContent) mainContent.style.display = '';
         });
     } else if (typeof window !== 'undefined' && typeof window.showWelcomeScreen === 'function') {
+        hideRegionSwapLoader();
         window.showWelcomeScreen();
     }
 }
@@ -1181,6 +1228,7 @@ if (typeof window !== 'undefined') {
     window.executeRegionSwap = executeRegionSwap;
     window.handleRegionChange = handleRegionChange;
     window.syncRegionDisplayDom = syncRegionDisplayDom;
+    window.ensureMapImageLoaded = ensureMapImageLoaded;
     window.checkKillswitch = checkKillswitch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     Object.defineProperty(window, 'isLieFi', {

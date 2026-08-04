@@ -137,6 +137,10 @@ export function openSmoothModal(modalId, customOrigin = null) {
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
+    if (modalId === 'map-modal' && typeof window.ensureMapImageLoaded === 'function') {
+        try { window.ensureMapImageLoaded(); } catch { /* ignore */ }
+    }
+
     const modal = document.getElementById(modalId);
     const wasHidden = !modal || modal.classList.contains('hidden');
 
@@ -286,9 +290,20 @@ export function bindHistoryBackNavigation() {
         const resultsSection = document.getElementById('planner-results-section');
         if (resultsSection && !resultsSection.classList.contains('hidden')) {
             const hashNow = location.hash || '';
-            // Closing notice/disruption/etc. restores #planner-results via history.back().
-            // That must NOT wipe the trip — only leave results when navigating away.
-            if (hashNow === '#planner-results') {
+            // Closing map/disruption/etc. restores #planner-results via history.back().
+            // Modal hashes sit on top of results — never wipe the trip while they are open
+            // or when we land back on #planner-results.
+            const keepPlannerResults = hashNow === '#planner-results'
+                || hashNow === '#map'
+                || hashNow === '#trip-map'
+                || hashNow === '#lightbox'
+                || hashNow === '#feedback'
+                || hashNow === '#notice'
+                || hashNow.startsWith('#disruption');
+            if (keepPlannerResults) {
+                if (hashNow === '#planner-results' && typeof window.restorePlannerResultsView === 'function') {
+                    try { window.restorePlannerResultsView(); } catch { /* ignore */ }
+                }
                 return;
             }
             if (typeof window.hidePlannerResults === 'function') window.hidePlannerResults();
@@ -303,6 +318,9 @@ export function bindHistoryBackNavigation() {
             }
         } else if (hash === '#planner' || hash === '#planner-results') {
             if (safeStorage.getItem('activeTab') !== 'trip-planner') switchTab('trip-planner');
+            if (hash === '#planner-results' && typeof window.restorePlannerResultsView === 'function') {
+                try { window.restorePlannerResultsView(); } catch { /* ignore */ }
+            }
         } else if (hash === '#community') {
             if (safeStorage.getItem('activeTab') !== 'community') switchTab('community');
         }

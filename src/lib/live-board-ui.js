@@ -253,8 +253,13 @@ export function updateFareDisplay(sheetKey) {
                 fareType.textContent = fareData.discountLabel || 'Discounted';
                 fareType.className = 'text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else if (fareData.isOffPeak) {
-                fareType.textContent = 'Off-Peak · 40% Off';
-                fareType.className = 'text-[10px] font-bold text-green-600 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
+                const end = Number(FARE_CONFIG.offPeakEnd);
+                const endH = Math.floor(end);
+                const endM = Math.round((end - endH) * 60);
+                const until = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+                fareType.textContent = `Off-Peak · 40% Off until ${until}`;
+                // Darker green ink on a soft wash + border — keeps the green cue without low-contrast text
+                fareType.className = 'text-[10px] font-bold text-emerald-900 dark:text-emerald-100 bg-emerald-50 dark:bg-emerald-950/55 border border-emerald-300/80 dark:border-emerald-700/70 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';
             } else {
                 fareType.textContent = 'Standard Fare';
                 fareType.className = 'text-[10px] font-bold text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate inline-block';

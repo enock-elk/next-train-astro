@@ -3608,10 +3608,7 @@ const Admin = {
                 const commuterTitle = did !== 'Anonymous / Legacy'
                     ? `<div class="min-w-0 w-full space-y-1">
                         ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
-                        <div class="flex items-start gap-2 min-w-0">
-                            <code class="flex-1 min-w-0 font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 select-all" title="Next Train user ID">${displayDid.replace(/</g, '&lt;')}</code>
-                            <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 focus:outline-none" title="Copy full user ID">Copy</button>
-                        </div>
+                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="block w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
@@ -3700,7 +3697,7 @@ const Admin = {
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0">
                                 ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="flex items-center gap-1 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Shadow-ban this Next Train ID (app looks broken to them)">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
-                                <button onclick="Admin.exportThreadForAI('${did}')" class="flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-500 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                                <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
                             </div>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
@@ -4714,11 +4711,22 @@ const Admin = {
                 : (choice.ms > 0 ? Date.now() + choice.ms : 0);
             const now = Date.now();
             const putFlag = async (basePath) => {
-                await fetch(`${dynamicEndpoint}${basePath}/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(true) });
-                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(until) });
-                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(now) });
+                const paths = [
+                    [`${basePath}/shadowBanned.json`, true],
+                    [`${basePath}/shadowBannedUntil.json`, until],
+                    [`${basePath}/shadowBannedAt.json`, now],
+                ];
                 if (Admin.currentUser?.uid) {
-                    await fetch(`${dynamicEndpoint}${basePath}/shadowBannedBy.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(Admin.currentUser.uid) });
+                    paths.push([`${basePath}/shadowBannedBy.json`, Admin.currentUser.uid]);
+                }
+                for (const [path, body] of paths) {
+                    const res = await fetch(`${dynamicEndpoint}${path}?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(body)
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Ban write failed (${res.status}) at ${path}`);
+                    }
                 }
             };
             // Always write users/{uid}/flags (works for Firebase uid OR device-id stub keys)
@@ -4726,7 +4734,11 @@ const Admin = {
             // Also stamp device path so guest devices are blocked even before account link
             if (deviceId) {
                 await putFlag(`devices/${encodeURIComponent(deviceId)}/flags`);
-                await fetch(`${dynamicEndpoint}devices/${encodeURIComponent(deviceId)}/bannedAt.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(now) });
+                const banAtRes = await fetch(`${dynamicEndpoint}devices/${encodeURIComponent(deviceId)}/bannedAt.json?auth=${secret}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(now)
+                });
+                if (!banAtRes.ok) throw new Error(`Ban write failed (${banAtRes.status}) at devices/.../bannedAt`);
             }
             if (typeof window.trustAddToBlockList === 'function') {
                 window.trustAddToBlockList(uid);
@@ -4738,7 +4750,8 @@ const Admin = {
             if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) — cloaked as bad network`, 'success');
             return true;
         } catch (e) {
-            if (typeof showToast === 'function') showToast('Shadow ban failed', 'error');
+            console.error('Shadow ban failed', e);
+            if (typeof showToast === 'function') showToast(e?.message || 'Shadow ban failed', 'error');
             return false;
         }
     },
@@ -4752,8 +4765,16 @@ const Admin = {
             const secret = await Admin.getAuthKey();
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             const clearFlag = async (basePath) => {
-                await fetch(`${dynamicEndpoint}${basePath}/shadowBanned.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(false) });
-                await fetch(`${dynamicEndpoint}${basePath}/shadowBannedUntil.json?auth=${secret}`, { method: 'PUT', body: JSON.stringify(0) });
+                for (const [path, body] of [
+                    [`${basePath}/shadowBanned.json`, false],
+                    [`${basePath}/shadowBannedUntil.json`, 0],
+                ]) {
+                    const res = await fetch(`${dynamicEndpoint}${path}?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(body)
+                    });
+                    if (!res.ok) throw new Error(`Lift ban failed (${res.status})`);
+                }
             };
             await clearFlag(`users/${encodeURIComponent(uid)}/flags`);
             if (deviceId) await clearFlag(`devices/${encodeURIComponent(deviceId)}/flags`);

@@ -113,9 +113,10 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
             localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
           }
         } catch (e) {}
-        // Strip cache-bust ?v= after load so shared secondary-page links stay clean
+        // Strip numeric cache-bust ?v=123… only — keep share flags like ?v=g
         var params = new URLSearchParams(window.location.search);
-        if (params.has('v')) {
+        var vParam = params.get('v');
+        if (vParam && /^\d{8,}$/.test(vParam)) {
           params.delete('v');
           var clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
           window.history.replaceState({}, '', clean);
@@ -131,8 +132,15 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       gtag('js', new Date());
       var gaConfig = {};
       var isDevAnalytics = false;
-      try { isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true'; } catch(e) {}
+      var userRegion = 'GP';
+      try {
+        isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true';
+        var saved = localStorage.getItem('userRegion');
+        if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') userRegion = saved;
+      } catch(e) {}
       if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
+      // Selected app region (not IP) — keeps SEO pages in the same regional buckets
+      gaConfig['user_properties'] = { crm_region: userRegion };
       gtag('config', 'G-JM5DH6ERVX', gaConfig);
     </script>
 

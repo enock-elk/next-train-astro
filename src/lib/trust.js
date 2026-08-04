@@ -8,7 +8,7 @@
  *   users/{uid}/trustScore
  *   delay_reports/{id}/{ verified, verifiedBy, verifiedAt }
  */
-import { DYNAMIC_BASE_URL } from './config.js';
+import { DYNAMIC_BASE_URL, withBase } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
 import { $isOffline, $deviceId } from '../store.js';
@@ -320,12 +320,30 @@ export const SHADOW_BAN_DURATIONS = [
  * - offline: current lie-fi / offline flicker
  * - freeze: UI captures input and feels frozen
  * - fouc: strip stylesheets → browser-default “true FOUC”
+ * - lost: persistent 404 / End of the Line (Return Home bounces back)
  */
 export const SHADOW_BAN_MODES = [
     { id: 'offline', label: 'Fake offline / lie-fi', hint: 'Offline banner + flaky connection feel' },
     { id: 'freeze', label: 'Freeze / unresponsive', hint: 'App looks loaded but ignores all input' },
     { id: 'fouc', label: 'True FOUC (unstyled)', hint: 'CSS disabled — raw HTML like a failed stylesheet load' },
+    { id: 'lost', label: '404 / End of the Line', hint: 'Served the station-not-found page; Home always returns there' },
 ];
+
+const BAN_LOST_KEY = 'nt_shadow_ban_lost';
+
+function clearLostBanFlag() {
+    try {
+        sessionStorage.removeItem(BAN_LOST_KEY);
+        localStorage.removeItem(BAN_LOST_KEY);
+    } catch { /* ignore */ }
+}
+
+function setLostBanFlag() {
+    try {
+        sessionStorage.setItem(BAN_LOST_KEY, '1');
+        localStorage.setItem(BAN_LOST_KEY, '1');
+    } catch { /* ignore */ }
+}
 
 const VALID_BAN_MODES = new Set(SHADOW_BAN_MODES.map((m) => m.id));
 let _globalBanModeCache = null;
@@ -518,6 +536,18 @@ function applyBanModeFouc() {
     }
 }
 
+/** Persistent 404 — Return Home reloads the app, which cloaks them back here. */
+function applyBanModeLost() {
+    setLostBanFlag();
+    const on404 = /404\.html?$/i.test(location.pathname) || /\/404\/?$/i.test(location.pathname);
+    if (on404) return;
+    try {
+        location.replace(withBase('404.html'));
+    } catch {
+        try { location.href = withBase('404.html'); } catch { /* ignore */ }
+    }
+}
+
 /**
  * Cloaked enforcement for shadow-banned devices/accounts.
  * Mode comes from per-ban flags.shadowBanMode, else config/shadow_ban_mode.json.
@@ -529,7 +559,10 @@ export async function applyShadowBanCloak() {
     if (!trustNetworkAvailable()) return false;
 
     const verdict = await resolveShadowBanEnforcement();
-    if (!verdict?.banned) return false;
+    if (!verdict?.banned) {
+        clearLostBanFlag();
+        return false;
+    }
 
     const mode = normalizeShadowBanMode(verdict.mode);
     window.__ntBanCloakApplied = true;
@@ -538,7 +571,11 @@ export async function applyShadowBanCloak() {
 
     if (mode === 'freeze') applyBanModeFreeze();
     else if (mode === 'fouc') applyBanModeFouc();
-    else applyBanModeOffline();
+    else if (mode === 'lost') applyBanModeLost();
+    else {
+        clearLostBanFlag();
+        applyBanModeOffline();
+    }
 
     return true;
 }

@@ -188,14 +188,46 @@ const faqJsonLd = {
         </a>
     </div>
     <script is:inline>
-      document.getElementById('guide-home-btn')?.addEventListener('click', function (e) {
-        try {
-          if (window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function') {
+      (function () {
+        function inAppSheet() {
+          try {
+            return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
+          } catch (_) { return false; }
+        }
+        function pathOf(href) {
+          try { return new URL(href, window.location.href).pathname.replace(/\/+$/, '') || '/'; }
+          catch (_) { return String(href || ''); }
+        }
+        // Hide floating Home when the parent sheet already provides Back.
+        if (inAppSheet()) {
+          var homeWrap = document.getElementById('guide-home-btn')?.parentElement;
+          if (homeWrap) homeWrap.classList.add('hidden');
+        }
+        document.addEventListener('click', function (e) {
+          if (!inAppSheet()) return;
+          var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+          if (!a) return;
+          var href = a.getAttribute('href') || '';
+          if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || a.target === '_blank') return;
+          var path = pathOf(href);
+          var isMap = /\/map\.html?$/i.test(path);
+          var isGuide = /\/guide\.html?$/i.test(path);
+          var isAppHome = path === '' || path === '/' || /\/index\.html?$/i.test(path)
+            || path === String(window.__NT_BASE__ || '/').replace(/\/+$/, '')
+            || path === String(window.__NT_BASE__ || '/');
+          // Stay inside sheet for map; close sheet for home / routes / other app exits.
+          if (isMap && typeof window.parent.__ntNavigateInAppSheet === 'function') {
+            e.preventDefault();
+            window.parent.__ntNavigateInAppSheet(href, 'Network Map');
+            return;
+          }
+          if (isGuide) return;
+          if (isAppHome || /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path) || /\/status\.html?/i.test(path)) {
             e.preventDefault();
             window.parent.__ntCloseInAppSheet();
           }
-        } catch (_) {}
-      });
+        }, true);
+      })();
     </script>
 
     <!-- Main Content Container -->

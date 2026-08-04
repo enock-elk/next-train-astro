@@ -103,7 +103,7 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     </div>
   </noscript>
 
-  <div class="fixed top-4 left-4 z-[1001]">
+  <div id="map-back-wrap" class="fixed top-4 left-4 z-[1001]">
     <a href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">
       <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
       Back
@@ -185,19 +185,38 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script is:inline src={withBase('js/map-app.js')}></script>
   <script is:inline>
-    // When embedded in the main app sheet, Back/Home closes the sheet instead of remounting.
-    document.addEventListener('click', function (e) {
-      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-      if (!a) return;
-      try {
-        if (window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function') {
-          var href = a.getAttribute('href') || '';
-          if (href === '/' || href === './' || /index\.html?$/i.test(href) || href === (window.APP_BASE || '/')) {
-            e.preventDefault();
-            window.parent.__ntCloseInAppSheet();
-          }
+    (function () {
+      function inAppSheet() {
+        try {
+          return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
+        } catch (_) { return false; }
+      }
+      // Parent sheet already has Back — avoid a double header.
+      if (inAppSheet()) {
+        document.getElementById('map-back-wrap')?.classList.add('hidden');
+        try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
+      }
+      document.addEventListener('click', function (e) {
+        if (!inAppSheet()) return;
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a) return;
+        var href = a.getAttribute('href') || '';
+        if (!href || href.startsWith('#') || a.target === '_blank') return;
+        var path = '';
+        try { path = new URL(href, window.location.href).pathname; } catch (_) { path = href; }
+        var isHome = href === '/' || href === './' || /index\.html?$/i.test(path)
+          || path.replace(/\/+$/, '') === String(window.APP_BASE || '/').replace(/\/+$/, '');
+        var isGuide = /\/guide\.html?$/i.test(path);
+        if (isGuide && typeof window.parent.__ntNavigateInAppSheet === 'function') {
+          e.preventDefault();
+          window.parent.__ntNavigateInAppSheet(href, 'Commuter Guide');
+          return;
         }
-      } catch (_) {}
-    }, true);
+        if (isHome || /\/routes(\/|\.html)/i.test(path)) {
+          e.preventDefault();
+          window.parent.__ntCloseInAppSheet();
+        }
+      }, true);
+    })();
   </script>
 </ContentLayout>

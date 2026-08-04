@@ -60,6 +60,7 @@ import { withBase } from '../lib/config.js';
       </p>
 
       <a
+        id="nt-404-home"
         href={withBase('/')}
         class="w-full bg-white text-gray-900 font-bold py-4 rounded-xl hover:bg-gray-100 transition-transform active:scale-95 shadow-xl flex items-center justify-center gap-2 group"
       >
@@ -72,6 +73,37 @@ import { withBase } from '../lib/config.js';
   <footer class="p-6 text-center z-10">
     <p class="text-[10px] text-gray-600 font-mono">ERR_STATION_NOT_FOUND</p>
   </footer>
+
+  <!-- Shadow-ban "lost" mode: Home tries the app; cloak sends them back here if still banned. -->
+  <script is:inline define:vars={{ homeHref: withBase('/') }}>
+    (function () {
+      var KEY = 'nt_shadow_ban_lost';
+      function flagged() {
+        try {
+          return sessionStorage.getItem(KEY) === '1' || localStorage.getItem(KEY) === '1';
+        } catch (e) { return false; }
+      }
+      if (!flagged()) return;
+      var home = document.getElementById('nt-404-home');
+      if (home) {
+        home.addEventListener('click', function (e) {
+          e.preventDefault();
+          // Soft bounce feel — brief pause then app boot (re-cloak redirects if still banned)
+          home.style.opacity = '0.6';
+          home.style.pointerEvents = 'none';
+          setTimeout(function () {
+            window.location.href = homeHref;
+          }, 280 + Math.random() * 420);
+        });
+      }
+      try {
+        history.pushState({ ntLost: 1 }, '', location.href);
+        window.addEventListener('popstate', function () {
+          if (flagged()) history.pushState({ ntLost: 1 }, '', location.href);
+        });
+      } catch (e) {}
+    })();
+  </script>
 </ContentLayout>
 
 <style>

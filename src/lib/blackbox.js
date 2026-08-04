@@ -182,6 +182,28 @@ function openBlackBox() {
     renderBlackBoxLogs();
 }
 
+/** Close terminal and restore About — PIN stays valid for this browser session. */
+function closeBlackBoxToAbout() {
+    const reopenAbout = () => {
+        try { openSmoothModal('about-modal'); } catch { /* ignore */ }
+    };
+    if (location.hash === '#blackbox') {
+        const onPop = () => {
+            window.removeEventListener('popstate', onPop);
+            setTimeout(reopenAbout, 40);
+        };
+        window.addEventListener('popstate', onPop);
+        try { history.back(); } catch {
+            window.removeEventListener('popstate', onPop);
+            closeSmoothModal('blackbox-modal');
+            setTimeout(reopenAbout, 320);
+        }
+        return;
+    }
+    closeSmoothModal('blackbox-modal');
+    setTimeout(reopenAbout, 320);
+}
+
 function promptPinOrOpen() {
     triggerHaptic();
     if (isSessionAuthed()) {
@@ -207,10 +229,7 @@ export function setupBlackBoxLogger() {
     document.getElementById('bb-clear-btn')?.addEventListener('click', clearBlackBoxLogs);
     document.getElementById('bb-copy-btn')?.addEventListener('click', copyBlackBoxLogs);
     document.getElementById('bb-send-btn')?.addEventListener('click', sendBlackBoxLogsToCloud);
-    document.getElementById('bb-close-btn')?.addEventListener('click', () => {
-        if (location.hash === '#blackbox') history.back();
-        else closeSmoothModal('blackbox-modal');
-    });
+    document.getElementById('bb-close-btn')?.addEventListener('click', closeBlackBoxToAbout);
 
     const aboutTitle = document.getElementById('about-app-title');
     if (!aboutTitle) return;

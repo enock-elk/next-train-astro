@@ -163,6 +163,7 @@
     },
 
     "users": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
@@ -178,6 +179,7 @@
     },
 
     "devices": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "$deviceId": {
         ".read": "auth != null && ((data.exists() && auth.uid === data.child('uid').val()) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && (!data.exists() || data.child('uid').val() === auth.uid) && newData.child('uid').val() === auth.uid"

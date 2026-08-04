@@ -19,6 +19,7 @@ import {
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { executeRegionSwap, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
@@ -2650,30 +2651,32 @@ export function setupAutocomplete(inputId, selectId) {
 }
 
 /**
- * Cold-start / shared planner links (short `plan=` + legacy `action=planner`).
- * Waits for MASTER_STATION_LIST, then runs executeTripPlan.
+ * Cold-start / shared planner links (short `plan=` + legacy SPA `action=planner`).
+ * SPA parity: honor link `region` even for returning users (shared trips are region-scoped).
  */
 export async function applyPlannerDeepLink() {
     if (typeof location === 'undefined') return false;
-    const link = parsePlannerDeepLink(location.search);
-    if (!link) return false;
 
-    const returning = safeStorage.getItem('welcomeSeen') === 'true';
-    const hasSavedRegion = !!safeStorage.getItem('userRegion');
+    const snap = peekShareDeeplinkSnapshot();
+    const link = (snap && snap.kind === 'planner')
+        ? parsePlannerDeepLink(snap)
+        : parsePlannerDeepLink(location.search);
+    if (!link || link.kind !== 'planner') return false;
+    // Only clear snapshot when it was ours (leave route snaps for applyRouteDeepLink)
+    if (snap && snap.kind === 'planner') consumeShareDeeplinkSnapshot();
 
-    // Established users: open planner with their region — don't force SEO/share region.
-    if (!(returning && hasSavedRegion)
-        && link.region
+    // SPA: region mismatch → adopt share region so stations resolve (Belle Ombre is GP-only, etc.)
+    if (link.region
         && ['GP', 'WC', 'KZN', 'EC'].includes(link.region)
         && ($userRegion.get() || 'GP') !== link.region) {
+        safeStorage.setItem('userRegion', link.region);
         executeRegionSwap(link.region, true);
     }
 
-    if (!returning) {
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
 
-    // Ensure station list exists (region DB loaded)
     try {
         await loadAllSchedules(true);
     } catch (e) { /* continue; poll may still resolve */ }
@@ -2693,12 +2696,10 @@ export async function applyPlannerDeepLink() {
                 clearInterval(checkReady);
                 const resolveStation = (txt) => {
                     if (!txt) return '';
-                    let clean = String(txt).trim();
-                    try { clean = decodeURIComponent(clean); } catch { /* keep */ }
-                    clean = clean.toUpperCase().replace(/\+/g, ' ');
-                    const exact = list.find((s) => s.replace(' STATION', '').toUpperCase() === clean);
+                    const clean = String(txt).trim().toUpperCase().replace(/\+/g, ' ').replace(/\s+/g, ' ');
+                    const exact = list.find((s) => s.replace(/ STATION$/i, '').toUpperCase() === clean);
                     if (exact) return exact;
-                    const partial = list.find((s) => s.replace(' STATION', '').toUpperCase().includes(clean));
+                    const partial = list.find((s) => s.replace(/ STATION$/i, '').toUpperCase().includes(clean));
                     return partial || '';
                 };
                 const fromId = resolveStation(link.from);
@@ -2716,11 +2717,11 @@ export async function applyPlannerDeepLink() {
                 if (fromSelect) fromSelect.value = fromId;
                 if (toSelect) toSelect.value = toId;
                 if (fromInput) {
-                    fromInput.value = fromId.replace(' STATION', '');
+                    fromInput.value = fromId.replace(/ STATION$/i, '');
                     fromInput.dataset.resolvedValue = fromId;
                 }
                 if (toInput) {
-                    toInput.value = toId.replace(' STATION', '');
+                    toInput.value = toId.replace(/ STATION$/i, '');
                     toInput.dataset.resolvedValue = toId;
                 }
 
@@ -2734,6 +2735,15 @@ export async function applyPlannerDeepLink() {
                         : (link.day === 'saturday' ? 'Saturday / Hol' : 'Sunday');
                     if (mainDayDisplay) mainDayDisplay.textContent = mainTxt;
                     if (headerDayDisplay) headerDayDisplay.textContent = headerTxt;
+                    const mList = document.getElementById('main-day-list');
+                    if (mList) {
+                        mList.querySelectorAll('li').forEach((li) => {
+                            li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                            if (li.textContent?.trim() === mainTxt) {
+                                li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                            }
+                        });
+                    }
                 }
 
                 let timeParam = link.time || null;
@@ -2742,7 +2752,12 @@ export async function applyPlannerDeepLink() {
                 executeTripPlan(fromId, toId, timeParam);
                 showToast('Loaded shared trip plan', 'success');
                 if (typeof window.trackAnalyticsEvent === 'function') {
-                    window.trackAnalyticsEvent('deep_link_open', { type: 'planner', from: fromId, to: toId });
+                    window.trackAnalyticsEvent('deep_link_open', {
+                        type: 'planner',
+                        from: fromId,
+                        to: toId,
+                        legacy: !!link.legacy,
+                    });
                 }
                 resolve(true);
             } else if (attempts >= maxAttempts) {

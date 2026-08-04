@@ -12,6 +12,7 @@ import {
     parseRouteDeepLinkParams,
     stripShareParamsFromUrl,
 } from './share-links.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 
 function closeFullGridModal() {
     if (typeof location !== 'undefined' && location.hash === '#grid') {
@@ -33,22 +34,23 @@ export function buildFareShareUrl(routeId) {
 
 export function parseRouteDeepLink() {
     if (typeof location === 'undefined') return null;
-    const link = parseRouteDeepLinkParams(location.search);
-    if (!link || !ROUTES[link.routeId]) return null;
+    const snap = peekShareDeeplinkSnapshot();
+    const raw = (snap && snap.kind === 'route') ? snap : parseRouteDeepLinkParams(location.search);
+    if (!raw || !ROUTES[raw.routeId]) return null;
     // Grid day: weekend board uses saturday schedules for sat/sun deep links
-    const day = link.day === 'saturday' || link.day === 'sunday' ? 'saturday' : 'weekday';
+    const day = raw.day === 'saturday' || raw.day === 'sunday' ? 'saturday' : 'weekday';
     return {
-        routeId: link.routeId,
-        view: link.view,
-        dir: link.dir,
+        routeId: raw.routeId,
+        view: raw.view,
+        dir: raw.dir,
         day,
+        fromSnapshot: !!(snap && snap.kind === 'route'),
     };
 }
 
 /**
  * Cold-start / share deep link: open the linked route (and grid when view=grid).
- * Returning users (welcomeSeen): never override region / pinned defaults — their
- * settings beat SEO/share automation. First-time / empty prefs may adopt the link.
+ * SPA parity: honor shared route + region so legacy `?action=route&route=…` still works.
  */
 export async function applyRouteDeepLink() {
     const link = parseRouteDeepLink();
@@ -57,15 +59,9 @@ export async function applyRouteDeepLink() {
     const route = ROUTES[link.routeId];
     if (!route) return false;
 
+    if (link.fromSnapshot) consumeShareDeeplinkSnapshot();
+
     const returning = safeStorage.getItem('welcomeSeen') === 'true';
-    const hasSavedRegion = !!safeStorage.getItem('userRegion');
-
-    // Established users browsing SEO/share links: keep their setup, drop params.
-    if (returning && hasSavedRegion) {
-        stripShareParamsFromUrl();
-        return false;
-    }
-
     const defaultKey = 'defaultRoute_' + route.region;
     const existingDefault = safeStorage.getItem(defaultKey);
     const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
@@ -78,7 +74,9 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem(defaultKey, link.routeId);
     }
 
+    // SPA: always adopt the shared route's region so the timetable resolves
     if (route.region !== ($userRegion.get() || 'GP')) {
+        safeStorage.setItem('userRegion', route.region);
         executeRegionSwap(route.region, true);
     }
 

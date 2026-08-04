@@ -139,7 +139,7 @@ import HubModals from '../components/HubModals.astro';
         openLegal,
         bindMaintenanceBanner
     } from '../lib/ui.js';
-    import { hydratePrefs } from '../lib/prefs.js';
+    import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
     import {
         prepareDeeplinkIntents,
         consumeHashDeeplinks,
@@ -160,6 +160,7 @@ import HubModals from '../components/HubModals.astro';
     hydrateStores();
     // Align sidenav + route-modal region labels with hydrated localStorage region
     syncRegionDisplayDom($userRegion.get() || 'GP');
+    syncCrmRegionAnalytics($userRegion.get() || 'GP');
     hydratePrefs();
     startClock();
     syncClockShims();

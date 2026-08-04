@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN LOGIC (V8_08.04 - Astro MPA Migration)
+ * METRORAIL NEXT TRAIN LOGIC (V8_08.05 - Astro MPA Migration)
  * -----------------------------------------------------------
  * This module manages Data Fetching, Caching (IndexedDB), and Synchronization.
  * It has been migrated to use Nano Stores for global state persistence.
@@ -114,25 +114,47 @@ function hideRegionSwapLoader() {
     if (label) label.textContent = 'Starting Next Train…';
 }
 
-// 🛡️ GUARDIAN PHASE 5: SILENT IP GEOLOCATION HOOK (Client-Side Only)
+// 🛡️ First-visit region guess: IP → product region, else GP. Never overwrites a saved selection.
+// Telemetry truth remains the selected app region (crm_region); IP only pre-selects for new users.
 if (typeof window !== 'undefined') {
-    if (!safeStorage.getItem('userRegion')) {
+    let seoRegionHint = '';
+    try {
+        const p = new URLSearchParams(window.location.search);
+        seoRegionHint = String(p.get('region') || p.get('r') || '').toUpperCase();
+    } catch { /* ignore */ }
+
+    if (!safeStorage.getItem('userRegion') && !['GP', 'WC', 'KZN', 'EC'].includes(seoRegionHint)) {
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            console.log("🛡️ Guardian: Offline state detected. IP Geolocation bypassed.");
+            // Offline new user: keep atom default GP and persist so analytics has a bucket
+            safeStorage.setItem('userRegion', 'GP');
+            $userRegion.set('GP');
+            console.log('🛡️ Guardian: Offline — defaulting new user region to GP.');
         } else {
             const geoController = new AbortController();
-            const geoTimerId = setTimeout(() => geoController.abort(), 1500); 
+            const geoTimerId = setTimeout(() => geoController.abort(), 1500);
 
             regionCheckPromise = fetch('https://nexttrain-telemetry.enock.workers.dev/region', { signal: geoController.signal })
-                .then(r => { clearTimeout(geoTimerId); return r.json(); })
-                .then(data => {
-                    if (data && data.region && ['GP', 'WC', 'KZN', 'EC'].includes(data.region)) {
-                        $userRegion.set(data.region);
-                        console.log(`🛡️ Guardian: Silent IP Geolocation successfully bound to ${data.region}`);
-                        syncRegionDisplayDom(data.region);
-                    }
+                .then((r) => { clearTimeout(geoTimerId); return r.json(); })
+                .then((data) => {
+                    // Bail if welcome/SEO already chose a region while we were in flight
+                    if (safeStorage.getItem('userRegion')) return;
+                    const guessed = (data && data.region && ['GP', 'WC', 'KZN', 'EC'].includes(data.region))
+                        ? data.region
+                        : 'GP';
+                    safeStorage.setItem('userRegion', guessed);
+                    $userRegion.set(guessed);
+                    syncRegionDisplayDom(guessed);
+                    try { window.syncCrmRegionAnalytics?.(guessed); } catch { /* ignore */ }
+                    console.log(`🛡️ Guardian: First-visit region guess → ${guessed}`);
                 })
-                .catch(() => console.log("🛡️ Guardian: IP Geolocation bypassed (AdBlocker, Timeout, or Offline)"));
+                .catch(() => {
+                    if (safeStorage.getItem('userRegion')) return;
+                    safeStorage.setItem('userRegion', 'GP');
+                    $userRegion.set('GP');
+                    syncRegionDisplayDom('GP');
+                    try { window.syncCrmRegionAnalytics?.('GP'); } catch { /* ignore */ }
+                    console.log('🛡️ Guardian: IP guess failed — defaulting new user region to GP.');
+                });
         }
     }
 }
@@ -881,6 +903,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     
     $userRegion.set(newRegion);
     syncRegionDisplayDom(newRegion);
+    try { window.syncCrmRegionAnalytics?.(newRegion); } catch { /* ignore */ }
 
     memoryFallbackCache = {}; 
     $fullDatabase.set(null); 

@@ -1,10 +1,13 @@
 /**
- * Cold-start / share deeplink intents (legal, fares).
+ * Cold-start / share deeplink intents (legal, fares, planner/route snapshot).
  * Defers until Welcome completes for first-time users.
+ * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
+import { parsePlannerDeepLink, parseRouteDeepLinkParams } from './share-links.js';
 
 const INTENT_KEY = 'nt_pending_deeplink';
+const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
 
 function isLegalHash(hash) {
     return hash === '#privacy' || hash === '#terms' || hash === '#legal';
@@ -43,6 +46,43 @@ function stripHashKeepQuery() {
     } catch { /* ignore */ }
 }
 
+/** Capture legacy + short share links before any UI mutates location.search. */
+export function snapshotShareDeeplink() {
+    if (typeof window === 'undefined') return null;
+    try {
+        const existing = sessionStorage.getItem(SHARE_SNAPSHOT_KEY);
+        if (existing) {
+            try { return JSON.parse(existing); } catch { /* fall through */ }
+        }
+        const planner = parsePlannerDeepLink(location.search);
+        const route = parseRouteDeepLinkParams(location.search);
+        const snap = planner || route || null;
+        if (snap) sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
+        return snap;
+    } catch {
+        return null;
+    }
+}
+
+export function consumeShareDeeplinkSnapshot() {
+    try {
+        const raw = sessionStorage.getItem(SHARE_SNAPSHOT_KEY);
+        sessionStorage.removeItem(SHARE_SNAPSHOT_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function peekShareDeeplinkSnapshot() {
+    try {
+        const raw = sessionStorage.getItem(SHARE_SNAPSHOT_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Call as early as possible on boot. For first-time users, stash modal intents
  * and clear the hash so Welcome can own the first screen.
@@ -50,6 +90,9 @@ function stripHashKeepQuery() {
 export function prepareDeeplinkIntents() {
     if (typeof window === 'undefined' || window.__ntDeeplinkPrepared) return;
     window.__ntDeeplinkPrepared = true;
+
+    // SPA parity: freeze share params first (Welcome used to strip region= before planner ran)
+    snapshotShareDeeplink();
 
     const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
     const hash = location.hash || '';

@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.04";
+export const APP_VERSION = "V8_08.05";
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -833,6 +833,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.05",
+        title: "Planner UI & Bugfix",
+        date: "05 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Trip Planner redesign:</b> Cleaner results chrome, clearer notices, and a more polished trip-planning interface.",
+            "<b>Bug fixes:</b> Guide and map return without reloading the app; alert ranking and planner glitches cleaned up.",
+            "<b>Stability:</b> Smoother navigation around About, Black Box, and in-app sheets."
+        ]
+    },
     {
         id: "V8_08.04",
         title: "Next Train: System Upgrade",

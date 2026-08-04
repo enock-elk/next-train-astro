@@ -230,3 +230,28 @@ export function applyReturningUserChrome() {
     const main = document.getElementById('main-content');
     main?.classList.toggle('chrome-compact', seen);
 }
+
+const VALID_CRM_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);
+
+/**
+ * Telemetry truth: selected app region (not raw IP).
+ * Keep GA4 user property `crm_region` + Clarity in sync whenever the user/region changes.
+ */
+export function syncCrmRegionAnalytics(region) {
+    const code = VALID_CRM_REGIONS.has(region) ? region : null;
+    if (!code || typeof window === 'undefined') return;
+    try {
+        if (typeof window.gtag === 'function') {
+            window.gtag('set', 'user_properties', { crm_region: code });
+        }
+    } catch { /* ignore */ }
+    try {
+        if (typeof window.clarity === 'function') {
+            window.clarity('set', 'crm_region', code);
+        }
+    } catch { /* ignore */ }
+}
+
+if (typeof window !== 'undefined') {
+    window.syncCrmRegionAnalytics = syncCrmRegionAnalytics;
+}

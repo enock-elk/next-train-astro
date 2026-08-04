@@ -981,20 +981,22 @@ export async function checkServiceAlerts() {
 
         bellBtn.classList.remove('hidden');
 
-        // SPA design: full className reset so severity bg + text always apply
-        let bellClass = 'absolute top-4 right-4 z-[70] p-1.5 rounded-full shadow-md focus:outline-none hover:scale-105 transition-transform ';
+        // Mirror #open-nav-btn exactly: top-2 · p-2 · w-6 icon · shadow-sm (right vs left)
+        let bellClass = 'absolute top-2 right-4 z-[70] p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
         let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
         if (severity === 'critical') {
-            bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300';
+            bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
             dotClass += 'bg-red-600';
         } else if (severity === 'warning') {
-            bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300';
+            bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800';
             dotClass += 'bg-yellow-500';
         } else {
-            bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300';
+            bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800';
             dotClass += 'bg-blue-600';
         }
         bellBtn.className = bellClass;
+        const bellSvg = bellBtn.querySelector('svg');
+        if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
         if (dot) dot.className = dotClass;
 
         if (!hasSeen) {
@@ -1187,6 +1189,14 @@ export function initHub() {
                     try { history.back(); } catch { /* ignore */ }
                 }
             };
+            const navigateSheet = (nextUrl, nextTitle) => {
+                const frame = document.getElementById('nt-inapp-sheet-frame');
+                const titleEl = document.getElementById('nt-inapp-sheet-title');
+                if (titleEl && nextTitle) titleEl.textContent = nextTitle;
+                if (frame && nextUrl) frame.src = nextUrl;
+                overlay.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            };
             document.getElementById('nt-inapp-sheet-close')?.addEventListener('click', closeSheet);
             window.addEventListener('popstate', () => {
                 if (location.hash !== '#sheet' && !overlay.classList.contains('hidden')) {
@@ -1197,6 +1207,7 @@ export function initHub() {
                 }
             });
             window.__ntCloseInAppSheet = closeSheet;
+            window.__ntNavigateInAppSheet = navigateSheet;
         }
         const frame = document.getElementById('nt-inapp-sheet-frame');
         const titleEl = document.getElementById('nt-inapp-sheet-title');

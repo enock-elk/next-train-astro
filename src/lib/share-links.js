@@ -70,20 +70,39 @@ export function buildRouteShareUrl({ routeId, view = 'grid', dir = 'A', day = 'w
     return `${baseOrigin}${basePath}?${params.toString()}`;
 }
 
-export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? location.search : '') {
-    const params = new URLSearchParams(search);
-    const plan = params.get('plan');
-    const legacy = params.get('action') === 'planner';
+function normalizeStationQuery(raw) {
+    let s = String(raw || '').trim();
+    if (!s) return '';
+    try { s = decodeURIComponent(s); } catch { /* already decoded */ }
+    // Legacy shares used + as spaces; URLSearchParams usually decodes these already
+    return s.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
-    let from = params.get('from') || '';
-    let to = params.get('to') || '';
+/**
+ * Parse short (`plan=`) or legacy SPA (`action=planner&from=&to=&time=&day=&region=`) links.
+ * Accepts a search string, URLSearchParams, or a pre-captured plain object.
+ */
+export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? location.search : '') {
+    if (search && typeof search === 'object' && !Array.isArray(search) && !(search instanceof URLSearchParams)) {
+        if (search.kind === 'planner' && search.from && search.to) return search;
+    }
+
+    const params = search instanceof URLSearchParams
+        ? search
+        : new URLSearchParams(typeof search === 'string' ? search : '');
+    const plan = params.get('plan');
+    const action = String(params.get('action') || '').toLowerCase();
+    const legacy = action === 'planner';
+
+    let from = normalizeStationQuery(params.get('from') || '');
+    let to = normalizeStationQuery(params.get('to') || '');
 
     if (plan) {
         const sep = plan.includes('~') ? '~' : (plan.includes('/') ? '/' : null);
         if (sep) {
             const [a, b] = plan.split(sep);
-            from = (a || '').trim();
-            to = (b || '').trim();
+            from = normalizeStationQuery(a);
+            to = normalizeStationQuery(b);
         }
     } else if (!legacy) {
         return null;
@@ -91,13 +110,15 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
 
     if (!from || !to) return null;
 
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
     return {
         kind: 'planner',
         from,
         to,
         time: params.get('t') || params.get('time') || '',
         day: decodeDay(params.get('d') || params.get('day') || ''),
-        region: (params.get('r') || params.get('region') || '').toUpperCase() || null,
+        region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
+        legacy,
     };
 }
 

@@ -49,14 +49,24 @@ export function hydrateStores() {
     // Failsafe: Ensure we are in the browser, not the Astro build server
     if (typeof window === 'undefined') return;
 
-    // 1. Hydrate Region
+    // 1. Hydrate Region (selected app region is the telemetry source of truth)
     const savedRegion = localStorage.getItem('userRegion');
     if (savedRegion) $userRegion.set(savedRegion);
     
-    // Auto-save Region changes back to localStorage
+    // Auto-save Region changes + keep GA/Clarity crm_region aligned
     $userRegion.listen((newRegion) => {
         localStorage.setItem('userRegion', newRegion);
+        try {
+            if (typeof window.syncCrmRegionAnalytics === 'function') {
+                window.syncCrmRegionAnalytics(newRegion);
+            }
+        } catch { /* ignore */ }
     });
+    try {
+        if (typeof window.syncCrmRegionAnalytics === 'function') {
+            window.syncCrmRegionAnalytics($userRegion.get() || savedRegion || 'GP');
+        }
+    } catch { /* ignore */ }
 
     // 2. Hydrate Profile
     const savedProfile = localStorage.getItem('userProfile');

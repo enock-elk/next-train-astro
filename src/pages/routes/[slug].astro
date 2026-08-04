@@ -1,5 +1,6 @@
 ---
 import ContentLayout from '../../layouts/ContentLayout.astro';
+import SeoThemeToggle from '../../components/SeoThemeToggle.astro';
 import { withBase } from '../../lib/config.js';
 import {
   listSeoRoutes,
@@ -73,55 +74,56 @@ const related = [
   themeColor="#1d4ed8"
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+  <SeoThemeToggle />
 
-  <main class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
     <div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
-      <p class="text-xs font-bold uppercase tracking-widest text-blue-400 mb-3">
+      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
         <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
-        <span class="text-slate-500"> / </span>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
         <a href={regionHref} class="hover:underline">{province}</a>
         {corridorLabel && (
           <>
-            <span class="text-slate-500"> / </span>
+            <span class="text-slate-400 dark:text-slate-500"> / </span>
             {corridorHref ? <a href={corridorHref} class="hover:underline">{corridorLabel}</a> : corridorLabel}
           </>
         )}
       </p>
 
-      <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
         {origin} to {dest} train times
       </h1>
-      <p class="mt-3 text-base text-slate-300 leading-relaxed">
+      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {seed.blurb}
       </p>
 
-      <div class="mt-8 rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-xl">
+      <div class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Origin</dt>
-            <dd class="mt-1 font-semibold text-white">{origin}</dd>
+            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{origin}</dd>
           </div>
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Destination</dt>
-            <dd class="mt-1 font-semibold text-white">{dest}</dd>
+            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{dest}</dd>
           </div>
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Province</dt>
-            <dd class="mt-1 font-semibold text-white">{province}</dd>
+            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{province}</dd>
           </div>
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Corridor</dt>
-            <dd class="mt-1 font-semibold text-white">{corridorLabel || 'Metrorail'}</dd>
+            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{corridorLabel || 'Metrorail'}</dd>
           </div>
         </dl>
 
-        <p class="mt-5 text-sm text-slate-400 leading-relaxed border-t border-slate-800 pt-4">
+        <p class="mt-5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-800 pt-4">
           {seed.operatingNote}
         </p>
 
         <a
           href={appHref}
-          class="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-4 transition-colors shadow-lg shadow-blue-900/40"
+          class="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-4 transition-colors shadow-lg shadow-blue-900/20 dark:shadow-blue-900/40"
         >
           Open live board for {name}
         </a>
@@ -131,13 +133,13 @@ const related = [
       </div>
 
       <section class="mt-10">
-        <h2 class="text-lg font-bold text-white mb-3">Related routes</h2>
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Related routes</h2>
         <ul class="space-y-2">
           {related.map(({ seed: rel, route: relRoute }) => (
             <li>
               <a
                 href={withBase(`routes/${rel.slug}.html`)}
-                class="block rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm font-semibold text-blue-300 hover:border-blue-700 hover:bg-slate-900 transition-colors"
+                class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/50 px-4 py-3 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:border-blue-500 dark:hover:border-blue-700 dark:hover:bg-slate-900 transition-colors"
               >
                 {displayRouteName(relRoute)} train times
               </a>
@@ -148,9 +150,9 @@ const related = [
 
       <p class="mt-10 text-sm text-slate-500">
         Need holiday rules or offline tips?
-        <a href={guideHref} class="text-blue-400 hover:underline ml-1">Read the user guide</a>
+        <a href={guideHref} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Read the user guide</a>
         ·
-        <a href={withBase('/')} class="text-blue-400 hover:underline ml-1">Home</a>
+        <a href={withBase('/')} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Home</a>
       </p>
     </div>
   </main>

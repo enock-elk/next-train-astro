@@ -46,7 +46,7 @@ Later (not today): province pages, station pages, auto-sitemap from all `ROUTES`
 - [x] Terminus: pin + “You’re here”
 - [x] Deeplinks: `?rt=` / `?plan=` open correct board/planner
 - [x] Legacy SPA SW + caches cleared on first Astro boot
-- [x] `APP_VERSION` / `public/app-version.json` = **V8_08.04**
+- [x] `APP_VERSION` / `public/app-version.json` = **V8_08.05**
 - [x] Guide FAQ: holidays ≠ always Saturday
 - [x] SEO seed: `/routes.html` + 5 route landings + sitemap
 - [x] Maintenance banner (`config/maintenance.json`) ported

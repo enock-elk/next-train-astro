@@ -1,5 +1,5 @@
 ﻿/**
- * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.04 - System Upgrade)
+ * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.05 - Planner UI & Bugfix)
  * -----------------------------------------------------------------------------
  *
  * ## ADMIN ISLAND ROADMAP (for future AI / ops)
@@ -4738,6 +4738,7 @@ const Admin = {
                 { id: 'offline', label: 'Fake offline / lie-fi' },
                 { id: 'freeze', label: 'Freeze / unresponsive' },
                 { id: 'fouc', label: 'True FOUC (unstyled)' },
+                { id: 'lost', label: '404 / End of the Line' },
             ];
 
         const choice = await new Promise((resolve) => {
@@ -4761,7 +4762,7 @@ const Admin = {
                     <select id="admin-ban-mode" class="w-full p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm mb-2">
                         ${banModes.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}
                     </select>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-4 leading-snug">They are never told they are banned. Offline = lie-fi banner. Freeze = no taps work. FOUC = styles stripped (raw HTML).</p>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-4 leading-snug">Never told they are banned. Offline = lie-fi. Freeze = no taps. FOUC = unstyled HTML. 404 = End of the Line page on every return home.</p>
                     <div class="flex gap-2">
                         <button type="button" id="admin-ban-cancel" class="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Cancel</button>
                         <button type="button" id="admin-ban-confirm" class="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">Ban</button>
@@ -4931,34 +4932,71 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Active bans below. Lookup by UID / device / email to ban, lift, or inspect trust score.</p>
-                <div class="flex items-center justify-between gap-2 mb-2 px-1">
-                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Active shadow bans</span>
-                    <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate — switch tabs below.</p>
+                <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
+                    <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
+                    <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
                 </div>
-                <div id="ut-bans-list" class="space-y-2 max-h-[280px] overflow-y-auto mb-4 px-1 custom-scrollbar">
-                    <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans…</p>
+                <div id="ut-pane-bans" role="tabpanel" class="ut-pane">
+                    <div class="flex items-center justify-between gap-2 mb-2 px-1">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Active shadow bans</span>
+                        <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                    </div>
+                    <div id="ut-bans-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
+                        <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans…</p>
+                    </div>
                 </div>
-                <div class="border-t border-gray-100 dark:border-gray-700 pt-3 mb-2 px-1">
-                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Lookup</span>
+                <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
+                    <div class="flex gap-2 mb-3 px-1">
+                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email…" />
+                        <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
+                    </div>
+                    <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
                 </div>
-                <div class="flex gap-2 mb-3 px-1">
-                    <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email…" />
-                    <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
-                </div>
-                <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
             </div>
         `;
 
         const header = document.getElementById('ut-header-btn');
         const body = document.getElementById('ut-body');
         const chevron = document.getElementById('ut-chevron');
+        const tabBans = document.getElementById('ut-tab-bans');
+        const tabLookup = document.getElementById('ut-tab-lookup');
+        const paneBans = document.getElementById('ut-pane-bans');
+        const paneLookup = document.getElementById('ut-pane-lookup');
+        const setUtTab = (which) => {
+            const bans = which === 'bans';
+            tabBans?.setAttribute('aria-selected', bans ? 'true' : 'false');
+            tabLookup?.setAttribute('aria-selected', bans ? 'false' : 'true');
+            tabBans?.classList.toggle('bg-white', bans);
+            tabBans?.classList.toggle('dark:bg-gray-800', bans);
+            tabBans?.classList.toggle('text-indigo-600', bans);
+            tabBans?.classList.toggle('dark:text-indigo-400', bans);
+            tabBans?.classList.toggle('shadow-sm', bans);
+            tabBans?.classList.toggle('border', bans);
+            tabBans?.classList.toggle('border-indigo-200', bans);
+            tabBans?.classList.toggle('dark:border-indigo-800', bans);
+            tabBans?.classList.toggle('text-gray-500', !bans);
+            tabLookup?.classList.toggle('bg-white', !bans);
+            tabLookup?.classList.toggle('dark:bg-gray-800', !bans);
+            tabLookup?.classList.toggle('text-indigo-600', !bans);
+            tabLookup?.classList.toggle('dark:text-indigo-400', !bans);
+            tabLookup?.classList.toggle('shadow-sm', !bans);
+            tabLookup?.classList.toggle('border', !bans);
+            tabLookup?.classList.toggle('border-indigo-200', !bans);
+            tabLookup?.classList.toggle('dark:border-indigo-800', !bans);
+            tabLookup?.classList.toggle('text-gray-500', bans);
+            paneBans?.classList.toggle('hidden', !bans);
+            paneLookup?.classList.toggle('hidden', bans);
+            if (bans) Admin.fetchActiveBans();
+        };
+        tabBans?.addEventListener('click', () => setUtTab('bans'));
+        tabLookup?.addEventListener('click', () => setUtTab('lookup'));
         header.onclick = () => {
             if (Admin.isGridMode) return;
             body.classList.toggle('hidden');
             chevron.classList.toggle('-rotate-90', body.classList.contains('hidden'));
             header.classList.toggle('mb-4', !body.classList.contains('hidden'));
-            if (!body.classList.contains('hidden')) Admin.fetchActiveBans();
+            if (!body.classList.contains('hidden')) setUtTab('bans');
         };
 
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
@@ -4977,6 +5015,7 @@ const Admin = {
                     { id: 'offline', label: 'Fake offline / lie-fi' },
                     { id: 'freeze', label: 'Freeze / unresponsive' },
                     { id: 'fouc', label: 'True FOUC (unstyled)' },
+                    { id: 'lost', label: '404 / End of the Line' },
                 ];
             return modes.find((m) => m.id === id)?.label || id;
         };
@@ -4987,8 +5026,9 @@ const Admin = {
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans…</p>';
             try {
                 const secret = await Admin.getAuthKey();
+                if (!secret) throw new Error('not signed in — open Admin while logged in as an admin account');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const auth = secret ? `?auth=${secret}` : '';
+                const auth = `?auth=${encodeURIComponent(secret)}`;
                 const [usersRes, devicesRes] = await Promise.all([
                     fetch(`${dynamicEndpoint}users.json${auth}`),
                     fetch(`${dynamicEndpoint}devices.json${auth}`),
@@ -8454,7 +8494,8 @@ const Admin = {
         if (qaPanel.dataset.loaded === 'true') return;
         qaPanel.dataset.loaded = 'true';
 
-        qaPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        // overflow-visible so the issue-type menu is not clipped by the white card
+        qaPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300';
 
         qaPanel.innerHTML = `
             <button id="sched-qa-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
@@ -8465,7 +8506,7 @@ const Admin = {
                 <svg id="sched-qa-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
 
-            <div id="sched-qa-body" class="hidden mt-4 space-y-4">
+            <div id="sched-qa-body" class="hidden mt-4 space-y-4 overflow-visible">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
                     Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
                     delta variance, missing coordinates, day mismatches, and more.
@@ -8494,13 +8535,13 @@ const Admin = {
                     </div>
                 </div>
 
-                <div class="relative" id="sched-qa-filter-wrap">
+                <div class="relative z-30" id="sched-qa-filter-wrap">
                     <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Issue types to show</label>
                     <button type="button" id="sched-qa-filter-btn" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none flex items-center justify-between">
                         <span id="sched-qa-filter-label">All default issue types</span>
                         <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    <div id="sched-qa-filter-menu" class="hidden absolute z-20 mt-1 w-full max-h-56 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 space-y-0.5">
+                    <div id="sched-qa-filter-menu" class="hidden absolute left-0 right-0 z-[80] mt-1 w-full max-h-56 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-2 space-y-0.5">
                         <div class="flex gap-2 px-1 pb-2 mb-1 border-b border-gray-100 dark:border-gray-800">
                             <button type="button" id="sched-qa-filter-all" class="text-[9px] font-bold uppercase text-violet-600 hover:underline">All</button>
                             <button type="button" id="sched-qa-filter-defaults" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">Defaults</button>
@@ -8571,10 +8612,15 @@ const Admin = {
             filterBtn.onclick = (e) => {
                 e.stopPropagation();
                 filterMenu.classList.toggle('hidden');
+                // Lift this card above neighbouring white panels while the menu is open
+                qaPanel.style.zIndex = filterMenu.classList.contains('hidden') ? '' : '50';
             };
             document.addEventListener('click', (e) => {
                 const wrap = document.getElementById('sched-qa-filter-wrap');
-                if (wrap && !wrap.contains(e.target)) filterMenu.classList.add('hidden');
+                if (wrap && !wrap.contains(e.target)) {
+                    filterMenu.classList.add('hidden');
+                    qaPanel.style.zIndex = '';
+                }
             });
         }
         document.getElementById('sched-qa-filter-all')?.addEventListener('click', () => {
@@ -8802,16 +8848,24 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Shadow-ban default experience -->
-                <div class="bg-violet-50 dark:bg-violet-900/20 p-4 rounded-xl border border-violet-200 dark:border-violet-800">
-                    <span class="font-bold text-violet-800 dark:text-violet-200 text-sm">Shadow-ban default mode</span>
-                    <p class="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5 mb-3 leading-snug">Used when a ban has no per-user mode set. Per-ban choice in the Shadow ban dialog always wins.</p>
-                    <select id="shadow-ban-default-mode" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none shadow-sm mb-2">
-                        <option value="offline">Fake offline / lie-fi</option>
-                        <option value="freeze">Freeze / unresponsive</option>
-                        <option value="fouc">True FOUC (unstyled)</option>
-                    </select>
-                    <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
+                <!-- Shadow-ban default experience (accordion, collapsed by default) -->
+                <div class="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="shadow-ban-default-header" class="w-full px-3 py-3 bg-violet-100/50 dark:bg-violet-900/40 text-left text-[10px] font-black text-violet-800 dark:text-violet-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-violet-200/50 dark:hover:bg-violet-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-violet-600 dark:text-violet-300">${Admin.icon('ban', 'w-4 h-4')}</span> Shadow-ban default mode
+                        </span>
+                        <svg id="shadow-ban-default-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="shadow-ban-default-body" class="hidden p-4">
+                        <p class="text-[10px] text-violet-600 dark:text-violet-400 mb-3 leading-snug">Used when a ban has no per-user mode set. Per-ban choice in the Shadow ban dialog always wins.</p>
+                        <select id="shadow-ban-default-mode" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none shadow-sm mb-2">
+                            <option value="offline">Fake offline / lie-fi</option>
+                            <option value="freeze">Freeze / unresponsive</option>
+                            <option value="fouc">True FOUC (unstyled)</option>
+                            <option value="lost">404 / End of the Line</option>
+                        </select>
+                        <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
+                    </div>
                 </div>
 
                 <!-- Transplanted Growth & Promo -->
@@ -8869,6 +8923,9 @@ const Admin = {
         const promoChevron = document.getElementById('promo-chevron');
         const banModeSelect = document.getElementById('shadow-ban-default-mode');
         const banModeSave = document.getElementById('shadow-ban-default-save');
+        const banDefaultHeader = document.getElementById('shadow-ban-default-header');
+        const banDefaultBody = document.getElementById('shadow-ban-default-body');
+        const banDefaultChevron = document.getElementById('shadow-ban-default-chevron');
 
         if (nukeHeader) {
             nukeHeader.onclick = () => {
@@ -8883,6 +8940,14 @@ const Admin = {
                 promoBody.classList.toggle('hidden');
                 if (promoBody.classList.contains('hidden')) promoChevron.classList.add('-rotate-90');
                 else promoChevron.classList.remove('-rotate-90');
+            };
+        }
+
+        if (banDefaultHeader && banDefaultBody) {
+            banDefaultHeader.onclick = () => {
+                banDefaultBody.classList.toggle('hidden');
+                if (banDefaultBody.classList.contains('hidden')) banDefaultChevron?.classList.add('-rotate-90');
+                else banDefaultChevron?.classList.remove('-rotate-90');
             };
         }
 

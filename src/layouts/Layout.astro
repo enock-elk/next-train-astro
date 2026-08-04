@@ -170,8 +170,9 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
             localStorage.setItem('next_train_device_id', deviceId);
           }
         }
-        // Cache-bust (?v=timestamp) must remain on the request; strip after load so shares stay clean
-        if (urlParams.has('v')) {
+        // Cache-bust (?v=1234567890) only — never strip short share view flags (?v=g / ?v=f)
+        var vParam = urlParams.get('v');
+        if (vParam && /^\d{8,}$/.test(vParam)) {
           urlParams.delete('v');
           urlDirty = true;
         }
@@ -184,12 +185,19 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
       if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
       if (deviceId) gaConfig['user_id'] = deviceId;
 
+      // Selected app region is telemetry truth; IP guess fills userRegion for new users before paint when available
       var userRegion = 'GP';
-      try { userRegion = localStorage.getItem('userRegion') || 'GP'; } catch (e) {}
+      try {
+        var savedRegion = localStorage.getItem('userRegion');
+        if (savedRegion === 'GP' || savedRegion === 'WC' || savedRegion === 'KZN' || savedRegion === 'EC') {
+          userRegion = savedRegion;
+        }
+      } catch (e) {}
       gaConfig['user_properties'] = { crm_region: userRegion, custom_device_id: deviceId };
 
       gtag('config', 'G-JM5DH6ERVX', gaConfig);
       window.NEXT_TRAIN_DEVICE_ID = deviceId;
+      window.__ntCrmRegion = userRegion;
     </script>
 
     <!-- Clarity — deferred + identify with same device id (SPA Growth Mode) -->

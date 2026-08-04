@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.05 — Planner UI & Bugfix (05 Aug 2026)
+
+- Cleared planner and navigation bugs (guide/map sheet return, alert ranking, notice glitches).
+- Redesigned the Trip Planner results UI for clearer chrome and notices.
+- Stability polish around About, Black Box, and in-app sheets.
+
 ## V8_08.04 — Next Train: System Upgrade (04 Aug 2026)
 
 - Massive under-the-hood upgrade for a faster, more reliable Next Train (**V8** platform line).

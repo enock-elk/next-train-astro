@@ -119,6 +119,7 @@ import { withBase } from '../lib/config.js';
                     // 2. Hydrate global reactive store states
                     $currentRouteId.set(route.id);
                     $userRegion.set(region);
+                    try { window.syncCrmRegionAnalytics?.(region); } catch (e) {}
 
                     try {
                         const { applyReturningUserChrome } = await import('../lib/prefs.js');
@@ -183,8 +184,10 @@ import { withBase } from '../lib/config.js';
             $userRegion.set(seoRegion);
             try { safeStorage.setItem('userRegion', seoRegion); } catch (e) {}
         }
-        // Strip region query so it can't re-apply later
-        if (params.has('region') || params.has('r')) {
+        // Do NOT strip region/from/to here when a share deep link is present — legacy SPA
+        // links need those params until applyPlannerDeepLink / applyRouteDeepLink run.
+        // Bare SEO ?region= hints (no share action) can be cleared safely.
+        if ((params.has('region') || params.has('r')) && !hasRouteDeepLink && !hasPlannerDeepLink) {
             try {
                 const urlObj = new URL(window.location.href);
                 urlObj.searchParams.delete('region');

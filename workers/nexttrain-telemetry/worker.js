@@ -1,10 +1,12 @@
 /**
- * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.9 - Per-bucket INTRADAY)
+ * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.10 - App-region telemetry)
  * --------------------------------------------------------------------------
  * Path B: Secure Telemetry Bridge
  *
  * V1.9: INTRADAY drops cumulative running totals and returns raw per half-hour
  *       GA4 activeUsers (rush-hour shape). Sets intradayMode: 'perBucket'.
+ * V1.10: Regional breakdown reads GA customUser:crm_region = selected app region
+ *        (IP /region is only a first-visit guess for the client; defaults to GP).
  */
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
@@ -80,15 +82,22 @@ export default {
 
         const url = new URL(request.url);
 
+        // First-visit soft guess only — client persists as selected region (GP fallback).
         if (url.pathname === '/region' && request.method === 'GET') {
+            // Cloudflare SA province codes → Next Train product regions
+            const PROVINCE_TO_PRODUCT = {
+                GT: 'GP', GP: 'GP',
+                WC: 'WC',
+                KZN: 'KZN', NL: 'KZN',
+                EC: 'EC',
+            };
             let region = 'GP';
-            if (request.cf && request.cf.regionCode) {
-                const prov = request.cf.regionCode.toUpperCase();
-                if (prov === 'WC') region = 'WC';
-                else if (prov === 'KZN' || prov === 'NL') region = 'KZN';
-                else if (prov === 'EC') region = 'EC';
+            const prov = String(request.cf?.regionCode || '').toUpperCase();
+            if (prov && PROVINCE_TO_PRODUCT[prov]) {
+                region = PROVINCE_TO_PRODUCT[prov];
             }
-            return new Response(JSON.stringify({ region }), {
+            // Non-rail SA provinces + foreign / missing → GP (product default)
+            return new Response(JSON.stringify({ region, source: prov ? 'cf' : 'default' }), {
                 status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });

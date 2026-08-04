@@ -3608,7 +3608,7 @@ const Admin = {
                 const commuterTitle = did !== 'Anonymous / Legacy'
                     ? `<div class="min-w-0 w-full space-y-1">
                         ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
-                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="block w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>
+                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
@@ -4977,6 +4977,11 @@ const Admin = {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
             return;
         }
+
+        const alias = Admin.cachedAliases && Admin.cachedAliases[deviceId] ? Admin.cachedAliases[deviceId] : null;
+        const recipientHtml = alias
+            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">·</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
+            : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>`;
         
         let modal = document.getElementById('admin-reply-modal');
         if (!modal) {
@@ -4984,11 +4989,13 @@ const Admin = {
             modal.id = 'admin-reply-modal';
             modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-3 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight flex items-center gap-2"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> Reply to Commuter</h3>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2">Message will be delivered to their personal inbox upon next app launch.</p>
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> Reply to Commuter</h3>
+                    <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
-                    <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5">
+                    <div class="flex flex-col min-h-0 flex-1">
+                    <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5 shrink-0">
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('bold', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Bold">B</button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('italic', 'admin-reply-text')" class="px-1.5 py-1 text-xs italic text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Italic">I</button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
@@ -5003,16 +5010,40 @@ const Admin = {
                             <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
-                        <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
+                        <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                    </div>
 
-                    <div class="flex space-x-2 mt-2">
+                    <div class="flex space-x-2 mt-3 shrink-0">
                         <button id="reply-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-3 rounded-lg transition-colors focus:outline-none text-sm">Cancel</button>
                         <button id="reply-send" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Send Reply</button>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+        } else {
+            // Upgrade short modal from earlier session in this page load
+            const panel = modal.firstElementChild;
+            if (panel) {
+                panel.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700';
+            }
+            const editor = document.getElementById('admin-reply-text');
+            if (editor) {
+                editor.classList.remove('min-h-[120px]', 'p-2.5');
+                editor.classList.add('min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+            }
+            if (!document.getElementById('admin-reply-recipient')) {
+                const h3 = panel?.querySelector('h3');
+                if (h3) {
+                    const recip = document.createElement('p');
+                    recip.id = 'admin-reply-recipient';
+                    recip.className = 'text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0';
+                    h3.insertAdjacentElement('afterend', recip);
+                }
+            }
         }
+
+        const recipEl = document.getElementById('admin-reply-recipient');
+        if (recipEl) recipEl.innerHTML = recipientHtml;
         
         document.getElementById('admin-reply-text').innerHTML = '';
         modal.classList.remove('hidden');

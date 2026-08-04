@@ -56,13 +56,15 @@
 
     <!-- Results Section -->
     <div id="planner-results-section" class="hidden mt-4 space-y-4 shrink-0">
-        <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-            <button id="planner-back-btn" class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-shrink-0 shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none">
-                <svg class="w-4 h-4 mr-1 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
-                Back
-            </button>
-            <h4 class="text-lg font-bold text-gray-900 dark:text-white flex-grow text-center min-w-[120px]">Your Journey</h4>
-            <div class="w-8 flex-shrink-0"></div>
+        <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center mb-4 gap-2">
+            <div class="justify-self-start">
+                <button id="planner-back-btn" class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-shrink-0 shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none">
+                    <svg class="w-4 h-4 mr-1 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+                    Back
+                </button>
+            </div>
+            <h4 class="text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1">Your Journey</h4>
+            <div class="planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end"></div>
         </div>
         <div id="planner-results-list" class="space-y-4"></div>
     </div>

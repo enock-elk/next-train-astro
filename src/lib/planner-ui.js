@@ -187,30 +187,170 @@ function getPlannerHolidayContext() {
     };
 }
 
-function buildHolidayNoticeHtml() {
-    const holiday = getPlannerHolidayContext();
-    if (!holiday) return '';
-    let body;
-    if (holiday.scheduleType === 'sunday') {
-        body = `Metrorail has <b>no service</b> on ${escapeHTML(holiday.name)}.`;
-    } else if (holiday.scheduleType === 'saturday') {
-        body = `Metrorail is running trains on the <b>Saturday schedule</b> for ${escapeHTML(holiday.name)}.`;
-    } else {
-        body = `Metrorail is running the <b>weekday schedule</b> for ${escapeHTML(holiday.name)}.`;
-    }
-    return `
-        <div class="bg-transparent border-b-4 border-blue-200 dark:border-blue-800/50 pb-4 mb-4 text-left animate-fade-in-up">
-            <div class="flex justify-between items-start w-full gap-2">
-                <div class="flex-1 min-w-0 pr-2">
-                    <h4 class="text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest mb-0.5">Public Holiday</h4>
-                    <p class="text-xs text-blue-700 dark:text-blue-300/90 leading-snug">${body}</p>
+/**
+ * Shared planner results notice — one layout, tone-driven colour.
+ * Tones: schedule | critical | warning | layover
+ */
+/**
+ * Attach 2+ planner notices into one stacked card (no inter-card gap).
+ * A single notice is returned unchanged with its own chrome.
+ */
+function stackPlannerNotices(...chunks) {
+    const parts = chunks.filter((h) => h && String(h).trim());
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0];
+    return `<div class="planner-notice-stack mb-3 rounded-xl overflow-hidden shadow-sm border border-gray-200/90 dark:border-gray-700 divide-y divide-gray-200/80 dark:divide-gray-700 [&>.planner-notice]:!mb-0 [&>.planner-notice]:!rounded-none [&>.planner-notice]:!border-0 [&>.planner-notice]:!shadow-none">${parts.join('')}</div>`;
+}
+
+function buildPlannerNotice({
+    tone = 'schedule',
+    title = '',
+    bodyHtml = '',
+    footerHtml = '',
+    icon = 'alert',
+    interactive = null, // { onclickAttr, detailsLabel }
+}) {
+    const tones = {
+        schedule: {
+            border: 'border-blue-200/90 dark:border-blue-900/60',
+            bar: 'bg-blue-500',
+            wash: 'bg-gradient-to-br from-blue-50 via-white to-white dark:from-blue-950/40 dark:via-gray-900 dark:to-gray-900',
+            title: 'text-blue-800 dark:text-blue-300',
+            iconWrap: 'bg-blue-100 dark:bg-blue-900/50 border-blue-200/80 dark:border-blue-800/60',
+            icon: 'text-blue-600 dark:text-blue-300',
+            details: 'text-blue-500/80 dark:text-blue-400/80 group-hover:text-blue-600 dark:group-hover:text-blue-300',
+            ring: 'focus-visible:ring-blue-400',
+        },
+        critical: {
+            border: 'border-red-200/90 dark:border-red-900/60',
+            bar: 'bg-red-500',
+            wash: 'bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/50 dark:via-gray-900 dark:to-gray-900',
+            title: 'text-red-700 dark:text-red-300',
+            iconWrap: 'bg-red-100 dark:bg-red-900/50 border-red-200/80 dark:border-red-800/60',
+            icon: 'text-red-600 dark:text-red-300',
+            details: 'text-red-500/80 dark:text-red-400/80 group-hover:text-red-600 dark:group-hover:text-red-300',
+            ring: 'focus-visible:ring-red-400',
+        },
+        warning: {
+            border: 'border-amber-200/90 dark:border-amber-900/60',
+            bar: 'bg-amber-500',
+            wash: 'bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900',
+            title: 'text-amber-800 dark:text-amber-300',
+            iconWrap: 'bg-amber-100 dark:bg-amber-900/50 border-amber-200/80 dark:border-amber-800/60',
+            icon: 'text-amber-600 dark:text-amber-300',
+            details: 'text-amber-600/80 dark:text-amber-400/80 group-hover:text-amber-700 dark:group-hover:text-amber-300',
+            ring: 'focus-visible:ring-amber-400',
+        },
+        layover: {
+            border: 'border-orange-200/90 dark:border-orange-900/60',
+            bar: 'bg-orange-500',
+            wash: 'bg-gradient-to-br from-orange-50 via-white to-white dark:from-orange-950/40 dark:via-gray-900 dark:to-gray-900',
+            title: 'text-orange-800 dark:text-orange-300',
+            iconWrap: 'bg-orange-100 dark:bg-orange-900/50 border-orange-200/80 dark:border-orange-800/60',
+            icon: 'text-orange-600 dark:text-orange-300',
+            details: 'text-orange-600/80 dark:text-orange-400/80',
+            ring: 'focus-visible:ring-orange-400',
+        },
+    };
+    const t = tones[tone] || tones.schedule;
+    const iconKey = icon === 'calendar' ? 'calendar'
+        : icon === 'moon' ? 'moon'
+        : icon === 'ban' ? 'ban'
+        : icon === 'stop' ? 'stop'
+        : 'alert';
+    const iconSvg = plannerIcon(iconKey, `w-5 h-5 ${t.icon}`);
+    const chevronSvg = `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
+    const detailsLabel = interactive?.detailsLabel || 'Details';
+    const detailsHtml = interactive?.onclickAttr
+        ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} transition-colors">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
+        : '';
+
+    const inner = `
+        <div class="flex items-stretch">
+            <div class="w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
+            <div class="flex-1 min-w-0 p-3.5 flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full ${t.iconWrap} border flex items-center justify-center shrink-0 shadow-sm">
+                    ${iconSvg}
                 </div>
-                <div class="shrink-0 text-blue-500 dark:text-blue-400 mt-0.5">
-                    ${plannerIcon('calendar', 'w-5 h-5')}
+                <div class="flex-1 min-w-0 pt-0.5">
+                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em]">${escapeHTML(title)}</h4>
+                        ${detailsHtml}
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1">${bodyHtml}</div>
+                    ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
                 </div>
             </div>
         </div>
     `;
+
+    const shellClass = `planner-notice group w-full text-left mb-3 rounded-xl overflow-hidden border ${t.border} ${t.wash} shadow-sm animate-fade-in-up`;
+    if (interactive?.onclickAttr) {
+        return `
+            <button ${interactive.onclickAttr} class="${shellClass} hover:brightness-[0.99] dark:hover:brightness-110 transition-all focus:outline-none ${t.ring}">
+                ${inner}
+            </button>
+        `;
+    }
+    return `<div class="${shellClass}">${inner}</div>`;
+}
+
+/** Day-bridge line for rollover / sunday-mapped holiday plans. */
+function showingTrainsForLine(trip) {
+    const label = trip?.dayLabel || 'Tomorrow';
+    return `Showing the next available option for <b>${escapeHTML(String(label))}</b>.`;
+}
+
+/**
+ * Holiday schedule notice. Sunday-mapped holidays include the day being shown
+ * when a trip is provided. Pass absorbSunday:true when a dedicated no-service
+ * notice will carry the holiday copy (avoid double banners).
+ */
+function buildHolidayNoticeHtml(trip = null, { absorbSunday = false } = {}) {
+    const holiday = getPlannerHolidayContext();
+    if (!holiday) return '';
+    if (absorbSunday && holiday.scheduleType === 'sunday') return '';
+
+    let bodyHtml;
+    if (holiday.scheduleType === 'sunday') {
+        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail has <span class="text-blue-700 dark:text-blue-300">no service</span> on ${escapeHTML(holiday.name)}.</p>`;
+        if (trip?.dayLabel || trip?.dayOffset) {
+            bodyHtml += `<p>${showingTrainsForLine(trip)}</p>`;
+        }
+    } else if (holiday.scheduleType === 'saturday') {
+        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail is running trains on the <span class="text-blue-700 dark:text-blue-300">Saturday schedule</span> for ${escapeHTML(holiday.name)}.</p>`;
+    } else {
+        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail is running the <span class="text-blue-700 dark:text-blue-300">weekday schedule</span> for ${escapeHTML(holiday.name)}.</p>`;
+    }
+
+    return buildPlannerNotice({
+        tone: 'schedule',
+        title: `Public Holiday · ${holiday.name}`,
+        bodyHtml,
+        icon: 'calendar',
+    });
+}
+
+function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
+    if (!payload) return '';
+    const intended = payload.intendedDest || 'Destination';
+    const partial = payload.partialDest || fallbackTo;
+    const disrId = payload.disruptionId || '';
+    const safeIntended = escapeHTML(String(intended).replace(/ STATION/gi, ''));
+    const safePartial = escapeHTML(String(partial).replace(/ STATION/gi, ''));
+    const onclickAttr = disrId
+        ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+        : null;
+    return buildPlannerNotice({
+        tone: 'critical',
+        title: 'Line Severed',
+        bodyHtml: `
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>.</p>
+            <p>Showing trains terminating at <span class="font-bold text-gray-800 dark:text-gray-200">${safePartial}</span>.</p>
+        `,
+        icon: 'alert',
+        interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+    });
 }
 
 function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
@@ -1289,21 +1429,20 @@ export const PlannerRenderer = {
                     } else {
                         const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
                         
+                        // Existing WARNING mid-timeline advisory only — thinner sibling of shared warning notice.
                         inj += `
                             <div class="relative py-2 z-20 w-full">
-                                <div class="bg-slate-50 dark:bg-slate-800/40 rounded-r-lg border-l-4 border-yellow-500 p-2.5 flex items-center justify-between w-[calc(100%+2px)] -ml-[2px] shadow-sm">
-                                    <div class="flex flex-col items-start min-w-0 pr-2">
-                                        <span class="text-yellow-600 dark:text-yellow-500 font-bold uppercase tracking-wide text-[10px] leading-none mb-1 flex items-center gap-1">
-                                            ${plannerIcon('alert', 'w-3.5 h-3.5')} EXPECT DELAYS
+                                <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${d.id}')" class="w-full text-left rounded-lg border border-amber-200/90 dark:border-amber-900/50 bg-amber-50/80 dark:bg-amber-950/30 px-2.5 py-2 flex items-center justify-between gap-2 shadow-sm hover:border-amber-300 dark:hover:border-amber-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+                                    <div class="flex flex-col items-start min-w-0 pr-1">
+                                        <span class="text-amber-800 dark:text-amber-300 font-black uppercase tracking-wide text-[10px] leading-none mb-1 flex items-center gap-1">
+                                            ${plannerIcon('alert', 'w-3.5 h-3.5')} Expect Delays
                                         </span>
-                                        <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full mt-0.5">
+                                        <div class="text-gray-500 dark:text-gray-400 leading-snug flex items-center min-w-0 w-full">
                                             ${linkSvg} <span class="font-medium text-[9px] truncate">${locationText}</span>
                                         </div>
                                     </div>
-                                    <button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${d.id}')" class="bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-100 dark:text-white px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors focus:outline-none shadow-sm flex items-center shrink-0">
-                                        <span class="truncate max-w-[110px]">${safeBtnText}</span>
-                                    </button>
-                                </div>
+                                    <span class="bg-gray-800 dark:bg-gray-700 text-gray-100 dark:text-white px-2.5 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider shrink-0 truncate max-w-[110px]">${safeBtnText}</span>
+                                </button>
                             </div>
                         `;
                     }
@@ -1469,9 +1608,90 @@ export const PlannerRenderer = {
         }
     },
 
-    buildCard: (step, isNextDay, allOptions, selectedIndex) => {
+    /** Line Severed / Expect Delays / Long Layover — attached when multiple. */
+    buildTripAdvisoryStack: (step, leadingNotices = []) => {
+        let activeDisr = null;
+
+        if (typeof window !== 'undefined' && typeof window.getTripDisruptions === 'function') {
+            const checkStops = (stops, routeId) => {
+                const disr = window.getTripDisruptions(routeId, stops);
+                if (disr.some(d => d.tier === 'CRITICAL')) activeDisr = disr.find(d => d.tier === 'CRITICAL');
+                else if (disr.some(d => d.tier === 'WARNING') && !activeDisr) activeDisr = disr.find(d => d.tier === 'WARNING');
+            };
+
+            if (step.type === 'DIRECT') checkStops(step.stops, step.route.id);
+            else if (step.type === 'TRANSFER') { checkStops(step.leg1.stops, step.leg1.route.id); checkStops(step.leg2.stops, step.leg2.route.id); }
+            else if (step.type === 'DOUBLE_TRANSFER') { checkStops(step.leg1.stops, step.leg1.route.id); checkStops(step.leg2.stops, step.leg2.route.id); checkStops(step.leg3.stops, step.leg3.route.id); }
+            else if (step.type === 'MULTI_TRANSFER' && step.legs) { step.legs.forEach(l => checkStops(l.stops, l.route.id)); }
+        }
+
+        if (typeof currentPlannerStatus !== 'undefined' && currentPlannerStatus === 'PARTIAL_JOURNEY' && currentPlannerErrorPayload) {
+            const partialTerminus = currentPlannerErrorPayload.partialDest;
+            if (partialTerminus) {
+                try {
+                    const normTerminus = normalizeStationName(partialTerminus);
+                    const globalList = Object.values($globalDisruptions.get() || {}).flat();
+                    const criticalSeverance = globalList.find(d =>
+                        d.tier === 'CRITICAL'
+                        && d.stations
+                        && d.stations.map(s => normalizeStationName(s)).includes(normTerminus)
+                    );
+                    if (criticalSeverance) activeDisr = criticalSeverance;
+                } catch { /* ignore */ }
+            }
+        }
+
+        let lineSeveredNotice = '';
+        if (currentPlannerStatus === 'PARTIAL_JOURNEY' && currentPlannerErrorPayload) {
+            lineSeveredNotice = buildLineSeveredNoticeHtml(currentPlannerErrorPayload, step.to);
+        }
+
+        let alertBanner = '';
+        if (activeDisr && activeDisr.tier !== 'CRITICAL') {
+            const disrId = activeDisr.id || '';
+            const onclickAttr = disrId
+                ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+                : null;
+            alertBanner = buildPlannerNotice({
+                tone: 'warning',
+                title: 'Expect Delays',
+                bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Minor service delays on this corridor.</p>`,
+                icon: 'alert',
+                interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+            });
+        }
+
+        let layoverBanner = '';
+        let maxWaitMins = 0;
+        let hubName = '';
+        const checkLayover = (arr, dep, hub) => {
+            let wait = Math.floor((timeToSeconds(dep) - timeToSeconds(arr)) / 60);
+            if (wait < 0) wait += 14400;
+            if (wait > maxWaitMins) { maxWaitMins = wait; hubName = hub; }
+        };
+        if (step.type === 'TRANSFER') checkLayover(step.leg1.arrTime, step.leg2.depTime, step.transferStation);
+        if (step.type === 'DOUBLE_TRANSFER') { checkLayover(step.leg1.arrTime, step.leg2.depTime, step.hub1); checkLayover(step.leg2.arrTime, step.leg3.depTime, step.hub2); }
+        if (step.type === 'MULTI_TRANSFER' && step.legs) {
+            for (let i = 0; i < step.legs.length - 1; i++) checkLayover(step.legs[i].arrTime, step.legs[i + 1].depTime, step.legs[i].to);
+        }
+        if (maxWaitMins >= 240) {
+            const waitStr = PlannerRenderer.formatDuration(maxWaitMins);
+            const hubLabel = escapeHTML(PlannerRenderer.applyUIIntercepts(hubName));
+            layoverBanner = buildPlannerNotice({
+                tone: 'layover',
+                title: 'Long Layover',
+                bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">This trip includes a <span class="text-orange-700 dark:text-orange-300">${escapeHTML(waitStr)}</span> wait at <span class="font-bold text-gray-800 dark:text-gray-200">${hubLabel}</span>.</p>`,
+                icon: 'alert',
+            });
+        }
+
+        return stackPlannerNotices(...leadingNotices, lineSeveredNotice, alertBanner, layoverBanner);
+    },
+
+    buildCard: (step, isNextDay, allOptions, selectedIndex, leadingNotices = []) => {
         return `
             <div class="bg-transparent overflow-visible flex flex-col">
+                ${PlannerRenderer.buildTripAdvisoryStack(step, leadingNotices)}
                 ${PlannerRenderer.renderHeader(step, isNextDay)}
                 ${PlannerRenderer.renderOptionsSelector(allOptions, selectedIndex, isNextDay)}
                 <div class="py-3 flex-grow overflow-visible">
@@ -1487,49 +1707,6 @@ export const PlannerRenderer = {
     },
 
     renderHeader: (step, isNextDay) => {
-        let activeDisr = null;
-        
-        if (typeof window !== 'undefined' && typeof window.getTripDisruptions === 'function') {
-            const checkStops = (stops, routeId) => {
-                const disr = window.getTripDisruptions(routeId, stops);
-                if (disr.some(d => d.tier === 'CRITICAL')) activeDisr = disr.find(d => d.tier === 'CRITICAL');
-                else if (disr.some(d => d.tier === 'WARNING') && !activeDisr) activeDisr = disr.find(d => d.tier === 'WARNING');
-            };
-            
-            if (step.type === 'DIRECT') checkStops(step.stops, step.route.id);
-            else if (step.type === 'TRANSFER') { checkStops(step.leg1.stops, step.leg1.route.id); checkStops(step.leg2.stops, step.leg2.route.id); }
-            else if (step.type === 'DOUBLE_TRANSFER') { checkStops(step.leg1.stops, step.leg1.route.id); checkStops(step.leg2.stops, step.leg2.route.id); checkStops(step.leg3.stops, step.leg3.route.id); }
-            else if (step.type === 'MULTI_TRANSFER' && step.legs) { step.legs.forEach(l => checkStops(l.stops, l.route.id)); }
-        }
-
-        // 🛡️ GUARDIAN PHASE 4: The Header Banner Restoration (Partial Journey Bypass)
-        // Mathematically chopped journeys hide the danger zone from the Vector Engine.
-        // We forcefully scan the global registry cross-corridor to resurrect the top banner.
-        if (typeof currentPlannerStatus !== 'undefined' && currentPlannerStatus === 'PARTIAL_JOURNEY' && typeof currentPlannerErrorPayload !== 'undefined' && currentPlannerErrorPayload) {
-            const partialTerminus = currentPlannerErrorPayload.partialDest;
-            if (partialTerminus && typeof $globalDisruptions !== 'undefined') {
-                const normTerminus = normalizeStationName(partialTerminus);
-                const globalList = Object.values($globalDisruptions.get()).flat();
-                const criticalSeverance = globalList.find(d => 
-                    d.tier === 'CRITICAL' && 
-                    d.stations && 
-                    d.stations.map(s => normalizeStationName(s)).includes(normTerminus)
-                );
-                
-                if (criticalSeverance) {
-                    activeDisr = criticalSeverance;
-                }
-            }
-        }
-
-        // Critical severances use the partial "Line Severed" card (or timeline TERMINATES block).
-        // Only keep the compact yellow banner for non-critical delays.
-        let alertBanner = '';
-        if (activeDisr && activeDisr.tier !== 'CRITICAL') {
-            const warningIcon = `<svg class="w-4 h-4 shrink-0 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-            alertBanner = `<button type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${activeDisr.id}')" class="w-full flex items-center justify-center bg-yellow-500 text-yellow-900 hover:bg-yellow-600 text-[10px] font-black uppercase tracking-wider text-center py-1.5 shadow-sm mb-3 rounded transition-colors focus:outline-none">${warningIcon} <span class="ml-1.5">MINOR SERVICE DELAYS</span></button>`;
-        }
-
         let transferCount = 0;
         if (step.type === 'MULTI_TRANSFER') {
             transferCount = step.legs ? step.legs.length - 1 : (step.transferCount || 3);
@@ -1551,28 +1728,6 @@ export const PlannerRenderer = {
         if (isNextDay) headerLabel = 'Future Trip';
 
         const { countdown, duration, isDeparted } = PlannerRenderer.calculateTimes(step, isNextDay);
-
-        let layoverBanner = '';
-        let maxWaitMins = 0;
-        let hubName = '';
-        
-        const checkLayover = (arr, dep, hub) => {
-            let wait = Math.floor((timeToSeconds(dep) - timeToSeconds(arr)) / 60);
-            if (wait < 0) wait += 14400; // Rollover safe
-            if (wait > maxWaitMins) { maxWaitMins = wait; hubName = hub; }
-        };
-
-        if (step.type === 'TRANSFER') checkLayover(step.leg1.arrTime, step.leg2.depTime, step.transferStation);
-        if (step.type === 'DOUBLE_TRANSFER') { checkLayover(step.leg1.arrTime, step.leg2.depTime, step.hub1); checkLayover(step.leg2.arrTime, step.leg3.depTime, step.hub2); }
-        if (step.type === 'MULTI_TRANSFER' && step.legs) {
-            for (let i = 0; i < step.legs.length - 1; i++) checkLayover(step.legs[i].arrTime, step.legs[i+1].depTime, step.legs[i].to);
-        }
-        
-        if (maxWaitMins >= 240) {
-            const waitStr = PlannerRenderer.formatDuration(maxWaitMins);
-            const alertSvg = `<svg class="w-4 h-4 text-orange-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-            layoverBanner = `<div class="bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500 text-orange-800 dark:text-orange-300 text-[10px] font-bold p-2.5 mb-3 rounded-r shadow-sm flex justify-between items-start w-full"><div class="flex-1 min-w-0 pr-3"><span>Please be advised that your trip includes a wait time of <b>${waitStr}</b> @ ${PlannerRenderer.applyUIIntercepts(hubName)}.</span></div><div class="shrink-0 scale-125 origin-top-right">${alertSvg}</div></div>`;
-        }
 
         let stateBadge = "";
         
@@ -1596,14 +1751,12 @@ export const PlannerRenderer = {
             `;
         } else {
             stateBadge = `<div class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                             ${countdown}
                           </div>`;
         }
 
         return `
-            ${alertBanner}
-            ${layoverBanner}
             <div class="pb-4 mb-2 border-b border-gray-100 dark:border-gray-800 bg-transparent">
                 <div class="flex items-center justify-start mb-3">
                     <span class="text-[10px] font-black ${colorClass} uppercase tracking-widest">${headerLabel}</span>
@@ -2564,6 +2717,17 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
         </div>
     `;
     }
+    // Keep loading header as centred "Your Journey" (not the day/share toolbar)
+    const headerTitle = document.querySelector('#planner-results-section h4');
+    if (headerTitle) {
+        headerTitle.className = 'text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1';
+        headerTitle.textContent = 'Your Journey';
+    }
+    const shareSlot = document.querySelector('#planner-results-section .planner-share-slot');
+    if (shareSlot) {
+        shareSlot.className = 'planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end';
+        shareSlot.innerHTML = '';
+    }
 
     let isSearching = true;
     const updateSpinnerText = (text) => {
@@ -3212,11 +3376,11 @@ export function getPlanningDayLabel() {
 
 export function updatePlannerHeader(dayLabel, showShare = true) {
     const headerTitle = document.querySelector('#planner-results-section h4');
-    const spacer = document.querySelector('#planner-results-section .w-8, #planner-results-section .planner-share-slot'); 
+    const spacer = document.querySelector('#planner-results-section .planner-share-slot'); 
     
     if (headerTitle) {
         headerTitle.innerHTML = "";
-        headerTitle.className = "flex-1 w-0 flex justify-center mx-1"; 
+        headerTitle.className = "flex justify-center items-center justify-self-center px-1"; 
         
         const badge = document.createElement("div");
         badge.id = "planner-header-badge";
@@ -3248,10 +3412,10 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
 
     if (spacer) {
         spacer.innerHTML = ""; 
-        if (spacer instanceof HTMLElement) spacer.style.display = 'block'; 
+        if (spacer instanceof HTMLElement) spacer.style.display = 'flex'; 
         
         if (showShare) {
-            spacer.className = "flex-none planner-share-slot"; 
+            spacer.className = "planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end"; 
             const shareBtn = document.createElement("button");
             shareBtn.className = "flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none";
             shareBtn.title = "Share Trip Plan";
@@ -3322,8 +3486,8 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
             
             spacer.appendChild(shareBtn);
         } else {
-            spacer.className = "flex-none planner-share-slot invisible w-24";
-            spacer.innerHTML = `<div></div>`;
+            spacer.className = "planner-share-slot justify-self-end min-h-[38px] flex items-center justify-end invisible";
+            spacer.innerHTML = `<div class="w-24"></div>`;
         }
     }
 }
@@ -3336,45 +3500,9 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
     
     updatePlannerHeader(dayLabel, true);
 
-    let partialWarningHtml = "";
-        if (isPartial && currentPlannerErrorPayload) {
-            const intended = currentPlannerErrorPayload.intendedDest || "Destination";
-            const partial = currentPlannerErrorPayload.partialDest || selectedTrip.to;
-            const disrId = currentPlannerErrorPayload.disruptionId || '';
-            const alertSvg = `<svg class="w-5 h-5 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-            const chevronSvg = `<svg class="w-4 h-4 text-red-400 dark:text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
-            const openAttrs = disrId
-                ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
-                : `type="button"`;
-            const safeIntended = escapeHTML(String(intended).replace(/ STATION/gi, ''));
-            const safePartial = escapeHTML(String(partial).replace(/ STATION/gi, ''));
-            partialWarningHtml = `
-                <button ${openAttrs} class="group w-full text-left mb-4 rounded-xl overflow-hidden border border-red-200/90 dark:border-red-900/60 bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/50 dark:via-gray-900 dark:to-gray-900 shadow-sm animate-fade-in-up hover:border-red-300 dark:hover:border-red-800 hover:shadow-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
-                    <div class="flex items-stretch">
-                        <div class="w-1.5 bg-red-500 shrink-0" aria-hidden="true"></div>
-                        <div class="flex-1 min-w-0 p-3.5 flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 border border-red-200/80 dark:border-red-800/60 flex items-center justify-center shrink-0 shadow-sm">
-                                ${alertSvg}
-                            </div>
-                            <div class="flex-1 min-w-0 pt-0.5">
-                                <div class="flex items-center justify-between gap-2 mb-1.5">
-                                    <h4 class="text-[11px] font-black text-red-700 dark:text-red-300 uppercase tracking-[0.14em]">Line Severed</h4>
-                                    ${disrId ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-500/80 dark:text-red-400/80 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors">Details ${chevronSvg}</span>` : ''}
-                                </div>
-                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">
-                                    Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>.
-                                </p>
-                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">
-                                    Showing trains terminating at <span class="font-bold text-gray-800 dark:text-gray-200">${safePartial}</span>.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </button>
-            `;
-        }
-
-    container.innerHTML = buildHolidayNoticeHtml() + partialWarningHtml + PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)
+    // Advisories attach in one stack: holiday → line severed → expect delays → long layover
+    const leading = [buildHolidayNoticeHtml(selectedTrip)].filter(Boolean);
+    container.innerHTML = PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, leading)
         + '<div id="planner-crowd-delay-slot"></div>';
     injectPlannerCrowdDelay(selectedTrip);
 }
@@ -3388,24 +3516,25 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
 
     const origin = (selectedTrip.from || "").replace(/ STATION/gi, '').trim();
     const dest = (selectedTrip.to || "").replace(/ STATION/gi, '').trim();
+    const safeO = origin.replace(/'/g, "\\'");
+    const safeD = dest.replace(/'/g, "\\'");
 
-    container.innerHTML = `
-        ${buildHolidayNoticeHtml()}
-        <div class="bg-transparent border-b-4 border-gray-200 dark:border-gray-800 pb-6 mb-6 text-left animate-fade-in-up">
-            <div class="flex justify-between items-start w-full mb-3">
-                <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-black text-gray-800 dark:text-gray-200 text-lg tracking-tight">All Trains Departed</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">There are no more scheduled trains for today. You can review past trips below, or check the next available schedule.</p>
-                </div>
-                <div class="shrink-0 text-indigo-400 dark:text-indigo-300">
-                    ${plannerIcon('moon', 'w-8 h-8')}
-                </div>
-            </div>
-            <button onclick="executeManualRollover('${origin.replace(/'/g, "\\'")}', '${dest.replace(/'/g, "\\'")}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs mt-4">
+    const departedNotice = buildPlannerNotice({
+        tone: 'schedule',
+        title: 'All Trains Departed',
+        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">There are no more scheduled trains for today.</p>
+            <p>Review past trips below, or check the next available schedule.</p>`,
+        icon: 'moon',
+        footerHtml: `
+            <button type="button" onclick="executeManualRollover('${safeO}', '${safeD}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs">
                 See Next Available Day
                 <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
             </button>
-        </div>
+        `,
+    });
+
+    container.innerHTML = `
+        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), departedNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -3420,25 +3549,20 @@ export function renderNoMoreTrainsResult(container, trips, selectedIndex = 0, ti
     
     updatePlannerHeader(dayLabel, true);
     
-    // GUARDIAN Phase 5: Typography Line Breaks Injected
-    let explanationText = `Showing trains for <b>${selectedTrip.dayLabel || 'Tomorrow'}</b>.`;
+    let bodyHtml = `<p>${showingTrainsForLine(selectedTrip)}</p>`;
     if (selectedTrip.dayOffset > 1) {
-        explanationText = `No valid connections found for tomorrow.<br>Showing trains for <b>${selectedTrip.dayLabel}</b>.`;
+        bodyHtml = `<p>No valid connections found for tomorrow.</p><p>${showingTrainsForLine(selectedTrip)}</p>`;
     }
 
+    const scheduleNotice = buildPlannerNotice({
+        tone: 'warning',
+        title,
+        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">No more scheduled trains for today.</p>${bodyHtml}`,
+        icon: 'ban',
+    });
+
     container.innerHTML = `
-        ${buildHolidayNoticeHtml()}
-        <div class="bg-transparent border-b-4 border-orange-200 dark:border-orange-800/50 pb-6 mb-6 text-left">
-            <div class="flex justify-between items-start w-full mb-3">
-                <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-bold text-orange-800 dark:text-orange-200 text-lg">${title}</h3>
-                    <p class="text-xs text-orange-700 dark:text-orange-300 mt-1 leading-snug">${explanationText}</p>
-                </div>
-                <div class="shrink-0 text-orange-500 dark:text-orange-400">
-                    ${plannerIcon('ban', 'w-7 h-7')}
-                </div>
-            </div>
-        </div>
+        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), scheduleNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -3452,30 +3576,29 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
 
+    // Merge sunday-mapped holiday into this notice (no separate holiday banner).
     const holiday = getPlannerHolidayContext();
-    let explanationText = holiday && holiday.scheduleType === 'sunday'
-        ? `Metrorail has no service on <b>${escapeHTML(holiday.name)}</b>.<br>`
-        : `Metrorail does not operate on Sundays.<br>`;
-    if (selectedTrip.dayOffset > 1) {
-        explanationText += `No valid connections were found for tomorrow.<br>`;
-    }
-    explanationText += `Showing the next available option for <b>${selectedTrip.dayLabel || 'Tomorrow'}</b>.`;
-    const rolloverTitle = holiday && holiday.scheduleType === 'sunday'
+    const isHolidaySunday = !!(holiday && holiday.scheduleType === 'sunday');
+    const rolloverTitle = isHolidaySunday
         ? `No Service · ${holiday.name}`
         : 'No Sunday Service';
 
+    // No "tomorrow" line here — Sunday has no service by definition; the next
+    // operating day is usually Monday (dayOffset can be >1 when Sunday is selected mid-week).
+    let bodyHtml = isHolidaySunday
+        ? `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail has <span class="text-blue-700 dark:text-blue-300">no service</span> on ${escapeHTML(holiday.name)}.</p>`
+        : `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail does not operate on Sundays.</p>`;
+    bodyHtml += `<p>${showingTrainsForLine(selectedTrip)}</p>`;
+
+    const sundayNotice = buildPlannerNotice({
+        tone: 'schedule',
+        title: rolloverTitle,
+        bodyHtml,
+        icon: 'calendar',
+    });
+
     container.innerHTML = `
-        <div class="bg-transparent border-b-4 border-indigo-200 dark:border-indigo-800/50 pb-6 mb-6 text-left">
-            <div class="flex justify-between items-start w-full mb-3">
-                <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-lg">${escapeHTML(rolloverTitle)}</h3>
-                    <p class="text-xs text-indigo-700 dark:text-indigo-400 mt-1 leading-snug">${explanationText}</p>
-                </div>
-                <div class="shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-800/50 rounded-full flex items-center justify-center mt-0.5 text-indigo-600 dark:text-indigo-300">
-                    ${plannerIcon('calendar', 'w-4 h-4')}
-                </div>
-            </div>
-        </div>
+        ${sundayNotice}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -3489,26 +3612,21 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
     
-    // GUARDIAN Phase 5: Typography Line Breaks Injected
-    let explanationText = `Today's limited schedule does not support this exact route.<br>`;
+    let bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Today's limited schedule does not support this exact route.</p>`;
     if (selectedTrip.dayOffset > 1) {
-        explanationText += `No valid connections were found for tomorrow.<br>`;
+        bodyHtml += `<p>No valid connections were found for tomorrow.</p>`;
     }
-    explanationText += `Showing the next available option for <b>${selectedTrip.dayLabel || 'Tomorrow'}</b>.`;
+    bodyHtml += `<p>${showingTrainsForLine(selectedTrip)}</p>`;
+
+    const unavailableNotice = buildPlannerNotice({
+        tone: 'schedule',
+        title: 'Route Unavailable Today',
+        bodyHtml,
+        icon: 'calendar',
+    });
 
     container.innerHTML = `
-        ${buildHolidayNoticeHtml()}
-        <div class="bg-transparent border-b-4 border-gray-200 dark:border-gray-800 pb-6 mb-6 text-left">
-            <div class="flex justify-between items-start w-full mb-3">
-                <div class="flex-1 min-w-0 pr-3">
-                    <h3 class="font-bold text-gray-900 dark:text-white text-lg">Route Unavailable Today</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-snug">${explanationText}</p>
-                </div>
-                <div class="shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mt-0.5 shadow-sm border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-                    ${plannerIcon('calendar', 'w-4 h-4')}
-                </div>
-            </div>
-        </div>
+        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip, { absorbSunday: true }), unavailableNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;

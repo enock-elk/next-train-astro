@@ -98,6 +98,17 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         }
     }
 
+    // After feedback closes (incl. popstate), restore any parked overlay (e.g. admin inbox reply)
+    if (modalId === 'feedback-modal') {
+        setTimeout(() => {
+            try {
+                if (typeof window.restoreFeedbackReturnOverlay === 'function') {
+                    window.restoreFeedbackReturnOverlay();
+                }
+            } catch { /* ignore */ }
+        }, fromPopState ? 40 : 320);
+    }
+
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 

@@ -46,6 +46,45 @@ function feedbackReplySvg() {
     return '<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
 }
 
+/** Overlay parked under feedback (e.g. developer-reply) so cancel/send restores it. */
+let feedbackReturnModalId = null;
+
+/** Unhide a higher-z overlay that was parked while feedback reply was open. */
+export function restoreFeedbackReturnOverlay() {
+    const id = feedbackReturnModalId;
+    feedbackReturnModalId = null;
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el || el.getAttribute('data-feedback-parked') !== '1') return;
+    el.removeAttribute('data-feedback-parked');
+    el.classList.remove('hidden', 'opacity-0');
+    const inner = el.firstElementChild;
+    if (inner) {
+        inner.classList.remove('scale-95');
+        inner.classList.add('scale-100');
+    }
+}
+
+/**
+ * Open feedback in reply mode without flashing home.
+ * notice-modal (lower z) stays open underneath; higher-z overlays are parked then restored.
+ */
+export function openFeedbackReplyFromOverlay(returnModalId, replyOpts = {}) {
+    enterFeedbackReplyMode(replyOpts);
+    feedbackReturnModalId = returnModalId || null;
+    if (returnModalId && returnModalId !== 'notice-modal') {
+        const parked = document.getElementById(returnModalId);
+        if (parked) {
+            parked.setAttribute('data-feedback-parked', '1');
+            parked.classList.add('hidden');
+        }
+    }
+    trackAlertEvent('open_feedback_modal', {
+        location: returnModalId === 'developer-reply-modal' ? 'admin_inbox_reply' : 'alert_reply',
+    });
+    openSmoothModal('feedback-modal');
+}
+
 /** Reset reply chrome so a fresh Feedback open is a normal form. */
 export function clearFeedbackReplyMode() {
     const contextBox = document.getElementById('feedback-reply-context');
@@ -342,6 +381,8 @@ async function submitFeedback() {
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
+        // closeSmoothModal may history.back() early — restore parked overlay after pop closes feedback
+        setTimeout(() => restoreFeedbackReturnOverlay(), 380);
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -613,18 +654,11 @@ export async function checkServiceAlerts() {
                             triggerHaptic();
                             let truncatedAdminMsg = htmlToPlainSnippet(adminReply.message || '', 8);
                             truncatedAdminMsg = truncatedAdminMsg.replace(/—.*/, '').trim();
-                            enterFeedbackReplyMode({
+                            openFeedbackReplyFromOverlay('developer-reply-modal', {
                                 label: 'Replying to Admin:',
                                 snippet: truncatedAdminMsg,
                                 rawMsg: `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`,
                             });
-                            if (location.hash === '#devreply') history.back();
-                            else closeSmoothModal('developer-reply-modal');
-                            setTimeout(() => {
-                                trackAlertEvent('open_feedback_modal', { location: 'admin_inbox_reply' });
-                                history.pushState({ modal: 'feedback' }, '', '#feedback');
-                                openSmoothModal('feedback-modal');
-                            }, 350);
                         };
                     }
 
@@ -840,18 +874,13 @@ export async function checkServiceAlerts() {
                 const rawHtml = repairMojibake(activeNotice?.message || activeNotice?.text || '');
                 let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
                 truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
-                enterFeedbackReplyMode({
+                // Stack feedback over the alert — no close/home flash; cancel/send returns to notice
+                openFeedbackReplyFromOverlay('notice-modal', {
                     label: 'Replying to Advisory:',
                     snippet: truncatedMsg,
                     rawMsg: truncatedMsg,
                     alertId: activeNotice?.id || '',
                 });
-                closeNotice();
-                setTimeout(() => {
-                    trackAlertEvent('open_feedback_modal', { location: 'alert_reply' });
-                    history.pushState({ modal: 'feedback' }, '', '#feedback');
-                    openSmoothModal('feedback-modal');
-                }, 350);
             };
             btnContainer.appendChild(newReplyBtn);
 
@@ -936,6 +965,7 @@ export function initHub() {
 
     window.repairMojibake = repairMojibake;
     window.closeAppHub = closeAppHub;
+    window.restoreFeedbackReturnOverlay = restoreFeedbackReturnOverlay;
     window.openAppHub = openAppHub;
     window.resetProfile = resetProfile;
     window.performHardCacheClear = performHardCacheClear;
@@ -1075,6 +1105,7 @@ export function initHub() {
         e?.stopPropagation?.();
         triggerHaptic();
         clearFeedbackReplyMode();
+        restoreFeedbackReturnOverlay(); // drop any parked alert/inbox overlay from a prior reply
         closeAppHub(true);
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
     };

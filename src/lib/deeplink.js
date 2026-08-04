@@ -4,7 +4,7 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
-import { parsePlannerDeepLink, parseRouteDeepLinkParams } from './share-links.js';
+import { parsePlannerDeepLink, parseRouteDeepLinkParams, parseMapDeepLink, stripShareParamsFromUrl } from './share-links.js';
 
 const INTENT_KEY = 'nt_pending_deeplink';
 const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
@@ -56,7 +56,8 @@ export function snapshotShareDeeplink() {
         }
         const planner = parsePlannerDeepLink(location.search);
         const route = parseRouteDeepLinkParams(location.search);
-        const snap = planner || route || null;
+        const map = parseMapDeepLink(location.search);
+        const snap = planner || route || map || null;
         if (snap) sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
         return snap;
     } catch {
@@ -145,6 +146,54 @@ export async function flushPendingDeeplinkIntents() {
         const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
         openFareModalForCurrentRoute();
     }
+}
+
+/**
+ * Legacy SPA `?action=map` — open static network map modal (handleShortcutActions parity).
+ */
+export async function applyMapDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    const link = (snap && snap.kind === 'map')
+        ? snap
+        : parseMapDeepLink(location.search);
+    if (!link || link.kind !== 'map') return false;
+    if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+
+    stripShareParamsFromUrl();
+
+    if (typeof window.switchTab === 'function') window.switchTab('next-train');
+
+    const open = () => {
+        const mapModal = document.getElementById('map-modal');
+        if (!mapModal) return false;
+        if (typeof window.setupMapLogic === 'function') {
+            try { window.setupMapLogic(); } catch { /* ignore */ }
+        }
+        if (typeof window.openSmoothModal === 'function') {
+            window.openSmoothModal('map-modal');
+        } else {
+            mapModal.classList.remove('hidden');
+        }
+        try {
+            if (location.hash !== '#map') history.pushState({ modal: 'map' }, '', '#map');
+        } catch { /* ignore */ }
+        const mapImage = document.getElementById('map-image');
+        if (mapImage) mapImage.style.transform = 'translate(0px, 0px) scale(1)';
+        if (typeof window.trackAnalyticsEvent === 'function') {
+            window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
+        }
+        return true;
+    };
+
+    // Modal markup may still be mounting on cold start
+    if (open()) return true;
+    await new Promise((r) => setTimeout(r, 120));
+    return open();
 }
 
 export function bindDeeplinkHashChange() {

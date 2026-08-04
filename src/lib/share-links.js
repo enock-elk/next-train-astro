@@ -123,12 +123,20 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
 }
 
 export function parseRouteDeepLinkParams(search = typeof location !== 'undefined' ? location.search : '') {
-    const params = new URLSearchParams(search);
+    if (search && typeof search === 'object' && !Array.isArray(search) && !(search instanceof URLSearchParams)) {
+        if (search.kind === 'route' && search.routeId) return search;
+    }
+
+    const params = search instanceof URLSearchParams
+        ? search
+        : new URLSearchParams(typeof search === 'string' ? search : '');
     const rt = params.get('rt');
-    const legacy = params.get('action') === 'route';
+    const action = String(params.get('action') || '').toLowerCase();
+    const legacy = action === 'route';
     const routeId = rt || params.get('route');
     if (!routeId) return null;
-    if (!rt && !legacy) return null;
+    // SPA parity: bare `?route=pta-pien&view=grid` (no action=) must still open the timetable
+    if (!rt && !legacy && !params.get('route')) return null;
 
     return {
         kind: 'route',
@@ -136,7 +144,20 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
         view: decodeView(params.get('v') || params.get('view') || ''),
         dir: params.get('dir') === 'B' ? 'B' : 'A',
         day: decodeDay(params.get('d') || params.get('day') || 'weekday'),
+        legacy: legacy || (!rt && !!params.get('route')),
     };
+}
+
+/** Legacy SPA `?action=map` — opens the static network map modal. */
+export function parseMapDeepLink(search = typeof location !== 'undefined' ? location.search : '') {
+    if (search && typeof search === 'object' && !Array.isArray(search) && !(search instanceof URLSearchParams)) {
+        if (search.kind === 'map') return search;
+    }
+    const params = search instanceof URLSearchParams
+        ? search
+        : new URLSearchParams(typeof search === 'string' ? search : '');
+    if (String(params.get('action') || '').toLowerCase() !== 'map') return null;
+    return { kind: 'map' };
 }
 
 export function stripShareParamsFromUrl() {
@@ -146,6 +167,7 @@ export function stripShareParamsFromUrl() {
             'action', 'route', 'view', 'dir', 'day',
             'from', 'to', 'time', 'region',
             'plan', 'rt', 'v', 't', 'd', 'r',
+            'onboard',
         ].forEach((k) => urlObj.searchParams.delete(k));
         const next = urlObj.pathname + (urlObj.search ? urlObj.search : '');
         history.replaceState({}, '', next);

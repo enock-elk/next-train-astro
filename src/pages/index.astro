@@ -143,7 +143,8 @@ import HubModals from '../components/HubModals.astro';
     import {
         prepareDeeplinkIntents,
         consumeHashDeeplinks,
-        flushPendingDeeplinkIntents
+        flushPendingDeeplinkIntents,
+        applyMapDeepLink
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
 
@@ -236,6 +237,12 @@ import HubModals from '../components/HubModals.astro';
             }
 
             if (await applyPlannerDeepLink()) {
+                checkServiceAlerts();
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
+            if (await applyMapDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();
                 return;

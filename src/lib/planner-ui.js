@@ -20,7 +20,7 @@ import {
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
-import { executeRegionSwap, loadAllSchedules } from './logic.js';
+import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
 import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
@@ -35,25 +35,10 @@ function plannerDatabaseReady() {
     return !!(db && idx && Object.keys(idx).length > 0);
 }
 
-/** Ensure a route is pinned so loadAllSchedules does not no-op. */
-function ensurePlannerRoutePinned() {
-    if ($currentRouteId.get()) return;
-    const region = $userRegion.get() || 'GP';
-    let saved = safeStorage.getItem('defaultRoute_' + region);
-    if (!saved || !ROUTES[saved] || ROUTES[saved].region !== region) {
-        const regionRoutes = Object.values(ROUTES).filter(
-            (r) => r.region === region && r.isActive && r.id !== 'special_event'
-        );
-        saved = regionRoutes[0]?.id || null;
-        if (saved) safeStorage.setItem('defaultRoute_' + region, saved);
-    }
-    if (saved) $currentRouteId.set(saved);
-}
-
 /** SPA always planned against a hydrated regional DB. Wait / nudge load if cold. */
 async function ensurePlannerDatabase(timeoutMs = 12000) {
     if (plannerDatabaseReady()) return true;
-    ensurePlannerRoutePinned();
+    ensureRoutePinnedForRegion($userRegion.get() || 'GP');
     try { await loadAllSchedules(true); } catch (e) { /* poll below */ }
     if (plannerDatabaseReady()) return true;
     const started = Date.now();
@@ -2668,7 +2653,7 @@ export function setupAutocomplete(inputId, selectId) {
 
 /**
  * Cold-start / shared planner links (short `plan=` + legacy SPA `action=planner`).
- * SPA parity: honor link `region` even for returning users (shared trips are region-scoped).
+ * SPA parity: honor link `region`, pin a route first (schedules need it), then poll stations.
  */
 export async function applyPlannerDeepLink() {
     if (typeof location === 'undefined') return false;
@@ -2681,16 +2666,20 @@ export async function applyPlannerDeepLink() {
     // Only clear snapshot when it was ours (leave route snaps for applyRouteDeepLink)
     if (snap && snap.kind === 'planner') consumeShareDeeplinkSnapshot();
 
-    // SPA: region mismatch → adopt share region so stations resolve (Belle Ombre is GP-only, etc.)
-    if (link.region
-        && ['GP', 'WC', 'KZN', 'EC'].includes(link.region)
-        && ($userRegion.get() || 'GP') !== link.region) {
-        safeStorage.setItem('userRegion', link.region);
-        executeRegionSwap(link.region, true);
-    }
-
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
+    }
+
+    // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
+    // and MASTER_STATION_LIST never fills → "Connection timeout".
+    const targetRegion = (link.region && ['GP', 'WC', 'KZN', 'EC'].includes(link.region))
+        ? link.region
+        : ($userRegion.get() || 'GP');
+    const pinned = ensureRoutePinnedForRegion(targetRegion);
+    if (!pinned) {
+        showToast('Could not load trip data for this region.', 'error');
+        stripShareParamsFromUrl();
+        return false;
     }
 
     try {
@@ -2704,18 +2693,28 @@ export async function applyPlannerDeepLink() {
 
     return await new Promise((resolve) => {
         let attempts = 0;
-        const maxAttempts = 24;
+        const maxAttempts = 30; // SPA: 20 × 500ms; allow a bit more for cold cache
         const checkReady = setInterval(() => {
             attempts += 1;
+            // Re-pin + reload if a race cleared the route / station list
+            if (attempts === 1 || attempts % 4 === 0) {
+                ensureRoutePinnedForRegion(targetRegion);
+                if (!getMasterStationList()?.length) {
+                    loadAllSchedules(true).catch(() => {});
+                }
+            }
             const list = getMasterStationList();
             if (list && list.length > 0) {
                 clearInterval(checkReady);
                 const resolveStation = (txt) => {
                     if (!txt) return '';
-                    const clean = String(txt).trim().toUpperCase().replace(/\+/g, ' ').replace(/\s+/g, ' ');
-                    const exact = list.find((s) => s.replace(/ STATION$/i, '').toUpperCase() === clean);
+                    let clean = String(txt).trim();
+                    try { clean = decodeURIComponent(clean); } catch { /* already decoded */ }
+                    clean = clean.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+                    const bare = (s) => String(s || '').replace(/ STATION$/i, '').toUpperCase();
+                    const exact = list.find((s) => bare(s) === clean || String(s).toUpperCase() === clean);
                     if (exact) return exact;
-                    const partial = list.find((s) => s.replace(/ STATION$/i, '').toUpperCase().includes(clean));
+                    const partial = list.find((s) => bare(s).includes(clean) || clean.includes(bare(s)));
                     return partial || '';
                 };
                 const fromId = resolveStation(link.from);
@@ -2778,6 +2777,7 @@ export async function applyPlannerDeepLink() {
                 resolve(true);
             } else if (attempts >= maxAttempts) {
                 clearInterval(checkReady);
+                console.warn('[DeepLink] Timed out waiting for station list.');
                 showToast('Connection timeout: Could not load trip data.', 'error');
                 resolve(false);
             }

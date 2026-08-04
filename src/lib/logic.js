@@ -897,6 +897,56 @@ export async function loadAllSchedules(force = false) {
     }
 }
 
+/**
+ * SPA deeplink boot parity: loadAllSchedules no-ops without a route.
+ * Pin default/first active route in `region` (and soft-swap region when needed).
+ */
+export function ensureRoutePinnedForRegion(region) {
+    const target = ['GP', 'WC', 'KZN', 'EC'].includes(region) ? region : ($userRegion.get() || 'GP');
+    const current = $userRegion.get() || 'GP';
+
+    if (current !== target) {
+        console.log(`🛡️ Guardian: Deeplink soft region pin ${current} → ${target}`);
+        regionSwapGeneration++;
+        $userRegion.set(target);
+        syncRegionDisplayDom(target);
+        try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
+        try { window.syncCrmRegionAnalytics?.(target); } catch { /* ignore */ }
+        memoryFallbackCache = {};
+        $fullDatabase.set(null);
+        $schedules.set({});
+        $globalStationIndex.set({});
+        $masterStationList.set([]);
+        if (typeof window !== 'undefined') window.MASTER_STATION_LIST = [];
+        currentScheduleData = {};
+        lastTrackedOD = null;
+        $currentRouteId.set(null);
+        applyMapImageForRegion(target);
+    }
+
+    let routeId = $currentRouteId.get();
+    if (routeId && ROUTES[routeId]?.region === target && ROUTES[routeId]?.isActive) {
+        return routeId;
+    }
+
+    let savedDefault = null;
+    try { savedDefault = safeStorage.getItem('defaultRoute_' + target); } catch { /* ignore */ }
+    if (savedDefault && ROUTES[savedDefault]?.region === target && ROUTES[savedDefault]?.isActive) {
+        routeId = savedDefault;
+    } else {
+        const first = Object.values(ROUTES).find(
+            (r) => r.region === target && r.isActive && r.id !== 'special_event'
+        );
+        routeId = first?.id || null;
+        if (routeId) {
+            try { safeStorage.setItem('defaultRoute_' + target, routeId); } catch { /* ignore */ }
+        }
+    }
+
+    if (routeId) $currentRouteId.set(routeId);
+    return routeId;
+}
+
 export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     console.log(`🛡️ Guardian: Executing seamless SPA region swap to ${newRegion}...`);
     regionSwapGeneration++;

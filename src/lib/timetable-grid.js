@@ -4,7 +4,7 @@
 import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules } from '../store.js';
-import { loadAllSchedules, executeRegionSwap } from './logic.js';
+import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
 import {
@@ -57,7 +57,7 @@ export async function applyRouteDeepLink() {
     if (!link) return false;
 
     const route = ROUTES[link.routeId];
-    if (!route) return false;
+    if (!route || !route.isActive) return false;
 
     if (link.fromSnapshot) consumeShareDeeplinkSnapshot();
 
@@ -74,18 +74,19 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem(defaultKey, link.routeId);
     }
 
-    // SPA: always adopt the shared route's region so the timetable resolves
-    if (route.region !== ($userRegion.get() || 'GP')) {
-        safeStorage.setItem('userRegion', route.region);
-        executeRegionSwap(route.region, true);
-    }
-
+    // Soft region pin (not welcome-skip swap) so schedules can load for the shared corridor
+    ensureRoutePinnedForRegion(route.region);
     $currentRouteId.set(link.routeId);
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
 
     await loadAllSchedules(true);
+
+    if (typeof window.trackAnalyticsEvent === 'function') {
+        window.trackAnalyticsEvent('deep_link_open', { type: 'route', route_id: link.routeId, view: link.view || 'board' });
+    }
+    showToast(`Opened shared route: ${route.name}`, 'success', 2000);
 
     if (link.view === 'grid') {
         setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);

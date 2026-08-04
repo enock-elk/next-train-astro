@@ -415,20 +415,29 @@ function destroyTripMapInstance() {
     if (typeof window !== 'undefined') window._isMapInitializing = false;
 }
 
+/** Tear down Leaflet only after the modal has faded out — avoids a white flash. */
+function scheduleTripMapDestroy(delayMs = 320) {
+    if (tripMapDestroyTimeout) clearTimeout(tripMapDestroyTimeout);
+    tripMapDestroyTimeout = setTimeout(() => {
+        tripMapDestroyTimeout = null;
+        destroyTripMapInstance();
+    }, delayMs);
+}
+
 function closeTripMapModal() {
     if (typeof location !== 'undefined' && location.hash === '#trip-map') {
         try { history.back(); } catch (e) { closeSmoothModal('trip-map-modal'); }
     } else {
         closeSmoothModal('trip-map-modal');
     }
-    destroyTripMapInstance();
+    scheduleTripMapDestroy();
 }
 
 if (typeof window !== 'undefined' && !window.__ntTripMapPopBound) {
     window.__ntTripMapPopBound = true;
     window.addEventListener('popstate', () => {
         if (location.hash !== '#trip-map' && (tripMapInstance || document.getElementById('trip-map-modal'))) {
-            destroyTripMapInstance();
+            scheduleTripMapDestroy();
         }
     });
 }
@@ -993,7 +1002,7 @@ export async function openTripMapRenderer(routeData) {
         modal.id = 'trip-map-modal';
         modal.className = 'fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
+            <div class="bg-gray-100 dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0 shadow-sm">
                     <div class="flex items-center space-x-3 min-w-0 pr-2">
                         <div class="flex flex-col min-w-0">
@@ -1007,7 +1016,7 @@ export async function openTripMapRenderer(routeData) {
                 </div>
 
                 <div class="flex-grow w-full bg-gray-200 dark:bg-gray-800 relative z-10 min-h-0">
-                    <div id="trip-map-canvas" class="absolute inset-0"></div>
+                    <div id="trip-map-canvas" class="absolute inset-0 bg-gray-200 dark:bg-gray-800"></div>
 
                     <div class="absolute bottom-6 left-4 right-4 z-[1000] flex justify-between items-end pointer-events-none">
                         <div class="flex items-end space-x-3 pointer-events-auto">
@@ -1041,6 +1050,7 @@ export async function openTripMapRenderer(routeData) {
 
     if (tripMapInitTimeout) clearTimeout(tripMapInitTimeout);
     if (tripMapDestroyTimeout) clearTimeout(tripMapDestroyTimeout);
+    tripMapDestroyTimeout = null;
 
     tripMapInitTimeout = setTimeout(async () => {
         if (tripMapInstance) {
@@ -1058,10 +1068,16 @@ export async function openTripMapRenderer(routeData) {
 
         try {
             const L = window.L;
+            const mapCanvasEl = document.getElementById('trip-map-canvas');
+            if (mapCanvasEl) {
+                mapCanvasEl.classList.add('bg-gray-200', 'dark:bg-gray-800');
+                mapCanvasEl.style.backgroundColor = '';
+            }
             tripMapInstance = L.map('trip-map-canvas', {
                 zoomControl: false,
                 attributionControl: true
             });
+            try { tripMapInstance.getContainer().style.background = 'transparent'; } catch (e) { /* ignore */ }
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                 maxZoom: 19,

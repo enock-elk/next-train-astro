@@ -25,6 +25,13 @@ const base = normalizeBase(import.meta.env.BASE_URL);
         position: absolute; top: 16px; right: 16px; z-index: 1000;
         max-width: calc(100vw - 120px); width: 250px; display: none;
       }
+      /* Parent sheet Back sits in this same top row when embedded. */
+      html.nt-map-embedded .legend-container {
+        top: max(0.5rem, env(safe-area-inset-top, 0px));
+        right: 12px;
+        max-width: min(250px, calc(100vw - 7.5rem));
+      }
+      html.nt-map-embedded #map-back-wrap { display: none !important; }
       .legend-box {
         background: rgba(255, 255, 255, 0.95);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -191,8 +198,9 @@ const base = normalizeBase(import.meta.env.BASE_URL);
           return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
         } catch (_) { return false; }
       }
-      // Parent sheet already has Back — avoid a double header.
+      // Parent sheet already has Back — align Network Lines on the same top row.
       if (inAppSheet()) {
+        document.documentElement.classList.add('nt-map-embedded');
         document.getElementById('map-back-wrap')?.classList.add('hidden');
         try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
       }

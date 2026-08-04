@@ -307,6 +307,8 @@ export function bindHistoryBackNavigation() {
             const keepPlannerResults = hashNow === '#planner-results'
                 || hashNow === '#map'
                 || hashNow === '#trip-map'
+                || hashNow === '#sheet'
+                || hashNow === '#sidenav'
                 || hashNow === '#lightbox'
                 || hashNow === '#feedback'
                 || hashNow === '#notice'

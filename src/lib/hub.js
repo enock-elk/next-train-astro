@@ -1163,61 +1163,128 @@ export function initHub() {
     setupMapLogic();
 
     /** In-app sheet for guide / interactive map — keeps planner state (no full remount). */
+    const isMapSheetUrl = (url) => /\/map\.html?(?:\?|#|$)/i.test(String(url || ''));
+
+    const applySheetChrome = (overlay, mode, title) => {
+        const chrome = document.getElementById('nt-inapp-sheet-chrome');
+        const titleEl = document.getElementById('nt-inapp-sheet-title');
+        const frame = document.getElementById('nt-inapp-sheet-frame');
+        const isMap = mode === 'map';
+        overlay.dataset.sheetMode = isMap ? 'map' : 'guide';
+        if (chrome) {
+            chrome.className = isMap
+                ? 'absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 pointer-events-none'
+                : 'relative shrink-0 z-10 flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm';
+        }
+        const closeBtn = document.getElementById('nt-inapp-sheet-close');
+        if (closeBtn) {
+            closeBtn.className = isMap
+                ? 'pointer-events-auto inline-flex items-center text-sm font-bold text-gray-800 dark:text-white bg-white/95 dark:bg-gray-800/95 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'
+                : 'inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none';
+        }
+        if (titleEl) {
+            if (isMap) {
+                titleEl.textContent = '';
+                titleEl.classList.add('hidden');
+            } else {
+                titleEl.textContent = title || '';
+                titleEl.classList.remove('hidden');
+            }
+        }
+        // Guide keeps a right spacer for title centering; map leaves the row open for Network Lines.
+        const spacer = chrome?.querySelector('[data-nt-sheet-spacer]');
+        if (spacer) spacer.classList.toggle('hidden', isMap);
+        if (frame) {
+            frame.className = isMap
+                ? 'absolute inset-0 w-full h-full border-0 bg-gray-100 dark:bg-gray-900'
+                : 'relative flex-1 w-full border-0 bg-white dark:bg-gray-900 min-h-0';
+        }
+    };
+
+    const showSheetOverlay = (overlay) => {
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+    };
+
+    const hideSheetOverlay = (overlay) => {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        const frame = document.getElementById('nt-inapp-sheet-frame');
+        // Delay blanking so users never see an empty white iframe flash.
+        setTimeout(() => {
+            if (overlay.classList.contains('hidden') && frame && !overlay.classList.contains('flex')) {
+                frame.src = 'about:blank';
+            }
+        }, 320);
+    };
+
     const openInAppSheet = (url, title) => {
         let overlay = document.getElementById('nt-inapp-sheet');
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'nt-inapp-sheet';
-            overlay.className = 'fixed inset-0 z-[220] hidden flex flex-col bg-gray-50 dark:bg-gray-900';
+            overlay.className = 'fixed inset-0 z-[220] hidden flex-col bg-gray-50 dark:bg-gray-900';
             overlay.innerHTML = `
-                <div class="shrink-0 flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+                <div id="nt-inapp-sheet-chrome" class="relative shrink-0 z-10 flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
                     <button type="button" id="nt-inapp-sheet-close" class="inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7-7h18"></path></svg>
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                         Back
                     </button>
                     <span id="nt-inapp-sheet-title" class="text-sm font-black text-gray-900 dark:text-white truncate"></span>
-                    <span class="w-16" aria-hidden="true"></span>
+                    <span data-nt-sheet-spacer class="w-16" aria-hidden="true"></span>
                 </div>
-                <iframe id="nt-inapp-sheet-frame" title="In-app page" class="flex-1 w-full border-0 bg-white dark:bg-gray-900"></iframe>`;
+                <iframe id="nt-inapp-sheet-frame" title="In-app page" class="relative flex-1 w-full border-0 bg-white dark:bg-gray-900 min-h-0"></iframe>`;
             document.body.appendChild(overlay);
             const closeSheet = () => {
-                overlay.classList.add('hidden');
-                const frame = document.getElementById('nt-inapp-sheet-frame');
-                if (frame) frame.src = 'about:blank';
-                document.body.classList.remove('overflow-hidden');
+                if (overlay.classList.contains('hidden')) return;
+                hideSheetOverlay(overlay);
                 if (location.hash === '#sheet') {
                     try { history.back(); } catch { /* ignore */ }
                 }
             };
             const navigateSheet = (nextUrl, nextTitle) => {
                 const frame = document.getElementById('nt-inapp-sheet-frame');
-                const titleEl = document.getElementById('nt-inapp-sheet-title');
-                if (titleEl && nextTitle) titleEl.textContent = nextTitle;
+                const mode = isMapSheetUrl(nextUrl) || (!nextUrl && /network map/i.test(String(nextTitle || '')))
+                    ? 'map'
+                    : 'guide';
+                // Title-only updates (map embed handshake) keep current URL/mode.
+                if (!nextUrl && nextTitle) {
+                    if (mode === 'guide' || overlay.dataset.sheetMode === 'guide') {
+                        const titleEl = document.getElementById('nt-inapp-sheet-title');
+                        if (titleEl) titleEl.textContent = nextTitle;
+                    }
+                    showSheetOverlay(overlay);
+                    return;
+                }
+                applySheetChrome(overlay, mode, nextTitle || title);
                 if (frame && nextUrl) frame.src = nextUrl;
-                overlay.classList.remove('hidden');
-                document.body.classList.add('overflow-hidden');
+                showSheetOverlay(overlay);
             };
             document.getElementById('nt-inapp-sheet-close')?.addEventListener('click', closeSheet);
             window.addEventListener('popstate', () => {
                 if (location.hash !== '#sheet' && !overlay.classList.contains('hidden')) {
-                    overlay.classList.add('hidden');
-                    const frame = document.getElementById('nt-inapp-sheet-frame');
-                    if (frame) frame.src = 'about:blank';
-                    document.body.classList.remove('overflow-hidden');
+                    hideSheetOverlay(overlay);
                 }
             });
             window.__ntCloseInAppSheet = closeSheet;
             window.__ntNavigateInAppSheet = navigateSheet;
         }
+        const mode = isMapSheetUrl(url) ? 'map' : 'guide';
+        applySheetChrome(overlay, mode, title);
         const frame = document.getElementById('nt-inapp-sheet-frame');
-        const titleEl = document.getElementById('nt-inapp-sheet-title');
-        if (titleEl) titleEl.textContent = title || '';
         if (frame) frame.src = url;
-        overlay.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-        if (location.hash !== '#sheet') {
-            try { history.pushState({ ntSheet: true }, '', '#sheet'); } catch { /* ignore */ }
-        }
+        showSheetOverlay(overlay);
+        // Opening from sidenav uses closeAppHub(true), which leaves #sidenav on the stack.
+        // Replace that entry so one Back returns to the real previous screen (not a blank stop).
+        try {
+            if (location.hash === '#sheet' || location.hash === '#sidenav') {
+                history.replaceState({ ntSheet: true }, '', '#sheet');
+            } else {
+                history.pushState({ ntSheet: true }, '', '#sheet');
+            }
+        } catch { /* ignore */ }
     };
 
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {

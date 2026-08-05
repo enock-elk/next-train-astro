@@ -181,12 +181,14 @@ export const LEGAL_TEXTS = {
 
         <h4 class="font-bold text-lg mb-2 mt-4">3. Acceptable Use</h4>
         <p class="mb-3">Next Train is built for personal, non-commercial transit planning. Automated data scraping, reverse-engineering of our databases, or malicious interference with our cloud infrastructure is strictly prohibited.</p>
+        <p class="mb-3">By using the Trip Planner and related features, you acknowledge that we may process limited anonymous service diagnostics to maintain reliability. This does not change the disclaimers above regarding schedule or fare accuracy.</p>
     `,
     privacy: `
         <h4 class="font-bold text-lg mb-2">1. What Information Do We Collect?</h4>
         <p class="mb-3">We respect your privacy. Next Train is designed to be used without creating an account.</p>
         <p class="mb-3"><strong>Location Data:</strong> If you use the “Find Nearest Station” feature, your GPS coordinates are processed strictly locally on your device. We never transmit, track, or store your physical location on our servers.</p>
         <p class="mb-3"><strong>Anonymous Telemetry:</strong> To keep the app fast and crash-free, we automatically collect basic diagnostic data (e.g., device model, operating system, generic region, and crash logs).</p>
+        <p class="mb-3">We may also collect limited anonymous diagnostics related to trip planning and routing outcomes, solely to improve service reliability. This data is not used to identify or market to you.</p>
         <p class="mb-3"><strong>Voluntary Information:</strong> If you use the In-App Feedback tool, you may optionally provide your email or WhatsApp number. This is used only to reply to your specific query and is never used for marketing.</p>
 
         <h4 class="font-bold text-lg mb-2 mt-4">2. Third-Party Tracking &amp; Cookies</h4>

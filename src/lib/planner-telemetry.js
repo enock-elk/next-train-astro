@@ -13,6 +13,21 @@ import { safeStorage } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 
+/** Optional signed-in Firebase uid (null for guests / anonymous). */
+function authUid() {
+    try {
+        if (typeof window !== 'undefined' && window.$account?.get) {
+            const a = window.$account.get();
+            if (a?.status === 'signed-in' && a.uid) return a.uid;
+        }
+    } catch { /* ignore */ }
+    try {
+        return safeStorage.getItem('authUid') || null;
+    } catch {
+        return null;
+    }
+}
+
 const FAIL_DEBOUNCE_MS = 45_000;
 /** Flush telemetry batch size — independent of UI history display cap. */
 export const TRIP_FLUSH_SIZE = 10;
@@ -67,6 +82,7 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
     lastFailKey = key;
     lastFailAt = now;
 
+    const did = deviceId();
     const payload = {
         origin,
         destination,
@@ -74,7 +90,9 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
         dayType: dayType || null,
         timeOfDay: timeOfDay || null,
         timestamp: now,
-        deviceId: deviceId(),
+        userId: did,
+        deviceId: did,
+        authUid: authUid(),
         region: $userRegion.get() || null,
         appVersion: APP_VERSION,
     };
@@ -119,11 +137,15 @@ export function getTripPlanQueueLength() {
  */
 export function enqueueSuccessfulTripPlan(entry) {
     const queue = readTripQueue();
+    const did = deviceId();
     queue.push({
         ...entry,
         timestamp: Date.now(),
-        deviceId: deviceId(),
-        region: $userRegion.get() || null,
+        userId: did,
+        deviceId: did,
+        authUid: authUid(),
+        region: entry.region || $userRegion.get() || null,
+        dayType: entry.dayType || null,
         appVersion: APP_VERSION,
     });
     writeTripQueue(queue.slice(-TRIP_QUEUE_HARD_CAP));
@@ -148,10 +170,13 @@ export async function flushTripPlanQueue(force = false) {
         const batch = queue.slice(0, TRIP_FLUSH_SIZE);
         const remainder = queue.slice(TRIP_FLUSH_SIZE);
         const batchId = uid();
+        const did = deviceId();
         const payload = {
             count: batch.length,
             flushedAt: Date.now(),
-            deviceId: deviceId(),
+            userId: did,
+            deviceId: did,
+            authUid: authUid(),
             region: $userRegion.get() || null,
             appVersion: APP_VERSION,
             trips: batch,

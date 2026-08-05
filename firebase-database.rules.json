@@ -13,7 +13,7 @@
     },
     "notices": {
       ".read": true,
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 
     "polls": {
@@ -73,6 +73,12 @@
         "$deadEndId": {
           ".write": "!data.exists()"
         }
+      },
+      "trip_plans": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$batchId": {
+          ".write": "!data.exists()"
+        }
       }
     },
 
@@ -83,7 +89,7 @@
 
     "notices_archive": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 
     "disruptions_archive": {

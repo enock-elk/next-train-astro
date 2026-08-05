@@ -520,16 +520,18 @@ export function getRouteFare(sheetKey) {
 
     const profile = FARE_CONFIG.profiles[getUserProfile()] || FARE_CONFIG.profiles["Adult"];
     let useOffPeakRate = false;
-    
-    // GUARDIAN BUGFIX 1: Tie Off-Peak explicitly to the Sheet Type (No discounts on Sat/Sun/Holidays)
+
+    // PRASA #TravelOffPeak: discount tickets valid 09:30–14:30 (weekdays, weekends & public holidays).
+    // Scholar 50% is profile.base — not gated on this window.
+    const applyOffPeakWindow = FARE_CONFIG.offPeakEveryDay !== false;
     let isWeekdaySheet = (getCurrentDayType() === 'weekday');
     if (sheetKey) {
         isWeekdaySheet = sheetKey.includes('weekday');
     }
-    
-    if (isWeekdaySheet) {
+
+    if (applyOffPeakWindow || isWeekdaySheet) {
         let checkH, checkM;
-        
+
         // GUARDIAN PHASE 2A: Decouple Off-Peak pricing from individual train departures.
         // Strict adherence to global physical/simulated clock.
         if ($isSimMode.get() && ($simTime.get() || "")) {
@@ -545,7 +547,7 @@ export function getRouteFare(sheetKey) {
             checkH = now.getHours();
             checkM = now.getMinutes();
         }
-        
+
         const decimalTime = checkH + (checkM / 60);
         if (decimalTime >= FARE_CONFIG.offPeakStart && decimalTime < FARE_CONFIG.offPeakEnd) {
             useOffPeakRate = true;

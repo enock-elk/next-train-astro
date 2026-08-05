@@ -2472,7 +2472,10 @@ export function initPlanner() {
     }
 }
 
-/** Persist every Plan Trip attempt (success or error). */
+/** Max recent trips shown in the planner UI (telemetry flush size is separate). */
+const PLANNER_HISTORY_DISPLAY_CAP = 5;
+
+/** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
     if (!from || !to || typeof from !== 'string' || typeof to !== 'string') return;
     const cleanFrom = from.replace(/ STATION/gi, '');
@@ -2492,7 +2495,9 @@ export function savePlannerHistory(from, to, opts = {}) {
         fullTo: to,
         at: Date.now(),
     });
-    if (history.length > 8) history = history.slice(0, 8);
+    if (history.length > PLANNER_HISTORY_DISPLAY_CAP) {
+        history = history.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+    }
     
     safeStorage.setItem(historyKey, JSON.stringify(history));
     renderPlannerHistory();
@@ -2517,13 +2522,17 @@ export function renderPlannerHistory() {
             masterKeys.has(stationKey(item.fullFrom || item.from)) &&
             masterKeys.has(stationKey(item.fullTo || item.to))
         );
-        // Persist cleaned list so dead entries don't stick around forever
-        if (validHistory.length !== rawHistory.length) {
-            safeStorage.setItem(historyKey, JSON.stringify(validHistory));
-        }
     } else if (masterList && masterList.length === 0) {
         container.classList.add('hidden');
         return;
+    }
+
+    if (validHistory.length > PLANNER_HISTORY_DISPLAY_CAP) {
+        validHistory = validHistory.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+    }
+    // Persist cleaned / capped list so dead or oversize entries don't linger
+    if (JSON.stringify(validHistory) !== JSON.stringify(rawHistory)) {
+        safeStorage.setItem(historyKey, JSON.stringify(validHistory));
     }
     
     if (validHistory.length === 0) {

@@ -33,6 +33,7 @@
  * 6. Exceptions Manager (God-Mode + Banned/Special Types + EXPIRY + Grid Notice Engine)
  * 7. Special Event Route Manager
  * 8. System Health / Diagnostics Scanner
+ *    (includes Zone Distance Audit accordion for fare-zone / km review)
  * 8b. Schedule Data QA (timetable content — standalone from diagnostics)
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
@@ -115,6 +116,7 @@ const Admin = {
             activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
             wrench: '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>',
             map: '<path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
+            ruler: '<path d="M21.3 15.3a2.4 2.4 0 010 3.4l-2.6 2.6a2.4 2.4 0 01-3.4 0L2.7 8.7a2.41 2.41 0 010-3.4l2.6-2.6a2.41 2.41 0 013.4 0z"/><path d="M14.5 12.5l2-2"/><path d="M11.5 9.5l2-2"/><path d="M8.5 6.5l2-2"/><path d="M17.5 15.5l2-2"/>',
             chart: '<path d="M3 3v18h18"/><path d="M7 14v4"/><path d="M12 10v8"/><path d="M17 6v12"/>',
             trending: '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
             plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
@@ -3299,7 +3301,7 @@ const Admin = {
                 const data = await res.json();
                 Admin._cachedTripPlans = data;
                 if (!data) {
-                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
+                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans to sys_logs/trip_plans (UI recent trips capped at 5).</span></div>';
                     return;
                 }
 
@@ -7926,6 +7928,57 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Zone Distance Audit — fare zone vs computed route km -->
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
+                    <button id="zone-audit-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-emerald-600 dark:text-emerald-400">${Admin.icon('ruler', 'w-4 h-4')}</span>
+                            Zone Distance Audit
+                        </span>
+                        <svg id="zone-audit-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+
+                    <div id="zone-audit-body" class="p-3 hidden space-y-3">
+                        <p class="text-[9px] text-emerald-800 dark:text-emerald-400 font-medium leading-snug">
+                            Measures route km from station coordinates (path sum; prefers KM_MARK when present)
+                            and checks the assigned fare zone against PRASA Aug 2025 travel distances:
+                            Z1 1–15 · Z2 16–40 · Z3 41–135 · Z4 &gt;135 km.
+                        </p>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Data Source</label>
+                            <select id="zone-audit-source-select" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
+                                <option value="RAM">RAM (Current Active Cache)</option>
+                                <option value="FIREBASE" selected>Firebase Live RTDB</option>
+                                <option value="CLOUDFLARE">Cloudflare Edge Cache</option>
+                                <option value="GITHUB">GitHub CDN</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) — PRASA defaults</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="number" id="zone-audit-z1" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z1 max km (official 15)">
+                                <input type="number" id="zone-audit-z2" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z2 max km (official 40)">
+                                <input type="number" id="zone-audit-z3" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z3 max km (official 135)">
+                            </div>
+                            <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1">Defaults 15 / 40 / 135. Above Z3 max → Z4. Override only for sensitivity checks. Uses Target Region above.</p>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button id="zone-audit-run-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center gap-1.5">
+                                ${Admin.icon('ruler', 'w-3.5 h-3.5')} Run Distance Audit
+                            </button>
+                            <button id="zone-audit-export-btn" class="px-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-bold py-2.5 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none inline-flex items-center gap-1" title="Download last audit as JSON">
+                                ${Admin.icon('download', 'w-3.5 h-3.5')} Export
+                            </button>
+                        </div>
+
+                        <div id="zone-audit-summary" class="hidden"></div>
+                        <div id="zone-audit-results" class="space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar"></div>
+                    </div>
+                </div>
+
                 <!-- 🛡️ GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
@@ -7993,6 +8046,262 @@ const Admin = {
         const simHeader = document.getElementById('sim-header-btn');
         const simBody = document.getElementById('sim-body');
         const simChevron = document.getElementById('sim-chevron');
+
+        const zoneAuditHeader = document.getElementById('zone-audit-header-btn');
+        const zoneAuditBody = document.getElementById('zone-audit-body');
+        const zoneAuditChevron = document.getElementById('zone-audit-chevron');
+        const zoneAuditRunBtn = document.getElementById('zone-audit-run-btn');
+        const zoneAuditExportBtn = document.getElementById('zone-audit-export-btn');
+        const zoneAuditResults = document.getElementById('zone-audit-results');
+        const zoneAuditSummary = document.getElementById('zone-audit-summary');
+        let lastZoneAuditReport = null;
+
+        const defaultBands = (typeof DEFAULT_ZONE_KM_BANDS !== 'undefined' && DEFAULT_ZONE_KM_BANDS)
+            ? DEFAULT_ZONE_KM_BANDS
+            : { Z1: 15, Z2: 40, Z3: 135 };
+        const z1Input = document.getElementById('zone-audit-z1');
+        const z2Input = document.getElementById('zone-audit-z2');
+        const z3Input = document.getElementById('zone-audit-z3');
+        if (z1Input) z1Input.value = defaultBands.Z1;
+        if (z2Input) z2Input.value = defaultBands.Z2;
+        if (z3Input) z3Input.value = defaultBands.Z3;
+
+        if (zoneAuditHeader && zoneAuditBody) {
+            zoneAuditHeader.onclick = () => {
+                zoneAuditBody.classList.toggle('hidden');
+                if (zoneAuditChevron) {
+                    if (zoneAuditBody.classList.contains('hidden')) zoneAuditChevron.classList.add('-rotate-90');
+                    else zoneAuditChevron.classList.remove('-rotate-90');
+                }
+            };
+        }
+
+        const fetchDbForZoneAudit = async (targetRegion, scanSource) => {
+            if (scanSource === 'RAM') {
+                if (typeof fullDatabase === 'undefined' || !fullDatabase) {
+                    throw new Error('Offline cache (RAM) is empty for this session.');
+                }
+                return fullDatabase;
+            }
+
+            const paths = {
+                GP: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/gauteng.json',
+                WC: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/westerncape.json',
+                KZN: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/kzn.json',
+                EC: scanSource === 'GITHUB' ? 'full-database.json' : 'schedules/easterncape.json',
+            };
+            const dbPath = paths[targetRegion];
+            let fetchUrl = '';
+            if (scanSource === 'GITHUB') {
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+            } else if (scanSource === 'FIREBASE') {
+                fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
+            } else {
+                fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
+            }
+
+            const res = await fetch(fetchUrl);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const rawData = await res.json();
+
+            if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
+            if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
+            if (targetRegion === 'KZN' && rawData.kzn) return rawData.kzn;
+            if (targetRegion === 'EC' && rawData.easterncape) return rawData.easterncape;
+            if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) return rawData.schedules;
+            return rawData;
+        };
+
+        const renderZoneAuditReport = (report) => {
+            lastZoneAuditReport = report;
+            const { summary, routes, bands } = report;
+            const esc = (typeof escapeHTML === 'function')
+                ? escapeHTML
+                : (t) => String(t).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
+            if (zoneAuditSummary) {
+                zoneAuditSummary.classList.remove('hidden');
+                zoneAuditSummary.innerHTML = `
+                    <div class="grid grid-cols-4 gap-1.5">
+                        <div class="text-center bg-emerald-100/70 dark:bg-emerald-900/30 rounded-lg p-2 border border-emerald-200 dark:border-emerald-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-emerald-700 tracking-wider">Routes</span>
+                            <span class="text-sm font-black text-emerald-900 dark:text-emerald-200">${summary.routesScanned}</span>
+                        </div>
+                        <div class="text-center bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 border border-amber-100 dark:border-amber-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-amber-600 tracking-wider">Mismatch</span>
+                            <span class="text-sm font-black text-amber-700 dark:text-amber-300">${summary.mismatches}</span>
+                        </div>
+                        <div class="text-center bg-red-50 dark:bg-red-900/20 rounded-lg p-2 border border-red-100 dark:border-red-800/40">
+                            <span class="block text-[8px] uppercase font-bold text-red-600 tracking-wider">No Zone</span>
+                            <span class="text-sm font-black text-red-700 dark:text-red-300">${summary.missingZones}</span>
+                        </div>
+                        <div class="text-center bg-slate-50 dark:bg-slate-900/40 rounded-lg p-2 border border-slate-200 dark:border-slate-700">
+                            <span class="block text-[8px] uppercase font-bold text-slate-500 tracking-wider">OK</span>
+                            <span class="text-sm font-black text-slate-700 dark:text-slate-200">${summary.ok}</span>
+                        </div>
+                    </div>
+                    <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1.5 text-center">
+                        PRASA bands: Z1 1–${bands.Z1} · Z2 ${bands.Z1 + 1}–${bands.Z2} · Z3 ${bands.Z2 + 1}–${bands.Z3} · Z4 &gt;${bands.Z3} km
+                    </p>
+                `;
+            }
+
+            if (!zoneAuditResults) return;
+
+            if (!routes?.length) {
+                zoneAuditResults.innerHTML = `<div class="text-xs text-amber-700 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg text-center">${esc(summary.error || 'No active routes in this region.')}</div>`;
+                return;
+            }
+
+            const statusStyle = {
+                mismatch: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50',
+                missing_zone: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50',
+                thin_coords: 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700',
+                no_sheets: 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700',
+                ok: 'bg-white dark:bg-gray-900 border-emerald-100 dark:border-emerald-900/40',
+            };
+
+            zoneAuditResults.innerHTML = routes.map((r) => {
+                const p = r.primary;
+                const distLabel = p?.distanceKm != null
+                    ? `${p.distanceKm.toFixed(1)} km`
+                    : '—';
+                const srcBit = p?.distanceSource
+                    ? ({ path: 'path', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
+                    : '';
+                const assigned = p?.assignedZone || (r.zones?.[0] || '—');
+                const suggested = p?.suggestedZone || '—';
+                const rangeLabels = (typeof ZONE_KM_RANGE_LABELS !== 'undefined' && ZONE_KM_RANGE_LABELS) ? ZONE_KM_RANGE_LABELS : {};
+                const suggestedRange = suggested !== '—' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
+                const routeBit = Admin.formatRouteLabelHtml(r.routeName);
+                const style = statusStyle[r.status] || statusStyle.ok;
+                const statusLabel = {
+                    mismatch: 'MISMATCH',
+                    missing_zone: 'NO ZONE',
+                    thin_coords: 'THIN COORDS',
+                    no_sheets: 'NO SHEETS',
+                    ok: 'OK',
+                }[r.status] || r.status;
+
+                const dirRows = (r.directions || []).map((d) => {
+                    const m = d.measure || {};
+                    const segPreview = (m.segments || [])
+                        .filter((s) => s.km != null)
+                        .slice(0, 8)
+                        .map((s) => `${esc(s.from)}→${esc(s.to)} ${s.km}km`)
+                        .join(' · ');
+                    const more = (m.segments || []).length > 8 ? ' …' : '';
+                    return `
+                        <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
+                            <div class="flex justify-between gap-2 font-mono text-[9px]">
+                                <span class="truncate">${esc(d.dayDir)} · ${esc(d.sheetKey)}</span>
+                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '—'} · ${esc(d.assignedZone || '?')}→${esc(d.suggestedZone || '?')}${d.mismatch ? ' ⚠' : ''}</span>
+                            </div>
+                            <div class="text-[8px] opacity-70 mt-0.5">
+                                path ${m.pathKm != null ? m.pathKm + ' km' : '—'}
+                                · crow ${m.crowKm != null ? m.crowKm + ' km' : '—'}
+                                · km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '—'}
+                                · coords ${m.withCoords || 0}/${m.stationCount || 0}
+                            </div>
+                            ${segPreview ? `<div class="text-[8px] opacity-60 mt-0.5 leading-snug">${segPreview}${more}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <details class="rounded-lg border text-[10px] leading-snug ${style}" ${r.status === 'mismatch' || r.status === 'missing_zone' ? 'open' : ''}>
+                        <summary class="p-2.5 cursor-pointer list-none flex items-start justify-between gap-2 select-none">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5 mb-0.5">
+                                    <span class="font-black uppercase tracking-wider text-[9px] opacity-80">${statusLabel}</span>
+                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} → ${esc(suggested)}${esc(suggestedRange)}</span>
+                                </div>
+                                <div class="font-semibold truncate">${routeBit}</div>
+                                <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} · ${esc(r.destB || '')}</div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="text-sm font-black leading-none">${distLabel}</div>
+                                <div class="text-[8px] uppercase opacity-60 mt-0.5">${esc(srcBit)}</div>
+                            </div>
+                        </summary>
+                        <div class="px-2.5 pb-2.5 pt-0">
+                            ${dirRows || '<div class="text-[9px] opacity-60">No direction sheets found.</div>'}
+                        </div>
+                    </details>
+                `;
+            }).join('');
+        };
+
+        if (zoneAuditRunBtn) {
+            zoneAuditRunBtn.onclick = async () => {
+                const regionSelect = document.getElementById('diag-region-select');
+                const sourceSelect = document.getElementById('zone-audit-source-select');
+                const scanRegion = regionSelect?.value || 'CURRENT';
+                const scanSourceRaw = sourceSelect?.value || 'FIREBASE';
+                const activeRegion = typeof currentRegion !== 'undefined' ? currentRegion : 'GP';
+                const targetRegion = scanRegion === 'CURRENT' ? activeRegion : scanRegion;
+                const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'FIREBASE' : scanSourceRaw;
+
+                const bands = {
+                    Z1: parseFloat(z1Input?.value) || defaultBands.Z1,
+                    Z2: parseFloat(z2Input?.value) || defaultBands.Z2,
+                    Z3: parseFloat(z3Input?.value) || defaultBands.Z3,
+                };
+                if (!(bands.Z1 < bands.Z2 && bands.Z2 < bands.Z3)) {
+                    if (typeof showToast === 'function') showToast('Zone max km must be Z1 < Z2 < Z3', 'error');
+                    return;
+                }
+
+                if (zoneAuditResults) {
+                    zoneAuditResults.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Measuring ${targetRegion} from ${scanSource}…</div>`;
+                }
+                if (zoneAuditSummary) zoneAuditSummary.classList.add('hidden');
+
+                try {
+                    if (typeof runZoneDistanceAudit !== 'function') {
+                        throw new Error('Zone audit engine not loaded (runZoneDistanceAudit missing).');
+                    }
+                    const db = await fetchDbForZoneAudit(targetRegion, scanSource);
+                    const report = runZoneDistanceAudit(db, targetRegion, {
+                        bands,
+                        parseJSONSchedule: typeof parseJSONSchedule === 'function' ? parseJSONSchedule : null,
+                    });
+                    report.meta = {
+                        region: targetRegion,
+                        source: scanSource,
+                        generatedAt: new Date().toISOString(),
+                    };
+                    renderZoneAuditReport(report);
+                    if (typeof showToast === 'function') {
+                        const s = report.summary;
+                        showToast(
+                            `Distance audit: ${s.mismatches} mismatch, ${s.missingZones} no zone`,
+                            s.mismatches || s.missingZones ? 'info' : 'success',
+                            2500
+                        );
+                    }
+                } catch (e) {
+                    if (zoneAuditResults) {
+                        zoneAuditResults.innerHTML = `<div class="text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">Audit failed: ${String(e.message || e)}</div>`;
+                    }
+                }
+            };
+        }
+
+        if (zoneAuditExportBtn) {
+            zoneAuditExportBtn.onclick = () => {
+                if (!lastZoneAuditReport) {
+                    if (typeof showToast === 'function') showToast('Run a distance audit first', 'info', 1500);
+                    return;
+                }
+                const blob = new Blob([JSON.stringify(lastZoneAuditReport, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `zone-distance-audit-${lastZoneAuditReport.meta?.region || 'region'}-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+        }
 
         if (simHeader) {
             simHeader.onclick = () => {

@@ -17,6 +17,11 @@ import {
     loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
 } from './logic.js';
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
+import {
+    runZoneDistanceAudit,
+    DEFAULT_ZONE_KM_BANDS,
+    ZONE_KM_RANGE_LABELS,
+} from './zone-distance-audit.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
@@ -67,6 +72,9 @@ export function exposeAdminGlobals() {
     window.runScheduleQaReport = runScheduleQaReport;
     window.scanScheduleSheet = scanScheduleSheet;
     window.QA_ISSUE_TYPES = QA_ISSUE_TYPES;
+    window.runZoneDistanceAudit = runZoneDistanceAudit;
+    window.DEFAULT_ZONE_KM_BANDS = DEFAULT_ZONE_KM_BANDS;
+    window.ZONE_KM_RANGE_LABELS = ZONE_KM_RANGE_LABELS;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

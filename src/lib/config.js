@@ -790,12 +790,26 @@ export const ROUTES = {
 // 4. Refresh Settings
 export const REFRESH_CONFIG = { standardInterval: 5 * 60 * 1000, activeInterval: 60 * 1000, nightModeStart: 21, nightModeEnd: 4 };
 
-// 5. Smart Pricing Configuration (RESTORED TO AUTHENTIC V5 LOGIC)
+// 5. Smart Pricing — PRASA Metrorail (Aug 2025 fare adjustment + TravelOffPeak)
+// Zone km bands and ticket prices from PRASA 2025 Fare Adjustment (effective 1 Aug 2025).
+// Off-peak window 09:30–14:30 from PRASA #TravelOffPeak (discount tickets valid only in-window).
 export const FARE_CONFIG = {
     offPeakStart: 9.5,  // 09:30
     offPeakEnd: 14.5,   // 14:30
-    
-    // Legacy support for logic.js (keeps existing code working)
+    /** Off-peak time window applies every day (weekdays, weekends, public holidays). */
+    offPeakEveryDay: true,
+
+    /**
+     * Official travel-distance bands (inclusive max km for Z1–Z3).
+     * Z1: 1–15 · Z2: 16–40 · Z3: 41–135 · Z4: >135
+     */
+    zone_km_max: {
+        Z1: 15,
+        Z2: 40,
+        Z3: 135,
+    },
+
+    // Legacy single-adult peak fare lookup (keeps existing code working)
     zones: {
         "Z1": 10.00,
         "Z2": 12.00,
@@ -803,19 +817,19 @@ export const FARE_CONFIG = {
         "Z4": 15.00
     },
 
-    // NEW V4.60.42: Detailed Pricing Table
+    // Detailed ticket table (new fares from Aug 2025 announcement)
     zones_detailed: {
-        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 180.00 },
-        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 220.00 },
-        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 250.00 },
-        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 280.00 }
+        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 240.00 },
+        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 300.00 },
+        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 320.00 },
+        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 350.00 }
     },
 
     profiles: {
-        "Adult":     { base: 1.0, offPeak: 0.6 }, // 40% Discount
-        "Scholar":   { base: 0.5, offPeak: 0.5 }, // Flat 50%
-        "Pensioner": { base: 1.0, offPeak: 0.5 }, // 50% Off-Peak Discount
-        "Military":  { base: 1.0, offPeak: 0.5 }  // 50% Off-Peak Discount
+        "Adult":     { base: 1.0, offPeak: 0.6 }, // 40% off-peak (public / commuters)
+        "Scholar":   { base: 0.5, offPeak: 0.5 }, // 50% all hours (uniform)
+        "Pensioner": { base: 1.0, offPeak: 0.5 }, // 50% off-peak
+        "Military":  { base: 1.0, offPeak: 0.5 }  // 50% off-peak (military veterans)
     }
 };
 

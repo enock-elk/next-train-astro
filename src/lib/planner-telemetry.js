@@ -1,7 +1,12 @@
 /**
  * Planner telemetry: routing fails + batched successful trip plans.
- * Batches successful plans (flush at 10) to limit RTDB write cost.
- * RTDB sys_logs requires auth — anonymous sign-in + id token (same as delay reports).
+ *
+ * Two buckets (intentionally separate):
+ *  1. UI recent trips — plannerHistory_* in planner-ui.js (display cap 5)
+ *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 10)
+ *
+ * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
+ * Auth token preferred; anonymous create-once still works without email claim.
  */
 import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';
 import { safeStorage } from './utils.js';
@@ -9,11 +14,16 @@ import { $deviceId, $userRegion } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 
 const FAIL_DEBOUNCE_MS = 45_000;
-const TRIP_FLUSH_SIZE = 10;
-const TRIP_QUEUE_KEY = 'nt_trip_plan_queue_v1';
+/** Flush telemetry batch size — independent of UI history display cap. */
+export const TRIP_FLUSH_SIZE = 10;
+/** Soft cap if flush keeps failing offline — avoid unbounded local growth. */
+const TRIP_QUEUE_HARD_CAP = 50;
+export const TRIP_QUEUE_KEY = 'nt_trip_plan_queue_v1';
 
 let lastFailKey = '';
 let lastFailAt = 0;
+/** Prevent overlapping flushes from double-enqueue / online+visibility races. */
+let flushInFlight = null;
 
 function deviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
@@ -34,7 +44,7 @@ async function ensureAuthToken() {
             return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
         }
     } catch {
-        /* ignore */
+        /* ignore — create-once rules still allow unauthenticated PUT */
     }
     return '';
 }
@@ -97,7 +107,16 @@ function writeTripQueue(arr) {
     safeStorage.setItem(TRIP_QUEUE_KEY, JSON.stringify(arr));
 }
 
-/** Queue a successful trip plan; flush to RTDB every TRIP_FLUSH_SIZE entries. */
+/** Current telemetry queue length (for diagnostics / tests). */
+export function getTripPlanQueueLength() {
+    return readTripQueue().length;
+}
+
+/**
+ * Queue a successful trip plan for telemetry.
+ * UI recent-trips history is separate (planner-ui savePlannerHistory).
+ * Flushes to sys_logs/trip_plans when the queue reaches TRIP_FLUSH_SIZE.
+ */
 export function enqueueSuccessfulTripPlan(entry) {
     const queue = readTripQueue();
     queue.push({
@@ -107,50 +126,75 @@ export function enqueueSuccessfulTripPlan(entry) {
         region: $userRegion.get() || null,
         appVersion: APP_VERSION,
     });
+    writeTripQueue(queue.slice(-TRIP_QUEUE_HARD_CAP));
+
     if (queue.length >= TRIP_FLUSH_SIZE) {
-        flushTripPlanQueue(queue);
-    } else {
-        writeTripQueue(queue);
+        flushTripPlanQueue();
     }
 }
 
-export async function flushTripPlanQueue(queue = readTripQueue()) {
-    if (!queue.length) return;
-    writeTripQueue([]);
-    const batchId = uid();
-    const payload = {
-        count: queue.length,
-        flushedAt: Date.now(),
-        deviceId: deviceId(),
-        region: $userRegion.get() || null,
-        appVersion: APP_VERSION,
-        trips: queue,
-    };
-    try {
-        const q = await authQuery();
-        const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/trip_plans/${batchId}.json${q}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-            console.warn('🛡️ Guardian: trip_plans write failed', res.status);
-            writeTripQueue([...queue, ...readTripQueue()].slice(0, 50));
+/**
+ * Flush queued trip plans to RTDB. Only clears local queue after a successful write.
+ * Takes the first TRIP_FLUSH_SIZE (or all if fewer when forced) and leaves any remainder.
+ */
+export async function flushTripPlanQueue(force = false) {
+    if (flushInFlight) return flushInFlight;
+
+    flushInFlight = (async () => {
+        const queue = readTripQueue();
+        if (!queue.length) return;
+        if (!force && queue.length < TRIP_FLUSH_SIZE) return;
+
+        const batch = queue.slice(0, TRIP_FLUSH_SIZE);
+        const remainder = queue.slice(TRIP_FLUSH_SIZE);
+        const batchId = uid();
+        const payload = {
+            count: batch.length,
+            flushedAt: Date.now(),
+            deviceId: deviceId(),
+            region: $userRegion.get() || null,
+            appVersion: APP_VERSION,
+            trips: batch,
+        };
+
+        try {
+            const q = await authQuery();
+            const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/trip_plans/${batchId}.json${q}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                console.warn('🛡️ Guardian: trip_plans write failed', res.status);
+                return;
+            }
+            // Success — reset flushed portion; keep any trips enqueued during the request
+            const latest = readTripQueue();
+            // Prefer remainder + anything appended after we snapshotted `queue`
+            const appended = latest.length > queue.length ? latest.slice(queue.length) : [];
+            writeTripQueue([...remainder, ...appended].slice(-TRIP_QUEUE_HARD_CAP));
+        } catch (e) {
+            console.warn('🛡️ Guardian: trip_plans write error', e);
+            // Leave queue intact for retry
         }
-    } catch {
-        writeTripQueue([...queue, ...readTripQueue()].slice(0, 50));
+    })();
+
+    try {
+        await flushInFlight;
+    } finally {
+        flushInFlight = null;
     }
 }
 
 if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         const q = readTripQueue();
-        if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue(q);
+        if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue();
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             const q = readTripQueue();
-            // Opportunistic flush if we have a meaningful batch when backgrounding
-            if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue(q);
+            if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue();
         }
     });
 }

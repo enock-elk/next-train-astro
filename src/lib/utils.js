@@ -264,6 +264,7 @@ export const safeStorage = {
             'defaultRoute_EC',  // 🛡️ GUARDIAN FIX: Protect EC
             'last_killswitch_timestamp', // Protect killswitch memory
             'analytics_queue', // Protect offline events queue
+            'nt_trip_plan_queue_v1', // Protect batched trip-plan telemetry until flush
             'last_impression_timestamp' // 🛡️ GUARDIAN FIX: Protect ad frequency cap
         ];
         
@@ -273,7 +274,13 @@ export const safeStorage = {
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (exactProtectedKeys.includes(key) || key.startsWith('clever_') || key.startsWith('cws_') || key.startsWith('firebase:authUser:')) {
+                if (
+                    exactProtectedKeys.includes(key) ||
+                    key.startsWith('clever_') ||
+                    key.startsWith('cws_') ||
+                    key.startsWith('firebase:authUser:') ||
+                    key.startsWith('plannerHistory_')
+                ) {
                     vault[key] = localStorage.getItem(key);
                 }
             }
@@ -282,6 +289,12 @@ export const safeStorage = {
             exactProtectedKeys.forEach(key => {
                 const val = this.getItem(key);
                 if (val !== null) vault[key] = val;
+            });
+            // Also preserve regional planner history in the fallback path
+            ['GP', 'WC', 'KZN', 'EC'].forEach((region) => {
+                const hk = `plannerHistory_${region}`;
+                const val = this.getItem(hk);
+                if (val !== null) vault[hk] = val;
             });
         }
         

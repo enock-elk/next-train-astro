@@ -280,6 +280,98 @@ const Admin = {
         }
     },
 
+    /**
+     * Force a file download (avoids navigating to blob: URLs in the PWA shell).
+     * @param {string} filename
+     * @param {string|Blob} content
+     * @param {string} [mime]
+     */
+    downloadFile: function(filename, content, mime = 'text/plain;charset=utf-8') {
+        try {
+            const isString = typeof content === 'string';
+            const blob = content instanceof Blob
+                ? content
+                : new Blob([content], { type: mime });
+
+            const trigger = (href, revoke) => {
+                const a = document.createElement('a');
+                a.href = href;
+                a.setAttribute('download', filename);
+                a.rel = 'noopener';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    a.remove();
+                    if (typeof revoke === 'function') revoke();
+                }, 400);
+            };
+
+            // Data URLs download more reliably than blob: in installed PWAs / WebViews
+            if (isString && content.length < 1_800_000) {
+                trigger(`data:${mime},${encodeURIComponent(content)}`);
+            } else {
+                const url = URL.createObjectURL(blob);
+                trigger(url, () => URL.revokeObjectURL(url));
+            }
+            return true;
+        } catch (e) {
+            console.warn('Admin.downloadFile failed', e);
+            if (typeof showToast === 'function') showToast('Download failed', 'error');
+            return false;
+        }
+    },
+
+    /**
+     * Pick one of several actions (e.g. export format). Returns choice id or null if cancelled.
+     * @param {string} title
+     * @param {string} message
+     * @param {{ id: string, label: string, primary?: boolean }[]} choices
+     */
+    secureChoice: function(title, message, choices = []) {
+        return new Promise((resolve) => {
+            const modalId = 'admin-secure-choice';
+            let modal = document.getElementById(modalId);
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+                document.body.appendChild(modal);
+            }
+
+            const buttons = (choices || []).map((c, i) => `
+                <button type="button" data-choice-id="${String(c.id).replace(/"/g, '')}"
+                    class="w-full font-bold py-3 px-4 rounded-xl transition-colors focus:outline-none text-sm ${c.primary || i === 0
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
+                        : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'}">
+                    ${c.label}
+                </button>
+            `).join('');
+
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-gray-200 dark:border-gray-700">
+                    <div class="text-center">
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight">${title}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">${message}</p>
+                        <div class="flex flex-col gap-2">${buttons}</div>
+                        <button type="button" id="ach-cancel" class="mt-4 w-full text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 focus:outline-none">Cancel</button>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            const done = (val) => {
+                modal.classList.add('hidden');
+                resolve(val);
+            };
+            modal.querySelectorAll('[data-choice-id]').forEach((btn) => {
+                btn.onclick = () => done(btn.getAttribute('data-choice-id'));
+            });
+            document.getElementById('ach-cancel').onclick = () => done(null);
+            modal.onclick = (e) => { if (e.target === modal) done(null); };
+        });
+    },
+
     // --- 0.15 SECURE ASYNC CONFIRMATION MODAL (PWA SANDBOX SAFE) ---
     secureConfirm: function(title, message, requirePromptText = null) {
         return new Promise((resolve) => {
@@ -2316,30 +2408,19 @@ const Admin = {
                 await fetch(`${dynamicEndpoint}exclusions/${routeId}/_grid_notice.json?auth=${secret}`, { method: 'DELETE' });
                 if (typeof showToast === 'function') showToast("Grid Notice resolved & removed.", "success");
             } else if (type === 'Alert') {
-                // 🛡️ GUARDIAN FIX: Corrected Firebase path for single-object nodes and integrated Archive + Purge protocol
-                const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${routeId}.json`, {}, 6000);
-                if (fetchRes.ok) {
-                    const alertData = await fetchRes.json();
-                    if (alertData && alertData.id) {
-                        alertData.archivedAt = Date.now();
-                        alertData.clearedFrom = routeId;
-                        const archiveUrl = `${dynamicEndpoint}notices_archive/${alertData.id}_${Date.now()}.json?auth=${secret}`;
-                        await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(alertData) });
+                try {
+                    const archived = await Admin.archiveActiveNotice(routeId, secret);
+                    if (!archived) {
+                        await fetch(`${dynamicEndpoint}notices/${routeId}.json?auth=${secret}`, { method: 'DELETE' });
                     }
-                }
-
-                const res = await fetch(`${dynamicEndpoint}notices/${routeId}.json?auth=${secret}`, { method: 'DELETE' });
-                
-                if (res.ok) {
                     try {
-                        await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
-                            method: 'POST', 
-                            headers: {'Authorization': `Bearer ${secret}`} 
+                        await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${secret}` }
                         });
-                    } catch(pe) { console.warn("Purge failed", pe); }
-
+                    } catch (pe) { console.warn("Purge failed", pe); }
                     if (typeof showToast === 'function') showToast("Alert cleared & archived.", "success");
-                } else {
+                } catch (ae) {
                     if (typeof showToast === 'function') showToast("Failed to clear alert.", "error");
                 }
             }
@@ -2383,10 +2464,11 @@ const Admin = {
                         <button id="crash-tab-inbox" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">Inbox (<span id="crash-inbox-count">0</span>)</button>
                         <button id="crash-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors focus:outline-none tracking-wider">Archive</button>
                     </div>
-                    <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1" id="crash-status-display">Syncing...</span>
-                        <div class="space-x-2 flex">
+                    <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner gap-2">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1 shrink-0" id="crash-status-display">Syncing...</span>
+                        <div class="flex flex-wrap gap-2 justify-end">
                             <button id="crash-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                            <button id="crash-export-btn" class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Export</button>
                             <button id="crash-clear-btn" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Clear DB</button>
                         </div>
                     </div>
@@ -2398,6 +2480,7 @@ const Admin = {
         const body = document.getElementById('crash-body');
         const chevron = document.getElementById('crash-chevron');
         const refreshBtn = document.getElementById('crash-refresh-btn');
+        const exportBtn = document.getElementById('crash-export-btn');
         const clearBtn = document.getElementById('crash-clear-btn');
         const listDiv = document.getElementById('crash-list');
         const tabInbox = document.getElementById('crash-tab-inbox');
@@ -2417,6 +2500,32 @@ const Admin = {
         };
 
         refreshBtn.onclick = () => Admin.fetchCrashes();
+
+        Admin.exportCrashesTxt = () => {
+            const isInbox = Admin.currentCrashTab === 'inbox';
+            const rows = (Admin.cachedCrashData || []).filter((c) =>
+                isInbox ? c.status !== 'resolved' : c.status === 'resolved'
+            );
+            if (!rows.length) {
+                if (typeof showToast === 'function') showToast('No crashes to export', 'info');
+                return;
+            }
+            let txt = `NEXT TRAIN — CRASH ANALYTICS\nTab: ${isInbox ? 'Inbox' : 'Archive'}\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+            rows.forEach((c, i) => {
+                txt += `#${i + 1}  ${Admin.formatDate(c.timestamp)}\n`;
+                txt += `  ID: ${c.id || '—'}\n`;
+                txt += `  Device: ${c.deviceId || c.device_id || '—'}\n`;
+                txt += `  Route: ${c.routeId || 'Global'} · Region: ${c.region || '—'} · Version: ${c.appVersion || '—'}\n`;
+                txt += `  Status: ${c.status || 'open'}\n`;
+                const msg = String(c.message || c.error || c.stack || '').replace(/\r/g, '');
+                if (msg) txt += `  Message:\n${msg.split('\n').map((l) => `    ${l}`).join('\n')}\n`;
+                txt += `\n`;
+            });
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const ok = Admin.downloadFile(`crashes_${isInbox ? 'inbox' : 'archive'}_${dateStr}.txt`, txt);
+            if (ok && typeof showToast === 'function') showToast(`Downloaded ${rows.length} crash(es)`, 'success');
+        };
+        if (exportBtn) exportBtn.onclick = () => Admin.exportCrashesTxt();
 
         const switchTab = (tab) => {
             Admin.currentCrashTab = tab;
@@ -3083,15 +3192,15 @@ const Admin = {
             <button id="de-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('ban', 'text-red-500 dark:text-red-400')}
-                    <span>Dead Ends & Fails</span>
+                    <span>Planner Telemetry</span>
                 </span>
-                <span id="de-unread-badge" class="admin-unread-badge hidden" aria-label="Unread dead ends"></span>
+                <span id="de-unread-badge" class="admin-unread-badge hidden" aria-label="Unread planner telemetry"></span>
                 <svg id="de-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="de-body" class="hidden mt-4 space-y-3">
-                <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner">
-                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1">Silent Routing Telemetry</span>
-                    <div class="flex space-x-2">
+                <div class="bg-gray-50 dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner space-y-2">
+                    <span class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-0.5">Silent Routing Telemetry</span>
+                    <div class="flex flex-wrap gap-2">
                         <button id="de-sort-btn" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
                             Sort: Hits
                         </button>
@@ -3099,7 +3208,7 @@ const Admin = {
                             Refresh
                         </button>
                         <button id="de-export-btn" class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-800 border border-emerald-200 dark:border-emerald-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
-                            Export All
+                            Export
                         </button>
                         <button id="de-clear-btn" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800 border border-red-200 dark:border-red-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
                             Clear DB
@@ -3109,6 +3218,31 @@ const Admin = {
                 <div class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
                     <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
+                </div>
+                <div id="de-trip-filters" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Region</label>
+                        <select id="de-filter-region" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
+                            <option value="">All regions</option>
+                            <option value="GP">Gauteng</option>
+                            <option value="WC">Western Cape</option>
+                            <option value="KZN">KwaZulu-Natal</option>
+                            <option value="EC">Eastern Cape</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
+                        <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
+                            <option value="">All days</option>
+                            <option value="weekday">Weekday</option>
+                            <option value="saturday">Saturday</option>
+                            <option value="sunday">Sunday</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">User ID</label>
+                        <input type="text" id="de-filter-userid" placeholder="usr_…" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none font-mono" />
+                    </div>
                 </div>
                 <div id="de-list" class="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar"></div>
             </div>
@@ -3123,20 +3257,47 @@ const Admin = {
         const sortBtn = document.getElementById('de-sort-btn');
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'fails';
+        Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+
+        const syncDeFiltersVisibility = () => {
+            const wrap = document.getElementById('de-trip-filters');
+            if (!wrap) return;
+            if (Admin._deActiveTab === 'trips') wrap.classList.remove('hidden');
+            else wrap.classList.add('hidden');
+        };
+
         document.getElementById('de-tab-fails')?.addEventListener('click', () => {
             Admin._deActiveTab = 'fails';
             document.getElementById('de-tab-fails')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
             document.getElementById('de-tab-trips')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
         });
         document.getElementById('de-tab-trips')?.addEventListener('click', () => {
             Admin._deActiveTab = 'trips';
             document.getElementById('de-tab-trips')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
             document.getElementById('de-tab-fails')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+            syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
         });
+        syncDeFiltersVisibility();
+
+        const bindTripFilter = (id, key) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const apply = () => {
+                Admin._deTripFilters[key] = (el.value || '').trim();
+                if (Admin._deActiveTab === 'trips') Admin.renderTripPlanBatches(listDiv, null, true);
+            };
+            el.addEventListener('change', apply);
+            el.addEventListener('input', apply);
+        };
+        bindTripFilter('de-filter-region', 'region');
+        bindTripFilter('de-filter-day', 'dayType');
+        bindTripFilter('de-filter-userid', 'userId');
+
         if (exportBtn) {
-            exportBtn.onclick = () => Admin.exportDeadEndsAll();
+            exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
         // 🛡️ GUARDIAN PHASE 2: Dynamic Sorting State
@@ -3292,48 +3453,90 @@ const Admin = {
             }
         };
 
-        Admin.renderTripPlanBatches = async (listDiv, secret) => {
-            listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
+        /** Flatten cached trip_plans batches into filterable rows. */
+        Admin.flattenTripPlanRows = (data = Admin._cachedTripPlans) => {
+            const rows = [];
+            if (!data || typeof data !== 'object') return rows;
+            Object.entries(data).forEach(([batchId, batch]) => {
+                if (!batch || typeof batch !== 'object') return;
+                const trips = Array.isArray(batch.trips) ? batch.trips : [];
+                const batchTs = Number(batch.flushedAt || 0);
+                trips.forEach((entry) => {
+                    if (!entry?.origin || !entry?.destination) return;
+                    rows.push({
+                        batchId,
+                        origin: entry.origin,
+                        destination: entry.destination,
+                        dayType: entry.dayType || 'unknown',
+                        region: entry.region || batch.region || '',
+                        userId: entry.userId || entry.deviceId || batch.userId || batch.deviceId || '',
+                        authUid: entry.authUid || batch.authUid || '',
+                        depTime: entry.depTime || '',
+                        arrTime: entry.arrTime || '',
+                        transfers: entry.transfers ?? '',
+                        appVersion: entry.appVersion || batch.appVersion || '',
+                        timestamp: Number(entry.timestamp || batchTs || 0),
+                    });
+                });
+            });
+            return rows;
+        };
+
+        Admin.getFilteredTripPlanRows = () => {
+            const f = Admin._deTripFilters || {};
+            const region = (f.region || '').toUpperCase();
+            const dayType = (f.dayType || '').toLowerCase();
+            const userId = (f.userId || '').toLowerCase();
+            return Admin.flattenTripPlanRows().filter((r) => {
+                if (region && String(r.region || '').toUpperCase() !== region) return false;
+                if (dayType && String(r.dayType || '').toLowerCase() !== dayType) return false;
+                if (userId) {
+                    const hay = `${r.userId || ''} ${r.authUid || ''}`.toLowerCase();
+                    if (!hay.includes(userId)) return false;
+                }
+                return true;
+            });
+        };
+
+        Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
+            if (!useCacheOnly) {
+                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
+            }
             try {
-                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                Admin._cachedTripPlans = data;
+                if (!useCacheOnly) {
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    Admin._cachedTripPlans = await res.json();
+                }
+                const data = Admin._cachedTripPlans;
                 if (!data) {
-                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans to sys_logs/trip_plans (UI recent trips capped at 5).</span></div>';
+                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
                     return;
                 }
 
-                // Merge across batches/users: Origin|Dest|DayType → tally (same pattern as routing fails)
+                const filtered = Admin.getFilteredTripPlanRows();
+                // Aggregate OD+day(+region) for the cards
                 const heatMap = {};
-                let batchCount = 0;
-                Object.values(data).forEach((batch) => {
-                    if (!batch || typeof batch !== 'object') return;
-                    batchCount++;
-                    const trips = Array.isArray(batch.trips) ? batch.trips : [];
-                    const batchTs = Number(batch.flushedAt || 0);
-                    trips.forEach((entry) => {
-                        if (!entry?.origin || !entry?.destination) return;
-                        const dayType = entry.dayType || 'unknown';
-                        const key = `${entry.origin}|${entry.destination}|${dayType}`;
-                        if (!heatMap[key]) {
-                            heatMap[key] = {
-                                origin: entry.origin,
-                                dest: entry.destination,
-                                dayType,
-                                count: 0,
-                                lastSeen: 0,
-                                depSample: entry.depTime || null,
-                            };
-                        }
-                        heatMap[key].count++;
-                        const ts = Number(entry.timestamp || batchTs || 0);
-                        if (ts > heatMap[key].lastSeen) {
-                            heatMap[key].lastSeen = ts;
-                            if (entry.depTime) heatMap[key].depSample = entry.depTime;
-                        }
-                    });
+                filtered.forEach((entry) => {
+                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}|${entry.userId}`;
+                    if (!heatMap[key]) {
+                        heatMap[key] = {
+                            origin: entry.origin,
+                            dest: entry.destination,
+                            dayType: entry.dayType,
+                            region: entry.region,
+                            userId: entry.userId,
+                            count: 0,
+                            lastSeen: 0,
+                            depSample: entry.depTime || null,
+                        };
+                    }
+                    heatMap[key].count++;
+                    if (entry.timestamp > heatMap[key].lastSeen) {
+                        heatMap[key].lastSeen = entry.timestamp;
+                        if (entry.depTime) heatMap[key].depSample = entry.depTime;
+                    }
                 });
 
                 const sorted = Object.values(heatMap).sort((a, b) => {
@@ -3341,8 +3544,9 @@ const Admin = {
                     return b.count - a.count;
                 });
 
+                const totalRows = Admin.flattenTripPlanRows().length;
                 if (!sorted.length) {
-                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Batches present but no trip rows to merge.</div>';
+                    listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
                 }
 
@@ -3356,7 +3560,7 @@ const Admin = {
 
                 listDiv.innerHTML = `
                     <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Merged from ${batchCount} flush${batchCount === 1 ? '' : 'es'} · ${sorted.length} unique OD+day
+                        Showing ${filtered.length} of ${totalRows} trips · ${sorted.length} grouped rows
                     </div>
                 `;
 
@@ -3368,12 +3572,16 @@ const Admin = {
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
                     const depLabel = secureEscape(item.depSample || '—');
+                    const regionLabel = secureEscape(item.region || '—');
+                    const uidLabel = secureEscape(item.userId || '—');
                     card.innerHTML = `
                         <div class="min-w-0 flex-1 pr-2">
                             <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
                             <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
                                 <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
+                                <span class="text-[9px] text-gray-400 font-mono truncate max-w-[9rem]" title="${uidLabel}">${uidLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">dep ${depLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
                             </div>
@@ -3390,30 +3598,94 @@ const Admin = {
             }
         };
 
-        Admin.exportDeadEndsAll = () => {
+        /** Export only the active tab; ask txt vs Excel (.csv); download file. */
+        Admin.exportPlannerTelemetryTab = async () => {
+            const format = await Admin.secureChoice(
+                'Download export',
+                Admin._deActiveTab === 'trips'
+                    ? 'Export the Trip Plans tab (respects current filters).'
+                    : 'Export the Fails tab.',
+                [
+                    { id: 'txt', label: 'Text (.txt)', primary: true },
+                    { id: 'csv', label: 'Excel (.csv)' },
+                ]
+            );
+            if (!format) return;
+
+            const dateStr = new Date().toISOString().slice(0, 10);
+            if (Admin._deActiveTab === 'trips') {
+                const rows = Admin.getFilteredTripPlanRows();
+                if (!rows.length) {
+                    if (typeof showToast === 'function') showToast('No trip plans to export', 'info');
+                    return;
+                }
+                rows.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                const headers = ['timestamp', 'region', 'userId', 'authUid', 'dayType', 'origin', 'destination', 'depTime', 'arrTime', 'transfers', 'appVersion', 'batchId'];
+                if (format === 'csv') {
+                    const esc = (v) => {
+                        const s = String(v ?? '');
+                        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                    };
+                    const lines = [headers.join(',')];
+                    rows.forEach((r) => {
+                        lines.push(headers.map((h) => esc(h === 'timestamp' ? Admin.formatDate(r.timestamp) : r[h])).join(','));
+                    });
+                    Admin.downloadFile(`trip_plans_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
+                } else {
+                    let txt = `NEXT TRAIN — TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+                    rows.forEach((r, i) => {
+                        txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
+                        txt += `  ${r.origin} → ${r.destination}\n`;
+                        txt += `  Region: ${r.region || '—'} · Day: ${r.dayType || '—'} · User: ${r.userId || '—'}\n`;
+                        if (r.authUid) txt += `  Auth UID: ${r.authUid}\n`;
+                        txt += `  Dep: ${r.depTime || '—'} · Arr: ${r.arrTime || '—'} · Transfers: ${r.transfers ?? '—'}\n\n`;
+                    });
+                    Admin.downloadFile(`trip_plans_${dateStr}.txt`, txt);
+                }
+                if (typeof showToast === 'function') showToast(`Downloaded ${rows.length} trip plan(s)`, 'success');
+                return;
+            }
+
+            // Fails tab
             const fails = Admin._cachedRoutingFails || {};
-            const trips = Admin._cachedTripPlans || {};
-            const payload = {
-                exportedAt: Date.now(),
-                routing_fails: fails,
-                trip_plans: trips,
-            };
-            const jsonStr = JSON.stringify(payload, null, 2);
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `deadends_export_${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            if (typeof showToast === 'function') showToast('Exported dead ends + trip plans', 'success');
+            const entries = Object.entries(fails).map(([id, v]) => ({ id, ...(v || {}) }));
+            if (!entries.length) {
+                if (typeof showToast === 'function') showToast('No fails to export', 'info');
+                return;
+            }
+            entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const headers = ['timestamp', 'region', 'userId', 'deviceId', 'dayType', 'origin', 'destination', 'reason', 'timeOfDay', 'appVersion', 'id'];
+            if (format === 'csv') {
+                const esc = (v) => {
+                    const s = String(v ?? '');
+                    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                };
+                const lines = [headers.join(',')];
+                entries.forEach((r) => {
+                    lines.push(headers.map((h) => {
+                        if (h === 'timestamp') return esc(Admin.formatDate(r.timestamp));
+                        if (h === 'userId') return esc(r.userId || r.deviceId || '');
+                        if (h === 'destination') return esc(r.destination || r.dest || '');
+                        return esc(r[h]);
+                    }).join(','));
+                });
+                Admin.downloadFile(`routing_fails_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
+            } else {
+                let txt = `NEXT TRAIN — ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
+                entries.forEach((r, i) => {
+                    txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
+                    txt += `  ${(r.origin || '?')} → ${(r.destination || r.dest || '?')}\n`;
+                    txt += `  Reason: ${r.reason || 'UNKNOWN'} · Day: ${r.dayType || '—'} · Region: ${r.region || '—'}\n`;
+                    txt += `  User: ${r.userId || r.deviceId || '—'} · Time: ${r.timeOfDay || '—'}\n\n`;
+                });
+                Admin.downloadFile(`routing_fails_${dateStr}.txt`, txt);
+            }
+            if (typeof showToast === 'function') showToast(`Downloaded ${entries.length} fail(s)`, 'success');
         };
 
         clearBtn.onclick = async () => {
             const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
-            const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'Dead End logs';
+            const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'routing fail logs';
             const confirmed = await Admin.secureConfirm('Clear Telemetry', `Permanently delete all ${label} from the server?`);
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();
@@ -4275,17 +4547,11 @@ const Admin = {
                 txt += `[${dateStr}] ${sender}:\n${cleanText}\n\n`;
             });
             
-            const blob = new Blob([txt], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `NextTrain_Thread_${did.replace(/[^a-zA-Z0-9]/g, '').substring(0,8)}_${Date.now()}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            if (typeof showToast === 'function') showToast("Thread exported for AI (.txt)", "success");
+            const ok = Admin.downloadFile(
+                `NextTrain_Thread_${did.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8)}_${Date.now()}.txt`,
+                txt
+            );
+            if (ok && typeof showToast === 'function') showToast("Downloaded thread (.txt)", "success");
         };
 
         // 🛡️ GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
@@ -4366,17 +4632,11 @@ const Admin = {
                 txt += `==================================================\n\n`;
             });
 
-            const blob = new Blob([txt], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `NextTrain_Global_${isInbox ? 'Inbox' : 'Archive'}_${Date.now()}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            if (typeof showToast === 'function') showToast(`Exported ${displayGroups.length} threads!`, "success");
+            const ok = Admin.downloadFile(
+                `NextTrain_Global_${isInbox ? 'Inbox' : 'Archive'}_${Date.now()}.txt`,
+                txt
+            );
+            if (ok && typeof showToast === 'function') showToast(`Downloaded ${displayGroups.length} threads`, "success");
         };
     },
 
@@ -5512,6 +5772,46 @@ const Admin = {
                         Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
                     }
                 }
+
+                // Match Transit Incident Manager entries by id (active + archive)
+                if (!foundData) {
+                    const disrActiveRes = await fetch(`${dynamicEndpoint}disruptions.json?auth=${secret}`);
+                    const disrActiveData = await disrActiveRes.json();
+                    if (disrActiveData && !disrActiveData.error) {
+                        Object.entries(disrActiveData).forEach(([rId, routeNode]) => {
+                            if (typeof routeNode !== 'object' || !routeNode) return;
+                            Object.values(routeNode).forEach((disr) => {
+                                if (disr && String(disr.id) === String(alertId)) {
+                                    foundData = {
+                                        ...disr,
+                                        kind: 'disruption',
+                                        clearedFrom: rId,
+                                        severity: disr.tier === 'CRITICAL' ? 'critical' : (disr.severity || 'warning'),
+                                    };
+                                }
+                            });
+                        });
+                    }
+                }
+                if (!foundData) {
+                    const disrArchRes = await fetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`);
+                    const disrArchData = await disrArchRes.json();
+                    if (disrArchData && !disrArchData.error) {
+                        Object.entries(disrArchData).forEach(([rId, routeNode]) => {
+                            if (typeof routeNode !== 'object' || !routeNode) return;
+                            Object.values(routeNode).forEach((disr) => {
+                                if (disr && String(disr.id) === String(alertId)) {
+                                    foundData = {
+                                        ...disr,
+                                        kind: 'disruption',
+                                        clearedFrom: disr.clearedFrom || rId,
+                                        severity: disr.severity || (disr.tier === 'CRITICAL' ? 'critical' : 'warning'),
+                                    };
+                                }
+                            });
+                        });
+                    }
+                }
             }
 
             // Fuzzy Text Fallback (For legacy quotes without IDs)
@@ -5577,30 +5877,14 @@ const Admin = {
             }
 
             if (foundData) {
-                const dateStr = Admin.formatDate(foundData.postedAt);
-                
-                // Wrap Hero Image in Lightbox
-                let imgHtml = foundData.imageUrl ? `<button type="button" onclick="window.openLightbox('${escapeHTML(foundData.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(foundData.imageUrl)}" class="w-full h-auto max-h-32 object-cover hover:opacity-90 transition-opacity"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>` : '';
-                
-                let statusHtml = foundData.archivedAt ? `<span class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived</span>` : `<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
-                
-                // 🛡️ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy inline images in Alerts
-                let parsedMessage = foundData.message || foundData.longExplanation || 'No details provided.';
-                parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-                    if (btnStart || btnEnd) return match; // Already wrapped
-                    return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
-                });
-
-                contentDiv.innerHTML = `
-                    ${statusHtml}
-                    ${imgHtml}
-                    <div class="mb-3">${parsedMessage}</div>
-                    <div class="text-[10px] text-gray-500 font-mono border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
-                        ID: ${foundData.id}<br>
-                        Posted: ${dateStr}<br>
-                        Severity: ${foundData.severity}
-                    </div>
-                `;
+                // Live poll tallies when previewing an active poll alert from Feedback
+                if (foundData.poll && foundData.poll.active && !foundData.pollResults && foundData.id) {
+                    const liveTallies = await Admin.fetchPollResultsSnapshot(foundData.id, secret);
+                    if (liveTallies) foundData = { ...foundData, pollResults: liveTallies };
+                }
+                const titleEl = modal.querySelector('h3');
+                if (titleEl) titleEl.textContent = 'Rebuilt Alert Preview';
+                contentDiv.innerHTML = Admin.buildAlertPreviewHtml(foundData);
             } else {
                 contentDiv.innerHTML = `
                     <div class="text-center py-4">
@@ -5711,6 +5995,170 @@ const Admin = {
 
 
     // --- 4. SERVICE ALERTS MANAGER ---
+    /** Tally votes from polls/{id} payload → { A, B, C, total }. */
+    tallyPollVotes: (pollData) => {
+        let A = 0, B = 0, C = 0;
+        if (pollData && typeof pollData === 'object') {
+            Object.values(pollData).forEach((vote) => {
+                if (!vote || typeof vote !== 'object') return;
+                if (vote.optionKey === 'A') A++;
+                else if (vote.optionKey === 'B') B++;
+                else if (vote.optionKey === 'C') C++;
+            });
+        }
+        return { A, B, C, total: A + B + C };
+    },
+
+    fetchPollResultsSnapshot: async (pollId, secret) => {
+        if (!pollId) return null;
+        try {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const q = secret ? `?auth=${encodeURIComponent(secret)}` : `?t=${Date.now()}`;
+            const res = await fetch(`${dynamicEndpoint}polls/${encodeURIComponent(pollId)}.json${q}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (!data) return { A: 0, B: 0, C: 0, total: 0 };
+            return Admin.tallyPollVotes(data);
+        } catch {
+            return null;
+        }
+    },
+
+    archiveActiveNotice: async (target, secret, noticeData = null) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        let alertData = noticeData;
+        if (!alertData) {
+            const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+            if (!fetchRes.ok) return null;
+            alertData = await fetchRes.json();
+        }
+        if (!alertData || !alertData.id) return null;
+
+        const pollResults = (alertData.poll && alertData.poll.active)
+            ? await Admin.fetchPollResultsSnapshot(alertData.id, secret)
+            : (alertData.pollResults || null);
+
+        const archived = {
+            ...alertData,
+            kind: 'notice',
+            archivedAt: Date.now(),
+            clearedFrom: target,
+            archiveReason: alertData.archiveReason || 'cleared',
+            pollResults: pollResults || alertData.pollResults || null,
+        };
+        const archiveUrl = `${dynamicEndpoint}notices_archive/${alertData.id}_${Date.now()}.json?auth=${secret}`;
+        const archRes = await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(archived) });
+        if (!archRes.ok) throw new Error('Failed to write notices_archive');
+        await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+        return archived;
+    },
+
+    sweepExpiredAlertsToArchive: async (secret) => {
+        if (!secret) return { notices: 0, disruptions: 0 };
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const now = Date.now();
+        let notices = 0;
+        let disruptions = 0;
+
+        try {
+            const nRes = await window.guardianFetch(`${dynamicEndpoint}notices.json`, {}, 10000);
+            const nData = nRes.ok ? await nRes.json() : null;
+            if (nData && typeof nData === 'object') {
+                for (const [target, node] of Object.entries(nData)) {
+                    if (node && node.message && node.id && node.expiresAt && node.expiresAt < now) {
+                        try {
+                            node.archiveReason = 'expired';
+                            await Admin.archiveActiveNotice(target, secret, node);
+                            notices++;
+                        } catch (e) {
+                            console.warn('Expired notice archive failed', target, e);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Notice expiry sweep failed', e);
+        }
+
+        try {
+            const dRes = await window.guardianFetch(`${dynamicEndpoint}disruptions.json`, {}, 10000);
+            const dData = dRes.ok ? await dRes.json() : null;
+            if (dData && typeof dData === 'object') {
+                for (const [rId, routeNode] of Object.entries(dData)) {
+                    if (!routeNode || typeof routeNode !== 'object') continue;
+                    for (const [key, disr] of Object.entries(routeNode)) {
+                        if (!disr || !disr.id || !disr.expiresAt || disr.expiresAt >= now) continue;
+                        try {
+                            const payload = {
+                                ...disr,
+                                kind: 'disruption',
+                                archivedAt: Date.now(),
+                                clearedFrom: rId,
+                                archiveReason: 'expired',
+                                severity: disr.tier === 'CRITICAL' ? 'critical' : (disr.severity || 'warning'),
+                            };
+                            await fetch(`${dynamicEndpoint}disruptions_archive/${rId}/${disr.id}_${Date.now()}.json?auth=${secret}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(payload),
+                            });
+                            await fetch(`${dynamicEndpoint}disruptions/${rId}/${key}.json?auth=${secret}`, { method: 'DELETE' });
+                            disruptions++;
+                        } catch (e) {
+                            console.warn('Expired disruption archive failed', rId, key, e);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Disruption expiry sweep failed', e);
+        }
+
+        return { notices, disruptions };
+    },
+
+    loadUnifiedAlertArchive: async (secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const items = [];
+
+        const nRes = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`);
+        const nData = nRes.ok ? await nRes.json() : null;
+        if (nData && typeof nData === 'object') {
+            Object.entries(nData).forEach(([archKey, alert]) => {
+                if (!alert || typeof alert !== 'object') return;
+                items.push({
+                    ...alert,
+                    kind: alert.kind || 'notice',
+                    _archKey: archKey,
+                    _sortAt: Number(alert.archivedAt || alert.postedAt || 0),
+                });
+            });
+        }
+
+        const dRes = await fetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`);
+        const dData = dRes.ok ? await dRes.json() : null;
+        if (dData && typeof dData === 'object') {
+            Object.entries(dData).forEach(([rId, routeNode]) => {
+                if (!routeNode || typeof routeNode !== 'object') return;
+                Object.entries(routeNode).forEach(([archKey, disr]) => {
+                    if (!disr || typeof disr !== 'object') return;
+                    items.push({
+                        ...disr,
+                        kind: 'disruption',
+                        clearedFrom: disr.clearedFrom || rId,
+                        severity: disr.severity || (disr.tier === 'CRITICAL' ? 'critical' : 'warning'),
+                        message: disr.message || disr.longExplanation || disr.buttonText || '',
+                        _archKey: `${rId}/${archKey}`,
+                        _sortAt: Number(disr.archivedAt || disr.postedAt || 0),
+                    });
+                });
+            });
+        }
+
+        items.sort((a, b) => (b._sortAt || 0) - (a._sortAt || 0));
+        Admin._cachedAlertArchive = items;
+        return items;
+    },
+
     setupServiceAlertsManager: () => {
         if (!window._adminPremiumDropdownsBound) {
             document.addEventListener('click', (e) => {
@@ -5752,7 +6200,12 @@ const Admin = {
             </button>
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
-                
+                <div class="flex border-b border-gray-200 dark:border-gray-700">
+                    <button type="button" id="alert-tab-compose" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">New Alert</button>
+                    <button type="button" id="alert-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Archive</button>
+                </div>
+
+                <div id="alert-compose-pane" class="space-y-4">
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target Audience (God-Mode)</label>
                     <div class="relative" id="alert-target-container">
@@ -5941,6 +6394,16 @@ const Admin = {
                         </div>
                     </div>
                 </div>
+                </div>
+
+                <div id="alert-archive-pane" class="hidden space-y-3">
+                    <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner gap-2">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1 shrink-0" id="alert-archive-status">Idle</span>
+                        <button type="button" id="alert-archive-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Cleared &amp; expired service alerts, poll tallies, and Transit Incident Manager archives.</p>
+                    <div id="alert-archive-list" class="space-y-3 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar"></div>
+                </div>
             </div>
         `;
 
@@ -5954,6 +6417,11 @@ const Admin = {
         const sendBtn = document.getElementById('alert-send-btn');
         const clearBtn = document.getElementById('alert-clear-btn');
         const severitySelect = document.getElementById('alert-severity');
+        const tabCompose = document.getElementById('alert-tab-compose');
+        const tabArchive = document.getElementById('alert-tab-archive');
+        const composePane = document.getElementById('alert-compose-pane');
+        const archivePane = document.getElementById('alert-archive-pane');
+        const archiveRefreshBtn = document.getElementById('alert-archive-refresh-btn');
         
         const signoffInput = document.getElementById('alert-signoff');
         const forcePopupToggle = document.getElementById('alert-force-popup');
@@ -5974,6 +6442,22 @@ const Admin = {
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
         let existingAlertId = null;
+
+        Admin.currentAlertManagerTab = 'compose';
+        const setAlertTab = (tab) => {
+            Admin.currentAlertManagerTab = tab;
+            const isCompose = tab === 'compose';
+            if (composePane) composePane.classList.toggle('hidden', !isCompose);
+            if (archivePane) archivePane.classList.toggle('hidden', isCompose);
+            const activeTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider';
+            const idleTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider';
+            if (tabCompose) tabCompose.className = isCompose ? activeTabCls : idleTabCls;
+            if (tabArchive) tabArchive.className = !isCompose ? activeTabCls : idleTabCls;
+            if (!isCompose) Admin.fetchAlertArchive();
+        };
+        if (tabCompose) tabCompose.onclick = () => setAlertTab('compose');
+        if (tabArchive) tabArchive.onclick = () => setAlertTab('archive');
+        if (archiveRefreshBtn) archiveRefreshBtn.onclick = () => Admin.fetchAlertArchive();
 
         if (pollAddCBtn && pollOptCWrap) {
             pollAddCBtn.onclick = () => {
@@ -6443,55 +6927,277 @@ const Admin = {
             const secret = await Admin.getAuthKey();
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required.", "error"); return; }
             
-            const confirmed = await Admin.secureConfirm("Clear Alert", `Delete alert for: ${target}?`);
+            const confirmed = await Admin.secureConfirm("Clear Alert", `Archive & clear alert for: ${target}?`);
             if (!confirmed) return;
 
-            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
-            
             try {
-                // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
-                const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
-                if (fetchRes.ok) {
-                    const alertData = await fetchRes.json();
-                    if (alertData && alertData.id) {
-                        alertData.archivedAt = Date.now();
-                        alertData.clearedFrom = target;
-                        const archiveUrl = `${dynamicEndpoint}notices_archive/${alertData.id}_${Date.now()}.json?auth=${secret}`;
-                        await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(alertData) });
-                    }
+                const archived = await Admin.archiveActiveNotice(target, secret);
+                if (!archived) {
+                    if (typeof showToast === 'function') showToast("No active alert to clear for this target.", "info");
+                    return;
                 }
+                try {
+                    await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${secret}` }
+                    });
+                } catch (pe) { console.warn("Purge failed", pe); }
 
-                const res = await fetch(url, { method: 'DELETE' });
-                if (res.ok) {
-                    try {
-                        await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
-                            method: 'POST', 
-                            headers: {'Authorization': `Bearer ${secret}`} 
-                        });
-                    } catch(pe) { console.warn("Purge failed", pe); }
+                if (typeof showToast === 'function') showToast("Cleared & Archived!", "info");
 
-                    if (typeof showToast === 'function') showToast("Cleared & Archived!", "info");
-                    
-                    existingAlertId = null;
-                    alertMsg.innerHTML = "";
-                    signoffInput.value = "Next Train Ops";
-                    forcePopupToggle.checked = false;
-                    pollToggle.checked = false;
-                    pollContainer.classList.add('hidden');
-                    pollQuestion.value = "";
-                    pollOptA.value = "";
-                    pollOptB.value = "";
-                    if (pollOptC) pollOptC.value = "";
-                    if (pollShowResults) pollShowResults.checked = false;
-                    pollOptCWrap?.classList.add('hidden');
-                    pollAddCBtn?.classList.remove('hidden');
+                existingAlertId = null;
+                alertMsg.innerHTML = "";
+                signoffInput.value = "Next Train Ops";
+                forcePopupToggle.checked = false;
+                pollToggle.checked = false;
+                pollContainer.classList.add('hidden');
+                pollQuestion.value = "";
+                pollOptA.value = "";
+                pollOptB.value = "";
+                if (pollOptC) pollOptC.value = "";
+                if (pollShowResults) pollShowResults.checked = false;
+                pollOptCWrap?.classList.add('hidden');
+                pollAddCBtn?.classList.remove('hidden');
+                const livePoll = document.getElementById('alert-live-poll-results');
+                if (livePoll) livePoll.classList.add('hidden');
 
-                    sendBtn.textContent = "Post Alert";
-                    if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500); 
-                } else { if (typeof showToast === 'function') showToast("Failed to clear alert.", "error"); }
-            } catch (e) { if (typeof showToast === 'function') showToast(e.message, "error"); }
+                sendBtn.textContent = "Post Alert";
+                if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
+            } catch (e) { if (typeof showToast === 'function') showToast(e.message || "Failed to clear alert.", "error"); }
         };
+    },
+
+    fetchAlertArchive: async () => {
+        const statusEl = document.getElementById('alert-archive-status');
+        const listEl = document.getElementById('alert-archive-list');
+        if (!listEl) return;
+
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (statusEl) statusEl.textContent = 'Auth required';
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = 'Sweeping expired…';
+        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive…</div>`;
+
+        try {
+            const swept = await Admin.sweepExpiredAlertsToArchive(secret);
+            if (statusEl) statusEl.textContent = 'Loading…';
+            const items = await Admin.loadUnifiedAlertArchive(secret);
+            Admin.renderAlertArchiveList(items);
+            const noticeN = items.filter((i) => (i.kind || 'notice') !== 'disruption').length;
+            const disrN = items.filter((i) => i.kind === 'disruption').length;
+            const sweepNote = (swept.notices || swept.disruptions)
+                ? ` · moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
+                : '';
+            if (statusEl) statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${sweepNote}`;
+        } catch (e) {
+            console.warn('fetchAlertArchive failed', e);
+            if (statusEl) statusEl.textContent = 'Failed';
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-red-500">Could not load archive.</div>`;
+        }
+    },
+
+    renderAlertArchiveList: (items) => {
+        const listEl = document.getElementById('alert-archive-list');
+        if (!listEl) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (!rows.length) {
+            listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">Archive is empty.</div>`;
+            return;
+        }
+
+        listEl.innerHTML = rows.map((item, idx) => {
+            const isDisr = item.kind === 'disruption';
+            const sev = (item.severity || (item.tier === 'CRITICAL' ? 'critical' : 'info')).toLowerCase();
+            const sevCls = sev === 'critical'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                : sev === 'warning'
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+            const kindCls = isDisr
+                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+            const reason = item.archiveReason || (item.archivedAt ? 'cleared' : 'archived');
+            const when = item.archivedAt || item.postedAt;
+            const whenStr = when ? Admin.formatDate(when) : '—';
+            const plain = (() => {
+                try {
+                    const d = document.createElement('div');
+                    d.innerHTML = item.message || item.longExplanation || item.buttonText || '';
+                    return (d.textContent || '').trim().slice(0, 140) || '(no message)';
+                } catch { return '(no message)'; }
+            })();
+            const poll = item.pollResults;
+            const pollHint = poll && poll.total
+                ? `<span class="text-[9px] font-bold text-purple-600 dark:text-purple-400">Poll · ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
+                : (item.poll && item.poll.active
+                    ? `<span class="text-[9px] font-bold text-purple-500">Had poll</span>`
+                    : '');
+            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || '—'));
+            const idSafe = escapeHTML(String(item.id || item._archKey || idx));
+
+            return `
+                <button type="button" data-archive-idx="${idx}" class="alert-archive-item w-full text-left p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 hover:border-blue-400 dark:hover:border-blue-500 transition-colors shadow-sm focus:outline-none">
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${kindCls}">${isDisr ? 'Incident' : 'Alert'}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${escapeHTML(sev)}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${escapeHTML(reason)}</span>
+                        ${pollHint}
+                    </div>
+                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
+                    <div class="flex justify-between gap-2 text-[9px] font-mono text-gray-400">
+                        <span class="truncate">${scope} · ${idSafe}</span>
+                        <span class="shrink-0">${escapeHTML(whenStr)}</span>
+                    </div>
+                </button>`;
+        }).join('');
+
+        listEl.querySelectorAll('.alert-archive-item').forEach((btn) => {
+            btn.onclick = () => {
+                const idx = Number(btn.getAttribute('data-archive-idx'));
+                const item = (Admin._cachedAlertArchive || [])[idx];
+                if (item) Admin.previewArchivedAlert(item);
+            };
+        });
+    },
+
+    /** Rebuild full advisory HTML (message, source, poll tallies) for archive / feedback preview. */
+    buildAlertPreviewHtml: (data) => {
+        if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
+        const isDisr = data.kind === 'disruption' || data.tier || data.longExplanation;
+        const severity = (data.severity || (data.tier === 'CRITICAL' ? 'critical' : (isDisr ? 'warning' : 'info'))).toLowerCase();
+        const title = isDisr
+            ? (severity === 'critical' ? '🔴 CRITICAL INCIDENT' : '🟡 TRANSIT INCIDENT')
+            : (severity === 'critical' ? '🔴 CRITICAL ADVISORY' : severity === 'warning' ? '🟡 SERVICE WARNING' : '🔵 SERVICE INFO');
+        const borderCls = severity === 'critical'
+            ? 'border-red-500'
+            : severity === 'warning'
+                ? 'border-yellow-500'
+                : 'border-blue-500';
+        const titleCls = severity === 'critical'
+            ? 'text-red-600 dark:text-red-400'
+            : severity === 'warning'
+                ? 'text-yellow-600 dark:text-yellow-400'
+                : 'text-blue-600 dark:text-blue-400';
+
+        let statusHtml = data.archivedAt
+            ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` · ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
+            : `<span class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
+
+        let imgHtml = data.imageUrl
+            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`
+            : '';
+
+        let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
+        parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
+            if (btnStart || btnEnd) return match;
+            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
+        });
+
+        if (data.sourceName) {
+            const sName = escapeHTML(data.sourceName);
+            const sUrl = data.sourceUrl ? escapeHTML(data.sourceUrl) : null;
+            const innerCitation = sUrl
+                ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
+                : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
+            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+        }
+
+        let pollHtml = '';
+        const poll = data.poll;
+        const results = data.pollResults || null;
+        if (poll && (poll.active || poll.question || results)) {
+            const total = results ? (results.total || ((results.A || 0) + (results.B || 0) + (results.C || 0))) : 0;
+            const pct = (n) => total > 0 ? Math.round((n / total) * 100) : 0;
+            const bar = (label, count, color) => {
+                const p = pct(count || 0);
+                return `
+                    <div class="mb-2">
+                        <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                            <span>${escapeHTML(label || 'Option')}</span>
+                            <span>${count || 0} vote${(count || 0) === 1 ? '' : 's'} (${p}%)</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div class="${color} h-2 rounded-full" style="width:${p}%"></div>
+                        </div>
+                    </div>`;
+            };
+            pollHtml = `
+                <div class="mt-4 p-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-900/20">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-2">Poll Snapshot</p>
+                    <p class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">${escapeHTML(poll.question || 'Poll')}</p>
+                    ${results ? `
+                        ${bar(poll.optionA || 'A', results.A, 'bg-purple-500')}
+                        ${bar(poll.optionB || 'B', results.B, 'bg-purple-400')}
+                        ${poll.optionC || (results.C || 0) > 0 ? bar(poll.optionC || 'C', results.C, 'bg-purple-300') : ''}
+                        <div class="text-right text-[9px] font-black uppercase text-gray-400 tracking-wider">Total Votes: ${total}</div>
+                    ` : `
+                        <div class="flex flex-wrap gap-2 text-[10px] font-bold">
+                            <span class="px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-700">${escapeHTML(poll.optionA || 'A')}</span>
+                            <span class="px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-700">${escapeHTML(poll.optionB || 'B')}</span>
+                            ${poll.optionC ? `<span class="px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-700">${escapeHTML(poll.optionC)}</span>` : ''}
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-2">No tallies stored for this archive entry.</p>
+                    `}
+                </div>`;
+        }
+
+        const postedStr = data.postedAt ? Admin.formatDate(data.postedAt) : '—';
+        const archivedStr = data.archivedAt ? Admin.formatDate(data.archivedAt) : null;
+        const signoff = data.signoff || data.signedBy || '';
+        const scope = data.clearedFrom || data.target || data.routeId || '';
+
+        return `
+            <div class="rounded-xl border-2 ${borderCls} p-3 bg-white dark:bg-gray-900/50">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <h4 class="text-sm font-black tracking-tight ${titleCls}">${title}</h4>
+                    ${statusHtml}
+                </div>
+                ${imgHtml}
+                <div class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed mb-2">${parsedMessage}</div>
+                ${signoff ? `<p class="text-[10px] text-gray-500 italic mb-2">— ${escapeHTML(String(signoff))}</p>` : ''}
+                ${pollHtml}
+                <div class="text-[10px] text-gray-500 font-mono border-t border-gray-200 dark:border-gray-700 pt-2 mt-3 space-y-0.5">
+                    <div>ID: ${escapeHTML(String(data.id || '—'))}</div>
+                    ${scope ? `<div>Scope: ${escapeHTML(String(scope))}</div>` : ''}
+                    <div>Posted: ${escapeHTML(postedStr)}</div>
+                    ${archivedStr ? `<div>Archived: ${escapeHTML(archivedStr)}</div>` : ''}
+                    <div>Severity: ${escapeHTML(severity)}</div>
+                    ${isDisr && data.tier ? `<div>Tier: ${escapeHTML(String(data.tier))}</div>` : ''}
+                </div>
+            </div>`;
+    },
+
+    previewArchivedAlert: (item) => {
+        if (!item) return;
+        let modal = document.getElementById('admin-context-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'admin-context-modal';
+            modal.className = 'fixed inset-0 bg-black/80 z-[250] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-blue-200 dark:border-blue-900/50 flex flex-col max-h-[85vh]">
+                    <div class="flex items-center justify-between mb-4 shrink-0">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl">🔍</span>
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Rebuilt Alert Preview</h3>
+                        </div>
+                        <button onclick="closeSmoothModal('admin-context-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <div id="admin-context-content" class="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-800 dark:text-gray-200 leading-relaxed overflow-y-auto custom-scrollbar"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        const contentDiv = document.getElementById('admin-context-content');
+        const titleEl = modal.querySelector('h3');
+        if (titleEl) titleEl.textContent = 'Rebuilt Alert Preview';
+        if (contentDiv) contentDiv.innerHTML = Admin.buildAlertPreviewHtml(item);
+        openSmoothModal('admin-context-modal');
     },
 
     // --- 4.5 TRANSIT INCIDENT MANAGER (GUARDIAN PHASE 6) ---
@@ -6999,9 +7705,16 @@ const Admin = {
                 if (fetchRes.ok) {
                     const disrData = await fetchRes.json();
                     if (disrData && disrData.id) {
-                        disrData.archivedAt = Date.now();
+                        const archivedPayload = {
+                            ...disrData,
+                            kind: 'disruption',
+                            archivedAt: Date.now(),
+                            clearedFrom: rId,
+                            archiveReason: 'cleared',
+                            severity: disrData.severity || (disrData.tier === 'CRITICAL' ? 'critical' : 'warning'),
+                        };
                         const archiveUrl = `${dynamicEndpoint}disruptions_archive/${rId}/${disrData.id}_${Date.now()}.json?auth=${secret}`;
-                        const archiveRes = await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(disrData) });
+                        const archiveRes = await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(archivedPayload) });
                         if (!archiveRes.ok) throw new Error("Failed to archive disruption. Aborting delete.");
                     }
                 }
@@ -8294,12 +9007,9 @@ const Admin = {
                     if (typeof showToast === 'function') showToast('Run a distance audit first', 'info', 1500);
                     return;
                 }
-                const blob = new Blob([JSON.stringify(lastZoneAuditReport, null, 2)], { type: 'application/json' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `zone-distance-audit-${lastZoneAuditReport.meta?.region || 'region'}-${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(a.href);
+                const name = `zone-distance-audit-${lastZoneAuditReport.meta?.region || 'region'}-${Date.now()}.json`;
+                Admin.downloadFile(name, JSON.stringify(lastZoneAuditReport, null, 2), 'application/json;charset=utf-8');
+                if (typeof showToast === 'function') showToast('Downloaded audit report', 'success', 1500);
             };
         }
 
@@ -9439,6 +10149,9 @@ const Admin = {
                         <button id="roadmap-refresh-btn" class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 hover:text-blue-500 transition-colors focus:outline-none shadow-sm shrink-0" title="Refresh">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                         </button>
+                        <button id="roadmap-export-btn" class="p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors focus:outline-none shadow-sm shrink-0" title="Download board (.txt)">
+                            ${Admin.icon('download', 'w-4 h-4')}
+                        </button>
                         <button onclick="Admin.openTicketModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-md focus:outline-none shrink-0">
                             ${Admin.icon('plus', 'w-3.5 h-3.5')} New Ticket
                         </button>
@@ -9510,6 +10223,10 @@ const Admin = {
         const body = document.getElementById('roadmap-body');
         const chevron = document.getElementById('roadmap-chevron');
         const refreshBtn = document.getElementById('roadmap-refresh-btn');
+        const roadmapExportBtn = document.getElementById('roadmap-export-btn');
+        if (roadmapExportBtn) {
+            roadmapExportBtn.onclick = () => Admin.exportColumn('all');
+        }
 
         header.onclick = () => {
             if (Admin.isGridMode) return;
@@ -10002,48 +10719,52 @@ const Admin = {
         // Escalate hook kept on Admin root (see Admin.escalateToRoadmap / escalateFromEl)
 
         // Export Engine
+        Admin.ticketsToTxt = (tickets, heading = 'OPERATIONS ROADMAP') => {
+            let txt = `NEXT TRAIN — ${heading}\nExported: ${Admin.formatDate(Date.now())}\nTickets: ${tickets.length}\n${'='.repeat(48)}\n\n`;
+            tickets.forEach((t, i) => {
+                txt += `#${i + 1}  [${String(t.status || 'backlog').toUpperCase()}] ${t.title || '(untitled)'}\n`;
+                txt += `  Type: ${t.type || '—'} · Severity: ${t.severity || '—'} · ID: ${t.id || '—'}\n`;
+                if (t.source) txt += `  Source: ${t.source}\n`;
+                if (t.createdAt) txt += `  Created: ${Admin.formatDate(t.createdAt)}\n`;
+                if (t.updatedAt) txt += `  Updated: ${Admin.formatDate(t.updatedAt)}\n`;
+                const desc = String(t.description || '').replace(/\r/g, '').trim();
+                if (desc) txt += `  Description:\n${desc.split('\n').map((l) => `    ${l}`).join('\n')}\n`;
+                txt += `\n`;
+            });
+            return txt;
+        };
+
         Admin.exportColumn = (statusColumn, targetArray = null, filenameOverride = null) => {
             let dataToExport = [];
             
             if (targetArray) {
-                // If a specific array is passed (e.g., from the View Modal single ticket export)
                 dataToExport = targetArray;
             } else {
-                // Otherwise, filter by column status
                 if (!Admin.cachedRoadmapData || Admin.cachedRoadmapData.length === 0) {
                     if (typeof showToast === 'function') showToast("No data to export.", "warning");
                     return;
                 }
-                dataToExport = Admin.cachedRoadmapData.filter(t => (t.status || 'backlog') === statusColumn);
+                if (statusColumn === 'all' || !statusColumn) {
+                    dataToExport = [...Admin.cachedRoadmapData];
+                } else {
+                    dataToExport = Admin.cachedRoadmapData.filter(t => (t.status || 'backlog') === statusColumn);
+                }
             }
 
             if (dataToExport.length === 0) {
-                if (typeof showToast === 'function') showToast("No tickets in this column to export.", "warning");
+                if (typeof showToast === 'function') showToast("No tickets to export.", "warning");
                 return;
             }
 
-            // Create JSON blob
-            const jsonStr = JSON.stringify(dataToExport, null, 2);
-            const blob = new Blob([jsonStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            
-            // Format Filename
-            const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-            const defaultFilename = `roadmap_${statusColumn}_${dateStr}.json`;
-            const finalFilename = filenameOverride ? `${filenameOverride}_${dateStr}.json` : defaultFilename;
-
-            // Trigger download
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = finalFilename;
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            if (typeof showToast === 'function') showToast(`Exported ${dataToExport.length} ticket(s) successfully!`, "success");
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const scope = statusColumn === 'all' || !statusColumn ? 'board' : statusColumn;
+            const finalFilename = filenameOverride
+                ? `${filenameOverride}_${dateStr}.txt`
+                : `roadmap_${scope}_${dateStr}.txt`;
+            const heading = statusColumn === 'all' ? 'OPERATIONS ROADMAP (FULL BOARD)' : `OPERATIONS ROADMAP (${String(scope).toUpperCase()})`;
+            const txt = Admin.ticketsToTxt(dataToExport, heading);
+            const ok = Admin.downloadFile(finalFilename, txt);
+            if (ok && typeof showToast === 'function') showToast(`Downloaded ${dataToExport.length} ticket(s)`, "success");
         };
     }
 };

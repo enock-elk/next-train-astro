@@ -7,7 +7,7 @@
 
 import { 
     $userRegion, $currentRouteId, $userProfile, $fullDatabase, $schedules, 
-    $globalStationIndex, $masterStationList, $globalExclusions, $globalDisruptions, 
+    $globalStationIndex, $masterStationList, $ghostStationList, $globalExclusions, $globalDisruptions, 
     $isOffline, $isSimMode, $simTime 
 } from '../store.js';
 
@@ -502,12 +502,67 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
 }
 
 export async function buildGlobalStationIndexAsync(targetDB) {
-    let tempIndex = {}; 
-    if (!targetDB) return tempIndex;
+    let tempIndex = {};
+    /** @type {Record<string, { lat: number|null, lon: number|null }>} */
+    const ghostCandidates = {};
+    if (!targetDB) {
+        $ghostStationList.set([]);
+        if (typeof window !== 'undefined') window.GHOST_STATION_LIST = [];
+        return tempIndex;
+    }
 
     const hasActiveService = (row, sKey, cKey) => {
         const ignored = new Set([sKey, cKey, 'KM_MARK', 'row_index']);
         return Object.keys(row).some(k => !ignored.has(k) && row[k] && String(row[k]).trim() !== "");
+    };
+
+    /** Sheet metadata / header labels that must never become stations. */
+    const isSheetMetaStationName = (rawName) => {
+        const bare = String(rawName || '')
+            .replace(/ STATION$/i, '')
+            .trim()
+            .toUpperCase();
+        if (!bare) return true;
+        if (bare === 'STATION' || bare === 'COORDINATES' || bare === 'KM_MARK' || bare === 'KM MARK') return true;
+        if (bare.startsWith('LAST U') || bare.startsWith('LAST UPDATED')) return true;
+        if (bare.startsWith('UPDATED:') || bare === 'UPDATED') return true;
+        return false;
+    };
+
+    const parseRowCoords = (row, coordKey) => {
+        let coords = { lat: null, lon: null };
+        try {
+            const coordVal = coordKey ? row[coordKey] : null;
+            if (coordVal) {
+                const parts = String(coordVal).split(',').map((s) => parseFloat(s.trim()));
+                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    coords = { lat: parts[0], lon: parts[1] };
+                }
+            }
+        } catch { /* ignore */ }
+        return coords;
+    };
+
+    const ingestStationRow = (row, stationKey, coordKey, routeId) => {
+        if (!stationKey || !row[stationKey]) return;
+        if (isSheetMetaStationName(row[stationKey])) return;
+        const stationName = normalizeStationName(row[stationKey]);
+        if (isSheetMetaStationName(stationName)) return;
+        const coords = parseRowCoords(row, coordKey);
+        if (!hasActiveService(row, stationKey, coordKey)) {
+            if (!ghostCandidates[stationName]) ghostCandidates[stationName] = coords;
+            else if (ghostCandidates[stationName].lat == null && coords.lat != null) {
+                ghostCandidates[stationName] = coords;
+            }
+            return;
+        }
+        if (!tempIndex[stationName]) {
+            tempIndex[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };
+        } else if (tempIndex[stationName].lat === null && coords.lat !== null) {
+            tempIndex[stationName].lat = coords.lat;
+            tempIndex[stationName].lon = coords.lon;
+        }
+        tempIndex[stationName].routes.add(routeId);
     };
 
     const routeList = Object.values(ROUTES);
@@ -555,57 +610,25 @@ export async function buildGlobalStationIndexAsync(targetDB) {
                       if (!stationKey && row[stationKey]) stationKey = 'STATION';
                       if (!coordKey && row['COORDINATES']) coordKey = 'COORDINATES';
 
-                      if (stationKey && row[stationKey]) {
-                           if (!hasActiveService(row, stationKey, coordKey)) continue;
-                           const stationName = normalizeStationName(row[stationKey]);
-                           const coordVal = coordKey ? row[coordKey] : null;
-                           let coords = { lat: null, lon: null };
-                           
-                           try {
-                               if (coordVal) {
-                                   const parts = String(coordVal).split(',').map(s => parseFloat(s.trim()));
-                                   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) coords = { lat: parts[0], lon: parts[1] };
-                               }
-                           } catch (e) { }
-
-                           if (!tempIndex[stationName]) {
-                               tempIndex[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };
-                           } else if (tempIndex[stationName].lat === null && coords.lat !== null) {
-                               tempIndex[stationName].lat = coords.lat;
-                               tempIndex[stationName].lon = coords.lon;
-                           }
-                           if (tempIndex[stationName]) tempIndex[stationName].routes.add(route.id);
-                      }
+                      ingestStationRow(row, stationKey, coordKey, route.id);
                  }
             } else {
                  sheetData.forEach(row => {
                     let stationKey = row['STATION'] !== undefined ? 'STATION' : null;
                     let coordKey = row['COORDINATES'] !== undefined ? 'COORDINATES' : null;
-
-                    if (stationKey && row[stationKey]) {
-                        if (!hasActiveService(row, stationKey, coordKey)) return;
-                        const stationName = normalizeStationName(row[stationKey]);
-                        let coords = { lat: null, lon: null };
-                        
-                        try {
-                            if (coordKey && row[coordKey]) {
-                                const parts = String(row[coordKey]).split(',').map(s => parseFloat(s.trim()));
-                                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) coords = { lat: parts[0], lon: parts[1] };
-                            }
-                        } catch (e) { }
-
-                        if (!tempIndex[stationName]) {
-                            tempIndex[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };
-                        } else if (tempIndex[stationName].lat === null && coords.lat !== null) {
-                            tempIndex[stationName].lat = coords.lat;
-                            tempIndex[stationName].lon = coords.lon;
-                        }
-                        if (tempIndex[stationName]) tempIndex[stationName].routes.add(route.id);
-                    }
+                    ingestStationRow(row, stationKey, coordKey, route.id);
                 });
             }
         });
     }
+
+    // Ghosts = timetable rows with no service times that never gained active service elsewhere
+    const ghosts = Object.keys(ghostCandidates)
+        .filter((name) => !tempIndex[name] && !isSheetMetaStationName(name))
+        .sort();
+    $ghostStationList.set(ghosts);
+    if (typeof window !== 'undefined') window.GHOST_STATION_LIST = ghosts;
+
     return tempIndex;
 }
 
@@ -917,7 +940,11 @@ export function ensureRoutePinnedForRegion(region) {
         $schedules.set({});
         $globalStationIndex.set({});
         $masterStationList.set([]);
-        if (typeof window !== 'undefined') window.MASTER_STATION_LIST = [];
+        $ghostStationList.set([]);
+        if (typeof window !== 'undefined') {
+            window.MASTER_STATION_LIST = [];
+            window.GHOST_STATION_LIST = [];
+        }
         currentScheduleData = {};
         lastTrackedOD = null;
         $currentRouteId.set(null);
@@ -960,6 +987,11 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     $schedules.set({});
     $globalStationIndex.set({}); 
     $masterStationList.set([]);
+    $ghostStationList.set([]);
+    if (typeof window !== 'undefined') {
+        window.MASTER_STATION_LIST = [];
+        window.GHOST_STATION_LIST = [];
+    }
     currentScheduleData = {};
     lastTrackedOD = null;
     $currentRouteId.set(null);

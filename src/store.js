@@ -23,6 +23,8 @@ export const $fullDatabase = atom(null);         // The raw downloaded timetable
 export const $schedules = atom({});              // Parsed schedule arrays
 export const $globalStationIndex = atom({});     // Dijkstra node graph
 export const $masterStationList = atom([]);      // For Trip Planner Autocomplete
+/** Inactive / no-service stations present in timetables but excluded from routing. */
+export const $ghostStationList = atom([]);
 
 // ==========================================
 // 3. DYNAMIC FIREBASE STATE

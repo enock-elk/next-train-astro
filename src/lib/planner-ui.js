@@ -9,7 +9,7 @@
 
 import { 
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
-    $globalDisruptions, $masterStationList, $userProfile, $fullDatabase 
+    $globalDisruptions, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
@@ -82,10 +82,296 @@ const resolveTripDisruptions = (routeId, stops) => {
         : null;
     return fn ? fn(routeId, stops) : [];
 };
-const getMasterStationList = () => {
-    if (typeof window !== 'undefined' && window.MASTER_STATION_LIST && window.MASTER_STATION_LIST.length > 0) return window.MASTER_STATION_LIST;
-    return $masterStationList.get() || [];
+const bareStationName = (name) => String(name || '').replace(/ STATION/gi, '').trim();
+
+/** Reject sheet header / "Last Updated" rows that leaked into station lists. */
+const isSheetMetaStationName = (name) => {
+    const bare = bareStationName(name).toUpperCase();
+    if (!bare) return true;
+    if (bare === 'STATION' || bare === 'COORDINATES' || bare === 'KM_MARK' || bare === 'KM MARK') return true;
+    if (bare.startsWith('LAST U') || bare.startsWith('LAST UPDATED')) return true;
+    if (bare.startsWith('UPDATED:') || bare === 'UPDATED') return true;
+    return false;
 };
+
+const getMasterStationList = () => {
+    let list = [];
+    if (typeof window !== 'undefined' && window.MASTER_STATION_LIST && window.MASTER_STATION_LIST.length > 0) {
+        list = window.MASTER_STATION_LIST;
+    } else {
+        list = $masterStationList.get() || [];
+    }
+    return (list || []).filter((s) => !isSheetMetaStationName(s));
+};
+
+const getGhostStationList = () => {
+    let list = [];
+    if (typeof window !== 'undefined' && Array.isArray(window.GHOST_STATION_LIST) && window.GHOST_STATION_LIST.length > 0) {
+        list = window.GHOST_STATION_LIST;
+    } else {
+        list = $ghostStationList.get() || [];
+    }
+    return (list || []).filter((s) => !isSheetMetaStationName(s));
+};
+
+/** Small Levenshtein for short station names (Did you mean). */
+function stationEditDistance(a, b) {
+    const s = String(a || '');
+    const t = String(b || '');
+    const n = s.length;
+    const m = t.length;
+    if (!n) return m;
+    if (!m) return n;
+    const prev = new Array(m + 1);
+    const cur = new Array(m + 1);
+    for (let j = 0; j <= m; j++) prev[j] = j;
+    for (let i = 1; i <= n; i++) {
+        cur[0] = i;
+        for (let j = 1; j <= m; j++) {
+            const cost = s.charCodeAt(i - 1) === t.charCodeAt(j - 1) ? 0 : 1;
+            cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+        }
+        for (let j = 0; j <= m; j++) prev[j] = cur[j];
+    }
+    return prev[m];
+}
+
+/**
+ * Fuzzy station suggestions when strict filter returns nothing.
+ * Short queries: prefix/contains only. Edit-distance only for longer typos,
+ * and only when the first letter matches (blocks QUEE → DUBE).
+ * @param {string} query
+ * @param {string[]} candidates
+ * @param {number} [limit=3]
+ */
+function fuzzyStationSuggestions(query, candidates, limit = 3) {
+    const q = bareStationName(query).toUpperCase();
+    if (q.length < 3 || !Array.isArray(candidates) || !candidates.length) return [];
+    // Pure edit-distance is too noisy under ~5 chars (QUEE↔DUBE).
+    const allowEditDistance = q.length >= 5;
+    const maxDist = q.length >= 8 ? 2 : 1;
+    const scored = [];
+    for (const raw of candidates) {
+        const bare = bareStationName(raw).toUpperCase();
+        if (!bare) continue;
+        let rank = 99;
+        let dist = stationEditDistance(q, bare);
+        if (bare.startsWith(q)) {
+            rank = 0;
+            dist = 0;
+        } else if (bare.includes(q)) {
+            rank = 1;
+            dist = 0;
+        } else if (allowEditDistance) {
+            const first = bare.split(/\s+/)[0] || bare;
+            // Same initial letter required — avoids unrelated short anagrams/near-misses
+            if (first.charAt(0) === q.charAt(0)) {
+                const d2 = stationEditDistance(q, first);
+                if (d2 <= maxDist && d2 / Math.max(q.length, 1) <= 0.34) {
+                    rank = 2 + d2;
+                    dist = d2;
+                }
+            }
+        }
+        if (rank < 99) scored.push({ raw, rank, dist });
+    }
+    scored.sort((a, b) => a.rank - b.rank || a.dist - b.dist || a.raw.localeCompare(b.raw));
+    const out = [];
+    const seen = new Set();
+    for (const row of scored) {
+        if (seen.has(row.raw)) continue;
+        seen.add(row.raw);
+        out.push(row.raw);
+        if (out.length >= limit) break;
+    }
+    return out;
+}
+
+function notifyGhostStation(stationName) {
+    const label = bareStationName(stationName) || 'This station';
+    if (typeof showToast === 'function') {
+        showToast(
+            `${label} is inactive — PRASA does not currently operate service at this station.`,
+            'info',
+            4500
+        );
+    }
+}
+
+/** Clock used for off-peak fare window (sim-aware). */
+function plannerFareClockParts() {
+    try {
+        if ($isSimMode.get() && ($simTime.get() || '')) {
+            const parts = String($simTime.get()).split(':');
+            return { h: parseInt(parts[0], 10) || 0, m: parseInt(parts[1], 10) || 0 };
+        }
+    } catch { /* ignore */ }
+    try {
+        if (typeof window !== 'undefined' && window.currentTime && String(window.currentTime).includes(':')) {
+            const parts = String(window.currentTime).split(':');
+            return { h: parseInt(parts[0], 10) || 0, m: parseInt(parts[1], 10) || 0 };
+        }
+    } catch { /* ignore */ }
+    const now = new Date();
+    return { h: now.getHours(), m: now.getMinutes() };
+}
+
+/** Resolve assigned fare zone for a corridor (same rules as live board). */
+function resolvePlannerRouteZone(routeId) {
+    const db = $fullDatabase.get();
+    if (!db || !routeId || !ROUTES[routeId]) return null;
+    const route = ROUTES[routeId];
+    const keysToCheck = Object.values(route.sheetKeys || {});
+    for (const key of keysToCheck) {
+        const zoneVal = db[`${key}_zone`];
+        if (zoneVal && FARE_CONFIG.zones[zoneVal]) return zoneVal;
+    }
+    for (const key of keysToCheck) {
+        if (!key.includes('_to_')) continue;
+        const parts = key.split('_to_');
+        if (parts.length !== 2) continue;
+        const prefix = parts[0];
+        const rest = parts[1];
+        let suffix = '';
+        let dest = '';
+        if (rest.endsWith('_weekday')) { suffix = '_weekday'; dest = rest.replace('_weekday', ''); }
+        else if (rest.endsWith('_saturday')) { suffix = '_saturday'; dest = rest.replace('_saturday', ''); }
+        else if (rest.endsWith('_sat')) { suffix = '_sat'; dest = rest.slice(0, -4); }
+        if (dest && suffix) {
+            const reverseZone = db[`${dest}_to_${prefix}${suffix}_zone`];
+            if (reverseZone && FARE_CONFIG.zones[reverseZone]) return reverseZone;
+        }
+    }
+    return null;
+}
+
+function computeZoneFare(zoneCode) {
+    if (!zoneCode || !FARE_CONFIG.zones[zoneCode]) return null;
+    const profile = FARE_CONFIG.profiles[$userProfile.get()] || FARE_CONFIG.profiles.Adult;
+    let useOffPeak = false;
+    if (FARE_CONFIG.offPeakEveryDay !== false) {
+        const { h, m } = plannerFareClockParts();
+        const decimalTime = h + (m / 60);
+        if (decimalTime >= FARE_CONFIG.offPeakStart && decimalTime < FARE_CONFIG.offPeakEnd) {
+            useOffPeak = true;
+        }
+    }
+    const multiplier = useOffPeak ? profile.offPeak : profile.base;
+    let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
+    finalPrice = Math.ceil(finalPrice * 2) / 2;
+    return {
+        zone: zoneCode,
+        price: finalPrice,
+        priceLabel: finalPrice.toFixed(2),
+        isOffPeak: useOffPeak,
+    };
+}
+
+function collectTripRoutes(trip) {
+    const routes = [];
+    const push = (r) => {
+        if (r && r.id && !routes.some((x) => x.id === r.id)) routes.push(r);
+    };
+    if (Array.isArray(trip?.legs)) trip.legs.forEach((leg) => push(leg?.route));
+    push(trip?.leg1?.route);
+    push(trip?.leg2?.route);
+    push(trip?.leg3?.route);
+    push(trip?.route);
+    return routes;
+}
+
+function collectTripStops(trip) {
+    const stops = [];
+    const pushStop = (s) => {
+        const name = normalizeStationName(s?.station || s?.name || s);
+        if (!name) return;
+        if (stops.length && normalizeStationName(stops[stops.length - 1].station) === name) return;
+        stops.push({
+            station: name,
+            lat: s?.lat ?? null,
+            lon: s?.lon ?? null,
+        });
+    };
+    if (Array.isArray(trip?.stops) && trip.stops.length) {
+        trip.stops.forEach(pushStop);
+    } else if (Array.isArray(trip?.legs) && trip.legs.length) {
+        trip.legs.forEach((leg) => (leg.stops || []).forEach(pushStop));
+    } else {
+        [trip?.leg1, trip?.leg2, trip?.leg3].forEach((leg) => {
+            if (!leg) return;
+            (leg.stops || []).forEach(pushStop);
+        });
+    }
+    if (!stops.length && trip?.from && trip?.to) {
+        pushStop(trip.from);
+        pushStop(trip.to);
+    }
+    return stops;
+}
+
+/** Est. along-route km from stop coords (crow-flies hops); null if too thin. */
+function getTripDistanceKm(trip) {
+    const index = $globalStationIndex.get() || {};
+    const stops = collectTripStops(trip);
+    if (stops.length < 2) return null;
+    let km = 0;
+    let hops = 0;
+    for (let i = 1; i < stops.length; i++) {
+        let a = stops[i - 1];
+        let b = stops[i];
+        if (a.lat == null || a.lon == null) {
+            const idx = index[normalizeStationName(a.station)];
+            if (idx) { a = { ...a, lat: idx.lat, lon: idx.lon }; }
+        }
+        if (b.lat == null || b.lon == null) {
+            const idx = index[normalizeStationName(b.station)];
+            if (idx) { b = { ...b, lat: idx.lat, lon: idx.lon }; }
+        }
+        if (a.lat == null || a.lon == null || b.lat == null || b.lon == null) continue;
+        km += getDistanceFromLatLonInKm(a.lat, a.lon, b.lat, b.lon);
+        hops++;
+    }
+    if (!hops || !Number.isFinite(km) || km <= 0) return null;
+    return Math.round(km * 10) / 10;
+}
+
+/** Zone fare for planner trip (sums unique corridor routes on multi-leg). */
+function getTripFareSummary(trip) {
+    const routes = collectTripRoutes(trip);
+    if (!routes.length) return null;
+    let total = 0;
+    let zones = [];
+    let anyOffPeak = false;
+    let any = false;
+    for (const route of routes) {
+        const zone = resolvePlannerRouteZone(route.id);
+        const fare = computeZoneFare(zone);
+        if (!fare) continue;
+        any = true;
+        total += fare.price;
+        zones.push(fare.zone);
+        if (fare.isOffPeak) anyOffPeak = true;
+    }
+    if (!any) return null;
+    total = Math.ceil(total * 2) / 2;
+    return {
+        priceLabel: total.toFixed(2),
+        zones,
+        isOffPeak: anyOffPeak,
+        multiRoute: routes.length > 1,
+    };
+}
+
+function formatPlannerMetaLine(trip) {
+    const km = getTripDistanceKm(trip);
+    const fare = getTripFareSummary(trip);
+    const bits = [];
+    if (km != null) bits.push(`~${km} km`);
+    if (fare) {
+        bits.push(`R${fare.priceLabel}${fare.isOffPeak ? ' off-peak' : ''}`);
+    }
+    return bits.length ? bits.join(' · ') : '';
+}
 
 /** Phase 5 — inject recent crowd delay reports under an active trip card */
 async function injectPlannerCrowdDelay(trip) {
@@ -2578,11 +2864,28 @@ export function setupAutocomplete(inputId, selectId) {
     list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
     input.parentNode.appendChild(list);
 
+    const pickActiveStation = (station) => {
+        input.value = bareStationName(station);
+        input.dataset.resolvedValue = station;
+        if (select) {
+            if (!select.querySelector(`option[value="${station}"]`)) {
+                const opt = document.createElement('option');
+                opt.value = station;
+                opt.textContent = station;
+                select.appendChild(opt);
+            }
+            select.value = station;
+            select.dispatchEvent(new Event('change'));
+        }
+        list.classList.add('hidden');
+    };
+
     const renderList = (filterText = '') => {
         list.innerHTML = '';
-        const val = filterText.trim().toUpperCase();
+        const rawFilter = filterText.trim();
+        const val = rawFilter.toUpperCase();
         const masterList = getMasterStationList();
-        let matches = val.length === 0 ? masterList : masterList.filter(s => s.includes(val));
+        const ghostList = getGhostStationList();
 
         let oppositeValue = "";
         if (inputId === 'planner-from-search') {
@@ -2592,40 +2895,89 @@ export function setupAutocomplete(inputId, selectId) {
             const fromInput = document.getElementById('planner-from-search');
             oppositeValue = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : "";
         }
-        
-        if (oppositeValue) {
-            matches = matches.filter(s => s !== oppositeValue);
-        }
 
-        if (matches.length === 0) {
-            const li = document.createElement('li');
-            li.className = "p-3 text-sm text-gray-400 italic";
-            li.textContent = "No stations found";
-            list.appendChild(li);
-        } else {
-            matches.forEach(station => {
-                const li = document.createElement('li');
-                li.className = "p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors";
-                li.textContent = station.replace(' STATION', '');
-                li.onclick = () => {
-                    input.value = station.replace(' STATION', '');
-                    input.dataset.resolvedValue = station;
-                    if (select) {
-                        if (!select.querySelector(`option[value="${station}"]`)) {
-                            const opt = document.createElement('option');
-                            opt.value = station;
-                            opt.textContent = station;
-                            select.appendChild(opt);
-                        }
-                        select.value = station;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                    }
-                    list.classList.add('hidden');
-                };
-                list.appendChild(li);
+        let matches = val.length === 0 ? masterList : masterList.filter((s) => s.includes(val));
+        if (oppositeValue) matches = matches.filter((s) => s !== oppositeValue);
+
+        // Ghosts only when the user is typing a name (not in the full browse list)
+        let ghostMatches = [];
+        if (val.length > 0) {
+            ghostMatches = ghostList.filter((s) => s.includes(val) && s !== oppositeValue);
+            // Prefer prefix hits (QUEE → Queenswood) over weaker contains-only ghosts
+            ghostMatches.sort((a, b) => {
+                const ba = bareStationName(a).toUpperCase();
+                const bb = bareStationName(b).toUpperCase();
+                const pa = ba.startsWith(val) ? 0 : 1;
+                const pb = bb.startsWith(val) ? 0 : 1;
+                return pa - pb || ba.localeCompare(bb);
             });
         }
+
+        const hasStrongGhostHit = ghostMatches.some((s) =>
+            bareStationName(s).toUpperCase().startsWith(val)
+        );
+
+        // Did-you-mean only when there is no active hit AND no clear inactive prefix hit
+        let didYouMean = [];
+        if (val.length >= 3 && matches.length === 0 && !hasStrongGhostHit) {
+            didYouMean = fuzzyStationSuggestions(rawFilter, masterList, 3)
+                .filter((s) => s !== oppositeValue);
+        }
+
+        let ghostSuggest = [];
+        if (val.length >= 3 && matches.length === 0 && ghostMatches.length === 0) {
+            ghostSuggest = fuzzyStationSuggestions(rawFilter, ghostList, 3)
+                .filter((s) => s !== oppositeValue);
+        }
+
+        const appendActive = (station) => {
+            const li = document.createElement('li');
+            li.className = "p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors";
+            li.textContent = bareStationName(station);
+            li.onclick = () => pickActiveStation(station);
+            list.appendChild(li);
+        };
+
+        const appendGhost = (station) => {
+            const li = document.createElement('li');
+            li.className = "p-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium text-gray-400 dark:text-gray-500 transition-colors opacity-70";
+            li.innerHTML = `<span class="line-through decoration-gray-300 dark:decoration-gray-600">${escapeHTML(bareStationName(station))}</span>
+                <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Inactive</span>`;
+            li.onclick = () => {
+                notifyGhostStation(station);
+                // Do not resolve ghost as origin/destination
+            };
+            list.appendChild(li);
+        };
+
+        if (matches.length) {
+            matches.forEach(appendActive);
+        }
+
+        if (didYouMean.length) {
+            const header = document.createElement('li');
+            header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
+            header.textContent = "Did you mean";
+            list.appendChild(header);
+            didYouMean.forEach(appendActive);
+        }
+
+        const allGhosts = [...ghostMatches, ...ghostSuggest];
+        if (allGhosts.length) {
+            const header = document.createElement('li');
+            header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
+            header.textContent = "Inactive stations";
+            list.appendChild(header);
+            allGhosts.forEach(appendGhost);
+        }
+
+        if (!matches.length && !didYouMean.length && !allGhosts.length) {
+            const li = document.createElement('li');
+            li.className = "p-3 text-sm text-gray-400 italic";
+            li.textContent = val.length ? "No stations found" : "No stations loaded";
+            list.appendChild(li);
+        }
+
         list.classList.remove('hidden');
     };
 

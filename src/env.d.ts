@@ -19,6 +19,7 @@ interface Window {
   updateFareDisplay?: (sheetKey?: string | null, timeOverride?: string | null) => void;
   _suppressReloads?: boolean;
   MASTER_STATION_LIST?: string[];
+  GHOST_STATION_LIST?: string[];
   switchTab?: (tab: string) => void;
   syncBottomNavActive?: (tab?: string) => void;
   openAppHub?: () => void;

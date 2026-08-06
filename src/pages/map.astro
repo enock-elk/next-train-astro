@@ -21,31 +21,42 @@ const base = normalizeBase(import.meta.env.BASE_URL);
       body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; }
       .dark body, .dark html { background-color: #111827; }
       #map { height: 100vh; width: 100%; z-index: 1; position: absolute; top: 0; left: 0; }
-      .legend-container {
-        position: absolute; top: 16px; right: 16px; z-index: 1000;
-        max-width: calc(100vw - 120px); width: 250px; display: none;
+      #map-top-controls {
+        position: fixed; top: 16px; right: 16px; z-index: 1001;
+        display: flex; align-items: flex-start; gap: 0.5rem;
+        pointer-events: none;
       }
-      /* Parent sheet Back sits in this same top row when embedded. */
-      html.nt-map-embedded .legend-container {
+      html.nt-map-embedded #map-top-controls {
         top: max(0.5rem, env(safe-area-inset-top, 0px));
         right: 12px;
-        max-width: min(250px, calc(100vw - 7.5rem));
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
-      .legend-box {
+      .legend-container {
+        position: relative; display: none; pointer-events: auto;
+        max-width: min(250px, calc(100vw - 5.5rem));
+      }
+      .legend-panel {
+        display: none;
+        position: absolute; top: calc(100% + 0.5rem); right: 0;
+        width: min(250px, calc(100vw - 5.5rem));
         background: rgba(255, 255, 255, 0.95);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        border-radius: 0.75rem; padding: 0.75rem; font-family: 'Inter', sans-serif; color: #1f2937;
+        border-radius: 0.75rem; padding: 0.75rem;
+        font-family: 'Inter', sans-serif; color: #1f2937;
+        border: 1px solid #e5e7eb;
+        max-height: min(60vh, 420px); overflow-y: auto;
       }
-      .dark .legend-box { background: rgba(31, 41, 55, 0.95); color: #f3f4f6; border: 1px solid #374151; }
-      .legend-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-      .legend-content { overflow: hidden; max-height: 500px; transition: max-height 0.3s ease-in-out; }
-      .legend-content.collapsed { max-height: 0; padding-top: 0; margin-top: 0; }
+      .dark .legend-panel {
+        background: rgba(31, 41, 55, 0.95); color: #f3f4f6; border-color: #374151;
+      }
+      .legend-container.is-open .legend-panel { display: block; }
+      .legend-content { /* list body filled by map-app.js */ }
       .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; font-weight: 600; }
+      .legend-item:last-child { margin-bottom: 0; }
       .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
       .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: auto; font-weight: 800; color: white; text-transform: uppercase; }
-      .toggle-icon { transition: transform 0.3s; }
-      .toggle-icon.rotated { transform: rotate(180deg); }
+      .legend-chevron { transition: transform 0.2s ease; }
+      .legend-container.is-open .legend-chevron { transform: rotate(180deg); }
       #map-placeholder {
         position: absolute; inset: 0; background-color: #f3f4f6;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -154,26 +165,22 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     </div>
   </div>
 
-  <div class="legend-container" id="legend-container">
-    <div class="legend-box">
-      <div class="legend-header" onclick="toggleLegend()">
-        <h4 class="font-black text-[11px] uppercase tracking-widest text-gray-500 dark:text-gray-400">Network Lines</h4>
-        <svg id="legend-icon" class="w-4 h-4 text-gray-400 toggle-icon rotated" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+  <div id="map-top-controls" class="pointer-events-none">
+    <div class="legend-container" id="legend-container">
+      <button type="button" id="legend-toggle-btn" onclick="toggleLegend()" class="h-11 inline-flex items-center gap-2 px-3.5 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-expanded="false" aria-controls="legend-panel">
+        <span class="font-black text-[11px] uppercase tracking-widest whitespace-nowrap">Network Lines</span>
+        <svg id="legend-icon" class="legend-chevron w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+      </button>
+      <div id="legend-panel" class="legend-panel" role="region" aria-label="Network lines legend">
+        <div id="legend-content" class="legend-content"></div>
       </div>
-      <div id="legend-content" class="legend-content mt-3 collapsed"></div>
     </div>
+    <button id="custom-theme-btn" type="button" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none shrink-0" aria-label="Toggle theme">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
   </div>
 
-  <div class="fixed bottom-6 left-4 right-4 z-[1000] flex justify-between items-end pointer-events-none">
-    <div class="flex items-end space-x-3 pointer-events-auto">
-      <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-        <button id="custom-zoom-in" type="button" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-600 transition-colors focus:outline-none">+</button>
-        <button id="custom-zoom-out" type="button" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none">−</button>
-      </div>
-      <button id="custom-theme-btn" type="button" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-      </button>
-    </div>
+  <div class="fixed bottom-6 right-4 z-[1000] pointer-events-none">
     <button id="custom-locate-btn" type="button" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
       <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
     </button>

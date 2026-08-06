@@ -279,7 +279,8 @@ export const safeStorage = {
                     key.startsWith('clever_') ||
                     key.startsWith('cws_') ||
                     key.startsWith('firebase:authUser:') ||
-                    key.startsWith('plannerHistory_')
+                    key.startsWith('plannerHistory_') ||
+                    key.startsWith('seen_holiday_')
                 ) {
                     vault[key] = localStorage.getItem(key);
                 }

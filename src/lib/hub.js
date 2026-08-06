@@ -1394,4 +1394,11 @@ export function initHub() {
     // Poll notices after boot (and periodically)
     setTimeout(() => checkServiceAlerts(), 1500);
     setInterval(() => checkServiceAlerts(), 5 * 60 * 1000);
+
+    // Public-holiday stacked notice — waits for app stability inside maybeShowHolidayNotice
+    setTimeout(() => {
+        import('./holiday-notice.js')
+            .then((m) => m.maybeShowHolidayNotice?.())
+            .catch(() => {});
+    }, 3500);
 }

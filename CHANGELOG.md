@@ -2,6 +2,19 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.07 — Map Times, Team & Alert Previews (06 Aug 2026)
+
+- Trip planner map: toggle station times on route labels.
+- About: Melmoth Nxumalo alongside Enock; shared Email / In-app message to admin@nexttrain.co.za.
+- Planner results chrome polish; “Showing Trains To…” timetable title; holiday eve overrides week preview.
+- Admin archive: preview alerts/incidents in the same modals users see, with Revive controls.
+
+## V8_08.06 — Alerts Schedule & Holiday Notice (06 Aug 2026)
+
+- Holiday notice: upcoming public holidays shown once in stacked dismissible cards.
+- Trip Planner Travel Day: single clean date control (no second native date field).
+- Admin: recurring service-alert recipes + Schedule queue; sidenav swipe-to-close; tab swipe polish.
+
 ## V8_08.05 — Planner UI & Bugfix (05 Aug 2026)
 
 - Cleared planner and navigation bugs (guide/map sheet return, alert ranking, notice glitches).

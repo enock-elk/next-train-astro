@@ -285,6 +285,8 @@
             'herc-koed': ["HERCULES", "DASPOORT", "CAPITAL PARK", "GEZINA", "DEERNESS", "VILLIERIA", "PIERNEEFSRUS", "QUEENSWOOD", "KOEDOESPOORT"],
             'pta-saul': ["PRETORIA", "PRETORIA WES", "MITCHELLSTRAAT", "SCHUTTESTRAAT", "KALAFONG", "ATTERIDGEVILLE", "SAULSVILLE"],
             'pta-kempton': ["PRETORIA", "FONTEINE", "KLOOFSIG", "SPORTPARK", "CENTURION", "IRENE", "PINEDENE", "OLIFANTSFONTEIN", "OAKMOOR", "KAALFONTEIN", "BIRCHLEIGH", "VAN RIEBEECKPARK", "KEMPTON PARK"],
+            // Pretoria ↔ Irene (subset of Kempton corridor) — needed for OSM track bake + map draw
+            'pta-irene': ["PRETORIA", "FONTEINE", "KLOOFSIG", "SPORTPARK", "CENTURION", "IRENE"],
             'germ-leralla': ["GERMISTON", "KNIGHTS", "RAVENSKLIP", "ELANDSFONTEIN", "ISANDO", "RHODESFIELD", "KEMPTON PARK", "VAN RIEBEECKPARK", "BIRCHLEIGH", "KAALFONTEIN", "TEMBISA", "LIMINDLELA", "LERALLA"],
             'germ-kwesine': ["GERMISTON", "ELSBURG", "KATLEHONG", "LINDELA", "PILOT", "KWESINE"],
             'jhb-germiston': ["JOHANNESBURG", "DOORNFONTEIN", "ELLIS PARK", "JEPPE", "GEORGE GOCH", "DENVER", "TOORONGA", "CLEVELAND", "GELDENHUIS", "DRIEHOEK", "PRESIDENT", "GERMISTON"],
@@ -314,8 +316,176 @@
         };
 
         // --- OSM rail tracks (static GeoJSON from scripts/build-rail-tracks.mjs) ---
-        async function loadRailTrackPaths(region) {
+        // Load baked route LineStrings + build a merged rail graph so we can
+        // re-smooth station sequences (fixes straight-chord hops / missing routes).
+        const RAIL_SNAP_MAX_M = 900;
+        const RAIL_MAX_HOPS = 14000;
+
+        function railHaversineM(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const toRad = (d) => (d * Math.PI) / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(a));
+        }
+
+        function railQuantizeKey(lat, lon) {
+            return `${Math.round(lat / 0.00015)},${Math.round(lon / 0.00015)}`;
+        }
+
+        function buildRailGraphFromFeatures(features) {
+            const nodes = [];
+            const keyToId = new Map();
+            const adj = new Map();
+            const getOrCreate = (lat, lon) => {
+                const k = railQuantizeKey(lat, lon);
+                if (keyToId.has(k)) return keyToId.get(k);
+                const id = nodes.length;
+                nodes.push({ lat, lon });
+                keyToId.set(k, id);
+                adj.set(id, []);
+                return id;
+            };
+            const addEdge = (a, b, w) => {
+                adj.get(a).push({ to: b, w });
+                adj.get(b).push({ to: a, w });
+            };
+            for (const f of features || []) {
+                const geom = f?.geometry;
+                if (!geom) continue;
+                const lines = geom.type === 'LineString'
+                    ? [geom.coordinates]
+                    : (geom.type === 'MultiLineString' ? geom.coordinates : []);
+                for (const line of lines) {
+                    let prev = null;
+                    for (const pair of line) {
+                        if (!pair || pair.length < 2) continue;
+                        const [lon, lat] = pair;
+                        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                        const id = getOrCreate(lat, lon);
+                        if (prev != null && prev !== id) {
+                            const A = nodes[prev];
+                            const B = nodes[id];
+                            const w = railHaversineM(A.lat, A.lon, B.lat, B.lon);
+                            // Skip absurd teleport edges left over from bake-time chord fallbacks
+                            if (w > 0 && w < 2500) addEdge(prev, id, w);
+                        }
+                        prev = id;
+                    }
+                }
+            }
+            return { nodes, adj };
+        }
+
+        function nearestRailNode(graph, lat, lon, maxM = RAIL_SNAP_MAX_M) {
+            let best = null;
+            let bestD = Infinity;
+            for (let id = 0; id < graph.nodes.length; id++) {
+                if (!graph.adj.get(id)?.length) continue;
+                const n = graph.nodes[id];
+                const d = railHaversineM(lat, lon, n.lat, n.lon);
+                if (d < bestD) { bestD = d; best = id; }
+            }
+            if (best == null || bestD > maxM) return null;
+            return best;
+        }
+
+        function shortestRailPath(graph, startId, endId) {
+            if (startId === endId) return [startId];
+            const dist = new Map([[startId, 0]]);
+            const prev = new Map();
+            const pq = [[0, startId]];
+            let hops = 0;
+            while (pq.length) {
+                let minIdx = 0;
+                for (let i = 1; i < pq.length; i++) {
+                    if (pq[i][0] < pq[minIdx][0]) minIdx = i;
+                }
+                const [d, u] = pq.splice(minIdx, 1)[0];
+                if (d !== dist.get(u)) continue;
+                if (u === endId) break;
+                if (++hops > RAIL_MAX_HOPS) return null;
+                for (const { to, w } of graph.adj.get(u) || []) {
+                    const nd = d + w;
+                    if (nd < (dist.get(to) ?? Infinity)) {
+                        dist.set(to, nd);
+                        prev.set(to, u);
+                        pq.push([nd, to]);
+                    }
+                }
+            }
+            if (!prev.has(endId) && startId !== endId) return null;
+            const path = [endId];
+            for (let cur = endId; cur !== startId; ) {
+                cur = prev.get(cur);
+                if (cur == null) return null;
+                path.push(cur);
+            }
+            path.reverse();
+            return path;
+        }
+
+        function smoothStopsOnRailGraph(graph, stops) {
+            if (!graph?.nodes?.length || !Array.isArray(stops) || stops.length < 2) return null;
+            const out = [];
+            let railHops = 0;
+            for (let i = 0; i < stops.length - 1; i++) {
+                const a = stops[i];
+                const b = stops[i + 1];
+                if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
+                const snapA = nearestRailNode(graph, a.lat, a.lon);
+                const snapB = nearestRailNode(graph, b.lat, b.lon);
+                if (snapA != null && snapB != null) {
+                    const nodePath = shortestRailPath(graph, snapA, snapB);
+                    if (nodePath && nodePath.length >= 2) {
+                        const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
+                        if (!out.length) out.push(...seg);
+                        else out.push(...seg.slice(1));
+                        railHops++;
+                        continue;
+                    }
+                }
+                if (!out.length) out.push([a.lat, a.lon]);
+                out.push([b.lat, b.lon]);
+            }
+            if (out.length < 2 || railHops === 0) return null;
+            const deduped = [out[0]];
+            for (let i = 1; i < out.length; i++) {
+                const p = out[i];
+                const prev = deduped[deduped.length - 1];
+                if (p[0] !== prev[0] || p[1] !== prev[1]) deduped.push(p);
+            }
+            return deduped.length > 1 ? deduped : null;
+        }
+
+        function nearestPathIndex(path, lat, lon) {
+            if (!path?.length) return -1;
+            let best = 0;
+            let bestD = Infinity;
+            for (let i = 0; i < path.length; i++) {
+                const dLat = path[i][0] - lat;
+                const dLon = path[i][1] - lon;
+                const d = dLat * dLat + dLon * dLon;
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            return best;
+        }
+
+        function pathHasLargeJumps(latlngs, maxM = 1500) {
+            if (!latlngs || latlngs.length < 2) return true;
+            for (let i = 1; i < latlngs.length; i++) {
+                const a = latlngs[i - 1];
+                const b = latlngs[i];
+                if (railHaversineM(a[0], a[1], b[0], b[1]) > maxM) return true;
+            }
+            return false;
+        }
+
+        async function loadRailTrackBundle(region) {
             const byId = new Map();
+            let graph = null;
             try {
                 const base = (typeof window.APP_BASE === 'string' && window.APP_BASE)
                     ? window.APP_BASE
@@ -324,9 +494,10 @@
                 // /tracks/ (not /data/) — production rsync excludes metrorail-app/data/
                 const url = `${root}tracks/rail-tracks-${region}.geojson`;
                 const res = await fetch(url, { cache: 'default' });
-                if (!res.ok) return byId;
+                if (!res.ok) return { byId, graph: null };
                 const fc = await res.json();
-                for (const f of fc.features || []) {
+                const features = fc.features || [];
+                for (const f of features) {
                     const id = f.properties?.routeId;
                     const geom = f.geometry;
                     if (!id || !geom) continue;
@@ -334,16 +505,34 @@
                     if (geom.type === 'LineString') {
                         latlngs = geom.coordinates.map(([lon, lat]) => [lat, lon]);
                     } else if (geom.type === 'MultiLineString') {
+                        // Keep as separate lines — do NOT concatenate (creates teleport chords)
+                        let best = [];
                         for (const line of geom.coordinates) {
-                            for (const [lon, lat] of line) latlngs.push([lat, lon]);
+                            const ll = line.map(([lon, lat]) => [lat, lon]);
+                            if (ll.length > best.length) best = ll;
                         }
+                        latlngs = best;
                     }
                     if (latlngs.length > 1) byId.set(id, latlngs);
                 }
+                graph = buildRailGraphFromFeatures(features);
             } catch (e) {
                 console.warn('Guardian: OSM track GeoJSON unavailable, using station chords.', e);
             }
-            return byId;
+            return { byId, graph };
+        }
+
+        /** Prefer graph-smoothed path; else baked LineString; else station chords. */
+        function resolveRouteLatLngs(routeObj, trackBundle) {
+            const stops = routeObj.validStops || [];
+            const baked = trackBundle.byId.get(routeObj.routeId);
+            if (trackBundle.graph) {
+                const smoothed = smoothStopsOnRailGraph(trackBundle.graph, stops);
+                if (smoothed && smoothed.length > 1) return smoothed;
+            }
+            if (baked && baked.length > 1 && !pathHasLargeJumps(baked)) return baked;
+            if (baked && baked.length > 1) return baked;
+            return routeObj.coords;
         }
 
         // --- MAP LOGIC (Dynamic Region & DB Sync) ---
@@ -710,15 +899,15 @@
                 return; // Stop drawing Leaflet elements
             }
 
-            // --- OSM TRACK GEOMETRY (cached GeoJSON; station chords as fallback) ---
+            // --- OSM TRACK GEOMETRY (cached GeoJSON + live graph smooth) ---
             // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
-            const trackByRouteId = await loadRailTrackPaths(currentRegion);
+            const trackBundle = await loadRailTrackBundle(currentRegion);
 
             // --- DRAW BASE ROUTES ---
             drawnRoutes.forEach(r => {
                 const isLive = r.isActive;
-                const osmLatLngs = trackByRouteId.get(r.routeId);
-                const lineCoords = (osmLatLngs && osmLatLngs.length > 1) ? osmLatLngs : r.coords;
+                const lineCoords = resolveRouteLatLngs(r, trackBundle);
+                r.trackCoords = lineCoords;
                 L.polyline(lineCoords, {
                     color: r.color, // 🛡️ Use actual route color for anticipation
                     weight: isLive ? 4 : 3,
@@ -735,8 +924,6 @@
                             : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">🚧 Launching Soon</span>'}
                     </div>
                 `);
-                // Keep station-chord coords for disruption segment matching
-                if (osmLatLngs && osmLatLngs.length > 1) r.trackCoords = osmLatLngs;
             });
 
             // --- 🛡️ GUARDIAN PHASE 2: DRAW DYNAMIC DISRUPTION OVERLAYS ---
@@ -750,11 +937,10 @@
                     const isCritical = d.tier === 'CRITICAL';
                     const color = isCritical ? '#ef4444' : '#eab308';
                     const currentValidStops = routeObj.validStops;
-                    // Station chords for stop-index matching; OSM tracks for full-route paint
-                    const currentPath = routeObj.coords;
+                    // Always paint disruptions on the same rail-following path as the route
                     const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
                         ? routeObj.trackCoords
-                        : currentPath;
+                        : routeObj.coords;
 
                     // No outward pulse rings on incident markers — solid badge only
                     const iconHtml = `<div class="flex items-center justify-center rounded-full shadow-md border-2 border-white" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`;
@@ -797,39 +983,37 @@
                         const normStations = d.stations.map(s => s.replace(/ STATION/gi, '').trim().toUpperCase());
                         const routeStationNames = currentValidStops.map(s => s.name);
                         
-                        // 2A. Segment Blockade (2 stations)
+                        // 2A. Segment Blockade (2 stations) — slice along rail track, not station chords
                         if (normStations.length >= 2) {
                             if (routeStationNames.includes(normStations[0]) && routeStationNames.includes(normStations[1])) {
                                 const idx1 = routeStationNames.indexOf(normStations[0]);
                                 const idx2 = routeStationNames.indexOf(normStations[1]);
-                                
+                                const s1 = currentValidStops[idx1];
+                                const s2 = currentValidStops[idx2];
+                                if (!s1 || !s2) return;
+
                                 drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                                const start = Math.min(idx1, idx2);
-                                const end = Math.max(idx1, idx2);
-                                const segment = currentPath.slice(start, end + 1);
-                                
+                                const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
+                                const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);
+                                if (i1 < 0 || i2 < 0) return;
+                                const start = Math.min(i1, i2);
+                                const end = Math.max(i1, i2);
+                                const segment = trackPath.slice(start, end + 1);
+                                if (segment.length < 2) return;
+
                                 L.polyline(segment, {
                                     color: color, weight: 10, opacity: 0.8, dashArray: '10, 12', lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
                                 }).addTo(map);
 
-                                L.marker(currentPath[start], { icon: alertIcon }).addTo(map);
-                                L.marker(currentPath[end], { icon: alertIcon }).addTo(map);
+                                L.marker(trackPath[start], { icon: alertIcon }).addTo(map);
+                                L.marker(trackPath[end], { icon: alertIcon }).addTo(map);
 
-                                const midIndexExact = (start + end) / 2;
-                                let midLat = 0, midLon = 0;
-                                if (midIndexExact % 1 === 0) {
-                                    midLat = currentPath[midIndexExact][0];
-                                    midLon = currentPath[midIndexExact][1];
-                                } else {
-                                    const f = Math.floor(midIndexExact);
-                                    const c = Math.ceil(midIndexExact);
-                                    midLat = (currentPath[f][0] + currentPath[c][0]) / 2;
-                                    midLon = (currentPath[f][1] + currentPath[c][1]) / 2;
+                                const midPt = trackPath[Math.floor((start + end) / 2)];
+                                if (midPt) {
+                                    L.marker(midPt, { icon: invisibleIcon, interactive: false })
+                                        .bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, { permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo' })
+                                        .addTo(map);
                                 }
-
-                                L.marker([midLat, midLon], { icon: invisibleIcon, interactive: false })
-                                    .bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, { permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo' })
-                                    .addTo(map);
                             }
                         } 
                         // 2B. Single Station Point
@@ -972,15 +1156,8 @@
                 });
             }
 
-            // --- 🛡️ GUARDIAN UX: HORIZONTAL ACTION BAR WIRING ---
-            
-            // 1. Zoom Controls
-            const zoomInBtn = document.getElementById('custom-zoom-in');
-            const zoomOutBtn = document.getElementById('custom-zoom-out');
-            if (zoomInBtn) zoomInBtn.onclick = () => map.zoomIn();
-            if (zoomOutBtn) zoomOutBtn.onclick = () => map.zoomOut();
-
-            // 2. Theme Toggle (SVG parity with planner map — no emoji)
+            // --- 🛡️ GUARDIAN UX: MAP CONTROLS ---
+            // Theme Toggle (top-right; zoom +/- removed — pinch / scroll zoom)
             const themeBtn = document.getElementById('custom-theme-btn');
             const themeSunSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
             const themeMoonSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
@@ -1083,12 +1260,13 @@
         }
 
         function toggleLegend() {
-            const content = document.getElementById('legend-content');
-            const icon = document.getElementById('legend-icon');
-            if(content) content.classList.toggle('collapsed');
-            if(icon) icon.classList.toggle('rotated');
+            const wrap = document.getElementById('legend-container');
+            const btn = document.getElementById('legend-toggle-btn');
+            if (!wrap) return;
+            const open = wrap.classList.toggle('is-open');
+            if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
         window.toggleLegend = toggleLegend;
 
-        // Network Lines starts collapsed on entry (all viewports) — see map.astro markup.
+        // Network Lines starts closed on entry — open via the top-bar button.
     

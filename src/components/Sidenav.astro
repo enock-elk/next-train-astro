@@ -172,6 +172,33 @@ const versionBadge = String(APP_VERSION);
 
   document.getElementById('sidenav-overlay')?.addEventListener('click', closeNav);
 
+  // Swipe right→left inside the open drawer to dismiss (does not touch home tab swipes)
+  const sidenavEl = document.getElementById('sidenav');
+  if (sidenavEl && sidenavEl.dataset.swipeCloseBound !== '1') {
+    sidenavEl.dataset.swipeCloseBound = '1';
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+    sidenavEl.addEventListener('touchstart', (e) => {
+      if (!sidenavEl.classList.contains('open')) return;
+      const t = e.changedTouches?.[0];
+      if (!t) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      tracking = true;
+    }, { passive: true });
+    sidenavEl.addEventListener('touchend', (e) => {
+      if (!tracking || !sidenavEl.classList.contains('open')) { tracking = false; return; }
+      tracking = false;
+      const t = e.changedTouches?.[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      // Horizontal swipe left, not a vertical scroll
+      if (dx < -56 && Math.abs(dx) > Math.abs(dy) * 1.25) closeNav();
+    }, { passive: true });
+  }
+
   const regionContainer = document.getElementById('sidenav-region-container');
   const regionList = document.getElementById('sidenav-region-list');
   const regionChevron = document.getElementById('sidenav-region-chevron');

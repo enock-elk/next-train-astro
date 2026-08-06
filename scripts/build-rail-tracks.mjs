@@ -51,8 +51,10 @@ const REGION_ROUTES = {
     EC: ['ec-berlin'],
 };
 
-const SNAP_MAX_M = 650;
-const MAX_SEGMENT_HOPS = 8000;
+const SNAP_MAX_M = 950;
+const MAX_SEGMENT_HOPS = 14000;
+/** Do not bake absurd straight teleports into output LineStrings. */
+const MAX_BAKE_EDGE_M = 2200;
 
 function haversineM(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -259,10 +261,15 @@ function buildRouteLine(graph, stations, stationNames) {
                 continue;
             }
         }
-        // Fallback: straight chord for this hop only
-        if (!coords.length) coords.push([a[1], a[0]]);
-        coords.push([b[1], b[0]]);
-        straight++;
+        // Fallback: short chord only — never bake multi-km teleports into the LineString
+        const chordM = haversineM(a[0], a[1], b[0], b[1]);
+        if (chordM > 0 && chordM <= MAX_BAKE_EDGE_M) {
+            if (!coords.length) coords.push([a[1], a[0]]);
+            coords.push([b[1], b[0]]);
+            straight++;
+        } else {
+            console.warn(`    skip long chord ${aName}→${bName} (${Math.round(chordM)}m)`);
+        }
     }
 
     return {

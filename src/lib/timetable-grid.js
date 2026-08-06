@@ -226,7 +226,7 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     if (headerTitle) {
         headerTitle.innerHTML = `
             <div class="flex flex-col w-full min-w-0 leading-tight">
-                <span class="text-xs font-black uppercase text-blue-600 dark:text-blue-400 tracking-wider truncate">Trains To ${escapeHTML(destName)}</span>
+                <span class="text-xs font-black uppercase text-blue-600 dark:text-blue-400 tracking-wider truncate">Showing Trains To ${escapeHTML(destName)}</span>
                 <span class="text-[9px] text-gray-400 font-mono truncate">${escapeHTML(effectiveDate)}</span>
             </div>`;
     }

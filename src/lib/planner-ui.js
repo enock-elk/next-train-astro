@@ -665,6 +665,8 @@ export let tripMapRouteLine = null;
 export let tripMapMarkers = [];
 let tripMapInitTimeout = null;
 let tripMapDestroyTimeout = null;
+/** When true, trip-map station labels include departure/arrival times. */
+let tripMapShowStationTimes = false;
 
 function destroyTripMapInstance() {
     if (tripMapInitTimeout) clearTimeout(tripMapInitTimeout);
@@ -791,6 +793,56 @@ export function toggleMainDayDropdown(e) {
     }
 }
 
+/** Single-button travel-day date sheet (replaces the second native date field). */
+function openPlannerDateSheet() {
+    let modal = document.getElementById('planner-date-sheet');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'planner-date-sheet';
+        modal.className = 'fixed inset-0 bg-black/70 z-[210] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 pb-8">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Travel Day</p>
+                        <h3 class="text-base font-black text-gray-900 dark:text-white">Pick a date</h3>
+                    </div>
+                    <button type="button" id="planner-date-sheet-cancel" class="text-gray-400 hover:text-gray-600 p-2 focus:outline-none" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <input type="date" id="planner-date-sheet-input" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
+                <button type="button" id="planner-date-sheet-apply" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm focus:outline-none">Set travel day</button>
+            </div>`;
+        document.body.appendChild(modal);
+        document.getElementById('planner-date-sheet-cancel')?.addEventListener('click', () => {
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('planner-date-sheet');
+            else modal.classList.add('hidden');
+        });
+        document.getElementById('planner-date-sheet-apply')?.addEventListener('click', () => {
+            const inp = document.getElementById('planner-date-sheet-input');
+            const val = inp?.value;
+            if (!val) {
+                if (typeof showToast === 'function') showToast('Please pick a date.', 'error');
+                return;
+            }
+            applyPlannerSpecificDate(val);
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('planner-date-sheet');
+            else modal.classList.add('hidden');
+        });
+    }
+    const inp = document.getElementById('planner-date-sheet-input');
+    if (inp) {
+        if (selectedPlannerDate) inp.value = selectedPlannerDate;
+        else {
+            const t = new Date();
+            inp.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        }
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('planner-date-sheet');
+    else modal.classList.remove('hidden');
+}
+
 export function selectMainDay(e, value, text) {
     if (e) {
         e.preventDefault?.();
@@ -808,26 +860,13 @@ export function selectMainDay(e, value, text) {
     }
 
     const dateWrap = document.getElementById('planner-specific-date-wrap');
-    const dateInput = document.getElementById('planner-specific-date');
+    if (dateWrap) dateWrap.classList.add('hidden');
 
     if (value === 'specific') {
-        if (dateWrap) dateWrap.classList.remove('hidden');
-        if (dateInput) {
-            if (!dateInput.value) {
-                const t = new Date();
-                dateInput.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-            }
-            dateInput.focus();
-            applyPlannerSpecificDate(dateInput.value);
-        } else {
-            selectedPlannerDay = 'weekday';
-        }
-        const display = document.getElementById('main-day-display');
-        if (display) display.textContent = plannerDayDisplayText('specific', selectedPlannerDate);
+        openPlannerDateSheet();
         return;
     }
 
-    if (dateWrap) dateWrap.classList.add('hidden');
     selectedPlannerDate = null;
     selectedPlannerDay = value;
 
@@ -1151,18 +1190,25 @@ export function extractTripCoordinates(tripIndex) {
             if (stop.time === "---") return;
 
             const name = normalizeStationName(stop.station);
-            if (stationNames.length > 0 && stationNames[stationNames.length - 1] === name) return;
-            
+            // Transfer station: same name as previous stop → keep arrive, attach depart
+            if (stationNames.length > 0 && stationNames[stationNames.length - 1] === name) {
+                const last = validStops[validStops.length - 1];
+                if (last && stop.time) last.timeOut = stop.time;
+                return;
+            }
+
             stationNames.push(name);
-            
+
             if (globalStationIndex && globalStationIndex[name] && globalStationIndex[name].lat) {
                 const coord = [globalStationIndex[name].lat, globalStationIndex[name].lon];
-                coordinates.push(coord); 
-                
+                coordinates.push(coord);
+
                 validStops.push({
                     name: name,
                     lat: coord[0],
-                    lon: coord[1]
+                    lon: coord[1],
+                    time: stop.time || null,
+                    timeOut: null
                 });
             }
         });
@@ -1289,14 +1335,14 @@ export async function openTripMapRenderer(routeData) {
                 <div class="flex-grow w-full bg-gray-200 dark:bg-gray-800 relative z-10 min-h-0">
                     <div id="trip-map-canvas" class="absolute inset-0 bg-gray-200 dark:bg-gray-800"></div>
 
-                    <div class="absolute bottom-6 left-4 right-4 z-[1000] flex justify-between items-end pointer-events-none">
-                        <div class="flex items-end space-x-3 pointer-events-auto">
-                            <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-                                <button type="button" id="custom-zoom-in" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-600 transition-colors focus:outline-none" aria-label="Zoom in">+</button>
-                                <button type="button" id="custom-zoom-out" class="w-11 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Zoom out">−</button>
-                            </div>
-                            <button type="button" id="custom-theme-btn" class="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">${plannerIcon('sun', 'w-5 h-5')}</button>
-                        </div>
+                    <div id="trip-map-top-controls" class="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 pointer-events-none">
+                        <button type="button" id="custom-theme-btn" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">${plannerIcon('sun', 'w-5 h-5')}</button>
+                        <button type="button" id="trip-map-times-toggle" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Show station times" aria-pressed="false" title="Show station times">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </button>
+                    </div>
+
+                    <div class="absolute bottom-6 right-4 z-[1000] pointer-events-none">
                         <button type="button" id="custom-locate-btn" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
                             <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                         </button>
@@ -1312,6 +1358,35 @@ export async function openTripMapRenderer(routeData) {
 
         document.getElementById('close-trip-map-btn')?.addEventListener('click', closeTripMapModal);
         document.getElementById('close-trip-map-btn-2')?.addEventListener('click', closeTripMapModal);
+    } else {
+        // Migrate older trip-map chrome (zoom / footer times text button)
+        modal.querySelector('#custom-zoom-in')?.closest('.flex.flex-col')?.remove();
+        const footerTimes = modal.querySelector('#close-trip-map-btn-2')?.parentElement?.querySelector('#trip-map-times-toggle');
+        if (footerTimes && !footerTimes.closest('#trip-map-top-controls')) footerTimes.remove();
+        const canvasWrap = modal.querySelector('#trip-map-canvas')?.parentElement;
+        if (canvasWrap && !modal.querySelector('#trip-map-top-controls')) {
+            const stack = document.createElement('div');
+            stack.id = 'trip-map-top-controls';
+            stack.className = 'absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 pointer-events-none';
+            stack.innerHTML = `
+                <button type="button" id="custom-theme-btn" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Toggle theme">${plannerIcon('sun', 'w-5 h-5')}</button>
+                <button type="button" id="trip-map-times-toggle" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-label="Show station times" aria-pressed="false" title="Show station times">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>`;
+            canvasWrap.appendChild(stack);
+            modal.querySelector('#custom-theme-btn:not(#trip-map-top-controls #custom-theme-btn)')?.remove();
+        }
+    }
+
+    // Reset times toggle each open (off by default)
+    tripMapShowStationTimes = false;
+    const timesToggleBtn = document.getElementById('trip-map-times-toggle');
+    if (timesToggleBtn) {
+        timesToggleBtn.setAttribute('aria-pressed', 'false');
+        timesToggleBtn.setAttribute('aria-label', 'Show station times');
+        timesToggleBtn.title = 'Show station times';
+        timesToggleBtn.classList.remove('text-blue-600', 'dark:text-blue-400', 'bg-blue-50', 'dark:bg-blue-900/40', 'border-blue-300', 'dark:border-blue-700');
+        timesToggleBtn.classList.add('text-gray-400');
     }
 
     try {
@@ -1368,8 +1443,14 @@ export async function openTripMapRenderer(routeData) {
             const region = $userRegion.get() || 'GP';
             let drawPath = stationPath;
             try {
-                const smoothed = await smoothPathFromStops(routeData.validStops || [], region);
-                if (smoothed && smoothed.length > 1) drawPath = smoothed;
+                const stops = routeData.validStops || [];
+                const smoothed = await smoothPathFromStops(stops, region);
+                if (smoothed && smoothed.length > 1) {
+                    drawPath = smoothed;
+                } else if (stops.length > 1) {
+                    // Retry once with a slightly looser mental model: already handled in rail-tracks snap.
+                    console.warn('Guardian: trip map rail snap returned null — drawing station chords.');
+                }
             } catch (e) {
                 console.warn('Guardian: trip map rail snap failed, using station chords.', e);
             }
@@ -1409,6 +1490,16 @@ export async function openTripMapRenderer(routeData) {
 
                 const majorLabelClass = 'font-bold text-[11px] text-gray-900 dark:text-white z-50 tooltip-dynamic tooltip-halo';
                 const minorLabelClass = 'font-medium text-[9.5px] text-gray-700 dark:text-gray-300 tooltip-dynamic tooltip-halo minor-station-tooltip';
+                const stationLabel = (name, time, timeOut = null) => {
+                    const clean = String(name || '').replace(/ STATION/gi, '');
+                    if (!tripMapShowStationTimes) return clean;
+                    const tIn = time && time !== '---' ? formatTimeDisplay(time) : '';
+                    const tOut = timeOut && timeOut !== '---' ? formatTimeDisplay(timeOut) : '';
+                    if (tIn && tOut && tIn !== tOut) return `${clean} · ${tIn} → ${tOut}`;
+                    if (tIn) return `${clean} · ${tIn}`;
+                    if (tOut) return `${clean} · ${tOut}`;
+                    return clean;
+                };
 
                 tripMapMarkers = [];
                 if (currentValidStops.length > 0) {
@@ -1416,7 +1507,7 @@ export async function openTripMapRenderer(routeData) {
                         if (idx !== 0 && idx !== currentValidStops.length - 1) {
                             const m = L.circleMarker([stop.lat, stop.lon], {
                                 radius: 2.5, color: '#3b82f6', weight: 1, fillColor: '#ffffff', fillOpacity: 1
-                            }).bindTooltip(String(stop.name || '').replace(/ STATION/gi, ''), {
+                            }).bindTooltip(stationLabel(stop.name, stop.time, stop.timeOut), {
                                 permanent: true, direction: 'top', offset: [0, -5], className: minorLabelClass
                             }).addTo(routeLayerGroup);
                             tripMapMarkers.push(m);
@@ -1430,14 +1521,18 @@ export async function openTripMapRenderer(routeData) {
                 const endLatLng = currentValidStops.length
                     ? [currentValidStops[currentValidStops.length - 1].lat, currentValidStops[currentValidStops.length - 1].lon]
                     : currentPath[currentPath.length - 1];
+                const startStop = currentValidStops[0];
+                const endStop = currentValidStops.length
+                    ? currentValidStops[currentValidStops.length - 1]
+                    : null;
 
                 L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
-                    .bindTooltip(`<b>Start:</b> ${currentOrigin.replace(/ STATION/gi, '')}`, {
+                    .bindTooltip(`<b>Start:</b> ${stationLabel(currentOrigin, startStop?.time, startStop?.timeOut)}`, {
                         permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
                     }).addTo(routeLayerGroup);
 
                 L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
-                    .bindTooltip(`<b>End:</b> ${currentDest.replace(/ STATION/gi, '')}`, {
+                    .bindTooltip(`<b>End:</b> ${stationLabel(currentDest, endStop?.time, endStop?.timeOut)}`, {
                         permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
                     }).addTo(routeLayerGroup);
 
@@ -1506,12 +1601,6 @@ export async function openTripMapRenderer(routeData) {
                 tripMapInstance.fitBounds(initialPolyline.getBounds(), { padding: [50, 50] });
             }
 
-            // map.html-parity action bar
-            const zoomInBtn = document.getElementById('custom-zoom-in');
-            const zoomOutBtn = document.getElementById('custom-zoom-out');
-            if (zoomInBtn) zoomInBtn.onclick = () => tripMapInstance.zoomIn();
-            if (zoomOutBtn) zoomOutBtn.onclick = () => tripMapInstance.zoomOut();
-
             const themeBtn = document.getElementById('custom-theme-btn');
             let isDarkNow = document.documentElement.classList.contains('dark');
             const paintThemeBtn = () => {
@@ -1529,6 +1618,21 @@ export async function openTripMapRenderer(routeData) {
                     paintThemeBtn();
                 };
             }
+
+            const paintTimesBtn = (btn) => {
+                if (!btn) return;
+                const on = tripMapShowStationTimes;
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                btn.setAttribute('aria-label', on ? 'Hide station times' : 'Show station times');
+                btn.title = on ? 'Hide station times' : 'Show station times';
+                btn.classList.toggle('text-blue-600', on);
+                btn.classList.toggle('dark:text-blue-400', on);
+                btn.classList.toggle('bg-blue-50', on);
+                btn.classList.toggle('dark:bg-blue-900/40', on);
+                btn.classList.toggle('border-blue-300', on);
+                btn.classList.toggle('dark:border-blue-700', on);
+                btn.classList.toggle('text-gray-400', !on);
+            };
 
             let lastKnownLatLng = null;
             let userMarker = null;
@@ -1604,6 +1708,18 @@ export async function openTripMapRenderer(routeData) {
             };
             tripMapInstance.on('zoomend', updateTooltipSize);
             updateTooltipSize();
+
+            const timesBtn = document.getElementById('trip-map-times-toggle');
+            if (timesBtn) {
+                paintTimesBtn(timesBtn);
+                timesBtn.onclick = () => {
+                    if (typeof triggerHaptic === 'function') triggerHaptic();
+                    tripMapShowStationTimes = !tripMapShowStationTimes;
+                    paintTimesBtn(timesBtn);
+                    drawRouteElements();
+                    updateTooltipSize();
+                };
+            }
         } catch (e) {
             console.error('Map Init Error:', e);
             showToast('Could not open live map.', 'error');
@@ -1837,7 +1953,7 @@ export const PlannerRenderer = {
                 html += `
                     <div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2">
                         <button id="btn-${subLegId}" onclick="if(typeof window.togglePlannerStops === 'function') window.togglePlannerStops('${subLegId}')" class="text-[10px] font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 px-3 py-1 rounded-full transition-colors mb-2 w-fit ml-5 -mt-1 relative top-[-5px] focus:outline-none">
-                            ${isExpanded ? "Hide Stops" : "Show All Stops"}
+                            ${isExpanded ? 'Hide Stops' : 'Show All Stops'}
                         </button>
                         <div id="${subLegId}" class="${isExpanded ? "" : "hidden"} space-y-1 pb-2">${innerHtml}</div>
                     </div>
@@ -2117,7 +2233,7 @@ export const PlannerRenderer = {
                      ${stateBadge}
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
                         <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
                             ${duration}
                         </div>
                         <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Total Time</div>
@@ -2500,16 +2616,14 @@ export function initPlanner() {
                 <li data-day="sunday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'sunday', 'Sunday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'sunday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
                 <li data-day="specific" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'specific', 'Pick a date…')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Pick a date…</li>
             </ul>
-            <div id="planner-specific-date-wrap" class="${selectedPlannerDate ? '' : 'hidden'} mt-2">
-                <input type="date" id="planner-specific-date" value="${selectedPlannerDate || ''}" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+            <!-- Legacy wrap kept hidden for any external refs; date picking uses the sheet modal -->
+            <div id="planner-specific-date-wrap" class="hidden" aria-hidden="true">
+                <input type="date" id="planner-specific-date" value="${selectedPlannerDate || ''}" tabindex="-1" />
             </div>
         `;
         inputSection.insertBefore(daySelectDiv, searchBtn);
         // Keep space under the day picker so the downward menu isn't clipped by the shell
         inputSection.classList.add('pb-8');
-        document.getElementById('planner-specific-date')?.addEventListener('change', (ev) => {
-            applyPlannerSpecificDate(ev.target.value);
-        });
     }
 
     if (inputSection && !document.getElementById('planner-history-container')) {
@@ -3107,8 +3221,8 @@ export async function applyPlannerDeepLink() {
                     const headerDayDisplay = document.getElementById('header-day-display');
                     const mainTxt = link.day === 'weekday' ? 'Weekday (Mon-Fri)'
                         : (link.day === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
-                    const headerTxt = link.day === 'weekday' ? 'Mon - Fri'
-                        : (link.day === 'saturday' ? 'Saturday / Hol' : 'Sunday');
+                    const headerTxt = link.day === 'weekday' ? 'Weekday'
+                        : (link.day === 'saturday' ? 'Saturday' : 'Sunday');
                     if (mainDayDisplay) mainDayDisplay.textContent = mainTxt;
                     if (headerDayDisplay) headerDayDisplay.textContent = headerTxt;
                     const mList = document.getElementById('main-day-list');
@@ -3564,7 +3678,7 @@ export function togglePlannerStops(id) {
     if (isHidden) plannerExpandedState.delete(id);
     else plannerExpandedState.add(id);
 
-    if (btn) btn.textContent = isHidden ? "Show All Stops" : "Hide Stops";
+    if (btn) btn.textContent = isHidden ? 'Show All Stops' : 'Hide Stops';
 }
 
 export async function shareCurrentGrid() {
@@ -3830,19 +3944,19 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         
         let selDay = selectedPlannerDay || getCurrentDayType();
         const holiday = getPlannerHolidayContext();
-        let selText = selDay === 'weekday' ? 'Mon - Fri' : (selDay === 'saturday' ? 'Saturday / Hol' : 'Sunday');
+        let selText = selDay === 'weekday' ? 'Weekday' : (selDay === 'saturday' ? 'Saturday' : 'Sunday');
         if (holiday) {
             selText = holiday.scheduleType === 'sunday' ? 'Holiday · None' : 'Holiday · Sat';
         }
 
         badge.innerHTML = `
-            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-2 relative">
+            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-3 relative min-w-[5.5rem]">
                 <span id="header-day-display" class="truncate font-bold text-[12px] pr-1">${selText}</span>
                 <svg id="header-day-chevron" class="w-3.5 h-3.5 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 
                 <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden z-[200] text-left">
-                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Mon - Fri')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Mon - Fri</li>
-                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday / Hol')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Hol</li>
+                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Weekday')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday</li>
+                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday</li>
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
                 </ul>
             </div>

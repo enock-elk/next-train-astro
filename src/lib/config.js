@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.05";
+export const APP_VERSION = "V8_08.07";
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -849,6 +849,28 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.07",
+        title: "Map Times, Team & Alert Previews",
+        date: "06 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Trip map:</b> Optional Show station times on the planner route map.",
+            "<b>About:</b> Team credits for Enock Kazembe and Melmoth Nxumalo with shared contact actions.",
+            "<b>Polish:</b> Clearer planner chrome, timetable wording, and holiday tomorrow notices."
+        ]
+    },
+    {
+        id: "V8_08.06",
+        title: "Alerts Schedule & Holiday Notice",
+        date: "06 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Holiday notice:</b> Upcoming public holidays show once in a clear stacked card you dismiss when ready.",
+            "<b>Travel Day:</b> Pick a planner date from one clean control — no double date field.",
+            "<b>Admin:</b> Scheduled service alerts with recurrence recipes, plus smoother drawer and tab gestures."
+        ]
+    },
     {
         id: "V8_08.05",
         title: "Planner UI & Bugfix",

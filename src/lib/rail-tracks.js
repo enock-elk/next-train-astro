@@ -6,8 +6,10 @@
  */
 import { withBase } from './config.js';
 
-const SNAP_MAX_M = 700;
-const MAX_HOPS = 12000;
+const SNAP_MAX_M = 900;
+const MAX_HOPS = 14000;
+/** Ignore bake-time straight-chord teleports when merging route LineStrings into a graph. */
+const MAX_EDGE_M = 2500;
 const cache = new Map(); // region -> { features, graph } | null
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -66,7 +68,7 @@ function buildGraph(features) {
                     const a = nodes[prev];
                     const b = nodes[id];
                     const w = haversineM(a.lat, a.lon, b.lat, b.lon);
-                    if (w > 0) addEdge(prev, id, w);
+                    if (w > 0 && w < MAX_EDGE_M) addEdge(prev, id, w);
                 }
                 prev = id;
             }

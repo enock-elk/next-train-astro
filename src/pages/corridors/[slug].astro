@@ -20,8 +20,8 @@ const entry = getSeoCorridorBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
-const title = `${entry.label} Train Times | ${province} Metrorail`;
-const description = `${entry.blurb}`;
+const title = `${entry.label} Train Times | Metrorail Next Train`;
+const description = `${entry.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
@@ -33,7 +33,7 @@ const jsonLd = {
   name: title,
   description,
   about: entry.label,
-  isPartOf: { '@type': 'WebSite', name: 'Next Train', url: 'https://nexttrain.co.za/' },
+  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
 };
 ---
 

@@ -18,8 +18,8 @@ const { slug } = Astro.params;
 const entry = getSeoRegionBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
-const title = `${entry.title} Timetables | Next Train`;
-const description = `${entry.blurb} Browse corridor pages and open the live Next Train board.`;
+const title = `${entry.title} Timetables | Metrorail Next Train`;
+const description = `${entry.blurb} Browse corridor pages and open the live Metrorail Next Train board.`;
 const canonicalPath = `/regions/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
@@ -29,7 +29,7 @@ const jsonLd = {
   '@type': 'CollectionPage',
   name: title,
   description,
-  isPartOf: { '@type': 'WebSite', name: 'Next Train', url: 'https://nexttrain.co.za/' },
+  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
 };
 ---
 

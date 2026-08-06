@@ -9,9 +9,100 @@ import WelcomeModal from '../components/WelcomeModal.astro';
 import PlannerModals from '../components/PlannerModals.astro';
 import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
+import { APP_VERSION } from '../lib/config.js';
+
+/** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
+const pageTitle = 'Metrorail Next Train | 2026 Train Schedules for South Africa';
+const pageDescription =
+  'Check live train schedules, download offline timetable images, and check fares for Metrorail South Africa.';
+const ogTitle = 'Metrorail Next Train | 2026 Updated Schedules';
+const ogDescription =
+  'Stop guessing. Get accurate train times, ticket prices, and updates for Gauteng, Cape Town, KZN, and Eastern Cape. Download timetables and plan your trip offline!';
+const twitterDescription =
+  'Live Metrorail schedules for Gauteng and Western Cape. Download timetables and plan your trip offline.';
+
+const softwareAppLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Metrorail Next Train',
+  operatingSystem: 'Web, iOS, Android',
+  applicationCategory: 'TravelApplication',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'ZAR' },
+  description:
+    'Live Metrorail schedules and route maps for Gauteng (Pretoria, Johannesburg), Western Cape (Cape Town), KZN, and Eastern Cape. Download timetable images for offline use.',
+  softwareVersion: APP_VERSION,
+  featureList:
+    'Offline Access, Full Timetable, Fare Calculator, Trip Planner, Network Map, Download Timetable Images',
+  url: 'https://nexttrain.co.za/',
+};
+
+const webSiteLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Metrorail Next Train',
+  url: 'https://nexttrain.co.za/',
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: 'https://nexttrain.co.za/?route={search_term_string}',
+    },
+    'query-input': 'required name=search_term_string',
+  },
+};
+
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'Does this app work offline?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Yes! Once you open the app while connected to the internet, it saves the schedules to your device. You can check times while underground or during loadshedding without using data.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Are you expanding to other provinces?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Absolutely. We cover Gauteng, Western Cape, KwaZulu-Natal, and Eastern Cape. We track demand, so be sure to vote for your region in the App Hub!',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How can I help improve the app?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'As a crowdsourced tool, we rely on commuters like you. If you notice a missing train, or if you have a photo of a new timetable at your local station, please use the Feedback button in the app to send it to us so we can update the database.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Why is my route showing "No Physical Connection"?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'If the Trip Planner fails to find a route, it means our system currently doesn\'t have a known transfer hub connecting your Origin and Destination. If you know a valid transfer route, please hit the "Report Missing Route" button to let us know!',
+      },
+    },
+  ],
+};
 ---
 
-<Layout title="Next Train | Live Schedules" unlockShellEarly={true}>
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  ogTitle={ogTitle}
+  ogDescription={ogDescription}
+  twitterTitle={ogTitle}
+  twitterDescription={twitterDescription}
+  unlockShellEarly={true}
+>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(softwareAppLd)} />
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(webSiteLd)} />
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(faqLd)} />
     
     <!-- SIDENAV / SETTINGS HUB -->
     <Sidenav />

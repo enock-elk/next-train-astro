@@ -3,10 +3,16 @@
 import '../styles/appearance.css';
 import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
-const { 
-  title = "Next Train | Live Schedules", 
-  description = "Live Metrorail schedules and route maps for Gauteng, Western Cape, KZN, and Eastern Cape.",
+const {
+  /** Full SEO brand — SPA default. Short "Next Train" stays for PWA homescreen only. */
+  title = "Metrorail Next Train | 2026 Train Schedules for South Africa",
+  description = "Check live train schedules, download offline timetable images, and check fares for Metrorail South Africa.",
   canonicalPath = "/",
+  /** Optional social overrides (SPA used slightly different og/twitter copy on home). */
+  ogTitle = null,
+  ogDescription = null,
+  twitterTitle = null,
+  twitterDescription = null,
   /** Home shell: skip full-screen boot gate for returning sessions (map→home, etc.). */
   unlockShellEarly = false,
 } = Astro.props;
@@ -18,6 +24,10 @@ const pathForCanonical = canonicalPath === "/"
   : withBase(canonicalPath);
 const canonical = new URL(pathForCanonical, Astro.site || siteOrigin).href;
 const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOrigin).href;
+const resolvedOgTitle = ogTitle || title;
+const resolvedOgDescription = ogDescription || description;
+const resolvedTwitterTitle = twitterTitle || resolvedOgTitle;
+const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
 ---
 
 <!DOCTYPE html>
@@ -26,11 +36,11 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
     
-    <!-- SEO & Identity -->
+    <!-- SEO & Identity — SEO entity = Metrorail Next Train; short name for iOS home screen -->
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
-    <meta name="application-name" content="Next Train" />
+    <meta name="application-name" content="Metrorail Next Train" />
     <meta name="apple-mobile-web-app-title" content="Next Train" />
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
@@ -41,17 +51,18 @@ const ogImage = new URL(withBase('icons/loading-logo.png'), Astro.site || siteOr
     
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:title" content={resolvedOgTitle} />
+    <meta property="og:description" content={resolvedOgDescription} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
-    <meta property="og:site_name" content="Next Train" />
+    <meta property="og:site_name" content="Metrorail Next Train" />
     <meta property="og:locale" content="en_ZA" />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
+    <meta name="twitter:title" content={resolvedTwitterTitle} />
+    <meta name="twitter:description" content={resolvedTwitterDescription} />
     <meta name="twitter:image" content={ogImage} />
+    <slot name="head" />
 
     <!-- PWA Manifest — always under base with trailing slash. Dev has no PWA
          plugin output, so linking it there only produces 404 noise. -->

@@ -36,7 +36,7 @@ const corridorEntry = listSeoCorridors().find(
   (c) => route.corridorId && c.corridorIds.includes(route.corridorId)
 );
 const title = `${origin} to ${dest} Train Times | Metrorail Next Train`;
-const description = `${seed.blurb} Check live ${province} Metrorail schedules offline in Next Train.`;
+const description = `${seed.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
 const canonicalPath = `/routes/${seed.slug}.html`;
 const appHref = withBase(`/?rt=${encodeURIComponent(route.id)}`);
 const routesIndexHref = withBase('routes.html');
@@ -52,7 +52,7 @@ const jsonLd = {
   about: name,
   isPartOf: {
     '@type': 'WebSite',
-    name: 'Next Train',
+    name: 'Metrorail Next Train',
     url: 'https://nexttrain.co.za/',
   },
 };

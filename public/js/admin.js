@@ -3215,33 +3215,41 @@ const Admin = {
                         </button>
                     </div>
                 </div>
-                <div class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div id="de-tabs-swipe" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y">
                     <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
                     <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
                 </div>
-                <div id="de-trip-filters" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div>
-                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Region</label>
-                        <select id="de-filter-region" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
-                            <option value="">All regions</option>
-                            <option value="GP">Gauteng</option>
-                            <option value="WC">Western Cape</option>
-                            <option value="KZN">KwaZulu-Natal</option>
-                            <option value="EC">Eastern Cape</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
-                        <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
-                            <option value="">All days</option>
-                            <option value="weekday">Weekday</option>
-                            <option value="saturday">Saturday</option>
-                            <option value="sunday">Sunday</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">User ID</label>
-                        <input type="text" id="de-filter-userid" placeholder="usr_…" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none font-mono" />
+                <div id="de-trip-filters" class="hidden space-y-2">
+                    <button type="button" id="de-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
+                        <span>Filters</span>
+                        <svg id="de-filters-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="de-filters-body" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Region</label>
+                            <select id="de-filter-region" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
+                                <option value="">All regions</option>
+                                <option value="GP">Gauteng</option>
+                                <option value="WC">Western Cape</option>
+                                <option value="KZN">KwaZulu-Natal</option>
+                                <option value="EC">Eastern Cape</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
+                            <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
+                                <option value="">All days</option>
+                                <option value="weekday">Weekday</option>
+                                <option value="saturday">Saturday</option>
+                                <option value="sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">User ID</label>
+                            <select id="de-filter-userid" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none font-mono">
+                                <option value="">All users</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div id="de-list" class="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar"></div>
@@ -3266,21 +3274,47 @@ const Admin = {
             else wrap.classList.add('hidden');
         };
 
-        document.getElementById('de-tab-fails')?.addEventListener('click', () => {
-            Admin._deActiveTab = 'fails';
-            document.getElementById('de-tab-fails')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
-            document.getElementById('de-tab-trips')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
+        const setDeTab = (tab) => {
+            Admin._deActiveTab = tab === 'trips' ? 'trips' : 'fails';
+            const failsBtn = document.getElementById('de-tab-fails');
+            const tripsBtn = document.getElementById('de-tab-trips');
+            const active = 'flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm';
+            const idle = 'flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400';
+            if (failsBtn) failsBtn.className = Admin._deActiveTab === 'fails' ? active : idle;
+            if (tripsBtn) tripsBtn.className = Admin._deActiveTab === 'trips' ? active : idle;
             syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
-        });
-        document.getElementById('de-tab-trips')?.addEventListener('click', () => {
-            Admin._deActiveTab = 'trips';
-            document.getElementById('de-tab-trips')?.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
-            document.getElementById('de-tab-fails')?.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-white', 'shadow-sm');
-            syncDeFiltersVisibility();
-            Admin.fetchDeadEnds();
-        });
+        };
+        document.getElementById('de-tab-fails')?.addEventListener('click', () => setDeTab('fails'));
+        document.getElementById('de-tab-trips')?.addEventListener('click', () => setDeTab('trips'));
         syncDeFiltersVisibility();
+
+        document.getElementById('de-filters-toggle')?.addEventListener('click', () => {
+            const bodyEl = document.getElementById('de-filters-body');
+            const chev = document.getElementById('de-filters-chevron');
+            if (!bodyEl) return;
+            const open = bodyEl.classList.toggle('hidden') === false;
+            chev?.classList.toggle('-rotate-90', !open);
+        });
+
+        // Swipe between Fails ↔ Trip Plans (tabs + list surface)
+        const bindDeSwipe = (el) => {
+            if (!el || el.dataset.deSwipeBound === '1') return;
+            el.dataset.deSwipeBound = '1';
+            let touchStartX = 0;
+            el.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches?.[0]?.screenX || 0;
+            }, { passive: true });
+            el.addEventListener('touchend', (e) => {
+                const endX = e.changedTouches?.[0]?.screenX || 0;
+                const diffX = endX - touchStartX;
+                if (Math.abs(diffX) < 48) return;
+                if (diffX > 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
+                else if (diffX < 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+            }, { passive: true });
+        };
+        bindDeSwipe(document.getElementById('de-tabs-swipe'));
+        bindDeSwipe(listDiv);
 
         const bindTripFilter = (id, key) => {
             const el = document.getElementById(id);
@@ -3515,8 +3549,20 @@ const Admin = {
                     return;
                 }
 
+                const allRows = Admin.flattenTripPlanRows();
+                // Populate user dropdown from full (unfiltered) set
+                const userSel = document.getElementById('de-filter-userid');
+                if (userSel) {
+                    const prev = Admin._deTripFilters?.userId || userSel.value || '';
+                    const users = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
+                    userSel.innerHTML = `<option value="">All users</option>` + users.map((u) =>
+                        `<option value="${String(u).replace(/"/g, '&quot;')}">${String(u).replace(/</g, '&lt;')}</option>`
+                    ).join('');
+                    if (prev && users.includes(prev)) userSel.value = prev;
+                    else Admin._deTripFilters.userId = '';
+                }
+
                 const filtered = Admin.getFilteredTripPlanRows();
-                // Aggregate OD+day(+region) for the cards
                 const heatMap = {};
                 filtered.forEach((entry) => {
                     const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}|${entry.userId}`;
@@ -3530,9 +3576,11 @@ const Admin = {
                             count: 0,
                             lastSeen: 0,
                             depSample: entry.depTime || null,
+                            hits: [],
                         };
                     }
                     heatMap[key].count++;
+                    heatMap[key].hits.push(entry);
                     if (entry.timestamp > heatMap[key].lastSeen) {
                         heatMap[key].lastSeen = entry.timestamp;
                         if (entry.depTime) heatMap[key].depSample = entry.depTime;
@@ -3544,7 +3592,8 @@ const Admin = {
                     return b.count - a.count;
                 });
 
-                const totalRows = Admin.flattenTripPlanRows().length;
+                const totalRows = allRows.length;
+                const userCount = new Set(filtered.map((r) => r.userId).filter(Boolean)).size;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
@@ -3560,37 +3609,57 @@ const Admin = {
 
                 listDiv.innerHTML = `
                     <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} of ${totalRows} trips · ${sorted.length} grouped rows
+                        Showing ${filtered.length} trips · ${sorted.length} grouped rows · ${userCount} user${userCount === 1 ? '' : 's'} reported
                     </div>
                 `;
 
-                sorted.forEach((item) => {
+                sorted.forEach((item, idx) => {
                     const dateStr = Admin.formatDate(item.lastSeen);
                     const card = document.createElement('div');
-                    card.className = 'bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between transition-colors hover:border-emerald-300';
+                    card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
                     const depLabel = secureEscape(item.depSample || '—');
                     const regionLabel = secureEscape(item.region || '—');
                     const uidLabel = secureEscape(item.userId || '—');
-                    card.innerHTML = `
-                        <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
-                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
-                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono truncate max-w-[9rem]" title="${uidLabel}">${uidLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">dep ${depLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
-                            </div>
+                    const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    const hitsHtml = hitsSorted.map((h) => `
+                        <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))}</span>
+                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '—')}</span>
                         </div>
-                        <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                            <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">Hits</span>
-                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
+                    `).join('');
+                    card.innerHTML = `
+                        <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
+                            <div class="min-w-0 flex-1 pr-2">
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
+                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
+                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                    <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
+                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
+                                </div>
+                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">${uidLabel}</div>
+                                <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
+                            </div>
+                            <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
+                                <span class="text-[9px] text-gray-400 uppercase font-bold">Hits</span>
+                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
+                            </div>
+                        </button>
+                        <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
+                            ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
                         </div>
                     `;
+                    card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
+                        const panel = card.querySelector('.de-trip-hits');
+                        const btn = card.querySelector('.de-trip-card-btn');
+                        if (!panel || !btn) return;
+                        const open = panel.classList.toggle('hidden') === false;
+                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    });
                     listDiv.appendChild(card);
                 });
             } catch (e) {
@@ -6159,6 +6228,192 @@ const Admin = {
         return items;
     },
 
+    /** Classify archive/live notice target: all | region | route */
+    classifyAlertTarget: (target) => {
+        const t = String(target || '');
+        if (t === 'all') return 'all';
+        if (/^all_[A-Z0-9]+$/i.test(t)) return 'region';
+        return t ? 'route' : '';
+    },
+
+    regionFromAlertTarget: (target) => {
+        const t = String(target || '');
+        if (/^all_([A-Z0-9]+)$/i.test(t)) return t.split('_')[1].toUpperCase();
+        if (typeof ROUTES !== 'undefined' && ROUTES[t]) return ROUTES[t].region || '';
+        return '';
+    },
+
+    filterAlertArchiveItems: (items) => {
+        const scope = (document.getElementById('alert-arch-filter-scope')?.value || '').trim();
+        const region = (document.getElementById('alert-arch-filter-region')?.value || '').trim().toUpperCase();
+        const route = (document.getElementById('alert-arch-filter-route')?.value || '').trim();
+        return (Array.isArray(items) ? items : []).filter((item) => {
+            const target = String(item.clearedFrom || item.target || item.routeId || '');
+            const kind = Admin.classifyAlertTarget(target);
+            if (scope === 'all' && kind !== 'all') return false;
+            if (scope === 'region' && kind !== 'region') return false;
+            if (scope === 'route' && kind !== 'route') return false;
+            if (region) {
+                if (kind === 'all') return false;
+                if (Admin.regionFromAlertTarget(target) !== region) return false;
+            }
+            if (route && target !== route) return false;
+            return true;
+        });
+    },
+
+    computeNextScheduleRun: (freq, fromTs) => {
+        const base = Number(fromTs) || Date.now();
+        if (freq === 'once') return null;
+        if (freq === 'hourly') return base + 3600 * 1000;
+        if (freq === 'daily') return base + 24 * 3600 * 1000;
+        if (freq === 'weekly') return base + 7 * 24 * 3600 * 1000;
+        if (freq === 'weekdays') {
+            let next = base + 24 * 3600 * 1000;
+            for (let i = 0; i < 10; i++) {
+                const day = new Date(next).getDay();
+                if (day !== 0 && day !== 6) return next;
+                next += 24 * 3600 * 1000;
+            }
+            return next;
+        }
+        return base + 24 * 3600 * 1000;
+    },
+
+    publishDueScheduledAlerts: async (secret) => {
+        if (!secret) secret = await Admin.getAuthKey();
+        if (!secret) return { published: 0 };
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        let published = 0;
+        try {
+            const res = await fetch(`${dynamicEndpoint}notices_scheduled.json?auth=${secret}`);
+            if (!res.ok) return { published: 0 };
+            const data = await res.json();
+            if (!data || typeof data !== 'object') return { published: 0 };
+            const now = Date.now();
+            for (const [schedId, job] of Object.entries(data)) {
+                if (!job || job.enabled === false || !job.target || !job.notice) continue;
+                const nextRun = Number(job.nextRunAt || 0);
+                if (!nextRun || nextRun > now) continue;
+                try {
+                    const notice = { ...job.notice };
+                    const expiresInMs = Number(notice.expiresInMs) || (2 * 3600 * 1000);
+                    delete notice.expiresInMs;
+                    const payload = {
+                        ...notice,
+                        id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
+                        postedAt: Date.now(),
+                        expiresAt: Date.now() + expiresInMs,
+                    };
+                    const putRes = await fetch(`${dynamicEndpoint}notices/${job.target}.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    });
+                    if (!putRes.ok) continue;
+                    published++;
+                    const next = Admin.computeNextScheduleRun(job.frequency || 'once', Math.max(nextRun, now));
+                    if (next == null || job.frequency === 'once') {
+                        await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, { method: 'DELETE' });
+                    } else {
+                        await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ nextRunAt: next, lastRunAt: Date.now(), lastNoticeId: payload.id }),
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Scheduled alert publish failed', schedId, e);
+                }
+            }
+        } catch (e) {
+            console.warn('publishDueScheduledAlerts failed', e);
+        }
+        if (published && typeof checkServiceAlerts === 'function') {
+            try { checkServiceAlerts(); } catch (_) {}
+        }
+        return { published };
+    },
+
+    fetchScheduledAlerts: async () => {
+        const secret = await Admin.getAuthKey();
+        if (!secret) return [];
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const res = await fetch(`${dynamicEndpoint}notices_scheduled.json?auth=${secret}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (!data || typeof data !== 'object') return [];
+        const items = Object.entries(data).map(([id, job]) => ({ id, ...job })).sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0));
+        Admin._cachedScheduledAlerts = items;
+        return items;
+    },
+
+    renderScheduledAlertsList: (items) => {
+        const listEl = document.getElementById('alert-schedule-list');
+        if (!listEl) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (!rows.length) {
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400">No scheduled alerts.</div>`;
+            return;
+        }
+        listEl.innerHTML = rows.map((job) => {
+            const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : '—';
+            const lastStr = job.lastRunAt ? Admin.formatDate(job.lastRunAt) : 'never';
+            const plain = (() => {
+                try {
+                    const d = document.createElement('div');
+                    d.innerHTML = job.notice?.message || '';
+                    return (d.textContent || '').trim().slice(0, 100) || '(empty)';
+                } catch { return '(empty)'; }
+            })();
+            const freq = escapeHTML(String(job.frequency || 'once'));
+            const target = escapeHTML(String(job.target || '—'));
+            const idSafe = escapeHTML(String(job.id || ''));
+            return `
+                <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm" data-sched-id="${idSafe}">
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">${freq}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">${target}</span>
+                    </div>
+                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
+                    <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
+                        <span>Next ${escapeHTML(nextStr)} · Last ${escapeHTML(lastStr)}</span>
+                        <button type="button" class="alert-sched-delete text-red-500 hover:text-red-700 font-bold uppercase tracking-wider focus:outline-none" data-sched-id="${idSafe}">Delete</button>
+                    </div>
+                </div>`;
+        }).join('');
+        listEl.querySelectorAll('.alert-sched-delete').forEach((btn) => {
+            btn.onclick = async () => {
+                const id = btn.getAttribute('data-sched-id');
+                if (!id) return;
+                const ok = await Admin.secureConfirm('Delete schedule', 'Remove this automated alert?');
+                if (!ok) return;
+                const secret = await Admin.getAuthKey();
+                if (!secret) return;
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                await fetch(`${dynamicEndpoint}notices_scheduled/${id}.json?auth=${secret}`, { method: 'DELETE' });
+                Admin.refreshScheduledAlerts();
+            };
+        });
+    },
+
+    refreshScheduledAlerts: async () => {
+        const statusEl = document.getElementById('alert-schedule-status');
+        if (statusEl) statusEl.textContent = 'Checking due…';
+        try {
+            const secret = await Admin.getAuthKey();
+            const due = await Admin.publishDueScheduledAlerts(secret);
+            const items = await Admin.fetchScheduledAlerts();
+            Admin.renderScheduledAlertsList(items);
+            if (statusEl) {
+                statusEl.textContent = due.published
+                    ? `${items.length} scheduled · posted ${due.published}`
+                    : `${items.length} scheduled`;
+            }
+        } catch (e) {
+            console.warn('refreshScheduledAlerts failed', e);
+            if (statusEl) statusEl.textContent = 'Failed';
+        }
+    },
+
     setupServiceAlertsManager: () => {
         if (!window._adminPremiumDropdownsBound) {
             document.addEventListener('click', (e) => {
@@ -6200,8 +6455,9 @@ const Admin = {
             </button>
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
-                <div class="flex border-b border-gray-200 dark:border-gray-700">
+                <div id="alert-tabs-swipe" class="flex border-b border-gray-200 dark:border-gray-700 touch-pan-y">
                     <button type="button" id="alert-tab-compose" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">New Alert</button>
+                    <button type="button" id="alert-tab-schedule" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Schedule</button>
                     <button type="button" id="alert-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Archive</button>
                 </div>
 
@@ -6396,12 +6652,75 @@ const Admin = {
                 </div>
                 </div>
 
+                <div id="alert-schedule-pane" class="hidden space-y-3">
+                    <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
+                            Schedule uses the <b>current New Alert form</b> (target, severity, message, expiry duration). Due jobs publish when an admin opens this panel or taps Refresh.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">First run</label>
+                            <input type="datetime-local" id="alert-schedule-first" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none" />
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Frequency</label>
+                            <select id="alert-schedule-freq" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
+                                <option value="once">Once</option>
+                                <option value="hourly">Hourly</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekdays">Weekdays</option>
+                                <option value="weekly">Weekly</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" id="alert-schedule-save-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md focus:outline-none">Save schedule from form</button>
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase" id="alert-schedule-status">Idle</span>
+                        <button type="button" id="alert-schedule-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-2 py-1 text-[10px] font-bold focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="alert-schedule-list" class="space-y-2 max-h-[360px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+
                 <div id="alert-archive-pane" class="hidden space-y-3">
                     <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner gap-2">
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1 shrink-0" id="alert-archive-status">Idle</span>
                         <button type="button" id="alert-archive-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                     </div>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Cleared &amp; expired service alerts, poll tallies, and Transit Incident Manager archives.</p>
+                    <div class="space-y-2">
+                        <button type="button" id="alert-archive-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 focus:outline-none">
+                            <span>Filters</span>
+                            <svg id="alert-archive-filters-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div id="alert-archive-filters-body" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Scope</label>
+                                <select id="alert-arch-filter-scope" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
+                                    <option value="">All scopes</option>
+                                    <option value="all">ALL (network)</option>
+                                    <option value="region">Region-wide</option>
+                                    <option value="route">Route-specific</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Region</label>
+                                <select id="alert-arch-filter-region" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
+                                    <option value="">All regions</option>
+                                    <option value="GP">Gauteng</option>
+                                    <option value="WC">Western Cape</option>
+                                    <option value="KZN">KZN</option>
+                                    <option value="EC">Eastern Cape</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Route</label>
+                                <select id="alert-arch-filter-route" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
+                                    <option value="">All routes</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                     <div id="alert-archive-list" class="space-y-3 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar"></div>
                 </div>
             </div>
@@ -6418,8 +6737,10 @@ const Admin = {
         const clearBtn = document.getElementById('alert-clear-btn');
         const severitySelect = document.getElementById('alert-severity');
         const tabCompose = document.getElementById('alert-tab-compose');
+        const tabSchedule = document.getElementById('alert-tab-schedule');
         const tabArchive = document.getElementById('alert-tab-archive');
         const composePane = document.getElementById('alert-compose-pane');
+        const schedulePane = document.getElementById('alert-schedule-pane');
         const archivePane = document.getElementById('alert-archive-pane');
         const archiveRefreshBtn = document.getElementById('alert-archive-refresh-btn');
         
@@ -6442,22 +6763,213 @@ const Admin = {
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
         let existingAlertId = null;
+        Admin._alertRepostDraft = false;
+        Admin._skipAlertFetchOnce = false;
 
         Admin.currentAlertManagerTab = 'compose';
         const setAlertTab = (tab) => {
-            Admin.currentAlertManagerTab = tab;
-            const isCompose = tab === 'compose';
-            if (composePane) composePane.classList.toggle('hidden', !isCompose);
-            if (archivePane) archivePane.classList.toggle('hidden', isCompose);
+            const next = (tab === 'schedule' || tab === 'archive') ? tab : 'compose';
+            Admin.currentAlertManagerTab = next;
+            if (composePane) composePane.classList.toggle('hidden', next !== 'compose');
+            if (schedulePane) schedulePane.classList.toggle('hidden', next !== 'schedule');
+            if (archivePane) archivePane.classList.toggle('hidden', next !== 'archive');
             const activeTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider';
             const idleTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider';
-            if (tabCompose) tabCompose.className = isCompose ? activeTabCls : idleTabCls;
-            if (tabArchive) tabArchive.className = !isCompose ? activeTabCls : idleTabCls;
-            if (!isCompose) Admin.fetchAlertArchive();
+            if (tabCompose) tabCompose.className = next === 'compose' ? activeTabCls : idleTabCls;
+            if (tabSchedule) tabSchedule.className = next === 'schedule' ? activeTabCls : idleTabCls;
+            if (tabArchive) tabArchive.className = next === 'archive' ? activeTabCls : idleTabCls;
+            if (next === 'archive') Admin.fetchAlertArchive();
+            if (next === 'schedule') Admin.refreshScheduledAlerts();
         };
+        Admin.setAlertManagerTab = setAlertTab;
         if (tabCompose) tabCompose.onclick = () => setAlertTab('compose');
+        if (tabSchedule) tabSchedule.onclick = () => setAlertTab('schedule');
         if (tabArchive) tabArchive.onclick = () => setAlertTab('archive');
         if (archiveRefreshBtn) archiveRefreshBtn.onclick = () => Admin.fetchAlertArchive();
+
+        document.getElementById('alert-archive-filters-toggle')?.addEventListener('click', () => {
+            const bodyEl = document.getElementById('alert-archive-filters-body');
+            const chev = document.getElementById('alert-archive-filters-chevron');
+            if (!bodyEl) return;
+            const open = bodyEl.classList.toggle('hidden') === false;
+            chev?.classList.toggle('-rotate-90', !open);
+        });
+        const refilterArchive = () => {
+            if (Admin._cachedAlertArchive) Admin.renderAlertArchiveList(Admin._cachedAlertArchive);
+        };
+        ['alert-arch-filter-scope', 'alert-arch-filter-region', 'alert-arch-filter-route'].forEach((id) => {
+            document.getElementById(id)?.addEventListener('change', refilterArchive);
+        });
+        const archRouteSel = document.getElementById('alert-arch-filter-route');
+        if (archRouteSel && typeof ROUTES !== 'undefined') {
+            Object.values(ROUTES)
+                .filter((r) => r.isActive && r.id !== 'special_event')
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+                .forEach((r) => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = `${r.region || '?'} · ${Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name}`;
+                    archRouteSel.appendChild(opt);
+                });
+        }
+
+        const bindAlertTabSwipe = (el) => {
+            if (!el || el.dataset.alertSwipeBound === '1') return;
+            el.dataset.alertSwipeBound = '1';
+            let startX = 0;
+            const order = ['compose', 'schedule', 'archive'];
+            el.addEventListener('touchstart', (e) => { startX = e.changedTouches?.[0]?.screenX || 0; }, { passive: true });
+            el.addEventListener('touchend', (e) => {
+                const diffX = (e.changedTouches?.[0]?.screenX || 0) - startX;
+                if (Math.abs(diffX) < 48) return;
+                const idx = order.indexOf(Admin.currentAlertManagerTab || 'compose');
+                if (diffX < 0 && idx < order.length - 1) setAlertTab(order[idx + 1]);
+                else if (diffX > 0 && idx > 0) setAlertTab(order[idx - 1]);
+            }, { passive: true });
+        };
+        bindAlertTabSwipe(document.getElementById('alert-tabs-swipe'));
+
+        document.getElementById('alert-schedule-refresh-btn')?.addEventListener('click', () => Admin.refreshScheduledAlerts());
+        document.getElementById('alert-schedule-save-btn')?.addEventListener('click', async () => {
+            const firstEl = document.getElementById('alert-schedule-first');
+            const freqEl = document.getElementById('alert-schedule-freq');
+            let msg = (alertMsg?.innerHTML || '').trim();
+            const target = alertTarget?.value;
+            if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast('Fill the New Alert message first.', 'error'); setAlertTab('compose'); return; }
+            if (!target) { if (typeof showToast === 'function') showToast('Pick a target on New Alert.', 'error'); setAlertTab('compose'); return; }
+            const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : Date.now();
+            if (!Number.isFinite(firstMs)) { if (typeof showToast === 'function') showToast('Invalid first-run time.', 'error'); return; }
+            const secret = await Admin.getAuthKey();
+            if (!secret) { if (typeof showToast === 'function') showToast('Authentication required.', 'error'); return; }
+
+            const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
+            msg = Admin.repairMojibake(msg);
+            if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
+                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">— ${signoff}</span>`;
+            }
+            const expiresAtVal = dateInput?.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
+            const expiresInMs = Math.max(5 * 60 * 1000, expiresAtVal - Date.now());
+            const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
+                ? (pollOptC.value.trim() || null) : null;
+            const schedId = `sched_${Date.now()}`;
+            const job = {
+                id: schedId,
+                target,
+                frequency: freqEl?.value || 'once',
+                nextRunAt: firstMs,
+                createdAt: Date.now(),
+                enabled: true,
+                notice: {
+                    message: msg,
+                    authorName: signoff,
+                    forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
+                    severity: severitySelect?.value || 'info',
+                    imageUrl: null,
+                    ctaUrl: null,
+                    ctaText: null,
+                    sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
+                    sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
+                    expiresInMs,
+                    poll: {
+                        active: !!(pollToggle && pollToggle.checked),
+                        question: pollToggle?.checked ? pollQuestion.value.trim() : null,
+                        optionA: pollToggle?.checked ? pollOptA.value.trim() : null,
+                        optionB: pollToggle?.checked ? pollOptB.value.trim() : null,
+                        optionC: optCVal,
+                        showResults: pollToggle?.checked ? !!(pollShowResults && pollShowResults.checked) : false,
+                    },
+                },
+            };
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            try {
+                const res = await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(job),
+                });
+                if (!res.ok) throw new Error('Save failed');
+                if (typeof showToast === 'function') showToast('Schedule saved.', 'success');
+                Admin.refreshScheduledAlerts();
+            } catch (e) {
+                if (typeof showToast === 'function') showToast(e.message || 'Could not save schedule.', 'error');
+            }
+        });
+
+        Admin.reviveArchivedAlert = (item) => {
+            if (!item) return;
+            if (item.kind === 'disruption') {
+                if (typeof showToast === 'function') showToast('Use Transit Incident Manager to revive incidents.', 'info');
+                return;
+            }
+            const target = item.clearedFrom || item.target || 'all';
+            Admin._alertRepostDraft = true;
+            Admin._skipAlertFetchOnce = true;
+            setAlertTab('compose');
+            body?.classList.remove('hidden');
+            chevron?.classList.remove('-rotate-90');
+            header?.classList.add('mb-4');
+
+            if (alertTarget) {
+                alertTarget.value = target;
+                const customDisplay = document.getElementById('alert-target-display');
+                const customList = document.getElementById('alert-target-list');
+                const selectedOpt = Array.from(alertTarget.options).find((o) => o.value === target);
+                if (customDisplay) {
+                    if (customList) {
+                        const matchLi = Array.from(customList.querySelectorAll('li')).find((li) => selectedOpt && li.textContent.includes(selectedOpt.textContent.split(' [')[0]));
+                        if (matchLi) customDisplay.innerHTML = matchLi.innerHTML;
+                        else customDisplay.textContent = selectedOpt ? selectedOpt.textContent : target;
+                    } else {
+                        customDisplay.textContent = selectedOpt ? selectedOpt.textContent : target;
+                    }
+                }
+            }
+
+            existingAlertId = null;
+            let cleanedMsg = Admin.repairMojibake(item.message || '');
+            cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
+            cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
+            if (alertMsg) alertMsg.innerHTML = cleanedMsg.trim();
+
+            if (item.expiresAt && dateInput) {
+                const expiryDate = new Date(Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000));
+                expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset());
+                dateInput.value = expiryDate.toISOString().slice(0, 16);
+            }
+            if (severitySelect) {
+                severitySelect.value = item.severity || 'info';
+                const display = document.getElementById('alert-severity-display');
+                if (display) {
+                    if (item.severity === 'warning') display.innerHTML = '🟡 Warning (Delays)';
+                    else if (item.severity === 'critical') display.innerHTML = '🔴 Critical (Suspended)';
+                    else display.innerHTML = '🔵 Info (General)';
+                }
+            }
+            if (signoffInput) signoffInput.value = item.authorName || item.signoff || 'Next Train Ops';
+            if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
+            if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
+            if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
+
+            if (item.poll && item.poll.active) {
+                if (pollToggle) pollToggle.checked = true;
+                pollContainer?.classList.remove('hidden');
+                if (pollQuestion) pollQuestion.value = item.poll.question || '';
+                if (pollOptA) pollOptA.value = item.poll.optionA || '';
+                if (pollOptB) pollOptB.value = item.poll.optionB || '';
+                if (pollShowResults) pollShowResults.checked = !!item.poll.showResults;
+                if (item.poll.optionC) {
+                    if (pollOptC) pollOptC.value = item.poll.optionC;
+                    pollOptCWrap?.classList.remove('hidden');
+                    pollAddCBtn?.classList.add('hidden');
+                }
+            } else {
+                if (pollToggle) pollToggle.checked = false;
+                pollContainer?.classList.add('hidden');
+            }
+
+            if (sendBtn) sendBtn.textContent = 'Repost Alert';
+            if (typeof showToast === 'function') showToast('Draft ready — review and tap Repost Alert.', 'success');
+            composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
 
         if (pollAddCBtn && pollOptCWrap) {
             pollAddCBtn.onclick = () => {
@@ -6486,6 +6998,7 @@ const Admin = {
             } else {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
+                Admin.publishDueScheduledAlerts().catch(() => {});
             }
         };
 
@@ -6594,6 +7107,11 @@ const Admin = {
         }
 
         async function fetchCurrentAlert(target) {
+            if (Admin._skipAlertFetchOnce) {
+                Admin._skipAlertFetchOnce = false;
+                return;
+            }
+            Admin._alertRepostDraft = false;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
@@ -6880,12 +7398,14 @@ const Admin = {
             const optCVal = pollToggle.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
                 ? (pollOptC.value.trim() || null)
                 : null;
+            const isRepost = !!Admin._alertRepostDraft;
+            const nowTs = Date.now();
             const payload = {
-                id: existingAlertId || Date.now().toString(),
+                id: existingAlertId || nowTs.toString(),
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
-                postedAt: Date.now(),
+                postedAt: nowTs,
                 expiresAt: expiresAtVal,
                 severity: severity,
                 imageUrl: null,
@@ -6893,6 +7413,8 @@ const Admin = {
                 ctaText: null,
                 sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                 sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
+                isRepost: isRepost || false,
+                repostedAt: isRepost ? nowTs : null,
                 poll: {
                     active: pollToggle.checked,
                     question: pollToggle.checked ? pollQuestion.value.trim() : null,
@@ -6907,13 +7429,14 @@ const Admin = {
             const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
 
             try {
-                sendBtn.textContent = "Posting...";
+                sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
                 sendBtn.disabled = true;
                 // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
                 const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
                 if (res.ok) {
                     existingAlertId = payload.id;
-                    if (typeof showToast === 'function') showToast("Alert Posted!", "success");
+                    Admin._alertRepostDraft = false;
+                    if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
                     if (typeof checkServiceAlerts === 'function') checkServiceAlerts(); 
                 } else {
                     if (typeof showToast === 'function') showToast("Failed. Check Session.", "error");
@@ -6985,13 +7508,15 @@ const Admin = {
             const swept = await Admin.sweepExpiredAlertsToArchive(secret);
             if (statusEl) statusEl.textContent = 'Loading…';
             const items = await Admin.loadUnifiedAlertArchive(secret);
+            const filtered = Admin.filterAlertArchiveItems(items);
             Admin.renderAlertArchiveList(items);
-            const noticeN = items.filter((i) => (i.kind || 'notice') !== 'disruption').length;
-            const disrN = items.filter((i) => i.kind === 'disruption').length;
+            const noticeN = filtered.filter((i) => (i.kind || 'notice') !== 'disruption').length;
+            const disrN = filtered.filter((i) => i.kind === 'disruption').length;
             const sweepNote = (swept.notices || swept.disruptions)
                 ? ` · moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
                 : '';
-            if (statusEl) statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${sweepNote}`;
+            const filterNote = filtered.length !== items.length ? ` · showing ${filtered.length}/${items.length}` : '';
+            if (statusEl) statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${filterNote}${sweepNote}`;
         } catch (e) {
             console.warn('fetchAlertArchive failed', e);
             if (statusEl) statusEl.textContent = 'Failed';
@@ -7002,9 +7527,15 @@ const Admin = {
     renderAlertArchiveList: (items) => {
         const listEl = document.getElementById('alert-archive-list');
         if (!listEl) return;
-        const rows = Array.isArray(items) ? items : [];
-        if (!rows.length) {
+        const all = Array.isArray(items) ? items : (Admin._cachedAlertArchive || []);
+        Admin._cachedAlertArchive = all;
+        const rows = Admin.filterAlertArchiveItems(all);
+        if (!all.length) {
             listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">Archive is empty.</div>`;
+            return;
+        }
+        if (!rows.length) {
+            listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">No archived alerts match these filters.</div>`;
             return;
         }
 
@@ -7057,10 +7588,18 @@ const Admin = {
         listEl.querySelectorAll('.alert-archive-item').forEach((btn) => {
             btn.onclick = () => {
                 const idx = Number(btn.getAttribute('data-archive-idx'));
-                const item = (Admin._cachedAlertArchive || [])[idx];
+                const item = rows[idx];
                 if (item) Admin.previewArchivedAlert(item);
             };
         });
+
+        const statusEl = document.getElementById('alert-archive-status');
+        if (statusEl && all.length) {
+            const noticeN = rows.filter((i) => (i.kind || 'notice') !== 'disruption').length;
+            const disrN = rows.filter((i) => i.kind === 'disruption').length;
+            const filterNote = rows.length !== all.length ? ` · showing ${rows.length}/${all.length}` : '';
+            statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${filterNote}`;
+        }
     },
 
     /** Rebuild full advisory HTML (message, source, poll tallies) for archive / feedback preview. */
@@ -7189,14 +7728,32 @@ const Admin = {
                         </button>
                     </div>
                     <div id="admin-context-content" class="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-800 dark:text-gray-200 leading-relaxed overflow-y-auto custom-scrollbar"></div>
+                    <div id="admin-context-footer" class="mt-4 shrink-0"></div>
                 </div>
             `;
             document.body.appendChild(modal);
+        }
+        let footer = document.getElementById('admin-context-footer');
+        if (!footer) {
+            footer = document.createElement('div');
+            footer.id = 'admin-context-footer';
+            footer.className = 'mt-4 shrink-0';
+            modal.querySelector('.max-w-sm')?.appendChild(footer);
         }
         const contentDiv = document.getElementById('admin-context-content');
         const titleEl = modal.querySelector('h3');
         if (titleEl) titleEl.textContent = 'Rebuilt Alert Preview';
         if (contentDiv) contentDiv.innerHTML = Admin.buildAlertPreviewHtml(item);
+        if (item.kind === 'disruption') {
+            footer.innerHTML = `<p class="text-[10px] text-gray-500 text-center">Revive incidents from Transit Incident Manager.</p>`;
+        } else {
+            footer.innerHTML = `<button type="button" id="alert-revive-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wide shadow-md focus:outline-none">Revive / Repost</button>`;
+            footer.querySelector('#alert-revive-btn')?.addEventListener('click', () => {
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('admin-context-modal');
+                else modal.classList.add('hidden');
+                Admin.reviveArchivedAlert(item);
+            });
+        }
         openSmoothModal('admin-context-modal');
     },
 

@@ -917,10 +917,11 @@ export async function checkServiceAlerts() {
             }
 
             if (timestamp) {
-                const posted = activeNotice.postedAt || activeNotice.timestamp;
+                const posted = activeNotice.repostedAt || activeNotice.postedAt || activeNotice.timestamp;
                 if (posted) {
                     const date = new Date(posted);
-                    timestamp.textContent = `Posted: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+                    const label = (activeNotice.isRepost || activeNotice.repostedAt) ? 'Reposted' : 'Posted';
+                    timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
                 } else {
                     timestamp.textContent = '';
                 }

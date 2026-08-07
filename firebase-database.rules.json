@@ -4,12 +4,25 @@
     ".write": false,
 
     "config": {
-      ".read": true,
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'",
+      "maintenance": { ".read": true },
+      "killswitch": { ".read": true },
+      "special_event": { ".read": true },
+      "schedule_override": { ".read": true },
+      "shadow_ban_mode": {
+        ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      }
     },
     "holiday_approvals": {
       ".read": true,
-      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$iso": {
+        "regions": {
+          "$regionCode": {
+            ".validate": "!newData.exists() || (newData.hasChildren(['status', 'dayType']) && (newData.child('status').val() === 'approved' || newData.child('status').val() === 'deferred' || newData.child('status').val() === 'rejected' || newData.child('status').val() === 'pending') && (newData.child('dayType').val() === 'public_holiday' || newData.child('dayType').val() === 'saturday' || newData.child('dayType').val() === 'weekday' || newData.child('dayType').val() === 'sunday') && !newData.hasChild('approvedByEmail') && !newData.hasChild('rejectedByEmail'))"
+          }
+        }
+      }
     },
     "schedules": {
       ".read": true,
@@ -35,7 +48,7 @@
     },
     "disruptions": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 
     "feedback": {
@@ -59,7 +72,7 @@
       "$deviceId": {
         ".read": true,
         "$messageId": {
-          ".write": "newData.hasChild('read')"
+          ".write": "data.exists() && newData.exists() && newData.hasChild('message') && newData.child('message').val() === data.child('message').val() && newData.hasChild('timestamp') && newData.child('timestamp').val() === data.child('timestamp').val() && (!data.hasChild('feedbackId') || newData.child('feedbackId').val() === data.child('feedbackId').val())"
         }
       }
     },
@@ -145,14 +158,14 @@
         "presence": {
           ".read": true,
           "$sessionId": {
-            ".write": true,
+            ".write": "auth != null",
             ".validate": "!newData.exists() || (newData.hasChildren(['at']) && newData.child('at').isNumber() && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)))"
           }
         },
         "typing": {
           ".read": true,
           "$sessionId": {
-            ".write": true,
+            ".write": "auth != null",
             ".validate": "!newData.exists() || (newData.hasChildren(['at']) && newData.child('at').isNumber() && (!newData.hasChild('name') || (newData.child('name').isString() && newData.child('name').val().length <= 80)))"
           }
         },

@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -18,10 +18,9 @@ import {
 } from './logic.js';
 import { getLookaheadDayInfo, isTrainExcluded } from './live-board.js';
 
-/** Sheet day used for timetable lookups — Sunday has no sheets; probes must use weekday. */
+/** Sheet day used for timetable lookups — Sunday has no sheets; public holidays use Saturday. */
 function scheduleDayType(dayType) {
-    if (!dayType || dayType === 'sunday') return 'weekday';
-    return dayType;
+    return normalizeScheduleSheetDay(dayType);
 }
 
 // SPA used script-scope globals. Prefer live window clock when the boot clock
@@ -535,7 +534,7 @@ export function findUpcomingTrainsForLeg(schedule, originRow, destRow, dayType, 
     } else if (isToday) {
         exclusionDayIdx = getCurrentDayIndex();
     } else {
-        if (dayType === 'saturday') exclusionDayIdx = 6;
+        if (dayType === 'saturday' || dayType === 'public_holiday') exclusionDayIdx = 6;
         if (dayType === 'sunday') exclusionDayIdx = 0;
     }
 
@@ -855,7 +854,7 @@ export function planDijkstraTrip(origin, dest, dayType, isRolloverLoop = false, 
 
     const dayIdx = context.targetDayIdx !== undefined ? context.targetDayIdx
                  : (dayType === getCurrentDayType() ? getCurrentDayIndex()
-                 : (dayType === 'saturday' ? 6 : 1));
+                 : (dayType === 'saturday' || dayType === 'public_holiday' ? 6 : 1));
 
     const startSec = 0;
 
@@ -1227,7 +1226,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         window._forceManualRollover = false; 
     }
 
-    const isExplicitOverride = (dayType === 'weekday' || dayType === 'saturday') && dayType !== getCurrentDayType();
+    const isExplicitOverride = (dayType === 'weekday' || dayType === 'saturday' || dayType === 'public_holiday') && dayType !== getCurrentDayType();
 
     if (!isExplicitOverride && dayType !== getCurrentDayType()) {
         let baseDate = new Date();
@@ -1266,7 +1265,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         if (isExplicitOverride) {
             targetDayType = dayType;
             targetDayLabel = null; 
-            targetDayIdx = (dayType === 'saturday') ? 6 : (dayType === 'sunday' ? 0 : 1);
+            targetDayIdx = (dayType === 'saturday' || dayType === 'public_holiday') ? 6 : (dayType === 'sunday' ? 0 : 1);
         } else if (offset > 0) {
             const info = getLookaheadDayInfo(offset);
             targetDayType = info.type;

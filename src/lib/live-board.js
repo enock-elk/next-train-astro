@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
-    getDistanceFromLatLonInKm, escapeHTML
+    getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -529,7 +529,7 @@ export function getRouteFare(sheetKey) {
     // PRASA #TravelOffPeak: discount tickets valid 09:30–14:30 (weekdays, weekends & public holidays).
     // Scholar 50% is profile.base — not gated on this window.
     const applyOffPeakWindow = FARE_CONFIG.offPeakEveryDay !== false;
-    let isWeekdaySheet = (getCurrentDayType() === 'weekday');
+    let isWeekdaySheet = usesWeekdayScheduleSheet(getCurrentDayType());
     if (sheetKey) {
         isWeekdaySheet = sheetKey.includes('weekday');
     }
@@ -646,7 +646,7 @@ export function findNextTrains() {
     
     if (!selectedStation) {
         if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
-        const fallbackSheetKey = (getCurrentDayType() === 'weekday')
+        const fallbackSheetKey = usesWeekdayScheduleSheet(getCurrentDayType())
             ? currentRoute.sheetKeys.weekday_to_a
             : currentRoute.sheetKeys.saturday_to_a;
         if (typeof window.updateFareDisplay === 'function') window.updateFareDisplay(fallbackSheetKey);
@@ -692,7 +692,7 @@ export function findNextTrains() {
     }
 
     // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape)
-    if (getCurrentDayType() === 'saturday' && !routeHasSaturdayService()) {
+    if (usesSaturdayScheduleSheet(getCurrentDayType()) && !routeHasSaturdayService()) {
         if (typeof window.renderNoWeekendService === 'function') {
             if (isAtStation(selectedStation, currentRoute.destA)) {
                 if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
@@ -725,14 +725,14 @@ export function findNextTrains() {
     }
 
     sharedRoutes = sharedRoutes.filter(rId => getSharedStationCount(getCurrentRouteId(), rId) > 1);
-    let primarySheetKey = (getCurrentDayType() === 'weekday') ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+    let primarySheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
 
     // --- DESTINATION A ---
     if (isAtStation(selectedStation, currentRoute.destA)) {
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
     } else {
-        const schedule = (getCurrentDayType() === 'weekday') ? getSchedules().weekday_to_a : getSchedules().saturday_to_a;
-        const currentSheetKey = (getCurrentDayType() === 'weekday') ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+        const schedule = usesWeekdayScheduleSheet(getCurrentDayType()) ? getSchedules().weekday_to_a : getSchedules().saturday_to_a;
+        const currentSheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
         const { allJourneys: currentJourneys } = findNextJourneyToDestA(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
         
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -742,7 +742,7 @@ export function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
-                const key = (getCurrentDayType() === 'weekday') ? otherRoute.sheetKeys.weekday_to_a : otherRoute.sheetKeys.saturday_to_a;
+                const key = usesWeekdayScheduleSheet(getCurrentDayType()) ? otherRoute.sheetKeys.weekday_to_a : otherRoute.sheetKeys.saturday_to_a;
                 const otherRows = getFullDatabase()[key];
                 const otherMeta = getFullDatabase()[key + "_meta"];
                 const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -796,8 +796,8 @@ export function findNextTrains() {
     if (isAtStation(selectedStation, currentRoute.destB)) {
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
     } else {
-        const schedule = (getCurrentDayType() === 'weekday') ? getSchedules().weekday_to_b : getSchedules().saturday_to_b;
-        const currentSheetKey = (getCurrentDayType() === 'weekday') ? currentRoute.sheetKeys.weekday_to_b : currentRoute.sheetKeys.saturday_to_b;
+        const schedule = usesWeekdayScheduleSheet(getCurrentDayType()) ? getSchedules().weekday_to_b : getSchedules().saturday_to_b;
+        const currentSheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_b : currentRoute.sheetKeys.saturday_to_b;
         const { allJourneys: currentJourneys } = findNextJourneyToDestB(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
 
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -807,7 +807,7 @@ export function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             
-                 const key = (getCurrentDayType() === 'weekday') ? otherRoute.sheetKeys.weekday_to_b : otherRoute.sheetKeys.saturday_to_b;
+                 const key = usesWeekdayScheduleSheet(getCurrentDayType()) ? otherRoute.sheetKeys.weekday_to_b : otherRoute.sheetKeys.saturday_to_b;
                  const otherRows = getFullDatabase()[key];
                  const otherMeta = getFullDatabase()[key + "_meta"];
                  const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -1250,9 +1250,9 @@ export function updateLastUpdatedText() {
     let displayDate = getFullDatabase().lastUpdated || "Unknown";
     const isValidDate = (d) => d && d !== "undefined" && d !== "null" && String(d).length > 5;
     
-    if (getCurrentDayType() === 'weekday' || getCurrentDayType() === 'monday') { 
+    if (usesWeekdayScheduleSheet(getCurrentDayType()) || getCurrentDayType() === 'monday') { 
         if (getSchedules().weekday_to_a && isValidDate(getSchedules().weekday_to_a.lastUpdated)) displayDate = getSchedules().weekday_to_a.lastUpdated;
-    } else if (getCurrentDayType() === 'saturday') {
+    } else if (usesSaturdayScheduleSheet(getCurrentDayType())) {
         if (getSchedules().saturday_to_a && isValidDate(getSchedules().saturday_to_a.lastUpdated)) displayDate = getSchedules().saturday_to_a.lastUpdated;
     } else if (getCurrentDayType() === 'sunday') {
          if (getSchedules().weekday_to_a && isValidDate(getSchedules().weekday_to_a.lastUpdated)) displayDate = getSchedules().weekday_to_a.lastUpdated;

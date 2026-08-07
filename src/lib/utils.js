@@ -13,6 +13,29 @@ export function escapeHTML(str) {
     });
 }
 
+/** Timetable sheet family for a logical day type (public holidays use Saturday sheets). */
+export function usesWeekdayScheduleSheet(dayType) {
+    return dayType === 'weekday' || dayType === 'monday';
+}
+
+export function usesSaturdayScheduleSheet(dayType) {
+    return dayType === 'saturday' || dayType === 'public_holiday';
+}
+
+export function normalizeScheduleSheetDay(dayType) {
+    if (!dayType || dayType === 'sunday') return 'weekday';
+    if (dayType === 'public_holiday') return 'saturday';
+    return dayType;
+}
+
+export function scheduleDayTypeLabel(dayType) {
+    if (dayType === 'sunday') return 'No Sunday service';
+    if (dayType === 'public_holiday') return 'Public holiday timetable';
+    if (dayType === 'saturday') return 'Saturday / public-holiday timetable';
+    if (dayType === 'weekday') return 'Weekday timetable';
+    return 'Special schedule';
+}
+
 /**
  * Repair common UTF-8-as-Latin1/Windows-1252 mojibake in remote HTML/text
  * (e.g. Firebase notices saved as mojibake em-dash + "Next Train Ops").

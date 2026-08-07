@@ -29,6 +29,10 @@ function getSessionId() {
 
 async function ensureDb() {
     if (!window.firebaseDb) await bootFirebase();
+    // Presence/typing rules require auth != null (anonymous is enough for guests).
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
     return !!(window.firebaseDb && window.firebaseDbRef && window.firebaseDbSet);
 }
 

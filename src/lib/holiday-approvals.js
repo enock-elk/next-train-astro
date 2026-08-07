@@ -1,12 +1,18 @@
 /**
- * Remote holiday timetable approvals (region-aware day types).
+ * Remote holiday timetable approvals (per-region day types).
  * Notices only require admin approval once enforcement is live (from 11 Aug 2026).
- * First approve wins; until then the legacy SPECIAL_DATES notice path still runs.
  */
 import { DYNAMIC_BASE_URL, SPECIAL_DATES } from './config.js';
 
 /** Local calendar date (YYYY-MM-DD) when approval becomes mandatory for notices. */
 export const HOLIDAY_APPROVAL_ENFORCE_FROM = '2026-08-11';
+
+export const HOLIDAY_DAY_TYPE_OPTIONS = [
+    { value: 'public_holiday', label: 'Public Holiday' },
+    { value: 'saturday', label: 'Saturday' },
+    { value: 'weekday', label: 'Weekday' },
+    { value: 'sunday', label: 'Sunday (no service)' },
+];
 
 let cachedApprovals = null;
 let loadPromise = null;
@@ -31,7 +37,6 @@ export function getCachedHolidayApprovals() {
 }
 
 export async function loadHolidayApprovals(force = false) {
-    // Before enforcement, skip the network round-trip for notice gating.
     if (!force && !isHolidayApprovalEnforced()) {
         cachedApprovals = cachedApprovals || {};
         return cachedApprovals;
@@ -68,37 +73,66 @@ export function getHolidayApproval(iso) {
     return entry && typeof entry === 'object' ? entry : null;
 }
 
-export function isHolidayApproved(iso) {
+/** Per-region approval row (new schema + legacy whole-holiday fallback). */
+export function getRegionHolidayApproval(iso, region = 'GP') {
     const entry = getHolidayApproval(iso);
-    return !!(entry && entry.status === 'approved');
+    if (!entry) return null;
+
+    const code = region || 'GP';
+    if (entry.regions && entry.regions[code] && typeof entry.regions[code] === 'object') {
+        return entry.regions[code];
+    }
+
+    // Legacy: single approve for all regions
+    if (entry.status === 'approved') {
+        return {
+            status: 'approved',
+            dayType: entry.regionDayTypes?.[code] || entry.defaultDayType || SPECIAL_DATES?.[entry.dateKey] || 'saturday',
+            approvedAt: entry.approvedAt || null,
+        };
+    }
+
+    const legacyStatus = entry.status === 'rejected' ? 'deferred' : (entry.status || 'pending');
+    return {
+        status: legacyStatus,
+        dayType: entry.defaultDayType || SPECIAL_DATES?.[entry.dateKey] || 'public_holiday',
+    };
+}
+
+export function isHolidayApprovedForRegion(iso, region = 'GP') {
+    const row = getRegionHolidayApproval(iso, region);
+    return !!(row && row.status === 'approved');
+}
+
+/** @deprecated use isHolidayApprovedForRegion */
+export function isHolidayApproved(iso) {
+    return isHolidayApprovedForRegion(iso, 'GP');
 }
 
 /**
- * Whether a holiday notice may be shown for this ISO date.
- * Before 11 Aug 2026: always yes (legacy path — Women's Day / Observed phase-out).
- * From 11 Aug 2026: requires an approved holiday_approvals entry.
- * Seen-key dismissals remain the user's permanent opt-out either way.
+ * Whether a holiday notice may be shown for this ISO date in the user's region.
+ * @param {string} iso
+ * @param {string} [region='GP']
+ * @param {Date} [now]
  */
-export function canShowHolidayNotice(iso, now = new Date()) {
+export function canShowHolidayNotice(iso, region = 'GP', now = new Date()) {
     if (!iso) return false;
-    if (!isHolidayApprovalEnforced(now)) return true;
-    return isHolidayApproved(iso);
+    const regionCode = typeof region === 'string' ? region : 'GP';
+    const when = now instanceof Date ? now : new Date();
+    if (!isHolidayApprovalEnforced(when)) return true;
+    return isHolidayApprovedForRegion(iso, regionCode);
 }
 
 /**
  * Resolve schedule day-type for a holiday date key (MM-DD).
- * Approved region overrides win when present; otherwise SPECIAL_DATES fallback.
+ * Approved region dayType wins; otherwise SPECIAL_DATES (calendar holiday still applies).
+ * Deferred/pending regions do not override the calendar timetable — only the notice is gated.
  */
 export function resolveHolidayDayType(dateKey, region, year = new Date().getFullYear()) {
     if (!dateKey) return null;
     const iso = `${year}-${dateKey}`;
-    const entry = getHolidayApproval(iso);
-    if (entry && entry.status === 'approved') {
-        const code = region || 'GP';
-        const fromRegion = entry.regionDayTypes && entry.regionDayTypes[code];
-        if (fromRegion) return fromRegion;
-        if (entry.defaultDayType) return entry.defaultDayType;
-    }
+    const row = getRegionHolidayApproval(iso, region || 'GP');
+    if (row && row.status === 'approved' && row.dayType) return row.dayType;
     return SPECIAL_DATES?.[dateKey] || null;
 }
 

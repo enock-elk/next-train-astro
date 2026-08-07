@@ -121,6 +121,7 @@ const Admin = {
             trending: '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
             plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
             check: '<path d="M20 6L9 17l-5-5"/>',
+            x: '<path d="M18 6L6 18"/><path d="M6 6l12 12"/>',
             checks: '<path d="M18 6L7 17l-5-5"/><path d="M22 10l-11 11-3-3"/>',
             calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
             note: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
@@ -5405,6 +5406,15 @@ const Admin = {
                     </div>
                 </div>`;
             modal.classList.remove('hidden');
+            // Prefill from System Controls default when available
+            const defaultModeEl = document.getElementById('shadow-ban-default-mode');
+            const banModeEl = document.getElementById('admin-ban-mode');
+            if (banModeEl && defaultModeEl?.value) {
+                const preferred = (typeof trustNormalizeShadowBanMode === 'function')
+                    ? trustNormalizeShadowBanMode(defaultModeEl.value)
+                    : defaultModeEl.value;
+                if ([...banModeEl.options].some((o) => o.value === preferred)) banModeEl.value = preferred;
+            }
             document.getElementById('admin-ban-cancel').onclick = () => { modal.classList.add('hidden'); resolve(null); };
             document.getElementById('admin-ban-confirm').onclick = () => {
                 const idx = parseInt(document.getElementById('admin-ban-duration').value, 10) || 0;
@@ -11004,7 +11014,7 @@ const Admin = {
         }
     },
 
-// --- 7.9 HOLIDAY NOTICE APPROVALS (first approve wins; defer asks again tomorrow) ---
+// --- 7.9 HOLIDAY NOTICE APPROVALS (per-region; Pending / Approved tabs) ---
     setupHolidayApprovalsManager: () => {
         const exclusionPanel = document.getElementById('exclusion-panel');
         if (!exclusionPanel || !exclusionPanel.parentNode) return;
@@ -11025,14 +11035,16 @@ const Admin = {
                     ${Admin.tileIcon('calendar', 'text-amber-500 dark:text-amber-400')}
                     <span>Holiday Notices</span>
                 </span>
-                <span id="holiday-approvals-badge" class="admin-unread-badge hidden" aria-label="Holidays awaiting approval"></span>
+                <span id="holiday-approvals-badge" class="admin-unread-badge hidden" aria-label="Regions awaiting approval"></span>
                 <svg id="holiday-approvals-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="holiday-approvals-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">Approve region-specific timetable types before commuters see the notice. First approve wins. Defer hides this holiday for you until tomorrow.</p>
-                <p id="holiday-approvals-enforce-note" class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-2 leading-snug">Commuter enforcement starts 11 Aug 2026. Until then, Women's Day / Observed still use the legacy notice path (seen dismissals still respected).</p>
-                <div class="flex gap-2">
-                    <button type="button" id="holiday-approvals-refresh" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">Approve each region separately before commuters see the notice. Tick approves; cross defers that region until info is available.</p>
+                <p id="holiday-approvals-enforce-note" class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-2 leading-snug"></p>
+                <div class="flex gap-2 items-center">
+                    <button type="button" id="holiday-tab-pending" class="holiday-tab-btn flex-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider">Pending</button>
+                    <button type="button" id="holiday-tab-approved" class="holiday-tab-btn flex-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider">Approved</button>
+                    <button type="button" id="holiday-approvals-refresh" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 border border-blue-200 dark:border-blue-800 rounded px-2 py-1.5 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
                 <div id="holiday-approvals-list" class="space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar"></div>
             </div>
@@ -11044,9 +11056,19 @@ const Admin = {
         const listDiv = document.getElementById('holiday-approvals-list');
         const refreshBtn = document.getElementById('holiday-approvals-refresh');
         const badge = document.getElementById('holiday-approvals-badge');
+        const tabPending = document.getElementById('holiday-tab-pending');
+        const tabApproved = document.getElementById('holiday-tab-approved');
+        let holidayTab = 'pending';
 
-        const dayTypeOptions = (selected) => ['saturday', 'sunday', 'weekday']
-            .map((t) => `<option value="${t}"${t === selected ? ' selected' : ''}>${t}</option>`)
+        const HOLIDAY_DAY_TYPES = [
+            { value: 'public_holiday', label: 'Public Holiday' },
+            { value: 'saturday', label: 'Saturday' },
+            { value: 'weekday', label: 'Weekday' },
+            { value: 'sunday', label: 'Sunday (no service)' },
+        ];
+
+        const dayTypeOptions = (selected) => HOLIDAY_DAY_TYPES
+            .map((t) => `<option value="${t.value}"${t.value === selected ? ' selected' : ''}>${t.label}</option>`)
             .join('');
 
         const pad2 = (n) => String(n).padStart(2, '0');
@@ -11068,12 +11090,42 @@ const Admin = {
                     year: y,
                     iso: `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
                     offset,
-                    defaultDayType: defaults[key] || 'saturday',
+                    defaultDayType: defaults[key] || 'public_holiday',
                     whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
                 });
             }
             return out;
         };
+
+        const readRegionRow = (entry, code, fallbackDayType) => {
+            if (entry?.regions?.[code]) {
+                const row = entry.regions[code];
+                // Normalize legacy "rejected" ? deferred for UI grouping
+                if (row?.status === 'rejected') return { ...row, status: 'deferred' };
+                return row;
+            }
+            if (entry?.status === 'approved') {
+                return {
+                    status: 'approved',
+                    dayType: entry.regionDayTypes?.[code] || entry.defaultDayType || fallbackDayType,
+                    approvedAt: entry.approvedAt || null,
+                };
+            }
+            return { status: 'pending', dayType: entry?.defaultDayType || fallbackDayType };
+        };
+
+        const setHolidayTab = (tab) => {
+            holidayTab = tab;
+            tabPending?.classList.toggle('ring-2', tab === 'pending');
+            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
+            tabApproved?.classList.toggle('ring-2', tab === 'approved');
+            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
+            Admin.fetchHolidayApprovals();
+        };
+
+        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
+        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
+        setHolidayTab('pending');
 
         Admin.fetchHolidayApprovals = async () => {
             const secret = await Admin.getAuthKey();
@@ -11085,78 +11137,79 @@ const Admin = {
                 const data = res.ok ? await res.json() : {};
                 const approvals = (data && typeof data === 'object' && !data.error) ? data : {};
                 const uid = Admin.currentUser?.uid || '';
-                const now = Date.now();
                 const today = new Date();
                 const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                const enforceFrom = '2026-08-11';
-                const enforced = todayIso >= enforceFrom;
+                const enforced = todayIso >= '2026-08-11';
                 const enforceNote = document.getElementById('holiday-approvals-enforce-note');
                 if (enforceNote) {
                     enforceNote.textContent = enforced
-                        ? 'Enforcement is live: commuters only see notices after an admin approves. First approve wins.'
-                        : 'Commuter enforcement starts 11 Aug 2026. Until then, Women\'s Day / Observed still use the legacy notice path (seen dismissals still respected). You can approve early for later holidays.';
+                        ? 'Enforcement is live: commuters only see notices after their region is approved.'
+                        : 'Commuter enforcement starts 11 Aug 2026. You can approve regions early for later holidays.';
                 }
+
                 const candidates = upcomingHolidayCandidates();
                 let pendingCount = 0;
+                const pendingBlocks = [];
+                const approvedRows = [];
 
-                const cards = candidates.map((h) => {
+                candidates.forEach((h) => {
                     const entry = approvals[h.iso] || {};
-                    const approved = entry.status === 'approved';
-                    const deferredUntil = Number(entry.deferred?.[uid] || 0);
-                    const deferredForMe = !approved && deferredUntil > now;
-                    if (!approved && !deferredForMe) pendingCount += 1;
+                    const regionRows = regions.map((code) => {
+                        const row = readRegionRow(entry, code, h.defaultDayType);
+                        return { code, row, holiday: h };
+                    });
 
-                    const regionDayTypes = entry.regionDayTypes || {};
-                    const defaultDayType = entry.defaultDayType || h.defaultDayType;
-                    const regionSelects = regions.map((code) => `
-                        <label class="flex items-center justify-between gap-2 text-[10px]">
-                            <span class="font-bold text-gray-600 dark:text-gray-300 uppercase w-10">${code}</span>
-                            <select data-holiday-region="${code}" class="holiday-region-day flex-1 h-8 px-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" ${approved ? 'disabled' : ''}>
-                                ${dayTypeOptions(regionDayTypes[code] || defaultDayType)}
-                            </select>
-                        </label>
-                    `).join('');
+                    regionRows.forEach(({ code, row, holiday }) => {
+                        if (row.status === 'approved') {
+                            approvedRows.push({ code, row, holiday });
+                        } else {
+                            pendingCount += 1;
+                        }
+                    });
 
-                    const statusChip = approved
-                        ? `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Approved</span>`
-                        : deferredForMe
-                            ? `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Deferred</span>`
-                            : `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Needs approval</span>`;
+                    const pendingRegions = regionRows.filter(({ row }) => row.status !== 'approved');
+                    if (pendingRegions.length === 0) return;
 
-                    const actions = approved
-                        ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">Approved${entry.approvedByEmail ? ` by ${escapeHTML(String(entry.approvedByEmail).split('@')[0])}` : ''}. Notices can show.</p>`
-                        : deferredForMe
-                            ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">Hidden for you until tomorrow. Other admins can still approve.</p>`
-                            : `<div class="flex gap-2 mt-3">
-                                    <button type="button" class="holiday-approve-btn flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wider focus:outline-none" data-iso="${h.iso}">Approve</button>
-                                    <button type="button" class="holiday-defer-btn flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wider focus:outline-none" data-iso="${h.iso}">Defer</button>
-                               </div>`;
-
-                    return `
-                        <div class="holiday-approval-card bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl p-3" data-iso="${h.iso}" data-key="${h.key}" data-name="${escapeHTML(h.name)}" data-default="${defaultDayType}">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="min-w-0">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">${escapeHTML(h.whenLabel)}</p>
-                                    <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(h.name)}</p>
-                                    <p class="text-[10px] text-gray-500 font-mono mt-0.5">${escapeHTML(h.iso)}</p>
-                                </div>
-                                ${statusChip}
+                    pendingBlocks.push(`
+                        <div class="holiday-approval-card bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl p-3" data-iso="${h.iso}" data-key="${h.key}" data-name="${escapeHTML(h.name)}" data-default="${h.defaultDayType}">
+                            <div class="mb-2">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">${escapeHTML(h.whenLabel)}</p>
+                                <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(h.name)}</p>
+                                <p class="text-[10px] text-gray-500 font-mono mt-0.5">${escapeHTML(h.iso)}</p>
                             </div>
-                            <div class="mt-3 space-y-1.5 ${approved || deferredForMe ? 'opacity-70' : ''}">
-                                <label class="flex items-center justify-between gap-2 text-[10px]">
-                                    <span class="font-bold text-gray-600 dark:text-gray-300 uppercase">Default</span>
-                                    <select class="holiday-default-day flex-1 h-8 px-2 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" ${approved ? 'disabled' : ''}>
-                                        ${dayTypeOptions(defaultDayType)}
-                                    </select>
-                                </label>
-                                ${regionSelects}
+                            <div class="space-y-1.5">
+                                ${pendingRegions.map(({ code, row }) => `
+                                    <div class="holiday-region-row flex items-center gap-2" data-region="${code}">
+                                        <span class="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase w-9 shrink-0">${code}</span>
+                                        <select class="holiday-region-day flex-1 min-w-0 h-8 px-2 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
+                                            ${dayTypeOptions(row.dayType || h.defaultDayType)}
+                                        </select>
+                                        <button type="button" class="holiday-region-approve shrink-0 w-8 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center focus:outline-none" data-region="${code}" title="Approve ${code}" aria-label="Approve ${code}">${Admin.icon('check', 'w-4 h-4')}</button>
+                                        <button type="button" class="holiday-region-reject shrink-0 w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/40 text-gray-700 dark:text-gray-200 flex items-center justify-center focus:outline-none" data-region="${code}" title="Defer ${code}" aria-label="Defer ${code}">${Admin.icon('x', 'w-4 h-4')}</button>
+                                    </div>
+                                `).join('')}
                             </div>
-                            ${actions}
                         </div>
-                    `;
-                }).join('');
+                    `);
+                });
 
-                listDiv.innerHTML = cards || '<div class="text-xs text-gray-500 italic text-center py-4">No upcoming mapped holidays in the next 3 weeks.</div>';
+                const approvedHtml = approvedRows.length
+                    ? approvedRows.map(({ code, row, holiday }) => `
+                        <div class="bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3 flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} ù ${escapeHTML(code)}</p>
+                                <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(holiday.name)}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(HOLIDAY_DAY_TYPES.find((t) => t.value === row.dayType)?.label || row.dayType || 'ù')}</p>
+                            </div>
+                            <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">Approved</span>
+                        </div>
+                    `).join('')
+                    : '<div class="text-xs text-gray-500 italic text-center py-4">No approved regions yet.</div>';
+
+                listDiv.innerHTML = holidayTab === 'approved'
+                    ? approvedHtml
+                    : (pendingBlocks.join('') || '<div class="text-xs text-gray-500 italic text-center py-4">No pending regions in the next 3 weeks.</div>');
+
                 if (badge) {
                     if (pendingCount > 0) {
                         badge.textContent = String(pendingCount);
@@ -11166,44 +11219,56 @@ const Admin = {
                     }
                 }
 
-                listDiv.querySelectorAll('.holiday-approve-btn').forEach((btn) => {
+                const saveRegion = async (card, code, status, dayType) => {
+                    const iso = card?.dataset?.iso;
+                    if (!iso || !code) return;
+                    const secret2 = await Admin.getAuthKey();
+                    if (!secret2) return;
+                    // Atomic per-region write ù avoids full-document PUT races wiping sibling regions.
+                    const regionPayload = status === 'approved'
+                        ? {
+                            status: 'approved',
+                            dayType,
+                            approvedBy: uid,
+                            approvedAt: Date.now(),
+                        }
+                        : {
+                            status: 'deferred',
+                            dayType,
+                            deferredBy: uid,
+                            deferredAt: Date.now(),
+                        };
+                    const regionRes = await window.guardianFetch(
+                        `${dynamicEndpoint}holiday_approvals/${iso}/regions/${code}.json?auth=${secret2}`,
+                        { method: 'PUT', body: JSON.stringify(regionPayload) },
+                        10000
+                    );
+                    if (!regionRes.ok) throw new Error(`HTTP ${regionRes.status}`);
+                    // Best-effort holiday metadata (merge ù does not replace sibling regions).
+                    await window.guardianFetch(
+                        `${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`,
+                        {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                                dateKey: card.dataset.key || null,
+                                name: card.dataset.name || null,
+                                defaultDayType: card.dataset.default || dayType || 'public_holiday',
+                            }),
+                        },
+                        10000
+                    ).catch(() => {});
+                };
+
+                listDiv.querySelectorAll('.holiday-region-approve').forEach((btn) => {
                     btn.onclick = async () => {
                         const card = btn.closest('.holiday-approval-card');
-                        if (!card) return;
-                        const iso = card.dataset.iso;
-                        const defaultDayType = card.querySelector('.holiday-default-day')?.value || 'saturday';
-                        const regionDayTypes = {};
-                        card.querySelectorAll('.holiday-region-day').forEach((sel) => {
-                            regionDayTypes[sel.dataset.holidayRegion] = sel.value;
-                        });
+                        const code = btn.dataset.region;
+                        const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
+                        const dayType = sel?.value || 'public_holiday';
                         btn.disabled = true;
                         try {
-                            const secret2 = await Admin.getAuthKey();
-                            if (!secret2) return;
-                            const checkRes = await fetch(`${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`);
-                            const existing = checkRes.ok ? await checkRes.json() : null;
-                            if (existing && existing.status === 'approved') {
-                                if (typeof showToast === 'function') showToast('Already approved by another admin.', 'info');
-                                Admin.fetchHolidayApprovals();
-                                return;
-                            }
-                            const payload = {
-                                status: 'approved',
-                                dateKey: card.dataset.key,
-                                name: card.dataset.name,
-                                defaultDayType,
-                                regionDayTypes,
-                                approvedBy: uid,
-                                approvedByEmail: Admin.currentUser?.email || '',
-                                approvedAt: Date.now(),
-                                deferred: existing?.deferred || null,
-                            };
-                            const putRes = await window.guardianFetch(`${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`, {
-                                method: 'PUT',
-                                body: JSON.stringify(payload),
-                            }, 10000);
-                            if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
-                            if (typeof showToast === 'function') showToast('Holiday approved. Notices can show.', 'success');
+                            await saveRegion(card, code, 'approved', dayType);
+                            if (typeof showToast === 'function') showToast(`${code} approved`, 'success');
                             Admin.fetchHolidayApprovals();
                         } catch (e) {
                             if (typeof showToast === 'function') showToast('Approve failed', 'error');
@@ -11212,24 +11277,19 @@ const Admin = {
                     };
                 });
 
-                listDiv.querySelectorAll('.holiday-defer-btn').forEach((btn) => {
+                listDiv.querySelectorAll('.holiday-region-reject').forEach((btn) => {
                     btn.onclick = async () => {
-                        const iso = btn.dataset.iso;
-                        if (!iso || !uid) return;
+                        const card = btn.closest('.holiday-approval-card');
+                        const code = btn.dataset.region;
+                        const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
+                        const dayType = sel?.value || 'public_holiday';
                         btn.disabled = true;
                         try {
-                            const secret2 = await Admin.getAuthKey();
-                            if (!secret2) return;
-                            const until = Date.now() + (24 * 60 * 60 * 1000);
-                            const putRes = await window.guardianFetch(`${dynamicEndpoint}holiday_approvals/${iso}/deferred/${uid}.json?auth=${secret2}`, {
-                                method: 'PUT',
-                                body: JSON.stringify(until),
-                            }, 10000);
-                            if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
-                            if (typeof showToast === 'function') showToast('Deferred until tomorrow for you.', 'info');
+                            await saveRegion(card, code, 'rejected', dayType);
+                            if (typeof showToast === 'function') showToast(`${code} deferred`, 'info');
                             Admin.fetchHolidayApprovals();
                         } catch (e) {
-                            if (typeof showToast === 'function') showToast('Defer failed', 'error');
+                            if (typeof showToast === 'function') showToast('Update failed', 'error');
                             btn.disabled = false;
                         }
                     };
@@ -11297,6 +11357,16 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Force schedule type (per region) -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800 space-y-3">
+                    <div>
+                        <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force schedule type</span>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
+                    </div>
+                    <div id="sched-override-regions" class="space-y-3"></div>
+                    <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
+                </div>
+
                 <!-- Shadow-ban default experience (accordion, collapsed by default) -->
                 <div class="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="shadow-ban-default-header" class="w-full px-3 py-3 bg-violet-100/50 dark:bg-violet-900/40 text-left text-[10px] font-black text-violet-800 dark:text-violet-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-violet-200/50 dark:hover:bg-violet-900/60">
@@ -11306,7 +11376,7 @@ const Admin = {
                         <svg id="shadow-ban-default-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="shadow-ban-default-body" class="hidden p-4">
-                        <p class="text-[10px] text-violet-600 dark:text-violet-400 mb-3 leading-snug">Used when a ban has no per-user mode set. Per-ban choice in the Shadow ban dialog always wins.</p>
+                        <p class="text-[10px] text-violet-600 dark:text-violet-400 mb-3 leading-snug">Prefills the Shadow ban dialog. Per-ban mode is stored on the user/device (clients no longer read this global config publicly).</p>
                         <select id="shadow-ban-default-mode" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none shadow-sm mb-2">
                             <option value="offline">Fake offline / lie-fi</option>
                             <option value="freeze">Freeze / unresponsive</option>
@@ -11375,6 +11445,34 @@ const Admin = {
         const banDefaultHeader = document.getElementById('shadow-ban-default-header');
         const banDefaultBody = document.getElementById('shadow-ban-default-body');
         const banDefaultChevron = document.getElementById('shadow-ban-default-chevron');
+        const schedOverrideRegions = document.getElementById('sched-override-regions');
+        const schedOverrideSave = document.getElementById('sched-override-save');
+        const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const SCHED_DAY_TYPES = [
+            { value: 'public_holiday', label: 'Public Holiday' },
+            { value: 'saturday', label: 'Saturday' },
+            { value: 'weekday', label: 'Weekday' },
+            { value: 'sunday', label: 'Sunday (no service)' },
+        ];
+
+        if (schedOverrideRegions) {
+            schedOverrideRegions.innerHTML = SCHED_OVERRIDE_REGIONS.map((code) => `
+                <div class="sched-override-region bg-white/80 dark:bg-gray-900/50 rounded-lg border border-blue-100 dark:border-blue-900/40 p-3 space-y-2" data-region="${code}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-200">${code}</span>
+                        <label class="flex items-center gap-1.5 text-[10px] font-bold text-gray-600 dark:text-gray-300 cursor-pointer">
+                            <input type="checkbox" class="sched-override-active rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-region="${code}">
+                            Active
+                        </label>
+                    </div>
+                    <select class="sched-override-day w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
+                        ${SCHED_DAY_TYPES.map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
+                    </select>
+                    <input type="text" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
+                    <textarea class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
+                </div>
+            `).join('');
+        }
 
         if (nukeHeader) {
             nukeHeader.onclick = () => {
@@ -11428,7 +11526,11 @@ const Admin = {
                 }
 
                 try {
-                    const resBan = await fetch(`${dynamicEndpoint}config/shadow_ban_mode.json`);
+                    const banSecret = await Admin.getAuthKey();
+                    const banUrl = banSecret
+                        ? `${dynamicEndpoint}config/shadow_ban_mode.json?auth=${banSecret}`
+                        : `${dynamicEndpoint}config/shadow_ban_mode.json`;
+                    const resBan = await fetch(banUrl);
                     if (resBan.ok) {
                         const banCfg = await resBan.json();
                         const mode = (typeof trustNormalizeShadowBanMode === 'function')
@@ -11437,6 +11539,25 @@ const Admin = {
                         if (banModeSelect) banModeSelect.value = mode;
                     }
                 } catch (be) { /* optional config */ }
+
+                try {
+                    const resSched = await fetch(`${dynamicEndpoint}config/schedule_override.json`);
+                    if (resSched.ok) {
+                        const schedCfg = await resSched.json();
+                        const regionsCfg = schedCfg?.regions || {};
+                        SCHED_OVERRIDE_REGIONS.forEach((code) => {
+                            const r = regionsCfg[code] || {};
+                            const activeEl = schedOverrideRegions?.querySelector(`.sched-override-active[data-region="${code}"]`);
+                            const dayEl = schedOverrideRegions?.querySelector(`.sched-override-day[data-region="${code}"]`);
+                            const titleEl = schedOverrideRegions?.querySelector(`.sched-override-title[data-region="${code}"]`);
+                            const bodyEl = schedOverrideRegions?.querySelector(`.sched-override-body[data-region="${code}"]`);
+                            if (activeEl) activeEl.checked = !!r.active;
+                            if (dayEl && r.dayType) dayEl.value = r.dayType;
+                            if (titleEl) titleEl.value = r.title || '';
+                            if (bodyEl) bodyEl.value = r.body || '';
+                        });
+                    }
+                } catch (se) { /* optional config */ }
 
                 } catch(e) { console.warn("Failed to check system status"); }
         }
@@ -11466,6 +11587,42 @@ const Admin = {
                     if (typeof showToast === 'function') showToast(`Shadow-ban default: ${mode}`, 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save ban mode.', 'error');
+                }
+            };
+        }
+
+        if (schedOverrideSave && schedOverrideRegions) {
+            schedOverrideSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const regions = {};
+                    SCHED_OVERRIDE_REGIONS.forEach((code) => {
+                        regions[code] = {
+                            active: !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked,
+                            dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value || 'public_holiday',
+                            title: (schedOverrideRegions.querySelector(`.sched-override-title[data-region="${code}"]`)?.value || '').trim(),
+                            body: (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim(),
+                            updatedAt: Date.now(),
+                        };
+                    });
+                    const payload = {
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                        regions,
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/schedule_override.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    if (typeof showToast === 'function') showToast('Schedule overrides saved', 'success');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save schedule overrides.', 'error');
                 }
             };
         }

@@ -23,6 +23,11 @@ import {
 import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+import {
+    fetchScheduleOverride,
+    resolveDayTypeWithOverride,
+    maybePromptScheduleOverride,
+} from './schedule-override.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -907,6 +912,9 @@ export async function loadAllSchedules(force = false) {
         await fetchSpecialEventConfig(force);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
+        await fetchScheduleOverride(force);
+        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+
         // Ops overlays (ghost trains / disruption badges)
         const edgeCacheBucket = Math.floor(Date.now() / 300000);
         try {
@@ -1074,6 +1082,8 @@ export async function loadAllSchedules(force = false) {
                 sessionStorage.removeItem('nt_lifeboat_auto');
             } catch { /* ignore */ }
             if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
+            const baseType = window.__ntPreOverrideDayType || window.currentDayType || currentDayType;
+            maybePromptScheduleOverride(baseType).catch(() => { /* ignore */ });
         }
     }
 }
@@ -1416,8 +1426,11 @@ export function updateTime() {
                 || SPECIAL_DATES[dateKey];
             if (holidayType) newDayType = holidayType;
         }
+
+        const preOverrideDayType = newDayType;
+        newDayType = resolveDayTypeWithOverride(newDayType, $userRegion.get() || 'GP');
         
-        if (newDayType !== currentDayType) { 
+        if (newDayType !== currentDayType) {
             currentDayType = newDayType; 
             currentDayIndex = day; 
         } else { 
@@ -1426,11 +1439,14 @@ export function updateTime() {
 
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         let displayType = newDayType === 'sunday' ? 'No Service'
-            : (newDayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule');
+            : (newDayType === 'public_holiday' ? 'Public Holiday Schedule'
+            : (newDayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
         if (dateKey && HOLIDAY_NAMES[dateKey]) {
             displayType = newDayType === 'sunday'
                 ? `${HOLIDAY_NAMES[dateKey]} · No Service`
-                : `${HOLIDAY_NAMES[dateKey]} Schedule`;
+                : (newDayType === 'public_holiday'
+                    ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
+                    : `${HOLIDAY_NAMES[dateKey]} Schedule`);
         }
         if (typeof document !== 'undefined') {
             const currentDayEl = document.getElementById('current-day');
@@ -1447,6 +1463,7 @@ export function updateTime() {
             window.currentTime = currentTime;
             window.currentDayType = currentDayType;
             window.currentDayIndex = currentDayIndex;
+            window.__ntPreOverrideDayType = preOverrideDayType;
         }
 
         // --- MINUTE CHANGE THROTTLED RECALCULATION & LIVE REACTION ---
@@ -1510,6 +1527,8 @@ if (typeof window !== 'undefined') {
     window.ensureMapImageLoaded = ensureMapImageLoaded;
     window.checkKillswitch = checkKillswitch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
+    window.fetchScheduleOverride = fetchScheduleOverride;
+    window.updateTime = updateTime;
     window.probeReachability = probeReachability;
     window.ensureReachabilityProbed = ensureReachabilityProbed;
     window.resetReachabilityProbe = resetReachabilityProbe;

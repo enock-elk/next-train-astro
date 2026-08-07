@@ -360,25 +360,15 @@ export function computeBanUntil(durationMs) {
 }
 
 async function fetchGlobalShadowBanMode() {
+    // Global default is admin-only (not publicly readable). Per-ban
+    // flags.shadowBanMode still wins; otherwise use the safe default.
     const now = Date.now();
     if (_globalBanModeCache && now - _globalBanModeFetchedAt < 60_000) {
         return _globalBanModeCache;
     }
-    try {
-        const res = await fetch(`${DYNAMIC_BASE_URL}config/shadow_ban_mode.json?t=${Math.floor(now / 60_000)}`);
-        if (!res.ok) throw new Error('no config');
-        const data = await res.json();
-        const mode = normalizeShadowBanMode(
-            (data && typeof data === 'object' ? data.mode : data) || 'offline'
-        );
-        _globalBanModeCache = mode;
-        _globalBanModeFetchedAt = now;
-        return mode;
-    } catch {
-        _globalBanModeCache = 'offline';
-        _globalBanModeFetchedAt = now;
-        return 'offline';
-    }
+    _globalBanModeCache = 'offline';
+    _globalBanModeFetchedAt = now;
+    return 'offline';
 }
 
 /**
@@ -550,7 +540,7 @@ function applyBanModeLost() {
 
 /**
  * Cloaked enforcement for shadow-banned devices/accounts.
- * Mode comes from per-ban flags.shadowBanMode, else config/shadow_ban_mode.json.
+ * Mode comes from per-ban flags.shadowBanMode, else safe default (offline).
  * Never tells the user they are banned.
  */
 export async function applyShadowBanCloak() {

@@ -9,7 +9,7 @@
  * legacy path.
  */
 import { SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
-import { safeStorage } from './utils.js';
+import { safeStorage, scheduleDayTypeLabel } from './utils.js';
 import { openSmoothModal, closeSmoothModal } from './ui.js';
 import { isReloadPending } from './session-stability.js';
 import { $userRegion } from '../store.js';
@@ -36,10 +36,7 @@ function dateKeyFromDate(d) {
 }
 
 function scheduleLabelForType(dayType) {
-    if (dayType === 'sunday') return 'No Sunday service';
-    if (dayType === 'saturday') return 'Saturday / public-holiday timetable';
-    if (dayType === 'weekday') return 'Weekday timetable';
-    return 'Special schedule';
+    return scheduleDayTypeLabel(dayType);
 }
 
 /**
@@ -58,10 +55,10 @@ export function getUpcomingUnseenHolidays(now = new Date()) {
         if (!name) continue;
         const y = d.getFullYear();
         const iso = `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-        // Legacy path through Women's Day Observed; approval gate from 11 Aug 2026.
-        if (!canShowHolidayNotice(iso, now)) continue;
+        // Legacy path through Women's Day Observed; approval gate from 11 Aug 2026 (per region).
+        if (!canShowHolidayNotice(iso, region, now)) continue;
 
-        const dayType = resolveHolidayDayType(key, region, y) || SPECIAL_DATES?.[key] || 'saturday';
+        const dayType = resolveHolidayDayType(key, region, y) || SPECIAL_DATES?.[key] || 'public_holiday';
 
         let seenKey;
         let phase;
@@ -135,23 +132,22 @@ export function maybeShowHolidayNotice() {
         if (safeStorage.getItem('welcomeSeen') !== 'true') return false;
 
         const stabilized = typeof window !== 'undefined' && !!window._appStabilized && !isReloadPending();
+        if (!holidayStabilityWaitStartedAt) holidayStabilityWaitStartedAt = Date.now();
+        const waitedTooLong = (Date.now() - holidayStabilityWaitStartedAt) >= HOLIDAY_STABILITY_MAX_WAIT_MS;
+
         if (!stabilized) {
-            if (!holidayStabilityWaitStartedAt) holidayStabilityWaitStartedAt = Date.now();
-            if (Date.now() - holidayStabilityWaitStartedAt < HOLIDAY_STABILITY_MAX_WAIT_MS) {
-                setTimeout(() => maybeShowHolidayNotice(), 500);
-            }
+            if (!waitedTooLong) setTimeout(() => maybeShowHolidayNotice(), 500);
+            else holidayStabilityWaitStartedAt = 0;
+            return false;
+        }
+
+        // Don't fight other overlays during settle (same wait clock as boot)
+        if (document.body.classList.contains('modal-active')) {
+            if (!waitedTooLong) setTimeout(() => maybeShowHolidayNotice(), 800);
+            else holidayStabilityWaitStartedAt = 0;
             return false;
         }
         holidayStabilityWaitStartedAt = 0;
-
-        // Don't fight other overlays during settle (cap retries via the same wait clock)
-        if (document.body.classList.contains('modal-active')) {
-            if (!holidayStabilityWaitStartedAt) holidayStabilityWaitStartedAt = Date.now();
-            if (Date.now() - holidayStabilityWaitStartedAt < HOLIDAY_STABILITY_MAX_WAIT_MS) {
-                setTimeout(() => maybeShowHolidayNotice(), 800);
-            }
-            return false;
-        }
 
         // Load approvals when enforcement is live; before 11 Aug this is a no-op cache.
         loadHolidayApprovals().then(() => {
@@ -207,7 +203,8 @@ function escapeSafe(s) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 if (typeof window !== 'undefined') {

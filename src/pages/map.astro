@@ -1,10 +1,13 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, normalizeBase, withBase } from '../lib/config.js';
+import { ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, REGION_SEO, normalizeBase, withBase } from '../lib/config.js';
 
 const title = 'Metrorail Network Map: Active Routes | Metrorail Next Train';
 const description = 'Interactive Metrorail network map for Gauteng, Western Cape, KZN, and Eastern Cape. View active train routes, stations, and live service disruptions.';
 const base = normalizeBase(import.meta.env.BASE_URL);
+const regionSeoSlugs = Object.fromEntries(
+  Object.entries(REGION_SEO).map(([code, meta]) => [code, meta.slug])
+);
 ---
 
 <ContentLayout
@@ -22,8 +25,8 @@ const base = normalizeBase(import.meta.env.BASE_URL);
       .dark body, .dark html { background-color: #111827; }
       #map { height: 100vh; width: 100%; z-index: 1; position: absolute; top: 0; left: 0; }
       #map-top-controls {
-        position: fixed; top: 16px; right: 16px; z-index: 1001;
-        display: flex; align-items: flex-start; gap: 0.5rem;
+        position: fixed; top: 12px; right: 12px; z-index: 1001;
+        display: flex; align-items: flex-start; gap: 0.375rem;
         pointer-events: none;
       }
       html.nt-map-embedded #map-top-controls {
@@ -31,26 +34,59 @@ const base = normalizeBase(import.meta.env.BASE_URL);
         right: 12px;
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
-      .legend-container {
-        position: relative; display: none; pointer-events: auto;
-        max-width: min(250px, calc(100vw - 5.5rem));
+      .map-chrome-btn {
+        pointer-events: auto;
+        width: 2.25rem; height: 2.25rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: #fff; border-radius: 0.65rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        border: 1px solid #d1d5db; color: #4b5563;
+        transition: background-color 0.15s ease;
+        flex-shrink: 0;
       }
-      .legend-panel {
+      .dark .map-chrome-btn {
+        background: #1f2937; border-color: #4b5563; color: #d1d5db;
+      }
+      .map-chrome-btn:hover { background: #f9fafb; }
+      .dark .map-chrome-btn:hover { background: #374151; }
+      .region-picker, .legend-container {
+        position: relative; pointer-events: auto;
+      }
+      .legend-container { display: none; }
+      .region-panel, .legend-panel {
         display: none;
-        position: absolute; top: calc(100% + 0.5rem); right: 0;
-        width: min(250px, calc(100vw - 5.5rem));
-        background: rgba(255, 255, 255, 0.95);
+        position: absolute; top: calc(100% + 0.4rem); right: 0;
+        width: min(220px, calc(100vw - 5rem));
+        background: rgba(255, 255, 255, 0.96);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        border-radius: 0.75rem; padding: 0.75rem;
+        border-radius: 0.75rem; padding: 0.5rem;
         font-family: 'Inter', sans-serif; color: #1f2937;
         border: 1px solid #e5e7eb;
         max-height: min(60vh, 420px); overflow-y: auto;
       }
-      .dark .legend-panel {
-        background: rgba(31, 41, 55, 0.95); color: #f3f4f6; border-color: #374151;
+      .legend-panel { width: min(250px, calc(100vw - 5rem)); padding: 0.75rem; }
+      .dark .region-panel, .dark .legend-panel {
+        background: rgba(31, 41, 55, 0.96); color: #f3f4f6; border-color: #374151;
       }
+      .region-picker.is-open .region-panel,
       .legend-container.is-open .legend-panel { display: block; }
-      .legend-content { /* list body filled by map-app.js */ }
+      .region-option {
+        display: flex; align-items: center; gap: 0.5rem;
+        width: 100%; text-align: left;
+        padding: 0.55rem 0.65rem; border-radius: 0.5rem;
+        font-size: 12px; font-weight: 700; color: inherit;
+        background: transparent; border: 0; cursor: pointer;
+      }
+      .region-option:hover { background: rgba(59, 130, 246, 0.12); }
+      .region-option.is-active { background: rgba(37, 99, 235, 0.16); color: #1d4ed8; }
+      .dark .region-option.is-active { color: #93c5fd; }
+      .region-code {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 1.75rem; height: 1.75rem; border-radius: 0.4rem;
+        font-size: 10px; font-weight: 900; letter-spacing: 0.04em;
+        background: #eff6ff; color: #1d4ed8; flex-shrink: 0;
+      }
+      .dark .region-code { background: #1e3a8a; color: #bfdbfe; }
       .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; font-weight: 600; }
       .legend-item:last-child { margin-bottom: 0; }
       .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
@@ -121,9 +157,9 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     </div>
   </noscript>
 
-  <div id="map-back-wrap" class="fixed top-4 left-4 z-[1001]">
-    <a href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg flex items-center transition-transform transform active:scale-95 text-sm">
-      <svg class="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+  <div id="map-back-wrap" class="fixed top-3 left-3 z-[1001]">
+    <a id="map-back-link" href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-1.5 px-2.5 border border-gray-300 dark:border-gray-600 rounded-[0.65rem] shadow-lg inline-flex items-center transition-transform transform active:scale-95 text-[11px] leading-none">
+      <svg class="w-4 h-4 mr-1 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
       Back
     </a>
   </div>
@@ -165,19 +201,31 @@ const base = normalizeBase(import.meta.env.BASE_URL);
     </div>
   </div>
 
+  <!-- Order: Back (left) · Region · Theme · Network Lines -->
   <div id="map-top-controls" class="pointer-events-none">
+    <div class="region-picker" id="region-picker">
+      <button type="button" id="region-toggle-btn" class="map-chrome-btn font-black text-[11px] tracking-wide text-blue-700 dark:text-blue-300" aria-expanded="false" aria-controls="region-panel" aria-label="Change map region">
+        <span id="region-toggle-label">GP</span>
+      </button>
+      <div id="region-panel" class="region-panel" role="menu" aria-label="Map regions">
+        <button type="button" class="region-option" data-region="GP" role="menuitem"><span class="region-code">GP</span><span>Gauteng</span></button>
+        <button type="button" class="region-option" data-region="WC" role="menuitem"><span class="region-code">WC</span><span>Western Cape</span></button>
+        <button type="button" class="region-option" data-region="KZN" role="menuitem"><span class="region-code">KZN</span><span>KwaZulu-Natal</span></button>
+        <button type="button" class="region-option" data-region="EC" role="menuitem"><span class="region-code">EC</span><span>Eastern Cape</span></button>
+      </div>
+    </div>
+    <button id="custom-theme-btn" type="button" class="map-chrome-btn text-amber-500" aria-label="Toggle theme">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
     <div class="legend-container" id="legend-container">
-      <button type="button" id="legend-toggle-btn" onclick="toggleLegend()" class="h-11 inline-flex items-center gap-2 px-3.5 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" aria-expanded="false" aria-controls="legend-panel">
-        <span class="font-black text-[11px] uppercase tracking-widest whitespace-nowrap">Network Lines</span>
-        <svg id="legend-icon" class="legend-chevron w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+      <button type="button" id="legend-toggle-btn" onclick="toggleLegend()" class="h-9 inline-flex items-center gap-1.5 px-2.5 bg-white dark:bg-gray-800 rounded-[0.65rem] shadow-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none pointer-events-auto" aria-expanded="false" aria-controls="legend-panel">
+        <span class="font-black text-[10px] uppercase tracking-widest whitespace-nowrap">Network Lines</span>
+        <svg id="legend-icon" class="legend-chevron w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
       </button>
       <div id="legend-panel" class="legend-panel" role="region" aria-label="Network lines legend">
         <div id="legend-content" class="legend-content"></div>
       </div>
     </div>
-    <button id="custom-theme-btn" type="button" class="pointer-events-auto w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600 text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none shrink-0" aria-label="Toggle theme">
-      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-    </button>
   </div>
 
   <div class="fixed bottom-6 right-4 z-[1000] pointer-events-none">
@@ -188,13 +236,14 @@ const base = normalizeBase(import.meta.env.BASE_URL);
 
   <div id="map" role="application" aria-label="Metrorail network map"></div>
 
-  <script is:inline define:vars={{ ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, APP_BASE: base }}>
+  <script is:inline define:vars={{ ROUTES, REGIONS, PIPELINE_SOURCES, DYNAMIC_BASE_URL, APP_VERSION, APP_BASE: base, REGION_SEO_SLUGS: regionSeoSlugs }}>
     window.ROUTES = ROUTES;
     window.REGIONS = REGIONS;
     window.PIPELINE_SOURCES = PIPELINE_SOURCES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.APP_VERSION = APP_VERSION;
     window.APP_BASE = APP_BASE;
+    window.REGION_SEO_SLUGS = REGION_SEO_SLUGS;
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script is:inline src={withBase('js/map-app.js')}></script>

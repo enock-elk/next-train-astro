@@ -160,6 +160,10 @@ export async function applyMapDeepLink() {
     if (!link || link.kind !== 'map') return false;
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
+    if (typeof window.showToast === 'function') {
+        window.showToast('Opening shared link...', 'info', 5000);
+    }
+
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
@@ -186,6 +190,9 @@ export async function applyMapDeepLink() {
         if (mapImage) mapImage.style.transform = 'translate(0px, 0px) scale(1)';
         if (typeof window.trackAnalyticsEvent === 'function') {
             window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
+        }
+        if (typeof window.showToast === 'function') {
+            window.showToast('Opened shared network map', 'success', 2000);
         }
         return true;
     };

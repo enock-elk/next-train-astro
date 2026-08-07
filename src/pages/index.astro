@@ -9,7 +9,7 @@ import WelcomeModal from '../components/WelcomeModal.astro';
 import PlannerModals from '../components/PlannerModals.astro';
 import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
-import { APP_VERSION } from '../lib/config.js';
+import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
 const pageTitle = 'Metrorail Next Train | 2026 Train Schedules for South Africa';
@@ -123,6 +123,11 @@ const faqLd = {
     <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
         <img src="/icons/loading-logo.png" alt="" class="w-16 h-16 mb-4 animate-pulse" width="64" height="64" />
         <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
+        <a
+            href={withBase('help.html') + '?reason=boot'}
+            class="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 underline underline-offset-2"
+            data-nt-help-escape="1"
+        >App stuck? Get help</a>
     </div>
 
     <!-- MAIN APP — fills device height; active tab expands into remaining space -->
@@ -196,7 +201,7 @@ const faqLd = {
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
@@ -213,9 +218,17 @@ const faqLd = {
     const loaderImg = document.querySelector('#loading-overlay img');
     if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo.png'));
 
-    // Never lock the UI behind schedule downloads (slow/offline must still reach chrome).
-    revealAppShell();
-    setTimeout(revealAppShell, 900);
+    // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
+    // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            revealAppShell();
+        });
+    });
+    setTimeout(revealAppShell, 700);
+
+    // Early reachability probe — radio up ≠ usable internet
+    try { ensureReachabilityProbed(); } catch (e) { /* ignore */ }
 
     import { initPlanner, applyPlannerDeepLink } from '../lib/planner-ui.js';
     import '../lib/renderer.js';
@@ -238,8 +251,10 @@ const faqLd = {
         applyMapDeepLink
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
+    import { initRecoveryWatchdog } from '../lib/recovery.js';
 
     window.openLegal = openLegal;
+    initRecoveryWatchdog();
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();

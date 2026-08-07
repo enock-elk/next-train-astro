@@ -155,9 +155,30 @@ export function enqueueSuccessfulTripPlan(entry) {
     }
 }
 
+/** Collapse duplicate searches within one flush batch (same OD / day / dep). */
+function dedupeTripsForBatch(trips) {
+    const seen = new Set();
+    const out = [];
+    for (const t of trips || []) {
+        if (!t?.origin || !t?.destination) continue;
+        const key = [
+            String(t.origin).toUpperCase(),
+            String(t.destination).toUpperCase(),
+            String(t.dayType || ''),
+            String(t.region || ''),
+            String(t.depTime || ''),
+        ].join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(t);
+    }
+    return out;
+}
+
 /**
  * Flush queued trip plans to RTDB. Only clears local queue after a successful write.
- * Takes the first TRIP_FLUSH_SIZE (or all if fewer when forced) and leaves any remainder.
+ * Still waits for TRIP_FLUSH_SIZE queue items, then writes unique trips only.
+ * A later batch from the same user can log the same OD again.
  */
 export async function flushTripPlanQueue(force = false) {
     if (flushInFlight) return flushInFlight;
@@ -167,12 +188,19 @@ export async function flushTripPlanQueue(force = false) {
         if (!queue.length) return;
         if (!force && queue.length < TRIP_FLUSH_SIZE) return;
 
-        const batch = queue.slice(0, TRIP_FLUSH_SIZE);
+        const rawBatch = queue.slice(0, TRIP_FLUSH_SIZE);
         const remainder = queue.slice(TRIP_FLUSH_SIZE);
+        const batch = dedupeTripsForBatch(rawBatch);
+        if (!batch.length) {
+            // All duplicates — drop the raw slice locally so the queue can progress
+            writeTripQueue(remainder.slice(-TRIP_QUEUE_HARD_CAP));
+            return;
+        }
         const batchId = uid();
         const did = deviceId();
         const payload = {
             count: batch.length,
+            rawCount: rawBatch.length,
             flushedAt: Date.now(),
             userId: did,
             deviceId: did,

@@ -61,6 +61,8 @@ export async function applyRouteDeepLink() {
 
     if (link.fromSnapshot) consumeShareDeeplinkSnapshot();
 
+    showToast('Opening shared link...', 'info', 5000);
+
     const returning = safeStorage.getItem('welcomeSeen') === 'true';
     const defaultKey = 'defaultRoute_' + route.region;
     const existingDefault = safeStorage.getItem(defaultKey);

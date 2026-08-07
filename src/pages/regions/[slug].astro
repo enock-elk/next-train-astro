@@ -19,10 +19,18 @@ const entry = getSeoRegionBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const title = `${entry.title} Timetables | Metrorail Next Train`;
-const description = `${entry.blurb} Browse corridor pages and open the live Metrorail Next Train board.`;
+const description = `${entry.blurb} Browse corridor pages, view the regional network map, and open the live Metrorail Next Train board.`;
 const canonicalPath = `/regions/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
+const mapHref = withBase(`map.html?region=${encodeURIComponent(entry.region)}`);
+const REGION_MAP_IMAGES = {
+  GP: 'images/network-map.png',
+  WC: 'images/network-map_wc.png',
+  KZN: 'images/network-map_kzn.png',
+  EC: 'images/network-map_ec.png',
+};
+const mapImageSrc = withBase(REGION_MAP_IMAGES[entry.region] || REGION_MAP_IMAGES.GP);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -56,6 +64,38 @@ const jsonLd = {
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {entry.blurb}
       </p>
+
+      <section class="mt-8">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          {entry.regionLabel} network map
+        </h2>
+        <a
+          href={mapHref}
+          class="block group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
+        >
+          <img
+            src={mapImageSrc}
+            alt={`${entry.regionLabel} Metrorail network map`}
+            class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2]"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            width="1200"
+            height="800"
+          />
+          <div class="px-4 py-3 flex items-center justify-between gap-3">
+            <span class="text-sm font-bold text-slate-900 dark:text-white">
+              Open interactive map · {entry.region}
+            </span>
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 group-hover:underline">
+              Explore
+            </span>
+          </div>
+        </a>
+        <p class="mt-2 text-[11px] text-slate-500">
+          Live routes, stations, and disruptions for {entry.regionLabel}.
+        </p>
+      </section>
 
       {entry.corridors.length > 0 && (
         <section class="mt-10">
@@ -97,12 +137,20 @@ const jsonLd = {
         </ul>
       </section>
 
-      <a
-        href={withBase(`/?region=${encodeURIComponent(entry.region)}`)}
-        class="mt-10 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 transition-colors"
-      >
-        Open Next Train · {entry.regionLabel}
-      </a>
+      <div class="mt-10 grid gap-2 sm:grid-cols-2">
+        <a
+          href={mapHref}
+          class="flex w-full items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold py-3.5 transition-colors"
+        >
+          Interactive map · {entry.region}
+        </a>
+        <a
+          href={withBase(`/?region=${encodeURIComponent(entry.region)}`)}
+          class="flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 transition-colors"
+        >
+          Open Next Train · {entry.regionLabel}
+        </a>
+      </div>
       <p class="mt-2 text-center text-[11px] text-slate-500">
         First visit suggests {entry.regionLabel}. Returning visitors keep their saved setup.
       </p>

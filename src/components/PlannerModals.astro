@@ -26,20 +26,11 @@ import { withBase } from '../lib/config.js';
         </div>
         
         <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative cursor-grab active:cursor-grabbing flex items-center justify-center">
-            <img id="map-image" src="" data-map-src={withBase('images/network-map.png')} alt="Metrorail Network Map" class="w-full h-full object-contain transition-transform duration-75 origin-center" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+            <img id="map-image" data-map-src={withBase('images/network-map.png')} alt="Metrorail Network Map" class="w-full h-full object-contain transition-transform duration-75 origin-center" loading="lazy" decoding="async" onerror="if(!this.getAttribute('src'))return;this.style.display='none';var f=this.nextElementSibling;if(f){f.classList.remove('hidden');f.style.display='flex';}">
             <div class="hidden flex-col items-center justify-center p-8 text-center text-gray-500 absolute inset-0">
                 <svg class="w-12 h-12 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 <p class="font-bold">Map image not found.</p>
             </div>
-        </div>
-
-        <div class="absolute bottom-20 right-4 flex flex-col space-y-2 z-30">
-            <button id="map-zoom-in" class="bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition" aria-label="Zoom In">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-            </button>
-            <button id="map-zoom-out" class="bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition" aria-label="Zoom Out">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
-            </button>
         </div>
 
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative">

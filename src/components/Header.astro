@@ -27,7 +27,7 @@
         <h1 id="app-title" class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 select-none cursor-pointer tracking-tighter leading-none mb-2 drop-shadow-sm">Next Train</h1>
 
         <div class="flex flex-col items-center mt-0.5">
-            <p id="current-day" class="text-sm font-bold text-gray-500 dark:text-gray-400 leading-tight">Loading...</p>
+            <p id="current-day" class="text-sm font-bold text-gray-500 dark:text-gray-400 leading-tight">Getting schedules…</p>
             <!-- Sim clock only — diagnostic, shown by logic.js when $isSimMode -->
             <p id="current-time" class="hidden mt-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400 tabular-nums" aria-hidden="true"></p>
         </div>
@@ -38,6 +38,23 @@
     <button id="open-settings-gear-btn" type="button" class="hidden" tabindex="-1" aria-hidden="true"></button>
 </div>
 
+<script is:inline>
+    // Instant day label so cold boot never shows a blank “Loading…” shell
+    (function () {
+      try {
+        var el = document.getElementById('current-day');
+        if (!el) return;
+        var names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        var d = new Date();
+        var day = d.getDay();
+        var type = day === 0 ? 'No Service' : (day === 6 ? 'Saturday Schedule' : 'Weekday Schedule');
+        var typeClass = day === 0
+          ? 'font-bold text-red-600 dark:text-red-400 ml-1'
+          : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
+        el.innerHTML = names[day] + ' <span class="' + typeClass + '">' + type + '</span>';
+      } catch (e) { /* keep Getting schedules… */ }
+    })();
+</script>
 <script>
     // @ts-nocheck
     const openSettings = () => {

@@ -19,7 +19,7 @@ const ORIGIN = 'https://nexttrain.co.za';
 /** Public indexable pages (must match public/sitemap.xml core set). */
 const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'routes.html'];
 /** Must exist but must never be indexed (private / system). */
-const NOINDEX = ['offline.html', '404.html', 'status.html', 'marketing.html'];
+const NOINDEX = ['offline.html', 'help.html', '404.html', 'status.html', 'marketing.html'];
 /** Legacy corridors that must keep stable slugs after SEO expansion. */
 const STABLE_ROUTE_SLUGS = [
   'routes/pretoria-to-pienaarspoort.html',
@@ -97,10 +97,13 @@ for (const file of [...INDEXABLE, ...NOINDEX, ...seoLandings]) {
   if (!existsSync(path)) continue;
   const html = readFileSync(path, 'utf8');
 
-  const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
-  const expected = file === 'index.html' ? `${ORIGIN}/` : `${ORIGIN}/${file}`;
-  if (!canonical) fail(`/${file} has no canonical tag`);
-  else if (canonical !== expected) fail(`/${file} canonical is ${canonical}, want ${expected}`);
+  // Static lifeboat (public/help.html) is intentionally bare — no Astro layout/canonical.
+  if (file !== 'help.html') {
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+    const expected = file === 'index.html' ? `${ORIGIN}/` : `${ORIGIN}/${file}`;
+    if (!canonical) fail(`/${file} has no canonical tag`);
+    else if (canonical !== expected) fail(`/${file} canonical is ${canonical}, want ${expected}`);
+  }
 
   const robots = html.match(/<meta name="robots" content="([^"]+)"/)?.[1] || '';
   if (NOINDEX.includes(file) && !robots.includes('noindex')) {
@@ -126,7 +129,7 @@ if (!existsSync(sitemapPath)) {
     if (!sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml missing SEO landing ${loc}`);
   }
   for (const file of NOINDEX) {
-    if (file === '404.html' || file === 'offline.html') continue;
+    if (file === '404.html' || file === 'offline.html' || file === 'help.html') continue;
     const loc = `${ORIGIN}/${file}`;
     if (sitemap.includes(loc)) fail(`sitemap.xml must not list private page ${loc}`);
   }
@@ -172,7 +175,7 @@ if (!existsSync(swPath)) {
   fail('sw.js not emitted — PWA integration did not run');
 } else {
   const sw = readFileSync(swPath, 'utf8');
-  for (const page of ['guide.html', 'map.html', 'offline.html', 'routes.html']) {
+  for (const page of ['guide.html', 'map.html', 'offline.html', 'help.html', 'routes.html']) {
     if (!sw.includes(`"${page}"`) && !sw.includes(`'${page}'`)) {
       fail(`sw.js precache missing ${page} — offline cold open will fail`);
     }
@@ -190,8 +193,9 @@ if (!existsSync(swPath)) {
       fail('sw.js must not precache private status.html');
     }
   }
-  if (!sw.includes('offline.html')) {
-    fail('sw.js must reference offline.html as navigate fallback');
+  // Navigate precacheFallback is the self-contained lifeboat (public/help.html)
+  if (!sw.includes('help.html')) {
+    fail('sw.js must reference help.html as navigate fallback / lifeboat');
   }
   if (/\{url:\\?"js\/admin\.js\\?"/.test(sw) || sw.includes('url:"js/admin.js"') || sw.includes('url:"/js/admin.js"')) {
     fail('sw.js must not precache js/admin.js — admin is lazy-loaded on unlock only');

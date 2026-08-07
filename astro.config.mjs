@@ -87,9 +87,10 @@ export default defineConfig({
           },
         ],
         // navigateFallback is NOT "show when offline" — Workbox serves it for ANY
-        // navigation URL missing from the precache (even while online). Pointing it
-        // at /offline made refreshes land on the offline page. Use NetworkFirst +
-        // precacheFallback so /offline only appears when the network truly fails.
+        // navigation URL missing from the precache (even while online). Use
+        // NetworkFirst + precacheFallback so the lifeboat only appears when the
+        // network truly fails (or the navigate can't be satisfied from cache).
+        // help.html is a self-contained recovery page (reset + contact) in public/.
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
@@ -98,7 +99,7 @@ export default defineConfig({
               cacheName: 'pages',
               networkTimeoutSeconds: 3,
               precacheFallback: {
-                fallbackURL: `${baseWithSlash}offline.html`,
+                fallbackURL: `${baseWithSlash}help.html`,
               },
             },
           },

@@ -7,9 +7,17 @@
  */
 
 import { safeStorage } from './utils.js';
-import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS } from './config.js';
+import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId } from '../store.js';
 import { markPendingReload } from './session-stability.js';
+import {
+    helpUrl,
+    mailtoSupportUrl,
+    whatsappSupportUrl,
+    stashLastCrash,
+    SUPPORT_EMAIL,
+    SUPPORT_WHATSAPP_DISPLAY,
+} from './recovery.js';
 
 
 // --- GLOBAL HAPTIC ENGINE ---
@@ -574,8 +582,21 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
 
 // --- LIGHTBOX ENGINE ---
+function resetMapImageVisibility(mapImg) {
+    if (!mapImg) return;
+    // Empty src / prior failed loads set display:none via onerror — clear before swap
+    mapImg.style.display = '';
+    const fallback = mapImg.nextElementSibling;
+    if (fallback instanceof HTMLElement) {
+        fallback.style.display = 'none';
+        fallback.classList.add('hidden');
+    }
+}
+
 export function openLightbox(url) {
     if (typeof window === 'undefined') return;
+    const src = typeof url === 'string' ? url.trim() : '';
+    if (!src) return;
     triggerHaptic();
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');
     lockBackgroundScroll();
@@ -588,12 +609,20 @@ export function openLightbox(url) {
         window._isLightboxMode = true;
         mapModal.classList.add('!z-[160]');
         
-        // Save original map states for the Teardown Hook
-        if (!window._originalMapSrc) window._originalMapSrc = mapImg.getAttribute('src');
-        if (mapTitle && !window._originalMapTitle) window._originalMapTitle = mapTitle.textContent;
+        // Save original map states for the Teardown Hook (once per lightbox session)
+        if (window._originalMapSrc == null) {
+            const attrSrc = mapImg.getAttribute('src') || '';
+            window._originalMapSrc = attrSrc || mapImg.dataset.mapSrc || '';
+        }
+        if (mapTitle && window._originalMapTitle == null) {
+            window._originalMapTitle = mapTitle.textContent;
+        }
         
         if (mapTitle) mapTitle.textContent = "Image Preview";
-        mapImg.setAttribute('src', url);
+        // Un-hide before assigning — sticky onerror display:none was blanking previews
+        resetMapImageVisibility(mapImg);
+        mapImg.alt = 'Image Preview';
+        mapImg.src = src;
         if (typeof window.resetMap === 'function') window.resetMap();
         else mapImg.style.transform = 'translate(0px, 0px) scale(1)';
         
@@ -678,9 +707,18 @@ export function closeLightbox(fromPopState = false) {
             const mapTitle = document.getElementById('map-modal-title');
             
             if (mapModal) mapModal.classList.remove('!z-[160]');
-            if (mapImg && window._originalMapSrc) mapImg.setAttribute('src', window._originalMapSrc);
-            if (mapTitle && window._originalMapTitle) mapTitle.textContent = window._originalMapTitle;
-            if (mapImg) mapImg.style.transform = 'translate(0px, 0px) scale(1)';
+            if (mapImg) {
+                const restoreSrc = window._originalMapSrc || mapImg.dataset.mapSrc || '';
+                // Prefer lazy empty until Network Map opens again (avoid empty-src onerror hide)
+                if (restoreSrc) mapImg.setAttribute('src', restoreSrc);
+                else mapImg.removeAttribute('src');
+                resetMapImageVisibility(mapImg);
+                mapImg.alt = 'Metrorail Network Map';
+                mapImg.style.transform = 'translate(0px, 0px) scale(1)';
+            }
+            if (mapTitle && window._originalMapTitle != null) {
+                mapTitle.textContent = window._originalMapTitle;
+            }
             
             const closeBtn1 = document.getElementById('close-map-btn');
             const closeBtn2 = document.getElementById('close-map-btn-2');
@@ -695,6 +733,8 @@ export function closeLightbox(fromPopState = false) {
             // Re-bind map viewer close handlers after lightbox hijack
             if (typeof window.setupMapLogic === 'function') window.setupMapLogic();
             window._isLightboxMode = false;
+            window._originalMapSrc = null;
+            window._originalMapTitle = null;
         }
     }, 350);
 }
@@ -774,18 +814,19 @@ export function initGlobalErrorHandler() {
             return false;
         }
 
-        // Strike 2: Safe Mode Fallback
+        // Strike 2: Safe Mode → lifeboat (inline CSS so Tailwind breakage still reads)
         console.log("🛡️ Guardian: Strike 2 Error intercepted. Deploying Safe Mode.");
         
-        // Secure Firebase PUT Bypass to /sys_logs/
         const crashId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const stackText = error && error.stack ? String(error.stack) : 'N/A';
+        const errorDetails = `Error: ${msg}\nLine: ${line}:${col}\nURL: ${url}\nStack: ${stackText}`;
+        stashLastCrash(errorDetails);
+
         const crashPayload = {
             error: String(msg),
             line: `${line}:${col}`,
             url: String(url),
             stack: stackText,
-            // Full raw dump for admin Crashlytics (not a one-line summary)
             raw: JSON.stringify({
                 message: String(msg),
                 line,
@@ -806,46 +847,64 @@ export function initGlobalErrorHandler() {
             fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json`, {
                 method: 'PUT',
                 body: JSON.stringify(crashPayload)
-            }).catch(()=>{}); // Silent fire and forget
+            }).catch(()=>{});
         } catch(e) {}
 
-        const errorDetails = `Error: ${msg}\nLine: ${line}:${col}\nURL: ${url}\nStack: ${error && error.stack ? error.stack : 'N/A'}`;
-        const encodedError = encodeURIComponent(errorDetails);
-        const feedbackUrl = `https://docs.google.com/forms/d/e/1FAIpQLSe7lhoUNKQFOiW1d6_7ezCHJvyOL5GkHNH1Oetmvdqgee16jw/viewform?entry.1546175845=${encodedError}`;
-        
+        const recoveryHref = helpUrl('crash');
+        const waHref = whatsappSupportUrl(`Hi Next Train — the app crashed. ${String(msg).slice(0, 160)}`);
+        const mailHref = mailtoSupportUrl('Next Train crash report', errorDetails.slice(0, 1800));
+        const homeHref = withBase('/');
+
+        // Prefer full lifeboat when possible (reset + contact form + Firebase distress)
+        try {
+            const preferLifeboat = sessionStorage.getItem('nt_safe_mode_inline') !== '1';
+            if (preferLifeboat) {
+                sessionStorage.setItem('nt_safe_mode_inline', '1');
+                markPendingReload('safe_mode_lifeboat', 400);
+                setTimeout(() => { window.location.replace(recoveryHref); }, 350);
+                return false;
+            }
+        } catch (e) { /* fall through to inline */ }
+
         document.body.innerHTML = `
-            <div class="fixed inset-0 bg-gray-900 z-[9999] flex flex-col items-center justify-center p-6 text-center">
-                <div class="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mb-6 shadow-inner ring-4 ring-red-500/20">
-                    <span class="text-3xl">⚠️</span>
-                </div>
-                <h2 class="text-2xl font-black text-white mb-2 tracking-tight">App Crashed (Safe Mode)</h2>
-                <p class="text-gray-400 text-sm mb-8 max-w-xs leading-relaxed">A fatal data error occurred. Please clear your offline cache to resync the latest schedules.</p>
-                <div class="w-full max-w-xs space-y-3">
-                    <button id="safe-mode-clear-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-colors w-full focus:outline-none">
-                        Clear Cache & Restart
-                    </button>
-                    <a href="${feedbackUrl}" target="_blank" class="flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3.5 px-6 rounded-xl shadow-lg transition-colors w-full border border-gray-700 focus:outline-none text-sm">
-                        <span class="mr-2">✉️</span> Report Crash to Developer
-                    </a>
+            <div style="position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#f1f5f9">
+                <div style="width:64px;height:64px;border-radius:999px;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:28px">⚠️</div>
+                <h2 style="font-size:1.4rem;font-weight:800;margin:0 0 8px">App crashed</h2>
+                <p style="color:#94a3b8;font-size:0.9rem;margin:0 0 22px;max-width:20rem;line-height:1.45">
+                    A fatal error stopped Next Train. Reset the saved copy on this device, or contact us — WhatsApp ${SUPPORT_WHATSAPP_DISPLAY} · ${SUPPORT_EMAIL}
+                </p>
+                <div style="width:100%;max-width:20rem;display:flex;flex-direction:column;gap:10px">
+                    <a href="${recoveryHref}" style="display:block;background:#2563eb;color:#fff;font-weight:700;padding:14px 16px;border-radius:12px;text-decoration:none">Open recovery help</a>
+                    <button type="button" id="safe-mode-clear-btn" style="background:#c2410c;color:#fff;font-weight:700;padding:14px 16px;border-radius:12px;border:0;cursor:pointer">Reset saved data &amp; restart</button>
+                    <a href="${waHref}" target="_blank" rel="noopener" style="display:block;background:#128c7e;color:#fff;font-weight:700;padding:14px 16px;border-radius:12px;text-decoration:none">WhatsApp us</a>
+                    <a href="${mailHref}" style="display:block;background:transparent;color:#e2e8f0;font-weight:700;padding:14px 16px;border-radius:12px;text-decoration:none;border:1px solid rgba(148,163,184,0.35)">Email ${SUPPORT_EMAIL}</a>
+                    <a href="${homeHref}" style="display:block;color:#94a3b8;font-size:0.85rem;font-weight:600;padding:8px;text-decoration:underline">Try home again</a>
                 </div>
             </div>
         `;
 
-        document.body.addEventListener('click', function(e) {
-            if (e.target.closest('#safe-mode-clear-btn')) {
-                try { 
-                    localStorage.clear(); 
-                    sessionStorage.clear(); 
-                } catch(ex) {} 
-                
-                if (window.indexedDB) indexedDB.deleteDatabase('NextTrainDB'); 
-                
-                markPendingReload('safe_mode_cache_clear', 800);
-                if (window.caches) { 
-                    caches.keys().then(k => Promise.all(k.map(n => caches.delete(n)))).finally(() => window.location.href = window.location.pathname + '?v=' + Date.now());
-                } else { 
-                    window.location.href = window.location.pathname + '?v=' + Date.now(); 
+        document.getElementById('safe-mode-clear-btn')?.addEventListener('click', async () => {
+            try {
+                const keep = localStorage.getItem('next_train_device_id');
+                localStorage.clear();
+                sessionStorage.clear();
+                if (keep) localStorage.setItem('next_train_device_id', keep);
+            } catch (ex) {}
+            try {
+                if (window.indexedDB) indexedDB.deleteDatabase('NextTrainDB');
+            } catch (ex) {}
+            try {
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of regs) await reg.unregister();
                 }
+            } catch (ex) {}
+            markPendingReload('safe_mode_cache_clear', 800);
+            const go = () => { window.location.href = withBase('/') + '?v=' + Date.now(); };
+            if (window.caches) {
+                caches.keys().then((k) => Promise.all(k.map((n) => caches.delete(n)))).finally(go);
+            } else {
+                go();
             }
         });
         
@@ -1049,8 +1108,12 @@ export function bindPlannerShellModals() {
     });
 }
 
-/** Show the bottom offline toast with auto-dismiss (Lie-Fi / offline transitions). */
-export function showOfflineToast(minIntervalMs = 0) {
+/**
+ * Show the bottom offline toast with auto-dismiss.
+ * @param {number} minIntervalMs
+ * @param {'offline'|'liefi'|'weak'} [mode]
+ */
+export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
     const offlineToast = document.getElementById('offline-toast');
     if (!offlineToast) return;
@@ -1062,11 +1125,33 @@ export function showOfflineToast(minIntervalMs = 0) {
         window._lastOfflineToastTime = now;
     }
 
+    offlineToast.classList.remove('pointer-events-none');
+    offlineToast.classList.add('pointer-events-auto');
+    const col = offlineToast.querySelector('.flex.flex-col') || offlineToast.lastElementChild;
+    if (col) {
+        const title = mode === 'offline'
+            ? 'You are offline.'
+            : mode === 'weak'
+              ? 'Connection is very slow.'
+              : 'No usable internet.';
+        const detail = mode === 'offline'
+            ? 'Pull down to refresh when signal returns.'
+            : mode === 'weak'
+              ? 'Mobile data may be on, but the network is struggling. Still trying…'
+              : 'Data may be on, but we can’t reach Next Train servers. Check airtime or Wi‑Fi.';
+        const helpReason = mode === 'offline' ? 'offline' : 'server';
+        col.innerHTML = `
+            <span class="text-sm font-bold tracking-wide">${title}</span>
+            <span class="text-[10px] text-gray-300 leading-snug">${detail}</span>
+            <a href="${helpUrl(helpReason)}" class="text-[10px] font-bold text-blue-300 underline mt-1">Need help? Recovery page</a>
+        `;
+    }
+
     offlineToast.classList.remove('translate-y-[150%]', 'opacity-0');
     if (window._lieFiToastTimeout) clearTimeout(window._lieFiToastTimeout);
     window._lieFiToastTimeout = setTimeout(() => {
         offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
-    }, 4000);
+    }, mode === 'weak' ? 5000 : 7000);
 }
 
 export function hideOfflineToast() {
@@ -1457,16 +1542,32 @@ if (typeof window !== 'undefined') {
         window._hasShownOfflineToast = false;
         hideOfflineToast();
         OfflineTracker.flush();
+        try { window.isLieFi = false; } catch { /* ignore */ }
+        try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
         const oi = document.getElementById('offline-indicator');
-        if (oi) oi.style.display = 'none';
+        if (oi) {
+            oi.style.display = 'none';
+            oi.textContent = 'WORKING OFFLINE';
+        }
+        // Re-probe — radio up ≠ usable internet (no airtime / blackhole)
+        setTimeout(() => {
+            try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
+        }, 400);
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        const oi = document.getElementById('offline-indicator');
-        if (oi) oi.style.display = 'flex';
-        if (!window._hasShownOfflineToast) {
-            window._hasShownOfflineToast = true;
-            showOfflineToast(0);
+        if (typeof window.engageConnectionStruggleUi === 'function') {
+            window.engageConnectionStruggleUi('offline');
+        } else {
+            const oi = document.getElementById('offline-indicator');
+            if (oi) {
+                oi.style.display = 'flex';
+                oi.textContent = 'WORKING OFFLINE';
+            }
+            if (!window._hasShownOfflineToast) {
+                window._hasShownOfflineToast = true;
+                showOfflineToast(0, 'offline');
+            }
         }
     });
 }

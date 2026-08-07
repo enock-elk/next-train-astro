@@ -4,6 +4,12 @@
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
 export const APP_VERSION = "V8_08.07";
 
+/** Public support channels (About modal, lifeboat help.html, Safe Mode). */
+export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
+/** WhatsApp digits for wa.me (no + or spaces). */
+export const SUPPORT_WHATSAPP = '27696473764';
+export const SUPPORT_WHATSAPP_DISPLAY = '+27 69 647 3764';
+
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
     const raw = String(base == null || base === '' ? '/' : base).trim();

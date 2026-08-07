@@ -313,6 +313,17 @@ async function submitFeedback() {
         return;
     }
 
+    // Prefix thread-reply context so admin can render a single quote chip
+    try {
+        const contextBox = document.getElementById('feedback-reply-context');
+        const prefix = contextBox && !contextBox.classList.contains('hidden')
+            ? String(contextBox.dataset.rawMsg || '').trim()
+            : '';
+        if (prefix) {
+            text = prefix.startsWith('[') ? `${prefix}\n${text}` : `[${prefix}]\n${text}`;
+        }
+    } catch { /* ignore */ }
+
     const hasFile = !!(fileInput?.files?.length);
     triggerHaptic();
     if (submitBtn) submitBtn.disabled = true;
@@ -399,6 +410,22 @@ async function submitFeedback() {
     }
 }
 
+/** Survives sanitizeHTML (no SVG) — clear circular “+” expand affordance on alert images. */
+const LIGHTBOX_PLUS_BADGE_HTML =
+    '<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>';
+
+function ensureLightboxPlusBadges(root) {
+    if (!root) return;
+    root.querySelectorAll('button[onclick*="openLightbox"]').forEach((btn) => {
+        // Drop empty husks left after SVG strip (and any prior + chip we will replace)
+        btn.querySelectorAll('.absolute.bottom-2.right-2').forEach((el) => {
+            if (el.classList.contains('nt-zoom-plus') || !(el.textContent || '').trim()) el.remove();
+        });
+        if (!/\brelative\b/.test(btn.className)) btn.className = `${btn.className} relative`.trim();
+        btn.insertAdjacentHTML('beforeend', LIGHTBOX_PLUS_BADGE_HTML);
+    });
+}
+
 function sanitizeHTML(dirtyHtml) {
     const doc = new DOMParser().parseFromString(repairMojibake(dirtyHtml || ''), 'text/html');
     const allowedTags = ['B', 'I', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV', 'UL', 'OL', 'LI', 'IMG', 'BUTTON'];
@@ -434,6 +461,8 @@ function sanitizeHTML(dirtyHtml) {
         });
     };
     cleanNode(doc.body);
+    // SVG badges are stripped above — restore a text “+” chip on lightbox buttons
+    ensureLightboxPlusBadges(doc.body);
     return doc.body.innerHTML;
 }
 
@@ -723,10 +752,16 @@ export async function checkServiceAlerts() {
                             triggerHaptic();
                             let truncatedAdminMsg = htmlToPlainSnippet(adminReply.message || '', 8);
                             truncatedAdminMsg = truncatedAdminMsg.replace(/—.*/, '').trim();
+                            // Keep snippet inside the bracket block so admin quote parsing
+                            // never treats the quoted text as the commuter’s reply body.
+                            const safeSnippet = String(truncatedAdminMsg || '')
+                                .replace(/[\[\]]/g, '')
+                                .replace(/\s+/g, ' ')
+                                .trim();
                             openFeedbackReplyFromOverlay('developer-reply-modal', {
                                 label: 'Replying to Admin:',
                                 snippet: truncatedAdminMsg,
-                                rawMsg: `[REPLY TO ADMIN: ${adminReply._key}] ${truncatedAdminMsg}`,
+                                rawMsg: `[REPLY TO ADMIN: ${adminReply._key} | ${safeSnippet}]`,
                             });
                         };
                     }
@@ -857,6 +892,7 @@ export async function checkServiceAlerts() {
             }
 
             content.innerHTML = formattedMsg;
+            ensureLightboxPlusBadges(content);
 
             if (activeNotice.ctaUrl && activeNotice.ctaText) {
                 content.innerHTML += `
@@ -1019,7 +1055,7 @@ export async function checkServiceAlerts() {
                     bindModalContent();
                     // openSmoothModal pushes #notice once — don't double-push over #planner-results
                     openSmoothModal('notice-modal');
-                }, 1200);
+                }, 400);
             }
         } else {
             bellBtn.classList.remove('animate-shake');
@@ -1391,9 +1427,19 @@ export function initHub() {
     // Admin cancel/login history is owned by public/js/admin.js only.
     // A second listener here called history.back() twice and skipped the home page.
 
-    // Poll notices after boot (and periodically)
-    setTimeout(() => checkServiceAlerts(), 1500);
-    setInterval(() => checkServiceAlerts(), 5 * 60 * 1000);
+    // Poll notices soon after boot, then often while the app is open (refresh was
+    // previously the only reliable way to see a just-published alert).
+    setTimeout(() => checkServiceAlerts(), 600);
+    setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        checkServiceAlerts();
+    }, 45 * 1000);
+    if (!window.__ntAlertVisibilityBound) {
+        window.__ntAlertVisibilityBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkServiceAlerts();
+        });
+    }
 
     // Public-holiday stacked notice — waits for app stability inside maybeShowHolidayNotice
     setTimeout(() => {

@@ -1,10 +1,13 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import { normalizeBase } from '../lib/config.js';
+import { normalizeBase, SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY } from '../lib/config.js';
 
 const title = "You're Offline | Metrorail Next Train";
-const description = "You appear to be offline. Reconnect to check live Metrorail train times.";
+const description = "You appear to be offline. Reconnect or open recovery help for Next Train.";
 const base = normalizeBase(import.meta.env.BASE_URL);
+const helpHref = `${base}help.html?reason=offline`;
+const waHref = `https://wa.me/${SUPPORT_WHATSAPP}`;
+const mailHref = `mailto:${SUPPORT_EMAIL}`;
 ---
 
 <ContentLayout
@@ -14,16 +17,40 @@ const base = normalizeBase(import.meta.env.BASE_URL);
   robots="noindex, nofollow"
   bodyClass="bg-slate-50 dark:bg-gray-900 min-h-screen flex items-center justify-center p-6"
 >
-  <main class="max-w-md text-center">
+  <main class="max-w-md w-full text-center">
+    <p class="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 mb-2">Next Train</p>
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">You're offline</h1>
-    <p class="text-gray-600 dark:text-gray-400 mb-6">
-      This page isn't available without a connection. Check your network, then try again.
+    <p class="text-gray-600 dark:text-gray-400 mb-6 text-sm leading-relaxed">
+      This page isn't available without a connection. When signal returns, pull to refresh.
+      If the app still looks blank after an update, open recovery help to reset the saved copy or contact us.
     </p>
-    <a
-      href={base}
-      class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 transition-colors"
-    >
-      Back to Home
-    </a>
+    <div class="flex flex-col gap-3">
+      <a
+        href={base}
+        class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-3 transition-colors"
+      >
+        Back to Home
+      </a>
+      <a
+        href={helpHref}
+        class="inline-flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold px-5 py-3 transition-colors"
+      >
+        Open recovery help
+      </a>
+      <a
+        href={waHref}
+        target="_blank"
+        rel="noopener"
+        class="inline-flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 font-semibold px-5 py-3 transition-colors"
+      >
+        WhatsApp {SUPPORT_WHATSAPP_DISPLAY}
+      </a>
+      <a
+        href={mailHref}
+        class="text-sm font-semibold text-blue-600 dark:text-blue-400 underline"
+      >
+        {SUPPORT_EMAIL}
+      </a>
+    </div>
   </main>
 </ContentLayout>

@@ -536,6 +536,86 @@
         }
 
         // --- MAP LOGIC (Dynamic Region & DB Sync) ---
+        const VALID_MAP_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const DEFAULT_REGION_SLUGS = {
+            GP: 'gauteng',
+            WC: 'western-cape',
+            KZN: 'kwazulu-natal',
+            EC: 'eastern-cape'
+        };
+
+        function readSavedAppRegion() {
+            try {
+                const stored = localStorage.getItem('userRegion');
+                if (stored && VALID_MAP_REGIONS.includes(stored)) return stored;
+            } catch (e) {}
+            return null;
+        }
+
+        /** Map view region only — never overwrite a returning user's saved app region/route. */
+        function resolveMapRegion() {
+            try {
+                const q = new URLSearchParams(location.search).get('region');
+                if (q) {
+                    const up = String(q).toUpperCase();
+                    if (VALID_MAP_REGIONS.includes(up)) {
+                        try { sessionStorage.setItem('nt_mapViewRegion', up); } catch (e) {}
+                        return up;
+                    }
+                }
+            } catch (e) {}
+            try {
+                const session = sessionStorage.getItem('nt_mapViewRegion');
+                if (session && VALID_MAP_REGIONS.includes(session)) return session;
+            } catch (e) {}
+            const saved = readSavedAppRegion();
+            if (saved) return saved;
+            // Cold start only: no app region yet — seed GP so first-time map visitors can load
+            try { localStorage.setItem('userRegion', 'GP'); } catch (e) {}
+            return 'GP';
+        }
+
+        function regionRoutesHref(region) {
+            const slugs = (typeof window.REGION_SEO_SLUGS === 'object' && window.REGION_SEO_SLUGS)
+                ? window.REGION_SEO_SLUGS
+                : DEFAULT_REGION_SLUGS;
+            const slug = slugs[region] || DEFAULT_REGION_SLUGS[region] || 'gauteng';
+            const base = (typeof window.APP_BASE === 'string' ? window.APP_BASE : '/').replace(/\/?$/, '/');
+            return `${base}regions/${slug}.html`;
+        }
+
+        function syncMapChromeRegion(region) {
+            const code = VALID_MAP_REGIONS.includes(region) ? region : 'GP';
+            const label = document.getElementById('region-toggle-label');
+            if (label) label.textContent = code;
+            const btn = document.getElementById('region-toggle-btn');
+            if (btn) btn.setAttribute('aria-label', `Map region ${code}. Change region`);
+            document.querySelectorAll('#region-panel [data-region]').forEach((el) => {
+                el.classList.toggle('is-active', el.getAttribute('data-region') === code);
+            });
+            const back = document.getElementById('map-back-link');
+            if (back) back.setAttribute('href', regionRoutesHref(code));
+        }
+
+        function switchMapRegion(region) {
+            const code = String(region || '').toUpperCase();
+            if (!VALID_MAP_REGIONS.includes(code)) return;
+            try { sessionStorage.setItem('nt_mapViewRegion', code); } catch (e) {}
+            // Persist to app profile only when the user has never chosen a region
+            try {
+                if (!localStorage.getItem('userRegion')) {
+                    localStorage.setItem('userRegion', code);
+                }
+            } catch (e) {}
+            try {
+                const url = new URL(location.href);
+                url.searchParams.set('region', code);
+                location.assign(url.toString());
+            } catch (e) {
+                location.reload();
+            }
+        }
+
         function showMapColdStartPanel(err) {
             console.warn("Guardian: Map Init Failed (cold-start safe).", err);
             const placeholder = document.getElementById('map-placeholder');
@@ -544,28 +624,63 @@
             if (panel) panel.classList.remove('hidden');
         }
 
+        function bindMapRegionPicker() {
+            const picker = document.getElementById('region-picker');
+            const toggle = document.getElementById('region-toggle-btn');
+            if (!picker || !toggle || picker.dataset.bound === '1') return;
+            picker.dataset.bound = '1';
+
+            const closePicker = () => {
+                picker.classList.remove('is-open');
+                toggle.setAttribute('aria-expanded', 'false');
+            };
+            const openPicker = () => {
+                const legend = document.getElementById('legend-container');
+                if (legend) {
+                    legend.classList.remove('is-open');
+                    document.getElementById('legend-toggle-btn')?.setAttribute('aria-expanded', 'false');
+                }
+                picker.classList.add('is-open');
+                toggle.setAttribute('aria-expanded', 'true');
+            };
+
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (picker.classList.contains('is-open')) closePicker();
+                else openPicker();
+            });
+            picker.querySelectorAll('[data-region]').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    switchMapRegion(btn.getAttribute('data-region'));
+                });
+            });
+            document.addEventListener('click', (e) => {
+                if (!picker.contains(e.target)) closePicker();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closePicker();
+            });
+        }
+
         function bindMapColdStartControls() {
             const panel = document.getElementById('map-cold-start');
             if (!panel || panel.dataset.bound === '1') return;
             panel.dataset.bound = '1';
             panel.querySelectorAll('[data-region]').forEach((btn) => {
                 btn.addEventListener('click', () => {
-                    const region = btn.getAttribute('data-region') || 'GP';
-                    try { localStorage.setItem('userRegion', region); } catch (e) {}
-                    window.location.reload();
+                    switchMapRegion(btn.getAttribute('data-region') || 'GP');
                 });
             });
             document.getElementById('map-retry-btn')?.addEventListener('click', () => window.location.reload());
         }
 
         window.addEventListener('load', async () => {
+            const bootRegion = resolveMapRegion();
+            syncMapChromeRegion(bootRegion);
+            bindMapRegionPicker();
             bindMapColdStartControls();
             try {
-                // Persist a safe default so brand-new visitors never hit null region crashes
-                try {
-                    if (!localStorage.getItem('userRegion')) localStorage.setItem('userRegion', 'GP');
-                } catch (e) {}
-
                 await initDynamicMap();
                 
                 // Remove placeholder on success
@@ -685,12 +800,9 @@
             if (typeof L === 'undefined') throw new Error("Leaflet Missing");
             if (typeof ROUTES === 'undefined') throw new Error("Config Missing");
 
-            // Guardian: Safe Storage Fetch — default GP for brand-new users
-            let currentRegion = 'GP';
-            try {
-                currentRegion = localStorage.getItem('userRegion') || 'GP';
-                if (!localStorage.getItem('userRegion')) localStorage.setItem('userRegion', 'GP');
-            } catch(e) {}
+            // Guardian: URL ?region= → localStorage → GP
+            const currentRegion = resolveMapRegion();
+            syncMapChromeRegion(currentRegion);
             
             // Center map dynamically based on region
             let initLat = -26.00, initLon = 28.10, initZoom = 10;
@@ -1157,10 +1269,10 @@
             }
 
             // --- 🛡️ GUARDIAN UX: MAP CONTROLS ---
-            // Theme Toggle (top-right; zoom +/- removed — pinch / scroll zoom)
+            // Theme Toggle (compact chrome; zoom +/- removed — pinch / scroll zoom)
             const themeBtn = document.getElementById('custom-theme-btn');
-            const themeSunSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
-            const themeMoonSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
+            const themeSunSvg = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+            const themeMoonSvg = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
             let isDarkNow = document.documentElement.classList.contains('dark');
             if (themeBtn) {
                 themeBtn.classList.add('text-amber-500');
@@ -1263,6 +1375,11 @@
             const wrap = document.getElementById('legend-container');
             const btn = document.getElementById('legend-toggle-btn');
             if (!wrap) return;
+            const regionPicker = document.getElementById('region-picker');
+            if (regionPicker) {
+                regionPicker.classList.remove('is-open');
+                document.getElementById('region-toggle-btn')?.setAttribute('aria-expanded', 'false');
+            }
             const open = wrap.classList.toggle('is-open');
             if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         }

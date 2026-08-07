@@ -39,8 +39,99 @@ export let regionSwapGeneration = 0;
 export let isLieFi = false;
 export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
+let _reachabilityProbed = false;
 
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
+
+/**
+ * Paint offline / weak-connection chrome. `navigator.onLine` alone is not enough —
+ * mobile data can be "up" with no usable path (no airtime, captive portal, blackhole).
+ * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
+ */
+export function engageConnectionStruggleUi(reason = 'offline') {
+    if (typeof document === 'undefined') return;
+    const soft = reason === 'slow_boot' || reason === 'weak';
+    if (!soft) {
+        isLieFi = true;
+        try { $isOffline.set(true); } catch { /* ignore */ }
+    }
+    // Soft hint only — don't flip full offline mode; schedules keep trying
+
+    if (typeof window.clearMaintenanceBanner === 'function') {
+        try { window.clearMaintenanceBanner(); } catch { /* ignore */ }
+    }
+
+    const oi = document.getElementById('offline-indicator');
+    if (oi) {
+        oi.style.display = 'flex';
+        if (reason === 'offline') {
+            oi.textContent = 'WORKING OFFLINE';
+        } else if (reason === 'slow_boot') {
+            oi.textContent = 'CONNECTION SLOW';
+        } else {
+            oi.textContent = 'NO USABLE INTERNET';
+        }
+    }
+
+    const toastMode = reason === 'offline' ? 'offline' : (reason === 'slow_boot' ? 'weak' : 'liefi');
+    showOfflineToast(soft ? 20_000 : 0, toastMode);
+}
+
+/**
+ * Active reachability probe (does not trust navigator.onLine).
+ * Uses the Cloudflare schedule edge (NetworkOnly in SW) so a cached SW shell
+ * cannot fake success.
+ * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
+ */
+export async function probeReachability(timeoutMs = 3500) {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
+    if (!navigator.onLine) {
+        engageConnectionStruggleUi('offline');
+        return 'offline';
+    }
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const url = `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${Date.now()}`;
+        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timer);
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('text/html')) {
+            engageConnectionStruggleUi('liefi');
+            return 'captive';
+        }
+        if (!res.ok) {
+            engageConnectionStruggleUi('liefi');
+            return 'captive';
+        }
+        isLieFi = false;
+        const oi = document.getElementById('offline-indicator');
+        if (oi && /CONNECTION SLOW|NO USABLE INTERNET/i.test(oi.textContent || '')) {
+            oi.style.display = 'none';
+        }
+        return 'ok';
+    } catch (err) {
+        // Slow / blackhole — warn but allow schedule waterfall to keep trying
+        engageConnectionStruggleUi('weak');
+        return 'timeout';
+    }
+}
+
+/** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */
+export async function ensureReachabilityProbed() {
+    if (_reachabilityProbed) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
+        if (isLieFi) return 'captive';
+        return 'ok';
+    }
+    _reachabilityProbed = true;
+    return probeReachability();
+}
+
+export function resetReachabilityProbe() {
+    _reachabilityProbed = false;
+    isLieFi = false;
+}
 
 export function syncRegionDisplayDom(region) {
     if (typeof document === 'undefined') return;
@@ -91,6 +182,11 @@ export function ensureMapImageLoaded() {
     const current = mapImageEl.getAttribute('src') || '';
     if (!current || current !== wanted) {
         mapImageEl.style.display = '';
+        const fallback = mapImageEl.nextElementSibling;
+        if (fallback instanceof HTMLElement) {
+            fallback.style.display = 'none';
+            fallback.classList.add('hidden');
+        }
         mapImageEl.src = wanted;
     }
 }
@@ -162,7 +258,7 @@ if (typeof window !== 'undefined') {
 // --- GUARDIAN FETCH WRAPPER ---
 export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && !navigator.onLine) {
-        isLieFi = true;
+        engageConnectionStruggleUi('offline');
         throw new Error("OS reports offline state.");
     }
     
@@ -181,14 +277,8 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         // Captive portals often return HTTP 200 with HTML login pages
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
-            isLieFi = true;
             _networkStruggleCount = 0;
-            if (typeof document !== 'undefined') {
-                if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
-                const oi = document.getElementById('offline-indicator');
-                if (oi) oi.style.display = 'flex';
-                showOfflineToast(0);
-            }
+            engageConnectionStruggleUi('liefi');
             throw new Error('Captive Portal Detected');
         }
 
@@ -216,21 +306,16 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 
         if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
             _networkStruggleCount++;
+            // First boot: trip Lie-Fi after 1 failure. Mid-session: need 3 (avoid flapping).
+            const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
             // OS may still report online for Wi‑Fi/mobile without a usable internet path
             if (typeof navigator !== 'undefined' && navigator.onLine) {
                 console.warn(`🛡️ Guardian: Request to ${url} timed out / failed while OS reports online (possible Lie-Fi).`);
-                if (_networkStruggleCount >= 3) {
+                if (_networkStruggleCount >= failThreshold) {
                     const hasRamCache = !!$fullDatabase.get();
                     const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
-                    // Treat repeated failures as Lie-Fi even when we have cache, so UI goes offline-mode
-                    isLieFi = true;
                     _networkStruggleCount = 0;
-                    if (typeof document !== 'undefined') {
-                        if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
-                        const oi = document.getElementById('offline-indicator');
-                        if (oi) oi.style.display = 'flex';
-                        showOfflineToast(0);
-                    }
+                    engageConnectionStruggleUi('liefi');
                     if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function') {
                         window.triggerNetworkStruggleModal();
                     }
@@ -242,13 +327,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     }
                 }
             } else {
-                isLieFi = true;
-                if (typeof document !== 'undefined') {
-                    if (typeof window.clearMaintenanceBanner === 'function') window.clearMaintenanceBanner();
-                    const oi = document.getElementById('offline-indicator');
-                    if (oi) oi.style.display = 'flex';
-                    showOfflineToast(60000);
-                }
+                engageConnectionStruggleUi('offline');
             }
         }
         throw error;
@@ -723,29 +802,13 @@ export async function loadAllSchedules(force = false) {
             throw new Error('Network request failed');
         }
 
-        // Captive portal pre-flight (HTML injected instead of JSON)
-        try {
-            const preFlightController = new AbortController();
-            const preFlightTimeout = setTimeout(() => preFlightController.abort(), 2000);
-            const pingRes = await fetch(`https://nexttrain-cache.enock.workers.dev/config/maintenance.json?t=${Date.now()}`, {
-                signal: preFlightController.signal,
-                cache: 'no-store'
-            });
-            clearTimeout(preFlightTimeout);
-            const contentType = pingRes.headers.get('content-type') || '';
-            if (contentType.includes('text/html')) {
-                console.warn("🛡️ Guardian: Captive Portal detected. Engaging Lie-Fi Offline Mode.");
-                isLieFi = true;
-                if (typeof document !== 'undefined') {
-                    const oi = document.getElementById('offline-indicator');
-                    if (oi) oi.style.display = 'flex';
-                    showOfflineToast(0);
-                }
-                return;
-            }
-        } catch (e) {
-            console.log("🛡️ Guardian: Pre-flight check complete or timed out. Proceeding to waterfall.");
+        // Reachability / captive pre-flight — do not trust navigator.onLine alone
+        const reach = await ensureReachabilityProbed();
+        if (reach === 'offline' || reach === 'captive') {
+            console.warn("🛡️ Guardian: No usable internet (offline / captive). Skipping network waterfall.");
+            return;
         }
+        // 'timeout' / weak: still attempt waterfall — schedules may load slowly
 
         const wasKilled = await checkKillswitch(force);
         if (wasKilled || fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
@@ -915,6 +978,10 @@ export async function loadAllSchedules(force = false) {
         const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
         if (typeof window !== 'undefined' && $currentRouteId.get() && !isWelcomeActive) {
             window._appStabilized = true;
+            try {
+                sessionStorage.removeItem('nt_safe_mode_inline');
+                sessionStorage.removeItem('nt_lifeboat_auto');
+            } catch { /* ignore */ }
             if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
         }
     }
@@ -1352,6 +1419,10 @@ if (typeof window !== 'undefined') {
     window.ensureMapImageLoaded = ensureMapImageLoaded;
     window.checkKillswitch = checkKillswitch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
+    window.probeReachability = probeReachability;
+    window.ensureReachabilityProbed = ensureReachabilityProbed;
+    window.resetReachabilityProbe = resetReachabilityProbe;
+    window.engageConnectionStruggleUi = engageConnectionStruggleUi;
     Object.defineProperty(window, 'isLieFi', {
         get: () => isLieFi,
         set: (v) => { isLieFi = v; },

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.05 - Planner UI & Bugfix)
  * -----------------------------------------------------------------------------
  *
@@ -22,7 +22,7 @@
  *     lazy-load only reduces blueprint exposure and payload bloat.
  *
  * Do NOT re-add a global <script src="/js/admin.js"> or initAdminBridge() that
- * eagerly fetches this file — that undoes Zero-Bloat and schema OPSEC.
+ * eagerly fetches this file � that undoes Zero-Bloat and schema OPSEC.
  * -----------------------------------------------------------------------------
  * This module handles Developer Mode features:
  * 1. Service Alerts Manager (God-Mode Regional Sync + Rich Text Formatting + Live Preview)
@@ -34,7 +34,7 @@
  * 7. Special Event Route Manager
  * 8. System Health / Diagnostics Scanner
  *    (includes Zone Distance Audit accordion for fare-zone / km review)
- * 8b. Schedule Data QA (timetable content — standalone from diagnostics)
+ * 8b. Schedule Data QA (timetable content � standalone from diagnostics)
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
@@ -57,11 +57,11 @@
  * * GROWTH SPRINT PHASE 10 [05 Jul 2026]: Swapped telemetry, crash, and routing failure endpoints from '/metrics/' to '/sys_logs/' to secure tracking channels against active client adblockers.
  * * GUARDIAN PHASE 13 [09 Jul 2026]: Built the Action Required active state monitor to scan, list, and instantly resolve expiring/live incidents across the entire system.
  * * GUARDIAN PHASE 14 [09 Jul 2026]: Resolved a malformed URL typo inside 'viewContextAlert' that threw unhandled exceptions during the disruption graveyard sweep.
- * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard [📝], [⛔], [🚧], and [📢] route cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
+ * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard [??], [?], [??], and [??] route cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
 */
 const Admin = {
     
-    // 🛡️ GUARDIAN PHASE 2: Dropdown Breadcrumbs State
+    // ??? GUARDIAN PHASE 2: Dropdown Breadcrumbs State
     _routeFlags: {},
     getRouteCues: (routeId) => {
         if (!Admin._routeFlags || !Admin._routeFlags[routeId]) return '';
@@ -83,11 +83,11 @@ const Admin = {
         let s = String(str);
         // Prefer escapes so scanners cannot rewrite the lookup keys
         const pairs = [
-            ['\u00E2\u20AC\u201D', '\u2014'], // â€" → —
+            ['\u00E2\u20AC\u201D', '\u2014'], // �" ? �
             ['\u00E2\u0080\u0094', '\u2014'],
             ['\u00E2\u20AC\u00A2', '\u2022'],
-            ['\u00E2\u02DC\u00A2\uFE0F', '☢️'],
-            ['\u00E2\u0098\u00A2\uFE0F', '☢️'],
+            ['\u00E2\u02DC\u00A2\uFE0F', '??'],
+            ['\u00E2\u0098\u00A2\uFE0F', '??'],
         ];
         for (const [bad, good] of pairs) {
             if (s.includes(bad)) s = s.split(bad).join(good);
@@ -171,14 +171,14 @@ const Admin = {
                 // Force token refresh to ensure it's valid for database rules
                 return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
             } catch(e) {
-                console.warn("🛡️ Guardian: Failed to securely fetch ID Token", e);
+                console.warn("??? Guardian: Failed to securely fetch ID Token", e);
                 return null;
             }
         }
         return null;
     },
 
-    /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError → app reload). */
+    /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
     copyCrashLog: async (crashId) => {
         const text = (Admin._crashRawById && Admin._crashRawById[crashId]) || '';
@@ -217,11 +217,11 @@ const Admin = {
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
                     <div>
                         <h3 class="text-base font-black text-gray-900 dark:text-white">Diagnostic Errors (24h)</h3>
-                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading…</p>
+                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading�</p>
                     </div>
-                    <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">✕</button>
+                    <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">?</button>
                 </div>
-                <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading…</div>
+                <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading�</div>
             </div>`;
         modal.classList.remove('hidden');
         document.getElementById('diag-errors-close').onclick = () => modal.classList.add('hidden');
@@ -234,28 +234,54 @@ const Admin = {
             const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 10000);
             const data = res.ok ? await res.json() : null;
             const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-            const items = data
+            const all = data
                 ? Object.keys(data).map((id) => ({ id, ...data[id] })).filter((c) => (c.timestamp || 0) >= cutoff)
                 : [];
+            const isDistress = (c) => c.kind === 'distress' || String(c.error || '').startsWith('DISTRESS:');
+            const distressCount = all.filter(isDistress).length;
+            // Distress / help belongs in Crash Analytics � keep this modal for JS/black-box noise only
+            const items = all.filter((c) => !isDistress(c));
             items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const n = items.length;
             const est = Math.round(n / SENTRY_SAMPLE);
-            meta.textContent = `${n} captured · ~${est} estimated at Sentry sampleRate ${SENTRY_SAMPLE} (n ÷ ${SENTRY_SAMPLE})`;
+            meta.textContent = `${n} JS/crash captures (~${est} est. @ sample ${SENTRY_SAMPLE}). Distress: use Crash Analytics.`;
             if (!n) {
-                list.innerHTML = '<p class="text-xs text-gray-500 text-center py-6">No crash / black-box entries in the last 24h.</p>';
+                list.innerHTML = `
+                    <p class="text-xs text-gray-500 text-center py-4">No JS / black-box diagnostic entries in the last 24h.</p>
+                    ${distressCount ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) � open Crash Analytics</button>` : ''}
+                `;
+                document.getElementById('diag-open-distress')?.addEventListener('click', () => {
+                    modal.classList.add('hidden');
+                    Admin.openCrashDistressPanel();
+                });
                 return;
             }
             list.innerHTML = items.map((c) => {
-                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '—';
+                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '-';
                 const err = String(c.error || 'Unknown').replace(/</g, '&lt;').slice(0, 180);
                 return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <div class="flex justify-between text-[9px] text-gray-400 font-mono mb-1"><span>${when}</span><span>${(c.routeId || 'global').toString().replace(/</g, '&lt;')}</span></div>
                     <div class="text-xs font-mono text-gray-800 dark:text-gray-200 break-words">${err}</div>
                 </div>`;
-            }).join('');
+            }).join('') + (distressCount
+                ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) � open Crash Analytics</button>`
+                : '');
+            document.getElementById('diag-open-distress')?.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                Admin.openCrashDistressPanel();
+            });
         } catch (e) {
             list.innerHTML = `<p class="text-xs text-red-500 text-center py-6">Failed to load: ${e.message || e}</p>`;
         }
+    },
+
+    openCrashDistressPanel: () => {
+        Admin.currentCrashTab = 'distress';
+        Admin.deepLinkToPanel('crashes-panel');
+        setTimeout(() => {
+            document.getElementById('crash-tab-distress')?.click();
+            if (typeof Admin.renderCrashList === 'function') Admin.renderCrashList();
+        }, 200);
     },
     escalateFromEl: (el) => {
         try {
@@ -517,13 +543,13 @@ const Admin = {
         if (!btn) return;
         if (Admin.gridCols === 1) {
             btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
-            btn.title = 'List view · tap for 2 columns';
+            btn.title = 'List view � tap for 2 columns';
         } else if (Admin.gridCols === 2) {
             btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>`;
-            btn.title = '2 columns · tap for 3 columns';
+            btn.title = '2 columns � tap for 3 columns';
         } else {
             btn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z"></path></svg>`;
-            btn.title = '3 columns · tap for list view';
+            btn.title = '3 columns � tap for list view';
         }
     },
 
@@ -669,7 +695,7 @@ const Admin = {
                 else navigator.clearAppBadge();
             }
         } catch(e) {
-            console.warn("🛡️ Guardian: Badge sync failed", e);
+            console.warn("??? Guardian: Badge sync failed", e);
         }
     },
 
@@ -707,7 +733,7 @@ const Admin = {
 
         const telBody = document.getElementById('telemetry-body');
         
-        // 🛡️ GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
+        // ??? GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
         if (telBody && !telBody.dataset.devibed) {
             telBody.dataset.devibed = "true";
             
@@ -717,7 +743,7 @@ const Admin = {
                 const label = box.querySelector('span:first-child');
                 const value = box.querySelector('span:last-child');
                 
-                // 🛡️ GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
+                // ??? GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
                 if (value && value.id === 'stat-today') {
                     box.classList.add('cursor-pointer', 'hover:border-indigo-400', 'dark:hover:border-indigo-500', 'hover:shadow-md');
                     box.title = "View Regional Breakdown";
@@ -725,24 +751,25 @@ const Admin = {
                 }
 
                 if (label) label.className = "text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1";
-                if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200 animate-pulse";
+                // No permanent pulse on Today / WAU � only refreshTelemetry adds a short loading pulse
+                if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200";
             });
 
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
                 errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
-                errorBox.title = 'View diagnostic errors (24h) · Sentry sample rate 0.3';
+                errorBox.title = 'JS / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> Diagnostic Errors (24h) · tap`;
+                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> JS Errors (24h) - tap`;
                 }
-                if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200 animate-pulse";
+                if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200";
             }
             
-            // 🛡️ GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native 📊 emoji to display.
+            // ??? GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native ?? emoji to display.
         }
 
         // GUARDIAN: Inject HTML elements dynamically if they don't exist
@@ -771,7 +798,7 @@ const Admin = {
             `;
             telBody.appendChild(trendWrapper);
             
-            // 🛡️ GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
+            // ??? GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
             let chartModal = document.getElementById('telemetry-chart-modal');
             if (!chartModal) {
                 chartModal = document.createElement('div');
@@ -800,9 +827,9 @@ const Admin = {
                         </div>
                         
                         <div id="modal-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95">◀</button>
+                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95">?</button>
                             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30">▶</button>
+                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30">?</button>
                         </div>
                         
                         <div class="flex-grow p-2 md:p-6 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0">
@@ -974,7 +1001,7 @@ const Admin = {
         const yMax = Math.ceil(maxVal + (spread > 0 ? spread * 0.2 : maxVal * 0.2));
         let yMin = Math.max(0, Math.floor(minVal - (spread > 0 ? spread * 0.2 : minVal * 0.5)));
         
-        // 🛡️ GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
+        // ??? GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
         if (allData.some((v) => v === 0)) {
             yMin = 0;
         }
@@ -984,7 +1011,7 @@ const Admin = {
         const getX = (i) => pl + (i * (uw / Math.max(1, numPoints - 1)));
         const getY = (v) => pt + uh - ((((Number(v) || 0) - yMin) / yRange) * uh);
 
-        // Build path only across known buckets (null = future / unreported — do not draw to 0)
+        // Build path only across known buckets (null = future / unreported � do not draw to 0)
         const knownIdx = [];
         for (let i = 0; i < numPoints; i++) {
             if (dataArray[i] !== null && dataArray[i] !== undefined) knownIdx.push(i);
@@ -1023,7 +1050,7 @@ const Admin = {
             });
         }
         
-        // 🛡️ COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
+        // ??? COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
         if (compareDataArray && numPoints > 1) {
             const cKnown = [];
             for (let i = 0; i < numPoints; i++) {
@@ -1091,7 +1118,7 @@ const Admin = {
                 const dayColor = isToday ? todayColor : labelColor;
                 svg += `<text x="${vx}" y="${pt+uh+20}" font-family="sans-serif" font-size="11" font-weight="800" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
                 
-                // 🛡️ GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
+                // ??? GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
                 if (Admin.telemetryRange !== 'INTRADAY') {
                     svg += `<text x="${vx}" y="${vy - 10}" font-family="sans-serif" font-size="11" font-weight="900" fill="${dayColor}" text-anchor="middle">${val}</text>`;
                 }
@@ -1117,7 +1144,7 @@ const Admin = {
             if (Admin.telemetryInterval) {
                 clearInterval(Admin.telemetryInterval);
                 Admin.telemetryInterval = null;
-                console.log("🛡️ Guardian: Dev Modal closed. Telemetry polling suspended.");
+                console.log("??? Guardian: Dev Modal closed. Telemetry polling suspended.");
             }
             return;
         }
@@ -1125,8 +1152,11 @@ const Admin = {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
 
+        // Soft loading pulse only while values are still placeholders
         [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
-            if (el && !el.classList.contains('animate-pulse')) el.classList.add('animate-pulse');
+            if (!el) return;
+            const t = (el.textContent || '').trim();
+            if (t === '--' || t === '' || t === 'Wait') el.classList.add('animate-pulse');
         });
 
         const CLOUDFLARE_WORKER_URL = 'https://nexttrain-telemetry.enock.workers.dev/';
@@ -1152,7 +1182,7 @@ const Admin = {
                 if(statAllTime) statAllTime.textContent = data.allTimeUsers !== undefined ? Admin.formatNumber(data.allTimeUsers) : '--';
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
                 
-                // 🛡️ GUARDIAN: Store and update regional breakdown seamlessly
+                // ??? GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
                     Admin.currentRegionalBreakdown = data.regionalBreakdown;
                     Admin.updateRegionalModal();
@@ -1198,9 +1228,9 @@ const Admin = {
                     }
                 }
                 
-                // 🛡️ GUARDIAN PHASE 2: RAM Array Slicer Engine
+                // ??? GUARDIAN PHASE 2: RAM Array Slicer Engine
                 // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
-                // "last 48" for Today — that straddles midnight and draws a fake cliff.
+                // "last 48" for Today � that straddles midnight and draws a fake cliff.
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
@@ -1230,7 +1260,7 @@ const Admin = {
                 
                 // Keep chart consistently scaled even if data runs out early
                 if (Admin.telemetryRange === 'INTRADAY') {
-                    // Pad FUTURE buckets (end), not the morning — zeros at the start fake a dawn climb.
+                    // Pad FUTURE buckets (end), not the morning � zeros at the start fake a dawn climb.
                     if (activeCountsArray.length < 48) {
                         const padLen = 48 - activeCountsArray.length;
                         activeCountsArray = [...activeCountsArray, ...Array(padLen).fill(null)];
@@ -1245,7 +1275,7 @@ const Admin = {
                     labelsArray = [...Array(padLen).fill(''), ...labelsArray];
                 }
 
-                // 🛡️ GUARDIAN PHASE 3: Comparison Array Slicer
+                // ??? GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
                 if (Admin.isComparing) {
                     if (Admin.telemetryRange === 'INTRADAY' && offset === 0 && masterLen > 48) {
@@ -1322,7 +1352,7 @@ const Admin = {
 
                 let titleStr = "";
                 
-                // 🛡️ GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
+                // ??? GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
                 let firstValidRaw = null;
                 let lastValidRaw = null;
                 
@@ -1440,14 +1470,14 @@ const Admin = {
                 const modalSvgContainer = document.getElementById('modal-chart-svg-container');
                 if (modalSvgContainer) modalSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray);
 
-                [stat5m, stat30m, statToday, statAllTime, statErrors].forEach(el => {
-                    if(el) el.classList.remove('animate-pulse');
+                [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
+                    if (el) el.classList.remove('animate-pulse');
                 });
             } else {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
-            console.warn("🛡️ Telemetry Fetch Failed:", e.message);
+            console.warn("??? Telemetry Fetch Failed:", e.message);
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
             if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
@@ -1691,7 +1721,7 @@ const Admin = {
 
     // --- 1. INITIALIZATION ---
     init: () => {
-        // 🛡️ GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
+        // ??? GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
         if (!Admin._coreEventsBound) {
             Admin.setupLoginAccess();
             Admin._coreEventsBound = true;
@@ -1713,11 +1743,11 @@ const Admin = {
 
     // --- 2. AUTH LISTENER (PHASE 9) ---
     setupAuthListener: () => {
-        // 🛡️ GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
+        // ??? GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
         const authListenerFn = typeof window.firebaseOnIdTokenChanged === 'function' ? window.firebaseOnIdTokenChanged : window.firebaseOnAuthStateChanged;
         
         if (typeof authListenerFn !== 'function') {
-            console.warn("🛡️ Guardian: Firebase Auth not loaded. Skipping auth listener.");
+            console.warn("??? Guardian: Firebase Auth not loaded. Skipping auth listener.");
             return;
         }
 
@@ -1725,13 +1755,13 @@ const Admin = {
             const signoutContainer = document.getElementById('admin-signout-container');
             
             if (user) {
-                console.log("🛡️ Guardian: Admin Authenticated. Analytics blocked.");
+                console.log("??? Guardian: Admin Authenticated. Analytics blocked.");
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
-                // 🛡️ GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
+                // ??? GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
                 Admin.currentUser = user;
 
-                // 🛡️ GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
+                // ??? GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
                 let displayName = user.email;
                 if (user.email && user.email.includes('@')) {
                     const prefix = user.email.split('@')[0];
@@ -1764,9 +1794,9 @@ const Admin = {
                 Admin.syncAllBadges();
 
             } else {
-                console.log("🛡️ Guardian: Admin Logged Out. Analytics restored.");
+                console.log("??? Guardian: Admin Logged Out. Analytics restored.");
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
-                // 🛡️ GUARDIAN UX: Wipe mirrored session on secure signout
+                // ??? GUARDIAN UX: Wipe mirrored session on secure signout
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
                 if (signoutContainer) signoutContainer.innerHTML = '';
@@ -1829,7 +1859,7 @@ const Admin = {
             }
         });
 
-        // 🛡️ GUARDIAN FIX: Smooth exit via Router/Back Button
+        // ??? GUARDIAN FIX: Smooth exit via Router/Back Button
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => { 
                 if (location.hash === '#login') history.back();
@@ -1854,7 +1884,7 @@ const Admin = {
                     return;
                 }
 
-                // 🛡️ GUARDIAN PHASE 1: Network-request-failed crash immunity
+                // ??? GUARDIAN PHASE 1: Network-request-failed crash immunity
                 if (!navigator.onLine || window.isLieFi) {
                     if (typeof showToast === 'function') showToast("Network disconnected. Cannot authenticate.", "error");
                     return;
@@ -1865,7 +1895,7 @@ const Admin = {
 
                 window.firebaseSignIn(window.firebaseAuth, email, password)
                     .then((userCredential) => {
-                        // Close login WITHOUT history.back() — that raced popstate and closed admin
+                        // Close login WITHOUT history.back() � that raced popstate and closed admin
                         if (typeof closeSmoothModal === 'function') closeSmoothModal('login-modal', true);
                         else loginModal.classList.add('hidden');
                         try {
@@ -1884,7 +1914,7 @@ const Admin = {
                     })
                     .catch((error) => {
                         if (typeof showToast === 'function') showToast("Authentication Failed", "error");
-                        console.error("🛡️ Guardian Login Error:", error);
+                        console.error("??? Guardian Login Error:", error);
                     })
                     .finally(() => {
                         if (spinner) spinner.classList.add('hidden');
@@ -1930,14 +1960,14 @@ const Admin = {
 
     // --- HELPER: RENDER ALL DYNAMIC MODULES ---
     renderAdminModules: () => {
-        // 🛡️ GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
+        // ??? GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
         if (Admin._modulesRendered) {
             Admin.initGridView(); // Ensure grid is bound if re-opened
             return;
         }
         Admin._modulesRendered = true;
 
-        // 🛡️ GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
+        // ??? GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
         const devModalCard = document.querySelector('#dev-modal > div');
         if (devModalCard) {
             devModalCard.className = "bg-gray-50 dark:bg-gray-900 w-full min-h-screen max-w-5xl mx-auto p-4 sm:p-6 flex flex-col relative transition-all duration-300";
@@ -1949,7 +1979,7 @@ const Admin = {
         }
 
         // --- AFTER ---
-        // 🛡️ GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
+        // ??? GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
         // Admin will rely purely on the bottom Sign Out button.
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6');
 
@@ -1968,18 +1998,18 @@ const Admin = {
         Admin.setupSpecialEventManager(); 
         Admin.setupDiagnosticsManager();
         Admin.setupScheduleQaManager();
-        Admin.setupRoadmapManager(); // 🛡️ GUARDIAN PHASE: Operations Roadmap
+        Admin.setupRoadmapManager(); // ??? GUARDIAN PHASE: Operations Roadmap
 
-        // 🛡️ GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
+        // ??? GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
         
         // Final Universal Sync
         Admin.syncAllBadges();
 
-        // 🛡️ GUARDIAN PHASE 14: Action Required Expiry Dashboard
+        // ??? GUARDIAN PHASE 14: Action Required Expiry Dashboard
         Admin.fetchActionRequired();
         
-        // 🛡️ GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
+        // ??? GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
         // Because the HTML for these elements was moved OUT of the monolithic UI.js string 
         // and IN to the dynamic setup functions, we must manually trigger their setup logic here
         // so they attach to the newly generated DOM elements on first load.
@@ -2019,7 +2049,23 @@ const Admin = {
 
         if (!actionBanner) return;
         actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
-        actionBanner.innerHTML = `<div class="animate-pulse text-xs text-center text-gray-500">Scanning for expiring entities...</div>`;
+        actionBanner.classList.remove('hidden');
+        // Stable grid-tile chrome (same header pattern as other admin modules)
+        actionBanner.innerHTML = `
+            <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                </span>
+                <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="action-body" class="hidden mt-4 space-y-2">
+                <div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>
+            </div>
+        `;
+        if (adminContainer.firstElementChild !== actionBanner) {
+            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+        }
 
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -2079,7 +2125,7 @@ const Admin = {
                         Object.keys(exclData[rId]).forEach(tNum => {
                             const item = exclData[rId][tNum];
                             
-                            // 🛡️ GUARDIAN PHASE 1: Capture Grid Notices
+                            // ??? GUARDIAN PHASE 1: Capture Grid Notices
                             if (tNum === '_grid_notice') {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     activeItems.push({ type: 'Grid Notice', label: `Grid Notice Active`, expiresAt: item.expiresAt, id: '_grid_notice', panelId: 'exclusion-panel', routeId: rId });
@@ -2097,13 +2143,30 @@ const Admin = {
                 }
             }
 
+            Admin._routeFlags = {};
             if (activeItems.length === 0) {
-                Admin._routeFlags = {};
                 if (typeof Admin.populateAlertTargets === 'function') Admin.populateAlertTargets(true);
                 if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
                 if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-                actionBanner.classList.add('hidden');
+                actionBanner.classList.remove('hidden');
+                actionBanner.innerHTML = `
+                    <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                        <span class="flex flex-col items-center">
+                            ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                            <span class="text-blue-600 dark:text-blue-400">Global State Monitor (0)</span>
+                        </span>
+                        <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="action-body" class="hidden mt-4 space-y-2">
+                        <div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
+                            All clear � no active alerts, incidents, grid notices, or schedule exceptions.
+                        </div>
+                    </div>
+                `;
+                if (adminContainer.firstElementChild !== actionBanner) {
+                    adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+                }
                 return;
             }
 
@@ -2115,7 +2178,7 @@ const Admin = {
                 return a.expiresAt - b.expiresAt;
             });
 
-            // 🛡️ GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
+            // ??? GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
             Admin._routeFlags = {};
             activeItems.forEach(item => {
                 if (!item.routeId || item.routeId === 'all' || item.routeId.startsWith('all_')) return;
@@ -2132,7 +2195,7 @@ const Admin = {
             if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
             if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-            // 🛡️ GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
+            // ??? GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
             const getRegionBadge = (rId) => {
                 if (!rId) return '';
                 const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
@@ -2192,36 +2255,39 @@ const Admin = {
             });
 
             actionBanner.innerHTML = `
-                <button id="action-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between focus:outline-none relative">
-                    <span class="flex items-center">
-                        <span class="mr-3 relative flex h-4 w-4">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-4 w-4 bg-blue-500 items-center justify-center">
-                                <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            </span>
-                        </span>
+                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
                         <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${activeItems.length})</span>
                     </span>
-                    <svg id="action-chevron" class="w-4 h-4 transform transition-transform text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <span class="admin-unread-badge ${activeItems.length ? '' : 'hidden'}" aria-label="Active items">${activeItems.length || ''}</span>
+                    <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
-                <div id="action-body" class="mt-4 space-y-2">
+                <div id="action-body" class="hidden mt-4 space-y-2">
                     ${listHtml}
                 </div>
             `;
-
-            const header = document.getElementById('action-header-btn');
-            const body = document.getElementById('action-body');
-            const chevron = document.getElementById('action-chevron');
-            
-            header.onclick = () => {
-                if (Admin.isGridMode) return; 
-                body.classList.toggle('hidden');
-                if (body.classList.contains('hidden')) chevron.classList.add('-rotate-90');
-                else chevron.classList.remove('-rotate-90');
-            };
+            if (adminContainer.firstElementChild !== actionBanner) {
+                adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+            }
 
         } catch(e) {
-            actionBanner.classList.add('hidden');
+            // Stay visible � never delete the tile on fetch failure
+            actionBanner.classList.remove('hidden');
+            actionBanner.innerHTML = `
+                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                    </span>
+                </button>
+                <div id="action-body" class="hidden mt-4 space-y-2">
+                    <div class="text-xs text-center text-red-500 py-4">Could not refresh active entities. Tap Refresh from another panel or reopen Dev Mode.</div>
+                </div>
+            `;
+            if (adminContainer?.firstElementChild !== actionBanner) {
+                adminContainer?.insertBefore(actionBanner, adminContainer.firstChild);
+            }
         }
     },
 
@@ -2269,12 +2335,62 @@ const Admin = {
         }
     },
 
+    /** Apply GSM / Review route to admin selects without touching the live board. */
+    applyPendingAdminRoute: (panelId) => {
+        const routeId = Admin._pendingAdminRoute;
+        if (!routeId) return;
+        let selectId = '';
+        if (panelId === 'alert-panel') selectId = 'alert-target';
+        else if (panelId === 'disruption-panel') selectId = 'disr-route';
+        else if (panelId === 'exclusion-panel') selectId = 'excl-route';
+        if (!selectId) return;
+        const selectEl = document.getElementById(selectId);
+        if (!selectEl) return;
+        const opt = selectEl.querySelector(`option[value="${routeId}"]`);
+        if (!opt) return;
+        if (selectEl.value !== routeId) {
+            selectEl.value = routeId;
+            selectEl.dispatchEvent(new Event('change'));
+        }
+        // Sync premium dropdown displays
+        if (selectId === 'excl-route') {
+            const display = document.getElementById('excl-route-display');
+            const list = document.getElementById('excl-route-list');
+            const matchLi = list && Array.from(list.querySelectorAll('li')).find((li) => {
+                try { return typeof li.onclick === 'function' && selectEl.value === routeId; } catch { return false; }
+            });
+            // Prefer the option�s matching list row by re-finding via value click simulation
+            if (list) {
+                const lis = Array.from(list.querySelectorAll('li[class*="cursor-pointer"]'));
+                // Re-populate display from selected option text
+                if (display && opt) {
+                    const plain = Admin.formatRouteLabelPlain(typeof ROUTES !== 'undefined' && ROUTES[routeId] ? ROUTES[routeId].name : opt.textContent);
+                    const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(routeId) : '';
+                    let badgeHtml = '';
+                    if (cues?.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
+                    display.innerHTML = `<span class="truncate mr-1 inline-flex items-center">${typeof ROUTES !== 'undefined' && ROUTES[routeId] ? Admin.formatRouteLabelHtml(ROUTES[routeId].name) : plain}</span>${badgeHtml}`;
+                }
+            }
+            const banner = document.getElementById('excl-review-banner');
+            if (banner && typeof ROUTES !== 'undefined' && ROUTES[routeId]) {
+                banner.classList.remove('hidden');
+                banner.innerHTML = `<span class="font-black text-blue-700 dark:text-blue-300">Reviewing</span> <span class="inline-flex items-center">${Admin.formatRouteLabelHtml(ROUTES[routeId].name)}</span> <span class="text-slate-500 dark:text-slate-400 font-medium">- live board route unchanged</span>`;
+            }
+        }
+    },
+
     deepLinkToPanel: (panelId, routeId) => {
         const targetPanel = document.getElementById(panelId);
         if (!targetPanel) return;
 
         const container = document.getElementById('admin-modules-container');
         if (!container) return;
+
+        // Pin admin route selection (never mutate live-board currentRouteId)
+        if (routeId) {
+            Admin._pendingAdminRoute = routeId;
+            Admin._adminRouteDeepLinkActive = true;
+        }
 
         // If we are currently in Grid Mode, we can just click it naturally
         if (Admin.isGridMode) {
@@ -2295,7 +2411,7 @@ const Admin = {
             const chev = targetPanel.querySelector('[id$="-chevron"]');
             if (chev) chev.classList.remove('-rotate-90');
 
-            // 🛡️ GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
+            // ??? GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
             const internalHeader = targetPanel.querySelector('[id$="-header-btn"]');
             if (internalHeader) internalHeader.style.setProperty('display', 'none', 'important');
 
@@ -2303,7 +2419,7 @@ const Admin = {
             const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6') || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
             if (devHeaderRow) {
                 devHeaderRow.classList.remove('pb-4', 'mb-6');
-                devHeaderRow.classList.add('pb-2', 'mb-3'); // 🛡️ GUARDIAN UX: Slim header padding
+                devHeaderRow.classList.add('pb-2', 'mb-3'); // ??? GUARDIAN UX: Slim header padding
 
                 const titleH3 = devHeaderRow.querySelector('h3');
                 if (titleH3) {
@@ -2342,7 +2458,7 @@ const Admin = {
                             container.classList.add('admin-grid-view');
                             container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
                             titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
-                            devHeaderRow.classList.add('pb-4', 'mb-6'); // 🛡️ GUARDIAN UX: Restore padding
+                            devHeaderRow.classList.add('pb-4', 'mb-6'); // ??? GUARDIAN UX: Restore padding
                             devHeaderRow.classList.remove('pb-2', 'mb-3');
                             const toggleBtn = document.getElementById('grid-view-toggle');
                             if (toggleBtn) toggleBtn.style.display = '';
@@ -2373,20 +2489,10 @@ const Admin = {
         }
 
         if (routeId) {
-            setTimeout(() => {
-                let selectId = '';
-                if (panelId === 'alert-panel') selectId = 'alert-target';
-                else if (panelId === 'disruption-panel') selectId = 'disr-route';
-                else if (panelId === 'exclusion-panel') selectId = 'excl-route';
-
-                if (selectId) {
-                    const selectEl = document.getElementById(selectId);
-                    if (selectEl) {
-                        selectEl.value = routeId;
-                        selectEl.dispatchEvent(new Event('change'));
-                    }
-                }
-            }, 100);
+            // Re-apply after panel mount + async populate*Routes (live board must not win)
+            setTimeout(() => Admin.applyPendingAdminRoute(panelId), 80);
+            setTimeout(() => Admin.applyPendingAdminRoute(panelId), 280);
+            setTimeout(() => Admin.applyPendingAdminRoute(panelId), 700);
         }
     },
 
@@ -2462,6 +2568,7 @@ const Admin = {
                 <div id="crash-body" class="hidden mt-3 space-y-2">
                     <div class="flex border-b border-gray-200 dark:border-gray-700 mb-2">
                         <button id="crash-tab-inbox" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">Inbox (<span id="crash-inbox-count">0</span>)</button>
+                        <button id="crash-tab-distress" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors focus:outline-none tracking-wider">Distress (<span id="crash-distress-count">0</span>)</button>
                         <button id="crash-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors focus:outline-none tracking-wider">Archive</button>
                     </div>
                     <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-inner gap-2">
@@ -2484,7 +2591,9 @@ const Admin = {
         const clearBtn = document.getElementById('crash-clear-btn');
         const listDiv = document.getElementById('crash-list');
         const tabInbox = document.getElementById('crash-tab-inbox');
+        const tabDistress = document.getElementById('crash-tab-distress');
         const tabArchive = document.getElementById('crash-tab-archive');
+        const isDistressCrash = (c) => c?.kind === 'distress' || String(c?.error || '').startsWith('DISTRESS:');
 
         header.onclick = () => {
             if (Admin.isGridMode) return;
@@ -2502,53 +2611,64 @@ const Admin = {
         refreshBtn.onclick = () => Admin.fetchCrashes();
 
         Admin.exportCrashesTxt = () => {
-            const isInbox = Admin.currentCrashTab === 'inbox';
-            const rows = (Admin.cachedCrashData || []).filter((c) =>
-                isInbox ? c.status !== 'resolved' : c.status === 'resolved'
-            );
+            const tab = Admin.currentCrashTab || 'inbox';
+            const rows = (Admin.cachedCrashData || []).filter((c) => {
+                if (tab === 'distress') return isDistressCrash(c);
+                if (tab === 'inbox') return c.status !== 'resolved' && !isDistressCrash(c);
+                return c.status === 'resolved';
+            });
             if (!rows.length) {
                 if (typeof showToast === 'function') showToast('No crashes to export', 'info');
                 return;
             }
-            let txt = `NEXT TRAIN — CRASH ANALYTICS\nTab: ${isInbox ? 'Inbox' : 'Archive'}\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+            const tabLabel = tab === 'distress' ? 'Distress' : (tab === 'inbox' ? 'Inbox' : 'Archive');
+            let txt = `NEXT TRAIN - CRASH ANALYTICS\nTab: ${tabLabel}\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
             rows.forEach((c, i) => {
                 txt += `#${i + 1}  ${Admin.formatDate(c.timestamp)}\n`;
-                txt += `  ID: ${c.id || '—'}\n`;
-                txt += `  Device: ${c.deviceId || c.device_id || '—'}\n`;
-                txt += `  Route: ${c.routeId || 'Global'} · Region: ${c.region || '—'} · Version: ${c.appVersion || '—'}\n`;
+                txt += `  ID: ${c.id || '-'}\n`;
+                txt += `  Device: ${c.deviceId || c.device_id || '-'}\n`;
+                txt += `  Route: ${c.routeId || 'Global'} - Region: ${c.region || '-'} - Version: ${c.appVersion || '-'}\n`;
                 txt += `  Status: ${c.status || 'open'}\n`;
+                if (c.contact) txt += `  Contact: ${c.contact}\n`;
+                if (c.reason) txt += `  Reason: ${c.reason}\n`;
+                if (c.note) txt += `  Note: ${c.note}\n`;
                 const msg = String(c.message || c.error || c.stack || '').replace(/\r/g, '');
                 if (msg) txt += `  Message:\n${msg.split('\n').map((l) => `    ${l}`).join('\n')}\n`;
                 txt += `\n`;
             });
             const dateStr = new Date().toISOString().slice(0, 10);
-            const ok = Admin.downloadFile(`crashes_${isInbox ? 'inbox' : 'archive'}_${dateStr}.txt`, txt);
-            if (ok && typeof showToast === 'function') showToast(`Downloaded ${rows.length} crash(es)`, 'success');
+            const ok = Admin.downloadFile(`crashes_${tab}_${dateStr}.txt`, txt);
+            if (ok && typeof showToast === 'function') showToast(`Downloaded ${rows.length} item(s)`, 'success');
         };
         if (exportBtn) exportBtn.onclick = () => Admin.exportCrashesTxt();
 
+        const styleCrashTab = (el, on) => {
+            if (!el) return;
+            if (on) {
+                el.classList.add('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+                el.classList.remove('border-transparent', 'text-gray-400');
+            } else {
+                el.classList.add('border-transparent', 'text-gray-400');
+                el.classList.remove('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+            }
+        };
+
         const switchTab = (tab) => {
             Admin.currentCrashTab = tab;
-            if (tab === 'inbox') {
-                tabInbox.classList.replace('border-transparent', 'border-blue-500');
-                tabInbox.classList.replace('text-gray-400', 'text-blue-600');
-                tabArchive.classList.replace('border-blue-500', 'border-transparent');
-                tabArchive.classList.replace('text-blue-600', 'text-gray-400');
-            } else {
-                tabArchive.classList.replace('border-transparent', 'border-blue-500');
-                tabArchive.classList.replace('text-gray-400', 'text-blue-600');
-                tabInbox.classList.replace('border-blue-500', 'border-transparent');
-                tabInbox.classList.replace('text-blue-600', 'text-gray-400');
-            }
+            styleCrashTab(tabInbox, tab === 'inbox');
+            styleCrashTab(tabDistress, tab === 'distress');
+            styleCrashTab(tabArchive, tab === 'archive');
             Admin.renderCrashList();
         };
 
         tabInbox.onclick = () => switchTab('inbox');
+        tabDistress?.addEventListener('click', () => switchTab('distress'));
         tabArchive.onclick = () => switchTab('archive');
 
-        // 🛡️ GUARDIAN UX: Native Swipe Navigation for Crash Tabs
+        // ??? GUARDIAN UX: Native Swipe Navigation for Crash Tabs
         let crashTouchStartX = 0;
         let crashTouchStartY = 0;
+        const crashTabOrder = ['inbox', 'distress', 'archive'];
         if (body) {
             body.addEventListener('touchstart', (e) => {
                 crashTouchStartX = e.changedTouches[0].screenX;
@@ -2558,24 +2678,34 @@ const Admin = {
                 const diffX = e.changedTouches[0].screenX - crashTouchStartX;
                 const diffY = e.changedTouches[0].screenY - crashTouchStartY;
                 if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-                    if (diffX > 0 && Admin.currentCrashTab === 'archive') switchTab('inbox'); // Swipe Right
-                    else if (diffX < 0 && Admin.currentCrashTab === 'inbox') switchTab('archive'); // Swipe Left
+                    const idx = crashTabOrder.indexOf(Admin.currentCrashTab || 'inbox');
+                    if (diffX > 0 && idx > 0) switchTab(crashTabOrder[idx - 1]);
+                    else if (diffX < 0 && idx < crashTabOrder.length - 1) switchTab(crashTabOrder[idx + 1]);
                 }
             }, {passive: true});
         }
 
         Admin.renderCrashList = () => {
             listDiv.innerHTML = '';
-            const isInbox = Admin.currentCrashTab === 'inbox';
-            const targetData = Admin.cachedCrashData.filter(c => isInbox ? c.status !== 'resolved' : c.status === 'resolved');
-            document.getElementById('crash-status-display').textContent = isInbox ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`;
+            const tab = Admin.currentCrashTab || 'inbox';
+            const targetData = Admin.cachedCrashData.filter((c) => {
+                if (tab === 'distress') return isDistressCrash(c);
+                if (tab === 'inbox') return c.status !== 'resolved' && !isDistressCrash(c);
+                return c.status === 'resolved';
+            });
+            const distressN = (Admin.cachedCrashData || []).filter(isDistressCrash).length;
+            const distressCountEl = document.getElementById('crash-distress-count');
+            if (distressCountEl) distressCountEl.textContent = String(distressN);
+            document.getElementById('crash-status-display').textContent =
+                tab === 'distress' ? `Distress / Help: ${targetData.length}`
+                : (tab === 'inbox' ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`);
             
             if (targetData.length === 0) {
-                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'No new crashes.' : 'Archive empty.'}</div>`;
+                listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${tab === 'distress' ? 'No distress / help reports.' : (tab === 'inbox' ? 'No new crashes.' : 'Archive empty.')}</div>`;
                 return;
             }
 
-            // 🛡️ GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
+            // ??? GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
             const secureEscape = (str) => {
                 if (!str) return '';
                 if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -2603,7 +2733,7 @@ const Admin = {
                 const did = secureEscape(rawDid);
                 const safeJsDid = rawDid.replace(/'/g, "\\'");
                 
-                // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
+                // ??? GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
                 const resolveAllHtml = isInbox 
                     ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>` 
                     : '';
@@ -2632,7 +2762,7 @@ const Admin = {
                     const safeLine = secureEscape(crash.line || '');
                     const safeUrl = secureEscape(crash.url || '');
 
-                    // Full raw details (stack / raw / logs) — never truncate to a one-line summary
+                    // Full raw details (stack / raw / logs) � never truncate to a one-line summary
                     let rawDetail = '';
                     if (crash.stack && crash.stack !== 'N/A') rawDetail = String(crash.stack);
                     else if (crash.raw) rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
@@ -2653,14 +2783,17 @@ const Admin = {
                     const safeRaw = secureEscape(rawDetail);
                     
                     const isBlackBox = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT');
+                    const isDistress = crash.kind === 'distress' || String(crash.error || '').startsWith('DISTRESS:');
                     const ticketDesc = isBlackBox
                         ? String(rawDetail || crash.stack || crash.raw || crash.error || '').slice(0, 12000)
                         : String(crash.error || '').slice(0, 240);
                     const escalateAttr = Admin.encodeEscalatePayload({
-                        type: 'bug',
-                        severity: isBlackBox ? 'medium' : 'high',
-                        title: isBlackBox
-                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) · ${crash.deviceId || crash.routeId || 'device'}`
+                        type: isDistress ? 'general' : 'bug',
+                        severity: isBlackBox ? 'medium' : (isDistress ? 'medium' : 'high'),
+                        title: isDistress
+                            ? `Distress � ${crash.contact || crash.deviceId || 'user'} � ${crash.reason || 'help'}`
+                            : isBlackBox
+                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) � ${crash.deviceId || crash.routeId || 'device'}`
                             : `Crash on ${crash.routeId || 'Global'}`,
                         description: ticketDesc,
                         source: `Crash ${crash.id || ''}`
@@ -2682,14 +2815,49 @@ const Admin = {
                              <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-2.5 py-1 rounded transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteCrash('${safeJsCrashId}')">Delete</button>
                            </div>`;
 
-                    const kindLabel = isBlackBox ? 'BLACK BOX LOG' : 'FATAL DUMP';
+                    const kindLabel = isDistress ? 'DISTRESS / HELP' : (isBlackBox ? 'BLACK BOX LOG' : 'FATAL DUMP');
+                    const kindBadgeClass = isDistress
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                    const safeContact = secureEscape(crash.contact || '');
+                    const safeReason = secureEscape(crash.reason || '');
+                    const safeNote = secureEscape(crash.note || '');
+                    let distressBlock = '';
+                    if (isDistress && (safeContact || safeNote || safeReason)) {
+                        const rawContact = String(crash.contact || '').trim();
+                        const contactHref = rawContact.includes('@')
+                            ? ('mailto:' + rawContact)
+                            : ('https://wa.me/' + rawContact.replace(/\D/g, ''));
+                        const safeContactHref = secureEscape(contactHref);
+                        distressBlock =
+                            '<div class="text-[11px] text-gray-900 dark:text-gray-100 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 mb-2 leading-snug">' +
+                            (safeContact
+                                ? '<div class="font-bold">Contact: <a class="text-blue-600 dark:text-blue-400 underline break-all" href="' +
+                                  safeContactHref +
+                                  '" target="_blank" rel="noopener">' +
+                                  safeContact +
+                                  '</a></div>'
+                                : '') +
+                            (safeReason
+                                ? '<div class="text-[10px] text-amber-800 dark:text-amber-300 mt-0.5 uppercase tracking-wide font-bold">' +
+                                  safeReason +
+                                  '</div>'
+                                : '') +
+                            (safeNote
+                                ? '<div class="mt-1 text-[10px] text-gray-700 dark:text-gray-300">' +
+                                  safeNote +
+                                  '</div>'
+                                : '') +
+                            '</div>';
+                    }
 
                     groupHTML += `
                         <div class="p-2.5 flex flex-col">
                             <div class="flex justify-between items-start mb-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">${kindLabel}</span>
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${kindBadgeClass}">${kindLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">${dateStr}</span>
                             </div>
+                            ${distressBlock}
                             <div class="text-[10px] font-mono text-gray-800 dark:text-gray-200 break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 leading-snug mb-2">
                                 ${safeErr}
                             </div>
@@ -2765,7 +2933,7 @@ const Admin = {
             }
         };
 
-        // 🛡️ GUARDIAN PHASE 1: Bulk Resolve Engine
+        // ??? GUARDIAN PHASE 1: Bulk Resolve Engine
         Admin.resolveAllDeviceCrashes = async (deviceId) => {
             const confirmed = await Admin.secureConfirm("Resolve All Crashes", `Mark all active crashes for device ${deviceId.substring(0,10)}... as resolved?`);
             if (!confirmed) return;
@@ -2899,7 +3067,7 @@ const Admin = {
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
                     .admin-grid-view .grid-hidden-actions { display: none !important; }
 
-                    /* Compact corner unread pills — never stretch across the tile */
+                    /* Compact corner unread pills � never stretch across the tile */
                     .admin-unread-badge {
                       position: absolute;
                       top: 6px;
@@ -2938,8 +3106,8 @@ const Admin = {
                 document.head.appendChild(style);
             }
 
-            // 🛡️ GUARDIAN UX FIX: Drill-Down "X" Interceptor
-            // Drilled-in → X acts as Back. Grid (or missing drill-back) → always close.
+            // ??? GUARDIAN UX FIX: Drill-Down "X" Interceptor
+            // Drilled-in ? X acts as Back. Grid (or missing drill-back) ? always close.
             // Previously X silently no-oped when !isGridMode but #drill-back-btn was gone,
             // and history.back() on #dev sometimes left the modal open.
             if (closeBtn) {
@@ -2985,17 +3153,17 @@ const Admin = {
                 container.classList.remove('admin-grid-view');
                 container.style.gridTemplateColumns = ''; // Clear inline styles
                 
-                // 🛡️ GUARDIAN UX FIX: Edge-to-Edge Expansion
+                // ??? GUARDIAN UX FIX: Edge-to-Edge Expansion
                 // Strip padding, borders, and margins so the module touches the exact edge of the screen
                 card.dataset.originalClasses = card.className;
                 card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800');
                 card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-transparent');
                 
-                // 🛡️ GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
+                // ??? GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
                 const signoutContainer = document.getElementById('admin-signout-container');
                 if (signoutContainer) signoutContainer.style.display = 'none';
                 
-                // 🛡️ GUARDIAN PHASE 11: Admin Router Bug Fix
+                // ??? GUARDIAN PHASE 11: Admin Router Bug Fix
                 history.pushState({ adminPanel: card.id }, '', `#dev-${card.id}`);
                 
                 // Hide sibling cards
@@ -3011,7 +3179,7 @@ const Admin = {
                 const chev = card.querySelector('[id$="-chevron"]');
                 if (chev) chev.classList.remove('-rotate-90');
 
-                // 🛡️ GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
+                // ??? GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
                 const innerHeader = card.querySelector('[id$="-header-btn"]');
                 if (innerHeader) innerHeader.style.setProperty('display', 'none', 'important');
                 
@@ -3019,7 +3187,7 @@ const Admin = {
                 const titleH3 = devHeaderRow.querySelector('h3');
                 devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
                 
-                // Keep native emoji in drill title (stop stripping — was causing broken headers)
+                // Keep native emoji in drill title (stop stripping � was causing broken headers)
                 let titleClone = card.querySelector('[id$="-header-btn"] > span').cloneNode(true);
                 titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
                 const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
@@ -3039,13 +3207,13 @@ const Admin = {
                     document.getElementById('drill-back-btn').onclick = (evt) => {
                         evt.stopPropagation();
                         
-                        // 🛡️ GUARDIAN PHASE 1: Lightbox Router Trap
+                        // ??? GUARDIAN PHASE 1: Lightbox Router Trap
                         if (window._adminLightboxOpen) {
                             Admin.closeLightbox();
                             return; // Halt cascade, stay in the panel
                         }
 
-                        // 🛡️ GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
+                        // ??? GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
                         // Temporarily rename the modal ID so ui.js's popstate listener doesn't see it
                         // and close it during the asynchronous history.back() event.
                         window._adminDrillBackLock = true;
@@ -3069,10 +3237,10 @@ const Admin = {
                         titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
                         toggleBtn.style.display = '';
                         
-                        // 🛡️ GUARDIAN UX FIX: Restore Card Borders & Padding
+                        // ??? GUARDIAN UX FIX: Restore Card Borders & Padding
                         card.className = card.dataset.originalClasses;
 
-                        // 🛡️ GUARDIAN UX FIX: Restore Action Required accordion state if it was open
+                        // ??? GUARDIAN UX FIX: Restore Action Required accordion state if it was open
                         if (window._actionRequiredWasOpen) {
                             const actionBody = document.getElementById('action-body');
                             const actionChevron = document.getElementById('action-chevron');
@@ -3081,7 +3249,7 @@ const Admin = {
                             window._actionRequiredWasOpen = false; // Reset lock
                         }
                         
-                        // 🛡️ GUARDIAN UX FIX: Restore Sign Out container when returning to grid
+                        // ??? GUARDIAN UX FIX: Restore Sign Out container when returning to grid
                         if (signoutContainer) signoutContainer.style.display = '';
                         
                         Array.from(container.children).forEach(child => {
@@ -3089,12 +3257,12 @@ const Admin = {
                             const b = child.querySelector('[id$="-body"]');
                             if (b) b.classList.add('hidden');
                             
-                            // 🛡️ GUARDIAN UX FIX: Restore internal accordion header
+                            // ??? GUARDIAN UX FIX: Restore internal accordion header
                             const h = child.querySelector('[id$="-header-btn"]');
                             if (h) h.style.removeProperty('display');
                         });
                     
-                    // 🛡️ GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
+                    // ??? GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
                     Admin.syncAllBadges();
                 };
                 
@@ -3104,8 +3272,8 @@ const Admin = {
                 if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
                 if (card.id === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
                 if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
-                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // 🛡️ GUARDIAN PHASE 7
-                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // 🛡️ GUARDIAN PHASE 14
+                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // ??? GUARDIAN PHASE 7
+                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // ??? GUARDIAN PHASE 14
                 if (card.id === 'alert-panel') {
                     const targetEl = document.getElementById('alert-target');
                     if (targetEl) targetEl.dispatchEvent(new Event('change'));
@@ -3244,11 +3412,16 @@ const Admin = {
                                 <option value="sunday">Sunday</option>
                             </select>
                         </div>
-                        <div>
+                        <div class="relative" id="de-filter-userid-container">
                             <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">User ID</label>
-                            <select id="de-filter-userid" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none font-mono">
+                            <select id="de-filter-userid" class="hidden">
                                 <option value="">All users</option>
                             </select>
+                            <div id="de-filter-userid-trigger" class="w-full h-9 px-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                                <span id="de-filter-userid-display" class="truncate font-mono text-[11px]">All users</span>
+                                <svg id="de-filter-userid-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                            <ul id="de-filter-userid-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-48 custom-scrollbar text-left"></ul>
                         </div>
                     </div>
                 </div>
@@ -3297,7 +3470,7 @@ const Admin = {
             chev?.classList.toggle('-rotate-90', !open);
         });
 
-        // Swipe between Fails ↔ Trip Plans (tabs + list surface)
+        // Swipe between Fails ? Trip Plans (tabs + list surface)
         const bindDeSwipe = (el) => {
             if (!el || el.dataset.deSwipeBound === '1') return;
             el.dataset.deSwipeBound = '1';
@@ -3330,11 +3503,31 @@ const Admin = {
         bindTripFilter('de-filter-day', 'dayType');
         bindTripFilter('de-filter-userid', 'userId');
 
+        // Premium custom dropdown for User ID (matches excl-route pattern)
+        const uidTrigger = document.getElementById('de-filter-userid-trigger');
+        const uidList = document.getElementById('de-filter-userid-list');
+        const uidChevron = document.getElementById('de-filter-userid-chevron');
+        if (uidTrigger && uidList && uidTrigger.dataset.bound !== '1') {
+            uidTrigger.dataset.bound = '1';
+            uidTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                uidList.classList.toggle('hidden');
+                uidChevron?.classList.toggle('rotate-180');
+            });
+            document.addEventListener('click', (e) => {
+                const wrap = document.getElementById('de-filter-userid-container');
+                if (wrap && !wrap.contains(e.target)) {
+                    uidList.classList.add('hidden');
+                    uidChevron?.classList.remove('rotate-180');
+                }
+            });
+        }
+
         if (exportBtn) {
             exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
-        // 🛡️ GUARDIAN PHASE 2: Dynamic Sorting State
+        // ??? GUARDIAN PHASE 2: Dynamic Sorting State
         Admin._deSortMode = Admin._deSortMode || 'recent'; 
 
         if (sortBtn) {
@@ -3396,7 +3589,7 @@ const Admin = {
                 
                 Admin._cachedRoutingFails = data;
 
-                // Aggregate by Origin|Dest|Reason|DayType — hits = unique logged attempts (client debounces retries)
+                // Aggregate by Origin|Dest|Reason|DayType � hits = unique logged attempts (client debounces retries)
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
@@ -3451,7 +3644,7 @@ const Admin = {
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const timeLabel = secureEscape(item.timeOfDay || '—');
+                    const timeLabel = secureEscape(item.timeOfDay || '�');
                     
                     const escalateAttr = Admin.encodeEscalatePayload({
                         type: 'route',
@@ -3463,7 +3656,7 @@ const Admin = {
 
                     card.innerHTML = `
                         <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">?</span> ${safeDest}</div>
                             <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
                                 <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
@@ -3534,7 +3727,7 @@ const Admin = {
 
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
             if (!useCacheOnly) {
-                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
+                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans�</div>';
             }
             try {
                 if (!useCacheOnly) {
@@ -3550,8 +3743,10 @@ const Admin = {
                 }
 
                 const allRows = Admin.flattenTripPlanRows();
-                // Populate user dropdown from full (unfiltered) set
+                // Populate premium user dropdown from full (unfiltered) set
                 const userSel = document.getElementById('de-filter-userid');
+                const uidList = document.getElementById('de-filter-userid-list');
+                const uidDisplay = document.getElementById('de-filter-userid-display');
                 if (userSel) {
                     const prev = Admin._deTripFilters?.userId || userSel.value || '';
                     const users = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
@@ -3559,13 +3754,39 @@ const Admin = {
                         `<option value="${String(u).replace(/"/g, '&quot;')}">${String(u).replace(/</g, '&lt;')}</option>`
                     ).join('');
                     if (prev && users.includes(prev)) userSel.value = prev;
-                    else Admin._deTripFilters.userId = '';
+                    else {
+                        userSel.value = '';
+                        Admin._deTripFilters.userId = '';
+                    }
+                    if (uidList) {
+                        const esc = (s) => String(s).replace(/</g, '&lt;');
+                        uidList.innerHTML = '';
+                        const addLi = (value, label) => {
+                            const li = document.createElement('li');
+                            li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer font-mono';
+                            li.textContent = label;
+                            li.onclick = () => {
+                                userSel.value = value;
+                                if (uidDisplay) uidDisplay.textContent = label;
+                                uidList.classList.add('hidden');
+                                document.getElementById('de-filter-userid-chevron')?.classList.remove('rotate-180');
+                                userSel.dispatchEvent(new Event('change'));
+                            };
+                            uidList.appendChild(li);
+                        };
+                        addLi('', 'All users');
+                        users.forEach((u) => addLi(u, esc(u)));
+                    }
+                    if (uidDisplay) {
+                        uidDisplay.textContent = userSel.value || 'All users';
+                    }
                 }
 
                 const filtered = Admin.getFilteredTripPlanRows();
+                // Group by trip corridor � uniqueUsers = unique userId�batchId (same user, new batch counts again)
                 const heatMap = {};
                 filtered.forEach((entry) => {
-                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}|${entry.userId}`;
+                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}`;
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -3573,16 +3794,20 @@ const Admin = {
                             dayType: entry.dayType,
                             region: entry.region,
                             userId: entry.userId,
+                            uniqueKeys: new Set(),
                             count: 0,
                             lastSeen: 0,
                             depSample: entry.depTime || null,
                             hits: [],
                         };
                     }
-                    heatMap[key].count++;
+                    const uniq = `${entry.userId || 'anon'}::${entry.batchId || entry.timestamp || 0}`;
+                    heatMap[key].uniqueKeys.add(uniq);
+                    heatMap[key].count = heatMap[key].uniqueKeys.size;
                     heatMap[key].hits.push(entry);
                     if (entry.timestamp > heatMap[key].lastSeen) {
                         heatMap[key].lastSeen = entry.timestamp;
+                        heatMap[key].userId = entry.userId;
                         if (entry.depTime) heatMap[key].depSample = entry.depTime;
                     }
                 });
@@ -3593,7 +3818,7 @@ const Admin = {
                 });
 
                 const totalRows = allRows.length;
-                const userCount = new Set(filtered.map((r) => r.userId).filter(Boolean)).size;
+                const userCount = new Set(filtered.map((r) => `${r.userId || ''}::${r.batchId || ''}`).filter(Boolean)).size;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
@@ -3609,7 +3834,7 @@ const Admin = {
 
                 listDiv.innerHTML = `
                     <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} trips · ${sorted.length} grouped rows · ${userCount} user${userCount === 1 ? '' : 's'} reported
+                        Showing ${filtered.length} logged trips � ${sorted.length} unique corridors � ${userCount} unique user-batches (export uses current filters)
                     </div>
                 `;
 
@@ -3620,31 +3845,31 @@ const Admin = {
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const depLabel = secureEscape(item.depSample || '—');
-                    const regionLabel = secureEscape(item.region || '—');
-                    const uidLabel = secureEscape(item.userId || '—');
+                    const depLabel = secureEscape(item.depSample || '-');
+                    const regionLabel = secureEscape(item.region || '-');
+                    const uidLabel = secureEscape(item.userId || '-');
                     const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     const hitsHtml = hitsSorted.map((h) => `
                         <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))}</span>
-                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '—')}</span>
+                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} � ${secureEscape((h.userId || '').slice(0, 14))}</span>
+                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
                         </div>
                     `).join('');
                     card.innerHTML = `
                         <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
                             <div class="min-w-0 flex-1 pr-2">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">→</span> ${safeDest}</div>
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">?</span> ${safeDest}</div>
                                 <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                     <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
                                     <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
                                     <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
                                     <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
                                 </div>
-                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">${uidLabel}</div>
+                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
                                 <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
                             </div>
                             <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">Hits</span>
+                                <span class="text-[9px] text-gray-400 uppercase font-bold">Users</span>
                                 <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
                             </div>
                         </button>
@@ -3701,13 +3926,13 @@ const Admin = {
                     });
                     Admin.downloadFile(`trip_plans_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
                 } else {
-                    let txt = `NEXT TRAIN — TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+                    let txt = `NEXT TRAIN � TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
                     rows.forEach((r, i) => {
                         txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
-                        txt += `  ${r.origin} → ${r.destination}\n`;
-                        txt += `  Region: ${r.region || '—'} · Day: ${r.dayType || '—'} · User: ${r.userId || '—'}\n`;
+                        txt += `  ${r.origin} ? ${r.destination}\n`;
+                        txt += `  Region: ${r.region || '�'} � Day: ${r.dayType || '�'} � User: ${r.userId || '�'}\n`;
                         if (r.authUid) txt += `  Auth UID: ${r.authUid}\n`;
-                        txt += `  Dep: ${r.depTime || '—'} · Arr: ${r.arrTime || '—'} · Transfers: ${r.transfers ?? '—'}\n\n`;
+                        txt += `  Dep: ${r.depTime || '�'} � Arr: ${r.arrTime || '�'} � Transfers: ${r.transfers ?? '�'}\n\n`;
                     });
                     Admin.downloadFile(`trip_plans_${dateStr}.txt`, txt);
                 }
@@ -3740,12 +3965,12 @@ const Admin = {
                 });
                 Admin.downloadFile(`routing_fails_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
             } else {
-                let txt = `NEXT TRAIN — ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
+                let txt = `NEXT TRAIN � ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
                 entries.forEach((r, i) => {
                     txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
-                    txt += `  ${(r.origin || '?')} → ${(r.destination || r.dest || '?')}\n`;
-                    txt += `  Reason: ${r.reason || 'UNKNOWN'} · Day: ${r.dayType || '—'} · Region: ${r.region || '—'}\n`;
-                    txt += `  User: ${r.userId || r.deviceId || '—'} · Time: ${r.timeOfDay || '—'}\n\n`;
+                    txt += `  ${(r.origin || '?')} ? ${(r.destination || r.dest || '?')}\n`;
+                    txt += `  Reason: ${r.reason || 'UNKNOWN'} � Day: ${r.dayType || '�'} � Region: ${r.region || '�'}\n`;
+                    txt += `  User: ${r.userId || r.deviceId || '�'} � Time: ${r.timeOfDay || '�'}\n\n`;
                 });
                 Admin.downloadFile(`routing_fails_${dateStr}.txt`, txt);
             }
@@ -3806,7 +4031,7 @@ const Admin = {
             </div>
             
             <div id="fb-body" class="hidden mt-4 flex flex-col">
-                <!-- 🛡️ GUARDIAN UX FIX: Next Train Style Tabs -->
+                <!-- ??? GUARDIAN UX FIX: Next Train Style Tabs -->
                 <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3">
                     <button id="fb-tab-inbox" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none">
                         Inbox
@@ -3816,7 +4041,7 @@ const Admin = {
                     </button>
                 </div>
 
-                <!-- 🛡️ GUARDIAN UX FIX: Search Bar -->
+                <!-- ??? GUARDIAN UX FIX: Search Bar -->
                 <div class="mb-3 relative px-1">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
                         ${Admin.icon('search', 'w-3.5 h-3.5')}
@@ -3824,7 +4049,7 @@ const Admin = {
                     <input type="text" id="fb-search-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block pl-10 p-3 shadow-inner outline-none transition-colors" placeholder="Search aliases, IDs, or messages...">
                 </div>
 
-                <!-- 🛡️ GUARDIAN UX FIX: Relocated Action Buttons -->
+                <!-- ??? GUARDIAN UX FIX: Relocated Action Buttons -->
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
@@ -3894,7 +4119,7 @@ const Admin = {
         tabInbox.onclick = () => switchTab('inbox');
         tabArchive.onclick = () => switchTab('archive');
 
-        // 🛡️ GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
+        // ??? GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
         let fbTouchStartX = 0;
         let fbTouchStartY = 0;
         if (body) {
@@ -3925,7 +4150,7 @@ const Admin = {
                 groups[did].push(item);
             });
 
-            // 🛡️ GUARDIAN UX FIX: Dynamic Tab Counters
+            // ??? GUARDIAN UX FIX: Dynamic Tab Counters
             let totalInbox = 0;
             let totalArchive = 0;
             Object.keys(groups).forEach(did => {
@@ -3982,7 +4207,7 @@ const Admin = {
                 });
             };
             
-            // 🛡️ GUARDIAN UX FIX: Universal CRM Date Formatter
+            // ??? GUARDIAN UX FIX: Universal CRM Date Formatter
             const formatNiceDateTime = (ts) => {
                 const d = new Date(ts);
                 const day = d.getDate();
@@ -4024,7 +4249,7 @@ const Admin = {
 
                 const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
 
-                // 🛡️ GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
+                // ??? GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
                 const allEmails = new Set();
                 const allPhones = new Set();
                 
@@ -4087,7 +4312,7 @@ const Admin = {
                     contactHtml += '</div>';
                 }
 
-                // 🛡️ GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
+                // ??? GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
@@ -4147,21 +4372,21 @@ const Admin = {
                     
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
-                        // 🛡️ GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
-                        let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">✓</span>';
+                        // ??? GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
+                        let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">?</span>';
                         if (item.acknowledged) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">✓✓</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
+                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">??</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
                         } else if (item.read) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">✓✓</span>';
+                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">??</span>';
                         } else if (item.delivered) {
-                            receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">✓✓</span>';
+                            receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">??</span>';
                         }
 
-                        // REGEX: Extract Admin Signoff Name ("— Enock")
+                        // REGEX: Extract Admin Signoff Name ("� Enock")
                         let parsedAdminText = item.text || "";
                         let adminName = "Admin";
                         parsedAdminText = Admin.repairMojibake(parsedAdminText);
-                        // Match em dash and legacy UTF-8 mojibake of "—"
+                        // Match em dash and legacy UTF-8 mojibake of "�"
                         const signoffRegex = /(?:<br>|\n)*<span[^>]*>(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*(.*?)<\/span>$/i;
                         const fallbackRegex = /(?:<br>|\n)*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*([a-zA-Z]+)$/i;
                         
@@ -4173,15 +4398,16 @@ const Admin = {
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
 
-                        // 🛡️ GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
+                        // ??? GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
                         parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
                             if (btnStart || btnEnd) return match; // Already wrapped in a button
-                            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
+                            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
                         });
 
-                        // 🛡️ GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
+                        // ??? GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
+                        const msgAnchor = secureEscape(item.id || item.key || '');
                         groupHTML += `
-                            <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4">
+                            <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}">
                                 <div class="flex flex-col bg-slate-700 dark:bg-slate-800 text-white pt-1.5 pb-2 px-3 rounded-2xl rounded-tr-sm shadow-md border border-slate-600 dark:border-slate-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
                                     <div class="mb-0.5 text-[10px] font-black text-slate-300 uppercase tracking-wider">${adminName}</div>
                                     <div>${parsedAdminText}</div>
@@ -4197,7 +4423,7 @@ const Admin = {
                         // TRAILING WHITESPACE PURGE: .trim() before replace
                         let rawText = item.text ? secureEscape(item.text.trim()) : "No content";
                         
-                        // 🛡️ GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
+                        // ??? GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
                         rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
                         
                         // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
@@ -4217,53 +4443,88 @@ const Admin = {
                             ? item.attachmentUrls.map(url => secureEscape(url)) 
                             : (safeAttachUrl ? [safeAttachUrl] : []);
 
-                        // REGEX: Extract Context Block ("[Replying to: ...]")
+                        // Quote chip: one block for admin-thread replies + legacy [context] prefixes
                         let quoteBlockHtml = "";
-                        // 🛡️ GUARDIAN UX FIX: Relaxed regex to catch replies without explicit <br> tags
-                        const quoteRegex = /^\[(.*?)\](?:\s*<br>\s*|\s+)/i;
-                        const quoteMatch = rawText.match(quoteRegex);
                         let isReply = false;
-                        
-                        if (quoteMatch && quoteMatch[1] !== undefined) {
+                        const decodeEntities = (s) => String(s || '')
+                            .replace(/&nbsp;/gi, ' ')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#39;/g, "'");
+
+                        // New + legacy: [REPLY TO ADMIN: key | snippet] body   OR   [REPLY TO ADMIN: key] snippet body
+                        const replyAdminRe = /^\[REPLY TO ADMIN:\s*([^|\]]+?)(?:\s*\|\s*([^\]]*))?\](?:\s*<br>\s*|\s+)?([\s\S]*)$/i;
+                        const replyAdminMatch = rawText.match(replyAdminRe);
+                        if (replyAdminMatch) {
                             isReply = true;
-                            // 🛡️ GUARDIAN UX FIX: Force string cast to ensure .replace() and .includes() never throw TypeErrors
-                            const rawQuoteContent = String(quoteMatch[1]);
-                            let quoteContent = rawQuoteContent
-                                .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_]+/i, 'Reply to Enock:')
-                                .replace(/Replying to:\s*/i, '')
-                                .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ');
-                                
-                            // 🛡️ GUARDIAN PHASE 7: Clickable Context Bubble
-                            // Determines if this is an alert reply (either legacy text match or future ID format)
-                            let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
-                            let isAlertQuote = alertIdMatch || rawQuoteContent.includes('Advisory') || rawQuoteContent.includes('Line Severed') || rawQuoteContent.includes('Expect Delays');
-                            
-                            if (isAlertQuote) {
-                                let alertIdParam = alertIdMatch ? `'${alertIdMatch[1]}'` : 'null';
-                                let safeQuoteText = escapeHTML(quoteContent.replace(/'/g, "\\'"));
-                                quoteBlockHtml = `
-                                    <button type="button" onclick="Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')" class="text-left -mx-1 mb-1.5 mt-1 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 py-1.5 px-2 rounded-r text-[10px] text-blue-800 dark:text-blue-300 italic w-full hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors focus:outline-none group shadow-sm">
-                                        <div class="flex items-start justify-between">
-                                            <span class="line-clamp-2">${quoteContent}</span>
-                                            <svg class="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                                        </div>
-                                    </button>
-                                `;
-                            } else {
-                                quoteBlockHtml = `
-                                    <div class="-mx-1 mb-1.5 mt-1 bg-black/5 dark:bg-white/10 border-l-4 border-gray-400 dark:border-gray-500 py-1 px-2 rounded-r text-[10px] text-gray-700 dark:text-gray-300 italic line-clamp-3 w-full">
-                                        ${quoteContent}
-                                    </div>
-                                `;
+                            const replyKey = String(replyAdminMatch[1] || '').trim();
+                            let snippet = decodeEntities(String(replyAdminMatch[2] || '').trim());
+                            let bodyRest = String(replyAdminMatch[3] || '').trim();
+                            // Legacy format put the snippet outside the brackets
+                            if (!snippet && bodyRest) {
+                                const parts = bodyRest.split(/(?:<br>\s*)+/i);
+                                if (parts.length > 1) {
+                                    snippet = decodeEntities(parts[0].replace(/^["'\s]+|["'\s]+$/g, ''));
+                                    bodyRest = parts.slice(1).join('<br>').trim();
+                                } else {
+                                    snippet = decodeEntities(bodyRest.replace(/^["'\s]+|["'\s]+$/g, ''));
+                                    bodyRest = '';
+                                }
                             }
-                            rawText = rawText.replace(quoteRegex, '').trim(); // Remove from main body
+                            snippet = snippet.replace(/\s+/g, ' ').trim();
+                            const chipLabel = `Enock: ${snippet || 'Admin message'}`.slice(0, 160);
+                            const safeKey = replyKey.replace(/'/g, "\\'");
+                            quoteBlockHtml = `
+                                <button type="button" data-reply-key="${secureEscape(replyKey)}" onclick="Admin.jumpToQuotedFeedback('${safeKey}')" class="text-left -mx-1 mb-1.5 mt-1 bg-black/5 dark:bg-white/10 border-l-4 border-blue-400 dark:border-blue-500 py-1.5 px-2 rounded-r text-[10px] text-gray-800 dark:text-gray-200 italic w-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm">
+                                    <span class="line-clamp-3 not-italic font-semibold text-blue-700 dark:text-blue-300">${secureEscape(chipLabel)}</span>
+                                </button>
+                            `;
+                            rawText = bodyRest;
+                        } else {
+                            const quoteRegex = /^\[([\s\S]*?)\](?:\s*<br>\s*|\s+)/i;
+                            const quoteMatch = rawText.match(quoteRegex);
+                            if (quoteMatch && quoteMatch[1] !== undefined) {
+                                isReply = true;
+                                const rawQuoteContent = decodeEntities(String(quoteMatch[1]));
+                                let quoteContent = rawQuoteContent
+                                    .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_|]+/i, '')
+                                    .replace(/Replying to:\s*/i, '')
+                                    .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
+                                    .trim();
+                                if (/^enock\s*:/i.test(quoteContent) === false && quoteContent) {
+                                    quoteContent = `Enock: ${quoteContent}`;
+                                }
+                                let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
+                                let isAlertQuote = alertIdMatch || rawQuoteContent.includes('Advisory') || rawQuoteContent.includes('Line Severed') || rawQuoteContent.includes('Expect Delays');
+                                if (isAlertQuote) {
+                                    let alertIdParam = alertIdMatch ? `'${alertIdMatch[1]}'` : 'null';
+                                    let safeQuoteText = escapeHTML(quoteContent.replace(/'/g, "\\'"));
+                                    quoteBlockHtml = `
+                                        <button type="button" onclick="Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')" class="text-left -mx-1 mb-1.5 mt-1 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 py-1.5 px-2 rounded-r text-[10px] text-blue-800 dark:text-blue-300 italic w-full hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors focus:outline-none group shadow-sm">
+                                            <div class="flex items-start justify-between">
+                                                <span class="line-clamp-2">${secureEscape(quoteContent)}</span>
+                                                <svg class="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                            </div>
+                                        </button>
+                                    `;
+                                } else {
+                                    quoteBlockHtml = `
+                                        <div class="-mx-1 mb-1.5 mt-1 bg-black/5 dark:bg-white/10 border-l-4 border-gray-400 dark:border-gray-500 py-1 px-2 rounded-r text-[10px] text-gray-700 dark:text-gray-300 italic line-clamp-3 w-full">
+                                            ${secureEscape(quoteContent)}
+                                        </div>
+                                    `;
+                                }
+                                rawText = rawText.replace(quoteRegex, '').trim();
+                            }
                         }
 
                         // Safeguard rawText in case the replace cleared it completely
                         if (typeof rawText !== 'string') rawText = "";
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
 
-                        // 🛡️ GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
+                        // ??? GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
                         let attachmentHtml = '';
                         if (safeAttachUrls.length > 0) {
                             const gridCols = safeAttachUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
@@ -4286,7 +4547,7 @@ const Admin = {
                         else if (item.type === 'bug') { typeLabel = "App Bug"; typeIconName = "bug"; }
                         else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIconName = "lightbulb"; }
 
-                        // 🛡️ GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
+                        // ??? GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
                         const headerLabelText = isReply
                             ? `${Admin.icon('reply', 'w-3 h-3')} Reply:`
                             : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
@@ -4295,11 +4556,11 @@ const Admin = {
                         const integratedHeaderHtml = `
                             <div class="text-[9px] font-black ${headerColorClass} uppercase tracking-widest mb-1.5 border-b border-gray-200 dark:border-gray-700 pb-1 flex justify-between items-center w-full">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1">${headerLabelText}</span>
-                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} • ${safeRouteId}</span>
+                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} � ${safeRouteId}</span>
                             </div>
                         `;
 
-                        // 🛡️ GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
+                        // ??? GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
                         groupHTML += `
                             <div class="flex flex-col items-start mb-1.5 pr-2 sm:pr-4">
                                 <div class="flex flex-col bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 pt-1.5 pb-2 px-3 rounded-2xl rounded-tl-sm shadow-sm border border-gray-200 dark:border-gray-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
@@ -4347,7 +4608,7 @@ const Admin = {
                 listContainer.appendChild(groupCard);
             });
 
-            // 🛡️ GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
+            // ??? GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
                 const header = e.target.closest('.feedback-group-header');
                 if (!header) return;
@@ -4503,7 +4764,7 @@ const Admin = {
             }
         };
 
-        // 🛡️ GUARDIAN PHASE 11: Restore from Archive
+        // ??? GUARDIAN PHASE 11: Restore from Archive
         Admin.restoreFeedback = async (id) => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -4552,13 +4813,13 @@ const Admin = {
             }
         };
 
-        // 🛡️ GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
+        // ??? GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
         Admin.setCommuterAlias = async (deviceId, currentAlias) => {
             // Prefill with existing alias, else the full Next Train ID so admin can
             // copy/edit/clear it instead of starting from a blank field.
             const initial = (currentAlias && String(currentAlias).trim()) ? String(currentAlias) : String(deviceId || '');
             const newName = prompt(
-                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID — delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
+                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID � delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
                 initial
             );
             if (newName === null) return; // Action cancelled by user
@@ -4569,7 +4830,7 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const trimmed = newName.trim();
-                // Saving the raw device ID as "alias" is pointless — treat as no alias
+                // Saving the raw device ID as "alias" is pointless � treat as no alias
                 if (trimmed === '' || trimmed === deviceId) {
                     await fetch(`${dynamicEndpoint}admin_state/aliases/${deviceId}.json?auth=${secret}`, { method: 'DELETE' });
                     if (Admin.cachedAliases) delete Admin.cachedAliases[deviceId];
@@ -4591,7 +4852,7 @@ const Admin = {
             }
         };
 
-        // 🛡️ GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
+        // ??? GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
         Admin.exportThreadForAI = (did) => {
             const items = Admin.cachedFeedbackData.filter(i => (i.device_id === did || i.deviceId === did || (did === 'Anonymous / Legacy' && !i.device_id && !i.deviceId)));
             items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -4623,7 +4884,7 @@ const Admin = {
             if (ok && typeof showToast === 'function') showToast("Downloaded thread (.txt)", "success");
         };
 
-        // 🛡️ GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
+        // ??? GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
         Admin.exportGlobalThreadsForAI = () => {
             const isInbox = Admin.currentFeedbackTab === 'inbox';
             
@@ -4765,7 +5026,7 @@ const Admin = {
         Admin.fetchDelayReports = async () => {
             const list = document.getElementById('dr-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading…</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading�</p>';
             try {
                 const secret = await Admin.getAuthKey();
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -4802,24 +5063,24 @@ const Admin = {
                 };
 
                 list.innerHTML = items.slice(0, 80).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '—';
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '�';
                     const sev = (r.severity || 'moderate').toUpperCase();
                     const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
                     const status = r.status || 'open';
                     const note = r.note ? String(r.note).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '<span class="italic text-gray-400">No note</span>';
-                    const who = r.isGuest ? `guest · ${(r.deviceId || '').slice(0, 8)}` : `uid · ${(r.uid || '').slice(0, 10)}`;
+                    const who = r.isGuest ? `guest � ${(r.deviceId || '').slice(0, 8)}` : `uid � ${(r.uid || '').slice(0, 10)}`;
                     const closedCls = status === 'closed' ? 'opacity-50' : '';
                     return `
                         <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closedCls}" data-report-id="${r.reportId || r._key}">
                             <div class="flex justify-between items-start gap-2 mb-1">
                                 <div class="min-w-0">
                                     <p class="text-xs font-black text-gray-900 dark:text-white truncate">${routeName(r.routeId)}</p>
-                                    <p class="text-[10px] font-bold ${sevColor}">${sev} · ${status} · ${r.source || 'app'}</p>
+                                    <p class="text-[10px] font-bold ${sevColor}">${sev} � ${status} � ${r.source || 'app'}</p>
                                 </div>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
                             <p class="text-[11px] text-gray-700 dark:text-gray-300 mb-1">${note}</p>
-                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` · near ${String(r.station).replace(/</g, '')}` : ''} · ${r.reportId || r._key}${r.verified ? ' · ✓ verified' : ''}</p>
+                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` � near ${String(r.station).replace(/</g, '')}` : ''} � ${r.reportId || r._key}${r.verified ? ' � ? verified' : ''}</p>
                             <div class="flex flex-wrap gap-3">
                             ${status !== 'closed' ? `<button type="button" class="dr-close-btn text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Mark closed</button>` : '<span class="text-[10px] text-gray-400">Closed</span>'}
                             ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn text-[10px] font-bold text-green-700 dark:text-green-400 underline" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified (+trust)</button>` : (r.verified ? '<span class="text-[10px] text-green-600">Verified</span>' : '')}
@@ -4930,7 +5191,7 @@ const Admin = {
         Admin.fetchModerationQueue = async () => {
             const list = document.getElementById('mq-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading…</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading�</p>';
             try {
                 const secret = await Admin.getAuthKey();
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -4958,7 +5219,7 @@ const Admin = {
                 }
 
                 list.innerHTML = items.slice(0, 100).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '—';
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '�';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
@@ -4966,11 +5227,11 @@ const Admin = {
                     return `
                         <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
                             <div class="flex justify-between gap-2 mb-1">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} · ${r.routeId || '—'}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} � ${r.routeId || '�'}</p>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '—').toString().slice(0, 16)} · post: ${(r.targetPostId || '—').toString().slice(0, 18)}</p>
-                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">“${snippet}”</p>` : ''}
+                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '�').toString().slice(0, 16)} � post: ${(r.targetPostId || '�').toString().slice(0, 18)}</p>
+                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">�${snippet}�</p>` : ''}
                             ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
@@ -5045,7 +5306,7 @@ const Admin = {
         };
     },
 
-    /** Phase 7 — timed shadow ban with duration picker. opts.deviceId also writes devices/{id}/flags. */
+    /** Phase 7 � timed shadow ban with duration picker. opts.deviceId also writes devices/{id}/flags. */
     applyShadowBan: async (uid, opts = {}) => {
         if (!uid) {
             if (typeof showToast === 'function') showToast('No target uid', 'error');
@@ -5117,7 +5378,7 @@ const Admin = {
         const modeLabel = banModes.find((m) => m.id === choice.mode)?.label || choice.mode;
         const confirmed = await Admin.secureConfirm(
             'Confirm shadow ban',
-            `Ban ${uid} for ${choice.label} with “${modeLabel}”? They won’t be told they’re banned.`
+            `Ban ${uid} for ${choice.label} with �${modeLabel}�? They won�t be told they�re banned.`
         );
         if (!confirmed) return false;
 
@@ -5169,7 +5430,7 @@ const Admin = {
                 window.trustLocalBlockList.add(uid);
                 if (deviceId) window.trustLocalBlockList.add(deviceId);
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) — mode: ${modeLabel}`, 'success');
+            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) � mode: ${modeLabel}`, 'success');
             if (typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
             return true;
         } catch (e) {
@@ -5182,7 +5443,7 @@ const Admin = {
     liftShadowBan: async (uid, opts = {}) => {
         if (!uid) return false;
         const deviceId = opts.deviceId || (/^usr_/i.test(uid) ? uid : null);
-        const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}…?`);
+        const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}�?`);
         if (!confirmed) return false;
         try {
             const secret = await Admin.getAuthKey();
@@ -5234,7 +5495,7 @@ const Admin = {
         await fetch(`${dynamicEndpoint}users/${uid}/trustScore.json?auth=${secret}`, {
             method: 'PUT', body: JSON.stringify(score + 1)
         });
-        if (typeof showToast === 'function') showToast(`Verified — trust score → ${score + 1}`, 'success');
+        if (typeof showToast === 'function') showToast(`Verified � trust score ? ${score + 1}`, 'success');
     },
 
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
@@ -5263,7 +5524,7 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate — switch tabs below.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate � switch tabs below.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
@@ -5274,12 +5535,12 @@ const Admin = {
                         <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
                     <div id="ut-bans-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
-                        <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans…</p>
+                        <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans�</p>
                     </div>
                 </div>
                 <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
                     <div class="flex gap-2 mb-3 px-1">
-                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email…" />
+                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_�), or email�" />
                         <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
                     </div>
                     <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
@@ -5354,10 +5615,10 @@ const Admin = {
         Admin.fetchActiveBans = async () => {
             const list = document.getElementById('ut-bans-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans…</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans�</p>';
             try {
                 const secret = await Admin.getAuthKey();
-                if (!secret) throw new Error('not signed in — open Admin while logged in as an admin account');
+                if (!secret) throw new Error('not signed in � open Admin while logged in as an admin account');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const auth = `?auth=${encodeURIComponent(secret)}`;
                 const [usersRes, devicesRes] = await Promise.all([
@@ -5381,7 +5642,7 @@ const Admin = {
                     bans.push({
                         id,
                         source,
-                        displayName: record.displayName || (source === 'device' ? 'Device guest' : '—'),
+                        displayName: record.displayName || (source === 'device' ? 'Device guest' : '�'),
                         email: record.email || null,
                         until,
                         bannedAt: Number(flags.shadowBannedAt || 0),
@@ -5395,7 +5656,7 @@ const Admin = {
                 Object.entries(devices).forEach(([deviceId, d]) => {
                     // Prefer linked account if already listed; else show device-level ban
                     if (d?.uid && seen.has(d.uid)) return;
-                    pushBan(deviceId, { flags: d?.flags || {}, displayName: d?.uid ? `Device → ${d.uid}` : 'Device' }, 'device');
+                    pushBan(deviceId, { flags: d?.flags || {}, displayName: d?.uid ? `Device ? ${d.uid}` : 'Device' }, 'device');
                 });
 
                 bans.sort((a, b) => (b.bannedAt || 0) - (a.bannedAt || 0));
@@ -5418,7 +5679,7 @@ const Admin = {
                         })()
                         : 'no expiry';
                     const modeStr = banModeLabel(b.mode);
-                    const name = String(b.displayName || '—').replace(/</g, '&lt;');
+                    const name = String(b.displayName || '�').replace(/</g, '&lt;');
                     const email = b.email ? String(b.email).replace(/</g, '&lt;') : '';
                     const card = document.createElement('div');
                     card.className = 'border border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/20 rounded-xl p-3 space-y-1';
@@ -5468,14 +5729,14 @@ const Admin = {
                 return { uid: q, user, via: 'uid', deviceId: null };
             }
 
-            // 2) Device ID → linked Firebase uid (devices/{deviceId}.uid)
+            // 2) Device ID ? linked Firebase uid (devices/{deviceId}.uid)
             const looksLikeDevice = /^usr_/i.test(q);
             if (looksLikeDevice) {
                 const device = await fetchJson(`devices/${encodeURIComponent(q)}.json`);
                 if (device?.uid) {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
-                        return { uid: device.uid, user, via: 'device→uid', deviceId: q };
+                        return { uid: device.uid, user, via: 'device?uid', deviceId: q };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
@@ -5515,11 +5776,11 @@ const Admin = {
             const query = (document.getElementById('ut-uid-input')?.value || '').trim();
             const out = document.getElementById('ut-result');
             if (!query || !out) return;
-            out.innerHTML = '<p class="animate-pulse text-gray-400">Loading…</p>';
+            out.innerHTML = '<p class="animate-pulse text-gray-400">Loading�</p>';
             try {
                 const resolved = await Admin.resolveTrustTarget(query);
                 if (!resolved) {
-                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_…</code>), or account email.</p>';
+                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_�</code>), or account email.</p>';
                     return;
                 }
                 const { uid, user, via, deviceId } = resolved;
@@ -5527,23 +5788,23 @@ const Admin = {
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
                 const expired = banned && until > 0 && Date.now() > until;
-                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '—');
+                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '�');
                 const modeRaw = flags.shadowBanMode || 'offline';
                 const modeStr = banModeLabel(modeRaw);
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
-                const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '—')).toString().replace(/</g, '&lt;');
-                const email = (user.email || '—').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device→uid' ? 'device → account' : 'user id'));
+                const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '�')).toString().replace(/</g, '&lt;');
+                const email = (user.email || '�').toString().replace(/</g, '&lt;');
+                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device ? account' : 'user id'));
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
                         <p class="font-black text-gray-900 dark:text-white">${name}</p>
                         <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
-                        <p class="text-[11px]">Email: <b>${email}</b> · Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` · device <span class="font-mono">${deviceId}</span>` : ''}</p>
-                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> · Trust score: <b>${score}</b></p>
-                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr}` : ''}</p>
+                        <p class="text-[11px]">Email: <b>${email}</b> � Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` � device <span class="font-mono">${deviceId}</span>` : ''}</p>
+                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> � Trust score: <b>${score}</b></p>
+                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` � until ${untilStr}` : ''}</p>
                         ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
                         <div class="flex flex-wrap gap-3 pt-1">
-                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban…</button>
+                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban�</button>
                             <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
                         </div>
                     </div>`;
@@ -5572,7 +5833,7 @@ const Admin = {
 
         const alias = Admin.cachedAliases && Admin.cachedAliases[deviceId] ? Admin.cachedAliases[deviceId] : null;
         const recipientHtml = alias
-            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">·</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
+            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">�</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
             : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>`;
         
         let modal = document.getElementById('admin-reply-modal');
@@ -5598,7 +5859,7 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">🔗</button>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">??</button>
                             <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
@@ -5649,12 +5910,12 @@ const Admin = {
             modal.firstElementChild.classList.add('scale-95');
         };
 
-        // 🛡️ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
+        // ??? GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
         const replyUploadFile = document.getElementById('admin-reply-upload-file');
         if (replyUploadFile) {
             replyUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('admin-reply-text');
-                // 🛡️ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // ??? GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -5704,7 +5965,7 @@ const Admin = {
                                     if (isPdf) {
                                         htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
                                     } else {
-                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button><br>`;
+                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
                                     }
                                     
                                     if (editor) {
@@ -5744,7 +6005,7 @@ const Admin = {
             // Auto-Signoff Logic
             const adminEmail = Admin.currentUser?.email || '';
             const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
-            text += `<br><br><span style="color: #9ca3af; font-style: italic;">— ${adminName}</span>`;
+            text += `<br><br><span style="color: #9ca3af; font-style: italic;">� ${adminName}</span>`;
             
             const btn = document.getElementById('reply-send');
             btn.textContent = "Sending...";
@@ -5789,6 +6050,19 @@ const Admin = {
     },
 
     // --- GUARDIAN PHASE 7: CONTEXTUAL ALERT VIEWER ---
+    jumpToQuotedFeedback: (replyKey) => {
+        if (!replyKey) return;
+        const el = document.getElementById(`fb-msg-${replyKey}`)
+            || document.querySelector(`[data-fb-msg-id="${CSS.escape ? CSS.escape(replyKey) : replyKey}"]`);
+        if (!el) {
+            if (typeof showToast === 'function') showToast('Original message not in this thread view', 'info', 2000);
+            return;
+        }
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-blue-400', 'rounded-xl');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'rounded-xl'), 1600);
+    },
+
     viewContextAlert: async (alertId, fallbackText) => {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
@@ -5804,7 +6078,7 @@ const Admin = {
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-blue-200 dark:border-blue-900/50 flex flex-col max-h-[85vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <div class="flex items-center space-x-2">
-                            <span class="text-xl">🔍</span>
+                            <span class="text-xl">??</span>
                             <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Original Advisory</h3>
                         </div>
                         <button onclick="closeSmoothModal('admin-context-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
@@ -5835,7 +6109,7 @@ const Admin = {
                 if (data && !data.error) Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
                 
                 if (!foundData) {
-                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // 🛡️ GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
+                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // ??? GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
                     data = await res.json();
                     if (data && !data.error) {
                         Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
@@ -5906,7 +6180,7 @@ const Admin = {
                 }
             }
 
-            // 🛡️ GUARDIAN PHASE 14: Disruption Graveyard Sweep
+            // ??? GUARDIAN PHASE 14: Disruption Graveyard Sweep
             if (!foundData && fallbackText) {
                 const cleanFallback = fallbackText.replace(/['"]/g, '').toLowerCase().substring(0, 30);
                 
@@ -5958,7 +6232,7 @@ const Admin = {
             } else {
                 contentDiv.innerHTML = `
                     <div class="text-center py-4">
-                        <span class="text-3xl mb-2 block">📡</span>
+                        <span class="text-3xl mb-2 block">??</span>
                         <p class="text-gray-500 text-sm font-bold">Alert not found in database.</p>
                         <p class="text-xs text-gray-400 mt-2">It may have been permanently deleted or too old to retrieve. Here is the snippet we have:</p>
                         <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded italic text-xs text-gray-600 dark:text-gray-400">"${fallbackText}"</div>
@@ -5971,7 +6245,7 @@ const Admin = {
         }
     },
 
-// --- 🛡️ GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
+// --- ??? GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
     _savedRange: null,
     saveCursorRange: () => {
         const sel = window.getSelection();
@@ -5985,7 +6259,7 @@ const Admin = {
         const editor = document.getElementById(targetId);
         if (!editor) return;
         
-        // 🛡️ GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
+        // ??? GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
         // Without these !important rules, Tailwind's text-sm class squashes all larger <font> tags back to "normal"
         if (!document.getElementById('wysiwyg-extended-sizes')) {
             const style = document.createElement('style');
@@ -6000,7 +6274,7 @@ const Admin = {
 
         editor.focus();
         
-        // 🛡️ GUARDIAN UX FIX: Restore mobile cursor selection before formatting
+        // ??? GUARDIAN UX FIX: Restore mobile cursor selection before formatting
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -6013,7 +6287,7 @@ const Admin = {
         } else if (tag === 'italic') { 
             document.execCommand('italic', false, null);
         } else if (tag === 'larger' || tag === 'smaller') {
-            // 🛡️ GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
+            // ??? GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
             let currentSize = 3; // Default to Normal
             const sel = window.getSelection();
@@ -6065,7 +6339,7 @@ const Admin = {
 
 
     // --- 4. SERVICE ALERTS MANAGER ---
-    /** Tally votes from polls/{id} payload → { A, B, C, total }. */
+    /** Tally votes from polls/{id} payload ? { A, B, C, total }. */
     tallyPollVotes: (pollData) => {
         let A = 0, B = 0, C = 0;
         if (pollData && typeof pollData === 'object') {
@@ -6364,11 +6638,11 @@ const Admin = {
         if (!listEl) return;
         const rows = Array.isArray(items) ? items : [];
         if (!rows.length) {
-            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400">No scheduled alerts. Add one under New Alert → Recurring schedule.</div>`;
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400">No scheduled alerts. Add one under New Alert ? Recurring schedule.</div>`;
             return;
         }
         listEl.innerHTML = rows.map((job) => {
-            const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : '—';
+            const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : '�';
             const lastStr = job.lastRunAt ? Admin.formatDate(job.lastRunAt) : 'never';
             const liveFor = Admin.formatScheduleDurationLabel(job.notice?.expiresInMs || 2 * 3600 * 1000);
             const paused = job.enabled === false;
@@ -6380,7 +6654,7 @@ const Admin = {
                 } catch { return '(empty)'; }
             })();
             const freq = escapeHTML(String(job.frequency || 'once'));
-            const target = escapeHTML(String(job.target || '—'));
+            const target = escapeHTML(String(job.target || '�'));
             const idSafe = escapeHTML(String(job.id || ''));
             return `
                 <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm ${paused ? 'opacity-70' : ''}" data-sched-id="${idSafe}">
@@ -6392,7 +6666,7 @@ const Admin = {
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
-                        <span>Next ${escapeHTML(nextStr)} · Last ${escapeHTML(lastStr)}</span>
+                        <span>Next ${escapeHTML(nextStr)} � Last ${escapeHTML(lastStr)}</span>
                         <span class="flex gap-2 shrink-0">
                             <button type="button" class="alert-sched-toggle font-bold uppercase tracking-wider focus:outline-none ${paused ? 'text-emerald-600' : 'text-amber-600'}" data-sched-id="${idSafe}" data-enabled="${paused ? '1' : '0'}">${paused ? 'Resume' : 'Pause'}</button>
                             <button type="button" class="alert-sched-delete text-red-500 hover:text-red-700 font-bold uppercase tracking-wider focus:outline-none" data-sched-id="${idSafe}">Clear</button>
@@ -6432,7 +6706,7 @@ const Admin = {
 
     refreshScheduledAlerts: async () => {
         const statusEl = document.getElementById('alert-schedule-status');
-        if (statusEl) statusEl.textContent = 'Checking due…';
+        if (statusEl) statusEl.textContent = 'Checking due�';
         try {
             const secret = await Admin.getAuthKey();
             const due = await Admin.publishDueScheduledAlerts(secret);
@@ -6440,7 +6714,7 @@ const Admin = {
             Admin.renderScheduledAlertsList(items);
             if (statusEl) {
                 statusEl.textContent = due.published
-                    ? `${items.length} scheduled · posted ${due.published}`
+                    ? `${items.length} scheduled � posted ${due.published}`
                     : `${items.length} scheduled`;
             }
         } catch (e) {
@@ -6514,18 +6788,18 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity</label>
                         <div class="relative" id="alert-severity-container">
                             <select id="alert-severity" class="hidden">
-                                <option value="info" selected>🔵 Info (General)</option>
-                                <option value="warning">🟡 Warning (Delays)</option>
-                                <option value="critical">🔴 Critical (Suspended)</option>
+                                <option value="info" selected>?? Info (General)</option>
+                                <option value="warning">?? Warning (Delays)</option>
+                                <option value="critical">?? Critical (Suspended)</option>
                             </select>
                             <div onclick="document.getElementById('alert-severity-list').classList.toggle('hidden'); document.getElementById('alert-severity-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="alert-severity-display" class="truncate">🔵 Info (General)</span>
+                                <span id="alert-severity-display" class="truncate">?? Info (General)</span>
                                 <svg id="alert-severity-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="alert-severity-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML='🔵 Info (General)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🔵 Info (General)</li>
-                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML='🟡 Warning (Delays)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🟡 Warning (Delays)</li>
-                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML='🔴 Critical (Suspended)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer">🔴 Critical (Suspended)</li>
+                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML='?? Info (General)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? Info (General)</li>
+                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML='?? Warning (Delays)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? Warning (Delays)</li>
+                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML='?? Critical (Suspended)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer">?? Critical (Suspended)</li>
                             </ul>
                         </div>
                     </div>
@@ -6560,8 +6834,8 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">🔗</button>
-                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">📎 Media</label>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">??</button>
+                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">?? Media</label>
                             <input type="file" id="alert-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
                         <div contenteditable="true" id="alert-msg" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
@@ -6569,10 +6843,10 @@ const Admin = {
                 </div>
 
 
-                <!-- 🛡️ SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
+                <!-- ??? SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span>📰 Add Data Source (Advanced)</span>
+                        <span>?? Add Data Source (Advanced)</span>
                         <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="alert-source-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
@@ -6587,7 +6861,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- 🛡️ SUPERCHARGED: Interactive Poll Manager -->
+                <!-- ??? SUPERCHARGED: Interactive Poll Manager -->
                 <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 mt-2">
                     <div>
                         <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
@@ -6622,7 +6896,7 @@ const Admin = {
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
-                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only · after they vote (or while viewing)</p>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only � after they vote (or while viewing)</p>
                         </div>
                         <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                             <input type="checkbox" id="alert-poll-show-results" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
@@ -6655,7 +6929,7 @@ const Admin = {
                                     <option value="once">Once</option>
                                     <option value="hourly">Hourly</option>
                                     <option value="daily">Daily</option>
-                                    <option value="weekdays">Weekdays (Mon–Fri)</option>
+                                    <option value="weekdays">Weekdays (Mon�Fri)</option>
                                     <option value="weekly">Weekly</option>
                                 </select>
                             </div>
@@ -6731,7 +7005,7 @@ const Admin = {
                 <div id="alert-schedule-pane" class="hidden space-y-3">
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
                         <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
-                            Live queue of scheduled alerts. Create recipes under <b>New Alert → Recurring schedule</b>. Refresh publishes any that are due.
+                            Live queue of scheduled alerts. Create recipes under <b>New Alert ? Recurring schedule</b>. Refresh publishes any that are due.
                         </p>
                     </div>
                     <div class="flex justify-between items-center">
@@ -6867,7 +7141,7 @@ const Admin = {
                 .forEach((r) => {
                     const opt = document.createElement('option');
                     opt.value = r.id;
-                    opt.textContent = `${r.region || '?'} · ${Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name}`;
+                    opt.textContent = `${r.region || '?'} � ${Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name}`;
                     archRouteSel.appendChild(opt);
                 });
         }
@@ -6921,7 +7195,7 @@ const Admin = {
                 once: 'once',
                 hourly: 'every hour',
                 daily: 'every day',
-                weekdays: 'on weekdays (Mon–Fri)',
+                weekdays: 'on weekdays (Mon�Fri)',
                 weekly: 'every week',
             })[freq] || freq;
             const when = Admin.formatDate(firstMs);
@@ -6956,7 +7230,7 @@ const Admin = {
             const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
             msg = Admin.repairMojibake(msg);
             if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">— ${signoff}</span>`;
+                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">� ${signoff}</span>`;
             }
             const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
                 ? (pollOptC.value.trim() || null) : null;
@@ -7049,9 +7323,9 @@ const Admin = {
                 severitySelect.value = item.severity || 'info';
                 const display = document.getElementById('alert-severity-display');
                 if (display) {
-                    if (item.severity === 'warning') display.innerHTML = '🟡 Warning (Delays)';
-                    else if (item.severity === 'critical') display.innerHTML = '🔴 Critical (Suspended)';
-                    else display.innerHTML = '🔵 Info (General)';
+                    if (item.severity === 'warning') display.innerHTML = '?? Warning (Delays)';
+                    else if (item.severity === 'critical') display.innerHTML = '?? Critical (Suspended)';
+                    else display.innerHTML = '?? Info (General)';
                 }
             }
             if (signoffInput) signoffInput.value = item.authorName || item.signoff || 'Next Train Ops';
@@ -7077,7 +7351,7 @@ const Admin = {
             }
 
             if (sendBtn) sendBtn.textContent = 'Repost Alert';
-            if (typeof showToast === 'function') showToast('Draft ready — review and tap Repost Alert.', 'success');
+            if (typeof showToast === 'function') showToast('Draft ready � review and tap Repost Alert.', 'success');
             composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
 
@@ -7089,7 +7363,7 @@ const Admin = {
             };
         }
 
-        // 🛡️ GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
+        // ??? GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
         if (alertMsg) {
             alertMsg.addEventListener('paste', (e) => {
                 e.preventDefault();
@@ -7120,12 +7394,12 @@ const Admin = {
             };
         }
 
-        // 🛡️ GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
+        // ??? GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
         const inlineUploadFile = document.getElementById('alert-upload-file');
         if (inlineUploadFile) {
             inlineUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('alert-msg');
-                // 🛡️ GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // ??? GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -7153,12 +7427,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.getElementById('alert-upload-label');
-                        const originalLabel = labelEl ? labelEl.innerHTML : '📎 Insert Media';
+                        const originalLabel = labelEl ? labelEl.innerHTML : '?? Insert Media';
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `⏳ ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `? ${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -7173,9 +7447,9 @@ const Admin = {
                                     
                                     let htmlToInsert = '';
                                     if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">📄 View Attached PDF</a>&nbsp;`;
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">?? View Attached PDF</a>&nbsp;`;
                                     } else {
-                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button><br>`;
+                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
                                     }
                                     
                                     if (editor) {
@@ -7247,14 +7521,14 @@ const Admin = {
                         severitySelect.value = data.severity;
                         const display = document.getElementById('alert-severity-display');
                         if (display) {
-                            if (data.severity === 'info') display.innerHTML = '🔵 Info (General)';
-                            else if (data.severity === 'warning') display.innerHTML = '🟡 Warning (Delays)';
-                            else if (data.severity === 'critical') display.innerHTML = '🔴 Critical (Suspended)';
+                            if (data.severity === 'info') display.innerHTML = '?? Info (General)';
+                            else if (data.severity === 'warning') display.innerHTML = '?? Warning (Delays)';
+                            else if (data.severity === 'critical') display.innerHTML = '?? Critical (Suspended)';
                         }
                     } else if (severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = '🔵 Info (General)';
+                        if (display) display.innerHTML = '?? Info (General)';
                     }
 
                     if (data.authorName) signoffInput.value = data.authorName;
@@ -7347,7 +7621,7 @@ const Admin = {
                     if(severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = '🔵 Info (General)';
+                        if (display) display.innerHTML = '?? Info (General)';
                     }
 
                     signoffInput.value = "Next Train Ops";
@@ -7415,10 +7689,10 @@ const Admin = {
 
             const globalGroup = addGroup("Global Alerts");
             addOption(globalGroup, "all", "Entire Network (All Regions)", `<span class='truncate inline-flex items-center gap-1'>${Admin.icon('globe', 'w-3.5 h-3.5 shrink-0')} Entire Network (All Regions)</span>`);
-            addOption(globalGroup, "all_GP", "📍 Gauteng Only", "<span class='truncate'>📍 Gauteng Only</span>");
-            addOption(globalGroup, "all_WC", "📍 Western Cape Only", "<span class='truncate'>📍 Western Cape Only</span>");
-            addOption(globalGroup, "all_KZN", "📍 KwaZulu-Natal Only", "<span class='truncate'>📍 KwaZulu-Natal Only</span>");
-            addOption(globalGroup, "all_EC", "📍 Eastern Cape Only", "<span class='truncate'>📍 Eastern Cape Only</span>");
+            addOption(globalGroup, "all_GP", "?? Gauteng Only", "<span class='truncate'>?? Gauteng Only</span>");
+            addOption(globalGroup, "all_WC", "?? Western Cape Only", "<span class='truncate'>?? Western Cape Only</span>");
+            addOption(globalGroup, "all_KZN", "?? KwaZulu-Natal Only", "<span class='truncate'>?? KwaZulu-Natal Only</span>");
+            addOption(globalGroup, "all_EC", "?? Eastern Cape Only", "<span class='truncate'>?? Eastern Cape Only</span>");
 
             if (typeof ROUTES !== 'undefined') {
                 const regions = [
@@ -7435,7 +7709,7 @@ const Admin = {
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
                             const plainName = Admin.formatRouteLabelPlain(r.name);
-                            const text = `🚂 ${plainName}${cues}`;
+                            const text = `?? ${plainName}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
@@ -7444,7 +7718,7 @@ const Admin = {
                                 if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
                                 if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">🚂 ${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">?? ${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -7500,7 +7774,7 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
             msg = Admin.repairMojibake(msg);
-            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">— ${signoff}</span>`;
+            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">� ${signoff}</span>`;
 
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
@@ -7611,22 +7885,22 @@ const Admin = {
             return;
         }
 
-        if (statusEl) statusEl.textContent = 'Sweeping expired…';
-        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive…</div>`;
+        if (statusEl) statusEl.textContent = 'Sweeping expired�';
+        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive�</div>`;
 
         try {
             const swept = await Admin.sweepExpiredAlertsToArchive(secret);
-            if (statusEl) statusEl.textContent = 'Loading…';
+            if (statusEl) statusEl.textContent = 'Loading�';
             const items = await Admin.loadUnifiedAlertArchive(secret);
             const filtered = Admin.filterAlertArchiveItems(items);
             Admin.renderAlertArchiveList(items);
             const noticeN = filtered.filter((i) => (i.kind || 'notice') !== 'disruption').length;
             const disrN = filtered.filter((i) => i.kind === 'disruption').length;
             const sweepNote = (swept.notices || swept.disruptions)
-                ? ` · moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
+                ? ` � moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
                 : '';
-            const filterNote = filtered.length !== items.length ? ` · showing ${filtered.length}/${items.length}` : '';
-            if (statusEl) statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${filterNote}${sweepNote}`;
+            const filterNote = filtered.length !== items.length ? ` � showing ${filtered.length}/${items.length}` : '';
+            if (statusEl) statusEl.textContent = `${noticeN} alerts � ${disrN} incidents${filterNote}${sweepNote}`;
         } catch (e) {
             console.warn('fetchAlertArchive failed', e);
             if (statusEl) statusEl.textContent = 'Failed';
@@ -7662,7 +7936,7 @@ const Admin = {
                 : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
             const reason = item.archiveReason || (item.archivedAt ? 'cleared' : 'archived');
             const when = item.archivedAt || item.postedAt;
-            const whenStr = when ? Admin.formatDate(when) : '—';
+            const whenStr = when ? Admin.formatDate(when) : '�';
             const plain = (() => {
                 try {
                     const d = document.createElement('div');
@@ -7672,11 +7946,11 @@ const Admin = {
             })();
             const poll = item.pollResults;
             const pollHint = poll && poll.total
-                ? `<span class="text-[9px] font-bold text-purple-600 dark:text-purple-400">Poll · ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
+                ? `<span class="text-[9px] font-bold text-purple-600 dark:text-purple-400">Poll � ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
                 : (item.poll && item.poll.active
                     ? `<span class="text-[9px] font-bold text-purple-500">Had poll</span>`
                     : '');
-            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || '—'));
+            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || '�'));
             const idSafe = escapeHTML(String(item.id || item._archKey || idx));
 
             return `
@@ -7689,7 +7963,7 @@ const Admin = {
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between gap-2 text-[9px] font-mono text-gray-400">
-                        <span class="truncate">${scope} · ${idSafe}</span>
+                        <span class="truncate">${scope} � ${idSafe}</span>
                         <span class="shrink-0">${escapeHTML(whenStr)}</span>
                     </div>
                 </button>`;
@@ -7707,8 +7981,8 @@ const Admin = {
         if (statusEl && all.length) {
             const noticeN = rows.filter((i) => (i.kind || 'notice') !== 'disruption').length;
             const disrN = rows.filter((i) => i.kind === 'disruption').length;
-            const filterNote = rows.length !== all.length ? ` · showing ${rows.length}/${all.length}` : '';
-            statusEl.textContent = `${noticeN} alerts · ${disrN} incidents${filterNote}`;
+            const filterNote = rows.length !== all.length ? ` � showing ${rows.length}/${all.length}` : '';
+            statusEl.textContent = `${noticeN} alerts � ${disrN} incidents${filterNote}`;
         }
     },
 
@@ -7718,8 +7992,8 @@ const Admin = {
         const isDisr = data.kind === 'disruption' || data.tier || data.longExplanation;
         const severity = (data.severity || (data.tier === 'CRITICAL' ? 'critical' : (isDisr ? 'warning' : 'info'))).toLowerCase();
         const title = isDisr
-            ? (severity === 'critical' ? '🔴 CRITICAL INCIDENT' : '🟡 TRANSIT INCIDENT')
-            : (severity === 'critical' ? '🔴 CRITICAL ADVISORY' : severity === 'warning' ? '🟡 SERVICE WARNING' : '🔵 SERVICE INFO');
+            ? (severity === 'critical' ? '?? CRITICAL INCIDENT' : '?? TRANSIT INCIDENT')
+            : (severity === 'critical' ? '?? CRITICAL ADVISORY' : severity === 'warning' ? '?? SERVICE WARNING' : '?? SERVICE INFO');
         const borderCls = severity === 'critical'
             ? 'border-red-500'
             : severity === 'warning'
@@ -7732,17 +8006,17 @@ const Admin = {
                 : 'text-blue-600 dark:text-blue-400';
 
         let statusHtml = data.archivedAt
-            ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` · ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
+            ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` � ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : `<span class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
 
         let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`
+            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
             : '';
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
+            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
         });
 
         if (data.sourceName) {
@@ -7751,7 +8025,7 @@ const Admin = {
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">??</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
         }
 
         let pollHtml = '';
@@ -7793,7 +8067,7 @@ const Admin = {
                 </div>`;
         }
 
-        const postedStr = data.postedAt ? Admin.formatDate(data.postedAt) : '—';
+        const postedStr = data.postedAt ? Admin.formatDate(data.postedAt) : '�';
         const archivedStr = data.archivedAt ? Admin.formatDate(data.archivedAt) : null;
         const signoff = data.signoff || data.signedBy || '';
         const scope = data.clearedFrom || data.target || data.routeId || '';
@@ -7806,10 +8080,10 @@ const Admin = {
                 </div>
                 ${imgHtml}
                 <div class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed mb-2">${parsedMessage}</div>
-                ${signoff ? `<p class="text-[10px] text-gray-500 italic mb-2">— ${escapeHTML(String(signoff))}</p>` : ''}
+                ${signoff ? `<p class="text-[10px] text-gray-500 italic mb-2">� ${escapeHTML(String(signoff))}</p>` : ''}
                 ${pollHtml}
                 <div class="text-[10px] text-gray-500 font-mono border-t border-gray-200 dark:border-gray-700 pt-2 mt-3 space-y-0.5">
-                    <div>ID: ${escapeHTML(String(data.id || '—'))}</div>
+                    <div>ID: ${escapeHTML(String(data.id || '�'))}</div>
                     ${scope ? `<div>Scope: ${escapeHTML(String(scope))}</div>` : ''}
                     <div>Posted: ${escapeHTML(postedStr)}</div>
                     ${archivedStr ? `<div>Archived: ${escapeHTML(archivedStr)}</div>` : ''}
@@ -7835,12 +8109,12 @@ const Admin = {
     buildNoticeBodyHtml: (data) => {
         if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
         let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-2 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`
+            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
             : '';
         let parsedMessage = data.message || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<div class="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full shadow-md flex items-center justify-center pointer-events-none border border-white/20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg></div></button>`;
+            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
         });
         if (data.sourceName) {
             const sName = escapeHTML(data.sourceName);
@@ -7848,7 +8122,7 @@ const Admin = {
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">??</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
         }
         const signoff = data.signoff || data.signedBy || '';
         let pollHtml = '';
@@ -7864,9 +8138,9 @@ const Admin = {
             pollHtml = `<div class="mt-4 p-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-900/20"><p class="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-2">Poll Snapshot</p><p class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3">${escapeHTML(poll.question || 'Poll')}</p>${results ? `${bar(poll.optionA || 'A', results.A, 'bg-purple-500')}${bar(poll.optionB || 'B', results.B, 'bg-purple-400')}${poll.optionC || (results.C || 0) > 0 ? bar(poll.optionC || 'C', results.C, 'bg-purple-300') : ''}<div class="text-right text-[9px] font-black uppercase text-gray-400">Total: ${total}</div>` : `<p class="text-[10px] text-gray-500">No tallies stored.</p>`}</div>`;
         }
         const statusChip = data.archivedAt
-            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${data.archiveReason ? ` · ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
+            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${data.archiveReason ? ` � ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : '';
-        return `${statusChip}${imgHtml}<div class="leading-relaxed">${parsedMessage}</div>${signoff ? `<p class="text-[10px] text-gray-500 italic mt-2">— ${escapeHTML(String(signoff))}</p>` : ''}${pollHtml}`;
+        return `${statusChip}${imgHtml}<div class="leading-relaxed">${parsedMessage}</div>${signoff ? `<p class="text-[10px] text-gray-500 italic mt-2">� ${escapeHTML(String(signoff))}</p>` : ''}${pollHtml}`;
     },
 
     previewArchivedAlert: (item) => {
@@ -7905,17 +8179,17 @@ const Admin = {
                 }`;
             }
             modalHeader.textContent = severity === 'critical'
-                ? '🔴 CRITICAL ADVISORY'
+                ? '?? CRITICAL ADVISORY'
                 : severity === 'warning'
-                    ? '🟡 SERVICE WARNING'
-                    : '🔵 SERVICE INFO';
+                    ? '?? SERVICE WARNING'
+                    : '?? SERVICE INFO';
         }
         content.innerHTML = Admin.buildNoticeBodyHtml(item);
         if (timestamp) {
             const posted = item.repostedAt || item.postedAt || item.timestamp;
-            const postedStr = posted ? Admin.formatDate(posted) : '—';
+            const postedStr = posted ? Admin.formatDate(posted) : '�';
             const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
-            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '—'))}</span>`;
+            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '�'))}</span>`;
         }
 
         modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
@@ -7982,7 +8256,7 @@ const Admin = {
         if (titleEl) titleEl.innerHTML = locationText;
         if (bodyEl) {
             const statusChip = item.archivedAt
-                ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` · ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
+                ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` � ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
                 : '';
             bodyEl.innerHTML = `${statusChip}${item.message || item.longExplanation || item.buttonText || 'No additional details provided.'}`;
         }
@@ -7999,7 +8273,7 @@ const Admin = {
         }
         if (timeEl) {
             const posted = item.postedAt ? Admin.formatDate(item.postedAt) : 'Recently';
-            const arch = item.archivedAt ? ` · Archived: ${Admin.formatDate(item.archivedAt)}` : '';
+            const arch = item.archivedAt ? ` � Archived: ${Admin.formatDate(item.archivedAt)}` : '';
             timeEl.textContent = `Posted: ${posted}${arch}`;
         }
 
@@ -8088,16 +8362,16 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity Tier</label>
                         <div class="relative" id="disr-tier-container">
                             <select id="disr-tier" class="hidden">
-                                <option value="CRITICAL">🔴 CRITICAL (Sever Line)</option>
-                                <option value="WARNING">🟡 WARNING (Expect Delays)</option>
+                                <option value="CRITICAL">?? CRITICAL (Sever Line)</option>
+                                <option value="WARNING">?? WARNING (Expect Delays)</option>
                             </select>
                             <div onclick="document.getElementById('disr-tier-list').classList.toggle('hidden'); document.getElementById('disr-tier-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">🔴 CRITICAL (Sever Line)</span></span>
+                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">?? CRITICAL (Sever Line)</span></span>
                                 <svg id="disr-tier-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="disr-tier-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>🔴 CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">🔴 CRITICAL (Sever Line)</li>
-                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>🟡 WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">🟡 WARNING (Expect Delays)</li>
+                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>?? CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? CRITICAL (Sever Line)</li>
+                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>?? WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">?? WARNING (Expect Delays)</li>
                             </ul>
                         </div>
                     </div>
@@ -8167,7 +8441,7 @@ const Admin = {
         const saveBtn = document.getElementById('disr-save-btn');
         const listDiv = document.getElementById('disr-list');
 
-        // 🛡️ GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
+        // ??? GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
         if (msgInput) {
             msgInput.addEventListener('input', function() {
                 this.style.height = 'auto'; // Reset to recalculate true scrollHeight
@@ -8272,8 +8546,16 @@ const Admin = {
                         optionToSelect.selected = true;
                         selectedOpt = optionToSelect;
                     }
-                } else if (typeof currentRouteId !== 'undefined' && currentRouteId) {
+                } else if (!Admin._adminRouteDeepLinkActive && typeof currentRouteId !== 'undefined' && currentRouteId) {
                     const optionToSelect = routeSelect.querySelector(`option[value="${currentRouteId}"]`);
+                    if (optionToSelect) {
+                        optionToSelect.selected = true;
+                        selectedOpt = optionToSelect;
+                    }
+                }
+
+                if (Admin._pendingAdminRoute) {
+                    const optionToSelect = routeSelect.querySelector(`option[value="${Admin._pendingAdminRoute}"]`);
                     if (optionToSelect) {
                         optionToSelect.selected = true;
                         selectedOpt = optionToSelect;
@@ -8495,8 +8777,8 @@ const Admin = {
                             document.getElementById('disr-tier').value = data.tier || 'CRITICAL';
                             const tierDisplay = document.getElementById('disr-tier-display');
                             if (tierDisplay) {
-                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">🔴 CRITICAL (Sever Line)</span>';
-                                else tierDisplay.innerHTML = '<span class="text-yellow-600">🟡 WARNING (Expect Delays)</span>';
+                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">?? CRITICAL (Sever Line)</span>';
+                                else tierDisplay.innerHTML = '<span class="text-yellow-600">?? WARNING (Expect Delays)</span>';
                             }
 
                             if (data.stations && data.stations.length >= 1) {
@@ -8539,7 +8821,7 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
-                // 🛡️ GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
+                // ??? GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
                 const fetchRes = await window.guardianFetch(`${dynamicEndpoint}disruptions/${rId}/${id}.json`, {}, 6000);
                 if (fetchRes.ok) {
                     const disrData = await fetchRes.json();
@@ -8600,6 +8882,7 @@ const Admin = {
             </button>
             
             <div id="excl-body" class="hidden mt-4 space-y-3">
+                <div id="excl-review-banner" class="hidden text-[10px] leading-snug px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-200"></div>
                 <div class="flex space-x-2">
                     <div class="relative w-2/3" id="excl-route-container">
                         <select id="excl-route" class="hidden"></select>
@@ -8631,7 +8914,7 @@ const Admin = {
                         <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
-                    <!-- 🛡️ GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
+                    <!-- ??? GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
                     <div class="flex items-center justify-between mt-2">
                         <div class="flex-1 pr-2">
                             <label class="block text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Expiry Date (Optional)</label>
@@ -8694,7 +8977,7 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
                     <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                     <p class="text-[9px] text-gray-400 mt-1 mb-2">If set, the train will automatically reappear on the schedule after this date.</p>
-                    <!-- 🛡️ GUARDIAN PHASE 1: Export Visibility Toggle -->
+                    <!-- ??? GUARDIAN PHASE 1: Export Visibility Toggle -->
                     <label class="flex items-center cursor-pointer bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
                         <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
                         <span class="text-[10px] font-bold text-gray-600 dark:text-gray-300 ml-2 uppercase tracking-wide leading-none">Show "NO SVC" Tag on Export Image</span>
@@ -8835,13 +9118,15 @@ const Admin = {
                 });
                 
                 let selectedOpt = null;
-                if (currentVal) {
-                    const optionToSelect = routeSelect.querySelector(`option[value="${currentVal}"]`);
+                const prefer = Admin._pendingAdminRoute || currentVal || '';
+                if (prefer) {
+                    const optionToSelect = routeSelect.querySelector(`option[value="${prefer}"]`);
                     if (optionToSelect) {
                         optionToSelect.selected = true;
                         selectedOpt = optionToSelect;
                     }
-                } else if (typeof currentRouteId !== 'undefined' && currentRouteId) {
+                } else if (!Admin._adminRouteDeepLinkActive && typeof currentRouteId !== 'undefined' && currentRouteId) {
+                    // Only fall back to the live board when admin did not deep-link a route
                     const optionToSelect = routeSelect.querySelector(`option[value="${currentRouteId}"]`);
                     if (optionToSelect) {
                         optionToSelect.selected = true;
@@ -8861,6 +9146,21 @@ const Admin = {
         if (routeSelect) {
             routeSelect.addEventListener('change', () => {
                 const rId = routeSelect.value;
+                // Manual pick clears deep-link lock so subsequent populate can follow the admin choice
+                if (rId && Admin._pendingAdminRoute && rId === Admin._pendingAdminRoute) {
+                    /* keep lock until user picks something else */
+                } else if (rId && Admin._pendingAdminRoute && rId !== Admin._pendingAdminRoute) {
+                    Admin._pendingAdminRoute = rId;
+                }
+                const banner = document.getElementById('excl-review-banner');
+                if (banner) {
+                    if (Admin._adminRouteDeepLinkActive && rId && typeof ROUTES !== 'undefined' && ROUTES[rId]) {
+                        banner.classList.remove('hidden');
+                        banner.innerHTML = `<span class="font-black text-blue-700 dark:text-blue-300">Reviewing</span> <span class="inline-flex items-center">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span> <span class="text-slate-500 dark:text-slate-400 font-medium">- live board route unchanged</span>`;
+                    } else {
+                        banner.classList.add('hidden');
+                    }
+                }
                 if (rId && ROUTES[rId]) {
                     const r = ROUTES[rId];
                     
@@ -8981,7 +9281,7 @@ const Admin = {
             pickerContainer.classList.remove('hidden');
         };
 
-        // 🛡️ GUARDIAN Phase 3: Added Notice Save Button Logic
+        // ??? GUARDIAN Phase 3: Added Notice Save Button Logic
         noticeSaveBtn.onclick = async () => {
             const rId = routeSelect.value;
             const text = noticeInput.value.trim();
@@ -9015,7 +9315,7 @@ const Admin = {
                     }, 10000);
                 }
 
-                // 🛡️ GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
+                // ??? GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
                 try {
                     await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -9049,7 +9349,7 @@ const Admin = {
                 const res = await window.guardianFetch(`${dynamicEndpoint}exclusions/${rId}.json?t=${Date.now()}`, {}, 6000);
                 const data = await res.json();
                 
-                // 🛡️ GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
+                // ??? GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
                 if (data && data._grid_notice) {
                     noticeInput.value = data._grid_notice.text || "";
                     
@@ -9072,7 +9372,7 @@ const Admin = {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
                     if (noticeExpiryInput) {
-                        // 🛡️ GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
+                        // ??? GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
                         const defaultExpiry = new Date();
                         defaultExpiry.setHours(defaultExpiry.getHours() + 24);
                         defaultExpiry.setMinutes(defaultExpiry.getMinutes() - defaultExpiry.getTimezoneOffset());
@@ -9126,7 +9426,7 @@ const Admin = {
                             <div class="text-[9px] text-gray-400 mt-0.5">${item.reason || 'No reason specified'}</div>
                             ${expiryHtml}
                         </div>
-                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')">✕</button>
+                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')">?</button>
                     `;
                     listDiv.appendChild(row);
                 });
@@ -9188,7 +9488,7 @@ const Admin = {
                 });
                 await Promise.all(promises);
 
-                // 🛡️ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                // ??? GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                 try {
                     const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -9223,7 +9523,7 @@ const Admin = {
             try {
                 const res = await fetch(url, { method: 'DELETE' });
                 if (res.ok) {
-                    // 🛡️ GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                    // ??? GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                     try {
                         const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                             method: 'POST', 
@@ -9401,7 +9701,7 @@ const Admin = {
 
             <div id="diag-body" class="hidden mt-4 space-y-4">
                 
-                <!-- 🛡️ GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
+                <!-- ??? GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
                 <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target Region (Matrix & Scan)</label>
                     <select id="diag-region-select" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
@@ -9413,7 +9713,7 @@ const Admin = {
                     </select>
                 </div>
 
-                <!-- 🛡️ CACHE PROPAGATION MATRIX ACCORDION -->
+                <!-- ??? CACHE PROPAGATION MATRIX ACCORDION -->
                 <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="matrix-header-btn" class="w-full px-3 py-3 bg-indigo-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-indigo-200/50 dark:hover:bg-indigo-900/60">
                         <span class="flex items-center">
@@ -9449,7 +9749,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- 🛡️ DEEP NETWORK SCAN ACCORDION -->
+                <!-- ??? DEEP NETWORK SCAN ACCORDION -->
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm transition-all">
                     <button id="deepscan-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-blue-900/40 text-left text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-blue-900/60">
                         <span class="flex items-center">
@@ -9480,7 +9780,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Zone Distance Audit — fare zone vs computed route km -->
+                <!-- Zone Distance Audit � fare zone vs computed route km -->
                 <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
                     <button id="zone-audit-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
                         <span class="flex items-center gap-2">
@@ -9494,7 +9794,7 @@ const Admin = {
                         <p class="text-[9px] text-emerald-800 dark:text-emerald-400 font-medium leading-snug">
                             Measures route km from station coordinates (path sum; prefers KM_MARK when present)
                             and checks the assigned fare zone against PRASA Aug 2025 travel distances:
-                            Z1 1–15 · Z2 16–40 · Z3 41–135 · Z4 &gt;135 km.
+                            Z1 1�15 � Z2 16�40 � Z3 41�135 � Z4 &gt;135 km.
                         </p>
 
                         <div>
@@ -9508,13 +9808,13 @@ const Admin = {
                         </div>
 
                         <div>
-                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) — PRASA defaults</label>
+                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) � PRASA defaults</label>
                             <div class="grid grid-cols-3 gap-2">
                                 <input type="number" id="zone-audit-z1" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z1 max km (official 15)">
                                 <input type="number" id="zone-audit-z2" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z2 max km (official 40)">
                                 <input type="number" id="zone-audit-z3" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z3 max km (official 135)">
                             </div>
-                            <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1">Defaults 15 / 40 / 135. Above Z3 max → Z4. Override only for sensitivity checks. Uses Target Region above.</p>
+                            <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1">Defaults 15 / 40 / 135. Above Z3 max ? Z4. Override only for sensitivity checks. Uses Target Region above.</p>
                         </div>
 
                         <div class="flex gap-2">
@@ -9531,7 +9831,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- 🛡️ GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
+                <!-- ??? GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
                         <span class="flex items-center gap-2">
@@ -9693,7 +9993,7 @@ const Admin = {
                         </div>
                     </div>
                     <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1.5 text-center">
-                        PRASA bands: Z1 1–${bands.Z1} · Z2 ${bands.Z1 + 1}–${bands.Z2} · Z3 ${bands.Z2 + 1}–${bands.Z3} · Z4 &gt;${bands.Z3} km
+                        PRASA bands: Z1 1�${bands.Z1} � Z2 ${bands.Z1 + 1}�${bands.Z2} � Z3 ${bands.Z2 + 1}�${bands.Z3} � Z4 &gt;${bands.Z3} km
                     </p>
                 `;
             }
@@ -9717,14 +10017,14 @@ const Admin = {
                 const p = r.primary;
                 const distLabel = p?.distanceKm != null
                     ? `${p.distanceKm.toFixed(1)} km`
-                    : '—';
+                    : '�';
                 const srcBit = p?.distanceSource
                     ? ({ path: 'path', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
                     : '';
-                const assigned = p?.assignedZone || (r.zones?.[0] || '—');
-                const suggested = p?.suggestedZone || '—';
+                const assigned = p?.assignedZone || (r.zones?.[0] || '�');
+                const suggested = p?.suggestedZone || '�';
                 const rangeLabels = (typeof ZONE_KM_RANGE_LABELS !== 'undefined' && ZONE_KM_RANGE_LABELS) ? ZONE_KM_RANGE_LABELS : {};
-                const suggestedRange = suggested !== '—' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
+                const suggestedRange = suggested !== '�' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
                 const routeBit = Admin.formatRouteLabelHtml(r.routeName);
                 const style = statusStyle[r.status] || statusStyle.ok;
                 const statusLabel = {
@@ -9740,20 +10040,20 @@ const Admin = {
                     const segPreview = (m.segments || [])
                         .filter((s) => s.km != null)
                         .slice(0, 8)
-                        .map((s) => `${esc(s.from)}→${esc(s.to)} ${s.km}km`)
-                        .join(' · ');
-                    const more = (m.segments || []).length > 8 ? ' …' : '';
+                        .map((s) => `${esc(s.from)}?${esc(s.to)} ${s.km}km`)
+                        .join(' � ');
+                    const more = (m.segments || []).length > 8 ? ' �' : '';
                     return `
                         <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
                             <div class="flex justify-between gap-2 font-mono text-[9px]">
-                                <span class="truncate">${esc(d.dayDir)} · ${esc(d.sheetKey)}</span>
-                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '—'} · ${esc(d.assignedZone || '?')}→${esc(d.suggestedZone || '?')}${d.mismatch ? ' ⚠' : ''}</span>
+                                <span class="truncate">${esc(d.dayDir)} � ${esc(d.sheetKey)}</span>
+                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '�'} � ${esc(d.assignedZone || '?')}?${esc(d.suggestedZone || '?')}${d.mismatch ? ' ?' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
-                                path ${m.pathKm != null ? m.pathKm + ' km' : '—'}
-                                · crow ${m.crowKm != null ? m.crowKm + ' km' : '—'}
-                                · km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '—'}
-                                · coords ${m.withCoords || 0}/${m.stationCount || 0}
+                                path ${m.pathKm != null ? m.pathKm + ' km' : '�'}
+                                � crow ${m.crowKm != null ? m.crowKm + ' km' : '�'}
+                                � km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '�'}
+                                � coords ${m.withCoords || 0}/${m.stationCount || 0}
                             </div>
                             ${segPreview ? `<div class="text-[8px] opacity-60 mt-0.5 leading-snug">${segPreview}${more}</div>` : ''}
                         </div>
@@ -9766,10 +10066,10 @@ const Admin = {
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5 mb-0.5">
                                     <span class="font-black uppercase tracking-wider text-[9px] opacity-80">${statusLabel}</span>
-                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} → ${esc(suggested)}${esc(suggestedRange)}</span>
+                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} ? ${esc(suggested)}${esc(suggestedRange)}</span>
                                 </div>
                                 <div class="font-semibold truncate">${routeBit}</div>
-                                <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} · ${esc(r.destB || '')}</div>
+                                <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} � ${esc(r.destB || '')}</div>
                             </div>
                             <div class="text-right shrink-0">
                                 <div class="text-sm font-black leading-none">${distLabel}</div>
@@ -9805,7 +10105,7 @@ const Admin = {
                 }
 
                 if (zoneAuditResults) {
-                    zoneAuditResults.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Measuring ${targetRegion} from ${scanSource}…</div>`;
+                    zoneAuditResults.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Measuring ${targetRegion} from ${scanSource}�</div>`;
                 }
                 if (zoneAuditSummary) zoneAuditSummary.classList.add('hidden');
 
@@ -9892,7 +10192,7 @@ const Admin = {
                 window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
                 try { window.__ntLastSimKey = null; } catch (e) {}
                 
-                // 🛡️ GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
+                // ??? GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
                     try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch(e){}
                 } else {
@@ -9919,7 +10219,7 @@ const Admin = {
                 if (location.hash === '#dev') history.back();
                 else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
                 
-                // 🛡️ GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
+                // ??? GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
                 if (typeof loadAllSchedules === 'function') {
                     loadAllSchedules(true).then(() => {
                         if (typeof updateTime === 'function') updateTime(); 
@@ -9940,7 +10240,7 @@ const Admin = {
                 try { window.__ntLastSimKey = null; } catch (e) {}
                 if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
                 
-                // 🛡️ GUARDIAN PHASE 4: Clear Pipeline Override on exit
+                // ??? GUARDIAN PHASE 4: Clear Pipeline Override on exit
                 try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
                 const pipelineDropdown = document.getElementById('sim-pipeline-override');
                 if (pipelineDropdown) pipelineDropdown.value = 'AUTO';
@@ -10131,7 +10431,7 @@ const Admin = {
                         }
                     }
 
-                    // 🛡️ GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
+                    // ??? GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
                     html += `
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                             <td class="px-1.5 py-2 border-r border-gray-100 dark:border-gray-800 align-top">
@@ -10157,7 +10457,7 @@ const Admin = {
         runBtn.onclick = async () => {
             resultsDiv.innerHTML = '<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Initializing scan...</div>';
             
-            // 🛡️ GUARDIAN PHASE 2: Dynamic Region & Source Engine
+            // ??? GUARDIAN PHASE 2: Dynamic Region & Source Engine
             const regionSelect = document.getElementById('diag-region-select');
             const sourceSelect = document.getElementById('deepscan-source-select');
             const scanRegion = regionSelect ? regionSelect.value : 'CURRENT';
@@ -10332,7 +10632,7 @@ const Admin = {
     },
 
     /**
-     * Standalone Schedule QA — data quality (duplicate adjacent times, regressions,
+     * Standalone Schedule QA � data quality (duplicate adjacent times, regressions,
      * delta variance). Kept separate from System Health Diagnostics (cache/network).
      */
     setupScheduleQaManager: () => {
@@ -10368,7 +10668,7 @@ const Admin = {
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
                     Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
                     delta variance, missing coordinates, day mismatches, and more.
-                    Diagnostics (above) covers cache/network — this panel is schedule content only.
+                    Diagnostics (above) covers cache/network � this panel is schedule content only.
                 </p>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -10597,11 +10897,11 @@ const Admin = {
             resultsDiv.innerHTML = findings.map((f) => {
                 const style = severityStyles[f.severity] || severityStyles.info;
                 const routeBit = f.routeName ? Admin.formatRouteLabelHtml(f.routeName) : (f.routeId || '');
-                const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' · ');
+                const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' � ');
                 return `
                     <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}">
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} · ${f.code}</span>
+                            <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} � ${f.code}</span>
                             <span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>
                         </div>
                         <div class="font-semibold mb-0.5">${routeBit}</div>
@@ -10621,7 +10921,7 @@ const Admin = {
                 const targetRegion = scanRegion === 'CURRENT' ? activeRegion : scanRegion;
                 const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'FIREBASE' : scanSourceRaw;
 
-                resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}…</div>`;
+                resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}�</div>`;
                 if (summaryDiv) summaryDiv.classList.add('hidden');
 
                 try {
@@ -10999,7 +11299,7 @@ const Admin = {
 
                 <!-- Kanban Board Area (Responsive Grid) -->
                 <div class="overflow-x-auto pb-4 custom-scrollbar snap-x flex-grow w-full">
-                    <!-- 🛡️ GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
+                    <!-- ??? GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
                     <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
@@ -11204,7 +11504,7 @@ const Admin = {
                 else if (status === 'done') colDone.insertAdjacentHTML('beforeend', cardHtml);
             });
 
-            // Update Counts — hide badges when zero
+            // Update Counts � hide badges when zero
             const setRoadmapCount = (id, n) => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -11234,7 +11534,7 @@ const Admin = {
             
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                // 🛡️ GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
+                // ??? GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
                 const res = await window.guardianFetch(`${dynamicEndpoint}roadmap.json?auth=${secret}&t=${Date.now()}`, {}, 10000);
                 
                 if (!res.ok) throw new Error("HTTP " + res.status);
@@ -11264,7 +11564,7 @@ const Admin = {
                     body: JSON.stringify({ status: newStatus, updatedAt: Date.now() })
                 });
                 
-                // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
+                // ??? GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to patch ticket.");
                 
                 // Update local RAM and re-render instantly
@@ -11289,7 +11589,7 @@ const Admin = {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const res = await fetch(`${dynamicEndpoint}roadmap/${ticketId}.json?auth=${secret}`, { method: 'DELETE' });
                 
-                // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
+                // ??? GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to delete ticket.");
 
                 Admin.cachedRoadmapData = Admin.cachedRoadmapData.filter(t => t.id !== ticketId);
@@ -11491,7 +11791,7 @@ const Admin = {
                 </div>
             `;
 
-            // Wire chip selectors → hidden inputs
+            // Wire chip selectors ? hidden inputs
             const chipMaps = { type: typeOpts, severity: sevOpts, status: statusOpts };
             modal.querySelectorAll('.tkt-chip').forEach((btn) => {
                 btn.addEventListener('click', () => {
@@ -11541,7 +11841,7 @@ const Admin = {
                         body: JSON.stringify(payload)
                     });
 
-                    // 🛡️ GUARDIAN FIX: Catch silent HTTP rejections
+                    // ??? GUARDIAN FIX: Catch silent HTTP rejections
                     if (!res.ok) throw new Error("Failed to PUT ticket data.");
 
                     if (typeof showToast === 'function') showToast("Ticket saved!", "success");
@@ -11559,10 +11859,10 @@ const Admin = {
 
         // Export Engine
         Admin.ticketsToTxt = (tickets, heading = 'OPERATIONS ROADMAP') => {
-            let txt = `NEXT TRAIN — ${heading}\nExported: ${Admin.formatDate(Date.now())}\nTickets: ${tickets.length}\n${'='.repeat(48)}\n\n`;
+            let txt = `NEXT TRAIN � ${heading}\nExported: ${Admin.formatDate(Date.now())}\nTickets: ${tickets.length}\n${'='.repeat(48)}\n\n`;
             tickets.forEach((t, i) => {
                 txt += `#${i + 1}  [${String(t.status || 'backlog').toUpperCase()}] ${t.title || '(untitled)'}\n`;
-                txt += `  Type: ${t.type || '—'} · Severity: ${t.severity || '—'} · ID: ${t.id || '—'}\n`;
+                txt += `  Type: ${t.type || '�'} � Severity: ${t.severity || '�'} � ID: ${t.id || '�'}\n`;
                 if (t.source) txt += `  Source: ${t.source}\n`;
                 if (t.createdAt) txt += `  Created: ${Admin.formatDate(t.createdAt)}\n`;
                 if (t.updatedAt) txt += `  Updated: ${Admin.formatDate(t.updatedAt)}\n`;

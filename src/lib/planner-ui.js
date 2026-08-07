@@ -3141,6 +3141,8 @@ export async function applyPlannerDeepLink() {
     // Only clear snapshot when it was ours (leave route snaps for applyRouteDeepLink)
     if (snap && snap.kind === 'planner') consumeShareDeeplinkSnapshot();
 
+    showToast('Opening shared link...', 'info', 5000);
+
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }

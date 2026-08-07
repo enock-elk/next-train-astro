@@ -22,7 +22,7 @@
  *     lazy-load only reduces blueprint exposure and payload bloat.
  *
  * Do NOT re-add a global <script src="/js/admin.js"> or initAdminBridge() that
- * eagerly fetches this file ù that undoes Zero-Bloat and schema OPSEC.
+ * eagerly fetches this file - that undoes Zero-Bloat and schema OPSEC.
  * -----------------------------------------------------------------------------
  * This module handles Developer Mode features:
  * 1. Service Alerts Manager (God-Mode Regional Sync + Rich Text Formatting + Live Preview)
@@ -34,7 +34,7 @@
  * 7. Special Event Route Manager
  * 8. System Health / Diagnostics Scanner
  *    (includes Zone Distance Audit accordion for fare-zone / km review)
- * 8b. Schedule Data QA (timetable content ù standalone from diagnostics)
+ * 8b. Schedule Data QA (timetable content - standalone from diagnostics)
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
@@ -83,7 +83,7 @@ const Admin = {
         let s = String(str);
         // Prefer escapes so scanners cannot rewrite the lookup keys
         const pairs = [
-            ['\u00E2\u20AC\u201D', '\u2014'], // ù" ? ù
+            ['\u00E2\u20AC\u201D', '\u2014'], // -" ? -
             ['\u00E2\u0080\u0094', '\u2014'],
             ['\u00E2\u20AC\u00A2', '\u2022'],
             ['\u00E2\u02DC\u00A2\uFE0F', '??'],
@@ -147,6 +147,16 @@ const Admin = {
         const body = paths[name];
         if (!body) return '';
         return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+    },
+
+
+    /** WhatsApp-style read receipts (crisp at ~12-14px). */
+    receiptTicks: (variant = 'double', className = 'w-3.5 h-3.5') => {
+        // variant: 'single' | 'double'
+        if (variant === 'single') {
+            return `<svg class="${className}" viewBox="0 0 12 11" width="12" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1.75 5.75L4.6 8.5 10.25 2.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        }
+        return `<svg class="${className}" viewBox="0 0 16 11" width="16" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1.2 6.1L3.85 8.7 8.9 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.35 6.1L9 8.7 14.05 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     },
 
     tileIcon: (name, colorClass = 'text-blue-600 dark:text-blue-400') =>
@@ -230,11 +240,11 @@ const Admin = {
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
                     <div>
                         <h3 class="text-base font-black text-gray-900 dark:text-white">Diagnostic Errors (24h)</h3>
-                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loadingù</p>
+                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading...</p>
                     </div>
                     <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">?</button>
                 </div>
-                <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loadingù</div>
+                <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading...</div>
             </div>`;
         modal.classList.remove('hidden');
         document.getElementById('diag-errors-close').onclick = () => modal.classList.add('hidden');
@@ -252,7 +262,7 @@ const Admin = {
                 : [];
             const isDistress = (c) => c.kind === 'distress' || String(c.error || '').startsWith('DISTRESS:');
             const distressCount = all.filter(isDistress).length;
-            // Distress / help belongs in Crash Analytics ù keep this modal for JS/black-box noise only
+            // Distress / help belongs in Crash Analytics - keep this modal for JS/black-box noise only
             const items = all.filter((c) => !isDistress(c));
             items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const n = items.length;
@@ -261,7 +271,7 @@ const Admin = {
             if (!n) {
                 list.innerHTML = `
                     <p class="text-xs text-gray-500 text-center py-4">No JS / black-box diagnostic entries in the last 24h.</p>
-                    ${distressCount ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) ù open Crash Analytics</button>` : ''}
+                    ${distressCount ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) - open Crash Analytics</button>` : ''}
                 `;
                 document.getElementById('diag-open-distress')?.addEventListener('click', () => {
                     modal.classList.add('hidden');
@@ -277,7 +287,7 @@ const Admin = {
                     <div class="text-xs font-mono text-gray-800 dark:text-gray-200 break-words">${err}</div>
                 </div>`;
             }).join('') + (distressCount
-                ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) ù open Crash Analytics</button>`
+                ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) - open Crash Analytics</button>`
                 : '');
             document.getElementById('diag-open-distress')?.addEventListener('click', () => {
                 modal.classList.add('hidden');
@@ -556,13 +566,13 @@ const Admin = {
         if (!btn) return;
         if (Admin.gridCols === 1) {
             btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
-            btn.title = 'List view ù tap for 2 columns';
+            btn.title = 'List view - tap for 2 columns';
         } else if (Admin.gridCols === 2) {
             btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>`;
-            btn.title = '2 columns ù tap for 3 columns';
+            btn.title = '2 columns - tap for 3 columns';
         } else {
             btn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z"></path></svg>`;
-            btn.title = '3 columns ù tap for list view';
+            btn.title = '3 columns - tap for list view';
         }
     },
 
@@ -764,7 +774,7 @@ const Admin = {
                 }
 
                 if (label) label.className = "text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1";
-                // No permanent pulse on Today / WAU ù only refreshTelemetry adds a short loading pulse
+                // No permanent pulse on Today / WAU - only refreshTelemetry adds a short loading pulse
                 if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200";
             });
 
@@ -1024,7 +1034,7 @@ const Admin = {
         const getX = (i) => pl + (i * (uw / Math.max(1, numPoints - 1)));
         const getY = (v) => pt + uh - ((((Number(v) || 0) - yMin) / yRange) * uh);
 
-        // Build path only across known buckets (null = future / unreported ù do not draw to 0)
+        // Build path only across known buckets (null = future / unreported - do not draw to 0)
         const knownIdx = [];
         for (let i = 0; i < numPoints; i++) {
             if (dataArray[i] !== null && dataArray[i] !== undefined) knownIdx.push(i);
@@ -1243,7 +1253,7 @@ const Admin = {
                 
                 // ??? GUARDIAN PHASE 2: RAM Array Slicer Engine
                 // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
-                // "last 48" for Today ù that straddles midnight and draws a fake cliff.
+                // "last 48" for Today - that straddles midnight and draws a fake cliff.
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
@@ -1273,7 +1283,7 @@ const Admin = {
                 
                 // Keep chart consistently scaled even if data runs out early
                 if (Admin.telemetryRange === 'INTRADAY') {
-                    // Pad FUTURE buckets (end), not the morning ù zeros at the start fake a dawn climb.
+                    // Pad FUTURE buckets (end), not the morning - zeros at the start fake a dawn climb.
                     if (activeCountsArray.length < 48) {
                         const padLen = 48 - activeCountsArray.length;
                         activeCountsArray = [...activeCountsArray, ...Array(padLen).fill(null)];
@@ -1908,7 +1918,7 @@ const Admin = {
 
                 window.firebaseSignIn(window.firebaseAuth, email, password)
                     .then((userCredential) => {
-                        // Close login WITHOUT history.back() ù that raced popstate and closed admin
+                        // Close login WITHOUT history.back() - that raced popstate and closed admin
                         if (typeof closeSmoothModal === 'function') closeSmoothModal('login-modal', true);
                         else loginModal.classList.add('hidden');
                         try {
@@ -1976,6 +1986,8 @@ const Admin = {
         // ??? GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
         if (Admin._modulesRendered) {
             Admin.initGridView(); // Ensure grid is bound if re-opened
+            Admin.ensureGlobalStateMonitorTile();
+            Admin.fetchActionRequired();
             return;
         }
         Admin._modulesRendered = true;
@@ -1996,23 +2008,30 @@ const Admin = {
         // Admin will rely purely on the bottom Sign Out button.
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6');
 
-        // Setup Execution Order
-        Admin.setupTelemetry();
-        Admin.setupFeedbackManager(); 
-        Admin.setupDelayReportsManager();
-        Admin.setupModerationQueueManager();
-        Admin.setupUserTrustManager();
-        Admin.setupDeadEndsManager(); 
-        Admin.setupCrashReportsManager();  
-        Admin.setupServiceAlertsManager();
-        Admin.setupDisruptionsManager(); 
-        Admin.setupExclusionManager();
-        Admin.setupHolidayApprovalsManager();
-        Admin.setupMaintenanceManager();
-        Admin.setupSpecialEventManager(); 
-        Admin.setupDiagnosticsManager();
-        Admin.setupScheduleQaManager();
-        Admin.setupRoadmapManager(); // ??? GUARDIAN PHASE: Operations Roadmap
+        // Setup Execution Order (isolated so one panel failure cannot blank the rest of the grid)
+        const runAdminSetup = (label, fn) => {
+            try { fn(); }
+            catch (err) { console.error(`[Admin] ${label} failed:`, err); }
+        };
+        runAdminSetup('telemetry', () => Admin.setupTelemetry());
+        runAdminSetup('feedback', () => Admin.setupFeedbackManager());
+        runAdminSetup('delayReports', () => Admin.setupDelayReportsManager());
+        runAdminSetup('moderation', () => Admin.setupModerationQueueManager());
+        runAdminSetup('userTrust', () => Admin.setupUserTrustManager());
+        runAdminSetup('deadEnds', () => Admin.setupDeadEndsManager());
+        runAdminSetup('crashes', () => Admin.setupCrashReportsManager());
+        runAdminSetup('serviceAlerts', () => Admin.setupServiceAlertsManager());
+        runAdminSetup('disruptions', () => Admin.setupDisruptionsManager());
+        runAdminSetup('exclusions', () => Admin.setupExclusionManager());
+        runAdminSetup('holidayApprovals', () => Admin.setupHolidayApprovalsManager());
+        runAdminSetup('maintenance', () => Admin.setupMaintenanceManager());
+        runAdminSetup('specialEvent', () => Admin.setupSpecialEventManager());
+        runAdminSetup('diagnostics', () => Admin.setupDiagnosticsManager());
+        runAdminSetup('scheduleQa', () => Admin.setupScheduleQaManager());
+        runAdminSetup('roadmap', () => Admin.setupRoadmapManager());
+
+        // Stub Global State Monitor before grid packs tiles (fetch fills body async)
+        Admin.ensureGlobalStateMonitorTile();
 
         // ??? GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
@@ -2048,23 +2067,55 @@ const Admin = {
         }
     },
 
-    fetchActionRequired: async () => {
-        const secret = await Admin.getAuthKey();
-        if (!secret) return;
 
+    ensureGlobalStateMonitorTile: () => {
         const adminContainer = document.getElementById('admin-modules-container');
+        if (!adminContainer) return null;
         let actionBanner = document.getElementById('action-required-panel');
-
-        if (!actionBanner && adminContainer) {
+        if (!actionBanner) {
             actionBanner = document.createElement('div');
             actionBanner.id = 'action-required-panel';
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
-
-        if (!actionBanner) return;
         actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
         actionBanner.classList.remove('hidden');
-        // Stable grid-tile chrome (same header pattern as other admin modules)
+        if (!actionBanner.querySelector('#action-header-btn')) {
+            actionBanner.innerHTML = `
+                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                    </span>
+                    <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="action-body" class="hidden mt-4 space-y-2">
+                    <div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>
+                </div>
+            `;
+        }
+        if (adminContainer.firstElementChild !== actionBanner) {
+            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+        }
+        return actionBanner;
+    },
+
+    fetchActionRequired: async () => {
+        const actionBanner = Admin.ensureGlobalStateMonitorTile();
+        if (!actionBanner) return;
+
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            const body = document.getElementById('action-body');
+            if (body) {
+                body.innerHTML = `<div class="text-xs text-center text-amber-600 dark:text-amber-400 py-4 px-2 leading-relaxed">Sign in required to scan active network state.</div>`;
+            }
+            return;
+        }
+
+        const adminContainer = document.getElementById('admin-modules-container');
+        // Refresh chrome while scanning (preserve tile presence)
+        actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
+        actionBanner.classList.remove('hidden');
         actionBanner.innerHTML = `
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
@@ -2077,7 +2128,7 @@ const Admin = {
                 <div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>
             </div>
         `;
-        if (adminContainer.firstElementChild !== actionBanner) {
+        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
 
@@ -2174,7 +2225,7 @@ const Admin = {
                     </button>
                     <div id="action-body" class="hidden mt-4 space-y-2">
                         <div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
-                            All clear ù no active alerts, incidents, grid notices, or schedule exceptions.
+                            All clear - no active alerts, incidents, grid notices, or schedule exceptions.
                         </div>
                     </div>
                 `;
@@ -2286,7 +2337,7 @@ const Admin = {
             }
 
         } catch(e) {
-            // Stay visible ù never delete the tile on fetch failure
+            // Stay visible - never delete the tile on fetch failure
             actionBanner.classList.remove('hidden');
             actionBanner.innerHTML = `
                 <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
@@ -2373,7 +2424,7 @@ const Admin = {
             const matchLi = list && Array.from(list.querySelectorAll('li')).find((li) => {
                 try { return typeof li.onclick === 'function' && selectEl.value === routeId; } catch { return false; }
             });
-            // Prefer the optionùs matching list row by re-finding via value click simulation
+            // Prefer the option's matching list row by re-finding via value click simulation
             if (list) {
                 const lis = Array.from(list.querySelectorAll('li[class*="cursor-pointer"]'));
                 // Re-populate display from selected option text
@@ -2776,7 +2827,7 @@ const Admin = {
                     const safeLine = secureEscape(crash.line || '');
                     const safeUrl = secureEscape(crash.url || '');
 
-                    // Full raw details (stack / raw / logs) ù never truncate to a one-line summary
+                    // Full raw details (stack / raw / logs) - never truncate to a one-line summary
                     let rawDetail = '';
                     if (crash.stack && crash.stack !== 'N/A') rawDetail = String(crash.stack);
                     else if (crash.raw) rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
@@ -2805,9 +2856,9 @@ const Admin = {
                         type: isDistress ? 'general' : 'bug',
                         severity: isBlackBox ? 'medium' : (isDistress ? 'medium' : 'high'),
                         title: isDistress
-                            ? `Distress ù ${crash.contact || crash.deviceId || 'user'} ù ${crash.reason || 'help'}`
+                            ? `Distress - ${crash.contact || crash.deviceId || 'user'} - ${crash.reason || 'help'}`
                             : isBlackBox
-                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) ù ${crash.deviceId || crash.routeId || 'device'}`
+                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) - ${crash.deviceId || crash.routeId || 'device'}`
                             : `Crash on ${crash.routeId || 'Global'}`,
                         description: ticketDesc,
                         source: `Crash ${crash.id || ''}`
@@ -3081,7 +3132,7 @@ const Admin = {
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
                     .admin-grid-view .grid-hidden-actions { display: none !important; }
 
-                    /* Compact corner unread pills ù never stretch across the tile */
+                    /* Compact corner unread pills - never stretch across the tile */
                     .admin-unread-badge {
                       position: absolute;
                       top: 6px;
@@ -3201,7 +3252,7 @@ const Admin = {
                 const titleH3 = devHeaderRow.querySelector('h3');
                 devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
                 
-                // Keep native emoji in drill title (stop stripping ù was causing broken headers)
+                // Keep native emoji in drill title (stop stripping - was causing broken headers)
                 let titleClone = card.querySelector('[id$="-header-btn"] > span').cloneNode(true);
                 titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
                 const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
@@ -3618,7 +3669,7 @@ const Admin = {
                 
                 Admin._cachedRoutingFails = data;
 
-                // Aggregate by Origin|Dest|Reason|DayType ù track hits + unique users
+                // Aggregate by Origin|Dest|Reason|DayType - track hits + unique users
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
@@ -3766,7 +3817,7 @@ const Admin = {
 
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
             if (!useCacheOnly) {
-                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plansù</div>';
+                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans...</div>';
             }
             try {
                 if (!useCacheOnly) {
@@ -3822,7 +3873,7 @@ const Admin = {
                 }
 
                 const filtered = Admin.getFilteredTripPlanRows();
-                // Group by trip corridor ù uniqueUsers = unique userIdùbatchId (same user, new batch counts again)
+                // Group by trip corridor - uniqueUsers = unique userId/batchId (same user, new batch counts again)
                 const heatMap = {};
                 filtered.forEach((entry) => {
                     const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}`;
@@ -3971,13 +4022,13 @@ const Admin = {
                     });
                     Admin.downloadFile(`trip_plans_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
                 } else {
-                    let txt = `NEXT TRAIN ù TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+                    let txt = `NEXT TRAIN - TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
                     rows.forEach((r, i) => {
                         txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
                         txt += `  ${r.origin} ? ${r.destination}\n`;
-                        txt += `  Region: ${r.region || 'ù'} ù Day: ${r.dayType || 'ù'} ù User: ${r.userId || 'ù'}\n`;
+                        txt += `  Region: ${r.region || '-'} - Day: ${r.dayType || '-'} - User: ${r.userId || '-'}\n`;
                         if (r.authUid) txt += `  Auth UID: ${r.authUid}\n`;
-                        txt += `  Dep: ${r.depTime || 'ù'} ù Arr: ${r.arrTime || 'ù'} ù Transfers: ${r.transfers ?? 'ù'}\n\n`;
+                        txt += `  Dep: ${r.depTime || '-'} - Arr: ${r.arrTime || '-'} - Transfers: ${r.transfers ?? '-'}\n\n`;
                     });
                     Admin.downloadFile(`trip_plans_${dateStr}.txt`, txt);
                 }
@@ -4010,12 +4061,12 @@ const Admin = {
                 });
                 Admin.downloadFile(`routing_fails_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
             } else {
-                let txt = `NEXT TRAIN ù ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
+                let txt = `NEXT TRAIN - ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
                 entries.forEach((r, i) => {
                     txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
                     txt += `  ${(r.origin || '?')} ? ${(r.destination || r.dest || '?')}\n`;
-                    txt += `  Reason: ${r.reason || 'UNKNOWN'} ù Day: ${r.dayType || 'ù'} ù Region: ${r.region || 'ù'}\n`;
-                    txt += `  User: ${r.userId || r.deviceId || 'ù'} ù Time: ${r.timeOfDay || 'ù'}\n\n`;
+                    txt += `  Reason: ${r.reason || 'UNKNOWN'} - Day: ${r.dayType || '-'} - Region: ${r.region || '-'}\n`;
+                    txt += `  User: ${r.userId || r.deviceId || '-'} - Time: ${r.timeOfDay || '-'}\n\n`;
                 });
                 Admin.downloadFile(`routing_fails_${dateStr}.txt`, txt);
             }
@@ -4418,20 +4469,20 @@ const Admin = {
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
                         // ??? GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
-                        let receiptHtml = `<span class="inline-flex text-gray-400 ml-1" title="Sent">${Admin.icon('check', 'w-3.5 h-3.5')}</span>`;
+                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
                         if (item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex text-blue-400 ml-1" title="Read">${Admin.icon('checks', 'w-3.5 h-3.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
                         } else if (item.read) {
-                            receiptHtml = `<span class="inline-flex text-blue-400 ml-1" title="Read">${Admin.icon('checks', 'w-3.5 h-3.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         } else if (item.delivered) {
-                            receiptHtml = `<span class="inline-flex text-gray-400 ml-1" title="Delivered">${Admin.icon('checks', 'w-3.5 h-3.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         }
 
-                        // REGEX: Extract Admin Signoff Name ("ù Enock")
+                        // REGEX: Extract Admin Signoff Name ("- Enock")
                         let parsedAdminText = item.text || "";
                         let adminName = "Admin";
                         parsedAdminText = Admin.repairMojibake(parsedAdminText);
-                        // Match em dash and legacy UTF-8 mojibake of "ù"
+                        // Match em dash and legacy UTF-8 mojibake of "-"
                         const signoffRegex = /(?:<br>|\n)*<span[^>]*>(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*(.*?)<\/span>$/i;
                         const fallbackRegex = /(?:<br>|\n)*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*([a-zA-Z]+)$/i;
                         
@@ -4465,109 +4516,121 @@ const Admin = {
                         `;
                     } else {
                         // COMMUTER BUBBLE (Left)
-                        // TRAILING WHITESPACE PURGE: .trim() before replace
-                        let rawText = item.text ? secureEscape(item.text.trim()) : "No content";
-                        
-                        // ??? GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
-                        rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
-                        
-                        // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
-                        rawText = rawText.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
-                            const fullNum = `27${p1}${p2}${p3}`;
-                            const displayNum = `0${p1} ${p2} ${p3}`;
-                            const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : ''; 
-                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
-                        });
-                        
-                        rawText = rawText.replace(/\n/g, "<br>");
-                        
-                        const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
-                        const safeRouteId = secureEscape(item.routeId || 'None');
-                        const safeAttachUrl = item.attachmentUrl ? secureEscape(item.attachmentUrl) : null;
-                        const safeAttachUrls = item.attachmentUrls && Array.isArray(item.attachmentUrls) 
-                            ? item.attachmentUrls.map(url => secureEscape(url)) 
-                            : (safeAttachUrl ? [safeAttachUrl] : []);
-
-                        // Quote chip: one block for admin-thread replies + legacy [context] prefixes
+                        // Parse reply/quote markers on PLAIN text first so escaping never splits the chip.
+                        let plainBody = item.text ? String(item.text).trim() : '';
                         let quoteBlockHtml = "";
                         let isReply = false;
-                        const decodeEntities = (s) => String(s || '')
-                            .replace(/&nbsp;/gi, ' ')
-                            .replace(/&amp;/g, '&')
-                            .replace(/&lt;/g, '<')
-                            .replace(/&gt;/g, '>')
-                            .replace(/&quot;/g, '"')
-                            .replace(/&#39;/g, "'");
 
-                        // New + legacy: [REPLY TO ADMIN: key | snippet] body   OR   [REPLY TO ADMIN: key] snippet body
-                        const replyAdminRe = /^\[REPLY TO ADMIN:\s*([^|\]]+?)(?:\s*\|\s*([^\]]*))?\](?:\s*<br>\s*|\s+)?([\s\S]*)$/i;
-                        const replyAdminMatch = rawText.match(replyAdminRe);
+                        const stripOuterQuotes = (s) => String(s || '').replace(/^["'\u201c\u201d\s]+|["'\u201c\u201d\s]+$/g, '').trim();
+                        const waQuoteChip = ({ author, snippet, onClickAttr, accent = 'blue' }) => {
+                            const bar = accent === 'blue'
+                                ? 'border-blue-500 dark:border-blue-400'
+                                : 'border-gray-400 dark:border-gray-500';
+                            const nameCls = accent === 'blue'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-600 dark:text-gray-300';
+                            const inner = `
+                                    <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(author || 'Enock')}</div>
+                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(snippet || 'Admin message')}</div>`;
+                            if (onClickAttr) {
+                                return `<button type="button" ${onClickAttr} class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm">${inner}</button>`;
+                            }
+                            return `<div class="-mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5">${inner}</div>`;
+                        };
+
+                        // [REPLY TO ADMIN: key | snippet]\nbody  OR  [REPLY TO ADMIN: key]\nsnippet\nbody
+                        const replyAdminRe = /^\[REPLY TO ADMIN:\s*([^|\]]+?)(?:\s*\|\s*([\s\S]*?))?\]\s*([\s\S]*)$/i;
+                        const replyAdminMatch = plainBody.match(replyAdminRe);
                         if (replyAdminMatch) {
                             isReply = true;
                             const replyKey = String(replyAdminMatch[1] || '').trim();
-                            let snippet = decodeEntities(String(replyAdminMatch[2] || '').trim());
-                            let bodyRest = String(replyAdminMatch[3] || '').trim();
-                            // Legacy format put the snippet outside the brackets
+                            let snippet = stripOuterQuotes(replyAdminMatch[2] || '');
+                            let bodyRest = String(replyAdminMatch[3] || '').replace(/^\s+/, '');
                             if (!snippet && bodyRest) {
-                                const parts = bodyRest.split(/(?:<br>\s*)+/i);
+                                const parts = bodyRest.split(/\r?\n/);
                                 if (parts.length > 1) {
-                                    snippet = decodeEntities(parts[0].replace(/^["'\s]+|["'\s]+$/g, ''));
-                                    bodyRest = parts.slice(1).join('<br>').trim();
+                                    snippet = stripOuterQuotes(parts[0]);
+                                    bodyRest = parts.slice(1).join('\n').replace(/^\s+/, '');
                                 } else {
-                                    snippet = decodeEntities(bodyRest.replace(/^["'\s]+|["'\s]+$/g, ''));
+                                    snippet = stripOuterQuotes(bodyRest);
                                     bodyRest = '';
                                 }
                             }
-                            snippet = snippet.replace(/\s+/g, ' ').trim();
-                            const chipLabel = `Enock: ${snippet || 'Admin message'}`.slice(0, 160);
-                            const safeKey = replyKey.replace(/'/g, "\\'");
-                            quoteBlockHtml = `
-                                <button type="button" data-reply-key="${secureEscape(replyKey)}" onclick="Admin.jumpToQuotedFeedback('${safeKey}')" class="text-left -mx-1 mb-1.5 mt-1 bg-black/5 dark:bg-white/10 border-l-4 border-blue-400 dark:border-blue-500 py-1.5 px-2 rounded-r text-[10px] text-gray-800 dark:text-gray-200 italic w-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm">
-                                    <span class="line-clamp-3 not-italic font-semibold text-blue-700 dark:text-blue-300">${secureEscape(chipLabel)}</span>
-                                </button>
-                            `;
-                            rawText = bodyRest;
+                            snippet = snippet.replace(/\s+/g, ' ').trim().slice(0, 240);
+                            const safeKey = replyKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            quoteBlockHtml = waQuoteChip({
+                                author: 'Enock',
+                                snippet: snippet || 'Admin message',
+                                onClickAttr: `data-reply-key="${secureEscape(replyKey)}" onclick="Admin.jumpToQuotedFeedback('${safeKey}')"`,
+                                accent: 'blue',
+                            });
+                            plainBody = bodyRest;
                         } else {
-                            const quoteRegex = /^\[([\s\S]*?)\](?:\s*<br>\s*|\s+)/i;
-                            const quoteMatch = rawText.match(quoteRegex);
+                            const quoteRegex = /^\[([\s\S]*?)\]\s+/;
+                            const quoteMatch = plainBody.match(quoteRegex);
                             if (quoteMatch && quoteMatch[1] !== undefined) {
                                 isReply = true;
-                                const rawQuoteContent = decodeEntities(String(quoteMatch[1]));
-                                let quoteContent = rawQuoteContent
+                                const rawQuoteContent = String(quoteMatch[1]);
+                                let quoteAuthor = 'Enock';
+                                let quoteSnippet = rawQuoteContent
                                     .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_|]+/i, '')
                                     .replace(/Replying to:\s*/i, '')
                                     .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
                                     .trim();
-                                if (/^enock\s*:/i.test(quoteContent) === false && quoteContent) {
-                                    quoteContent = `Enock: ${quoteContent}`;
+                                const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
+                                if (named) {
+                                    quoteAuthor = named[1].trim();
+                                    quoteSnippet = named[2].trim();
                                 }
+                                quoteSnippet = stripOuterQuotes(quoteSnippet).replace(/\s+/g, ' ').trim().slice(0, 240);
                                 let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
-                                let isAlertQuote = alertIdMatch || rawQuoteContent.includes('Advisory') || rawQuoteContent.includes('Line Severed') || rawQuoteContent.includes('Expect Delays');
+                                let isAlertQuote = !!(alertIdMatch || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent));
                                 if (isAlertQuote) {
                                     let alertIdParam = alertIdMatch ? `'${alertIdMatch[1]}'` : 'null';
-                                    let safeQuoteText = escapeHTML(quoteContent.replace(/'/g, "\\'"));
-                                    quoteBlockHtml = `
-                                        <button type="button" onclick="Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')" class="text-left -mx-1 mb-1.5 mt-1 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 py-1.5 px-2 rounded-r text-[10px] text-blue-800 dark:text-blue-300 italic w-full hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors focus:outline-none group shadow-sm">
-                                            <div class="flex items-start justify-between">
-                                                <span class="line-clamp-2">${secureEscape(quoteContent)}</span>
-                                                <svg class="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                                            </div>
-                                        </button>
-                                    `;
+                                    let safeQuoteText = (typeof escapeHTML === 'function' ? escapeHTML : secureEscape)(`${quoteAuthor}: ${quoteSnippet}`.replace(/'/g, "\\'"));
+                                    quoteBlockHtml = waQuoteChip({
+                                        author: quoteAuthor,
+                                        snippet: quoteSnippet || 'Advisory',
+                                        onClickAttr: `onclick="Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')"`,
+                                        accent: 'blue',
+                                    });
                                 } else {
-                                    quoteBlockHtml = `
-                                        <div class="-mx-1 mb-1.5 mt-1 bg-black/5 dark:bg-white/10 border-l-4 border-gray-400 dark:border-gray-500 py-1 px-2 rounded-r text-[10px] text-gray-700 dark:text-gray-300 italic line-clamp-3 w-full">
-                                            ${secureEscape(quoteContent)}
-                                        </div>
-                                    `;
+                                    quoteBlockHtml = waQuoteChip({
+                                        author: quoteAuthor,
+                                        snippet: quoteSnippet || 'Quoted message',
+                                        accent: 'gray',
+                                    });
                                 }
-                                rawText = rawText.replace(quoteRegex, '').trim();
+                                plainBody = plainBody.slice(quoteMatch[0].length).replace(/^\s+/, '');
                             }
                         }
 
+                        let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
+
+                        // ??? GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
+                        rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
+
+                        // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
+                        rawText = rawText.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
+                            const fullNum = `27${p1}${p2}${p3}`;
+                            const displayNum = `0${p1} ${p2} ${p3}`;
+                            const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : '';
+                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
+                        });
+
+                        rawText = rawText.replace(/\n/g, '<br>');
+
+                        const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
+                        const safeRouteId = secureEscape(item.routeId || 'None');
+                        const safeAttachUrl = item.attachmentUrl ? secureEscape(item.attachmentUrl) : null;
+                        const safeAttachUrls = item.attachmentUrls && Array.isArray(item.attachmentUrls)
+                            ? item.attachmentUrls.map(url => secureEscape(url))
+                            : (safeAttachUrl ? [safeAttachUrl] : []);
+
                         // Safeguard rawText in case the replace cleared it completely
-                        if (typeof rawText !== 'string') rawText = "";
+                        if (typeof rawText !== 'string') rawText = '';
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
+
 
                         // ??? GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
                         let attachmentHtml = '';
@@ -4601,7 +4664,7 @@ const Admin = {
                         const integratedHeaderHtml = `
                             <div class="text-[9px] font-black ${headerColorClass} uppercase tracking-widest mb-1.5 border-b border-gray-200 dark:border-gray-700 pb-1 flex justify-between items-center w-full">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1">${headerLabelText}</span>
-                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} ù ${safeRouteId}</span>
+                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} ¬∑ ${safeRouteId}</span>
                             </div>
                         `;
 
@@ -4864,7 +4927,7 @@ const Admin = {
             // copy/edit/clear it instead of starting from a blank field.
             const initial = (currentAlias && String(currentAlias).trim()) ? String(currentAlias) : String(deviceId || '');
             const newName = prompt(
-                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID ù delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
+                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID - delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
                 initial
             );
             if (newName === null) return; // Action cancelled by user
@@ -4875,7 +4938,7 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const trimmed = newName.trim();
-                // Saving the raw device ID as "alias" is pointless ù treat as no alias
+                // Saving the raw device ID as "alias" is pointless - treat as no alias
                 if (trimmed === '' || trimmed === deviceId) {
                     await fetch(`${dynamicEndpoint}admin_state/aliases/${deviceId}.json?auth=${secret}`, { method: 'DELETE' });
                     if (Admin.cachedAliases) delete Admin.cachedAliases[deviceId];
@@ -5071,7 +5134,7 @@ const Admin = {
         Admin.fetchDelayReports = async () => {
             const list = document.getElementById('dr-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loadingù</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
             try {
                 const secret = await Admin.getAuthKey();
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -5108,24 +5171,24 @@ const Admin = {
                 };
 
                 list.innerHTML = items.slice(0, 80).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : 'ù';
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
                     const sev = (r.severity || 'moderate').toUpperCase();
                     const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
                     const status = r.status || 'open';
                     const note = r.note ? String(r.note).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '<span class="italic text-gray-400">No note</span>';
-                    const who = r.isGuest ? `guest ù ${(r.deviceId || '').slice(0, 8)}` : `uid ù ${(r.uid || '').slice(0, 10)}`;
+                    const who = r.isGuest ? `guest - ${(r.deviceId || '').slice(0, 8)}` : `uid - ${(r.uid || '').slice(0, 10)}`;
                     const closedCls = status === 'closed' ? 'opacity-50' : '';
                     return `
                         <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closedCls}" data-report-id="${r.reportId || r._key}">
                             <div class="flex justify-between items-start gap-2 mb-1">
                                 <div class="min-w-0">
                                     <p class="text-xs font-black text-gray-900 dark:text-white truncate">${routeName(r.routeId)}</p>
-                                    <p class="text-[10px] font-bold ${sevColor}">${sev} ù ${status} ù ${r.source || 'app'}</p>
+                                    <p class="text-[10px] font-bold ${sevColor}">${sev} - ${status} - ${r.source || 'app'}</p>
                                 </div>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
                             <p class="text-[11px] text-gray-700 dark:text-gray-300 mb-1">${note}</p>
-                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` ù near ${String(r.station).replace(/</g, '')}` : ''} ù ${r.reportId || r._key}${r.verified ? ' ù ? verified' : ''}</p>
+                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` - near ${String(r.station).replace(/</g, '')}` : ''} - ${r.reportId || r._key}${r.verified ? ' - ? verified' : ''}</p>
                             <div class="flex flex-wrap gap-3">
                             ${status !== 'closed' ? `<button type="button" class="dr-close-btn text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Mark closed</button>` : '<span class="text-[10px] text-gray-400">Closed</span>'}
                             ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn text-[10px] font-bold text-green-700 dark:text-green-400 underline" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified (+trust)</button>` : (r.verified ? '<span class="text-[10px] text-green-600">Verified</span>' : '')}
@@ -5236,7 +5299,7 @@ const Admin = {
         Admin.fetchModerationQueue = async () => {
             const list = document.getElementById('mq-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loadingù</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
             try {
                 const secret = await Admin.getAuthKey();
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -5264,7 +5327,7 @@ const Admin = {
                 }
 
                 list.innerHTML = items.slice(0, 100).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : 'ù';
+                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
@@ -5272,11 +5335,11 @@ const Admin = {
                     return `
                         <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
                             <div class="flex justify-between gap-2 mb-1">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} ù ${r.routeId || 'ù'}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} - ${r.routeId || '-'}</p>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || 'ù').toString().slice(0, 16)} ù post: ${(r.targetPostId || 'ù').toString().slice(0, 18)}</p>
-                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">ù${snippet}ù</p>` : ''}
+                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}</p>
+                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">"${snippet}"</p>` : ''}
                             ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
@@ -5351,7 +5414,7 @@ const Admin = {
         };
     },
 
-    /** Phase 7 ù timed shadow ban with duration picker. opts.deviceId also writes devices/{id}/flags. */
+    /** Phase 7 - timed shadow ban with duration picker. opts.deviceId also writes devices/{id}/flags. */
     applyShadowBan: async (uid, opts = {}) => {
         if (!uid) {
             if (typeof showToast === 'function') showToast('No target uid', 'error');
@@ -5432,7 +5495,7 @@ const Admin = {
         const modeLabel = banModes.find((m) => m.id === choice.mode)?.label || choice.mode;
         const confirmed = await Admin.secureConfirm(
             'Confirm shadow ban',
-            `Ban ${uid} for ${choice.label} with ù${modeLabel}ù? They wonùt be told theyùre banned.`
+            `Ban ${uid} for ${choice.label} with "${modeLabel}"? They won't be told they're banned.`
         );
         if (!confirmed) return false;
 
@@ -5484,7 +5547,7 @@ const Admin = {
                 window.trustLocalBlockList.add(uid);
                 if (deviceId) window.trustLocalBlockList.add(deviceId);
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) ù mode: ${modeLabel}`, 'success');
+            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) - mode: ${modeLabel}`, 'success');
             if (typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
             return true;
         } catch (e) {
@@ -5497,7 +5560,7 @@ const Admin = {
     liftShadowBan: async (uid, opts = {}) => {
         if (!uid) return false;
         const deviceId = opts.deviceId || (/^usr_/i.test(uid) ? uid : null);
-        const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}ù?`);
+        const confirmed = await Admin.secureConfirm('Lift shadow ban', `Restore posting for ${uid.slice(0, 12)}-?`);
         if (!confirmed) return false;
         try {
             const secret = await Admin.getAuthKey();
@@ -5549,7 +5612,7 @@ const Admin = {
         await fetch(`${dynamicEndpoint}users/${uid}/trustScore.json?auth=${secret}`, {
             method: 'PUT', body: JSON.stringify(score + 1)
         });
-        if (typeof showToast === 'function') showToast(`Verified ù trust score ? ${score + 1}`, 'success');
+        if (typeof showToast === 'function') showToast(`Verified - trust score ? ${score + 1}`, 'success');
     },
 
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
@@ -5578,7 +5641,7 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate ù switch tabs below.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate - switch tabs below.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
@@ -5589,12 +5652,12 @@ const Admin = {
                         <button type="button" id="ut-bans-refresh" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
                     <div id="ut-bans-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
-                        <p class="text-xs text-gray-400 text-center py-3">Open panel to load bansù</p>
+                        <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans...</p>
                     </div>
                 </div>
                 <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
                     <div class="flex gap-2 mb-3 px-1">
-                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_ù), or emailù" />
+                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_-), or email-" />
                         <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
                     </div>
                     <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
@@ -5669,10 +5732,10 @@ const Admin = {
         Admin.fetchActiveBans = async () => {
             const list = document.getElementById('ut-bans-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bansù</p>';
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans...</p>';
             try {
                 const secret = await Admin.getAuthKey();
-                if (!secret) throw new Error('not signed in ù open Admin while logged in as an admin account');
+                if (!secret) throw new Error('not signed in - open Admin while logged in as an admin account');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const auth = `?auth=${encodeURIComponent(secret)}`;
                 const [usersRes, devicesRes] = await Promise.all([
@@ -5696,7 +5759,7 @@ const Admin = {
                     bans.push({
                         id,
                         source,
-                        displayName: record.displayName || (source === 'device' ? 'Device guest' : 'ù'),
+                        displayName: record.displayName || (source === 'device' ? 'Device guest' : '-'),
                         email: record.email || null,
                         until,
                         bannedAt: Number(flags.shadowBannedAt || 0),
@@ -5733,7 +5796,7 @@ const Admin = {
                         })()
                         : 'no expiry';
                     const modeStr = banModeLabel(b.mode);
-                    const name = String(b.displayName || 'ù').replace(/</g, '&lt;');
+                    const name = String(b.displayName || '-').replace(/</g, '&lt;');
                     const email = b.email ? String(b.email).replace(/</g, '&lt;') : '';
                     const card = document.createElement('div');
                     card.className = 'border border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/20 rounded-xl p-3 space-y-1';
@@ -5830,11 +5893,11 @@ const Admin = {
             const query = (document.getElementById('ut-uid-input')?.value || '').trim();
             const out = document.getElementById('ut-result');
             if (!query || !out) return;
-            out.innerHTML = '<p class="animate-pulse text-gray-400">Loadingù</p>';
+            out.innerHTML = '<p class="animate-pulse text-gray-400">Loading...</p>';
             try {
                 const resolved = await Admin.resolveTrustTarget(query);
                 if (!resolved) {
-                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_ù</code>), or account email.</p>';
+                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_-</code>), or account email.</p>';
                     return;
                 }
                 const { uid, user, via, deviceId } = resolved;
@@ -5842,23 +5905,23 @@ const Admin = {
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
                 const expired = banned && until > 0 && Date.now() > until;
-                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : 'ù');
+                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '-');
                 const modeRaw = flags.shadowBanMode || 'offline';
                 const modeStr = banModeLabel(modeRaw);
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
-                const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : 'ù')).toString().replace(/</g, '&lt;');
-                const email = (user.email || 'ù').toString().replace(/</g, '&lt;');
+                const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
+                const email = (user.email || '-').toString().replace(/</g, '&lt;');
                 const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device ? account' : 'user id'));
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
                         <p class="font-black text-gray-900 dark:text-white">${name}</p>
                         <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
-                        <p class="text-[11px]">Email: <b>${email}</b> ù Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` ù device <span class="font-mono">${deviceId}</span>` : ''}</p>
-                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> ù Trust score: <b>${score}</b></p>
-                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` ù until ${untilStr}` : ''}</p>
+                        <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono">${deviceId}</span>` : ''}</p>
+                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
+                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
                         ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
                         <div class="flex flex-wrap gap-3 pt-1">
-                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow banù</button>
+                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban</button>
                             <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
                         </div>
                     </div>`;
@@ -5887,7 +5950,7 @@ const Admin = {
 
         const alias = Admin.cachedAliases && Admin.cachedAliases[deviceId] ? Admin.cachedAliases[deviceId] : null;
         const recipientHtml = alias
-            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">ù</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
+            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">-</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
             : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>`;
         
         let modal = document.getElementById('admin-reply-modal');
@@ -6059,7 +6122,7 @@ const Admin = {
             // Auto-Signoff Logic
             const adminEmail = Admin.currentUser?.email || '';
             const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
-            text += `<br><br><span style="color: #9ca3af; font-style: italic;">ù ${adminName}</span>`;
+            text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
             
             const btn = document.getElementById('reply-send');
             btn.textContent = "Sending...";
@@ -6696,7 +6759,7 @@ const Admin = {
             return;
         }
         listEl.innerHTML = rows.map((job) => {
-            const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : 'ù';
+            const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : '-';
             const lastStr = job.lastRunAt ? Admin.formatDate(job.lastRunAt) : 'never';
             const liveFor = Admin.formatScheduleDurationLabel(job.notice?.expiresInMs || 2 * 3600 * 1000);
             const paused = job.enabled === false;
@@ -6708,7 +6771,7 @@ const Admin = {
                 } catch { return '(empty)'; }
             })();
             const freq = escapeHTML(String(job.frequency || 'once'));
-            const target = escapeHTML(String(job.target || 'ù'));
+            const target = escapeHTML(String(job.target || '-'));
             const idSafe = escapeHTML(String(job.id || ''));
             return `
                 <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm ${paused ? 'opacity-70' : ''}" data-sched-id="${idSafe}">
@@ -6720,7 +6783,7 @@ const Admin = {
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
-                        <span>Next ${escapeHTML(nextStr)} ù Last ${escapeHTML(lastStr)}</span>
+                        <span>Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</span>
                         <span class="flex gap-2 shrink-0">
                             <button type="button" class="alert-sched-toggle font-bold uppercase tracking-wider focus:outline-none ${paused ? 'text-emerald-600' : 'text-amber-600'}" data-sched-id="${idSafe}" data-enabled="${paused ? '1' : '0'}">${paused ? 'Resume' : 'Pause'}</button>
                             <button type="button" class="alert-sched-delete text-red-500 hover:text-red-700 font-bold uppercase tracking-wider focus:outline-none" data-sched-id="${idSafe}">Clear</button>
@@ -6760,7 +6823,7 @@ const Admin = {
 
     refreshScheduledAlerts: async () => {
         const statusEl = document.getElementById('alert-schedule-status');
-        if (statusEl) statusEl.textContent = 'Checking dueù';
+        if (statusEl) statusEl.textContent = 'Checking due...';
         try {
             const secret = await Admin.getAuthKey();
             const due = await Admin.publishDueScheduledAlerts(secret);
@@ -6768,7 +6831,7 @@ const Admin = {
             Admin.renderScheduledAlertsList(items);
             if (statusEl) {
                 statusEl.textContent = due.published
-                    ? `${items.length} scheduled ù posted ${due.published}`
+                    ? `${items.length} scheduled - posted ${due.published}`
                     : `${items.length} scheduled`;
             }
         } catch (e) {
@@ -6950,7 +7013,7 @@ const Admin = {
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
-                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only ù after they vote (or while viewing)</p>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only - after they vote (or while viewing)</p>
                         </div>
                         <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                             <input type="checkbox" id="alert-poll-show-results" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
@@ -6983,7 +7046,7 @@ const Admin = {
                                     <option value="once">Once</option>
                                     <option value="hourly">Hourly</option>
                                     <option value="daily">Daily</option>
-                                    <option value="weekdays">Weekdays (MonùFri)</option>
+                                    <option value="weekdays">Weekdays (Mon-Fri)</option>
                                     <option value="weekly">Weekly</option>
                                 </select>
                             </div>
@@ -7195,7 +7258,7 @@ const Admin = {
                 .forEach((r) => {
                     const opt = document.createElement('option');
                     opt.value = r.id;
-                    opt.textContent = `${r.region || '?'} ù ${Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name}`;
+                    opt.textContent = `${r.region || '?'} - ${Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name}`;
                     archRouteSel.appendChild(opt);
                 });
         }
@@ -7249,7 +7312,7 @@ const Admin = {
                 once: 'once',
                 hourly: 'every hour',
                 daily: 'every day',
-                weekdays: 'on weekdays (MonùFri)',
+                weekdays: 'on weekdays (Mon-Fri)',
                 weekly: 'every week',
             })[freq] || freq;
             const when = Admin.formatDate(firstMs);
@@ -7284,7 +7347,7 @@ const Admin = {
             const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
             msg = Admin.repairMojibake(msg);
             if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">ù ${signoff}</span>`;
+                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
             const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
                 ? (pollOptC.value.trim() || null) : null;
@@ -7403,7 +7466,7 @@ const Admin = {
             }
 
             if (sendBtn) sendBtn.textContent = 'Repost Alert';
-            if (typeof showToast === 'function') showToast('Draft ready ù review and tap Repost Alert.', 'success');
+            if (typeof showToast === 'function') showToast('Draft ready - review and tap Repost Alert.', 'success');
             composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
 
@@ -7826,7 +7889,7 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
             msg = Admin.repairMojibake(msg);
-            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">ù ${signoff}</span>`;
+            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
 
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
@@ -7937,22 +8000,22 @@ const Admin = {
             return;
         }
 
-        if (statusEl) statusEl.textContent = 'Sweeping expiredù';
-        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archiveù</div>`;
+        if (statusEl) statusEl.textContent = 'Sweeping expired...';
+        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive...</div>`;
 
         try {
             const swept = await Admin.sweepExpiredAlertsToArchive(secret);
-            if (statusEl) statusEl.textContent = 'Loadingù';
+            if (statusEl) statusEl.textContent = 'Loading...';
             const items = await Admin.loadUnifiedAlertArchive(secret);
             const filtered = Admin.filterAlertArchiveItems(items);
             Admin.renderAlertArchiveList(items);
             const noticeN = filtered.filter((i) => (i.kind || 'notice') !== 'disruption').length;
             const disrN = filtered.filter((i) => i.kind === 'disruption').length;
             const sweepNote = (swept.notices || swept.disruptions)
-                ? ` ù moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
+                ? ` - moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
                 : '';
-            const filterNote = filtered.length !== items.length ? ` ù showing ${filtered.length}/${items.length}` : '';
-            if (statusEl) statusEl.textContent = `${noticeN} alerts ù ${disrN} incidents${filterNote}${sweepNote}`;
+            const filterNote = filtered.length !== items.length ? ` - showing ${filtered.length}/${items.length}` : '';
+            if (statusEl) statusEl.textContent = `${noticeN} alerts - ${disrN} incidents${filterNote}${sweepNote}`;
         } catch (e) {
             console.warn('fetchAlertArchive failed', e);
             if (statusEl) statusEl.textContent = 'Failed';
@@ -7988,7 +8051,7 @@ const Admin = {
                 : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
             const reason = item.archiveReason || (item.archivedAt ? 'cleared' : 'archived');
             const when = item.archivedAt || item.postedAt;
-            const whenStr = when ? Admin.formatDate(when) : 'ù';
+            const whenStr = when ? Admin.formatDate(when) : '-';
             const plain = (() => {
                 try {
                     const d = document.createElement('div');
@@ -7998,11 +8061,11 @@ const Admin = {
             })();
             const poll = item.pollResults;
             const pollHint = poll && poll.total
-                ? `<span class="text-[9px] font-bold text-purple-600 dark:text-purple-400">Poll ù ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
+                ? `<span class="text-[9px] font-bold text-purple-600 dark:text-purple-400">Poll - ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
                 : (item.poll && item.poll.active
                     ? `<span class="text-[9px] font-bold text-purple-500">Had poll</span>`
                     : '');
-            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || 'ù'));
+            const scope = escapeHTML(String(item.clearedFrom || item.target || item.routeId || '-'));
             const idSafe = escapeHTML(String(item.id || item._archKey || idx));
 
             return `
@@ -8015,7 +8078,7 @@ const Admin = {
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between gap-2 text-[9px] font-mono text-gray-400">
-                        <span class="truncate">${scope} ù ${idSafe}</span>
+                        <span class="truncate">${scope} - ${idSafe}</span>
                         <span class="shrink-0">${escapeHTML(whenStr)}</span>
                     </div>
                 </button>`;
@@ -8033,8 +8096,8 @@ const Admin = {
         if (statusEl && all.length) {
             const noticeN = rows.filter((i) => (i.kind || 'notice') !== 'disruption').length;
             const disrN = rows.filter((i) => i.kind === 'disruption').length;
-            const filterNote = rows.length !== all.length ? ` ù showing ${rows.length}/${all.length}` : '';
-            statusEl.textContent = `${noticeN} alerts ù ${disrN} incidents${filterNote}`;
+            const filterNote = rows.length !== all.length ? ` - showing ${rows.length}/${all.length}` : '';
+            statusEl.textContent = `${noticeN} alerts - ${disrN} incidents${filterNote}`;
         }
     },
 
@@ -8058,7 +8121,7 @@ const Admin = {
                 : 'text-blue-600 dark:text-blue-400';
 
         let statusHtml = data.archivedAt
-            ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` ù ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
+            ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` - ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : `<span class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
 
         let imgHtml = data.imageUrl
@@ -8119,7 +8182,7 @@ const Admin = {
                 </div>`;
         }
 
-        const postedStr = data.postedAt ? Admin.formatDate(data.postedAt) : 'ù';
+        const postedStr = data.postedAt ? Admin.formatDate(data.postedAt) : '-';
         const archivedStr = data.archivedAt ? Admin.formatDate(data.archivedAt) : null;
         const signoff = data.signoff || data.signedBy || '';
         const scope = data.clearedFrom || data.target || data.routeId || '';
@@ -8132,10 +8195,10 @@ const Admin = {
                 </div>
                 ${imgHtml}
                 <div class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed mb-2">${parsedMessage}</div>
-                ${signoff ? `<p class="text-[10px] text-gray-500 italic mb-2">ù ${escapeHTML(String(signoff))}</p>` : ''}
+                ${signoff ? `<p class="text-[10px] text-gray-500 italic mb-2">- ${escapeHTML(String(signoff))}</p>` : ''}
                 ${pollHtml}
                 <div class="text-[10px] text-gray-500 font-mono border-t border-gray-200 dark:border-gray-700 pt-2 mt-3 space-y-0.5">
-                    <div>ID: ${escapeHTML(String(data.id || 'ù'))}</div>
+                    <div>ID: ${escapeHTML(String(data.id || '-'))}</div>
                     ${scope ? `<div>Scope: ${escapeHTML(String(scope))}</div>` : ''}
                     <div>Posted: ${escapeHTML(postedStr)}</div>
                     ${archivedStr ? `<div>Archived: ${escapeHTML(archivedStr)}</div>` : ''}
@@ -8190,9 +8253,9 @@ const Admin = {
             pollHtml = `<div class="mt-4 p-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-900/20"><p class="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-2">Poll Snapshot</p><p class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3">${escapeHTML(poll.question || 'Poll')}</p>${results ? `${bar(poll.optionA || 'A', results.A, 'bg-purple-500')}${bar(poll.optionB || 'B', results.B, 'bg-purple-400')}${poll.optionC || (results.C || 0) > 0 ? bar(poll.optionC || 'C', results.C, 'bg-purple-300') : ''}<div class="text-right text-[9px] font-black uppercase text-gray-400">Total: ${total}</div>` : `<p class="text-[10px] text-gray-500">No tallies stored.</p>`}</div>`;
         }
         const statusChip = data.archivedAt
-            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${data.archiveReason ? ` ù ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
+            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${data.archiveReason ? ` - ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : '';
-        return `${statusChip}${imgHtml}<div class="leading-relaxed">${parsedMessage}</div>${signoff ? `<p class="text-[10px] text-gray-500 italic mt-2">ù ${escapeHTML(String(signoff))}</p>` : ''}${pollHtml}`;
+        return `${statusChip}${imgHtml}<div class="leading-relaxed">${parsedMessage}</div>${signoff ? `<p class="text-[10px] text-gray-500 italic mt-2">- ${escapeHTML(String(signoff))}</p>` : ''}${pollHtml}`;
     },
 
     previewArchivedAlert: (item) => {
@@ -8239,9 +8302,9 @@ const Admin = {
         content.innerHTML = Admin.buildNoticeBodyHtml(item);
         if (timestamp) {
             const posted = item.repostedAt || item.postedAt || item.timestamp;
-            const postedStr = posted ? Admin.formatDate(posted) : 'ù';
+            const postedStr = posted ? Admin.formatDate(posted) : '-';
             const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
-            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || 'ù'))}</span>`;
+            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
         }
 
         modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
@@ -8308,7 +8371,7 @@ const Admin = {
         if (titleEl) titleEl.innerHTML = locationText;
         if (bodyEl) {
             const statusChip = item.archivedAt
-                ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` ù ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
+                ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
                 : '';
             bodyEl.innerHTML = `${statusChip}${item.message || item.longExplanation || item.buttonText || 'No additional details provided.'}`;
         }
@@ -8325,7 +8388,7 @@ const Admin = {
         }
         if (timeEl) {
             const posted = item.postedAt ? Admin.formatDate(item.postedAt) : 'Recently';
-            const arch = item.archivedAt ? ` ù Archived: ${Admin.formatDate(item.archivedAt)}` : '';
+            const arch = item.archivedAt ? ` - Archived: ${Admin.formatDate(item.archivedAt)}` : '';
             timeEl.textContent = `Posted: ${posted}${arch}`;
         }
 
@@ -9832,7 +9895,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Zone Distance Audit ù fare zone vs computed route km -->
+                <!-- Zone Distance Audit - fare zone vs computed route km -->
                 <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
                     <button id="zone-audit-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
                         <span class="flex items-center gap-2">
@@ -9846,7 +9909,7 @@ const Admin = {
                         <p class="text-[9px] text-emerald-800 dark:text-emerald-400 font-medium leading-snug">
                             Measures route km from station coordinates (path sum; prefers KM_MARK when present)
                             and checks the assigned fare zone against PRASA Aug 2025 travel distances:
-                            Z1 1ù15 ù Z2 16ù40 ù Z3 41ù135 ù Z4 &gt;135 km.
+                            Z1 1-15 - Z2 16-40 - Z3 41-135 - Z4 &gt;135 km.
                         </p>
 
                         <div>
@@ -9860,7 +9923,7 @@ const Admin = {
                         </div>
 
                         <div>
-                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) ù PRASA defaults</label>
+                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) - PRASA defaults</label>
                             <div class="grid grid-cols-3 gap-2">
                                 <input type="number" id="zone-audit-z1" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z1 max km (official 15)">
                                 <input type="number" id="zone-audit-z2" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z2 max km (official 40)">
@@ -10045,7 +10108,7 @@ const Admin = {
                         </div>
                     </div>
                     <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1.5 text-center">
-                        PRASA bands: Z1 1ù${bands.Z1} ù Z2 ${bands.Z1 + 1}ù${bands.Z2} ù Z3 ${bands.Z2 + 1}ù${bands.Z3} ù Z4 &gt;${bands.Z3} km
+                        PRASA bands: Z1 1-${bands.Z1} - Z2 ${bands.Z1 + 1}-${bands.Z2} - Z3 ${bands.Z2 + 1}-${bands.Z3} - Z4 &gt;${bands.Z3} km
                     </p>
                 `;
             }
@@ -10069,14 +10132,14 @@ const Admin = {
                 const p = r.primary;
                 const distLabel = p?.distanceKm != null
                     ? `${p.distanceKm.toFixed(1)} km`
-                    : 'ù';
+                    : '-';
                 const srcBit = p?.distanceSource
                     ? ({ path: 'path', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
                     : '';
-                const assigned = p?.assignedZone || (r.zones?.[0] || 'ù');
-                const suggested = p?.suggestedZone || 'ù';
+                const assigned = p?.assignedZone || (r.zones?.[0] || '-');
+                const suggested = p?.suggestedZone || '-';
                 const rangeLabels = (typeof ZONE_KM_RANGE_LABELS !== 'undefined' && ZONE_KM_RANGE_LABELS) ? ZONE_KM_RANGE_LABELS : {};
-                const suggestedRange = suggested !== 'ù' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
+                const suggestedRange = suggested !== '-' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
                 const routeBit = Admin.formatRouteLabelHtml(r.routeName);
                 const style = statusStyle[r.status] || statusStyle.ok;
                 const statusLabel = {
@@ -10093,19 +10156,19 @@ const Admin = {
                         .filter((s) => s.km != null)
                         .slice(0, 8)
                         .map((s) => `${esc(s.from)}?${esc(s.to)} ${s.km}km`)
-                        .join(' ù ');
-                    const more = (m.segments || []).length > 8 ? ' ù' : '';
+                        .join(' - ');
+                    const more = (m.segments || []).length > 8 ? ' -' : '';
                     return `
                         <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
                             <div class="flex justify-between gap-2 font-mono text-[9px]">
-                                <span class="truncate">${esc(d.dayDir)} ù ${esc(d.sheetKey)}</span>
-                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : 'ù'} ù ${esc(d.assignedZone || '?')}?${esc(d.suggestedZone || '?')}${d.mismatch ? ' ?' : ''}</span>
+                                <span class="truncate">${esc(d.dayDir)} - ${esc(d.sheetKey)}</span>
+                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '?')}?${esc(d.suggestedZone || '?')}${d.mismatch ? ' ?' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
-                                path ${m.pathKm != null ? m.pathKm + ' km' : 'ù'}
-                                ù crow ${m.crowKm != null ? m.crowKm + ' km' : 'ù'}
-                                ù km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : 'ù'}
-                                ù coords ${m.withCoords || 0}/${m.stationCount || 0}
+                                path ${m.pathKm != null ? m.pathKm + ' km' : '-'}
+                                - crow ${m.crowKm != null ? m.crowKm + ' km' : '-'}
+                                - km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '-'}
+                                - coords ${m.withCoords || 0}/${m.stationCount || 0}
                             </div>
                             ${segPreview ? `<div class="text-[8px] opacity-60 mt-0.5 leading-snug">${segPreview}${more}</div>` : ''}
                         </div>
@@ -10121,7 +10184,7 @@ const Admin = {
                                     <span class="font-mono text-[9px] opacity-60">${esc(assigned)} ? ${esc(suggested)}${esc(suggestedRange)}</span>
                                 </div>
                                 <div class="font-semibold truncate">${routeBit}</div>
-                                <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} ù ${esc(r.destB || '')}</div>
+                                <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} - ${esc(r.destB || '')}</div>
                             </div>
                             <div class="text-right shrink-0">
                                 <div class="text-sm font-black leading-none">${distLabel}</div>
@@ -10157,7 +10220,7 @@ const Admin = {
                 }
 
                 if (zoneAuditResults) {
-                    zoneAuditResults.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Measuring ${targetRegion} from ${scanSource}ù</div>`;
+                    zoneAuditResults.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Measuring ${targetRegion} from ${scanSource}-</div>`;
                 }
                 if (zoneAuditSummary) zoneAuditSummary.classList.add('hidden');
 
@@ -10684,7 +10747,7 @@ const Admin = {
     },
 
     /**
-     * Standalone Schedule QA ù data quality (duplicate adjacent times, regressions,
+     * Standalone Schedule QA - data quality (duplicate adjacent times, regressions,
      * delta variance). Kept separate from System Health Diagnostics (cache/network).
      */
     setupScheduleQaManager: () => {
@@ -10720,7 +10783,7 @@ const Admin = {
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
                     Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
                     delta variance, missing coordinates, day mismatches, and more.
-                    Diagnostics (above) covers cache/network ù this panel is schedule content only.
+                    Diagnostics (above) covers cache/network - this panel is schedule content only.
                 </p>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -10949,11 +11012,11 @@ const Admin = {
             resultsDiv.innerHTML = findings.map((f) => {
                 const style = severityStyles[f.severity] || severityStyles.info;
                 const routeBit = f.routeName ? Admin.formatRouteLabelHtml(f.routeName) : (f.routeId || '');
-                const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' ù ');
+                const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' - ');
                 return `
                     <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}">
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} ù ${f.code}</span>
+                            <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} - ${f.code}</span>
                             <span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>
                         </div>
                         <div class="font-semibold mb-0.5">${routeBit}</div>
@@ -10973,7 +11036,7 @@ const Admin = {
                 const targetRegion = scanRegion === 'CURRENT' ? activeRegion : scanRegion;
                 const scanSource = (scanSourceRaw === 'RAM' && targetRegion !== activeRegion) ? 'FIREBASE' : scanSourceRaw;
 
-                resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}ù</div>`;
+                resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center">${Admin.icon('hourglass', 'w-5 h-5 mb-2 animate-pulse')} Loading ${targetRegion} from ${scanSource}-</div>`;
                 if (summaryDiv) summaryDiv.classList.add('hidden');
 
                 try {
@@ -11197,9 +11260,9 @@ const Admin = {
                     ? approvedRows.map(({ code, row, holiday }) => `
                         <div class="bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3 flex items-start justify-between gap-2">
                             <div class="min-w-0">
-                                <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} ù ${escapeHTML(code)}</p>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} - ${escapeHTML(code)}</p>
                                 <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(holiday.name)}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(HOLIDAY_DAY_TYPES.find((t) => t.value === row.dayType)?.label || row.dayType || 'ù')}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(HOLIDAY_DAY_TYPES.find((t) => t.value === row.dayType)?.label || row.dayType || '-')}</p>
                             </div>
                             <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">Approved</span>
                         </div>
@@ -11224,7 +11287,7 @@ const Admin = {
                     if (!iso || !code) return;
                     const secret2 = await Admin.getAuthKey();
                     if (!secret2) return;
-                    // Atomic per-region write ù avoids full-document PUT races wiping sibling regions.
+                    // Atomic per-region write - avoids full-document PUT races wiping sibling regions.
                     const regionPayload = status === 'approved'
                         ? {
                             status: 'approved',
@@ -11244,7 +11307,7 @@ const Admin = {
                         10000
                     );
                     if (!regionRes.ok) throw new Error(`HTTP ${regionRes.status}`);
-                    // Best-effort holiday metadata (merge ù does not replace sibling regions).
+                    // Best-effort holiday metadata (merge - does not replace sibling regions).
                     await window.guardianFetch(
                         `${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`,
                         {
@@ -11316,13 +11379,15 @@ const Admin = {
 // --- 8. MAINTENANCE MODE MANAGER ---
     setupMaintenanceManager: () => {
         const exclusionPanel = document.getElementById('exclusion-panel');
-        if (!exclusionPanel || !exclusionPanel.parentNode) return;
+        const adminContainer = document.getElementById('admin-modules-container');
+        const host = (exclusionPanel && exclusionPanel.parentNode) || adminContainer;
+        if (!host) return;
 
         let maintPanel = document.getElementById('maint-panel');
         if (!maintPanel) {
             maintPanel = document.createElement('div');
             maintPanel.id = 'maint-panel';
-            exclusionPanel.parentNode.appendChild(maintPanel);
+            host.appendChild(maintPanel);
         }
 
         if (maintPanel.dataset.loaded === "true") return;
@@ -11498,17 +11563,19 @@ const Admin = {
             };
         }
 
-        header.onclick = () => {
-            if (Admin.isGridMode) return;
-            body.classList.toggle('hidden');
-            if (body.classList.contains('hidden')) {
-                chevron.classList.add('-rotate-90');
-                header.classList.remove('mb-4');
-            } else {
-                chevron.classList.remove('-rotate-90');
-                header.classList.add('mb-4');
-            }
-        };
+        if (header) {
+            header.onclick = () => {
+                if (Admin.isGridMode) return;
+                body?.classList.toggle('hidden');
+                if (body?.classList.contains('hidden')) {
+                    chevron?.classList.add('-rotate-90');
+                    header.classList.remove('mb-4');
+                } else {
+                    chevron?.classList.remove('-rotate-90');
+                    header.classList.add('mb-4');
+                }
+            };
+        }
         
         async function checkStatus() {
             try {
@@ -11952,7 +12019,7 @@ const Admin = {
                 else if (status === 'done') colDone.insertAdjacentHTML('beforeend', cardHtml);
             });
 
-            // Update Counts ù hide badges when zero
+            // Update Counts - hide badges when zero
             const setRoadmapCount = (id, n) => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -12307,10 +12374,10 @@ const Admin = {
 
         // Export Engine
         Admin.ticketsToTxt = (tickets, heading = 'OPERATIONS ROADMAP') => {
-            let txt = `NEXT TRAIN ù ${heading}\nExported: ${Admin.formatDate(Date.now())}\nTickets: ${tickets.length}\n${'='.repeat(48)}\n\n`;
+            let txt = `NEXT TRAIN - ${heading}\nExported: ${Admin.formatDate(Date.now())}\nTickets: ${tickets.length}\n${'='.repeat(48)}\n\n`;
             tickets.forEach((t, i) => {
                 txt += `#${i + 1}  [${String(t.status || 'backlog').toUpperCase()}] ${t.title || '(untitled)'}\n`;
-                txt += `  Type: ${t.type || 'ù'} ù Severity: ${t.severity || 'ù'} ù ID: ${t.id || 'ù'}\n`;
+                txt += `  Type: ${t.type || '-'} - Severity: ${t.severity || '-'} - ID: ${t.id || '-'}\n`;
                 if (t.source) txt += `  Source: ${t.source}\n`;
                 if (t.createdAt) txt += `  Created: ${Admin.formatDate(t.createdAt)}\n`;
                 if (t.updatedAt) txt += `  Updated: ${Admin.formatDate(t.updatedAt)}\n`;

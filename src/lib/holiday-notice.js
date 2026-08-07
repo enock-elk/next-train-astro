@@ -2,11 +2,22 @@
  * Upcoming public-holiday notice — week preview once, plus a day-before reminder.
  * Stacks holidays using planner-style info cards.
  * Only shown after the app has stabilized (schedules up, no pending reload).
+ *
+ * Back-compat: existing seen_holiday_* keys still suppress re-shows for users who
+ * already dismissed a notice (e.g. Women's Day week/eve). Approval gating is
+ * enforced only from 11 Aug 2026 so Women's Day / Observed can finish on the
+ * legacy path.
  */
 import { SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage } from './utils.js';
 import { openSmoothModal, closeSmoothModal } from './ui.js';
 import { isReloadPending } from './session-stability.js';
+import { $userRegion } from '../store.js';
+import {
+    loadHolidayApprovals,
+    canShowHolidayNotice,
+    resolveHolidayDayType,
+} from './holiday-approvals.js';
 
 /** Wait for boot/schedules before first show; then give up (never interrupt a busy boot). */
 const HOLIDAY_STABILITY_MAX_WAIT_MS = 25000;
@@ -27,25 +38,30 @@ function dateKeyFromDate(d) {
 function scheduleLabelForType(dayType) {
     if (dayType === 'sunday') return 'No Sunday service';
     if (dayType === 'saturday') return 'Saturday / public-holiday timetable';
+    if (dayType === 'weekday') return 'Weekday timetable';
     return 'Special schedule';
 }
 
 /**
  * Holidays from today through +6 days that still need a notice.
- * - Mid-week preview (2–6 days out): once via week key
- * - Day before (tomorrow): eve key wins — week preview never runs for that holiday
- * - Holiday day itself: once via day key
+ * - Seen keys (week/eve/day) always win: already-dismissed users are never re-prompted.
+ * - From 11 Aug 2026, caller must load approvals; unapproved holidays are omitted.
  */
 export function getUpcomingUnseenHolidays(now = new Date()) {
     const year = now.getFullYear();
+    const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
     const out = [];
     for (let offset = 0; offset < 7; offset++) {
         const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
         const key = dateKeyFromDate(d);
         const name = HOLIDAY_NAMES?.[key];
         if (!name) continue;
-        const dayType = SPECIAL_DATES?.[key] || 'saturday';
         const y = d.getFullYear();
+        const iso = `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        // Legacy path through Women's Day Observed; approval gate from 11 Aug 2026.
+        if (!canShowHolidayNotice(iso, now)) continue;
+
+        const dayType = resolveHolidayDayType(key, region, y) || SPECIAL_DATES?.[key] || 'saturday';
 
         let seenKey;
         let phase;
@@ -62,6 +78,7 @@ export function getUpcomingUnseenHolidays(now = new Date()) {
             seenKey = `${SEEN_WEEK_PREFIX}${key}_${y}`;
         }
 
+        // Back-compat: users who already tapped "Got it" keep their dismiss forever.
         if (safeStorage.getItem(seenKey) === 'true') continue;
 
         out.push({
@@ -78,7 +95,7 @@ export function getUpcomingUnseenHolidays(now = new Date()) {
                 : offset === 1
                     ? 'Tomorrow'
                     : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
-            iso: `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+            iso,
         });
     }
     return out.filter((h) => h.year === year || h.year === year + 1);
@@ -106,7 +123,7 @@ function ensureHolidayModal() {
 }
 
 /**
- * Show stacked holiday cards if any unseen holidays fall in the next week.
+ * Show stacked holiday cards if any unseen, approved holidays fall in the next week.
  * Call after welcome is done so it does not fight first-run UX.
  * Retries until `window._appStabilized` (or max wait), so it never races boot.
  */
@@ -136,45 +153,48 @@ export function maybeShowHolidayNotice() {
             return false;
         }
 
-        const holidays = getUpcomingUnseenHolidays();
-        if (!holidays.length) return false;
+        // Load approvals when enforcement is live; before 11 Aug this is a no-op cache.
+        loadHolidayApprovals().then(() => {
+            const holidays = getUpcomingUnseenHolidays();
+            if (!holidays.length) return;
 
-        const modal = ensureHolidayModal();
-        const cards = document.getElementById('holiday-notice-cards');
-        const title = document.getElementById('holiday-notice-title');
-        if (!cards) return false;
+            const modal = ensureHolidayModal();
+            const cards = document.getElementById('holiday-notice-cards');
+            const title = document.getElementById('holiday-notice-title');
+            if (!cards) return;
 
-        const onlyEve = holidays.every((h) => h.phase === 'eve');
-        const onlyDay = holidays.every((h) => h.phase === 'day');
-        if (title) {
-            if (onlyEve) title.textContent = 'Holiday tomorrow';
-            else if (onlyDay) title.textContent = 'Public holiday today';
-            else title.textContent = 'Coming up this week';
-        }
+            const onlyEve = holidays.every((h) => h.phase === 'eve');
+            const onlyDay = holidays.every((h) => h.phase === 'day');
+            if (title) {
+                if (onlyEve) title.textContent = 'Holiday tomorrow';
+                else if (onlyDay) title.textContent = 'Public holiday today';
+                else title.textContent = 'Coming up this week';
+            }
 
-        cards.innerHTML = holidays.map((h) => `
-            <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-900/20 p-3.5 shadow-sm">
-                <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">${escapeSafe(h.whenLabel)}</p>
-                <p class="text-sm font-black text-gray-900 dark:text-white mt-0.5 leading-snug">${escapeSafe(h.name)}</p>
-                <p class="text-xs text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">${escapeSafe(h.scheduleLabel)}</p>
-            </div>`).join('');
+            cards.innerHTML = holidays.map((h) => `
+                <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-900/20 p-3.5 shadow-sm">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">${escapeSafe(h.whenLabel)}</p>
+                    <p class="text-sm font-black text-gray-900 dark:text-white mt-0.5 leading-snug">${escapeSafe(h.name)}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">${escapeSafe(h.scheduleLabel)}</p>
+                </div>`).join('');
 
-        const closeBtn = document.getElementById('holiday-notice-close');
-        const dismiss = () => {
-            holidays.forEach((h) => {
-                try {
-                    safeStorage.setItem(h.seenKey, 'true');
-                    // Eve dismissal also retires the week preview for that holiday.
-                    if (h.phase === 'eve') {
-                        safeStorage.setItem(`${SEEN_WEEK_PREFIX}${h.key}_${h.year}`, 'true');
-                    }
-                } catch { /* ignore */ }
-            });
-            closeSmoothModal('holiday-notice-modal');
-        };
-        if (closeBtn) closeBtn.onclick = dismiss;
+            const closeBtn = document.getElementById('holiday-notice-close');
+            const dismiss = () => {
+                holidays.forEach((h) => {
+                    try {
+                        safeStorage.setItem(h.seenKey, 'true');
+                        if (h.phase === 'eve') {
+                            safeStorage.setItem(`${SEEN_WEEK_PREFIX}${h.key}_${h.year}`, 'true');
+                        }
+                    } catch { /* ignore */ }
+                });
+                closeSmoothModal('holiday-notice-modal');
+            };
+            if (closeBtn) closeBtn.onclick = dismiss;
 
-        openSmoothModal('holiday-notice-modal');
+            openSmoothModal('holiday-notice-modal');
+        }).catch(() => { /* ignore */ });
+
         return true;
     } catch (e) {
         console.warn('Holiday notice failed', e);

@@ -1441,7 +1441,8 @@ export function initHub() {
         });
     }
 
-    // Public-holiday stacked notice — waits for app stability inside maybeShowHolidayNotice
+    // Prefetch holiday approvals, then show notice once the app is stable.
+    import('./holiday-approvals.js').then((m) => m.loadHolidayApprovals?.()).catch(() => {});
     setTimeout(() => {
         import('./holiday-notice.js')
             .then((m) => m.maybeShowHolidayNotice?.())

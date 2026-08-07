@@ -8,6 +8,7 @@
 
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 import { normalizeStationName, timeToSeconds } from './utils.js';
 import {
     getScheduleFromDb,
@@ -1243,9 +1244,10 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             
             const m = String(checkDate.getMonth() + 1).padStart(2, '0');
             const d = String(checkDate.getDate()).padStart(2, '0');
-            if (SPECIAL_DATES[`${m}-${d}`]) {
-                type = SPECIAL_DATES[`${m}-${d}`];
-            }
+            const dateKey = `${m}-${d}`;
+            const region = $userRegion.get() || 'GP';
+            const holidayType = resolveHolidayDayType(dateKey, region, checkDate.getFullYear()) || SPECIAL_DATES[dateKey];
+            if (holidayType) type = holidayType;
             
             if (type === dayType || (dayType === 'sunday' && dayOfWeek === 0)) {
                 startOffset = i;

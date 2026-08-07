@@ -12,6 +12,7 @@ import {
     $globalDisruptions, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
@@ -418,7 +419,9 @@ function resolveDayTypeFromIso(isoDate) {
     const day = d.getDay();
     let dayType = day === 0 ? 'sunday' : (day === 6 ? 'saturday' : 'weekday');
     const key = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (SPECIAL_DATES && SPECIAL_DATES[key]) dayType = SPECIAL_DATES[key];
+    const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
+    const holidayType = resolveHolidayDayType(key, region, parts[0]) || (SPECIAL_DATES && SPECIAL_DATES[key]);
+    if (holidayType) dayType = holidayType;
     return { dayType, dayIndex: day, label: isoDate };
 }
 
@@ -452,11 +455,17 @@ function getPlannerHolidayContext() {
     if (planningGenericDayType) return null;
 
     const dateKey = plannerActiveDateKey();
-    if (!dateKey || !SPECIAL_DATES?.[dateKey]) return null;
+    if (!dateKey) return null;
+    const region = $userRegion.get() || 'GP';
+    const year = selectedPlannerDate && /^\d{4}/.test(selectedPlannerDate)
+        ? Number(selectedPlannerDate.slice(0, 4))
+        : new Date().getFullYear();
+    const scheduleType = resolveHolidayDayType(dateKey, region, year) || SPECIAL_DATES?.[dateKey];
+    if (!scheduleType) return null;
     return {
         dateKey,
         name: HOLIDAY_NAMES?.[dateKey] || 'Public Holiday',
-        scheduleType: SPECIAL_DATES[dateKey],
+        scheduleType,
     };
 }
 

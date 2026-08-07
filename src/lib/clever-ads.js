@@ -5,8 +5,8 @@
  * expand/collapse chrome (chevron). That is not Next Train UI. We contain the
  * host slot so it cannot cover onboarding or go fullscreen.
  *
- * Startup reloads: defer inject while a queued refresh is pending or the app
- * has not stabilized — with a hard max wait so ads are never held forever.
+ * Session inject schedule (after app stabilized):
+ *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for the session.
  */
 import { safeStorage } from './utils.js';
 import { isReloadPending, isStableForThirdParty } from './session-stability.js';
@@ -15,8 +15,30 @@ const LOADER_ID = 'CleverCoreLoader103008';
 const SCRIPT_SRC = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
 /** Soft wait for schedules / welcome; pending reloads always win until their until. */
 const STABILITY_MAX_WAIT_MS = 15000;
+/** Four timed inject attempts after stabilize, then hard stop for the tab session. */
+const AD_INJECT_SCHEDULE_MS = [0, 30_000, 60_000, 120_000];
+const AD_SESSION_INJECT_CAP = AD_INJECT_SCHEDULE_MS.length;
+const AD_SESSION_INJECT_KEY = 'nt_ad_session_injects';
 
 let stabilityWaitStartedAt = 0;
+
+function getSessionInjectCount() {
+    try {
+        return Math.max(0, parseInt(sessionStorage.getItem(AD_SESSION_INJECT_KEY) || '0', 10) || 0);
+    } catch {
+        return 0;
+    }
+}
+
+function bumpSessionInjectCount() {
+    try {
+        sessionStorage.setItem(AD_SESSION_INJECT_KEY, String(getSessionInjectCount() + 1));
+    } catch { /* ignore */ }
+}
+
+function sessionInjectCapReached() {
+    return getSessionInjectCount() >= AD_SESSION_INJECT_CAP;
+}
 
 function isWelcomeActive() {
     const welcome = document.getElementById('welcome-modal');
@@ -40,9 +62,8 @@ function isSafeZone() {
     return true;
 }
 
-/** True when we should not inject yet (queued reload or not stabilized). */
+/** True when we should not treat the app as ready to start the ad schedule. */
 function shouldDeferForSessionStability() {
-    // Imminent navigation: always defer until the mark expires (never forever).
     if (isReloadPending()) return true;
 
     if (isStableForThirdParty()) {
@@ -52,7 +73,7 @@ function shouldDeferForSessionStability() {
 
     if (!stabilityWaitStartedAt) stabilityWaitStartedAt = Date.now();
     if (Date.now() - stabilityWaitStartedAt >= STABILITY_MAX_WAIT_MS) {
-        console.log('🛡️ Guardian: Ad stability wait capped — injecting after max wait.');
+        console.log('🛡️ Guardian: Ad stability wait capped — starting inject schedule after max wait.');
         return false;
     }
     return true;
@@ -92,7 +113,7 @@ function handleAdFailure(adContainer, reason, isFatal = false) {
     if (isFatal) window._adNetworkDestroyed = true;
     window._adScriptInjected = false;
     window._adScriptLoaded = false;
-    if (isFatal) document.getElementById(LOADER_ID)?.remove();
+    document.getElementById(LOADER_ID)?.remove();
     cloak(adContainer, isFatal);
     if (typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent('ad_shield_triggered', { reason, fatal: isFatal });
@@ -100,7 +121,15 @@ function handleAdFailure(adContainer, reason, isFatal = false) {
 }
 
 function injectAdScript(adContainer) {
-    if (window._adNetworkDestroyed || window._adScriptInjected || !adContainer) return;
+    if (window._adNetworkDestroyed || window._adScriptInjected || !adContainer) return false;
+    if (sessionInjectCapReached()) {
+        console.log('🛡️ Guardian: Ad session inject cap reached — skipping further injects.');
+        window._adNetworkDestroyed = true;
+        cloak(adContainer, true);
+        return false;
+    }
+    bumpSessionInjectCount();
+    const attempt = getSessionInjectCount();
     window._adScriptInjected = true;
 
     const adTimeout = setTimeout(() => {
@@ -126,17 +155,18 @@ function injectAdScript(adContainer) {
         c.onload = () => {
             clearTimeout(adTimeout);
             window._adScriptLoaded = true;
-            console.log('🛡️ Guardian: Ad script initialized.');
+            console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_SESSION_INJECT_CAP}).`);
             if (adContainer.classList.contains('ad-cloaked') && !window._adNetworkDestroyed && isSafeZone()) {
                 uncloak(adContainer);
                 setAdPadding(isAdFilled(adContainer));
             }
         };
-        // Mount inside container so the network anchors here, not <head>
         adContainer.appendChild(c);
+        return true;
     } catch (e) {
         console.warn('🛡️ Guardian: Ad inject suppressed', e);
         handleAdFailure(adContainer, 'EVAL_EXCEPTION', false);
+        return false;
     }
 }
 
@@ -151,10 +181,6 @@ function refreshAdVisibility(adContainer) {
     if (shouldDeferForSessionStability()) {
         cloak(adContainer, false);
         return;
-    }
-
-    if (!window._adScriptInjected && !window._adScriptLoaded) {
-        injectAdScript(adContainer);
     }
 
     uncloak(adContainer);
@@ -186,9 +212,11 @@ export function initCleverAds() {
     window._adScriptLoaded = false;
     window._adTelemetryFired = false;
 
-    let adRetryCount = 0;
-    let isAdSleeping = false;
-    let hasUsedForegroundReset = false;
+    let stabilizedAt = 0;
+    let nextScheduleIndex = 0;
+    let scheduleTimer = null;
+    let scheduleStarted = false;
+    let scheduleExhausted = false;
 
     if (window.MutationObserver) {
         const adObserver = new MutationObserver((mutations) => {
@@ -223,63 +251,105 @@ export function initCleverAds() {
         adObserver.observe(adContainer, { attributes: true, childList: true, subtree: true });
     }
 
-    const tryInjectWithStrikes = () => {
-        if (window._adNetworkDestroyed || !adContainer) return;
-        if (!isSafeZone() || shouldDeferForSessionStability()) return;
-        if (window._adScriptInjected && window._adScriptLoaded) return;
-        if (isAdSleeping) return;
+    const stopSchedule = (reason) => {
+        scheduleExhausted = true;
+        if (scheduleTimer) {
+            clearTimeout(scheduleTimer);
+            scheduleTimer = null;
+        }
+        if (reason) console.log(`🛡️ Guardian: Ad inject schedule stopped (${reason}).`);
+    };
 
-        if (adRetryCount === 4) {
-            console.log('🛡️ Guardian: Pulse 1 complete. Entering 60-second cooldown...');
-            isAdSleeping = true;
-            setTimeout(() => {
-                isAdSleeping = false;
-                adRetryCount += 1;
-                if (window.checkAndUnhide) window.checkAndUnhide();
-            }, 60000);
+    /** Run one schedule slot; only then advance. Retries same slot while unsafe. */
+    const runScheduledInject = (attemptNo, onComplete) => {
+        if (window._adNetworkDestroyed || scheduleExhausted) {
+            onComplete();
             return;
         }
-        if (adRetryCount >= 8) {
-            handleAdFailure(adContainer, '8_STRIKES_MAX_REACHED', true);
+        if (sessionInjectCapReached()) {
+            window._adNetworkDestroyed = true;
+            cloak(adContainer, true);
+            stopSchedule('session cap');
+            onComplete();
             return;
         }
-        if (!window._adScriptInjected) {
-            adRetryCount += 1;
-            console.log(`🛡️ Guardian: Ad inject attempt ${adRetryCount}/8`);
-            injectAdScript(adContainer);
+        if (window._adTelemetryFired || isAdFilled(adContainer)) {
+            refreshAdVisibility(adContainer);
+            stopSchedule(`filled after ${Math.max(0, attemptNo - 1)}/${AD_SESSION_INJECT_CAP}`);
+            onComplete();
+            return;
         }
+        if (!isSafeZone() || shouldDeferForSessionStability()) {
+            scheduleTimer = setTimeout(() => runScheduledInject(attemptNo, onComplete), 1500);
+            return;
+        }
+
+        window._adScriptInjected = false;
+        window._adScriptLoaded = false;
+        document.getElementById(LOADER_ID)?.remove();
+
+        console.log(`🛡️ Guardian: Ad inject ${attemptNo}/${AD_SESSION_INJECT_CAP} (T+${AD_INJECT_SCHEDULE_MS[attemptNo - 1] / 1000}s after stabilize)`);
+        injectAdScript(adContainer);
+        refreshAdVisibility(adContainer);
+        onComplete();
+    };
+
+    const armNextScheduleSlot = () => {
+        if (window._adNetworkDestroyed || scheduleExhausted) return;
+        if (sessionInjectCapReached()) {
+            stopSchedule('session cap');
+            return;
+        }
+        if (window._adTelemetryFired || isAdFilled(adContainer)) {
+            stopSchedule('already filled');
+            return;
+        }
+        if (nextScheduleIndex >= AD_INJECT_SCHEDULE_MS.length) {
+            stopSchedule('4/4 complete');
+            return;
+        }
+
+        const delayFromStabilize = AD_INJECT_SCHEDULE_MS[nextScheduleIndex];
+        const attemptNo = nextScheduleIndex + 1;
+        const waitMs = Math.max(0, (stabilizedAt + delayFromStabilize) - Date.now());
+        nextScheduleIndex += 1;
+
+        scheduleTimer = setTimeout(() => {
+            scheduleTimer = null;
+            runScheduledInject(attemptNo, () => {
+                if (!scheduleExhausted && !window._adNetworkDestroyed) armNextScheduleSlot();
+            });
+        }, waitMs);
+    };
+
+    const startInjectSchedule = () => {
+        if (scheduleStarted || window._adNetworkDestroyed || scheduleExhausted) return;
+        if (shouldDeferForSessionStability()) return;
+        scheduleStarted = true;
+        stabilizedAt = Date.now();
+        console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
+        armNextScheduleSlot();
     };
 
     window.checkAndUnhide = () => {
         refreshAdVisibility(adContainer);
-        tryInjectWithStrikes();
+        startInjectSchedule();
     };
 
+    // Poll until stabilized, then the schedule owns further injects.
     let ticks = 0;
-    const tick = () => {
+    const waitForStabilize = () => {
         ticks += 1;
-        const wasDeferring = shouldDeferForSessionStability();
         refreshAdVisibility(adContainer);
-        tryInjectWithStrikes();
-        if (window._adTelemetryFired || window._adNetworkDestroyed) return;
-        if (window._adScriptInjected && window._adScriptLoaded) return;
-        if (ticks < 60) setTimeout(tick, wasDeferring || shouldDeferForSessionStability() ? 500 : 3000);
+        if (!scheduleStarted) startInjectSchedule();
+        if (scheduleStarted || window._adNetworkDestroyed || scheduleExhausted) return;
+        if (ticks < 80) setTimeout(waitForStabilize, shouldDeferForSessionStability() ? 500 : 1000);
     };
-    setTimeout(tick, 1500);
+    setTimeout(waitForStabilize, 1500);
 
-    // SPA: one-shot foreground reset after a fatal ad kill
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
-        if (!hasUsedForegroundReset && window._adNetworkDestroyed) {
-            console.log('🛡️ Guardian: Foreground Reset. Giving the Ad Network one more chance...');
-            hasUsedForegroundReset = true;
-            window._adNetworkDestroyed = false;
-            adRetryCount = 0;
-            isAdSleeping = false;
-            window._adScriptInjected = false;
-            window._adScriptLoaded = false;
-        }
         refreshAdVisibility(adContainer);
-        tryInjectWithStrikes();
+        if (!scheduleStarted) startInjectSchedule();
     });
 }

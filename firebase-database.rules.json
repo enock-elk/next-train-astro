@@ -7,6 +7,10 @@
       ".read": true,
       ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
     },
+    "holiday_approvals": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+    },
     "schedules": {
       ".read": true,
       ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"

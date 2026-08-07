@@ -6,7 +6,8 @@
  * See the ROADMAP block at the top of public/js/admin.js for medium/long-term plans.
  */
 import {
-    ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase
+    ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
+    SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import {
@@ -56,6 +57,8 @@ export function exposeAdminGlobals() {
     window.DEFAULT_EXCLUSIONS = DEFAULT_EXCLUSIONS;
     window.REGIONS = REGIONS;
     window.FARE_CONFIG = FARE_CONFIG;
+    window.SPECIAL_DATES = SPECIAL_DATES;
+    window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
     window.showToast = showToast;

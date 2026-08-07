@@ -96,7 +96,7 @@ const Admin = {
     },
 
     /** SVG bidirectional arrow for route labels (matches app formatRouteLabelHtml). */
-    routeArrowSvg: (className = 'inline-block w-3.5 h-3.5 mx-0.5 align-[-2px] text-current shrink-0') =>
+    routeArrowSvg: (className = 'inline-block w-3.5 h-3.5 mx-0.5 align-middle text-current shrink-0') =>
         `<svg class="${className}" viewBox="0 0 24 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 6h14M8 3L5 6l3 3M16 3l3 3-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 
     /** Lucide-style stroke icons for admin grid tiles and in-panel chrome. */
@@ -121,6 +121,8 @@ const Admin = {
             trending: '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
             plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
             check: '<path d="M20 6L9 17l-5-5"/>',
+            checks: '<path d="M18 6L7 17l-5-5"/><path d="M22 10l-11 11-3-3"/>',
+            calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
             note: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
             globe: '<circle cx="12" cy="12" r="9"/><path d="M2 12h20"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10 15 15 0 014-10z"/>',
             camera: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
@@ -148,6 +150,16 @@ const Admin = {
 
     tileIcon: (name, colorClass = 'text-blue-600 dark:text-blue-400') =>
         `<span class="admin-tile-icon mb-2 inline-flex items-center justify-center ${colorClass}">${Admin.icon(name, 'w-7 h-7')}</span>`,
+
+    _severityLabelHtml: (severity) => {
+        if (severity === 'warning') {
+            return `<span class="inline-flex items-center gap-1.5"><span class="inline-flex text-amber-500">${Admin.icon('alert', 'w-3 h-3')}</span> Warning (Delays)</span>`;
+        }
+        if (severity === 'critical') {
+            return `<span class="inline-flex items-center gap-1.5"><span class="inline-flex text-red-500">${Admin.icon('siren', 'w-3 h-3')}</span> Critical (Suspended)</span>`;
+        }
+        return `<span class="inline-flex items-center gap-1.5"><span class="inline-flex text-blue-500">${Admin.icon('circle', 'w-3 h-3')}</span> Info (General)</span>`;
+    },
 
     formatRouteLabelHtml: (raw) => {
         if (typeof raw !== 'string' || !raw) return '';
@@ -705,10 +717,10 @@ const Admin = {
         Admin.telemetryRange = ranges[(ranges.indexOf(Admin.telemetryRange) + 1) % ranges.length];
         
         const cycleBtn = document.getElementById('trend-cycle-btn');
-        if (cycleBtn) cycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-[-2px]')} ${Admin.telemetryRange} Trend`;
+        if (cycleBtn) cycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange} Trend`;
         
         const modalCycleBtn = document.getElementById('modal-trend-cycle');
-        if (modalCycleBtn) modalCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-[-2px]')} ${Admin.telemetryRange}`;
+        if (modalCycleBtn) modalCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange}`;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
         
@@ -1994,6 +2006,7 @@ const Admin = {
         Admin.setupServiceAlertsManager();
         Admin.setupDisruptionsManager(); 
         Admin.setupExclusionManager();
+        Admin.setupHolidayApprovalsManager();
         Admin.setupMaintenanceManager();
         Admin.setupSpecialEventManager(); 
         Admin.setupDiagnosticsManager();
@@ -2986,7 +2999,7 @@ const Admin = {
         };
 
         Admin.clearCrashes = async () => {
-            const confirmed = await Admin.secureConfirm("Clear Logs", "Permanently delete all crash reports from the server?");
+            const confirmed = await Admin.secureConfirm("Clear Crash DB", "Type 'CLEAR' to permanently delete all crash reports from the server:", "CLEAR");
             if (!confirmed) return;
             
             const secret = await Admin.getAuthKey();
@@ -3274,6 +3287,7 @@ const Admin = {
                 if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
                 if (card.id === 'crashes-panel') Admin.fetchCrashes(); // ??? GUARDIAN PHASE 7
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // ??? GUARDIAN PHASE 14
+                if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
                 if (card.id === 'alert-panel') {
                     const targetEl = document.getElementById('alert-target');
                     if (targetEl) targetEl.dispatchEvent(new Event('change'));
@@ -3370,7 +3384,10 @@ const Admin = {
                     <span class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-0.5">Silent Routing Telemetry</span>
                     <div class="flex flex-wrap gap-2">
                         <button id="de-sort-btn" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
-                            Sort: Hits
+                            Sort: Recent
+                        </button>
+                        <button id="de-count-mode-btn" class="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
+                            Users
                         </button>
                         <button id="de-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">
                             Refresh
@@ -3436,9 +3453,11 @@ const Admin = {
         const clearBtn = document.getElementById('de-clear-btn');
         const exportBtn = document.getElementById('de-export-btn');
         const sortBtn = document.getElementById('de-sort-btn');
+        const countModeBtn = document.getElementById('de-count-mode-btn');
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'fails';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+        Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
 
         const syncDeFiltersVisibility = () => {
             const wrap = document.getElementById('de-trip-filters');
@@ -3531,11 +3550,20 @@ const Admin = {
         Admin._deSortMode = Admin._deSortMode || 'recent'; 
 
         if (sortBtn) {
-            sortBtn.textContent = Admin._deSortMode === 'hits' ? 'Sort: Hits' : 'Sort: Recent';
+            sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
             sortBtn.onclick = () => {
-                Admin._deSortMode = Admin._deSortMode === 'hits' ? 'recent' : 'hits';
-                sortBtn.textContent = Admin._deSortMode === 'hits' ? 'Sort: Hits' : 'Sort: Recent';
-                if (listDiv.innerHTML !== '') Admin.fetchDeadEnds(); // Re-render with new sort
+                Admin._deSortMode = Admin._deSortMode === 'count' ? 'recent' : 'count';
+                sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
+                if (listDiv.innerHTML !== '') Admin.fetchDeadEnds();
+            };
+        }
+
+        if (countModeBtn) {
+            countModeBtn.textContent = Admin._deCountMode === 'hits' ? 'Hits' : 'Users';
+            countModeBtn.onclick = () => {
+                Admin._deCountMode = Admin._deCountMode === 'hits' ? 'users' : 'hits';
+                countModeBtn.textContent = Admin._deCountMode === 'hits' ? 'Hits' : 'Users';
+                if (listDiv.innerHTML !== '') Admin.fetchDeadEnds();
             };
         }
 
@@ -3589,7 +3617,7 @@ const Admin = {
                 
                 Admin._cachedRoutingFails = data;
 
-                // Aggregate by Origin|Dest|Reason|DayType ù hits = unique logged attempts (client debounces retries)
+                // Aggregate by Origin|Dest|Reason|DayType ù track hits + unique users
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
@@ -3602,20 +3630,28 @@ const Admin = {
                             reason: entry.reason,
                             dayType,
                             timeOfDay: entry.timeOfDay || null,
-                            count: 0,
+                            hitCount: 0,
+                            userIds: new Set(),
                             lastSeen: 0,
                         };
                     }
-                    heatMap[key].count++;
+                    heatMap[key].hitCount++;
+                    const uid = entry.userId || entry.deviceId || entry.authUid || '';
+                    if (uid) heatMap[key].userIds.add(uid);
                     if (entry.timestamp > heatMap[key].lastSeen) {
                         heatMap[key].lastSeen = entry.timestamp;
                         if (entry.timeOfDay) heatMap[key].timeOfDay = entry.timeOfDay;
                     }
                 });
-                
-                const sorted = Object.values(heatMap).sort((a, b) => {
+
+                const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
+                const sorted = Object.values(heatMap).map((item) => ({
+                    ...item,
+                    userCount: item.userIds.size,
+                    displayCount: countMode === 'hits' ? item.hitCount : item.userIds.size,
+                })).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
-                    return b.count - a.count;
+                    return b.displayCount - a.displayCount;
                 });
                 
                 listDiv.innerHTML = '';
@@ -3635,7 +3671,8 @@ const Admin = {
                     
                     let reasonBadge = "bg-gray-100 text-gray-600";
                     let reasonText = "Unknown";
-                    if (item.reason === 'ERR_TIMETABLE_MISMATCH') { reasonBadge = "bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400"; reasonText = "Sparse Schedule"; }
+                    if (item.reason === 'SAME_STATION') { reasonBadge = "bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300"; reasonText = "Same Station"; }
+                    else if (item.reason === 'ERR_TIMETABLE_MISMATCH') { reasonBadge = "bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400"; reasonText = "Sparse Schedule"; }
                     else if (item.reason === 'ERR_DISCONNECTED_GRAPH') { reasonBadge = "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"; reasonText = "No Physical Link"; }
                     else if (item.reason === 'ERR_CROSS_REGION') { reasonBadge = "bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400"; reasonText = "Cross Region"; }
                     else if (item.reason === 'ERR_ACTIVE_SUSPENSION') { reasonBadge = "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400"; reasonText = "Line Severed"; }
@@ -3644,19 +3681,20 @@ const Admin = {
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const timeLabel = secureEscape(item.timeOfDay || 'ù');
+                    const timeLabel = secureEscape(item.timeOfDay || '-');
+                    const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
                     
                     const escalateAttr = Admin.encodeEscalatePayload({
                         type: 'route',
                         severity: 'medium',
                         title: `Routing Fail: ${item.origin} to ${item.dest}`,
-                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). Logged ${item.count} times.`,
+                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users.`,
                         source: 'Telemetry Data'
                     });
 
                     card.innerHTML = `
                         <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">?</span> ${safeDest}</div>
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
                             <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
                                 <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
@@ -3664,12 +3702,12 @@ const Admin = {
                                 <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
                             </div>
                         </div>
-                        <div class="flex flex-row items-center shrink-0 gap-2">
-                            <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">Hits</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
+                        <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
+                            <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
+                                <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">${countLabel}</span>
+                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
                             </div>
-                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm shrink-0" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
+                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm w-full text-center" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
                         </div>
                     `;
                     listDiv.appendChild(card);
@@ -3812,9 +3850,14 @@ const Admin = {
                     }
                 });
 
-                const sorted = Object.values(heatMap).sort((a, b) => {
+                const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
+                const sorted = Object.values(heatMap).map((item) => ({
+                    ...item,
+                    hitCount: (item.hits || []).length,
+                    displayCount: countMode === 'hits' ? (item.hits || []).length : item.count,
+                })).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
-                    return b.count - a.count;
+                    return b.displayCount - a.displayCount;
                 });
 
                 const totalRows = allRows.length;
@@ -3834,7 +3877,7 @@ const Admin = {
 
                 listDiv.innerHTML = `
                     <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} logged trips ù ${sorted.length} unique corridors ù ${userCount} unique user-batches (export uses current filters)
+                        Showing ${filtered.length} logged trips / ${sorted.length} unique corridors / ${userCount} unique user-batches (export uses current filters)
                     </div>
                 `;
 
@@ -3848,17 +3891,18 @@ const Admin = {
                     const depLabel = secureEscape(item.depSample || '-');
                     const regionLabel = secureEscape(item.region || '-');
                     const uidLabel = secureEscape(item.userId || '-');
+                    const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
                     const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     const hitsHtml = hitsSorted.map((h) => `
                         <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} ù ${secureEscape((h.userId || '').slice(0, 14))}</span>
+                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} / ${secureEscape((h.userId || '').slice(0, 14))}</span>
                             <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
                         </div>
                     `).join('');
                     card.innerHTML = `
                         <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
                             <div class="min-w-0 flex-1 pr-2">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} <span class="text-gray-400 mx-1">?</span> ${safeDest}</div>
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
                                 <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                     <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
                                     <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
@@ -3869,8 +3913,8 @@ const Admin = {
                                 <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
                             </div>
                             <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">Users</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.count}</span>
+                                <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
+                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
                             </div>
                         </button>
                         <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
@@ -3980,7 +4024,7 @@ const Admin = {
         clearBtn.onclick = async () => {
             const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
             const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'routing fail logs';
-            const confirmed = await Admin.secureConfirm('Clear Telemetry', `Permanently delete all ${label} from the server?`);
+            const confirmed = await Admin.secureConfirm('Clear Telemetry DB', `Type 'CLEAR' to permanently delete all ${label} from the server:`, 'CLEAR');
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -4373,13 +4417,13 @@ const Admin = {
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
                         // ??? GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
-                        let receiptHtml = '<span class="text-[11px] text-gray-400 font-bold ml-1">?</span>';
+                        let receiptHtml = `<span class="inline-flex text-gray-400 ml-1" title="Sent">${Admin.icon('check', 'w-3.5 h-3.5')}</span>`;
                         if (item.acknowledged) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">??</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>';
+                            receiptHtml = `<span class="inline-flex text-blue-400 ml-1" title="Read">${Admin.icon('checks', 'w-3.5 h-3.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
                         } else if (item.read) {
-                            receiptHtml = '<span class="text-[11px] text-blue-400 tracking-tighter font-bold ml-1">??</span>';
+                            receiptHtml = `<span class="inline-flex text-blue-400 ml-1" title="Read">${Admin.icon('checks', 'w-3.5 h-3.5')}</span>`;
                         } else if (item.delivered) {
-                            receiptHtml = '<span class="text-[11px] text-gray-400 tracking-tighter font-bold ml-1">??</span>';
+                            receiptHtml = `<span class="inline-flex text-gray-400 ml-1" title="Delivered">${Admin.icon('checks', 'w-3.5 h-3.5')}</span>`;
                         }
 
                         // REGEX: Extract Admin Signoff Name ("ù Enock")
@@ -5859,7 +5903,7 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">??</button>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                             <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
@@ -6078,7 +6122,7 @@ const Admin = {
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-blue-200 dark:border-blue-900/50 flex flex-col max-h-[85vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <div class="flex items-center space-x-2">
-                            <span class="text-xl">??</span>
+                            <span class="inline-flex text-amber-500">${Admin.icon('alert', 'w-5 h-5')}</span>
                             <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Original Advisory</h3>
                         </div>
                         <button onclick="closeSmoothModal('admin-context-modal')" class="text-gray-400 hover:text-gray-500 focus:outline-none">
@@ -6232,7 +6276,7 @@ const Admin = {
             } else {
                 contentDiv.innerHTML = `
                     <div class="text-center py-4">
-                        <span class="text-3xl mb-2 block">??</span>
+                        <span class="inline-flex justify-center text-gray-400 mb-2">${Admin.icon('search', 'w-8 h-8')}</span>
                         <p class="text-gray-500 text-sm font-bold">Alert not found in database.</p>
                         <p class="text-xs text-gray-400 mt-2">It may have been permanently deleted or too old to retrieve. Here is the snippet we have:</p>
                         <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded italic text-xs text-gray-600 dark:text-gray-400">"${fallbackText}"</div>
@@ -6788,18 +6832,18 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity</label>
                         <div class="relative" id="alert-severity-container">
                             <select id="alert-severity" class="hidden">
-                                <option value="info" selected>?? Info (General)</option>
-                                <option value="warning">?? Warning (Delays)</option>
-                                <option value="critical">?? Critical (Suspended)</option>
+                                <option value="info" selected>Info (General)</option>
+                                <option value="warning">Warning (Delays)</option>
+                                <option value="critical">Critical (Suspended)</option>
                             </select>
                             <div onclick="document.getElementById('alert-severity-list').classList.toggle('hidden'); document.getElementById('alert-severity-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="alert-severity-display" class="truncate">?? Info (General)</span>
+                                <span id="alert-severity-display" class="truncate inline-flex items-center gap-1.5"><span class="inline-flex text-blue-500">${Admin.icon('circle', 'w-3 h-3')}</span> Info (General)</span>
                                 <svg id="alert-severity-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="alert-severity-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML='?? Info (General)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? Info (General)</li>
-                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML='?? Warning (Delays)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? Warning (Delays)</li>
-                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML='?? Critical (Suspended)'; document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer">?? Critical (Suspended)</li>
+                                <li onclick="document.getElementById('alert-severity').value='info'; document.getElementById('alert-severity-display').innerHTML=Admin._severityLabelHtml('info'); document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer inline-flex items-center gap-1.5 w-full"><span class="inline-flex text-blue-500">${Admin.icon('circle', 'w-3 h-3')}</span> Info (General)</li>
+                                <li onclick="document.getElementById('alert-severity').value='warning'; document.getElementById('alert-severity-display').innerHTML=Admin._severityLabelHtml('warning'); document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-700 dark:text-yellow-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer inline-flex items-center gap-1.5 w-full"><span class="inline-flex text-amber-500">${Admin.icon('alert', 'w-3 h-3')}</span> Warning (Delays)</li>
+                                <li onclick="document.getElementById('alert-severity').value='critical'; document.getElementById('alert-severity-display').innerHTML=Admin._severityLabelHtml('critical'); document.getElementById('alert-severity-list').classList.add('hidden'); document.getElementById('alert-severity-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-700 dark:text-red-400 transition-colors cursor-pointer inline-flex items-center gap-1.5 w-full"><span class="inline-flex text-red-500">${Admin.icon('siren', 'w-3 h-3')}</span> Critical (Suspended)</li>
                             </ul>
                         </div>
                     </div>
@@ -6834,8 +6878,8 @@ const Admin = {
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
                             <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">??</button>
-                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">?? Media</label>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="alert-upload-file" class="hidden" accept="image/*,.pdf">
                         </div>
                         <div contenteditable="true" id="alert-msg" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
@@ -6846,7 +6890,7 @@ const Admin = {
                 <!-- ??? SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span>?? Add Data Source (Advanced)</span>
+                        <span class="inline-flex items-center gap-1.5">${Admin.icon('note', 'w-3.5 h-3.5')} Add Data Source (Advanced)</span>
                         <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="alert-source-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
@@ -7323,9 +7367,7 @@ const Admin = {
                 severitySelect.value = item.severity || 'info';
                 const display = document.getElementById('alert-severity-display');
                 if (display) {
-                    if (item.severity === 'warning') display.innerHTML = '?? Warning (Delays)';
-                    else if (item.severity === 'critical') display.innerHTML = '?? Critical (Suspended)';
-                    else display.innerHTML = '?? Info (General)';
+                    display.innerHTML = Admin._severityLabelHtml(item.severity || 'info');
                 }
             }
             if (signoffInput) signoffInput.value = item.authorName || item.signoff || 'Next Train Ops';
@@ -8025,7 +8067,7 @@ const Admin = {
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">??</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic inline-flex text-gray-500">${Admin.icon('note', 'w-3.5 h-3.5')}</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
         }
 
         let pollHtml = '';
@@ -8122,7 +8164,7 @@ const Admin = {
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">??</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+            parsedMessage += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic inline-flex text-gray-500">${Admin.icon('note', 'w-3.5 h-3.5')}</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
         }
         const signoff = data.signoff || data.signedBy || '';
         let pollHtml = '';
@@ -10960,6 +11002,255 @@ const Admin = {
                 URL.revokeObjectURL(a.href);
             };
         }
+    },
+
+// --- 7.9 HOLIDAY NOTICE APPROVALS (first approve wins; defer asks again tomorrow) ---
+    setupHolidayApprovalsManager: () => {
+        const exclusionPanel = document.getElementById('exclusion-panel');
+        if (!exclusionPanel || !exclusionPanel.parentNode) return;
+
+        let holidayPanel = document.getElementById('holiday-approvals-panel');
+        if (!holidayPanel) {
+            holidayPanel = document.createElement('div');
+            holidayPanel.id = 'holiday-approvals-panel';
+            exclusionPanel.parentNode.insertBefore(holidayPanel, exclusionPanel.nextSibling);
+        }
+        if (holidayPanel.dataset.adminLoaded === 'true') return;
+        holidayPanel.dataset.adminLoaded = 'true';
+
+        holidayPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        holidayPanel.innerHTML = `
+            <button id="holiday-approvals-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('calendar', 'text-amber-500 dark:text-amber-400')}
+                    <span>Holiday Notices</span>
+                </span>
+                <span id="holiday-approvals-badge" class="admin-unread-badge hidden" aria-label="Holidays awaiting approval"></span>
+                <svg id="holiday-approvals-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="holiday-approvals-body" class="hidden mt-4 space-y-3">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">Approve region-specific timetable types before commuters see the notice. First approve wins. Defer hides this holiday for you until tomorrow.</p>
+                <p id="holiday-approvals-enforce-note" class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-2 leading-snug">Commuter enforcement starts 11 Aug 2026. Until then, Women's Day / Observed still use the legacy notice path (seen dismissals still respected).</p>
+                <div class="flex gap-2">
+                    <button type="button" id="holiday-approvals-refresh" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                </div>
+                <div id="holiday-approvals-list" class="space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar"></div>
+            </div>
+        `;
+
+        const header = document.getElementById('holiday-approvals-header-btn');
+        const body = document.getElementById('holiday-approvals-body');
+        const chevron = document.getElementById('holiday-approvals-chevron');
+        const listDiv = document.getElementById('holiday-approvals-list');
+        const refreshBtn = document.getElementById('holiday-approvals-refresh');
+        const badge = document.getElementById('holiday-approvals-badge');
+
+        const dayTypeOptions = (selected) => ['saturday', 'sunday', 'weekday']
+            .map((t) => `<option value="${t}"${t === selected ? ' selected' : ''}>${t}</option>`)
+            .join('');
+
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const names = (typeof HOLIDAY_NAMES !== 'undefined' && HOLIDAY_NAMES) ? HOLIDAY_NAMES : {};
+        const defaults = (typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES) ? SPECIAL_DATES : {};
+        const regions = ['GP', 'WC', 'KZN', 'EC'];
+
+        const upcomingHolidayCandidates = (now = new Date()) => {
+            const out = [];
+            for (let offset = 0; offset < 21; offset++) {
+                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+                const key = `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+                const name = names[key];
+                if (!name) continue;
+                const y = d.getFullYear();
+                out.push({
+                    key,
+                    name,
+                    year: y,
+                    iso: `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+                    offset,
+                    defaultDayType: defaults[key] || 'saturday',
+                    whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                });
+            }
+            return out;
+        };
+
+        Admin.fetchHolidayApprovals = async () => {
+            const secret = await Admin.getAuthKey();
+            if (!secret || !listDiv) return;
+            listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading holiday approvals...</div>';
+            try {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}holiday_approvals.json?auth=${secret}`, {}, 10000);
+                const data = res.ok ? await res.json() : {};
+                const approvals = (data && typeof data === 'object' && !data.error) ? data : {};
+                const uid = Admin.currentUser?.uid || '';
+                const now = Date.now();
+                const today = new Date();
+                const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                const enforceFrom = '2026-08-11';
+                const enforced = todayIso >= enforceFrom;
+                const enforceNote = document.getElementById('holiday-approvals-enforce-note');
+                if (enforceNote) {
+                    enforceNote.textContent = enforced
+                        ? 'Enforcement is live: commuters only see notices after an admin approves. First approve wins.'
+                        : 'Commuter enforcement starts 11 Aug 2026. Until then, Women\'s Day / Observed still use the legacy notice path (seen dismissals still respected). You can approve early for later holidays.';
+                }
+                const candidates = upcomingHolidayCandidates();
+                let pendingCount = 0;
+
+                const cards = candidates.map((h) => {
+                    const entry = approvals[h.iso] || {};
+                    const approved = entry.status === 'approved';
+                    const deferredUntil = Number(entry.deferred?.[uid] || 0);
+                    const deferredForMe = !approved && deferredUntil > now;
+                    if (!approved && !deferredForMe) pendingCount += 1;
+
+                    const regionDayTypes = entry.regionDayTypes || {};
+                    const defaultDayType = entry.defaultDayType || h.defaultDayType;
+                    const regionSelects = regions.map((code) => `
+                        <label class="flex items-center justify-between gap-2 text-[10px]">
+                            <span class="font-bold text-gray-600 dark:text-gray-300 uppercase w-10">${code}</span>
+                            <select data-holiday-region="${code}" class="holiday-region-day flex-1 h-8 px-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" ${approved ? 'disabled' : ''}>
+                                ${dayTypeOptions(regionDayTypes[code] || defaultDayType)}
+                            </select>
+                        </label>
+                    `).join('');
+
+                    const statusChip = approved
+                        ? `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Approved</span>`
+                        : deferredForMe
+                            ? `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Deferred</span>`
+                            : `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Needs approval</span>`;
+
+                    const actions = approved
+                        ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">Approved${entry.approvedByEmail ? ` by ${escapeHTML(String(entry.approvedByEmail).split('@')[0])}` : ''}. Notices can show.</p>`
+                        : deferredForMe
+                            ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">Hidden for you until tomorrow. Other admins can still approve.</p>`
+                            : `<div class="flex gap-2 mt-3">
+                                    <button type="button" class="holiday-approve-btn flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-[10px] uppercase tracking-wider focus:outline-none" data-iso="${h.iso}">Approve</button>
+                                    <button type="button" class="holiday-defer-btn flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wider focus:outline-none" data-iso="${h.iso}">Defer</button>
+                               </div>`;
+
+                    return `
+                        <div class="holiday-approval-card bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl p-3" data-iso="${h.iso}" data-key="${h.key}" data-name="${escapeHTML(h.name)}" data-default="${defaultDayType}">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">${escapeHTML(h.whenLabel)}</p>
+                                    <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(h.name)}</p>
+                                    <p class="text-[10px] text-gray-500 font-mono mt-0.5">${escapeHTML(h.iso)}</p>
+                                </div>
+                                ${statusChip}
+                            </div>
+                            <div class="mt-3 space-y-1.5 ${approved || deferredForMe ? 'opacity-70' : ''}">
+                                <label class="flex items-center justify-between gap-2 text-[10px]">
+                                    <span class="font-bold text-gray-600 dark:text-gray-300 uppercase">Default</span>
+                                    <select class="holiday-default-day flex-1 h-8 px-2 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" ${approved ? 'disabled' : ''}>
+                                        ${dayTypeOptions(defaultDayType)}
+                                    </select>
+                                </label>
+                                ${regionSelects}
+                            </div>
+                            ${actions}
+                        </div>
+                    `;
+                }).join('');
+
+                listDiv.innerHTML = cards || '<div class="text-xs text-gray-500 italic text-center py-4">No upcoming mapped holidays in the next 3 weeks.</div>';
+                if (badge) {
+                    if (pendingCount > 0) {
+                        badge.textContent = String(pendingCount);
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+
+                listDiv.querySelectorAll('.holiday-approve-btn').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const card = btn.closest('.holiday-approval-card');
+                        if (!card) return;
+                        const iso = card.dataset.iso;
+                        const defaultDayType = card.querySelector('.holiday-default-day')?.value || 'saturday';
+                        const regionDayTypes = {};
+                        card.querySelectorAll('.holiday-region-day').forEach((sel) => {
+                            regionDayTypes[sel.dataset.holidayRegion] = sel.value;
+                        });
+                        btn.disabled = true;
+                        try {
+                            const secret2 = await Admin.getAuthKey();
+                            if (!secret2) return;
+                            const checkRes = await fetch(`${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`);
+                            const existing = checkRes.ok ? await checkRes.json() : null;
+                            if (existing && existing.status === 'approved') {
+                                if (typeof showToast === 'function') showToast('Already approved by another admin.', 'info');
+                                Admin.fetchHolidayApprovals();
+                                return;
+                            }
+                            const payload = {
+                                status: 'approved',
+                                dateKey: card.dataset.key,
+                                name: card.dataset.name,
+                                defaultDayType,
+                                regionDayTypes,
+                                approvedBy: uid,
+                                approvedByEmail: Admin.currentUser?.email || '',
+                                approvedAt: Date.now(),
+                                deferred: existing?.deferred || null,
+                            };
+                            const putRes = await window.guardianFetch(`${dynamicEndpoint}holiday_approvals/${iso}.json?auth=${secret2}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(payload),
+                            }, 10000);
+                            if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
+                            if (typeof showToast === 'function') showToast('Holiday approved. Notices can show.', 'success');
+                            Admin.fetchHolidayApprovals();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Approve failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                listDiv.querySelectorAll('.holiday-defer-btn').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const iso = btn.dataset.iso;
+                        if (!iso || !uid) return;
+                        btn.disabled = true;
+                        try {
+                            const secret2 = await Admin.getAuthKey();
+                            if (!secret2) return;
+                            const until = Date.now() + (24 * 60 * 60 * 1000);
+                            const putRes = await window.guardianFetch(`${dynamicEndpoint}holiday_approvals/${iso}/deferred/${uid}.json?auth=${secret2}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(until),
+                            }, 10000);
+                            if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
+                            if (typeof showToast === 'function') showToast('Deferred until tomorrow for you.', 'info');
+                            Admin.fetchHolidayApprovals();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Defer failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+            } catch (e) {
+                listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load holiday approvals.<br><span class="text-[9px] text-gray-500">${escapeHTML(String(e.message || e))}</span></div>`;
+            }
+        };
+
+        if (header) {
+            header.onclick = () => {
+                if (Admin.isGridMode) return;
+                body.classList.toggle('hidden');
+                if (body.classList.contains('hidden')) chevron?.classList.add('-rotate-90');
+                else {
+                    chevron?.classList.remove('-rotate-90');
+                    Admin.fetchHolidayApprovals();
+                }
+            };
+        }
+        if (refreshBtn) refreshBtn.onclick = () => Admin.fetchHolidayApprovals();
     },
 
 // --- 8. MAINTENANCE MODE MANAGER ---

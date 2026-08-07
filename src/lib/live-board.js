@@ -20,6 +20,7 @@ import {
     loadAllSchedules, guardianFetch
 } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 
 // --- Store-backed globals (SPA parity shims) ---
 let allStations = [];
@@ -105,11 +106,15 @@ export function getLookaheadDayInfo(daysAhead = 1) {
     const d = String(baseDate.getDate()).padStart(2, '0');
     const dateKey = `${m}-${d}`;
 
-    // Override the Schedule Type if it's a Special Date (Public Holiday)
+    // Override the Schedule Type if it's a Special Date (Public Holiday).
+    // Approved region overrides (when loaded) win over the static SPECIAL_DATES map.
     const holidayName = (typeof HOLIDAY_NAMES !== 'undefined' && HOLIDAY_NAMES[dateKey]) || null;
-    if (typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey]) {
-        dayType = SPECIAL_DATES[dateKey];
-        // When the sheet is not the usual weekday (e.g. Women's Day Observed →
+    const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
+    const resolvedHoliday = resolveHolidayDayType(dateKey, region, baseDate.getFullYear())
+        || (typeof SPECIAL_DATES !== 'undefined' ? SPECIAL_DATES[dateKey] : null);
+    if (resolvedHoliday) {
+        dayType = resolvedHoliday;
+        // When the sheet is not the usual weekday (e.g. Women's Day Observed ->
         // Saturday timetable on a Monday), surface the holiday so the UI does
         // not claim "Monday" while showing weekend trains.
         if (holidayName) {
@@ -127,7 +132,7 @@ export function getLookaheadDayInfo(daysAhead = 1) {
         type: dayType,
         name: dayName,
         idx: dayOfWeek,
-        isHoliday: !!(typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey]),
+        isHoliday: !!(resolvedHoliday || (typeof SPECIAL_DATES !== 'undefined' && SPECIAL_DATES[dateKey])),
         holidayName: holidayName || null,
     };
 };

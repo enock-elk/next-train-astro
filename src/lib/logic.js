@@ -20,8 +20,9 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm 
 } from './utils.js';
-import { showToast, showOfflineToast, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal } from './ui.js';
 import { markPendingReload } from './session-stability.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -41,21 +42,79 @@ export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
 
+/** Banner/toast only after this much continuous struggle + foreground. */
+const STRUGGLE_UI_MIN_MS = 30_000;
+let _struggleClockStartedAt = 0;
+let _pendingStruggleReason = null;
+let _struggleUiTimer = null;
+let _struggleVisibilityBound = false;
+
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
-/**
- * Paint offline / weak-connection chrome. `navigator.onLine` alone is not enough —
- * mobile data can be "up" with no usable path (no airtime, captive portal, blackhole).
- * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
- */
-export function engageConnectionStruggleUi(reason = 'offline') {
+function noteStruggleAttempt() {
+    if (!_struggleClockStartedAt) _struggleClockStartedAt = Date.now();
+}
+
+function clearStruggleClock() {
+    _struggleClockStartedAt = 0;
+    _pendingStruggleReason = null;
+    if (_struggleUiTimer) {
+        clearTimeout(_struggleUiTimer);
+        _struggleUiTimer = null;
+    }
+}
+
+function isActiveForegroundSession() {
+    return typeof document !== 'undefined' && document.visibilityState === 'visible';
+}
+
+function struggleElapsedOk() {
+    return !!_struggleClockStartedAt && (Date.now() - _struggleClockStartedAt >= STRUGGLE_UI_MIN_MS);
+}
+
+function bindStruggleVisibilityListener() {
+    if (_struggleVisibilityBound || typeof document === 'undefined') return;
+    _struggleVisibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            try { hideOfflineToast(); } catch { /* ignore */ }
+            const oi = document.getElementById('offline-indicator');
+            if (oi && oi.dataset.struggleUi === '1') oi.style.display = 'none';
+            return;
+        }
+        if (_pendingStruggleReason) scheduleStruggleUiFlush();
+    });
+}
+
+function scheduleStruggleUiFlush() {
+    bindStruggleVisibilityListener();
+    if (_struggleUiTimer) return;
+    const tick = () => {
+        _struggleUiTimer = null;
+        if (!_pendingStruggleReason) return;
+        if (!isActiveForegroundSession()) return;
+        if (!struggleElapsedOk()) {
+            const wait = Math.max(400, STRUGGLE_UI_MIN_MS - (Date.now() - _struggleClockStartedAt));
+            _struggleUiTimer = setTimeout(tick, wait);
+            return;
+        }
+        const reason = _pendingStruggleReason;
+        _pendingStruggleReason = null;
+        paintConnectionStruggleUi(reason);
+    };
+    const wait = _struggleClockStartedAt
+        ? Math.max(400, STRUGGLE_UI_MIN_MS - (Date.now() - _struggleClockStartedAt))
+        : STRUGGLE_UI_MIN_MS;
+    _struggleUiTimer = setTimeout(tick, wait);
+}
+
+function paintConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
     const soft = reason === 'slow_boot' || reason === 'weak';
     if (!soft) {
         isLieFi = true;
         try { $isOffline.set(true); } catch { /* ignore */ }
     }
-    // Soft hint only — don't flip full offline mode; schedules keep trying
 
     if (typeof window.clearMaintenanceBanner === 'function') {
         try { window.clearMaintenanceBanner(); } catch { /* ignore */ }
@@ -63,6 +122,7 @@ export function engageConnectionStruggleUi(reason = 'offline') {
 
     const oi = document.getElementById('offline-indicator');
     if (oi) {
+        oi.dataset.struggleUi = '1';
         oi.style.display = 'flex';
         if (reason === 'offline') {
             oi.textContent = 'WORKING OFFLINE';
@@ -75,6 +135,27 @@ export function engageConnectionStruggleUi(reason = 'offline') {
 
     const toastMode = reason === 'offline' ? 'offline' : (reason === 'slow_boot' ? 'weak' : 'liefi');
     showOfflineToast(soft ? 20_000 : 0, toastMode);
+}
+
+/**
+ * Paint offline / weak-connection chrome. `navigator.onLine` alone is not enough —
+ * mobile data can be "up" with no usable path (no airtime, captive portal, blackhole).
+ * Banner + toast only after ≥30s of trying and only while the tab is foreground.
+ * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
+ */
+export function engageConnectionStruggleUi(reason = 'offline') {
+    if (typeof document === 'undefined') return;
+    noteStruggleAttempt();
+    bindStruggleVisibilityListener();
+
+    if (!isActiveForegroundSession() || !struggleElapsedOk()) {
+        _pendingStruggleReason = reason;
+        scheduleStruggleUiFlush();
+        return;
+    }
+
+    _pendingStruggleReason = null;
+    paintConnectionStruggleUi(reason);
 }
 
 /**
@@ -105,10 +186,13 @@ export async function probeReachability(timeoutMs = 3500) {
             return 'captive';
         }
         isLieFi = false;
+        clearStruggleClock();
         const oi = document.getElementById('offline-indicator');
         if (oi && /CONNECTION SLOW|NO USABLE INTERNET/i.test(oi.textContent || '')) {
             oi.style.display = 'none';
+            delete oi.dataset.struggleUi;
         }
+        try { hideOfflineToast(); } catch { /* ignore */ }
         return 'ok';
     } catch (err) {
         // Slow / blackhole — warn but allow schedule waterfall to keep trying
@@ -284,10 +368,15 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 
         isLieFi = false;
         _networkStruggleCount = 0;
+        clearStruggleClock();
         
         if (typeof document !== 'undefined') {
             const oi = document.getElementById('offline-indicator');
-            if (oi) oi.style.display = 'none';
+            if (oi) {
+                oi.style.display = 'none';
+                delete oi.dataset.struggleUi;
+            }
+            try { hideOfflineToast(); } catch { /* ignore */ }
 
             const toastEl = document.getElementById('toast');
             if (toastEl && toastEl.classList.contains('show') && (toastEl.innerText || '').includes('Please wait while we load schedules')) {
@@ -306,6 +395,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 
         if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
             _networkStruggleCount++;
+            noteStruggleAttempt();
             // First boot: trip Lie-Fi after 1 failure. Mid-session: need 3 (avoid flapping).
             const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
             // OS may still report online for Wi‑Fi/mobile without a usable internet path
@@ -316,10 +406,11 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
                     _networkStruggleCount = 0;
                     engageConnectionStruggleUi('liefi');
-                    if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function') {
+                    // Modal also waits for the 30s struggle gate (same clock).
+                    if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function' && struggleElapsedOk() && isActiveForegroundSession()) {
                         window.triggerNetworkStruggleModal();
                     }
-                } else {
+                } else if (struggleElapsedOk() && isActiveForegroundSession()) {
                     const now = Date.now();
                     if (now - _lastSlowNetworkToastTime > 6000) {
                         _lastSlowNetworkToastTime = now;
@@ -1321,9 +1412,9 @@ export function updateTime() {
             var m = String(dateToCheck.getMonth() + 1).padStart(2, '0');
             var d = String(dateToCheck.getDate()).padStart(2, '0');
             dateKey = m + "-" + d;
-            if (SPECIAL_DATES[dateKey]) { 
-                newDayType = SPECIAL_DATES[dateKey]; 
-            }
+            const holidayType = resolveHolidayDayType(dateKey, $userRegion.get() || 'GP', dateToCheck.getFullYear())
+                || SPECIAL_DATES[dateKey];
+            if (holidayType) newDayType = holidayType;
         }
         
         if (newDayType !== currentDayType) { 

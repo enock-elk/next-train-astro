@@ -1174,12 +1174,15 @@ export function hideOfflineToast() {
 }
 
 /**
- * Yellow hazard strip when Firebase config/maintenance.json has active: true.
- * Optional scope (backward-compatible):
- *   { active, message, regions?: ['WC'], routes?: ['ct-bellv'] }
- * - No regions/routes → global (legacy)
- * - regions only → match $userRegion
- * - routes set → match $currentRouteId; if route unknown yet, fall back to region when regions are set
+ * Yellow hazard strip from Firebase config/maintenance.json.
+ *
+ * Supported shapes:
+ * - Legacy boolean: true
+ * - Legacy flat: { active, message, regions?, routes?, expiresAt? }
+ * - Multi-item: { active, items: { id: { active, message, regions?, routes?, expiresAt? } } }
+ *
+ * Client shows at most one strip: most specific match wins (route > region > network).
+ * Root active: false pauses all items.
  */
 function clearMaintenanceBanner() {
     const banner = document.getElementById('maintenance-banner');
@@ -1192,14 +1195,58 @@ function normalizeMaintScopeList(raw) {
     return raw.map((v) => String(v || '').trim()).filter(Boolean);
 }
 
-/** Whether this device should see the maintenance banner for the given payload. */
-export function isMaintenanceVisibleToUser(maintData) {
-    if (maintData === true) return true;
-    if (!maintData || typeof maintData !== 'object' || maintData.active !== true) return false;
+/** Expand payload into a flat list of banner items (legacy → one synthetic item). */
+export function listMaintenanceItems(maintData) {
+    if (maintData === true) {
+        return [{ id: '_legacy', active: true, message: 'MAINTENANCE IN PROGRESS', regions: [], routes: [], expiresAt: null }];
+    }
+    if (!maintData || typeof maintData !== 'object') return [];
 
-    const regions = normalizeMaintScopeList(maintData.regions).map((r) => r.toUpperCase());
-    const routes = normalizeMaintScopeList(maintData.routes);
-    if (!regions.length && !routes.length) return true; // global
+    const itemsObj = maintData.items;
+    if (itemsObj && typeof itemsObj === 'object' && !Array.isArray(itemsObj)) {
+        return Object.keys(itemsObj).map((key) => {
+            const it = itemsObj[key] || {};
+            return {
+                id: String(it.id || key),
+                active: it.active !== false,
+                message: String(it.message || '').trim(),
+                regions: normalizeMaintScopeList(it.regions).map((r) => r.toUpperCase()),
+                routes: normalizeMaintScopeList(it.routes),
+                expiresAt: it.expiresAt ? Number(it.expiresAt) : null,
+                createdAt: it.createdAt || null,
+                updatedAt: it.updatedAt || null,
+                updatedBy: it.updatedBy || null,
+            };
+        });
+    }
+
+    // Flat legacy object
+    return [{
+        id: '_legacy',
+        active: !!maintData.active,
+        message: String(maintData.message || '').trim() || 'MAINTENANCE IN PROGRESS',
+        regions: normalizeMaintScopeList(maintData.regions).map((r) => r.toUpperCase()),
+        routes: normalizeMaintScopeList(maintData.routes),
+        expiresAt: maintData.expiresAt ? Number(maintData.expiresAt) : null,
+        createdAt: maintData.createdAt || null,
+        updatedAt: maintData.updatedAt || null,
+        updatedBy: maintData.updatedBy || null,
+    }];
+}
+
+export function isMaintenanceItemLive(item, now = Date.now()) {
+    if (!item || item.active === false) return false;
+    const exp = item.expiresAt ? Number(item.expiresAt) : 0;
+    if (exp > 0 && exp <= now) return false;
+    return true;
+}
+
+/** Scope match for a single item (same rules as legacy flat payload). */
+export function isMaintenanceItemInScope(item) {
+    if (!item) return false;
+    const regions = Array.isArray(item.regions) ? item.regions.map((r) => String(r).toUpperCase()) : [];
+    const routes = Array.isArray(item.routes) ? item.routes.map(String) : [];
+    if (!regions.length && !routes.length) return true;
 
     let userRegion = '';
     try { userRegion = String($userRegion.get() || '').toUpperCase(); } catch { /* ignore */ }
@@ -1214,11 +1261,47 @@ export function isMaintenanceVisibleToUser(maintData) {
 
     if (routes.length) {
         if (userRoute) return routes.includes(userRoute) && regionOk;
-        // Route not chosen yet — fall back to region scope when present
         return regions.length ? regionOk : false;
     }
-
     return regionOk;
+}
+
+function maintenanceSpecificityScore(item) {
+    if (item?.routes?.length) return 2;
+    if (item?.regions?.length) return 1;
+    return 0;
+}
+
+/** Pick the single banner this device should show (or null). */
+export function pickMaintenanceBanner(maintData, now = Date.now()) {
+    if (maintData === true) {
+        return { id: '_legacy', active: true, message: 'MAINTENANCE IN PROGRESS', regions: [], routes: [], expiresAt: null };
+    }
+    if (!maintData || typeof maintData !== 'object') return null;
+
+    // Root pause (multi-item + flat)
+    if (maintData.active === false) return null;
+
+    // Flat legacy without items: require active === true
+    if (!maintData.items && maintData.active !== true) return null;
+
+    const candidates = listMaintenanceItems(maintData)
+        .filter((it) => isMaintenanceItemLive(it, now) && isMaintenanceItemInScope(it));
+    if (!candidates.length) return null;
+
+    candidates.sort((a, b) => {
+        const ds = maintenanceSpecificityScore(b) - maintenanceSpecificityScore(a);
+        if (ds) return ds;
+        const ae = a.expiresAt || Number.POSITIVE_INFINITY;
+        const be = b.expiresAt || Number.POSITIVE_INFINITY;
+        return ae - be;
+    });
+    return candidates[0];
+}
+
+/** Whether this device should see the maintenance banner for the given payload. */
+export function isMaintenanceVisibleToUser(maintData) {
+    return !!pickMaintenanceBanner(maintData);
 }
 
 export async function checkMaintenanceStatus() {
@@ -1241,12 +1324,10 @@ export async function checkMaintenanceStatus() {
 
         const maintData = await res.json();
         const existingBanner = document.getElementById('maintenance-banner');
-        const isMaintActive = isMaintenanceVisibleToUser(maintData);
-        const customMessage = (maintData !== null && typeof maintData === 'object' && maintData.message)
-            ? maintData.message
-            : 'MAINTENANCE IN PROGRESS';
+        const picked = pickMaintenanceBanner(maintData);
+        const customMessage = (picked && picked.message) ? picked.message : 'MAINTENANCE IN PROGRESS';
 
-        if (isMaintActive) {
+        if (picked) {
             // Still offline-looking? Prefer the offline badge over maintenance.
             if (!navigator.onLine || (typeof window !== 'undefined' && window.isLieFi)) {
                 clearMaintenanceBanner();
@@ -1294,6 +1375,8 @@ export function bindMaintenanceBanner() {
     window.checkMaintenanceStatus = checkMaintenanceStatus;
     window.clearMaintenanceBanner = clearMaintenanceBanner;
     window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
+    window.listMaintenanceItems = listMaintenanceItems;
+    window.pickMaintenanceBanner = pickMaintenanceBanner;
 
     checkMaintenanceStatus();
     window.addEventListener('online', () => { checkMaintenanceStatus(); });
@@ -1571,6 +1654,8 @@ if (typeof window !== 'undefined') {
     window.bindHistoryBackNavigation = bindHistoryBackNavigation;
     window.checkMaintenanceStatus = checkMaintenanceStatus;
     window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
+    window.listMaintenanceItems = listMaintenanceItems;
+    window.pickMaintenanceBanner = pickMaintenanceBanner;
     window.bindMaintenanceBanner = bindMaintenanceBanner;
     window.showRedirectModal = showRedirectModal;
     window.OfflineTracker = OfflineTracker;

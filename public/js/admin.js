@@ -996,7 +996,11 @@ const Admin = {
         Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
     },
 
-    /** Catmull-Rom → cubic Bézier path through chart points (smooth 30‑min buckets). */
+    /**
+     * Steffen monotone cubic → SVG path through chart points.
+     * Local peaks/troughs get zero tangent (crest is the data point; no overshoot).
+     * Slope changes at joins — S-curve inflection sits on the shared vertex.
+     */
     _smoothSvgPathD: (points) => {
         if (!points.length) return '';
         const fmt = (n) => (Math.round(n * 100) / 100);
@@ -1004,16 +1008,42 @@ const Admin = {
         if (points.length === 2) {
             return `M ${fmt(points[0].x)} ${fmt(points[0].y)} L ${fmt(points[1].x)} ${fmt(points[1].y)}`;
         }
+
+        const n = points.length;
+        const segSlope = new Array(n - 1);
+        for (let i = 0; i < n - 1; i++) {
+            const dx = points[i + 1].x - points[i].x;
+            const dy = points[i + 1].y - points[i].y;
+            segSlope[i] = dx === 0 ? 0 : dy / dx;
+        }
+
+        const m = new Array(n);
+        m[0] = segSlope[0];
+        m[n - 1] = segSlope[n - 2];
+        for (let i = 1; i < n - 1; i++) {
+            const s0 = segSlope[i - 1];
+            const s1 = segSlope[i];
+            if (s0 === 0 || s1 === 0 || (s0 > 0) !== (s1 > 0)) {
+                // Local extremum or flat — horizontal tangent so peak/trough is the crest
+                m[i] = 0;
+            } else {
+                const h0 = points[i].x - points[i - 1].x;
+                const h1 = points[i + 1].x - points[i].x;
+                const weighted = (h0 + h1) ? Math.abs((h0 * s1 + h1 * s0) / (h0 + h1)) : 0;
+                const sign = s0 > 0 ? 1 : -1;
+                m[i] = sign * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * weighted);
+            }
+        }
+
         let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
-        for (let i = 0; i < points.length - 1; i++) {
-            const p0 = points[i === 0 ? 0 : i - 1];
+        for (let i = 0; i < n - 1; i++) {
             const p1 = points[i];
             const p2 = points[i + 1];
-            const p3 = points[i + 2] || p2;
-            const cp1x = p1.x + (p2.x - p0.x) / 6;
-            const cp1y = p1.y + (p2.y - p0.y) / 6;
-            const cp2x = p2.x - (p3.x - p1.x) / 6;
-            const cp2y = p2.y - (p3.y - p1.y) / 6;
+            const dx = p2.x - p1.x;
+            const cp1x = p1.x + dx / 3;
+            const cp1y = p1.y + (m[i] * dx) / 3;
+            const cp2x = p2.x - dx / 3;
+            const cp2y = p2.y - (m[i + 1] * dx) / 3;
             d += ` C ${fmt(cp1x)} ${fmt(cp1y)}, ${fmt(cp2x)} ${fmt(cp2y)}, ${fmt(p2.x)} ${fmt(p2.y)}`;
         }
         return d;
@@ -2151,10 +2181,11 @@ const Admin = {
 
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const [noticesRes, disrRes, exclRes] = await Promise.all([
+            const [noticesRes, disrRes, exclRes, maintRes] = await Promise.all([
                 fetch(`${dynamicEndpoint}notices.json?auth=${secret}`).catch(() => null),
                 fetch(`${dynamicEndpoint}disruptions.json?auth=${secret}`).catch(() => null),
-                fetch(`${dynamicEndpoint}exclusions.json?auth=${secret}`).catch(() => null)
+                fetch(`${dynamicEndpoint}exclusions.json?auth=${secret}`).catch(() => null),
+                fetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`).catch(() => null)
             ]);
 
             const now = Date.now();
@@ -2225,6 +2256,51 @@ const Admin = {
                 }
             }
 
+            // 4. Scan Maintenance banners
+            if (maintRes && maintRes.ok) {
+                try {
+                    const maintData = await maintRes.json();
+                    const rootOn = maintData === true || (maintData && typeof maintData === 'object' && maintData.active !== false);
+                    if (rootOn) {
+                        let items = [];
+                        if (typeof window.listMaintenanceItems === 'function') {
+                            items = window.listMaintenanceItems(maintData === true ? true : maintData);
+                        } else if (maintData === true) {
+                            items = [{ id: '_legacy', active: true, message: 'MAINTENANCE IN PROGRESS', regions: [], routes: [] }];
+                        } else if (maintData?.items && typeof maintData.items === 'object') {
+                            items = Object.keys(maintData.items).map((k) => ({ id: k, ...maintData.items[k] }));
+                        } else if (maintData && typeof maintData === 'object') {
+                            items = [{
+                                id: '_legacy',
+                                active: !!maintData.active,
+                                message: maintData.message || 'MAINTENANCE IN PROGRESS',
+                                regions: maintData.regions || [],
+                                routes: maintData.routes || [],
+                                expiresAt: maintData.expiresAt || null,
+                            }];
+                        }
+                        items.forEach((it) => {
+                            if (it.active === false) return;
+                            if (it.expiresAt && Number(it.expiresAt) <= now) return;
+                            const scopeLabel = it.routes?.length
+                                ? `${it.routes.length} route(s)`
+                                : (it.regions?.length ? it.regions.join('+') : 'Network');
+                            const routeId = it.routes?.[0]
+                                || (it.regions?.[0] ? `all_${it.regions[0]}` : 'all');
+                            const msg = String(it.message || 'Maintenance').slice(0, 80);
+                            activeItems.push({
+                                type: 'Maintenance',
+                                label: `${msg}${msg.length >= 80 ? '…' : ''} (${scopeLabel})`,
+                                expiresAt: it.expiresAt || null,
+                                id: it.id,
+                                panelId: 'maint-panel',
+                                routeId,
+                            });
+                        });
+                    }
+                } catch (me) { /* optional */ }
+            }
+
             Admin._routeFlags = {};
             if (activeItems.length === 0) {
                 if (typeof Admin.populateAlertTargets === 'function') Admin.populateAlertTargets(true);
@@ -2242,7 +2318,7 @@ const Admin = {
                     </button>
                     <div id="action-body" class="hidden mt-4 space-y-2">
                         <div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
-                            All clear - no active alerts, incidents, grid notices, or schedule exceptions.
+                            All clear - no active alerts, incidents, grid notices, schedule exceptions, or maintenance banners.
                         </div>
                     </div>
                 `;
@@ -2382,6 +2458,52 @@ const Admin = {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             let url = '';
 
+            if (type === 'Maintenance') {
+                const maintUrl = `${dynamicEndpoint}config/maintenance.json?auth=${secret}`;
+                const fetchRes = await fetch(maintUrl);
+                if (!fetchRes.ok) throw new Error('Fetch failed');
+                const maintData = await fetchRes.json();
+                if (!maintData || typeof maintData !== 'object') {
+                    if (typeof showToast === 'function') showToast('No maintenance config.', 'warning');
+                    return;
+                }
+                // Flat legacy (no items map yet)
+                if (!maintData.items || typeof maintData.items !== 'object') {
+                    if (!maintData.expiresAt) {
+                        if (typeof showToast === 'function') showToast('Item has no expiry to extend.', 'warning');
+                        return;
+                    }
+                    const newExpiry = Number(maintData.expiresAt) + 86400000;
+                    await fetch(maintUrl, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
+                    });
+                    if (typeof showToast === 'function') showToast('Extended by +24 Hours!', 'success');
+                    Admin.fetchActionRequired();
+                    return;
+                }
+                const item = maintData.items[id];
+                if (!item || !item.expiresAt) {
+                    if (typeof showToast === 'function') showToast('Item has no expiry to extend.', 'warning');
+                    return;
+                }
+                const newExpiry = Number(item.expiresAt) + 86400000;
+                await fetch(`${dynamicEndpoint}config/maintenance/items/${encodeURIComponent(id)}.json?auth=${secret}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
+                });
+                // Keep root shim expiresAt in sync when this is the primary
+                if (maintData.expiresAt && Number(maintData.expiresAt) === Number(item.expiresAt)) {
+                    await fetch(maintUrl, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
+                    });
+                }
+                if (typeof showToast === 'function') showToast('Extended by +24 Hours!', 'success');
+                Admin.fetchActionRequired();
+                return;
+            }
+
             if (type === 'Disruption') url = `${dynamicEndpoint}disruptions/${routeId}/${id}.json?auth=${secret}`;
             else if (type === 'Exception') url = `${dynamicEndpoint}exclusions/${routeId}/${id}.json?auth=${secret}`;
             else if (type === 'Grid Notice') url = `${dynamicEndpoint}exclusions/${routeId}/_grid_notice.json?auth=${secret}`;
@@ -2417,10 +2539,60 @@ const Admin = {
         }
     },
 
+    /** Sync a premium dropdown's visible label to match the hidden <select> value. */
+    _syncAdminSelectDisplay: (selectId, routeId) => {
+        const selectEl = document.getElementById(selectId);
+        if (!selectEl) return;
+        const opt = selectEl.querySelector(`option[value="${CSS.escape ? CSS.escape(routeId) : routeId}"]`)
+            || Array.from(selectEl.options).find((o) => o.value === routeId);
+        if (!opt) return;
+
+        const displayId = selectId === 'alert-target' ? 'alert-target-display'
+            : selectId === 'disr-route' ? 'disr-route-display'
+            : selectId === 'excl-route' ? 'excl-route-display'
+            : null;
+        const listId = selectId === 'alert-target' ? 'alert-target-list'
+            : selectId === 'disr-route' ? 'disr-route-list'
+            : selectId === 'excl-route' ? 'excl-route-list'
+            : null;
+        const display = displayId ? document.getElementById(displayId) : null;
+        const list = listId ? document.getElementById(listId) : null;
+        if (!display) return;
+
+        // Prefer the matching custom-list row HTML (badges / route arrows)
+        if (list) {
+            const matchLi = Array.from(list.querySelectorAll('li.cursor-pointer, li[class*="cursor-pointer"]'))
+                .find((li) => typeof li.onclick === 'function' && (
+                    (li.getAttribute('data-value') === routeId)
+                    || (opt.textContent && li.textContent.includes(String(opt.textContent).split(' [')[0].trim()))
+                ));
+            if (matchLi) {
+                display.innerHTML = matchLi.innerHTML;
+                return;
+            }
+        }
+
+        if (typeof ROUTES !== 'undefined' && ROUTES[routeId]) {
+            const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(routeId) : '';
+            let badgeHtml = '';
+            if (cues?.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
+            if (cues?.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
+            display.innerHTML = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(ROUTES[routeId].name)}</span>${badgeHtml}`;
+        } else {
+            display.textContent = opt.textContent || routeId;
+        }
+    },
+
     /** Apply GSM / Review route to admin selects without touching the live board. */
     applyPendingAdminRoute: (panelId) => {
         const routeId = Admin._pendingAdminRoute;
         if (!routeId) return;
+
+        // Review always lands on New Alert (not leftover Schedule / Archive tab)
+        if (panelId === 'alert-panel' && typeof Admin.setAlertManagerTab === 'function') {
+            Admin.setAlertManagerTab('compose');
+        }
+
         let selectId = '';
         if (panelId === 'alert-panel') selectId = 'alert-target';
         else if (panelId === 'disruption-panel') selectId = 'disr-route';
@@ -2428,31 +2600,16 @@ const Admin = {
         if (!selectId) return;
         const selectEl = document.getElementById(selectId);
         if (!selectEl) return;
-        const opt = selectEl.querySelector(`option[value="${routeId}"]`);
+        const opt = selectEl.querySelector(`option[value="${CSS.escape ? CSS.escape(routeId) : routeId}"]`)
+            || Array.from(selectEl.options).find((o) => o.value === routeId);
         if (!opt) return;
-        if (selectEl.value !== routeId) {
-            selectEl.value = routeId;
-            selectEl.dispatchEvent(new Event('change'));
-        }
-        // Sync premium dropdown displays
+
+        const changed = selectEl.value !== routeId;
+        if (changed) selectEl.value = routeId;
+        Admin._syncAdminSelectDisplay(selectId, routeId);
+        if (changed) selectEl.dispatchEvent(new Event('change'));
+
         if (selectId === 'excl-route') {
-            const display = document.getElementById('excl-route-display');
-            const list = document.getElementById('excl-route-list');
-            const matchLi = list && Array.from(list.querySelectorAll('li')).find((li) => {
-                try { return typeof li.onclick === 'function' && selectEl.value === routeId; } catch { return false; }
-            });
-            // Prefer the option's matching list row by re-finding via value click simulation
-            if (list) {
-                const lis = Array.from(list.querySelectorAll('li[class*="cursor-pointer"]'));
-                // Re-populate display from selected option text
-                if (display && opt) {
-                    const plain = Admin.formatRouteLabelPlain(typeof ROUTES !== 'undefined' && ROUTES[routeId] ? ROUTES[routeId].name : opt.textContent);
-                    const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(routeId) : '';
-                    let badgeHtml = '';
-                    if (cues?.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
-                    display.innerHTML = `<span class="truncate mr-1 inline-flex items-center">${typeof ROUTES !== 'undefined' && ROUTES[routeId] ? Admin.formatRouteLabelHtml(ROUTES[routeId].name) : plain}</span>${badgeHtml}`;
-                }
-            }
             const banner = document.getElementById('excl-review-banner');
             if (banner && typeof ROUTES !== 'undefined' && ROUTES[routeId]) {
                 banner.classList.remove('hidden');
@@ -2570,6 +2727,17 @@ const Admin = {
             if (targetPanel.id === 'crashes-panel') Admin.fetchCrashes();
         }
 
+        // Review → Service Alerts must open Compose (not sticky Schedule/Archive)
+        if (panelId === 'alert-panel' && typeof Admin.setAlertManagerTab === 'function') {
+            Admin.setAlertManagerTab('compose');
+        }
+
+        if (panelId === 'maint-panel') {
+            setTimeout(() => {
+                if (typeof Admin.openMaintenanceAccordion === 'function') Admin.openMaintenanceAccordion();
+            }, 100);
+        }
+
         if (routeId) {
             // Re-apply after panel mount + async populate*Routes (live board must not win)
             setTimeout(() => Admin.applyPendingAdminRoute(panelId), 80);
@@ -2611,6 +2779,62 @@ const Admin = {
                 } catch (ae) {
                     if (typeof showToast === 'function') showToast("Failed to clear alert.", "error");
                 }
+            } else if (type === 'Maintenance') {
+                const res = await fetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`);
+                const maintData = res.ok ? await res.json() : null;
+                if (maintData && typeof maintData === 'object' && (!maintData.items || typeof maintData.items !== 'object')) {
+                    // Flat legacy — turn off
+                    await fetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            active: false,
+                            message: '',
+                            updatedAt: Date.now(),
+                            updatedBy: Admin.currentUser?.email || 'Admin',
+                        }),
+                    });
+                } else {
+                    await fetch(`${dynamicEndpoint}config/maintenance/items/${encodeURIComponent(id)}.json?auth=${secret}`, { method: 'DELETE' });
+                    // Rebuild root shim so legacy clients don't keep a stale banner
+                    try {
+                        const res2 = await fetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`);
+                        const md = res2.ok ? await res2.json() : null;
+                        if (md && typeof md === 'object') {
+                            const items = md.items && typeof md.items === 'object' ? { ...md.items } : {};
+                            delete items[id];
+                            const nowTs = Date.now();
+                            const live = Object.values(items).filter((it) => {
+                                if (!it || it.active === false) return false;
+                                if (it.expiresAt && Number(it.expiresAt) <= nowTs) return false;
+                                return true;
+                            });
+                            live.sort((a, b) => {
+                                const sa = (a.routes?.length ? 2 : a.regions?.length ? 1 : 0);
+                                const sb = (b.routes?.length ? 2 : b.regions?.length ? 1 : 0);
+                                return sb - sa;
+                            });
+                            const primary = live[0];
+                            const payload = {
+                                active: !!(md.active !== false && primary),
+                                items,
+                                message: primary ? (primary.message || 'MAINTENANCE IN PROGRESS') : '',
+                                updatedAt: nowTs,
+                                updatedBy: Admin.currentUser?.email || 'Admin',
+                            };
+                            if (primary?.regions?.length) payload.regions = primary.regions;
+                            else payload.regions = null;
+                            if (primary?.routes?.length) payload.routes = primary.routes;
+                            else payload.routes = null;
+                            if (primary?.expiresAt) payload.expiresAt = primary.expiresAt;
+                            else payload.expiresAt = null;
+                            await fetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`, {
+                                method: 'PUT',
+                                body: JSON.stringify(payload),
+                            });
+                        }
+                    } catch (re) { /* best-effort shim */ }
+                }
+                if (typeof showToast === 'function') showToast('Maintenance banner resolved.', 'success');
             }
             Admin.fetchActionRequired();
         } catch(e) {
@@ -3358,8 +3582,12 @@ const Admin = {
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
                 if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
                 if (card.id === 'alert-panel') {
+                    if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
+                        Admin.setAlertManagerTab('compose');
+                    }
+                    Admin.applyPendingAdminRoute('alert-panel');
                     const targetEl = document.getElementById('alert-target');
-                    if (targetEl) targetEl.dispatchEvent(new Event('change'));
+                    if (targetEl && !Admin._pendingAdminRoute) targetEl.dispatchEvent(new Event('change'));
                 }
             });
 
@@ -4532,14 +4760,12 @@ const Admin = {
                             </div>
                         `;
                     } else {
-                        // COMMUTER BUBBLE (Left)
-                        // Parse reply/quote markers on PLAIN text first so escaping never splits the chip.
+                        // COMMUTER BUBBLE (Left) — WhatsApp-style quote chip + reply body
                         let plainBody = item.text ? String(item.text).trim() : '';
-                        let quoteBlockHtml = "";
+                        let quoteBlockHtml = '';
                         let isReply = false;
 
                         const stripOuterQuotes = (s) => String(s || '').replace(/^["'\u201c\u201d\s]+|["'\u201c\u201d\s]+$/g, '').trim();
-                        /** Decode HTML entities / tags so quote chips never show &nbsp; etc. */
                         const toQuotePlain = (raw) => {
                             let s = String(raw ?? '');
                             try {
@@ -4558,12 +4784,44 @@ const Admin = {
                                 .replace(/&quot;/gi, '"')
                                 .replace(/&#39;/gi, "'");
                             s = stripOuterQuotes(s);
-                            // Unwrap a single leftover [ ... ] layer from legacy wrappers
-                            const wrapped = s.match(/^\[\s*([\s\S]*?)\s*\]$/);
+                            const wrapped = s.match(/^\[\s*([\s\S]*)\s*\]$/);
                             if (wrapped) s = stripOuterQuotes(wrapped[1]);
+                            // Drop leftover wrapper crumbs: Bathong Thandeka ..."] → Bathong Thandeka ...
+                            s = s.replace(/^[\[\s]+/, '').replace(/[\]"'\u201c\u201d]+$/g, '');
                             return s.replace(/\s+/g, ' ').trim();
                         };
-                        const waQuoteChip = ({ author, snippet, onClickAttr, accent = 'blue' }) => {
+                        const isJunkQuoteLine = (line) => {
+                            const t = String(line || '').trim();
+                            if (!t) return true;
+                            // Stray bracket / quote crumbs from broken legacy wrappers
+                            if (/^[\[\]"'“”.…\s]+$/.test(t)) return true;
+                            if (t.length <= 2 && /[\[\]]/.test(t)) return true;
+                            return false;
+                        };
+                        const stripDupQuoteFromBody = (body, snippet) => {
+                            let rest = String(body || '').replace(/^\s+/, '');
+                            const snip = toQuotePlain(snippet);
+                            // Drop junk / duplicate quote lines that leaked below the header
+                            const lines = rest.split(/\r?\n/);
+                            while (lines.length) {
+                                const head = lines[0];
+                                const plainHead = toQuotePlain(head);
+                                if (isJunkQuoteLine(head)) { lines.shift(); continue; }
+                                if (snip && plainHead && (plainHead === snip || snip.startsWith(plainHead) || plainHead.startsWith(snip))) {
+                                    lines.shift();
+                                    continue;
+                                }
+                                // One-line `[quoted text]` / `"quoted text"` duplicate
+                                if (snip && (/^\s*\[/.test(head) || /^\s*["“]/.test(head)) && plainHead && (plainHead === snip || snip.includes(plainHead))) {
+                                    lines.shift();
+                                    continue;
+                                }
+                                break;
+                            }
+                            return lines.join('\n').replace(/^\s+/, '');
+                        };
+                        // data-* only — never embed snippet in onclick (breaks on quotes/apostrophes)
+                        const waQuoteChip = ({ author, snippet, replyKey = '', alertId = '', alertFallback = '', accent = 'blue' }) => {
                             const bar = accent === 'blue'
                                 ? 'border-blue-500 dark:border-blue-400'
                                 : 'border-gray-400 dark:border-gray-500';
@@ -4572,88 +4830,109 @@ const Admin = {
                                 : 'text-gray-600 dark:text-gray-300';
                             const cleanAuthor = toQuotePlain(author) || 'Enock';
                             const cleanSnippet = toQuotePlain(snippet) || 'Message';
-                            const inner = `
+                            const attrs = [
+                                'type="button"',
+                                'data-fb-quote-jump="1"',
+                                `data-reply-key="${secureEscape(replyKey || '')}"`,
+                                `data-reply-snippet="${secureEscape(cleanSnippet)}"`,
+                                `data-alert-id="${secureEscape(alertId || '')}"`,
+                                `data-alert-fallback="${secureEscape(alertFallback || '')}"`,
+                                `class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer"`,
+                            ].join(' ');
+                            return `<button ${attrs}>
                                     <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(cleanAuthor)}</div>
-                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(cleanSnippet)}</div>`;
-                            // Whole shaded block is the hit target (WhatsApp-style)
-                            if (onClickAttr) {
-                                return `<button type="button" ${onClickAttr} class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer">${inner}</button>`;
-                            }
-                            return `<div class="-mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5">${inner}</div>`;
+                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(cleanSnippet)}</div>
+                                </button>`;
                         };
 
-                        // [REPLY TO ADMIN: key | snippet]\nbody  OR  [REPLY TO ADMIN: key]\nsnippet\nbody
-                        const replyAdminRe = /^\[REPLY TO ADMIN:\s*([^|\]]+?)(?:\s*\|\s*([\s\S]*?))?\]\s*([\s\S]*)$/i;
-                        const replyAdminMatch = plainBody.match(replyAdminRe);
-                        if (replyAdminMatch) {
+                        // 1) Modern: [REPLY TO ADMIN: key | snippet]\nbody  (hub.js) — snippet cannot contain ]
+                        const replyWithPipe = plainBody.match(/^\[REPLY TO ADMIN:\s*([^|\]]+?)\s*\|\s*([^\]]*)\]\s*([\s\S]*)$/i);
+                        // 2) Legacy header only: [REPLY TO ADMIN: key]\n(optional snippet lines)\nbody
+                        const replyHeaderOnly = !replyWithPipe
+                            ? plainBody.match(/^\[REPLY TO ADMIN:\s*([^\]]+)\]\s*([\s\S]*)$/i)
+                            : null;
+
+                        if (replyWithPipe || replyHeaderOnly) {
                             isReply = true;
-                            const replyKey = String(replyAdminMatch[1] || '').trim();
-                            let snippet = toQuotePlain(replyAdminMatch[2] || '');
-                            let bodyRest = String(replyAdminMatch[3] || '').replace(/^\s+/, '');
-                            if (!snippet && bodyRest) {
-                                const parts = bodyRest.split(/\r?\n/);
-                                if (parts.length > 1) {
-                                    snippet = toQuotePlain(parts[0]);
-                                    bodyRest = parts.slice(1).join('\n').replace(/^\s+/, '');
-                                } else {
-                                    // Prefer not to swallow the whole reply as the quote when pipe snippet missing
-                                    snippet = '';
+                            const replyKey = String((replyWithPipe || replyHeaderOnly)[1] || '').trim();
+                            let snippet = '';
+                            let bodyRest = '';
+                            if (replyWithPipe) {
+                                snippet = toQuotePlain(replyWithPipe[2] || '');
+                                bodyRest = String(replyWithPipe[3] || '');
+                            } else {
+                                bodyRest = String(replyHeaderOnly[2] || '');
+                                // Prefer a dedicated quote line; never treat a lone "[" as the quote
+                                const lines = bodyRest.split(/\r?\n/);
+                                let i = 0;
+                                while (i < lines.length && isJunkQuoteLine(lines[i])) i++;
+                                if (i < lines.length) {
+                                    const candidate = toQuotePlain(lines[i]);
+                                    const after = lines.slice(i + 1).join('\n').replace(/^\s+/, '');
+                                    // First real line is the quote only when a reply body remains after it
+                                    if (candidate && after) {
+                                        snippet = candidate;
+                                        bodyRest = after;
+                                    }
+                                    // else: single remaining line is the commuter reply (no separate quote line)
                                 }
                             }
-                            snippet = snippet.slice(0, 240);
-                            const safeKey = replyKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                            const safeSnippetAttr = snippet.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
+                            snippet = (snippet || 'Admin message').slice(0, 240);
                             quoteBlockHtml = waQuoteChip({
                                 author: 'Enock',
-                                snippet: snippet || 'Admin message',
-                                onClickAttr: `data-reply-key="${secureEscape(replyKey)}" onclick="event.stopPropagation(); Admin.jumpToQuotedFeedback('${safeKey}', '${safeSnippetAttr}')"`,
+                                snippet,
+                                replyKey,
                                 accent: 'blue',
                             });
                             plainBody = bodyRest;
-                        } else {
-                            // Legacy: [quote...] body  — also tolerate missing space after ]
-                            const quoteRegex = /^\[([\s\S]*?)\](?:\s+|(?=\S))/;
-                            const quoteMatch = plainBody.match(quoteRegex);
-                            if (quoteMatch && quoteMatch[1] !== undefined) {
-                                isReply = true;
-                                const rawQuoteContent = String(quoteMatch[1]);
-                                let quoteAuthor = 'Enock';
-                                let quoteSnippet = toQuotePlain(
-                                    rawQuoteContent
-                                        .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_|]+/i, '')
-                                        .replace(/Replying to:\s*/i, '')
-                                        .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
-                                );
-                                const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
-                                if (named) {
-                                    quoteAuthor = toQuotePlain(named[1]) || quoteAuthor;
-                                    quoteSnippet = toQuotePlain(named[2]);
+                        } else if (plainBody.startsWith('[')) {
+                            // 3) Legacy bracket quote: find matching ] for the opening [ (not first ] only)
+                            let depth = 0;
+                            let end = -1;
+                            for (let i = 0; i < plainBody.length; i++) {
+                                const ch = plainBody[i];
+                                if (ch === '[') depth++;
+                                else if (ch === ']') {
+                                    depth--;
+                                    if (depth === 0) { end = i; break; }
                                 }
-                                quoteSnippet = quoteSnippet.slice(0, 240);
-                                let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
-                                let isAlertQuote = !!(alertIdMatch || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent));
-                                const safeSnippetAttr = quoteSnippet.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                                if (isAlertQuote) {
-                                    let alertIdParam = alertIdMatch ? `'${alertIdMatch[1]}'` : 'null';
-                                    let safeQuoteText = (typeof escapeHTML === 'function' ? escapeHTML : secureEscape)(`${quoteAuthor}: ${quoteSnippet}`.replace(/'/g, "\\'"));
+                            }
+                            if (end > 0) {
+                                const rawQuoteContent = plainBody.slice(1, end);
+                                let bodyRest = plainBody.slice(end + 1).replace(/^\s+/, '');
+                                // Require a separator or end — avoid eating normal sentences
+                                if (bodyRest || rawQuoteContent) {
+                                    isReply = true;
+                                    let quoteAuthor = 'Enock';
+                                    let quoteSnippet = toQuotePlain(
+                                        rawQuoteContent
+                                            .replace(/REPLY TO ADMIN:\s*[^\]|]*/i, '')
+                                            .replace(/Replying to:\s*/i, '')
+                                            .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
+                                    );
+                                    const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
+                                    if (named) {
+                                        quoteAuthor = toQuotePlain(named[1]) || quoteAuthor;
+                                        quoteSnippet = toQuotePlain(named[2]);
+                                    }
+                                    quoteSnippet = (quoteSnippet || 'Quoted message').slice(0, 240);
+                                    bodyRest = stripDupQuoteFromBody(bodyRest, quoteSnippet);
+                                    const alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
+                                    const isAlertQuote = !!(alertIdMatch || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent));
                                     quoteBlockHtml = waQuoteChip({
                                         author: quoteAuthor,
-                                        snippet: quoteSnippet || 'Advisory',
-                                        onClickAttr: `onclick="event.stopPropagation(); Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')"`,
+                                        snippet: quoteSnippet,
+                                        replyKey: '',
+                                        alertId: isAlertQuote ? (alertIdMatch ? alertIdMatch[1] : '') : '',
+                                        alertFallback: isAlertQuote ? `${quoteAuthor}: ${quoteSnippet}` : '',
                                         accent: 'blue',
                                     });
-                                } else {
-                                    quoteBlockHtml = waQuoteChip({
-                                        author: quoteAuthor,
-                                        snippet: quoteSnippet || 'Quoted message',
-                                        onClickAttr: `onclick="event.stopPropagation(); Admin.jumpToQuotedFeedback(null, '${safeSnippetAttr}')"`,
-                                        accent: 'blue',
-                                    });
+                                    plainBody = bodyRest;
                                 }
-                                plainBody = plainBody.slice(quoteMatch[0].length).replace(/^\s+/, '');
                             }
                         }
-                        // Decode entities in the reply body without collapsing intentional newlines
+
                         plainBody = String(plainBody || '')
                             .replace(/&nbsp;/gi, ' ')
                             .replace(/\u00a0/g, ' ')
@@ -4662,8 +4941,6 @@ const Admin = {
                             .replace(/&gt;/gi, '>')
                             .replace(/&quot;/gi, '"')
                             .replace(/&#39;/gi, "'")
-                            .replace(/^\[+\s*/, '')
-                            .replace(/^\s*["'\u201c\u201d]+/, '')
                             .trim();
 
                         let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
@@ -4779,6 +5056,24 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
+                // WhatsApp quote chip — data-* attrs (no fragile inline onclick)
+                const quoteBtn = e.target.closest('[data-fb-quote-jump]');
+                if (quoteBtn && listContainer.contains(quoteBtn)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const alertId = quoteBtn.getAttribute('data-alert-id') || '';
+                    const alertFallback = quoteBtn.getAttribute('data-alert-fallback') || '';
+                    if (alertId || alertFallback) {
+                        Admin.viewContextAlert(alertId || null, alertFallback);
+                    } else {
+                        Admin.jumpToQuotedFeedback(
+                            quoteBtn.getAttribute('data-reply-key') || null,
+                            quoteBtn.getAttribute('data-reply-snippet') || ''
+                        );
+                    }
+                    return;
+                }
+
                 const header = e.target.closest('.feedback-group-header');
                 if (!header) return;
 
@@ -7861,6 +8156,7 @@ const Admin = {
                     const li = document.createElement('li');
                     // GUARDIAN UX FIX: Added pl-6 for child indentation
                     li.className = "pl-6 pr-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer flex items-center";
+                    li.setAttribute('data-value', value);
                     li.innerHTML = htmlText;
                     li.onclick = () => {
                         alertTarget.value = value;
@@ -7912,26 +8208,28 @@ const Admin = {
                 });
             }
             
+            // Prefer GSM / Review deep-link target over sticky "Gauteng Only" default
+            const preferVal = Admin._pendingAdminRoute || currentVal || '';
             let selectedOpt = null;
-            if (currentVal) {
-                const optionToSelect = alertTarget.querySelector(`option[value="${currentVal}"]`);
+            if (preferVal) {
+                const optionToSelect = Array.from(alertTarget.options).find((o) => o.value === preferVal);
                 if (optionToSelect) {
                     optionToSelect.selected = true;
+                    alertTarget.value = preferVal;
                     selectedOpt = optionToSelect;
                 }
-            } else {
+            }
+            if (!selectedOpt) {
                 const defOpt = typeof currentRegion !== 'undefined' ? `all_${currentRegion}` : 'all_GP';
-                const optionToSelect = alertTarget.querySelector(`option[value="${defOpt}"]`);
+                const optionToSelect = Array.from(alertTarget.options).find((o) => o.value === defOpt);
                 if (optionToSelect) {
                     optionToSelect.selected = true;
                     selectedOpt = optionToSelect;
                 }
             }
 
-            if (selectedOpt && customDisplay) {
-                const matchLi = Array.from(customList.querySelectorAll('li')).find(li => li.onclick && li.textContent.includes(selectedOpt.textContent.split(' [')[0]));
-                if (matchLi) customDisplay.innerHTML = matchLi.innerHTML;
-                else customDisplay.textContent = selectedOpt.textContent;
+            if (selectedOpt) {
+                Admin._syncAdminSelectDisplay('alert-target', selectedOpt.value);
             }
 
             if (!skipFetch) fetchCurrentAlert(alertTarget.value);
@@ -8199,14 +8497,18 @@ const Admin = {
             ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` - ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : `<span class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
 
+        const lb = (url) => {
+            const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `Admin.openLightbox('${safe}')`;
+        };
         let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
             : '';
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+            return `<button type="button" onclick="event.stopPropagation(); ${lb(srcUrl)}" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
         });
 
         if (data.sourceName) {
@@ -8298,13 +8600,18 @@ const Admin = {
     /** Body HTML for notice-modal (no outer padded card). */
     buildNoticeBodyHtml: (data) => {
         if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
+        // Admin.openLightbox (z-300) — never window.openLightbox/map-modal (z-160 under archive preview z-260)
+        const lb = (url) => {
+            const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `Admin.openLightbox('${safe}')`;
+        };
         let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="window.openLightbox('${escapeHTML(data.imageUrl)}')" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
             : '';
         let parsedMessage = data.message || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+            return `<button type="button" onclick="event.stopPropagation(); ${lb(srcUrl)}" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
         });
         if (data.sourceName) {
             const sName = escapeHTML(data.sourceName);
@@ -11467,6 +11774,11 @@ const Admin = {
             host.appendChild(maintPanel);
         }
 
+        // Re-init if an older admin session left a panel without the multi-banner accordion
+        if (maintPanel.dataset.loaded === "true" && !document.getElementById('maint-mode-header')) {
+            delete maintPanel.dataset.loaded;
+            maintPanel.innerHTML = '';
+        }
         if (maintPanel.dataset.loaded === "true") return;
         maintPanel.dataset.loaded = "true";
 
@@ -11482,39 +11794,63 @@ const Admin = {
             </button>
             
             <div id="maint-body" class="hidden mt-4 space-y-4">
-                <!-- Maintenance Controls -->
-                <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800 space-y-3">
-                    <div class="flex items-center justify-between">
+                <!-- Maintenance Mode (accordion) -->
+                <div class="bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="maint-mode-header" class="w-full px-3 py-3 bg-orange-100/50 dark:bg-orange-900/40 text-left text-[10px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-orange-200/50 dark:hover:bg-orange-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-orange-600 dark:text-orange-300">${Admin.icon('wrench', 'w-4 h-4')}</span> Maintenance Mode
+                            <span id="maint-active-count" class="hidden ml-1 px-1.5 py-0.5 rounded bg-orange-600 text-white text-[9px] font-black normal-case tracking-normal">0</span>
+                        </span>
+                        <svg id="maint-mode-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="maint-mode-body" class="hidden p-4 space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <span class="font-bold text-orange-800 dark:text-orange-200 text-sm">Publish banners</span>
+                                <p class="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5">Add multiple scoped banners. Pause all = master off. Empty scope = everyone.</p>
+                            </div>
+                            <div class="relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in shrink-0" title="Master pause — off hides all banners">
+                                <input type="checkbox" name="toggle" id="maint-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                                <label for="maint-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        <input type="text" id="maint-message" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm" placeholder="Banner text (e.g. Cape Town Northern Line update...)">
                         <div>
-                            <span class="font-bold text-orange-800 dark:text-orange-200 text-sm">Maintenance Mode</span>
-                            <p class="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5">Yellow banner for online users. Leave scope empty = everyone.</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5">Regions (optional)</p>
+                            <div id="maint-region-checks" class="flex flex-wrap gap-2">
+                                ${['GP', 'WC', 'KZN', 'EC'].map((code) => `
+                                    <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/40 border border-orange-200 dark:border-orange-800/60 text-[10px] font-bold text-orange-900 dark:text-orange-200 cursor-pointer">
+                                        <input type="checkbox" class="maint-region-cb rounded border-orange-300 text-orange-600 focus:ring-orange-500" value="${code}">
+                                        ${code}
+                                    </label>`).join('')}
+                            </div>
                         </div>
-                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                            <input type="checkbox" name="toggle" id="maint-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
-                            <label for="maint-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300">Routes (optional)</p>
+                                <button type="button" id="maint-routes-clear" class="text-[9px] font-bold text-orange-600 dark:text-orange-400 hover:underline focus:outline-none">Clear</button>
+                            </div>
+                            <div id="maint-route-checks" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-orange-200 dark:border-orange-800/60 bg-white/60 dark:bg-gray-900/30 p-2">
+                                <p class="text-[10px] text-orange-500 italic">Select a region to list its routes.</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5">Expires</p>
+                            <input type="datetime-local" id="maint-expires" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm">
+                            <p class="text-[9px] text-orange-500 dark:text-orange-400 mt-1">Clear the field for no auto-expiry (until you deactivate).</p>
+                        </div>
+                        <input type="hidden" id="maint-edit-id" value="">
+                        <div class="flex gap-2">
+                            <button type="button" id="maint-add-btn" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Add banner</button>
+                            <button type="button" id="maint-cancel-edit" class="hidden px-3 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Cancel</button>
+                        </div>
+                        <div class="pt-2 border-t border-orange-200 dark:border-orange-800/60">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-2">Active maintenance</p>
+                            <div id="maint-active-list" class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                                <p class="text-[10px] text-orange-500 italic text-center py-3">No active banners.</p>
+                            </div>
                         </div>
                     </div>
-                    <input type="text" id="maint-message" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm" placeholder="Optional context (e.g. Cape Town Northern Line update...)">
-                    <div>
-                        <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5">Regions (optional)</p>
-                        <div id="maint-region-checks" class="flex flex-wrap gap-2">
-                            ${['GP', 'WC', 'KZN', 'EC'].map((code) => `
-                                <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/40 border border-orange-200 dark:border-orange-800/60 text-[10px] font-bold text-orange-900 dark:text-orange-200 cursor-pointer">
-                                    <input type="checkbox" class="maint-region-cb rounded border-orange-300 text-orange-600 focus:ring-orange-500" value="${code}">
-                                    ${code}
-                                </label>`).join('')}
-                        </div>
-                    </div>
-                    <div>
-                        <div class="flex items-center justify-between mb-1.5">
-                            <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300">Routes (optional)</p>
-                            <button type="button" id="maint-routes-clear" class="text-[9px] font-bold text-orange-600 dark:text-orange-400 hover:underline focus:outline-none">Clear</button>
-                        </div>
-                        <div id="maint-route-checks" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-orange-200 dark:border-orange-800/60 bg-white/60 dark:bg-gray-900/30 p-2">
-                            <p class="text-[10px] text-orange-500 italic">Select a region to list its routes.</p>
-                        </div>
-                    </div>
-                    <button type="button" id="maint-scope-save" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save message &amp; scope</button>
                 </div>
 
                 <!-- Force schedule type (accordion, collapsed by default) -->
@@ -11596,28 +11932,204 @@ const Admin = {
         const chevron = document.getElementById('maint-chevron');
         const toggle = document.getElementById('maint-toggle');
         const maintMsg = document.getElementById('maint-message');
+        const maintExpires = document.getElementById('maint-expires');
+        const maintEditId = document.getElementById('maint-edit-id');
         const maintRegionBox = document.getElementById('maint-region-checks');
         const maintRouteBox = document.getElementById('maint-route-checks');
         const maintRoutesClear = document.getElementById('maint-routes-clear');
-        const maintScopeSave = document.getElementById('maint-scope-save');
+        const maintAddBtn = document.getElementById('maint-add-btn');
+        const maintCancelEdit = document.getElementById('maint-cancel-edit');
+        const maintActiveList = document.getElementById('maint-active-list');
+        const maintActiveCount = document.getElementById('maint-active-count');
+        const maintModeHeader = document.getElementById('maint-mode-header');
+        const maintModeBody = document.getElementById('maint-mode-body');
+        const maintModeChevron = document.getElementById('maint-mode-chevron');
         let _maintSelectedRoutes = new Set();
+        let _maintItems = {}; // id → item
+        let _maintRootActive = true;
 
         const getMaintSelectedRegions = () =>
             Array.from(maintRegionBox?.querySelectorAll('.maint-region-cb:checked') || []).map((el) => el.value);
 
-        const collectMaintPayload = (activeOverride) => {
-            const regions = getMaintSelectedRegions();
-            const routes = Array.from(_maintSelectedRoutes);
+        const toLocalDatetimeValue = (ms) => {
+            if (!ms) return '';
+            const d = new Date(ms);
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            return d.toISOString().slice(0, 16);
+        };
+
+        const defaultMaintExpiryValue = () => {
+            const now = new Date();
+            now.setHours(23, 59, 0, 0);
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            return now.toISOString().slice(0, 16);
+        };
+
+        const resetMaintComposer = () => {
+            if (maintMsg) maintMsg.value = '';
+            if (maintEditId) maintEditId.value = '';
+            if (maintExpires) maintExpires.value = defaultMaintExpiryValue();
+            _maintSelectedRoutes = new Set();
+            maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => { cb.checked = false; });
+            renderMaintRouteChecks();
+            if (maintAddBtn) maintAddBtn.textContent = 'Add banner';
+            maintCancelEdit?.classList.add('hidden');
+        };
+
+        const listMaintItemsLocal = () => {
+            if (typeof window.listMaintenanceItems === 'function') {
+                return window.listMaintenanceItems({ active: true, items: _maintItems });
+            }
+            return Object.keys(_maintItems).map((k) => ({ id: k, ..._maintItems[k] }));
+        };
+
+        const countLiveMaint = () => {
+            const now = Date.now();
+            return listMaintItemsLocal().filter((it) => {
+                if (it.active === false) return false;
+                if (it.expiresAt && Number(it.expiresAt) <= now) return false;
+                return true;
+            }).length;
+        };
+
+        const buildMaintFirebasePayload = (rootActiveOverride) => {
+            const rootActive = typeof rootActiveOverride === 'boolean' ? rootActiveOverride : _maintRootActive;
+            const now = Date.now();
+            const items = {};
+            Object.keys(_maintItems).forEach((id) => {
+                const it = _maintItems[id];
+                if (!it) return;
+                const entry = {
+                    id,
+                    active: it.active !== false,
+                    message: String(it.message || '').trim(),
+                    updatedAt: it.updatedAt || now,
+                    updatedBy: it.updatedBy || (Admin.currentUser?.email || 'Admin'),
+                };
+                if (it.createdAt) entry.createdAt = it.createdAt;
+                if (Array.isArray(it.regions) && it.regions.length) entry.regions = it.regions;
+                if (Array.isArray(it.routes) && it.routes.length) entry.routes = it.routes;
+                if (it.expiresAt) entry.expiresAt = Number(it.expiresAt);
+                items[id] = entry;
+            });
+
+            // Root shim for older clients: primary live item (most specific), with its scope
+            const live = Object.values(items).filter((it) => {
+                if (it.active === false) return false;
+                if (it.expiresAt && Number(it.expiresAt) <= now) return false;
+                return true;
+            });
+            live.sort((a, b) => {
+                const sa = (a.routes?.length ? 2 : a.regions?.length ? 1 : 0);
+                const sb = (b.routes?.length ? 2 : b.regions?.length ? 1 : 0);
+                return sb - sa;
+            });
+            const primary = live[0];
             const payload = {
-                active: typeof activeOverride === 'boolean' ? activeOverride : !!(toggle && toggle.checked),
-                message: (maintMsg && maintMsg.value) || '',
-                updatedAt: Date.now(),
+                active: !!(rootActive && primary),
+                items,
+                updatedAt: now,
                 updatedBy: Admin.currentUser?.email || 'Admin',
             };
-            // Empty arrays omitted → clients treat as global
-            if (regions.length) payload.regions = regions;
-            if (routes.length) payload.routes = routes;
+            if (primary) {
+                payload.message = primary.message || 'MAINTENANCE IN PROGRESS';
+                if (primary.regions?.length) payload.regions = primary.regions;
+                if (primary.routes?.length) payload.routes = primary.routes;
+                if (primary.expiresAt) payload.expiresAt = primary.expiresAt;
+            } else {
+                payload.message = '';
+            }
+            // Explicit root pause even when items exist
+            if (!rootActive) payload.active = false;
             return payload;
+        };
+
+        const renderMaintActiveList = () => {
+            const now = Date.now();
+            const items = listMaintItemsLocal().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            const liveCount = countLiveMaint();
+            if (maintActiveCount) {
+                if (liveCount > 0 && _maintRootActive) {
+                    maintActiveCount.textContent = String(liveCount);
+                    maintActiveCount.classList.remove('hidden');
+                } else {
+                    maintActiveCount.classList.add('hidden');
+                }
+            }
+            if (!maintActiveList) return;
+            if (!items.length) {
+                maintActiveList.innerHTML = `<p class="text-[10px] text-orange-500 italic text-center py-3">No maintenance banners yet.</p>`;
+                return;
+            }
+            const esc = (typeof escapeHTML === 'function')
+                ? escapeHTML
+                : (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+            maintActiveList.innerHTML = items.map((it) => {
+                const expired = it.expiresAt && Number(it.expiresAt) <= now;
+                const inactive = it.active === false || expired || !_maintRootActive;
+                const scopeBits = [];
+                if (it.regions?.length) scopeBits.push(it.regions.join('+'));
+                else scopeBits.push('All regions');
+                if (it.routes?.length) {
+                    const names = it.routes.slice(0, 2).map((rid) => {
+                        const r = routesObj[rid];
+                        return r ? (Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(r.name) : r.name) : rid;
+                    });
+                    scopeBits.push(it.routes.length > 2 ? `${names.join(', ')} +${it.routes.length - 2}` : names.join(', '));
+                } else {
+                    scopeBits.push('All routes');
+                }
+                const expStr = it.expiresAt
+                    ? (expired ? 'Expired' : `Expires ${Admin.formatDate ? Admin.formatDate(it.expiresAt) : new Date(it.expiresAt).toLocaleString()}`)
+                    : 'No expiry';
+                const msg = esc(String(it.message || 'MAINTENANCE IN PROGRESS'));
+                const idSafe = esc(String(it.id));
+                return `<div class="flex flex-col gap-1.5 p-2.5 rounded-lg border ${inactive ? 'border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 opacity-70' : 'border-orange-200 dark:border-orange-800/60 bg-white/80 dark:bg-gray-900/40'}">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="text-[11px] font-bold text-orange-950 dark:text-orange-100 leading-snug break-words">${msg}</p>
+                        <span class="text-[8px] font-black uppercase tracking-wider shrink-0 ${inactive ? 'text-gray-400' : 'text-orange-600 dark:text-orange-400'}">${inactive ? (expired ? 'Expired' : (!_maintRootActive ? 'Paused' : 'Off')) : 'Live'}</span>
+                    </div>
+                    <p class="text-[9px] text-orange-700/80 dark:text-orange-300/80">${escapeHTML(scopeBits.join(' · '))} · ${escapeHTML(expStr)}</p>
+                    <div class="flex gap-1.5 pt-1">
+                        <button type="button" data-maint-edit="${idSafe}" class="flex-1 text-[9px] font-bold py-1.5 rounded-md bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 text-orange-800 dark:text-orange-200 focus:outline-none">Edit</button>
+                        <button type="button" data-maint-extend="${idSafe}" class="flex-1 text-[9px] font-bold py-1.5 rounded-md bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 text-orange-800 dark:text-orange-200 focus:outline-none ${it.expiresAt ? '' : 'opacity-40 cursor-not-allowed'}" ${it.expiresAt ? '' : 'disabled'}>+24h</button>
+                        <button type="button" data-maint-toggle="${idSafe}" class="flex-1 text-[9px] font-bold py-1.5 rounded-md bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 text-orange-800 dark:text-orange-200 focus:outline-none">${it.active === false ? 'Enable' : 'Disable'}</button>
+                        <button type="button" data-maint-del="${idSafe}" class="flex-1 text-[9px] font-bold py-1.5 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 focus:outline-none">Delete</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            maintActiveList.querySelectorAll('[data-maint-edit]').forEach((btn) => {
+                btn.onclick = () => loadMaintItemIntoComposer(btn.getAttribute('data-maint-edit'));
+            });
+            maintActiveList.querySelectorAll('[data-maint-extend]').forEach((btn) => {
+                btn.onclick = () => extendMaintItem(btn.getAttribute('data-maint-extend'));
+            });
+            maintActiveList.querySelectorAll('[data-maint-toggle]').forEach((btn) => {
+                btn.onclick = () => toggleMaintItemActive(btn.getAttribute('data-maint-toggle'));
+            });
+            maintActiveList.querySelectorAll('[data-maint-del]').forEach((btn) => {
+                btn.onclick = () => deleteMaintItem(btn.getAttribute('data-maint-del'));
+            });
+        };
+
+        const loadMaintItemIntoComposer = (id) => {
+            const it = _maintItems[id];
+            if (!it) return;
+            if (maintEditId) maintEditId.value = id;
+            if (maintMsg) maintMsg.value = it.message || '';
+            if (maintExpires) maintExpires.value = it.expiresAt ? toLocalDatetimeValue(it.expiresAt) : '';
+            const regions = Array.isArray(it.regions) ? it.regions : [];
+            maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
+                cb.checked = regions.includes(cb.value);
+            });
+            _maintSelectedRoutes = new Set((it.routes || []).map(String));
+            renderMaintRouteChecks();
+            if (maintAddBtn) maintAddBtn.textContent = 'Update banner';
+            maintCancelEdit?.classList.remove('hidden');
+            maintModeBody?.classList.remove('hidden');
+            maintModeChevron?.classList.remove('-rotate-90');
         };
 
         const renderMaintRouteChecks = () => {
@@ -11652,7 +12164,6 @@ const Admin = {
 
         maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
             cb.onchange = () => {
-                // Drop routes that no longer belong to selected regions
                 const regions = getMaintSelectedRegions();
                 if (regions.length) {
                     const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
@@ -11669,7 +12180,19 @@ const Admin = {
                 renderMaintRouteChecks();
             };
         }
+        if (maintExpires && !maintExpires.value) maintExpires.value = defaultMaintExpiryValue();
         renderMaintRouteChecks();
+
+        if (maintModeHeader && maintModeBody) {
+            maintModeHeader.onclick = () => {
+                maintModeBody.classList.toggle('hidden');
+                if (maintModeBody.classList.contains('hidden')) maintModeChevron?.classList.add('-rotate-90');
+                else maintModeChevron?.classList.remove('-rotate-90');
+            };
+        }
+        if (maintCancelEdit) {
+            maintCancelEdit.onclick = () => resetMaintComposer();
+        }
 
         const nukeHeader = document.getElementById('nuke-header-btn');
         const nukeBody = document.getElementById('nuke-body');
@@ -11766,25 +12289,60 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
-                // Fetch Maintenance Payload
+                // Fetch Maintenance Payload (multi-item + legacy flat)
                 const resMaint = await fetch(`${dynamicEndpoint}config/maintenance.json`);
                 const maintData = await resMaint.json();
-                if (maintData !== null && typeof maintData === 'object') {
-                    toggle.checked = !!maintData.active;
-                    if (maintMsg) maintMsg.value = maintData.message || "";
-                    const regions = Array.isArray(maintData.regions) ? maintData.regions : [];
-                    const routes = Array.isArray(maintData.routes) ? maintData.routes : [];
-                    maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
-                        cb.checked = regions.includes(cb.value);
-                    });
-                    _maintSelectedRoutes = new Set(routes.map(String));
-                    renderMaintRouteChecks();
+                _maintItems = {};
+                if (maintData === true) {
+                    _maintRootActive = true;
+                    if (toggle) toggle.checked = true;
+                    const id = `m_${Date.now().toString(36)}`;
+                    _maintItems[id] = {
+                        id, active: true, message: 'MAINTENANCE IN PROGRESS',
+                        regions: [], routes: [], expiresAt: null, createdAt: Date.now(), updatedAt: Date.now(),
+                    };
+                } else if (maintData !== null && typeof maintData === 'object') {
+                    _maintRootActive = maintData.active !== false;
+                    if (toggle) toggle.checked = _maintRootActive;
+                    if (maintData.items && typeof maintData.items === 'object') {
+                        Object.keys(maintData.items).forEach((key) => {
+                            const it = maintData.items[key] || {};
+                            _maintItems[String(it.id || key)] = {
+                                id: String(it.id || key),
+                                active: it.active !== false,
+                                message: it.message || '',
+                                regions: Array.isArray(it.regions) ? it.regions : [],
+                                routes: Array.isArray(it.routes) ? it.routes.map(String) : [],
+                                expiresAt: it.expiresAt || null,
+                                createdAt: it.createdAt || null,
+                                updatedAt: it.updatedAt || null,
+                                updatedBy: it.updatedBy || null,
+                            };
+                        });
+                    } else if (maintData.active || maintData.message) {
+                        // Migrate flat legacy into items map (in-memory; persisted on next save)
+                        const id = '_legacy';
+                        _maintItems[id] = {
+                            id,
+                            active: !!maintData.active,
+                            message: maintData.message || 'MAINTENANCE IN PROGRESS',
+                            regions: Array.isArray(maintData.regions) ? maintData.regions : [],
+                            routes: Array.isArray(maintData.routes) ? maintData.routes.map(String) : [],
+                            expiresAt: maintData.expiresAt || null,
+                            createdAt: maintData.createdAt || Date.now(),
+                            updatedAt: maintData.updatedAt || Date.now(),
+                            updatedBy: maintData.updatedBy || null,
+                        };
+                    }
                 } else {
-                    toggle.checked = !!maintData; // Legacy boolean fallback
-                    if (maintMsg) maintMsg.value = "";
-                    _maintSelectedRoutes = new Set();
-                    maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => { cb.checked = false; });
-                    renderMaintRouteChecks();
+                    _maintRootActive = !!maintData;
+                    if (toggle) toggle.checked = _maintRootActive;
+                }
+                resetMaintComposer();
+                renderMaintActiveList();
+                if (countLiveMaint() > 0) {
+                    maintModeBody?.classList.remove('hidden');
+                    maintModeChevron?.classList.remove('-rotate-90');
                 }
 
                 try {
@@ -11889,47 +12447,145 @@ const Admin = {
             };
         }
 
-        const saveMaintenanceConfig = async (activeOverride, successMsg) => {
+        const saveMaintenanceConfig = async (rootActiveOverride, successMsg) => {
             const secret = await Admin.getAuthKey();
             if (!secret) {
                 if (typeof showToast === 'function') showToast('Authentication required.', 'error');
                 return false;
             }
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const payload = collectMaintPayload(activeOverride);
+            if (typeof rootActiveOverride === 'boolean') _maintRootActive = rootActiveOverride;
+            const payload = buildMaintFirebasePayload(_maintRootActive);
             const res = await window.guardianFetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`, {
                 method: 'PUT',
                 body: JSON.stringify(payload),
             }, 10000);
             if (!res.ok) throw new Error('Auth failed');
-            const scopeBits = [];
-            if (payload.regions?.length) scopeBits.push(payload.regions.join('+'));
-            if (payload.routes?.length) scopeBits.push(`${payload.routes.length} route(s)`);
-            const scopeNote = scopeBits.length ? ` · ${scopeBits.join(' · ')}` : ' · global';
-            if (typeof showToast === 'function') showToast((successMsg || 'Maintenance saved') + scopeNote, 'success');
+            const live = countLiveMaint();
+            if (typeof showToast === 'function') {
+                showToast(successMsg || `Maintenance saved · ${live} live`, 'success');
+            }
+            renderMaintActiveList();
+            if (typeof window.checkMaintenanceStatus === 'function') {
+                try { window.checkMaintenanceStatus(); } catch { /* ignore */ }
+            }
+            if (typeof Admin.fetchActionRequired === 'function') {
+                try { Admin.fetchActionRequired(); } catch { /* ignore */ }
+            }
             return true;
+        };
+
+        const collectComposerItem = () => {
+            const message = (maintMsg?.value || '').trim();
+            if (!message) {
+                if (typeof showToast === 'function') showToast('Enter a banner message.', 'error');
+                return null;
+            }
+            const regions = getMaintSelectedRegions();
+            const routes = Array.from(_maintSelectedRoutes);
+            let expiresAt = null;
+            if (maintExpires?.value) {
+                const t = new Date(maintExpires.value).getTime();
+                if (!Number.isFinite(t)) {
+                    if (typeof showToast === 'function') showToast('Invalid expiry date.', 'error');
+                    return null;
+                }
+                expiresAt = t;
+            }
+            const editId = (maintEditId?.value || '').trim();
+            const id = editId || `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+            const prev = _maintItems[id] || {};
+            return {
+                id,
+                active: prev.active !== false,
+                message,
+                regions,
+                routes,
+                expiresAt,
+                createdAt: prev.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                updatedBy: Admin.currentUser?.email || 'Admin',
+            };
+        };
+
+        const extendMaintItem = async (id) => {
+            const it = _maintItems[id];
+            if (!it || !it.expiresAt) return;
+            it.expiresAt = Number(it.expiresAt) + 86400000;
+            it.updatedAt = Date.now();
+            try {
+                await saveMaintenanceConfig(undefined, 'Maintenance extended +24h');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Failed to extend.', 'error');
+            }
+        };
+
+        const toggleMaintItemActive = async (id) => {
+            const it = _maintItems[id];
+            if (!it) return;
+            it.active = it.active === false;
+            it.updatedAt = Date.now();
+            try {
+                await saveMaintenanceConfig(undefined, it.active ? 'Banner enabled' : 'Banner disabled');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Failed to update banner.', 'error');
+            }
+        };
+
+        const deleteMaintItem = async (id) => {
+            const confirmed = await Admin.secureConfirm('Delete banner', 'Remove this maintenance banner?');
+            if (!confirmed) return;
+            delete _maintItems[id];
+            if (maintEditId?.value === id) resetMaintComposer();
+            try {
+                await saveMaintenanceConfig(undefined, 'Banner deleted');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Failed to delete banner.', 'error');
+            }
         };
 
         if (toggle) {
             toggle.addEventListener('change', async () => {
                 try {
-                    await saveMaintenanceConfig(toggle.checked, `Maintenance: ${toggle.checked ? 'ENABLED' : 'DISABLED'}`);
+                    await saveMaintenanceConfig(toggle.checked, `Maintenance master: ${toggle.checked ? 'ON' : 'PAUSED'}`);
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to update status.', 'error');
                     toggle.checked = !toggle.checked;
+                    _maintRootActive = toggle.checked;
                 }
             });
         }
 
-        if (maintScopeSave) {
-            maintScopeSave.onclick = async () => {
+        if (maintAddBtn) {
+            maintAddBtn.onclick = async () => {
+                const item = collectComposerItem();
+                if (!item) return;
+                _maintItems[item.id] = item;
+                if (!_maintRootActive && toggle) {
+                    toggle.checked = true;
+                    _maintRootActive = true;
+                }
                 try {
-                    await saveMaintenanceConfig(undefined, 'Maintenance message & scope saved');
+                    const editing = !!(maintEditId?.value);
+                    await saveMaintenanceConfig(undefined, editing ? 'Banner updated' : 'Banner added');
+                    resetMaintComposer();
                 } catch (e) {
-                    if (typeof showToast === 'function') showToast('Failed to save maintenance scope.', 'error');
+                    if (typeof showToast === 'function') showToast('Failed to save banner.', 'error');
                 }
             };
         }
+
+        // Expose for GSM resolve/extend
+        Admin._saveMaintenanceItems = saveMaintenanceConfig;
+        Admin._getMaintenanceItems = () => ({ ..._maintItems });
+        Admin._setMaintenanceItem = (id, item) => { if (item) _maintItems[id] = item; else delete _maintItems[id]; };
+        Admin._reloadMaintenanceUi = () => { renderMaintActiveList(); };
+        Admin.openMaintenanceAccordion = () => {
+            body?.classList.remove('hidden');
+            chevron?.classList.remove('-rotate-90');
+            maintModeBody?.classList.remove('hidden');
+            maintModeChevron?.classList.remove('-rotate-90');
+        };
 
         if (nukeFireBtn) {
             nukeFireBtn.onclick = async () => {

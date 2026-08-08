@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
 import {
-    showToast, triggerHaptic, openSmoothModal, closeSmoothModal
+    showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
@@ -1041,12 +1041,16 @@ export async function checkServiceAlerts() {
             if (severity === 'critical') bellBtn.classList.add('animate-shake');
             else bellBtn.classList.remove('animate-shake');
 
-            const welcomeModal = document.getElementById('welcome-modal');
-            const isWelcomeScreenActive = !routeId || (welcomeModal && !welcomeModal.classList.contains('hidden'));
-
-            if (forcePopup && !window._criticalModalShown && !isWelcomeScreenActive) {
+            // Auto-open only on the home board (stabilized + route selected +
+            // Next Train / Trip Planner). Bell still updates everywhere.
+            if (forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices()) {
                 window._criticalModalShown = true;
                 setTimeout(() => {
+                    // Re-check: user may have opened route modal / map / Community in the delay.
+                    if (!canAutoOpenHomeNotices()) {
+                        window._criticalModalShown = false;
+                        return;
+                    }
                     triggerHaptic();
                     trackAlertEvent('auto_open_alert', { severity, route_id: routeId || 'all' });
                     safeStorage.setItem(seenKey, 'true');
@@ -1235,6 +1239,11 @@ export function initHub() {
             frame.className = isMap
                 ? 'absolute inset-0 w-full h-full border-0 bg-gray-100 dark:bg-gray-900'
                 : 'relative flex-1 w-full border-0 bg-white dark:bg-gray-900 min-h-0';
+            // Paint iframe chrome before navigation — blank iframe defaults to white.
+            const isDark = document.documentElement.classList.contains('dark');
+            frame.style.backgroundColor = isMap
+                ? (isDark ? '#111827' : '#f3f4f6')
+                : (isDark ? '#111827' : '#ffffff');
         }
     };
 
@@ -1296,8 +1305,18 @@ export function initHub() {
                     return;
                 }
                 applySheetChrome(overlay, mode, nextTitle || title);
-                if (frame && nextUrl) frame.src = nextUrl;
                 showSheetOverlay(overlay);
+                if (frame && nextUrl) {
+                    const isDark = document.documentElement.classList.contains('dark');
+                    frame.style.backgroundColor = mode === 'map'
+                        ? (isDark ? '#111827' : '#f3f4f6')
+                        : (isDark ? '#111827' : '#ffffff');
+                    requestAnimationFrame(() => {
+                        if (document.getElementById('nt-inapp-sheet') === overlay && !overlay.classList.contains('hidden')) {
+                            frame.src = nextUrl;
+                        }
+                    });
+                }
             };
             document.getElementById('nt-inapp-sheet-close')?.addEventListener('click', closeSheet);
             window.addEventListener('popstate', () => {
@@ -1311,8 +1330,20 @@ export function initHub() {
         const mode = isMapSheetUrl(url) ? 'map' : 'guide';
         applySheetChrome(overlay, mode, title);
         const frame = document.getElementById('nt-inapp-sheet-frame');
-        if (frame) frame.src = url;
+        // Show themed chrome first, then navigate — avoids a white flash before map.html paints.
         showSheetOverlay(overlay);
+        if (frame) {
+            const isDark = document.documentElement.classList.contains('dark');
+            frame.style.backgroundColor = mode === 'map'
+                ? (isDark ? '#111827' : '#f3f4f6')
+                : (isDark ? '#111827' : '#ffffff');
+            // Defer src one frame so the overlay/iframe background is composited first.
+            requestAnimationFrame(() => {
+                if (document.getElementById('nt-inapp-sheet') === overlay && !overlay.classList.contains('hidden')) {
+                    frame.src = url;
+                }
+            });
+        }
         // Opening from sidenav uses closeAppHub(true), which leaves #sidenav on the stack.
         // Replace that entry so one Back returns to the real previous screen (not a blank stop).
         try {
@@ -1441,7 +1472,8 @@ export function initHub() {
         });
     }
 
-    // Prefetch holiday approvals, then show notice once the app is stable.
+    // Prefetch holiday approvals, then show notice only on the home board
+    // (stabilized + route selected + Next Train / Trip Planner).
     import('./holiday-approvals.js').then((m) => m.loadHolidayApprovals?.()).catch(() => {});
     setTimeout(() => {
         import('./holiday-notice.js')

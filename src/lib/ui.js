@@ -9,7 +9,7 @@
 import { safeStorage } from './utils.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
-import { markPendingReload } from './session-stability.js';
+import { markPendingReload, isReloadPending } from './session-stability.js';
 import {
     helpUrl,
     mailtoSupportUrl,
@@ -979,6 +979,52 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
     paint(community, mode === 'community');
 }
 
+/**
+ * Auto-open service alerts / public-holiday notices only on the home board:
+ * app stabilized, a route already selected, Next Train or Trip Planner tab,
+ * and no blocking overlay (welcome, route picker, map sheet, community, Dev Mode, …).
+ */
+export function canAutoOpenHomeNotices() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+    if (!window._appStabilized || isReloadPending()) return false;
+
+    const routeId = typeof $currentRouteId?.get === 'function' ? $currentRouteId.get() : null;
+    if (!routeId) return false;
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') return false;
+    const welcome = document.getElementById('welcome-modal');
+    if (welcome && !welcome.classList.contains('hidden')) return false;
+
+    const tab = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab !== 'next-train' && tab !== 'trip-planner') return false;
+
+    const hash = (location.hash || '').toLowerCase();
+    const homeHashes = new Set(['', '#home', '#planner', '#planner-results']);
+    if (hash && !homeHashes.has(hash)) return false;
+
+    const sheet = document.getElementById('nt-inapp-sheet');
+    if (sheet && !sheet.classList.contains('hidden') && sheet.classList.contains('flex')) return false;
+
+    // Sidenav / any modal already owns the screen — don't stack auto-popups.
+    if (document.body.classList.contains('sidenav-open')) return false;
+    if (document.body.classList.contains('modal-active')) return false;
+
+    return true;
+}
+
+/** Debounced nudge so deferred auto-notices fire once the user lands on a home tab. */
+let _homeNoticeNudgeTimer = 0;
+export function nudgeHomeAutoNotices() {
+    if (typeof window === 'undefined') return;
+    if (_homeNoticeNudgeTimer) clearTimeout(_homeNoticeNudgeTimer);
+    _homeNoticeNudgeTimer = setTimeout(() => {
+        _homeNoticeNudgeTimer = 0;
+        if (!canAutoOpenHomeNotices()) return;
+        try { window.checkServiceAlerts?.(); } catch { /* ignore */ }
+        try { window.maybeShowHolidayNotice?.(); } catch { /* ignore */ }
+    }, 450);
+}
+
 export function switchTab(tab) {
     if (typeof document === 'undefined') return;
 
@@ -1026,6 +1072,11 @@ export function switchTab(tab) {
         import('./community.js').then((m) => m.openRouteCommunity?.()).catch(() => {});
     } else if (prev === 'community') {
         import('./community.js').then((m) => m.leaveCommunityRoom?.()).catch(() => {});
+    }
+
+    // Alerts / holiday notices deferred while off home tabs should fire on return.
+    if (tab === 'next-train' || tab === 'trip-planner') {
+        nudgeHomeAutoNotices();
     }
 }
 

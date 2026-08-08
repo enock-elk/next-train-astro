@@ -20,10 +20,22 @@ const regionSeoSlugs = Object.fromEntries(
   htmlClass="h-full"
 >
   <link slot="head" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- Paint map shell before CSS/JS — prevents white flash in the sidenav iframe. -->
+  <script slot="head" is:inline>
+    (function () {
+      try {
+        var dark = document.documentElement.classList.contains('dark');
+        var bg = dark ? '#111827' : '#f3f4f6';
+        document.documentElement.style.backgroundColor = bg;
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    })();
+  </script>
   <style slot="head" is:global>
-      body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; }
-      .dark body, .dark html { background-color: #111827; }
-      #map { height: 100vh; width: 100%; z-index: 1; position: absolute; top: 0; left: 0; }
+      html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; }
+      html.dark, html.dark body { background-color: #111827; }
+      #map { height: 100vh; width: 100%; z-index: 1; position: absolute; top: 0; left: 0; background-color: #f3f4f6; }
+      html.dark #map { background-color: #111827; }
       #map-top-controls {
         position: fixed; top: 12px; right: 12px; z-index: 1001;
         display: flex; align-items: flex-start; gap: 0.375rem;
@@ -132,7 +144,7 @@ const regionSeoSlugs = Object.fromEntries(
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         z-index: 50; transition: opacity 0.5s ease;
       }
-      .dark #map-placeholder { background-color: #111827; }
+      html.dark #map-placeholder { background-color: #111827; }
       .gps-pulse {
         width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
         box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); animation: pulse 2s infinite; border: 3px solid white;

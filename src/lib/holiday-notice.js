@@ -1,7 +1,8 @@
 /**
  * Upcoming public-holiday notice — week preview once, plus a day-before reminder.
  * Stacks holidays using planner-style info cards.
- * Only shown after the app has stabilized (schedules up, no pending reload).
+ * Only auto-shown on the home board after stabilize + route selected
+ * (Next Train / Trip Planner — never Community, map sheet, welcome, etc.).
  *
  * Back-compat: existing seen_holiday_* keys still suppress re-shows for users who
  * already dismissed a notice (e.g. Women's Day week/eve). Approval gating is
@@ -10,9 +11,9 @@
  */
 import { SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, scheduleDayTypeLabel } from './utils.js';
-import { openSmoothModal, closeSmoothModal } from './ui.js';
+import { openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices } from './ui.js';
 import { isReloadPending } from './session-stability.js';
-import { $userRegion } from '../store.js';
+import { $userRegion, $currentRouteId } from '../store.js';
 import {
     loadHolidayApprovals,
     canShowHolidayNotice,
@@ -140,17 +141,33 @@ export function maybeShowHolidayNotice() {
             else holidayStabilityWaitStartedAt = 0;
             return false;
         }
+        holidayStabilityWaitStartedAt = 0;
 
-        // Don't fight other overlays during settle (same wait clock as boot)
-        if (document.body.classList.contains('modal-active')) {
-            if (!waitedTooLong) setTimeout(() => maybeShowHolidayNotice(), 800);
-            else holidayStabilityWaitStartedAt = 0;
+        // New users / mid-flow: wait until a route is selected and the home board
+        // (Next Train or Trip Planner) is showing. Soft-poll; tab/route nudges also re-fire.
+        const routeId = typeof $currentRouteId?.get === 'function' ? $currentRouteId.get() : null;
+        if (!routeId || !canAutoOpenHomeNotices()) {
+            if (!window.__ntHolidayHomeWait) {
+                window.__ntHolidayHomeWait = setTimeout(() => {
+                    window.__ntHolidayHomeWait = 0;
+                    maybeShowHolidayNotice();
+                }, 2000);
+            }
             return false;
         }
-        holidayStabilityWaitStartedAt = 0;
+        if (window.__ntHolidayHomeWait) {
+            clearTimeout(window.__ntHolidayHomeWait);
+            window.__ntHolidayHomeWait = 0;
+        }
 
         // Load approvals when enforcement is live; before 11 Aug this is a no-op cache.
         loadHolidayApprovals().then(() => {
+            // Surface may have changed while approvals loaded.
+            if (!canAutoOpenHomeNotices()) {
+                setTimeout(() => maybeShowHolidayNotice(), 800);
+                return;
+            }
+
             const holidays = getUpcomingUnseenHolidays();
             if (!holidays.length) return;
 

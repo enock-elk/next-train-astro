@@ -20,7 +20,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm 
 } from './utils.js';
-import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
@@ -1084,13 +1084,16 @@ export async function loadAllSchedules(force = false) {
             if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
             const baseType = window.__ntPreOverrideDayType || window.currentDayType || currentDayType;
             maybePromptScheduleOverride(baseType).catch(() => { /* ignore */ });
+            // Home-board auto notices (alerts / holidays) wait for stabilize + route.
+            nudgeHomeAutoNotices();
         }
     }
 }
 
 /**
  * SPA deeplink boot parity: loadAllSchedules no-ops without a route.
- * Pin default/first active route in `region` (and soft-swap region when needed).
+ * Prefer the user-pinned default; otherwise browse the first active route
+ * without writing it as a pin.
  */
 export function ensureRoutePinnedForRegion(region) {
     const target = ['GP', 'WC', 'KZN', 'EC'].includes(region) ? region : ($userRegion.get() || 'GP');
@@ -1129,13 +1132,11 @@ export function ensureRoutePinnedForRegion(region) {
     if (savedDefault && ROUTES[savedDefault]?.region === target && ROUTES[savedDefault]?.isActive) {
         routeId = savedDefault;
     } else {
+        // Browse-only fallback for deeplink / schedule boot — never auto-pin.
         const first = Object.values(ROUTES).find(
             (r) => r.region === target && r.isActive && r.id !== 'special_event'
         );
         routeId = first?.id || null;
-        if (routeId) {
-            try { safeStorage.setItem('defaultRoute_' + target, routeId); } catch { /* ignore */ }
-        }
     }
 
     if (routeId) $currentRouteId.set(routeId);
@@ -1215,21 +1216,36 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         return;
     }
 
+    // Restore only a route the user previously pinned for this region.
+    // Never invent first-in-list as current/pinned — leave that to the route modal.
     let savedDefault = null;
     try { savedDefault = safeStorage.getItem('defaultRoute_' + newRegion); } catch (e) {}
 
     let nextRouteId = null;
-    if (savedDefault && ROUTES[savedDefault] && ROUTES[savedDefault].region === newRegion) {
+    if (
+        savedDefault &&
+        ROUTES[savedDefault] &&
+        ROUTES[savedDefault].region === newRegion &&
+        ROUTES[savedDefault].isActive
+    ) {
         nextRouteId = savedDefault;
-    } else {
-        const regionRoutes = Object.values(ROUTES).filter(r => r.region === newRegion && r.isActive && r.id !== 'special_event');
-        if (regionRoutes.length > 0) nextRouteId = regionRoutes[0].id;
     }
 
+    const openRoutePickerAfterSwap = () => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        setTimeout(() => {
+            if (window.Renderer?.renderRouteMenu) {
+                window.Renderer.renderRouteMenu(
+                    'route-list',
+                    getRoutesForCurrentRegion(),
+                    $currentRouteId.get()
+                );
+            }
+            openSmoothModal('route-modal');
+        }, 280);
+    };
+
     if (nextRouteId) {
-        if (!savedDefault || ROUTES[savedDefault]?.region !== newRegion) {
-            try { safeStorage.setItem('defaultRoute_' + newRegion, nextRouteId); } catch (e) {}
-        }
         $currentRouteId.set(nextRouteId);
         if (typeof window !== 'undefined' && typeof window.updatePinUI === 'function') window.updatePinUI();
         if (typeof window !== 'undefined' && typeof window.updateNextTrainView === 'function') {
@@ -1276,6 +1292,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             }
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';
+            openRoutePickerAfterSwap();
         }).catch(() => {
             hideRegionSwapLoader();
             // Still unlock the board with correct region headers if download fails.
@@ -1284,10 +1301,14 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             }
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';
+            openRoutePickerAfterSwap();
         });
-    } else if (typeof window !== 'undefined' && typeof window.showWelcomeScreen === 'function') {
+    } else {
         hideRegionSwapLoader();
-        window.showWelcomeScreen();
+        if (typeof window !== 'undefined' && typeof window.updatePinUI === 'function') window.updatePinUI();
+        const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
+        if (mainContent) mainContent.style.display = '';
+        openRoutePickerAfterSwap();
     }
 }
 

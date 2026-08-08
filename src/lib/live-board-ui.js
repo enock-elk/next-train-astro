@@ -650,14 +650,13 @@ export function initLiveBoardUi() {
         if (!routeId) return;
         updatePinUI();
         updateNextTrainView();
-        // Reload route-specific schedules when route changes after initial boot
-        if ($fullDatabase.get()) {
-            loadAllSchedules(true).then(() => {
-                populateStationList();
-                findNextTrains();
-                updateNextTrainView();
-            });
-        }
+        // Always reload on route change — region swaps clear fullDatabase, so a
+        // "only if cache exists" guard left the board empty after picking a route.
+        loadAllSchedules(true).then(() => {
+            populateStationList();
+            findNextTrains();
+            updateNextTrainView();
+        });
     });
 
     const timetableBtn = document.getElementById('view-full-timetable-btn');
@@ -800,6 +799,8 @@ export function initLiveBoardUi() {
         // action owned by #pin-route-btn (and the first-run welcome choice).
         $currentRouteId.set(id);
         closeSmoothModal('route-modal');
+        // Deferred alert / holiday auto-open after new-user or region route pick.
+        import('./ui.js').then((m) => m.nudgeHomeAutoNotices?.()).catch(() => {});
     });
 
     document.querySelectorAll('#route-modal-region-list [data-region-target]').forEach((li) => {

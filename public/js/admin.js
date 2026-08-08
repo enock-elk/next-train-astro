@@ -2033,8 +2033,22 @@ const Admin = {
     renderAdminModules: () => {
         // GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
         if (Admin._modulesRendered) {
-            Admin.initGridView(); // Ensure grid is bound if re-opened
+            // Rebuild any empty/broken shells left by a prior failed setup (grid otherwise shows blank cards)
+            try {
+                const alertPanel = document.getElementById('alert-panel');
+                const alertBroken = alertPanel && (
+                    !(alertPanel.innerHTML || '').trim()
+                    || !(alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim()
+                );
+                if (alertBroken) {
+                    delete alertPanel.dataset.adminLoaded;
+                    alertPanel.dataset.adminShell = 'empty';
+                    alertPanel.classList.add('hidden');
+                    Admin.setupServiceAlertsManager();
+                }
+            } catch (e) { console.error('[Admin] alert rebuild failed:', e); }
             Admin.ensureGlobalStateMonitorTile();
+            Admin.initGridView(); // Ensure grid is bound if re-opened
             Admin.fetchActionRequired();
             return;
         }
@@ -7386,12 +7400,7 @@ const Admin = {
             // #endregion
             return;
         }
-        // Empty HubModals shell or failed prior load — (re)build tile chrome
-        alertPanel.dataset.adminLoaded = "true";
-        delete alertPanel.dataset.adminShell;
-        alertPanel.removeAttribute('aria-hidden');
-        alertPanel.classList.remove('hidden');
-
+        // Rebuild tile chrome — mark loaded only after HTML lands (prevents permanent blank grid card)
         alertPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
 
         alertPanel.innerHTML = `
@@ -7698,8 +7707,14 @@ const Admin = {
                 </div>
             </div>
         `;
+        // Only expose tile once chrome exists
+        delete alertPanel.dataset.adminShell;
+        alertPanel.removeAttribute('aria-hidden');
+        alertPanel.classList.remove('hidden');
+        alertPanel.dataset.adminLoaded = "true";
+
         // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager:afterHtml',message:'alert panel html applied',data:{htmlLen:(alertPanel.innerHTML||'').length,hasHeader:!!document.getElementById('alert-header-btn'),headerText:(document.getElementById('alert-header-btn')?.textContent||'').trim().slice(0,50)},timestamp:Date.now()})}).catch(()=>{});
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager:afterHtml',message:'alert panel html applied',data:{htmlLen:(alertPanel.innerHTML||'').length,hasHeader:!!document.getElementById('alert-header-btn'),headerText:(document.getElementById('alert-header-btn')?.textContent||'').trim().slice(0,50)},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
 
         // --- Logic Wiring ---

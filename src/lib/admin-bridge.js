@@ -119,7 +119,8 @@ function loadClassicAdminScript() {
             return;
         }
         const script = document.createElement('script');
-        script.src = withBase('/js/admin.js');
+        // Cache-bust so Dev Mode picks up admin.js fixes (SW/HTTP cache otherwise sticks)
+        script.src = `${withBase('/js/admin.js')}?v=${encodeURIComponent(APP_VERSION)}`;
         script.async = true;
         script.dataset.adminClassic = '1';
         script.onload = () => resolve(window.Admin);

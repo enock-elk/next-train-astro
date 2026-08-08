@@ -94,15 +94,30 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
     if (window._adminDrillBackLock && modalId === 'dev-modal') return;
 
+    // Drilled Dev Mode: never close the whole modal — step back to the grid first
+    if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
+        if (typeof window.Admin.exitDrillToGrid === 'function') {
+            window.Admin.exitDrillToGrid({ fromPopState });
+            return;
+        }
+    }
+
     const hash = hashForModal(modalId);
     // Prefer popping history so Back stack stays consistent (popstate closes with fromPopState)
+    // Dev Mode: skip history.back() when hash is #dev-* (panel) — that overshot to home
     if (!fromPopState) {
         const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
-        if (shouldPopLegal || (hash && location.hash === hash)) {
+        const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
+        if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
             try {
                 history.back();
                 return;
             } catch { /* fall through */ }
+        }
+        // Close Dev Mode visually + normalize hash (no history.back race)
+        if (isDevHash) {
+            fromPopState = true;
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch { /* ignore */ }
         }
     }
 
@@ -278,8 +293,7 @@ export function bindHistoryBackNavigation() {
         }
 
         // Close the top overlay first (e.g. archived alert preview over Dev Mode).
-        // Must run before admin drill-back — otherwise history.back() from notice/disruption
-        // incorrectly exits the drilled Service Alerts panel to the Dev Mode grid.
+        // Never close Dev Mode while a panel is drilled in — that was jumping users to home.
         const openModals = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)'));
         if (openModals.length > 0) {
             let highestZ = -1;
@@ -304,17 +318,23 @@ export function bindHistoryBackNavigation() {
                 closeSmoothModal(modalToClose, true);
                 return;
             }
-            // Only close Dev Mode itself when it is the sole open modal
-            if (modalToClose === 'dev-modal' && openModals.length === 1) {
-                closeSmoothModal('dev-modal', true);
-                return;
-            }
         }
 
+        // Drilled admin panel: Back/← returns to the Dev grid only (not home)
         if (window.Admin && window.Admin.isGridMode === false) {
-            const drillBackBtn = document.getElementById('drill-back-btn');
-            if (drillBackBtn) {
-                drillBackBtn.click();
+            if (typeof window.Admin.exitDrillToGrid === 'function') {
+                window.Admin.exitDrillToGrid({ fromPopState: true });
+            }
+            return;
+        }
+
+        // Grid Dev Mode: now safe to close the whole modal
+        if (openModals.length > 0) {
+            const onlyDev = openModals.length === 1 && openModals[0].id === 'dev-modal';
+            const topIsDev = openModals.some((m) => m.id === 'dev-modal')
+                && !openModals.some((m) => m.id !== 'dev-modal');
+            if (onlyDev || topIsDev) {
+                closeSmoothModal('dev-modal', true);
                 return;
             }
         }

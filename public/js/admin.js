@@ -555,6 +555,89 @@ const Admin = {
     gridCols: 3,
     _modulesRendered: false,
 
+    /**
+     * Leave a drilled admin panel and restore the Dev Mode grid.
+     * Uses replaceState(#dev) — never history.back() — so popstate cannot close Dev Mode / jump home.
+     */
+    exitDrillToGrid: (opts = {}) => {
+        const fromPopState = !!opts.fromPopState;
+        if (window._adminLightboxOpen && typeof Admin.closeLightbox === 'function') {
+            Admin.closeLightbox();
+            return true;
+        }
+        if (Admin.isGridMode) return false;
+
+        const container = document.getElementById('admin-modules-container');
+        const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6')
+            || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3')
+            || document.querySelector('#dev-panel-temp .border-b.border-gray-200.pb-4.mb-6')
+            || document.querySelector('#dev-panel-temp .border-b.border-gray-200.pb-2.mb-3');
+        const titleH3 = devHeaderRow?.querySelector('h3');
+        const toggleBtn = document.getElementById('grid-view-toggle');
+        const signoutContainer = document.getElementById('admin-signout-container');
+
+        window._adminDrillBackLock = true;
+        Admin.isGridMode = true;
+
+        if (container) {
+            container.classList.add('admin-grid-view');
+            container.style.gridTemplateColumns = `repeat(${Admin.gridCols || 3}, minmax(0, 1fr))`;
+            Array.from(container.children).forEach((child) => {
+                child.style.display = '';
+                if (child.dataset.originalClasses) {
+                    child.className = child.dataset.originalClasses;
+                }
+                const b = child.querySelector('[id$="-body"]');
+                if (b) b.classList.add('hidden');
+                const h = child.querySelector('[id$="-header-btn"]');
+                if (h) h.style.removeProperty('display');
+            });
+        }
+
+        if (titleH3 && devHeaderRow?.dataset.originalHtml) {
+            titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
+        }
+        if (devHeaderRow) {
+            devHeaderRow.classList.add('pb-4', 'mb-6');
+            devHeaderRow.classList.remove('pb-2', 'mb-3');
+        }
+        if (toggleBtn) toggleBtn.style.display = '';
+        if (signoutContainer) signoutContainer.style.display = '';
+
+        if (window._actionRequiredWasOpen) {
+            const actionBody = document.getElementById('action-body');
+            const actionChevron = document.getElementById('action-chevron');
+            if (actionBody) actionBody.classList.remove('hidden');
+            if (actionChevron) actionChevron.classList.remove('-rotate-90');
+            window._actionRequiredWasOpen = false;
+        }
+
+        // Keep Dev Mode on #dev without popping history (avoids closing the modal / home jump)
+        const hashNow = location.hash || '';
+        if (!(fromPopState && hashNow === '#dev')) {
+            try { history.replaceState({ modal: 'dev' }, '', '#dev'); } catch (_) {}
+        }
+
+        if (typeof Admin.syncAllBadges === 'function') Admin.syncAllBadges();
+        if (typeof Admin.syncGridToggleIcon === 'function') Admin.syncGridToggleIcon(toggleBtn);
+
+        setTimeout(() => { window._adminDrillBackLock = false; }, 200);
+        return true;
+    },
+
+    /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
+    closeDevModal: () => {
+        if (!Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
+            Admin.exitDrillToGrid();
+            return;
+        }
+        window._adminDrillBackLock = true;
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
+        else document.getElementById('dev-modal')?.classList.add('hidden');
+        try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
+        setTimeout(() => { window._adminDrillBackLock = false; }, 200);
+    },
+
     /** Compact unread count for tile badges (number only). */
     formatBadgeCount: (n) => {
         const c = Number(n) || 0;
@@ -2075,9 +2158,6 @@ const Admin = {
             try { fn(); }
             catch (err) {
                 console.error(`[Admin] ${label} failed:`, err);
-                // #region agent log
-                fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:runAdminSetup',message:'admin panel setup threw',data:{label,err:String(err&&err.message||err),stack:String(err&&err.stack||'').slice(0,400)},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
             }
         };
         runAdminSetup('telemetry', () => Admin.setupTelemetry());
@@ -2102,31 +2182,6 @@ const Admin = {
 
         // GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
-
-        // #region agent log
-        try {
-            const container = document.getElementById('admin-modules-container');
-            const kids = container ? Array.from(container.children).map((el, i) => {
-                const cs = getComputedStyle(el);
-                return {
-                    i,
-                    id: el.id || '(no-id)',
-                    cls: (el.className || '').toString().slice(0, 80),
-                    loaded: el.dataset?.adminLoaded || null,
-                    shell: el.dataset?.adminShell || null,
-                    display: cs.display,
-                    headerLen: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().length,
-                    headerText: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().slice(0, 40),
-                    childCount: el.children.length,
-                    htmlLen: (el.innerHTML || '').length,
-                    blankVisible: cs.display !== 'none' && !(el.querySelector('[id$="-header-btn"]')?.textContent || '').trim(),
-                };
-            }) : [];
-            const payload = {sessionId:'03887c',runId:'post-fix',hypothesisId:'H2-H5',location:'admin.js:renderAdminModules:postGrid',message:'admin grid tile snapshot',data:{count:kids.length,blankVisible:kids.filter(k=>k.blankVisible).map(k=>k.id),gsm:kids.find(k=>k.id==='action-required-panel')||null,alert:kids.find(k=>k.id==='alert-panel')||null,kids},timestamp:Date.now()};
-            try { const arr = JSON.parse(localStorage.getItem('debug_03887c')||'[]'); arr.push(payload); localStorage.setItem('debug_03887c', JSON.stringify(arr.slice(-40))); } catch (_) {}
-            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify(payload)}).catch(()=>{});
-        } catch (_) {}
-        // #endregion
         
         // Final Universal Sync
         Admin.syncAllBadges();
@@ -2164,7 +2219,6 @@ const Admin = {
         const adminContainer = document.getElementById('admin-modules-container');
         if (!adminContainer) return null;
         let actionBanner = document.getElementById('action-required-panel');
-        const created = !actionBanner;
         if (!actionBanner) {
             actionBanner = document.createElement('div');
             actionBanner.id = 'action-required-panel';
@@ -2192,9 +2246,6 @@ const Admin = {
         if (adminContainer.firstElementChild !== actionBanner) {
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H3',location:'admin.js:ensureGlobalStateMonitorTile',message:'GSM ensure',data:{created,hadHeader,htmlLen:(actionBanner.innerHTML||'').length,headerText:(actionBanner.querySelector('#action-header-btn')?.textContent||'').trim().slice(0,60),firstId:adminContainer.firstElementChild?.id||null,hidden:actionBanner.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return actionBanner;
     },
 
@@ -2739,36 +2790,7 @@ const Admin = {
                     if (newDrillBack) {
                         newDrillBack.onclick = (evt) => {
                             evt.stopPropagation();
-                            window._adminDrillBackLock = true;
-
-                            if (location.hash.startsWith('#dev-')) {
-                                const devModal = document.getElementById('dev-modal');
-                                if (devModal) devModal.id = 'dev-panel-temp';
-                                history.back();
-                                setTimeout(() => {
-                                    const tempModal = document.getElementById('dev-panel-temp');
-                                    if (tempModal) tempModal.id = 'dev-modal';
-                                    window._adminDrillBackLock = false;
-                                }, 150);
-                            }
-
-                            Admin.isGridMode = true;
-                            container.classList.add('admin-grid-view');
-                            container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
-                            titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
-                            devHeaderRow.classList.add('pb-4', 'mb-6'); // GUARDIAN UX: Restore padding
-                            devHeaderRow.classList.remove('pb-2', 'mb-3');
-                            const toggleBtn = document.getElementById('grid-view-toggle');
-                            if (toggleBtn) toggleBtn.style.display = '';
-                            const signoutContainer = document.getElementById('admin-signout-container');
-                            if (signoutContainer) signoutContainer.style.display = '';
-
-                            Array.from(container.children).forEach(child => {
-                                child.style.display = '';
-                                const b = child.querySelector('[id$="-body"]');
-                                if (b) b.classList.add('hidden');
-                            });
-                            Admin.syncAllBadges();
+                            Admin.exitDrillToGrid();
                         };
                     }
                 }
@@ -3502,29 +3524,13 @@ const Admin = {
                 }
             }
 
-            // GUARDIAN UX FIX: Drill-Down "X" Interceptor
-            // Drilled-in ? X acts as Back. Grid (or missing drill-back) ? always close.
-            // Previously X silently no-oped when !isGridMode but #drill-back-btn was gone,
-            // and history.back() on #dev sometimes left the modal open.
+            // Drill-Down "X": inside a panel → grid only; on grid → close Dev Mode (no history.back race)
             if (closeBtn) {
                 closeBtn.removeAttribute('onclick');
-                
                 closeBtn.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-
-                    const drillBack = document.getElementById('drill-back-btn');
-                    if (!Admin.isGridMode && drillBack) {
-                        drillBack.click();
-                        return;
-                    }
-
-                    if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
-                    else document.getElementById('dev-modal')?.classList.add('hidden');
-
-                    if (location.hash === '#dev' || location.hash.startsWith('#dev-')) {
-                        try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
-                    }
+                    Admin.closeDevModal();
                 };
             }
 
@@ -3599,67 +3605,10 @@ const Admin = {
                 
                 toggleBtn.style.display = 'none';
                 
-                // Bind the Drill Back Action
-                    document.getElementById('drill-back-btn').onclick = (evt) => {
-                        evt.stopPropagation();
-                        
-                        // GUARDIAN PHASE 1: Lightbox Router Trap
-                        if (window._adminLightboxOpen) {
-                            Admin.closeLightbox();
-                            return; // Halt cascade, stay in the panel
-                        }
-
-                        // GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
-                        // Temporarily rename the modal ID so ui.js's popstate listener doesn't see it
-                        // and close it during the asynchronous history.back() event.
-                        window._adminDrillBackLock = true;
-                    
-                    if (location.hash.startsWith('#dev-')) {
-                        const devModal = document.getElementById('dev-modal');
-                        if (devModal) devModal.id = 'dev-panel-temp';
-                        
-                        history.back(); // Pops the state cleanly
-                        
-                        setTimeout(() => { 
-                            const tempModal = document.getElementById('dev-panel-temp');
-                            if (tempModal) tempModal.id = 'dev-modal';
-                            window._adminDrillBackLock = false; 
-                        }, 150); // 150ms is plenty for popstate to fire and miss it
-                    }
-                    
-                    Admin.isGridMode = true;
-                        container.classList.add('admin-grid-view');
-                        container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
-                        titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
-                        toggleBtn.style.display = '';
-                        
-                        // GUARDIAN UX FIX: Restore Card Borders & Padding
-                        card.className = card.dataset.originalClasses;
-
-                        // GUARDIAN UX FIX: Restore Action Required accordion state if it was open
-                        if (window._actionRequiredWasOpen) {
-                            const actionBody = document.getElementById('action-body');
-                            const actionChevron = document.getElementById('action-chevron');
-                            if (actionBody) actionBody.classList.remove('hidden');
-                            if (actionChevron) actionChevron.classList.remove('-rotate-90');
-                            window._actionRequiredWasOpen = false; // Reset lock
-                        }
-                        
-                        // GUARDIAN UX FIX: Restore Sign Out container when returning to grid
-                        if (signoutContainer) signoutContainer.style.display = '';
-                        
-                        Array.from(container.children).forEach(child => {
-                            child.style.display = '';
-                            const b = child.querySelector('[id$="-body"]');
-                            if (b) b.classList.add('hidden');
-                            
-                            // GUARDIAN UX FIX: Restore internal accordion header
-                            const h = child.querySelector('[id$="-header-btn"]');
-                            if (h) h.style.removeProperty('display');
-                        });
-                    
-                    // GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
-                    Admin.syncAllBadges();
+                // Bind the Drill Back Action (replaceState — no history.back race)
+                document.getElementById('drill-back-btn').onclick = (evt) => {
+                    evt.stopPropagation();
+                    Admin.exitDrillToGrid();
                 };
                 
                 // Auto-Fetch data upon drill-down
@@ -3686,6 +3635,17 @@ const Admin = {
                 container.classList.add('admin-grid-view');
                 container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
             }
+        }
+
+        // Always (re)bind X — HubModals inline onclick can race with history.back()
+        const alwaysCloseBtn = document.querySelector('#dev-modal button[aria-label="Close Dev Modal"]');
+        if (alwaysCloseBtn) {
+            alwaysCloseBtn.removeAttribute('onclick');
+            alwaysCloseBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Admin.closeDevModal();
+            };
         }
     },
 
@@ -7395,9 +7355,6 @@ const Admin = {
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
         if (alertPanel.dataset.adminLoaded === "true" && !alertShellEmpty) {
-            // #region agent log
-            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager',message:'alert panel skipped already loaded',data:{htmlLen:(alertPanel.innerHTML||'').length,headerLen:alertHeaderLen},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             return;
         }
         // Rebuild tile chrome — mark loaded only after HTML lands (prevents permanent blank grid card)
@@ -7712,10 +7669,6 @@ const Admin = {
         alertPanel.removeAttribute('aria-hidden');
         alertPanel.classList.remove('hidden');
         alertPanel.dataset.adminLoaded = "true";
-
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager:afterHtml',message:'alert panel html applied',data:{htmlLen:(alertPanel.innerHTML||'').length,hasHeader:!!document.getElementById('alert-header-btn'),headerText:(document.getElementById('alert-header-btn')?.textContent||'').trim().slice(0,50)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');

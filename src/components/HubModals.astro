@@ -363,7 +363,7 @@ import { withBase } from '../lib/config.js';
             <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
                 <svg class="w-6 h-6 mr-2 text-slate-500 dark:text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg> Developer Mode
             </h3>
-            <button type="button" onclick="closeSmoothModal('dev-modal')" class="text-gray-400 hover:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none" aria-label="Close Dev Modal">
+            <button type="button" onclick="if(window.Admin&amp;&amp;typeof Admin.closeDevModal==='function')Admin.closeDevModal();else closeSmoothModal('dev-modal',true)" class="text-gray-400 hover:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none" aria-label="Close Dev Modal">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>

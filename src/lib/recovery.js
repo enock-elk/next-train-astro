@@ -11,8 +11,6 @@ import {
 
 export { SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY };
 
-/** Soft banner — wait so slow 3G boots aren't treated as failures. */
-const RECOVERY_BANNER_MS = 20_000;
 /** Auto lifeboat — only with dual signal (not stabilized + broken shell). */
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
 /** Soft “connection struggling” strip while still “online” but not stabilized. */
@@ -85,56 +83,6 @@ function ensureLoaderEscape() {
     overlay.appendChild(link);
 }
 
-function injectRecoveryBanner(reason) {
-    if (typeof document === 'undefined') return;
-    if (document.getElementById('nt-recovery-banner')) return;
-
-    const bar = document.createElement('div');
-    bar.id = 'nt-recovery-banner';
-    bar.setAttribute('role', 'status');
-    bar.style.cssText = [
-        'position:fixed',
-        'left:12px',
-        'right:12px',
-        'bottom:max(16px,env(safe-area-inset-bottom))',
-        'z-index:9998',
-        'background:#0f172a',
-        'color:#f1f5f9',
-        'border:1px solid rgba(148,163,184,0.35)',
-        'border-radius:14px',
-        'padding:12px 14px',
-        'box-shadow:0 12px 40px rgba(0,0,0,0.35)',
-        'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
-        'display:flex',
-        'flex-direction:column',
-        'gap:10px',
-        'max-width:420px',
-        'margin:0 auto',
-    ].join(';');
-
-    const online = typeof navigator !== 'undefined' && navigator.onLine;
-    const title = online
-        ? 'Still having trouble loading Next Train?'
-        : 'Connection looks weak — need a hand?';
-    const body = online
-        ? 'If the app looks blank or stuck after an update, open recovery help to reset the saved copy or contact us.'
-        : 'When signal returns, pull to refresh — or open recovery help for reset steps and contact options.';
-
-    bar.innerHTML = `
-        <div style="font-size:13px;font-weight:800;letter-spacing:0.01em">${title}</div>
-        <div style="font-size:12px;color:#94a3b8;line-height:1.4">${body}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a href="${helpUrl(reason)}" style="flex:1;min-width:8rem;text-align:center;background:#2563eb;color:#fff;font-weight:700;font-size:12px;padding:10px 12px;border-radius:10px;text-decoration:none">Open recovery help</a>
-            <button type="button" id="nt-recovery-dismiss" style="flex:0 0 auto;background:transparent;border:1px solid rgba(148,163,184,0.35);color:#e2e8f0;font-weight:700;font-size:12px;padding:10px 12px;border-radius:10px;cursor:pointer">Dismiss</button>
-        </div>
-    `;
-    document.body.appendChild(bar);
-    bar.querySelector('#nt-recovery-dismiss')?.addEventListener('click', () => {
-        bar.remove();
-        try { sessionStorage.setItem('nt_recovery_banner_dismissed', String(Date.now())); } catch { /* ignore */ }
-    });
-}
-
 function shellLooksBroken() {
     if (typeof document === 'undefined') return true;
     const main = document.getElementById('main-content');
@@ -167,12 +115,8 @@ export function initRecoveryWatchdog() {
 
     ensureLoaderEscape();
     setTimeout(ensureLoaderEscape, 500);
-
-    let dismissed = false;
-    try {
-        const t = Number(sessionStorage.getItem('nt_recovery_banner_dismissed') || 0);
-        if (t && Date.now() - t < 30 * 60 * 1000) dismissed = true;
-    } catch { /* ignore */ }
+    // Remove any leftover soft banner from older builds
+    try { document.getElementById('nt-recovery-banner')?.remove(); } catch { /* ignore */ }
 
     const tick = (ms, fn) => setTimeout(fn, ms);
 
@@ -183,20 +127,6 @@ export function initRecoveryWatchdog() {
         if (typeof window.engageConnectionStruggleUi === 'function') {
             window.engageConnectionStruggleUi('slow_boot');
         }
-    });
-
-    tick(RECOVERY_BANNER_MS, () => {
-        if (dismissed) return;
-        if (window._appStabilized) return;
-        const reason = (() => {
-            try {
-                if (sessionStorage.getItem('error_reloaded') === 'true') return 'crash';
-            } catch { /* ignore */ }
-            if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
-            if (typeof window !== 'undefined' && window.isLieFi) return 'server';
-            return 'boot';
-        })();
-        injectRecoveryBanner(reason);
     });
 
     tick(RECOVERY_AUTO_REDIRECT_MS, () => {

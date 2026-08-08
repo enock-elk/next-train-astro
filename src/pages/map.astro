@@ -49,6 +49,28 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .map-chrome-btn:hover { background: #f9fafb; }
       .dark .map-chrome-btn:hover { background: #374151; }
+      /* Back = same height as GP/theme chrome, inverted fill vs theme */
+      .map-back-btn {
+        pointer-events: auto;
+        height: 2.25rem;
+        min-height: 2.25rem;
+        padding: 0 0.55rem;
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem;
+        border-radius: 0.65rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        font-size: 11px; font-weight: 800; line-height: 1;
+        transition: background-color 0.15s ease, transform 0.1s ease;
+        /* Light theme: chrome is white → Back is dark */
+        background: #111827; border: 1px solid #111827; color: #f9fafb;
+      }
+      .map-back-btn:hover { background: #1f2937; }
+      .map-back-btn:active { transform: scale(0.95); }
+      /* Dark theme: chrome is dark → Back is white */
+      .dark .map-back-btn {
+        background: #ffffff; border-color: #e5e7eb; color: #111827;
+      }
+      .dark .map-back-btn:hover { background: #f3f4f6; }
+      .map-back-btn svg { width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
       .region-picker, .legend-container {
         position: relative; pointer-events: auto;
       }
@@ -170,8 +192,8 @@ const regionSeoSlugs = Object.fromEntries(
   </noscript>
 
   <div id="map-back-wrap" class="fixed top-3 left-3 z-[1001]">
-    <a id="map-back-link" href={base} class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white font-bold py-1.5 px-2.5 border border-gray-300 dark:border-gray-600 rounded-[0.65rem] shadow-lg inline-flex items-center transition-transform transform active:scale-95 text-[11px] leading-none">
-      <svg class="w-4 h-4 mr-1 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+    <a id="map-back-link" href={base} class="map-back-btn" aria-label="Back to Next Train">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
       Back
     </a>
   </div>

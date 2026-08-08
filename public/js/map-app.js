@@ -677,22 +677,6 @@
                         }
                     }
                 } catch (_) {}
-                // #region agent log
-                try {
-                    const panel = document.getElementById('region-panel');
-                    const pr = picker.getBoundingClientRect();
-                    const tr = toggle.getBoundingClientRect();
-                    const pan = panel ? panel.getBoundingClientRect() : null;
-                    const cs = panel ? getComputedStyle(panel) : null;
-                    const codes = panel ? [...panel.querySelectorAll('.region-code')].map((el) => {
-                        const r = el.getBoundingClientRect();
-                        return { t: el.textContent.trim(), left: Math.round(r.left), clipped: r.left < 0 || r.right > window.innerWidth };
-                    }) : [];
-                    const payload = {sessionId:'03887c',runId:'post-fix',hypothesisId:'H1',location:'map-app.js:openPicker',message:'region dropdown geometry',data:{vw:window.innerWidth,picker:{left:pr.left,right:pr.right,width:pr.width},toggle:{left:tr.left,right:tr.right},panel:pan?{left:pan.left,right:pan.right,width:pan.width,overflowLeft:pan.left<0,overflowRight:pan.right>window.innerWidth}:null,css:{position:cs?.position,left:cs?.left,right:cs?.right,width:cs?.width},codes,clamped:!!panel?.classList.contains('is-viewport-clamped')},timestamp:Date.now()};
-                    try { const arr = JSON.parse(localStorage.getItem('debug_03887c')||'[]'); arr.push(payload); localStorage.setItem('debug_03887c', JSON.stringify(arr.slice(-40))); } catch (_) {}
-                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify(payload)}).catch(()=>{});
-                } catch (_) {}
-                // #endregion
             };
 
             toggle.addEventListener('click', (e) => {

@@ -55,16 +55,21 @@ const regionSeoSlugs = Object.fromEntries(
       .legend-container { display: none; }
       .region-panel, .legend-panel {
         display: none;
-        position: absolute; top: calc(100% + 0.4rem); right: 0;
-        width: min(220px, calc(100vw - 5rem));
+        position: absolute; top: calc(100% + 0.4rem);
+        /* Prefer left-align so badges stay on-screen; clamp width to viewport */
+        left: 0; right: auto;
+        width: min(220px, calc(100vw - 1.5rem));
+        max-width: calc(100vw - 1.5rem);
         background: rgba(255, 255, 255, 0.96);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         border-radius: 0.75rem; padding: 0.5rem;
         font-family: 'Inter', sans-serif; color: #1f2937;
         border: 1px solid #e5e7eb;
         max-height: min(60vh, 420px); overflow-y: auto;
+        box-sizing: border-box;
       }
-      .legend-panel { width: min(250px, calc(100vw - 5rem)); padding: 0.75rem; }
+      /* Network lines sits further right — keep its menu right-aligned */
+      .legend-panel { left: auto; right: 0; width: min(250px, calc(100vw - 1.5rem)); padding: 0.75rem; }
       .dark .region-panel, .dark .legend-panel {
         background: rgba(31, 41, 55, 0.96); color: #f3f4f6; border-color: #374151;
       }

@@ -409,7 +409,8 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
         <div id="admin-modules-container">
-            <div id="alert-panel" data-admin-loaded="false"></div>
+            <!-- Shell only — setupServiceAlertsManager fills chrome; keep id for insertBefore anchors -->
+            <div id="alert-panel" data-admin-loaded="false" class="hidden"></div>
         </div>
         <div id="admin-signout-container"></div>
     </div>

@@ -142,6 +142,7 @@ const Admin = {
             copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
             reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 00-4-4H4"/>',
             file: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
+            more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
         };
         const body = paths[name];
@@ -2058,7 +2059,12 @@ const Admin = {
         // Setup Execution Order (isolated so one panel failure cannot blank the rest of the grid)
         const runAdminSetup = (label, fn) => {
             try { fn(); }
-            catch (err) { console.error(`[Admin] ${label} failed:`, err); }
+            catch (err) {
+                console.error(`[Admin] ${label} failed:`, err);
+                // #region agent log
+                fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:runAdminSetup',message:'admin panel setup threw',data:{label,err:String(err&&err.message||err),stack:String(err&&err.stack||'').slice(0,400)},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+            }
         };
         runAdminSetup('telemetry', () => Admin.setupTelemetry());
         runAdminSetup('feedback', () => Admin.setupFeedbackManager());
@@ -2082,6 +2088,23 @@ const Admin = {
 
         // GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
+
+        // #region agent log
+        try {
+            const container = document.getElementById('admin-modules-container');
+            const kids = container ? Array.from(container.children).map((el, i) => ({
+                i,
+                id: el.id || '(no-id)',
+                cls: (el.className || '').toString().slice(0, 80),
+                loaded: el.dataset?.adminLoaded || null,
+                headerLen: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().length,
+                headerText: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().slice(0, 40),
+                childCount: el.children.length,
+                htmlLen: (el.innerHTML || '').length,
+            })) : [];
+            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2-H3',location:'admin.js:renderAdminModules:postGrid',message:'admin grid tile snapshot',data:{count:kids.length,kids},timestamp:Date.now()})}).catch(()=>{});
+        } catch (_) {}
+        // #endregion
         
         // Final Universal Sync
         Admin.syncAllBadges();
@@ -2119,14 +2142,18 @@ const Admin = {
         const adminContainer = document.getElementById('admin-modules-container');
         if (!adminContainer) return null;
         let actionBanner = document.getElementById('action-required-panel');
+        const created = !actionBanner;
         if (!actionBanner) {
             actionBanner = document.createElement('div');
             actionBanner.id = 'action-required-panel';
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
-        actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
+        // Match other tiles: visible overflow so grid titles/icons are never clipped
+        actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
         actionBanner.classList.remove('hidden');
-        if (!actionBanner.querySelector('#action-header-btn')) {
+        const hadHeader = !!actionBanner.querySelector('#action-header-btn');
+        const headerEmpty = hadHeader && !(actionBanner.querySelector('#action-header-btn')?.textContent || '').trim();
+        if (!hadHeader || headerEmpty) {
             actionBanner.innerHTML = `
                 <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                     <span class="flex flex-col items-center">
@@ -2143,6 +2170,9 @@ const Admin = {
         if (adminContainer.firstElementChild !== actionBanner) {
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H3',location:'admin.js:ensureGlobalStateMonitorTile',message:'GSM ensure',data:{created,hadHeader,htmlLen:(actionBanner.innerHTML||'').length,headerText:(actionBanner.querySelector('#action-header-btn')?.textContent||'').trim().slice(0,60),firstId:adminContainer.firstElementChild?.id||null,hidden:actionBanner.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         return actionBanner;
     },
 
@@ -2160,21 +2190,28 @@ const Admin = {
         }
 
         const adminContainer = document.getElementById('admin-modules-container');
-        // Refresh chrome while scanning (preserve tile presence)
-        actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
+        // Refresh chrome while scanning (preserve tile presence — never leave an empty card)
+        actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
         actionBanner.classList.remove('hidden');
-        actionBanner.innerHTML = `
+        const gsmHeaderHtml = `
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
                     <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
                 </span>
                 <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            <div id="action-body" class="hidden mt-4 space-y-2">
-                <div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>
-            </div>
-        `;
+            </button>`;
+        // Prefer updating body only so grid title never blanks mid-fetch
+        let actionBody = document.getElementById('action-body');
+        if (!document.getElementById('action-header-btn') || !actionBody) {
+            actionBanner.innerHTML = `${gsmHeaderHtml}
+                <div id="action-body" class="hidden mt-4 space-y-2">
+                    <div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>
+                </div>`;
+            actionBody = document.getElementById('action-body');
+        } else if (actionBody) {
+            actionBody.innerHTML = `<div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>`;
+        }
         if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
@@ -3346,10 +3383,11 @@ const Admin = {
             }
 
             // Inject Custom Layout CSS
-            if (!document.getElementById('admin-grid-styles')) {
-                const style = document.createElement('style');
-                style.id = 'admin-grid-styles';
-                style.innerHTML = `
+            let gridStyleEl = document.getElementById('admin-grid-styles');
+            if (!gridStyleEl) {
+                gridStyleEl = document.createElement('style');
+                gridStyleEl.id = 'admin-grid-styles';
+                gridStyleEl.innerHTML = `
                     .admin-grid-view { display: grid; gap: 12px; align-items: start; padding-bottom: 20px; transition: grid-template-columns 0.3s ease; }
                     .admin-grid-view > div { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
                     .admin-grid-view > div:hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
@@ -3408,8 +3446,25 @@ const Admin = {
                     .admin-unread-badge:not(.hidden) {
                       display: inline-flex !important;
                     }
+                    /* Ensure tile titles stay readable in dark grid cards */
+                    .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) {
+                      opacity: 1 !important;
+                      max-width: 100%;
+                      padding: 0 4px;
+                      line-height: 1.15;
+                      font-size: 10px;
+                      font-weight: 800;
+                      letter-spacing: 0.04em;
+                      text-transform: uppercase;
+                    }
                 `;
-                document.head.appendChild(style);
+                document.head.appendChild(gridStyleEl);
+            } else if (!gridStyleEl.textContent.includes('text-transform: uppercase')) {
+                gridStyleEl.textContent += `
+                    .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) {
+                      opacity: 1 !important; max-width: 100%; padding: 0 4px; line-height: 1.15;
+                      font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+                    }`;
             }
 
             // GUARDIAN UX FIX: Drill-Down "X" Interceptor
@@ -4628,6 +4683,15 @@ const Admin = {
                     ? `<span class="inline-flex items-center gap-1 mx-1 align-middle">${contactScanHtml}</span>`
                     : '';
 
+                const ticketType = latestCommuterMsg.type === 'bug' ? 'bug' : 'feature';
+                const escalateAttr = Admin.encodeEscalatePayload({
+                    type: ticketType,
+                    severity: 'medium',
+                    title: `Feedback from ${String(did).substring(0, 8)}`,
+                    description: String(latestCommuterMsg.text || 'No description').slice(0, 400),
+                    source: `Feedback ${feedbackId}`
+                });
+
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
                     contactHtml = '<div class="flex flex-wrap gap-1.5">';
@@ -4671,9 +4735,16 @@ const Admin = {
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <div class="flex items-center gap-1.5 shrink-0">
-                                ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="flex items-center gap-1 px-2 py-1.5 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Shadow-ban this Next Train ID (app looks broken to them)">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
-                                <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Download Thread for AI (.txt)">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                            <div class="relative shrink-0" data-fb-more-wrap>
+                                <button type="button" data-fb-more-toggle class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="More options">
+                                    ${Admin.icon('more', 'w-3.5 h-3.5')} More Options
+                                    <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                    <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                                    <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
+                                </div>
                             </div>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
@@ -4746,9 +4817,11 @@ const Admin = {
                         });
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
-                        const msgAnchor = secureEscape(item.id || item.key || '');
+                        // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
+                        const rawMsgKey = String(item.id || item.key || '').trim();
+                        const msgAnchor = secureEscape(rawMsgKey);
                         groupHTML += `
-                            <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}">
+                            <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
                                 <div class="flex flex-col bg-slate-700 dark:bg-slate-800 text-white pt-1.5 pb-2 px-3 rounded-2xl rounded-tr-sm shadow-md border border-slate-600 dark:border-slate-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
                                     <div class="mb-0.5 text-[10px] font-black text-slate-300 uppercase tracking-wider">${adminName}</div>
                                     <div>${parsedAdminText}</div>
@@ -4786,8 +4859,8 @@ const Admin = {
                             s = stripOuterQuotes(s);
                             const wrapped = s.match(/^\[\s*([\s\S]*)\s*\]$/);
                             if (wrapped) s = stripOuterQuotes(wrapped[1]);
-                            // Drop leftover wrapper crumbs: Bathong Thandeka ..."] → Bathong Thandeka ...
-                            s = s.replace(/^[\[\s]+/, '').replace(/[\]"'\u201c\u201d]+$/g, '');
+                            // Drop leftover wrapper crumbs: "] Bathong…" / "Bathong…"]" from broken legacy wraps
+                            s = s.replace(/^[\[\]"'“”\s]+/, '').replace(/[\[\]"'“”]+$/g, '');
                             return s.replace(/\s+/g, ' ').trim();
                         };
                         const isJunkQuoteLine = (line) => {
@@ -5021,21 +5094,11 @@ const Admin = {
                             </div>
                         `;
                 } });
-                const ticketType = latestCommuterMsg.type === 'bug' ? 'bug' : 'feature';
-                const escalateAttr = Admin.encodeEscalatePayload({
-                    type: ticketType,
-                    severity: 'medium',
-                    title: `Feedback from ${String(did).substring(0, 8)}`,
-                    description: String(latestCommuterMsg.text || 'No description').slice(0, 400),
-                    source: `Feedback ${feedbackId}`
-                });
-                
-                // Bottom Action Bar (Contextual)
+                // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in More Options)
                 const actionHtml = isInbox 
                     ? `<div class="flex space-x-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                         ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
-                         <button class="flex-1 text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Escalate</button>
                          <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
+                         ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
                        </div>`
                     : `<div class="flex justify-between items-center w-full mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                          <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived Thread</span>
@@ -5056,6 +5119,26 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
+                // More Options dropdown
+                const moreToggle = e.target.closest('[data-fb-more-toggle]');
+                if (moreToggle && listContainer.contains(moreToggle)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const wrap = moreToggle.closest('[data-fb-more-wrap]');
+                    const menu = wrap?.querySelector('[data-fb-more-menu]');
+                    listContainer.querySelectorAll('[data-fb-more-menu]').forEach((m) => {
+                        if (m !== menu) m.classList.add('hidden');
+                    });
+                    menu?.classList.toggle('hidden');
+                    return;
+                }
+                if (e.target.closest('[data-fb-more-menu]')) {
+                    // Close after choosing an action (Export / Escalate / Ban)
+                    e.target.closest('[data-fb-more-menu]')?.classList.add('hidden');
+                } else if (!e.target.closest('[data-fb-more-wrap]')) {
+                    listContainer.querySelectorAll('[data-fb-more-menu]').forEach((m) => m.classList.add('hidden'));
+                }
+
                 // WhatsApp quote chip — data-* attrs (no fragile inline onclick)
                 const quoteBtn = e.target.closest('[data-fb-quote-jump]');
                 if (quoteBtn && listContainer.contains(quoteBtn)) {
@@ -5066,9 +5149,11 @@ const Admin = {
                     if (alertId || alertFallback) {
                         Admin.viewContextAlert(alertId || null, alertFallback);
                     } else {
+                        const threadBody = quoteBtn.closest('.feedback-thread-body');
                         Admin.jumpToQuotedFeedback(
                             quoteBtn.getAttribute('data-reply-key') || null,
-                            quoteBtn.getAttribute('data-reply-snippet') || ''
+                            quoteBtn.getAttribute('data-reply-snippet') || '',
+                            threadBody || listContainer
                         );
                     }
                     return;
@@ -6523,23 +6608,60 @@ const Admin = {
     },
 
     // --- GUARDIAN PHASE 7: CONTEXTUAL ALERT VIEWER ---
-    jumpToQuotedFeedback: (replyKey, snippetHint = '') => {
+    jumpToQuotedFeedback: (replyKey, snippetHint = '', scopeEl = null) => {
+        const root = scopeEl && scopeEl.querySelectorAll ? scopeEl : document;
+        const cleanKey = String(replyKey || '').trim();
         let el = null;
-        if (replyKey) {
-            el = document.getElementById(`fb-msg-${replyKey}`)
-                || document.querySelector(`[data-fb-msg-id="${CSS.escape ? CSS.escape(replyKey) : replyKey}"]`);
-        }
-        // Legacy / missing key: fuzzy-match quoted text against admin bubbles in this thread
-        if (!el && snippetHint) {
-            const needle = String(snippetHint).replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 80);
-            if (needle) {
-                const bubbles = document.querySelectorAll('[id^="fb-msg-"]');
-                for (const node of bubbles) {
-                    const t = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                    if (t.includes(needle)) { el = node; break; }
-                }
+
+        if (cleanKey) {
+            // Prefer scoped lookup (open thread), then document — keys may be HTML-escaped in id attrs
+            const tryIds = [cleanKey, cleanKey.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')];
+            for (const k of tryIds) {
+                el = (root.getElementById && root.getElementById(`fb-msg-${k}`))
+                    || document.getElementById(`fb-msg-${k}`)
+                    || root.querySelector?.(`[data-fb-msg-id="${CSS.escape ? CSS.escape(k) : k}"]`)
+                    || document.querySelector(`[data-fb-msg-id="${CSS.escape ? CSS.escape(k) : k}"]`);
+                if (el) break;
             }
         }
+
+        // Fuzzy-match quoted text against admin bubbles (scoped to this thread when possible)
+        if (!el && snippetHint) {
+            const normalize = (s) => String(s || '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/^[\[\]"'“”\s]+/, '')
+                .replace(/[\[\]"'“”]+$/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+            const needle = normalize(snippetHint).slice(0, 80);
+            const shortNeedle = needle.replace(/[^\p{L}\p{N}\s]/gu, '').trim().slice(0, 48);
+            if (needle) {
+                const bubbles = root.querySelectorAll
+                    ? root.querySelectorAll('[id^="fb-msg-"], [data-fb-msg-id]')
+                    : document.querySelectorAll('[id^="fb-msg-"], [data-fb-msg-id]');
+                let best = null;
+                let bestScore = 0;
+                for (const node of bubbles) {
+                    const plainAttr = normalize(node.getAttribute('data-fb-admin-plain') || '');
+                    const t = plainAttr || normalize(node.textContent || '');
+                    if (!t) continue;
+                    if (t.includes(needle) || (shortNeedle && t.includes(shortNeedle))) {
+                        el = node;
+                        break;
+                    }
+                    // Soft match: share significant token from quote
+                    const tokens = shortNeedle.split(/\s+/).filter((w) => w.length >= 4);
+                    const hits = tokens.filter((w) => t.includes(w)).length;
+                    if (hits >= 2 && hits > bestScore) {
+                        bestScore = hits;
+                        best = node;
+                    }
+                }
+                if (!el && best) el = best;
+            }
+        }
+
         if (!el) {
             if (typeof showToast === 'function') showToast('Original message not in this thread view', 'info', 2000);
             return;
@@ -7235,16 +7357,24 @@ const Admin = {
         const alertPanel = document.getElementById('alert-panel');
         if (!alertPanel) return;
         
-        if (alertPanel.dataset.adminLoaded === "true") return;
+        const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
+        const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
+        if (alertPanel.dataset.adminLoaded === "true" && !alertShellEmpty) {
+            // #region agent log
+            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager',message:'alert panel skipped already loaded',data:{htmlLen:(alertPanel.innerHTML||'').length,headerLen:alertHeaderLen},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            return;
+        }
+        // Empty HubModals shell or failed prior load — (re)build tile chrome
         alertPanel.dataset.adminLoaded = "true";
 
-        alertPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
+        alertPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
 
         alertPanel.innerHTML = `
             <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('megaphone', 'text-rose-500 dark:text-rose-400')}
-                    <span>Service Alerts Manager</span>
+                    <span class="text-rose-600 dark:text-rose-400">Service Alerts Manager</span>
                 </span>
                 <svg id="alert-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
@@ -7544,6 +7674,9 @@ const Admin = {
                 </div>
             </div>
         `;
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:setupServiceAlertsManager:afterHtml',message:'alert panel html applied',data:{htmlLen:(alertPanel.innerHTML||'').length,hasHeader:!!document.getElementById('alert-header-btn'),headerText:(document.getElementById('alert-header-btn')?.textContent||'').trim().slice(0,50)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -12670,9 +12803,12 @@ const Admin = {
                         <button id="roadmap-refresh-btn" class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 hover:text-blue-500 transition-colors focus:outline-none shadow-sm shrink-0" title="Refresh">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                         </button>
-                        <button id="roadmap-export-btn" class="p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors focus:outline-none shadow-sm shrink-0" title="Download board (.txt)">
-                            ${Admin.icon('download', 'w-4 h-4')}
-                        </button>
+                        <select id="roadmap-date-filter" class="h-9 max-w-[7.5rem] px-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[10px] font-bold rounded-lg focus:ring-blue-500 outline-none shadow-sm shrink-0" title="Filter by date">
+                            <option value="all">All dates</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
                         <button onclick="Admin.openTicketModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-md focus:outline-none shrink-0">
                             ${Admin.icon('plus', 'w-3.5 h-3.5')} New Ticket
                         </button>
@@ -12744,10 +12880,7 @@ const Admin = {
         const body = document.getElementById('roadmap-body');
         const chevron = document.getElementById('roadmap-chevron');
         const refreshBtn = document.getElementById('roadmap-refresh-btn');
-        const roadmapExportBtn = document.getElementById('roadmap-export-btn');
-        if (roadmapExportBtn) {
-            roadmapExportBtn.onclick = () => Admin.exportColumn('all');
-        }
+        Admin._roadmapDateFilter = 'all';
 
         header.onclick = () => {
             if (Admin.isGridMode) return;
@@ -12778,6 +12911,10 @@ const Admin = {
             
             const searchInput = document.getElementById('roadmap-search-input');
             const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const dateFilterEl = document.getElementById('roadmap-date-filter');
+            const dateFilter = (dateFilterEl?.value || Admin._roadmapDateFilter || 'all');
+            Admin._roadmapDateFilter = dateFilter;
+            const dateCutoff = dateFilter === 'all' ? 0 : (Date.now() - (Number(dateFilter) * 86400000));
 
             // Quick escapeHTML helper
             const safeHTML = (str) => {
@@ -12802,6 +12939,10 @@ const Admin = {
                 if (searchTerm) {
                     const searchableText = `${ticket.title} ${ticket.description || ''} ${ticket.source || ''}`.toLowerCase();
                     if (!searchableText.includes(searchTerm)) return; // Skip if no match
+                }
+                if (dateCutoff > 0) {
+                    const ts = Number(ticket.timestamp || ticket.createdAt || 0);
+                    if (!ts || ts < dateCutoff) return;
                 }
 
                 const status = ticket.status || 'backlog';
@@ -12838,45 +12979,45 @@ const Admin = {
 
                 let moveControls = '';
                 if (status === 'backlog') {
-                    moveControls = `<button class="text-gray-400 hover:text-blue-500 p-2 md:p-1 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'progress')" title="Move to Progress">${rightArrowIcon}</button>`;
+                    moveControls = `<button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'progress')" title="Move to Progress">${rightArrowIcon}</button>`;
                 } else if (status === 'progress') {
                     moveControls = `
-                        <button class="text-gray-400 hover:text-blue-500 p-2 md:p-1 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'backlog')" title="Move to Backlog">${leftArrowIcon}</button>
-                        <button class="text-gray-400 hover:text-green-500 p-2 md:p-1 rounded hover:bg-green-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'done')" title="Move to Done">${rightArrowIcon}</button>
+                        <button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'backlog')" title="Move to Backlog">${leftArrowIcon}</button>
+                        <button class="text-gray-400 hover:text-green-500 p-2 rounded hover:bg-green-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'done')" title="Move to Done">${rightArrowIcon}</button>
                     `;
                 } else if (status === 'done') {
-                    moveControls = `<button class="text-gray-400 hover:text-blue-500 p-2 md:p-1 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'progress')" title="Move to Progress">${leftArrowIcon}</button>`;
+                    moveControls = `<button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'progress')" title="Move to Progress">${leftArrowIcon}</button>`;
                 }
 
                 const cardHtml = `
                     <div class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-3 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 relative overflow-hidden" onclick="Admin.openViewModal('${ticket.id}')">
-                        <div class="flex justify-between items-start gap-2">
-                            <div class="flex items-start min-w-0 pr-1 gap-1.5">
-                                ${typeIcon}
-                                <h4 class="font-bold text-gray-900 dark:text-gray-200 text-sm leading-tight line-clamp-2 break-words">${safeTitle}</h4>
-                            </div>
-                            <div class="flex gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-white dark:bg-gray-800 pl-1 relative z-10">
+                        <div class="flex items-start min-w-0 gap-1.5">
+                            ${typeIcon}
+                            <h4 class="font-bold text-gray-900 dark:text-gray-200 text-sm leading-tight line-clamp-2 break-words min-w-0 flex-1">${safeTitle}</h4>
+                        </div>
+
+                        <div class="relative flex flex-col gap-1 min-h-[2.5rem]">
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pr-16">${shortDesc}</p>
+                            ${sourceBadge}
+                            <span class="absolute bottom-0 right-0 text-[9px] text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">
+                                ${dateStr.split(',')[0]}
+                            </span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between gap-2 mt-0.5 pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider flex items-center shrink-0 ${pStyles.bg} ${pStyles.border} ${pStyles.text}">
+                                ${prioritySvg} ${(ticket.severity || 'medium')}
+                            </span>
+                            <div class="flex items-center gap-0.5 shrink-0">
                                 ${moveControls}
-                                <div class="w-px h-4 bg-gray-200 dark:bg-gray-600 my-auto mx-1 md:mx-0.5"></div>
-                                <button class="text-gray-400 hover:text-blue-500 p-2 md:p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${ticket.id}')" title="Edit Ticket">
+                                <div class="w-px h-4 bg-gray-200 dark:bg-gray-600 my-auto mx-0.5"></div>
+                                <button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${ticket.id}')" title="Edit Ticket">
                                     ${editIcon}
                                 </button>
-                                <button class="text-gray-400 hover:text-red-500 p-2 md:p-1 rounded hover:bg-red-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.deleteTicket('${ticket.id}')" title="Delete Ticket">
+                                <button class="text-gray-400 hover:text-red-500 p-2 rounded hover:bg-red-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.deleteTicket('${ticket.id}')" title="Delete Ticket">
                                     ${trashIcon}
                                 </button>
                             </div>
-                        </div>
-                        
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">${shortDesc}</p>
-                        ${sourceBadge}
-                        
-                        <div class="flex items-center justify-between mt-1 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider flex items-center ${pStyles.bg} ${pStyles.border} ${pStyles.text}">
-                                ${prioritySvg} ${(ticket.severity || 'medium')}
-                            </span>
-                            <span class="text-[9px] text-gray-400 dark:text-gray-500 font-mono">
-                                ${dateStr.split(',')[0]}
-                            </span>
                         </div>
                     </div>
                 `;
@@ -12906,6 +13047,13 @@ const Admin = {
         const searchInput = document.getElementById('roadmap-search-input');
         if (searchInput) {
             searchInput.addEventListener('input', Admin.renderRoadmapList);
+        }
+        const dateFilterInput = document.getElementById('roadmap-date-filter');
+        if (dateFilterInput) {
+            dateFilterInput.addEventListener('change', () => {
+                Admin._roadmapDateFilter = dateFilterInput.value || 'all';
+                Admin.renderRoadmapList();
+            });
         }
 
         Admin.fetchRoadmap = async () => {

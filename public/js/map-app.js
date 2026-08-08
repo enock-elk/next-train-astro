@@ -642,6 +642,33 @@
                 }
                 picker.classList.add('is-open');
                 toggle.setAttribute('aria-expanded', 'true');
+                // Keep menu inside the viewport (left chrome / narrow phones)
+                try {
+                    const panel = document.getElementById('region-panel');
+                    if (panel) {
+                        panel.style.left = '0px';
+                        panel.style.right = 'auto';
+                        const pickerLeft = picker.getBoundingClientRect().left;
+                        let pan = panel.getBoundingClientRect();
+                        if (pan.left < 8) {
+                            panel.style.left = `${8 - pickerLeft}px`;
+                            pan = panel.getBoundingClientRect();
+                        }
+                        if (pan.right > window.innerWidth - 8) {
+                            panel.style.left = `${(window.innerWidth - 8) - pan.width - pickerLeft}px`;
+                        }
+                    }
+                } catch (_) {}
+                // #region agent log
+                try {
+                    const panel = document.getElementById('region-panel');
+                    const pr = picker.getBoundingClientRect();
+                    const tr = toggle.getBoundingClientRect();
+                    const pan = panel ? panel.getBoundingClientRect() : null;
+                    const cs = panel ? getComputedStyle(panel) : null;
+                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H1',location:'map-app.js:openPicker',message:'region dropdown geometry',data:{vw:window.innerWidth,picker:{left:pr.left,right:pr.right,width:pr.width},toggle:{left:tr.left,right:tr.right},panel:pan?{left:pan.left,right:pan.right,width:pan.width,overflowLeft:pan.left<0,overflowRight:pan.right>window.innerWidth}:null,css:{position:cs?.position,left:cs?.left,right:cs?.right,width:cs?.width},controlsRight:!!document.getElementById('map-top-controls')},timestamp:Date.now()})}).catch(()=>{});
+                } catch (_) {}
+                // #endregion
             };
 
             toggle.addEventListener('click', (e) => {

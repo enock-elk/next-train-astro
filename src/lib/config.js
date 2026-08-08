@@ -135,10 +135,42 @@ export function getCorridorLabel(routeOrCorridorId) {
 }
 
 export const REGION_SEO = {
-    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
-    WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
-    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City and inland KZN Metrorail corridor pages.' },
-    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
+    GP: {
+        slug: 'gauteng',
+        title: 'Gauteng Metrorail',
+        h1: 'Gauteng Metrorail train times',
+        pageTitle: 'Gauteng Metrorail Train Times & Schedules Today | Pretoria & Johannesburg',
+        cityFocus: 'Pretoria and Johannesburg',
+        blurb:
+            'Gauteng Metrorail train times and schedules today for Pretoria, Johannesburg and Germiston corridors — weekday, Saturday and public-holiday boards in Metrorail Next Train.',
+    },
+    WC: {
+        slug: 'western-cape',
+        title: 'Western Cape Metrorail',
+        h1: 'Cape Town & Western Cape Metrorail train times',
+        pageTitle: 'Cape Town Metrorail Train Times & Schedules Today | Western Cape',
+        cityFocus: 'Cape Town',
+        blurb:
+            'Cape Town Metrorail train times and schedules today — Central, Northern, Southern, Cape Flats and Malmesbury lines. Open live boards and route timetables in Metrorail Next Train.',
+    },
+    KZN: {
+        slug: 'kwazulu-natal',
+        title: 'KwaZulu-Natal Metrorail',
+        h1: 'Durban & KZN Metrorail train times',
+        pageTitle: 'Durban Metrorail Train Times & Schedules Today | KZN',
+        cityFocus: 'Durban',
+        blurb:
+            'Durban Metrorail train times and schedules today — Umlazi, Bridge City, Pinetown, Cato Ridge and more KZN corridors. Live boards in Metrorail Next Train.',
+    },
+    EC: {
+        slug: 'eastern-cape',
+        title: 'Eastern Cape Metrorail',
+        h1: 'East London & Eastern Cape Metrorail train times',
+        pageTitle: 'East London Metrorail Train Times & Schedules Today | Eastern Cape',
+        cityFocus: 'East London',
+        blurb:
+            'East London Metrorail train times and schedules today — Berlin corridor and Eastern Cape routes. Check today’s trains in Metrorail Next Train.',
+    },
 };
 export const MAX_RADIUS_KM = 6;
 

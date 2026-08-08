@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.10 - App-region telemetry)
+ * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.11 - Sentry issues bridge)
  * --------------------------------------------------------------------------
  * Path B: Secure Telemetry Bridge
  *
@@ -7,7 +7,107 @@
  *       GA4 activeUsers (rush-hour shape). Sets intradayMode: 'perBucket'.
  * V1.10: Regional breakdown reads GA customUser:crm_region = selected app region
  *        (IP /region is only a first-visit guess for the client; defaults to GP).
+ * V1.11: GET /sentry/issues — admin-only list of Sentry issues (last 24h activity).
+ *
+ * Required secrets/vars: SENTRY_AUTH_TOKEN (event:read), SENTRY_ORG, SENTRY_PROJECT
  */
+
+function jsonResponse(body, status, corsHeaders, extraHeaders = {}) {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
+    });
+}
+
+function sumStats24h(issue) {
+    const series = issue?.stats?.['24h'];
+    if (!Array.isArray(series)) return 0;
+    return series.reduce((sum, pair) => sum + (Number(pair?.[1]) || 0), 0);
+}
+
+async function fetchSentryIssues24h(env) {
+    if (!env.SENTRY_AUTH_TOKEN || !env.SENTRY_ORG || !env.SENTRY_PROJECT) {
+        const missing = [
+            !env.SENTRY_AUTH_TOKEN && 'SENTRY_AUTH_TOKEN',
+            !env.SENTRY_ORG && 'SENTRY_ORG',
+            !env.SENTRY_PROJECT && 'SENTRY_PROJECT',
+        ].filter(Boolean);
+        return {
+            ok: false,
+            error: `Sentry not configured on worker (missing ${missing.join(', ')})`,
+            issues: [],
+            issueCount: 0,
+            events24h: 0,
+        };
+    }
+
+    const qs = new URLSearchParams({
+        statsPeriod: '24h',
+        sort: 'date',
+        limit: '50',
+        // Issues with activity in the last day (not only unresolved forever-list)
+        query: 'lastSeen:-24h',
+    });
+    const sentryUrl =
+        `https://sentry.io/api/0/projects/${encodeURIComponent(env.SENTRY_ORG)}/` +
+        `${encodeURIComponent(env.SENTRY_PROJECT)}/issues/?${qs.toString()}`;
+
+    const sentryRes = await fetch(sentryUrl, {
+        headers: {
+            Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
+            Accept: 'application/json',
+        },
+    });
+
+    if (!sentryRes.ok) {
+        const errText = await sentryRes.text();
+        throw new Error(`Sentry issues API ${sentryRes.status}: ${errText.slice(0, 280)}`);
+    }
+
+    const raw = await sentryRes.json();
+    const list = Array.isArray(raw) ? raw : [];
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+    const issues = list
+        .map((issue) => {
+            const events24h = sumStats24h(issue);
+            const lastSeenMs = issue.lastSeen ? Date.parse(issue.lastSeen) : 0;
+            return {
+                id: String(issue.id || ''),
+                shortId: String(issue.shortId || ''),
+                title: String(issue.title || issue.metadata?.title || 'Untitled issue'),
+                culprit: String(issue.culprit || ''),
+                level: String(issue.level || 'error'),
+                status: String(issue.status || ''),
+                count: Number(issue.count) || 0,
+                userCount: Number(issue.userCount) || 0,
+                firstSeen: issue.firstSeen || null,
+                lastSeen: issue.lastSeen || null,
+                permalink: issue.permalink || null,
+                events24h,
+                active24h: events24h > 0 || (lastSeenMs >= cutoff),
+            };
+        })
+        .filter((i) => i.active24h)
+        .sort((a, b) => {
+            const tb = Date.parse(b.lastSeen || 0) || 0;
+            const ta = Date.parse(a.lastSeen || 0) || 0;
+            return tb - ta;
+        });
+
+    const events24h = issues.reduce((sum, i) => sum + (i.events24h || 0), 0);
+
+    return {
+        ok: true,
+        period: '24h',
+        issueCount: issues.length,
+        events24h,
+        org: env.SENTRY_ORG,
+        project: env.SENTRY_PROJECT,
+        issues,
+        error: null,
+    };
+}
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -108,15 +208,17 @@ export default {
         }
 
         const authHeader = request.headers.get('Authorization');
+        const needsAdminAuth =
+            url.pathname === '/'
+            || url.pathname.includes('/telemetry')
+            || url.pathname === '/sentry/issues'
+            || url.pathname.startsWith('/admin/');
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            if (url.pathname.includes('/telemetry')) {
-                return new Response(JSON.stringify({ error: 'Missing or Invalid Authorization Header' }), {
-                    status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-            } else {
-                return fetch(request);
+            if (needsAdminAuth) {
+                return jsonResponse({ error: 'Missing or Invalid Authorization Header' }, 401, corsHeaders);
             }
+            return fetch(request);
         }
 
         const idToken = authHeader.split('Bearer ')[1];
@@ -132,22 +234,55 @@ export default {
                 const verifyData = await verifyRes.json();
 
                 if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
-                    return new Response(JSON.stringify({ error: 'Unauthorized: Invalid Firebase Token' }), {
-                        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
+                    return jsonResponse({ error: 'Unauthorized: Invalid Firebase Token' }, 401, corsHeaders);
                 }
 
                 const user = verifyData.users[0];
                 const adminEmails = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
                 if (!user.email || !adminEmails.includes(user.email.toLowerCase())) {
-                    return new Response(JSON.stringify({ error: 'Forbidden: Admin access required.' }), {
-                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
+                    return jsonResponse({ error: 'Forbidden: Admin access required.' }, 403, corsHeaders);
                 }
             } catch (err) {
-                return new Response(JSON.stringify({ error: 'Auth Verification Failed', details: err.message }), {
-                    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                return jsonResponse({ error: 'Auth Verification Failed', details: err.message }, 500, corsHeaders);
+            }
+        }
+
+        // Admin: real Sentry issue list (not Firebase sys_logs/crashes)
+        if (url.pathname === '/sentry/issues') {
+            try {
+                const cache = caches.default;
+                const cacheKey = new Request('https://nexttrain-internal-cache.local/sentry-issues-24h');
+                const cached = await cache.match(cacheKey);
+                if (cached) {
+                    return new Response(cached.body, {
+                        status: 200,
+                        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'HIT' },
+                    });
+                }
+
+                const payload = await fetchSentryIssues24h(env);
+                const status = payload.ok ? 200 : 503;
+                const body = JSON.stringify(payload);
+                if (payload.ok) {
+                    await cache.put(
+                        cacheKey,
+                        new Response(body, {
+                            headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=45' },
+                        })
+                    );
+                }
+                return new Response(body, {
+                    status,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' },
                 });
+            } catch (e) {
+                return jsonResponse({
+                    ok: false,
+                    error: e.message || String(e),
+                    issues: [],
+                    issueCount: 0,
+                    events24h: 0,
+                }, 502, corsHeaders);
             }
         }
 

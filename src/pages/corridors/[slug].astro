@@ -20,8 +20,8 @@ const entry = getSeoCorridorBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
-const title = `${entry.label} Train Times | Metrorail Next Train`;
-const description = `${entry.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
+const title = `${entry.label} Train Schedule Today | ${province} Metrorail`;
+const description = `${entry.blurb} Check live ${province} Metrorail train times and schedules today offline in Metrorail Next Train.`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
@@ -33,7 +33,12 @@ const jsonLd = {
   name: title,
   description,
   about: entry.label,
-  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'Metrorail Next Train',
+    alternateName: 'Next Train',
+    url: 'https://nexttrain.co.za/',
+  },
 };
 ---
 
@@ -57,10 +62,13 @@ const jsonLd = {
       </p>
 
       <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-        {entry.label} schedules
+        {entry.label} train schedule today
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {entry.blurb}
+      </p>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+        Browse routes on this {province} line, then open the live board for today’s departures and the full weekday / Saturday grid.
       </p>
 
       <section class="mt-10">

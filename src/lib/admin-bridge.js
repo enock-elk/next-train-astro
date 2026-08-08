@@ -186,6 +186,13 @@ function openAdminEntryUi() {
             if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
         } catch (e) { /* ignore */ }
         openSmoothModal('login-modal');
+        const loginBtn = document.getElementById('admin-login-btn');
+        const spinner = document.getElementById('admin-login-spinner');
+        if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        if (spinner) spinner.classList.add('hidden');
         if (emailInput) setTimeout(() => emailInput.focus(), 150);
     }
 }

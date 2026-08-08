@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.09";
+export const APP_VERSION = "V8_08.08";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -856,24 +856,16 @@ export const DEFAULT_EXCLUSIONS = {
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.09",
-        title: "Map Region Menu",
-        date: "08 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Network map:</b> Region picker (GP / WC / KZN / EC) stays fully on-screen on phones.",
-            "<b>Polish:</b> Clearer map chrome and fresher client updates after deploy."
-        ]
-    },
-    {
         id: "V8_08.08",
-        title: "Map Times & Fares",
+        title: "Map, Fares & Home Board",
         date: "08 Aug 2026",
         forceShow: false,
         features: [
             "<b>Trip map:</b> Optional Show station times on the planner route map.",
             "<b>Fares:</b> Weekend and public-holiday tickets no longer show weekday off-peak discounts.",
-            "<b>Polish:</b> Clearer planner chrome, timetable wording, and holiday tomorrow notices."
+            "<b>Network map:</b> Region picker stays fully on-screen; side-nav map opens without a white flash.",
+            "<b>Region switch:</b> Opens route selection so you choose — never auto-pins a random route.",
+            "<b>Notices:</b> Service alerts and public-holiday cards only auto-open on Next Train / Trip Planner after the app is ready."
         ]
     },
     {

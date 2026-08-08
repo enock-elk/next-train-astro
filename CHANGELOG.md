@@ -2,11 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
-## V8_08.08 — Map Times & Fares (08 Aug 2026)
+## V8_08.08 — Map, Fares & Home Board (08 Aug 2026)
 
 - Trip planner map: toggle station times on route labels.
 - Fares: weekend and public-holiday tickets no longer show weekday off-peak discounts.
-- Planner results chrome polish; “Showing Trains To…” timetable title; holiday eve overrides week preview.
+- Network map: region picker stays on-screen; side-nav map opens without a white flash.
+- Region switch opens route selection (no auto-pin of a random route).
+- Service alerts and public-holiday notices only auto-open on Next Train / Trip Planner after stabilize + route selected.
+- Planner results chrome polish; timetable wording; holiday eve overrides week preview; Dev Mode tile tap/colour polish.
 
 ## V8_08.06 — Holiday Notice & Travel Day (06 Aug 2026)
 

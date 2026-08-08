@@ -14,18 +14,47 @@ function hardReloadWithCacheBust(reason = 'force_update') {
     window.location.href = path + '?v=' + Date.now();
 }
 
+/**
+ * Incoming = version on the CDN (`app-version.json`), not the shell currently running.
+ * SPA legacy parity: toast must name the build users are about to receive.
+ */
 async function peekIncomingVersion() {
-    let incoming = String(APP_VERSION || 'Latest').split(' - ')[0];
     try {
-        const res = await fetch(withBase('app-version.json') + '?v=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch(withBase('app-version.json') + '?v=' + Date.now(), {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+        });
         if (res.ok) {
             const data = await res.json();
-            if (data && data.version) incoming = String(data.version).split(' - ')[0];
+            if (data && data.version) return String(data.version).split(' - ')[0];
         }
     } catch (e) {
         console.warn('🛡️ Guardian: Failed to peek at incoming update version.', e);
     }
-    return incoming;
+    // Last resort only — prefer blank over lying that "incoming" equals this shell.
+    return String(APP_VERSION || 'Latest').split(' - ')[0];
+}
+
+/** Visible force-update toast (SPA parity) — always names the *incoming* version. */
+function showCrucialUpdateToast(incomingVersion) {
+    const label = incomingVersion || 'Latest';
+    const msg = `Crucial system update incoming: ${label}.`;
+    try {
+        showToast(msg, 'error', 5000);
+    } catch { /* ignore */ }
+
+    // Fallback banner if #toast is not in the DOM yet (early boot / race).
+    if (typeof document !== 'undefined' && !document.getElementById('toast')) {
+        let el = document.getElementById('nt-force-update-banner');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'nt-force-update-banner';
+            el.setAttribute('role', 'status');
+            el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] max-w-[90vw] px-4 py-3 rounded-xl shadow-2xl bg-red-900/95 text-white text-sm font-bold border border-red-700';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+    }
 }
 
 export async function handleUpdateClick(newVersion) {
@@ -63,7 +92,10 @@ export function enforceAppVersion() {
         console.log(`[Guardian] Version Upgrade Available: ${storedVersion} -> ${currentVersion}`);
 
         if (FORCE_UPDATE_REQUIRED) {
-            handleUpdateClick(currentVersion);
+            // New shell already loaded — APP_VERSION *is* the incoming build.
+            // Previously this path reloaded silently (no toast); restore SPA toast first.
+            showCrucialUpdateToast(currentVersion);
+            setTimeout(() => handleUpdateClick(currentVersion), 1600);
             return;
         }
 
@@ -99,14 +131,17 @@ export function bindAppUpdateLifecycle(registerSW) {
     api.updateSW = registerSW({
         immediate: true,
         async onNeedRefresh() {
+            // Still on the *old* shell — peek CDN version (incoming), not APP_VERSION (current).
             const incomingVersion = await peekIncomingVersion();
 
             if (FORCE_UPDATE_REQUIRED) {
-                console.log('GUARDIAN: Force Update Triggered.');
-                showToast(`Crucial system update incoming: ${incomingVersion}.`, 'error', 5000);
-                markPendingReload('sw_force_update', 2500);
+                console.log('GUARDIAN: Force Update Triggered →', incomingVersion);
+                showCrucialUpdateToast(incomingVersion);
+                markPendingReload('sw_force_update', 3500);
                 const token = Date.now();
                 window.__ntPendingUpdateToken = token;
+                // Let the toast paint before skipWaiting → controllerchange reload.
+                await new Promise((r) => setTimeout(r, 1600));
                 try {
                     await api.updateSW(false);
                 } catch (e) {
@@ -122,7 +157,7 @@ export function bindAppUpdateLifecycle(registerSW) {
                 return;
             }
 
-            console.log('GUARDIAN: Silent Update Available.');
+            console.log('GUARDIAN: Silent Update Available →', incomingVersion);
             const actionHTML = `
                 <button type="button" id="nt-trigger-app-update" class="bg-white/20 hover:bg-white/40 text-white px-3 py-1 rounded text-xs font-bold transition-colors">
                     UPDATE

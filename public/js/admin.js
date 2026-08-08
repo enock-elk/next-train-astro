@@ -625,6 +625,43 @@ const Admin = {
         return true;
     },
 
+    /** Re-sync grid mode after Dev Mode re-open (fixes tiles that look active but ignore taps). */
+    ensureGridViewEngaged: () => {
+        const container = document.getElementById('admin-modules-container');
+        const devModal = document.getElementById('dev-modal');
+        if (!container || !devModal || devModal.classList.contains('hidden')) return;
+
+        const hash = location.hash || '';
+        const drilled = hash.startsWith('#dev-') && hash !== '#dev';
+        if (drilled && Admin.isGridMode === false) return;
+
+        Admin.isGridMode = true;
+        container.classList.add('admin-grid-view');
+        container.style.gridTemplateColumns = `repeat(${Admin.gridCols || 3}, minmax(0, 1fr))`;
+
+        Array.from(container.children).forEach((child) => {
+            child.style.display = '';
+            if (child.dataset.originalClasses) {
+                child.className = child.dataset.originalClasses;
+            }
+            const body = child.querySelector('[id$="-body"]');
+            if (body) body.classList.add('hidden');
+            const header = child.querySelector('[id$="-header-btn"]');
+            if (header) header.style.removeProperty('display');
+        });
+
+        const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6')
+            || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
+        const titleH3 = devHeaderRow?.querySelector('h3');
+        if (titleH3 && devHeaderRow?.dataset.originalHtml) {
+            titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
+        }
+        const toggleBtn = document.getElementById('grid-view-toggle');
+        if (toggleBtn) toggleBtn.style.display = '';
+        const signoutContainer = document.getElementById('admin-signout-container');
+        if (signoutContainer) signoutContainer.style.display = '';
+    },
+
     /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
     closeDevModal: () => {
         if (!Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
@@ -2006,6 +2043,12 @@ const Admin = {
                         } catch (e) { /* ignore */ }
                         if (typeof openSmoothModal === 'function') openSmoothModal('login-modal');
                         else loginModal.classList.remove('hidden');
+
+                        if (loginBtn) {
+                            loginBtn.disabled = false;
+                            loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        }
+                        if (spinner) spinner.classList.add('hidden');
                         
                         if(emailInput) setTimeout(() => emailInput.focus(), 150);
                     }
@@ -3409,6 +3452,9 @@ const Admin = {
             container.insertBefore(telPanel, container.firstElementChild);
         }
 
+        // Re-open path: grid toggle already exists — still re-engage so tiles stay tappable.
+        Admin.ensureGridViewEngaged();
+
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6');
         if (devHeaderRow && !document.getElementById('grid-view-toggle')) {
             
@@ -3495,8 +3541,15 @@ const Admin = {
                       display: inline-flex !important;
                     }
                     /* Ensure tile titles stay readable in dark grid cards */
+                    .admin-grid-view > div [id$="-header-btn"] {
+                      color: #64748b;
+                    }
+                    .dark .admin-grid-view > div [id$="-header-btn"] {
+                      color: #94a3b8;
+                    }
                     .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) {
                       opacity: 1 !important;
+                      color: inherit !important;
                       max-width: 100%;
                       padding: 0 4px;
                       line-height: 1.15;
@@ -3522,6 +3575,12 @@ const Admin = {
                     .admin-grid-view > div:empty,
                     .admin-grid-view > div[data-admin-shell="empty"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
                 }
+                if (!gridStyleEl.textContent.includes('color: #64748b')) {
+                    gridStyleEl.textContent += `
+                    .admin-grid-view > div [id$="-header-btn"] { color: #64748b; }
+                    .dark .admin-grid-view > div [id$="-header-btn"] { color: #94a3b8; }
+                    .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) { color: inherit !important; }`;
+                }
             }
 
             // Drill-Down "X": inside a panel → grid only; on grid → close Dev Mode (no history.back race)
@@ -3545,7 +3604,11 @@ const Admin = {
 
             // Global Interceptor: The Drill-Down Engine
             container.addEventListener('click', (e) => {
-                if (!Admin.isGridMode) return;
+                if (!Admin.isGridMode) {
+                    // Stale drill flag while grid chrome is still visible — recover taps.
+                    if (container.classList.contains('admin-grid-view')) Admin.isGridMode = true;
+                    else return;
+                }
                 
                 const card = e.target.closest('.admin-grid-view > div');
                 if (!card) return;
@@ -3616,7 +3679,12 @@ const Admin = {
                 if (card.id === 'delay-reports-panel') Admin.fetchDelayReports();
                 if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
                 if (card.id === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
-                if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
+                if (card.id === 'deadends-panel') {
+                    Admin._deSortMode = 'count';
+                    const sortBtn = document.getElementById('de-sort-btn');
+                    if (sortBtn) sortBtn.textContent = 'Sort: Count';
+                    Admin.fetchDeadEnds();
+                }
                 if (card.id === 'crashes-panel') Admin.fetchCrashes(); // GUARDIAN PHASE 7
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
                 if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
@@ -3893,8 +3961,8 @@ const Admin = {
             exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
-        // GUARDIAN PHASE 2: Dynamic Sorting State
-        Admin._deSortMode = Admin._deSortMode || 'recent'; 
+        // Default: sort corridors by volume (count), not most recent.
+        Admin._deSortMode = 'count';
 
         if (sortBtn) {
             sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
@@ -7361,10 +7429,10 @@ const Admin = {
         alertPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
 
         alertPanel.innerHTML = `
-            <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+            <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('megaphone', 'text-rose-500 dark:text-rose-400')}
-                    <span class="text-rose-600 dark:text-rose-400">Service Alerts Manager</span>
+                    <span>Service Alerts Manager</span>
                 </span>
                 <svg id="alert-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>

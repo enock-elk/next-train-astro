@@ -8,7 +8,7 @@
 
 import { safeStorage } from './utils.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
-import { $deviceId, $currentRouteId } from '../store.js';
+import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload } from './session-stability.js';
 import {
     helpUrl,
@@ -151,7 +151,7 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     }
 }
 
-export function openSmoothModal(modalId, customOrigin = null) {
+export function openSmoothModal(modalId, customOrigin = null, opts = null) {
     if (typeof window === 'undefined') return;
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
@@ -162,6 +162,7 @@ export function openSmoothModal(modalId, customOrigin = null) {
 
     const modal = document.getElementById(modalId);
     const wasHidden = !modal || modal.classList.contains('hidden');
+    const skipHash = !!(opts && opts.skipHash);
 
     if (modal && modal.firstElementChild) {
         const inner = modal.firstElementChild;
@@ -197,9 +198,10 @@ export function openSmoothModal(modalId, customOrigin = null) {
         lockBackgroundScroll();
     }
 
-    // Push history so Android/iOS Back closes this overlay instead of leaving the tab
+    // Push history so Android/iOS Back closes this overlay instead of leaving the tab.
+    // skipHash: admin archive previews stay on #dev-* so close/X never pops drill-back.
     const hash = hashForModal(modalId);
-    if (wasHidden && hash && location.hash !== hash) {
+    if (!skipHash && wasHidden && hash && location.hash !== hash) {
         try { history.pushState({ modal: modalId }, '', hash); } catch { /* ignore */ }
     }
 }
@@ -270,19 +272,14 @@ export function bindHistoryBackNavigation() {
 
         if (window._isSidenavClosing) return;
 
-        if (window.Admin && window.Admin.isGridMode === false) {
-            const drillBackBtn = document.getElementById('drill-back-btn');
-            if (drillBackBtn) {
-                drillBackBtn.click();
-                return;
-            }
-        }
-
         if (document.body.classList.contains('sidenav-open')) {
             if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
             return;
         }
 
+        // Close the top overlay first (e.g. archived alert preview over Dev Mode).
+        // Must run before admin drill-back — otherwise history.back() from notice/disruption
+        // incorrectly exits the drilled Service Alerts panel to the Dev Mode grid.
         const openModals = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)'));
         if (openModals.length > 0) {
             let highestZ = -1;
@@ -295,13 +292,29 @@ export function bindHistoryBackNavigation() {
                     const computedZ = window.getComputedStyle(modal).zIndex;
                     if (computedZ !== 'auto') zIndex = parseInt(computedZ, 10) || 0;
                 }
+                // Inline z-index (admin elevates notice/disruption previews to 260)
+                const inlineZ = parseInt(modal.style?.zIndex, 10);
+                if (Number.isFinite(inlineZ)) zIndex = Math.max(zIndex, inlineZ);
                 if (zIndex >= highestZ) {
                     highestZ = zIndex;
                     modalToClose = modal.id;
                 }
             });
-            if (modalToClose) {
+            if (modalToClose && modalToClose !== 'dev-modal') {
                 closeSmoothModal(modalToClose, true);
+                return;
+            }
+            // Only close Dev Mode itself when it is the sole open modal
+            if (modalToClose === 'dev-modal' && openModals.length === 1) {
+                closeSmoothModal('dev-modal', true);
+                return;
+            }
+        }
+
+        if (window.Admin && window.Admin.isGridMode === false) {
+            const drillBackBtn = document.getElementById('drill-back-btn');
+            if (drillBackBtn) {
+                drillBackBtn.click();
                 return;
             }
         }
@@ -1162,12 +1175,50 @@ export function hideOfflineToast() {
 
 /**
  * Yellow hazard strip when Firebase config/maintenance.json has active: true.
- * SPA parity (ui.js checkMaintenanceStatus) — was missing from the Astro port.
+ * Optional scope (backward-compatible):
+ *   { active, message, regions?: ['WC'], routes?: ['ct-bellv'] }
+ * - No regions/routes → global (legacy)
+ * - regions only → match $userRegion
+ * - routes set → match $currentRouteId; if route unknown yet, fall back to region when regions are set
  */
 function clearMaintenanceBanner() {
     const banner = document.getElementById('maintenance-banner');
     if (banner) banner.remove();
     document.getElementById('app-header')?.classList.remove('nt-maint-active');
+}
+
+function normalizeMaintScopeList(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((v) => String(v || '').trim()).filter(Boolean);
+}
+
+/** Whether this device should see the maintenance banner for the given payload. */
+export function isMaintenanceVisibleToUser(maintData) {
+    if (maintData === true) return true;
+    if (!maintData || typeof maintData !== 'object' || maintData.active !== true) return false;
+
+    const regions = normalizeMaintScopeList(maintData.regions).map((r) => r.toUpperCase());
+    const routes = normalizeMaintScopeList(maintData.routes);
+    if (!regions.length && !routes.length) return true; // global
+
+    let userRegion = '';
+    try { userRegion = String($userRegion.get() || '').toUpperCase(); } catch { /* ignore */ }
+    if (!userRegion) {
+        try { userRegion = String(safeStorage.getItem('userRegion') || '').toUpperCase(); } catch { /* ignore */ }
+    }
+
+    let userRoute = '';
+    try { userRoute = String($currentRouteId.get() || '').trim(); } catch { /* ignore */ }
+
+    const regionOk = !regions.length || (!!userRegion && regions.includes(userRegion));
+
+    if (routes.length) {
+        if (userRoute) return routes.includes(userRoute) && regionOk;
+        // Route not chosen yet — fall back to region scope when present
+        return regions.length ? regionOk : false;
+    }
+
+    return regionOk;
 }
 
 export async function checkMaintenanceStatus() {
@@ -1190,8 +1241,7 @@ export async function checkMaintenanceStatus() {
 
         const maintData = await res.json();
         const existingBanner = document.getElementById('maintenance-banner');
-        const isMaintActive = maintData === true
-            || (maintData !== null && typeof maintData === 'object' && maintData.active === true);
+        const isMaintActive = isMaintenanceVisibleToUser(maintData);
         const customMessage = (maintData !== null && typeof maintData === 'object' && maintData.message)
             ? maintData.message
             : 'MAINTENANCE IN PROGRESS';
@@ -1243,11 +1293,18 @@ export function bindMaintenanceBanner() {
     window.__ntMaintBound = true;
     window.checkMaintenanceStatus = checkMaintenanceStatus;
     window.clearMaintenanceBanner = clearMaintenanceBanner;
+    window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
 
     checkMaintenanceStatus();
     window.addEventListener('online', () => { checkMaintenanceStatus(); });
     window.addEventListener('offline', () => { clearMaintenanceBanner(); });
     setInterval(() => { checkMaintenanceStatus(); }, 5 * 60 * 1000);
+
+    // Re-evaluate when the user switches region/route (scoped banners)
+    try {
+        $userRegion.subscribe(() => { checkMaintenanceStatus(); });
+        $currentRouteId.subscribe(() => { checkMaintenanceStatus(); });
+    } catch { /* store unavailable */ }
 }
 
 /** Chrome/Edge installability + WebView fallback — strict SPA ui.js parity. */
@@ -1513,6 +1570,7 @@ if (typeof window !== 'undefined') {
     window.bindPwaInstallPrompt = bindPwaInstallPrompt;
     window.bindHistoryBackNavigation = bindHistoryBackNavigation;
     window.checkMaintenanceStatus = checkMaintenanceStatus;
+    window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
     window.bindMaintenanceBanner = bindMaintenanceBanner;
     window.showRedirectModal = showRedirectModal;
     window.OfflineTracker = OfflineTracker;

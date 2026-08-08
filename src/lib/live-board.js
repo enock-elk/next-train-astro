@@ -526,15 +526,15 @@ export function getRouteFare(sheetKey) {
     const profile = FARE_CONFIG.profiles[getUserProfile()] || FARE_CONFIG.profiles["Adult"];
     let useOffPeakRate = false;
 
-    // PRASA #TravelOffPeak: discount tickets valid 09:30–14:30 (weekdays, weekends & public holidays).
+    // Off-peak 09:30–14:30 on weekdays only (unless FARE_CONFIG.offPeakEveryDay).
     // Scholar 50% is profile.base — not gated on this window.
-    const applyOffPeakWindow = FARE_CONFIG.offPeakEveryDay !== false;
+    const applyOffPeakEveryDay = FARE_CONFIG.offPeakEveryDay === true;
     let isWeekdaySheet = usesWeekdayScheduleSheet(getCurrentDayType());
     if (sheetKey) {
         isWeekdaySheet = sheetKey.includes('weekday');
     }
 
-    if (applyOffPeakWindow || isWeekdaySheet) {
+    if (applyOffPeakEveryDay || isWeekdaySheet) {
         let checkH, checkM;
 
         // GUARDIAN PHASE 2A: Decouple Off-Peak pricing from individual train departures.

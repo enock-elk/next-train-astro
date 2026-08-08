@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.05 - Planner UI & Bugfix)
+ * METRORAIL NEXT TRAIN - ADMIN TOOLS (V8_08.08)
  * -----------------------------------------------------------------------------
  *
  * ## ADMIN ISLAND ROADMAP (for future AI / ops)
@@ -57,11 +57,11 @@
  * * GROWTH SPRINT PHASE 10 [05 Jul 2026]: Swapped telemetry, crash, and routing failure endpoints from '/metrics/' to '/sys_logs/' to secure tracking channels against active client adblockers.
  * * GUARDIAN PHASE 13 [09 Jul 2026]: Built the Action Required active state monitor to scan, list, and instantly resolve expiring/live incidents across the entire system.
  * * GUARDIAN PHASE 14 [09 Jul 2026]: Resolved a malformed URL typo inside 'viewContextAlert' that threw unhandled exceptions during the disruption graveyard sweep.
- * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard [??], [?], [??], and [??] route cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
+ * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard route-status cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
 */
 const Admin = {
     
-    // ??? GUARDIAN PHASE 2: Dropdown Breadcrumbs State
+    // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
     _routeFlags: {},
     getRouteCues: (routeId) => {
         if (!Admin._routeFlags || !Admin._routeFlags[routeId]) return '';
@@ -83,11 +83,11 @@ const Admin = {
         let s = String(str);
         // Prefer escapes so scanners cannot rewrite the lookup keys
         const pairs = [
-            ['\u00E2\u20AC\u201D', '\u2014'], // -" ? -
+            ['\u00E2\u20AC\u201D', '\u2014'], // mojibake em dash
             ['\u00E2\u0080\u0094', '\u2014'],
             ['\u00E2\u20AC\u00A2', '\u2022'],
-            ['\u00E2\u02DC\u00A2\uFE0F', '??'],
-            ['\u00E2\u0098\u00A2\uFE0F', '??'],
+            ['\u00E2\u02DC\u00A2\uFE0F', '\u26A0\uFE0F'], // warning emoji
+            ['\u00E2\u0098\u00A2\uFE0F', '\u26A0\uFE0F'], // warning emoji
         ];
         for (const [bad, good] of pairs) {
             if (s.includes(bad)) s = s.split(bad).join(good);
@@ -194,7 +194,7 @@ const Admin = {
                 // Force token refresh to ensure it's valid for database rules
                 return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
             } catch(e) {
-                console.warn("??? Guardian: Failed to securely fetch ID Token", e);
+                console.warn("Guardian: Failed to securely fetch ID Token", e);
                 return null;
             }
         }
@@ -239,10 +239,10 @@ const Admin = {
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200 dark:border-gray-700">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
                     <div>
-                        <h3 class="text-base font-black text-gray-900 dark:text-white">Diagnostic Errors (24h)</h3>
+                        <h3 class="text-base font-black text-gray-900 dark:text-white">System Errors 24H</h3>
                         <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading...</p>
                     </div>
-                    <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">?</button>
+                    <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" aria-label="Close">${Admin.icon('x', 'w-4 h-4')}</button>
                 </div>
                 <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading...</div>
             </div>`;
@@ -718,7 +718,7 @@ const Admin = {
                 else navigator.clearAppBadge();
             }
         } catch(e) {
-            console.warn("??? Guardian: Badge sync failed", e);
+            console.warn("Guardian: Badge sync failed", e);
         }
     },
 
@@ -756,7 +756,7 @@ const Admin = {
 
         const telBody = document.getElementById('telemetry-body');
         
-        // ??? GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
+        // GUARDIAN UX FIX: Dynamically strip "vibe coded" rainbow colors and apply sleek monochromatic corporate theme
         if (telBody && !telBody.dataset.devibed) {
             telBody.dataset.devibed = "true";
             
@@ -766,7 +766,7 @@ const Admin = {
                 const label = box.querySelector('span:first-child');
                 const value = box.querySelector('span:last-child');
                 
-                // ??? GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
+                // GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
                 if (value && value.id === 'stat-today') {
                     box.classList.add('cursor-pointer', 'hover:border-indigo-400', 'dark:hover:border-indigo-500', 'hover:shadow-md');
                     box.title = "View Regional Breakdown";
@@ -781,18 +781,18 @@ const Admin = {
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
                 errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
-                errorBox.title = 'JS / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
+                errorBox.title = 'System / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> JS Errors (24h) - tap`;
+                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> SYSTEM ERRORS 24H`;
                 }
                 if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200";
             }
             
-            // ??? GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native ?? emoji to display.
+            // GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native emoji to display.
         }
 
         // GUARDIAN: Inject HTML elements dynamically if they don't exist
@@ -821,7 +821,7 @@ const Admin = {
             `;
             telBody.appendChild(trendWrapper);
             
-            // ??? GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
+            // GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
             let chartModal = document.getElementById('telemetry-chart-modal');
             if (!chartModal) {
                 chartModal = document.createElement('div');
@@ -850,9 +850,9 @@ const Admin = {
                         </div>
                         
                         <div id="modal-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95">?</button>
+                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
                             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30">?</button>
+                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
                         </div>
                         
                         <div class="flex-grow p-2 md:p-6 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0">
@@ -996,6 +996,29 @@ const Admin = {
         Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
     },
 
+    /** Catmull-Rom → cubic Bézier path through chart points (smooth 30‑min buckets). */
+    _smoothSvgPathD: (points) => {
+        if (!points.length) return '';
+        const fmt = (n) => (Math.round(n * 100) / 100);
+        if (points.length === 1) return `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
+        if (points.length === 2) {
+            return `M ${fmt(points[0].x)} ${fmt(points[0].y)} L ${fmt(points[1].x)} ${fmt(points[1].y)}`;
+        }
+        let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i === 0 ? 0 : i - 1];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[i + 2] || p2;
+            const cp1x = p1.x + (p2.x - p0.x) / 6;
+            const cp1y = p1.y + (p2.y - p0.y) / 6;
+            const cp2x = p2.x - (p3.x - p1.x) / 6;
+            const cp2y = p2.y - (p3.y - p1.y) / 6;
+            d += ` C ${fmt(cp1x)} ${fmt(cp1y)}, ${fmt(cp2x)} ${fmt(cp2y)}, ${fmt(p2.x)} ${fmt(p2.y)}`;
+        }
+        return d;
+    },
+
     // --- DYNAMIC SVG LINE GRAPH BUILDER (GROWTH PHASE 8: SCALE AWARE) ---
     _buildLineGraphSVG: (dataArray, labelsArray, title, isTodayIdx, isMini = false, compareDataArray = null) => {
         const numPoints = Math.max(1, dataArray.length);
@@ -1024,7 +1047,7 @@ const Admin = {
         const yMax = Math.ceil(maxVal + (spread > 0 ? spread * 0.2 : maxVal * 0.2));
         let yMin = Math.max(0, Math.floor(minVal - (spread > 0 ? spread * 0.2 : minVal * 0.5)));
         
-        // ??? GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
+        // GUARDIAN UX FIX: Clamp Y-Axis to 0 if dataset contains 0s to stop negative baseline rendering
         if (allData.some((v) => v === 0)) {
             yMin = 0;
         }
@@ -1039,13 +1062,8 @@ const Admin = {
         for (let i = 0; i < numPoints; i++) {
             if (dataArray[i] !== null && dataArray[i] !== undefined) knownIdx.push(i);
         }
-        let pathD = '';
-        if (knownIdx.length > 0) {
-            pathD = `M ${getX(knownIdx[0])} ${getY(dataArray[knownIdx[0]])}`;
-            for (let k = 1; k < knownIdx.length; k++) {
-                pathD += ` L ${getX(knownIdx[k])} ${getY(dataArray[knownIdx[k]])}`;
-            }
-        }
+        const knownPts = knownIdx.map((i) => ({ x: getX(i), y: getY(dataArray[i]) }));
+        let pathD = Admin._smoothSvgPathD(knownPts);
         const firstKnown = knownIdx[0] ?? 0;
         const lastKnown = knownIdx[knownIdx.length - 1] ?? 0;
         let areaD = pathD
@@ -1073,17 +1091,16 @@ const Admin = {
             });
         }
         
-        // ??? COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
+        // COMPARE OVERLAY: Draw the faded comparison line first so it sits underneath
         if (compareDataArray && numPoints > 1) {
             const cKnown = [];
             for (let i = 0; i < numPoints; i++) {
                 if (compareDataArray[i] !== null && compareDataArray[i] !== undefined) cKnown.push(i);
             }
             if (cKnown.length > 0) {
-                let comparePathD = `M ${getX(cKnown[0])} ${getY(compareDataArray[cKnown[0]])}`;
-                for (let k = 1; k < cKnown.length; k++) {
-                    comparePathD += ` L ${getX(cKnown[k])} ${getY(compareDataArray[cKnown[k]])}`;
-                }
+                const comparePathD = Admin._smoothSvgPathD(
+                    cKnown.map((i) => ({ x: getX(i), y: getY(compareDataArray[i]) }))
+                );
                 svg += `<path d="${comparePathD}" fill="none" stroke="#94a3b8" stroke-width="${isMini ? '2' : '3'}" stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" />`;
             }
         }
@@ -1141,7 +1158,7 @@ const Admin = {
                 const dayColor = isToday ? todayColor : labelColor;
                 svg += `<text x="${vx}" y="${pt+uh+20}" font-family="sans-serif" font-size="11" font-weight="800" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
                 
-                // ??? GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
+                // GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
                 if (Admin.telemetryRange !== 'INTRADAY') {
                     svg += `<text x="${vx}" y="${vy - 10}" font-family="sans-serif" font-size="11" font-weight="900" fill="${dayColor}" text-anchor="middle">${val}</text>`;
                 }
@@ -1167,7 +1184,7 @@ const Admin = {
             if (Admin.telemetryInterval) {
                 clearInterval(Admin.telemetryInterval);
                 Admin.telemetryInterval = null;
-                console.log("??? Guardian: Dev Modal closed. Telemetry polling suspended.");
+                console.log("Guardian: Dev Modal closed. Telemetry polling suspended.");
             }
             return;
         }
@@ -1205,7 +1222,7 @@ const Admin = {
                 if(statAllTime) statAllTime.textContent = data.allTimeUsers !== undefined ? Admin.formatNumber(data.allTimeUsers) : '--';
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
                 
-                // ??? GUARDIAN: Store and update regional breakdown seamlessly
+                // GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
                     Admin.currentRegionalBreakdown = data.regionalBreakdown;
                     Admin.updateRegionalModal();
@@ -1251,7 +1268,7 @@ const Admin = {
                     }
                 }
                 
-                // ??? GUARDIAN PHASE 2: RAM Array Slicer Engine
+                // GUARDIAN PHASE 2: RAM Array Slicer Engine
                 // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
                 // "last 48" for Today - that straddles midnight and draws a fake cliff.
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
@@ -1298,7 +1315,7 @@ const Admin = {
                     labelsArray = [...Array(padLen).fill(''), ...labelsArray];
                 }
 
-                // ??? GUARDIAN PHASE 3: Comparison Array Slicer
+                // GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
                 if (Admin.isComparing) {
                     if (Admin.telemetryRange === 'INTRADAY' && offset === 0 && masterLen > 48) {
@@ -1375,7 +1392,7 @@ const Admin = {
 
                 let titleStr = "";
                 
-                // ??? GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
+                // GUARDIAN PHASE 4: Dynamic Title Extractor based on raw data labels
                 let firstValidRaw = null;
                 let lastValidRaw = null;
                 
@@ -1500,7 +1517,7 @@ const Admin = {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
-            console.warn("??? Telemetry Fetch Failed:", e.message);
+            console.warn("Telemetry Fetch Failed:", e.message);
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
             if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
@@ -1744,7 +1761,7 @@ const Admin = {
 
     // --- 1. INITIALIZATION ---
     init: () => {
-        // ??? GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
+        // GUARDIAN FIX: Uncouple UI bindings from Firebase to survive offline/cached race conditions
         if (!Admin._coreEventsBound) {
             Admin.setupLoginAccess();
             Admin._coreEventsBound = true;
@@ -1766,11 +1783,11 @@ const Admin = {
 
     // --- 2. AUTH LISTENER (PHASE 9) ---
     setupAuthListener: () => {
-        // ??? GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
+        // GUARDIAN PHASE 4: Upgrade to onIdTokenChanged to survive token refreshes and prevent random drops
         const authListenerFn = typeof window.firebaseOnIdTokenChanged === 'function' ? window.firebaseOnIdTokenChanged : window.firebaseOnAuthStateChanged;
         
         if (typeof authListenerFn !== 'function') {
-            console.warn("??? Guardian: Firebase Auth not loaded. Skipping auth listener.");
+            console.warn("Guardian: Firebase Auth not loaded. Skipping auth listener.");
             return;
         }
 
@@ -1778,13 +1795,13 @@ const Admin = {
             const signoutContainer = document.getElementById('admin-signout-container');
             
             if (user) {
-                console.log("??? Guardian: Admin Authenticated. Analytics blocked.");
+                console.log("Guardian: Admin Authenticated. Analytics blocked.");
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
-                // ??? GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
+                // GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
                 Admin.currentUser = user;
 
-                // ??? GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
+                // GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
                 let displayName = user.email;
                 if (user.email && user.email.includes('@')) {
                     const prefix = user.email.split('@')[0];
@@ -1817,9 +1834,9 @@ const Admin = {
                 Admin.syncAllBadges();
 
             } else {
-                console.log("??? Guardian: Admin Logged Out. Analytics restored.");
+                console.log("Guardian: Admin Logged Out. Analytics restored.");
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
-                // ??? GUARDIAN UX: Wipe mirrored session on secure signout
+                // GUARDIAN UX: Wipe mirrored session on secure signout
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
                 if (signoutContainer) signoutContainer.innerHTML = '';
@@ -1882,7 +1899,7 @@ const Admin = {
             }
         });
 
-        // ??? GUARDIAN FIX: Smooth exit via Router/Back Button
+        // GUARDIAN FIX: Smooth exit via Router/Back Button
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => { 
                 if (location.hash === '#login') history.back();
@@ -1907,7 +1924,7 @@ const Admin = {
                     return;
                 }
 
-                // ??? GUARDIAN PHASE 1: Network-request-failed crash immunity
+                // GUARDIAN PHASE 1: Network-request-failed crash immunity
                 if (!navigator.onLine || window.isLieFi) {
                     if (typeof showToast === 'function') showToast("Network disconnected. Cannot authenticate.", "error");
                     return;
@@ -1937,7 +1954,7 @@ const Admin = {
                     })
                     .catch((error) => {
                         if (typeof showToast === 'function') showToast("Authentication Failed", "error");
-                        console.error("??? Guardian Login Error:", error);
+                        console.error("Guardian Login Error:", error);
                     })
                     .finally(() => {
                         if (spinner) spinner.classList.add('hidden');
@@ -1983,7 +2000,7 @@ const Admin = {
 
     // --- HELPER: RENDER ALL DYNAMIC MODULES ---
     renderAdminModules: () => {
-        // ??? GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
+        // GUARDIAN UX FIX: Singleton rendering lock absolutely eradicates the module duplication bug
         if (Admin._modulesRendered) {
             Admin.initGridView(); // Ensure grid is bound if re-opened
             Admin.ensureGlobalStateMonitorTile();
@@ -1992,7 +2009,7 @@ const Admin = {
         }
         Admin._modulesRendered = true;
 
-        // ??? GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
+        // GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
         const devModalCard = document.querySelector('#dev-modal > div');
         if (devModalCard) {
             devModalCard.className = "bg-gray-50 dark:bg-gray-900 w-full min-h-screen max-w-5xl mx-auto p-4 sm:p-6 flex flex-col relative transition-all duration-300";
@@ -2004,7 +2021,7 @@ const Admin = {
         }
 
         // --- AFTER ---
-        // ??? GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
+        // GUARDIAN UX FIX: Removed the top "Secure Sign Out" button to prevent accidental 6th-tap clicks. 
         // Admin will rely purely on the bottom Sign Out button.
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6');
 
@@ -2033,16 +2050,16 @@ const Admin = {
         // Stub Global State Monitor before grid packs tiles (fetch fills body async)
         Admin.ensureGlobalStateMonitorTile();
 
-        // ??? GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
+        // GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
         
         // Final Universal Sync
         Admin.syncAllBadges();
 
-        // ??? GUARDIAN PHASE 14: Action Required Expiry Dashboard
+        // GUARDIAN PHASE 14: Action Required Expiry Dashboard
         Admin.fetchActionRequired();
         
-        // ??? GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
+        // GUARDIAN PHASE 6.3: Post-Render Initialization for Transplanted UI Components
         // Because the HTML for these elements was moved OUT of the monolithic UI.js string 
         // and IN to the dynamic setup functions, we must manually trigger their setup logic here
         // so they attach to the newly generated DOM elements on first load.
@@ -2190,7 +2207,7 @@ const Admin = {
                         Object.keys(exclData[rId]).forEach(tNum => {
                             const item = exclData[rId][tNum];
                             
-                            // ??? GUARDIAN PHASE 1: Capture Grid Notices
+                            // GUARDIAN PHASE 1: Capture Grid Notices
                             if (tNum === '_grid_notice') {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     activeItems.push({ type: 'Grid Notice', label: `Grid Notice Active`, expiresAt: item.expiresAt, id: '_grid_notice', panelId: 'exclusion-panel', routeId: rId });
@@ -2243,7 +2260,7 @@ const Admin = {
                 return a.expiresAt - b.expiresAt;
             });
 
-            // ??? GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
+            // GUARDIAN PHASE 2: Cross-reference active states for Dropdown Breadcrumbs
             Admin._routeFlags = {};
             activeItems.forEach(item => {
                 if (!item.routeId || item.routeId === 'all' || item.routeId.startsWith('all_')) return;
@@ -2260,7 +2277,7 @@ const Admin = {
             if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
             if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-            // ??? GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
+            // GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
             const getRegionBadge = (rId) => {
                 if (!rId) return '';
                 const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
@@ -2476,7 +2493,7 @@ const Admin = {
             const chev = targetPanel.querySelector('[id$="-chevron"]');
             if (chev) chev.classList.remove('-rotate-90');
 
-            // ??? GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
+            // GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
             const internalHeader = targetPanel.querySelector('[id$="-header-btn"]');
             if (internalHeader) internalHeader.style.setProperty('display', 'none', 'important');
 
@@ -2484,7 +2501,7 @@ const Admin = {
             const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6') || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
             if (devHeaderRow) {
                 devHeaderRow.classList.remove('pb-4', 'mb-6');
-                devHeaderRow.classList.add('pb-2', 'mb-3'); // ??? GUARDIAN UX: Slim header padding
+                devHeaderRow.classList.add('pb-2', 'mb-3'); // GUARDIAN UX: Slim header padding
 
                 const titleH3 = devHeaderRow.querySelector('h3');
                 if (titleH3) {
@@ -2523,7 +2540,7 @@ const Admin = {
                             container.classList.add('admin-grid-view');
                             container.style.gridTemplateColumns = `repeat(${Admin.gridCols}, minmax(0, 1fr))`;
                             titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
-                            devHeaderRow.classList.add('pb-4', 'mb-6'); // ??? GUARDIAN UX: Restore padding
+                            devHeaderRow.classList.add('pb-4', 'mb-6'); // GUARDIAN UX: Restore padding
                             devHeaderRow.classList.remove('pb-2', 'mb-3');
                             const toggleBtn = document.getElementById('grid-view-toggle');
                             if (toggleBtn) toggleBtn.style.display = '';
@@ -2730,7 +2747,7 @@ const Admin = {
         tabDistress?.addEventListener('click', () => switchTab('distress'));
         tabArchive.onclick = () => switchTab('archive');
 
-        // ??? GUARDIAN UX: Native Swipe Navigation for Crash Tabs
+        // GUARDIAN UX: Native Swipe Navigation for Crash Tabs
         let crashTouchStartX = 0;
         let crashTouchStartY = 0;
         const crashTabOrder = ['inbox', 'distress', 'archive'];
@@ -2770,7 +2787,7 @@ const Admin = {
                 return;
             }
 
-            // ??? GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
+            // GUARDIAN PHASE 1: Sanitization Armor (XSS Protection)
             const secureEscape = (str) => {
                 if (!str) return '';
                 if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -2798,7 +2815,7 @@ const Admin = {
                 const did = secureEscape(rawDid);
                 const safeJsDid = rawDid.replace(/'/g, "\\'");
                 
-                // ??? GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
+                // GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
                 const resolveAllHtml = isInbox 
                     ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>` 
                     : '';
@@ -2998,7 +3015,7 @@ const Admin = {
             }
         };
 
-        // ??? GUARDIAN PHASE 1: Bulk Resolve Engine
+        // GUARDIAN PHASE 1: Bulk Resolve Engine
         Admin.resolveAllDeviceCrashes = async (deviceId) => {
             const confirmed = await Admin.secureConfirm("Resolve All Crashes", `Mark all active crashes for device ${deviceId.substring(0,10)}... as resolved?`);
             if (!confirmed) return;
@@ -3171,7 +3188,7 @@ const Admin = {
                 document.head.appendChild(style);
             }
 
-            // ??? GUARDIAN UX FIX: Drill-Down "X" Interceptor
+            // GUARDIAN UX FIX: Drill-Down "X" Interceptor
             // Drilled-in ? X acts as Back. Grid (or missing drill-back) ? always close.
             // Previously X silently no-oped when !isGridMode but #drill-back-btn was gone,
             // and history.back() on #dev sometimes left the modal open.
@@ -3218,17 +3235,17 @@ const Admin = {
                 container.classList.remove('admin-grid-view');
                 container.style.gridTemplateColumns = ''; // Clear inline styles
                 
-                // ??? GUARDIAN UX FIX: Edge-to-Edge Expansion
+                // GUARDIAN UX FIX: Edge-to-Edge Expansion
                 // Strip padding, borders, and margins so the module touches the exact edge of the screen
                 card.dataset.originalClasses = card.className;
                 card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800');
                 card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-transparent');
                 
-                // ??? GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
+                // GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
                 const signoutContainer = document.getElementById('admin-signout-container');
                 if (signoutContainer) signoutContainer.style.display = 'none';
                 
-                // ??? GUARDIAN PHASE 11: Admin Router Bug Fix
+                // GUARDIAN PHASE 11: Admin Router Bug Fix
                 history.pushState({ adminPanel: card.id }, '', `#dev-${card.id}`);
                 
                 // Hide sibling cards
@@ -3244,7 +3261,7 @@ const Admin = {
                 const chev = card.querySelector('[id$="-chevron"]');
                 if (chev) chev.classList.remove('-rotate-90');
 
-                // ??? GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
+                // GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
                 const innerHeader = card.querySelector('[id$="-header-btn"]');
                 if (innerHeader) innerHeader.style.setProperty('display', 'none', 'important');
                 
@@ -3272,13 +3289,13 @@ const Admin = {
                     document.getElementById('drill-back-btn').onclick = (evt) => {
                         evt.stopPropagation();
                         
-                        // ??? GUARDIAN PHASE 1: Lightbox Router Trap
+                        // GUARDIAN PHASE 1: Lightbox Router Trap
                         if (window._adminLightboxOpen) {
                             Admin.closeLightbox();
                             return; // Halt cascade, stay in the panel
                         }
 
-                        // ??? GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
+                        // GUARDIAN PHASE 1: The UI.js Blindfold & Router Lock
                         // Temporarily rename the modal ID so ui.js's popstate listener doesn't see it
                         // and close it during the asynchronous history.back() event.
                         window._adminDrillBackLock = true;
@@ -3302,10 +3319,10 @@ const Admin = {
                         titleH3.innerHTML = devHeaderRow.dataset.originalHtml;
                         toggleBtn.style.display = '';
                         
-                        // ??? GUARDIAN UX FIX: Restore Card Borders & Padding
+                        // GUARDIAN UX FIX: Restore Card Borders & Padding
                         card.className = card.dataset.originalClasses;
 
-                        // ??? GUARDIAN UX FIX: Restore Action Required accordion state if it was open
+                        // GUARDIAN UX FIX: Restore Action Required accordion state if it was open
                         if (window._actionRequiredWasOpen) {
                             const actionBody = document.getElementById('action-body');
                             const actionChevron = document.getElementById('action-chevron');
@@ -3314,7 +3331,7 @@ const Admin = {
                             window._actionRequiredWasOpen = false; // Reset lock
                         }
                         
-                        // ??? GUARDIAN UX FIX: Restore Sign Out container when returning to grid
+                        // GUARDIAN UX FIX: Restore Sign Out container when returning to grid
                         if (signoutContainer) signoutContainer.style.display = '';
                         
                         Array.from(container.children).forEach(child => {
@@ -3322,12 +3339,12 @@ const Admin = {
                             const b = child.querySelector('[id$="-body"]');
                             if (b) b.classList.add('hidden');
                             
-                            // ??? GUARDIAN UX FIX: Restore internal accordion header
+                            // GUARDIAN UX FIX: Restore internal accordion header
                             const h = child.querySelector('[id$="-header-btn"]');
                             if (h) h.style.removeProperty('display');
                         });
                     
-                    // ??? GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
+                    // GUARDIAN UX FIX: Recalculate and clear badges locally when returning to grid
                     Admin.syncAllBadges();
                 };
                 
@@ -3337,8 +3354,8 @@ const Admin = {
                 if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
                 if (card.id === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
                 if (card.id === 'deadends-panel') Admin.fetchDeadEnds();
-                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // ??? GUARDIAN PHASE 7
-                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // ??? GUARDIAN PHASE 14
+                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // GUARDIAN PHASE 7
+                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
                 if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
                 if (card.id === 'alert-panel') {
                     const targetEl = document.getElementById('alert-target');
@@ -3598,7 +3615,7 @@ const Admin = {
             exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
-        // ??? GUARDIAN PHASE 2: Dynamic Sorting State
+        // GUARDIAN PHASE 2: Dynamic Sorting State
         Admin._deSortMode = Admin._deSortMode || 'recent'; 
 
         if (sortBtn) {
@@ -4025,7 +4042,7 @@ const Admin = {
                     let txt = `NEXT TRAIN - TRIP PLANS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
                     rows.forEach((r, i) => {
                         txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
-                        txt += `  ${r.origin} ? ${r.destination}\n`;
+                        txt += `  ${r.origin} -> ${r.destination}\n`;
                         txt += `  Region: ${r.region || '-'} - Day: ${r.dayType || '-'} - User: ${r.userId || '-'}\n`;
                         if (r.authUid) txt += `  Auth UID: ${r.authUid}\n`;
                         txt += `  Dep: ${r.depTime || '-'} - Arr: ${r.arrTime || '-'} - Transfers: ${r.transfers ?? '-'}\n\n`;
@@ -4064,7 +4081,7 @@ const Admin = {
                 let txt = `NEXT TRAIN - ROUTING FAILS EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
                 entries.forEach((r, i) => {
                     txt += `#${i + 1}  ${Admin.formatDate(r.timestamp)}\n`;
-                    txt += `  ${(r.origin || '?')} ? ${(r.destination || r.dest || '?')}\n`;
+                    txt += `  ${(r.origin || '-')} -> ${(r.destination || r.dest || '-')}\n`;
                     txt += `  Reason: ${r.reason || 'UNKNOWN'} - Day: ${r.dayType || '-'} - Region: ${r.region || '-'}\n`;
                     txt += `  User: ${r.userId || r.deviceId || '-'} - Time: ${r.timeOfDay || '-'}\n\n`;
                 });
@@ -4127,7 +4144,7 @@ const Admin = {
             </div>
             
             <div id="fb-body" class="hidden mt-4 flex flex-col">
-                <!-- ??? GUARDIAN UX FIX: Next Train Style Tabs -->
+                <!-- GUARDIAN UX FIX: Next Train Style Tabs -->
                 <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3">
                     <button id="fb-tab-inbox" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none">
                         Inbox
@@ -4137,7 +4154,7 @@ const Admin = {
                     </button>
                 </div>
 
-                <!-- ??? GUARDIAN UX FIX: Search Bar -->
+                <!-- GUARDIAN UX FIX: Search Bar -->
                 <div class="mb-3 relative px-1">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
                         ${Admin.icon('search', 'w-3.5 h-3.5')}
@@ -4145,7 +4162,7 @@ const Admin = {
                     <input type="text" id="fb-search-input" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block pl-10 p-3 shadow-inner outline-none transition-colors" placeholder="Search aliases, IDs, or messages...">
                 </div>
 
-                <!-- ??? GUARDIAN UX FIX: Relocated Action Buttons -->
+                <!-- GUARDIAN UX FIX: Relocated Action Buttons -->
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
@@ -4215,7 +4232,7 @@ const Admin = {
         tabInbox.onclick = () => switchTab('inbox');
         tabArchive.onclick = () => switchTab('archive');
 
-        // ??? GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
+        // GUARDIAN UX: Native Swipe Navigation for Feedback Tabs
         let fbTouchStartX = 0;
         let fbTouchStartY = 0;
         if (body) {
@@ -4246,7 +4263,7 @@ const Admin = {
                 groups[did].push(item);
             });
 
-            // ??? GUARDIAN UX FIX: Dynamic Tab Counters
+            // GUARDIAN UX FIX: Dynamic Tab Counters
             let totalInbox = 0;
             let totalArchive = 0;
             Object.keys(groups).forEach(did => {
@@ -4303,7 +4320,7 @@ const Admin = {
                 });
             };
             
-            // ??? GUARDIAN UX FIX: Universal CRM Date Formatter
+            // GUARDIAN UX FIX: Universal CRM Date Formatter
             const formatNiceDateTime = (ts) => {
                 const d = new Date(ts);
                 const day = d.getDate();
@@ -4345,7 +4362,7 @@ const Admin = {
 
                 const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
 
-                // ??? GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
+                // GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
                 const allEmails = new Set();
                 const allPhones = new Set();
                 
@@ -4408,7 +4425,7 @@ const Admin = {
                     contactHtml += '</div>';
                 }
 
-                // ??? GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
+                // GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
@@ -4468,7 +4485,7 @@ const Admin = {
                     
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right)
-                        // ??? GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
+                        // GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
                         let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
                         if (item.acknowledged) {
                             receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
@@ -4494,13 +4511,13 @@ const Admin = {
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
 
-                        // ??? GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
+                        // GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
                         parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
                             if (btnStart || btnEnd) return match; // Already wrapped in a button
                             return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
                         });
 
-                        // ??? GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
+                        // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
                         const msgAnchor = secureEscape(item.id || item.key || '');
                         groupHTML += `
                             <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}">
@@ -4522,6 +4539,30 @@ const Admin = {
                         let isReply = false;
 
                         const stripOuterQuotes = (s) => String(s || '').replace(/^["'\u201c\u201d\s]+|["'\u201c\u201d\s]+$/g, '').trim();
+                        /** Decode HTML entities / tags so quote chips never show &nbsp; etc. */
+                        const toQuotePlain = (raw) => {
+                            let s = String(raw ?? '');
+                            try {
+                                const d = document.createElement('div');
+                                d.innerHTML = s;
+                                s = d.textContent || d.innerText || '';
+                            } catch {
+                                s = s.replace(/<[^>]*>/g, '');
+                            }
+                            s = s
+                                .replace(/\u00a0/g, ' ')
+                                .replace(/&nbsp;/gi, ' ')
+                                .replace(/&amp;/gi, '&')
+                                .replace(/&lt;/gi, '<')
+                                .replace(/&gt;/gi, '>')
+                                .replace(/&quot;/gi, '"')
+                                .replace(/&#39;/gi, "'");
+                            s = stripOuterQuotes(s);
+                            // Unwrap a single leftover [ ... ] layer from legacy wrappers
+                            const wrapped = s.match(/^\[\s*([\s\S]*?)\s*\]$/);
+                            if (wrapped) s = stripOuterQuotes(wrapped[1]);
+                            return s.replace(/\s+/g, ' ').trim();
+                        };
                         const waQuoteChip = ({ author, snippet, onClickAttr, accent = 'blue' }) => {
                             const bar = accent === 'blue'
                                 ? 'border-blue-500 dark:border-blue-400'
@@ -4529,11 +4570,14 @@ const Admin = {
                             const nameCls = accent === 'blue'
                                 ? 'text-blue-600 dark:text-blue-400'
                                 : 'text-gray-600 dark:text-gray-300';
+                            const cleanAuthor = toQuotePlain(author) || 'Enock';
+                            const cleanSnippet = toQuotePlain(snippet) || 'Message';
                             const inner = `
-                                    <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(author || 'Enock')}</div>
-                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(snippet || 'Admin message')}</div>`;
+                                    <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(cleanAuthor)}</div>
+                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(cleanSnippet)}</div>`;
+                            // Whole shaded block is the hit target (WhatsApp-style)
                             if (onClickAttr) {
-                                return `<button type="button" ${onClickAttr} class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm">${inner}</button>`;
+                                return `<button type="button" ${onClickAttr} class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer">${inner}</button>`;
                             }
                             return `<div class="-mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5">${inner}</div>`;
                         };
@@ -4544,70 +4588,87 @@ const Admin = {
                         if (replyAdminMatch) {
                             isReply = true;
                             const replyKey = String(replyAdminMatch[1] || '').trim();
-                            let snippet = stripOuterQuotes(replyAdminMatch[2] || '');
+                            let snippet = toQuotePlain(replyAdminMatch[2] || '');
                             let bodyRest = String(replyAdminMatch[3] || '').replace(/^\s+/, '');
                             if (!snippet && bodyRest) {
                                 const parts = bodyRest.split(/\r?\n/);
                                 if (parts.length > 1) {
-                                    snippet = stripOuterQuotes(parts[0]);
+                                    snippet = toQuotePlain(parts[0]);
                                     bodyRest = parts.slice(1).join('\n').replace(/^\s+/, '');
                                 } else {
-                                    snippet = stripOuterQuotes(bodyRest);
-                                    bodyRest = '';
+                                    // Prefer not to swallow the whole reply as the quote when pipe snippet missing
+                                    snippet = '';
                                 }
                             }
-                            snippet = snippet.replace(/\s+/g, ' ').trim().slice(0, 240);
+                            snippet = snippet.slice(0, 240);
                             const safeKey = replyKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            const safeSnippetAttr = snippet.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                             quoteBlockHtml = waQuoteChip({
                                 author: 'Enock',
                                 snippet: snippet || 'Admin message',
-                                onClickAttr: `data-reply-key="${secureEscape(replyKey)}" onclick="Admin.jumpToQuotedFeedback('${safeKey}')"`,
+                                onClickAttr: `data-reply-key="${secureEscape(replyKey)}" onclick="event.stopPropagation(); Admin.jumpToQuotedFeedback('${safeKey}', '${safeSnippetAttr}')"`,
                                 accent: 'blue',
                             });
                             plainBody = bodyRest;
                         } else {
-                            const quoteRegex = /^\[([\s\S]*?)\]\s+/;
+                            // Legacy: [quote...] body  — also tolerate missing space after ]
+                            const quoteRegex = /^\[([\s\S]*?)\](?:\s+|(?=\S))/;
                             const quoteMatch = plainBody.match(quoteRegex);
                             if (quoteMatch && quoteMatch[1] !== undefined) {
                                 isReply = true;
                                 const rawQuoteContent = String(quoteMatch[1]);
                                 let quoteAuthor = 'Enock';
-                                let quoteSnippet = rawQuoteContent
-                                    .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_|]+/i, '')
-                                    .replace(/Replying to:\s*/i, '')
-                                    .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
-                                    .trim();
+                                let quoteSnippet = toQuotePlain(
+                                    rawQuoteContent
+                                        .replace(/REPLY TO ADMIN:\s*[-a-zA-Z0-9_|]+/i, '')
+                                        .replace(/Replying to:\s*/i, '')
+                                        .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
+                                );
                                 const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
                                 if (named) {
-                                    quoteAuthor = named[1].trim();
-                                    quoteSnippet = named[2].trim();
+                                    quoteAuthor = toQuotePlain(named[1]) || quoteAuthor;
+                                    quoteSnippet = toQuotePlain(named[2]);
                                 }
-                                quoteSnippet = stripOuterQuotes(quoteSnippet).replace(/\s+/g, ' ').trim().slice(0, 240);
+                                quoteSnippet = quoteSnippet.slice(0, 240);
                                 let alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
                                 let isAlertQuote = !!(alertIdMatch || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent));
+                                const safeSnippetAttr = quoteSnippet.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                                 if (isAlertQuote) {
                                     let alertIdParam = alertIdMatch ? `'${alertIdMatch[1]}'` : 'null';
                                     let safeQuoteText = (typeof escapeHTML === 'function' ? escapeHTML : secureEscape)(`${quoteAuthor}: ${quoteSnippet}`.replace(/'/g, "\\'"));
                                     quoteBlockHtml = waQuoteChip({
                                         author: quoteAuthor,
                                         snippet: quoteSnippet || 'Advisory',
-                                        onClickAttr: `onclick="Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')"`,
+                                        onClickAttr: `onclick="event.stopPropagation(); Admin.viewContextAlert(${alertIdParam}, '${safeQuoteText}')"`,
                                         accent: 'blue',
                                     });
                                 } else {
                                     quoteBlockHtml = waQuoteChip({
                                         author: quoteAuthor,
                                         snippet: quoteSnippet || 'Quoted message',
-                                        accent: 'gray',
+                                        onClickAttr: `onclick="event.stopPropagation(); Admin.jumpToQuotedFeedback(null, '${safeSnippetAttr}')"`,
+                                        accent: 'blue',
                                     });
                                 }
                                 plainBody = plainBody.slice(quoteMatch[0].length).replace(/^\s+/, '');
                             }
                         }
+                        // Decode entities in the reply body without collapsing intentional newlines
+                        plainBody = String(plainBody || '')
+                            .replace(/&nbsp;/gi, ' ')
+                            .replace(/\u00a0/g, ' ')
+                            .replace(/&amp;/gi, '&')
+                            .replace(/&lt;/gi, '<')
+                            .replace(/&gt;/gi, '>')
+                            .replace(/&quot;/gi, '"')
+                            .replace(/&#39;/gi, "'")
+                            .replace(/^\[+\s*/, '')
+                            .replace(/^\s*["'\u201c\u201d]+/, '')
+                            .trim();
 
                         let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
 
-                        // ??? GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
+                        // GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
                         rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
 
                         // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
@@ -4632,7 +4693,7 @@ const Admin = {
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
 
 
-                        // ??? GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
+                        // GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
                         let attachmentHtml = '';
                         if (safeAttachUrls.length > 0) {
                             const gridCols = safeAttachUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
@@ -4655,7 +4716,7 @@ const Admin = {
                         else if (item.type === 'bug') { typeLabel = "App Bug"; typeIconName = "bug"; }
                         else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIconName = "lightbulb"; }
 
-                        // ??? GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
+                        // GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
                         const headerLabelText = isReply
                             ? `${Admin.icon('reply', 'w-3 h-3')} Reply:`
                             : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
@@ -4668,7 +4729,7 @@ const Admin = {
                             </div>
                         `;
 
-                        // ??? GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
+                        // GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
                         groupHTML += `
                             <div class="flex flex-col items-start mb-1.5 pr-2 sm:pr-4">
                                 <div class="flex flex-col bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 pt-1.5 pb-2 px-3 rounded-2xl rounded-tl-sm shadow-sm border border-gray-200 dark:border-gray-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
@@ -4716,7 +4777,7 @@ const Admin = {
                 listContainer.appendChild(groupCard);
             });
 
-            // ??? GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
+            // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
                 const header = e.target.closest('.feedback-group-header');
                 if (!header) return;
@@ -4872,7 +4933,7 @@ const Admin = {
             }
         };
 
-        // ??? GUARDIAN PHASE 11: Restore from Archive
+        // GUARDIAN PHASE 11: Restore from Archive
         Admin.restoreFeedback = async (id) => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -4921,7 +4982,7 @@ const Admin = {
             }
         };
 
-        // ??? GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
+        // GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
         Admin.setCommuterAlias = async (deviceId, currentAlias) => {
             // Prefill with existing alias, else the full Next Train ID so admin can
             // copy/edit/clear it instead of starting from a blank field.
@@ -4960,7 +5021,7 @@ const Admin = {
             }
         };
 
-        // ??? GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
+        // GUARDIAN PHASE 6: AI Thread Exporter (.txt Blob Generator)
         Admin.exportThreadForAI = (did) => {
             const items = Admin.cachedFeedbackData.filter(i => (i.device_id === did || i.deviceId === did || (did === 'Anonymous / Legacy' && !i.device_id && !i.deviceId)));
             items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -4992,7 +5053,7 @@ const Admin = {
             if (ok && typeof showToast === 'function') showToast("Downloaded thread (.txt)", "success");
         };
 
-        // ??? GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
+        // GROWTH SPRINT PHASE 11: Global AI Thread Exporter (.txt Blob Generator)
         Admin.exportGlobalThreadsForAI = () => {
             const isInbox = Admin.currentFeedbackTab === 'inbox';
             
@@ -5188,7 +5249,7 @@ const Admin = {
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
                             <p class="text-[11px] text-gray-700 dark:text-gray-300 mb-1">${note}</p>
-                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` - near ${String(r.station).replace(/</g, '')}` : ''} - ${r.reportId || r._key}${r.verified ? ' - ? verified' : ''}</p>
+                            <p class="text-[9px] text-gray-400 font-mono mb-2">${who}${r.station ? ` - near ${String(r.station).replace(/</g, '')}` : ''} - ${r.reportId || r._key}${r.verified ? ' - verified' : ''}</p>
                             <div class="flex flex-wrap gap-3">
                             ${status !== 'closed' ? `<button type="button" class="dr-close-btn text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Mark closed</button>` : '<span class="text-[10px] text-gray-400">Closed</span>'}
                             ${!r.verified && r.uid ? `<button type="button" class="dr-verify-btn text-[10px] font-bold text-green-700 dark:text-green-400 underline" data-id="${r.reportId || r._key}" data-uid="${r.uid}">Mark verified (+trust)</button>` : (r.verified ? '<span class="text-[10px] text-green-600">Verified</span>' : '')}
@@ -5612,7 +5673,7 @@ const Admin = {
         await fetch(`${dynamicEndpoint}users/${uid}/trustScore.json?auth=${secret}`, {
             method: 'PUT', body: JSON.stringify(score + 1)
         });
-        if (typeof showToast === 'function') showToast(`Verified - trust score ? ${score + 1}`, 'success');
+        if (typeof showToast === 'function') showToast(`Verified - trust score: ${score + 1}`, 'success');
     },
 
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
@@ -5657,7 +5718,7 @@ const Admin = {
                 </div>
                 <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
                     <div class="flex gap-2 mb-3 px-1">
-                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_-), or email-" />
+                        <input type="text" id="ut-uid-input" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-mono" placeholder="UID, device ID (usr_…), or email" />
                         <button type="button" id="ut-lookup-btn" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Lookup</button>
                     </div>
                     <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
@@ -5773,7 +5834,7 @@ const Admin = {
                 Object.entries(devices).forEach(([deviceId, d]) => {
                     // Prefer linked account if already listed; else show device-level ban
                     if (d?.uid && seen.has(d.uid)) return;
-                    pushBan(deviceId, { flags: d?.flags || {}, displayName: d?.uid ? `Device ? ${d.uid}` : 'Device' }, 'device');
+                    pushBan(deviceId, { flags: d?.flags || {}, displayName: d?.uid ? `Device / ${d.uid}` : 'Device' }, 'device');
                 });
 
                 bans.sort((a, b) => (b.bannedAt || 0) - (a.bannedAt || 0));
@@ -5897,7 +5958,7 @@ const Admin = {
             try {
                 const resolved = await Admin.resolveTrustTarget(query);
                 if (!resolved) {
-                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_-</code>), or account email.</p>';
+                    out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_…</code>), or account email.</p>';
                     return;
                 }
                 const { uid, user, via, deviceId } = resolved;
@@ -6027,12 +6088,12 @@ const Admin = {
             modal.firstElementChild.classList.add('scale-95');
         };
 
-        // ??? GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
+        // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
         const replyUploadFile = document.getElementById('admin-reply-upload-file');
         if (replyUploadFile) {
             replyUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('admin-reply-text');
-                // ??? GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -6167,10 +6228,23 @@ const Admin = {
     },
 
     // --- GUARDIAN PHASE 7: CONTEXTUAL ALERT VIEWER ---
-    jumpToQuotedFeedback: (replyKey) => {
-        if (!replyKey) return;
-        const el = document.getElementById(`fb-msg-${replyKey}`)
-            || document.querySelector(`[data-fb-msg-id="${CSS.escape ? CSS.escape(replyKey) : replyKey}"]`);
+    jumpToQuotedFeedback: (replyKey, snippetHint = '') => {
+        let el = null;
+        if (replyKey) {
+            el = document.getElementById(`fb-msg-${replyKey}`)
+                || document.querySelector(`[data-fb-msg-id="${CSS.escape ? CSS.escape(replyKey) : replyKey}"]`);
+        }
+        // Legacy / missing key: fuzzy-match quoted text against admin bubbles in this thread
+        if (!el && snippetHint) {
+            const needle = String(snippetHint).replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 80);
+            if (needle) {
+                const bubbles = document.querySelectorAll('[id^="fb-msg-"]');
+                for (const node of bubbles) {
+                    const t = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    if (t.includes(needle)) { el = node; break; }
+                }
+            }
+        }
         if (!el) {
             if (typeof showToast === 'function') showToast('Original message not in this thread view', 'info', 2000);
             return;
@@ -6226,7 +6300,7 @@ const Admin = {
                 if (data && !data.error) Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
                 
                 if (!foundData) {
-                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // ??? GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
+                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
                     data = await res.json();
                     if (data && !data.error) {
                         Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
@@ -6297,7 +6371,7 @@ const Admin = {
                 }
             }
 
-            // ??? GUARDIAN PHASE 14: Disruption Graveyard Sweep
+            // GUARDIAN PHASE 14: Disruption Graveyard Sweep
             if (!foundData && fallbackText) {
                 const cleanFallback = fallbackText.replace(/['"]/g, '').toLowerCase().substring(0, 30);
                 
@@ -6362,7 +6436,7 @@ const Admin = {
         }
     },
 
-// --- ??? GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
+// --- GUARDIAN PHASE 2: WYSIWYG CURSOR LOCK ---
     _savedRange: null,
     saveCursorRange: () => {
         const sel = window.getSelection();
@@ -6376,7 +6450,7 @@ const Admin = {
         const editor = document.getElementById(targetId);
         if (!editor) return;
         
-        // ??? GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
+        // GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
         // Without these !important rules, Tailwind's text-sm class squashes all larger <font> tags back to "normal"
         if (!document.getElementById('wysiwyg-extended-sizes')) {
             const style = document.createElement('style');
@@ -6391,7 +6465,7 @@ const Admin = {
 
         editor.focus();
         
-        // ??? GUARDIAN UX FIX: Restore mobile cursor selection before formatting
+        // GUARDIAN UX FIX: Restore mobile cursor selection before formatting
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -6404,7 +6478,7 @@ const Admin = {
         } else if (tag === 'italic') { 
             document.execCommand('italic', false, null);
         } else if (tag === 'larger' || tag === 'smaller') {
-            // ??? GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
+            // GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
             let currentSize = 3; // Default to Normal
             const sel = window.getSelection();
@@ -6960,7 +7034,7 @@ const Admin = {
                 </div>
 
 
-                <!-- ??? SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
+                <!-- SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
                 <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
                         <span class="inline-flex items-center gap-1.5">${Admin.icon('note', 'w-3.5 h-3.5')} Add Data Source (Advanced)</span>
@@ -6978,7 +7052,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ??? SUPERCHARGED: Interactive Poll Manager -->
+                <!-- SUPERCHARGED: Interactive Poll Manager -->
                 <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 mt-2">
                     <div>
                         <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
@@ -7478,7 +7552,7 @@ const Admin = {
             };
         }
 
-        // ??? GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
+        // GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
         if (alertMsg) {
             alertMsg.addEventListener('paste', (e) => {
                 e.preventDefault();
@@ -7509,12 +7583,12 @@ const Admin = {
             };
         }
 
-        // ??? GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
+        // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
         const inlineUploadFile = document.getElementById('alert-upload-file');
         if (inlineUploadFile) {
             inlineUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('alert-msg');
-                // ??? GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
+                // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
                 if (editor) editor.focus();
 
@@ -7542,12 +7616,12 @@ const Admin = {
                         
                         const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
                         const labelEl = document.getElementById('alert-upload-label');
-                        const originalLabel = labelEl ? labelEl.innerHTML : '?? Insert Media';
+                        const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Insert Media`;
                         
                         uploadTask.on('state_changed', 
                             (snapshot) => {
                                 const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                                if (labelEl) labelEl.innerHTML = `? ${progress}%`;
+                                if (labelEl) labelEl.innerHTML = `${progress}%`;
                             }, 
                             (error) => {
                                 if (typeof showToast === 'function') showToast("Upload failed", "error");
@@ -7562,7 +7636,7 @@ const Admin = {
                                     
                                     let htmlToInsert = '';
                                     if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">?? View Attached PDF</a>&nbsp;`;
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">View Attached PDF</a>&nbsp;`;
                                     } else {
                                         htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
                                     }
@@ -7636,14 +7710,12 @@ const Admin = {
                         severitySelect.value = data.severity;
                         const display = document.getElementById('alert-severity-display');
                         if (display) {
-                            if (data.severity === 'info') display.innerHTML = '?? Info (General)';
-                            else if (data.severity === 'warning') display.innerHTML = '?? Warning (Delays)';
-                            else if (data.severity === 'critical') display.innerHTML = '?? Critical (Suspended)';
+                            display.innerHTML = Admin._severityLabelHtml(data.severity || 'info');
                         }
                     } else if (severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = '?? Info (General)';
+                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
                     }
 
                     if (data.authorName) signoffInput.value = data.authorName;
@@ -7736,7 +7808,7 @@ const Admin = {
                     if(severitySelect) {
                         severitySelect.value = 'info';
                         const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = '?? Info (General)';
+                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
                     }
 
                     signoffInput.value = "Next Train Ops";
@@ -7804,10 +7876,10 @@ const Admin = {
 
             const globalGroup = addGroup("Global Alerts");
             addOption(globalGroup, "all", "Entire Network (All Regions)", `<span class='truncate inline-flex items-center gap-1'>${Admin.icon('globe', 'w-3.5 h-3.5 shrink-0')} Entire Network (All Regions)</span>`);
-            addOption(globalGroup, "all_GP", "?? Gauteng Only", "<span class='truncate'>?? Gauteng Only</span>");
-            addOption(globalGroup, "all_WC", "?? Western Cape Only", "<span class='truncate'>?? Western Cape Only</span>");
-            addOption(globalGroup, "all_KZN", "?? KwaZulu-Natal Only", "<span class='truncate'>?? KwaZulu-Natal Only</span>");
-            addOption(globalGroup, "all_EC", "?? Eastern Cape Only", "<span class='truncate'>?? Eastern Cape Only</span>");
+            addOption(globalGroup, "all_GP", "Gauteng Only", "<span class='truncate'>Gauteng Only</span>");
+            addOption(globalGroup, "all_WC", "Western Cape Only", "<span class='truncate'>Western Cape Only</span>");
+            addOption(globalGroup, "all_KZN", "KwaZulu-Natal Only", "<span class='truncate'>KwaZulu-Natal Only</span>");
+            addOption(globalGroup, "all_EC", "Eastern Cape Only", "<span class='truncate'>Eastern Cape Only</span>");
 
             if (typeof ROUTES !== 'undefined') {
                 const regions = [
@@ -7824,7 +7896,7 @@ const Admin = {
                         regionalRoutes.forEach(r => {
                             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
                             const plainName = Admin.formatRouteLabelPlain(r.name);
-                            const text = `?? ${plainName}${cues}`;
+                            const text = `${plainName}${cues}`;
                             
                             let badgeHtml = '';
                             if (cues) {
@@ -7833,7 +7905,7 @@ const Admin = {
                                 if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
                                 if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
                             }
-                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">?? ${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
+                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
                             addOption(group, r.id, text, htmlText);
                         });
                     }
@@ -8046,6 +8118,9 @@ const Admin = {
                 : sev === 'warning'
                     ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
                     : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+            // Unicode escapes (encoding-safe) — same glyphs as live hub titles
+            const sevEmoji = sev === 'critical' ? '\uD83D\uDD34' : sev === 'warning' ? '\uD83D\uDFE1' : '\uD83D\uDD35';
+            const sevLabel = sev === 'critical' ? 'Critical' : sev === 'warning' ? 'Warning' : 'Info';
             const kindCls = isDisr
                 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
                 : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
@@ -8072,7 +8147,7 @@ const Admin = {
                 <button type="button" data-archive-idx="${idx}" class="alert-archive-item w-full text-left p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 hover:border-blue-400 dark:hover:border-blue-500 transition-colors shadow-sm focus:outline-none">
                     <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${kindCls}">${isDisr ? 'Incident' : 'Alert'}</span>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${escapeHTML(sev)}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevEmoji} ${sevLabel}</span>
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${escapeHTML(reason)}</span>
                         ${pollHint}
                     </div>
@@ -8107,8 +8182,8 @@ const Admin = {
         const isDisr = data.kind === 'disruption' || data.tier || data.longExplanation;
         const severity = (data.severity || (data.tier === 'CRITICAL' ? 'critical' : (isDisr ? 'warning' : 'info'))).toLowerCase();
         const title = isDisr
-            ? (severity === 'critical' ? '?? CRITICAL INCIDENT' : '?? TRANSIT INCIDENT')
-            : (severity === 'critical' ? '?? CRITICAL ADVISORY' : severity === 'warning' ? '?? SERVICE WARNING' : '?? SERVICE INFO');
+            ? (severity === 'critical' ? '\uD83D\uDD34 CRITICAL INCIDENT' : '\uD83D\uDFE0 TRANSIT INCIDENT')
+            : (severity === 'critical' ? '\uD83D\uDD34 CRITICAL ADVISORY' : severity === 'warning' ? '\uD83D\uDFE1 SERVICE WARNING' : '\uD83D\uDD35 SERVICE INFO');
         const borderCls = severity === 'critical'
             ? 'border-red-500'
             : severity === 'warning'
@@ -8293,11 +8368,12 @@ const Admin = {
                             : 'text-blue-600 dark:text-blue-400'
                 }`;
             }
+            // Unicode escapes stay encoding-safe (matches live hub.js titles)
             modalHeader.textContent = severity === 'critical'
-                ? '?? CRITICAL ADVISORY'
+                ? '\uD83D\uDD34 CRITICAL ADVISORY'
                 : severity === 'warning'
-                    ? '?? SERVICE WARNING'
-                    : '?? SERVICE INFO';
+                    ? '\uD83D\uDFE1 SERVICE WARNING'
+                    : '\uD83D\uDD35 SERVICE INFO';
         }
         content.innerHTML = Admin.buildNoticeBodyHtml(item);
         if (timestamp) {
@@ -8313,7 +8389,8 @@ const Admin = {
 
         const closePreview = () => {
             restoreZ();
-            if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal');
+            // Close without history.back() — archive preview never pushed #notice.
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal', true);
             else modal.classList.add('hidden');
             if (oldCloseBtn) oldCloseBtn.style.display = '';
         };
@@ -8340,12 +8417,12 @@ const Admin = {
         }
 
         const topClose = modal.querySelector('button.text-gray-400');
-        if (topClose) topClose.onclick = (e) => { e.preventDefault(); closePreview(); };
+        if (topClose) topClose.onclick = (e) => { e.preventDefault(); e.stopPropagation(); closePreview(); };
 
         if (oldCloseBtn?.parentNode) oldCloseBtn.parentNode.appendChild(btnContainer);
         else content.parentNode?.appendChild(btnContainer);
 
-        openSmoothModal('notice-modal');
+        openSmoothModal('notice-modal', null, { skipHash: true });
     },
 
     _previewArchiveAsDisruption: (item) => {
@@ -8378,11 +8455,11 @@ const Admin = {
         if (badgeEl) {
             if (item.tier === 'CRITICAL' || item.severity === 'critical') {
                 badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50';
-                badgeEl.textContent = 'CRITICAL SERVICE DISRUPTION';
+                badgeEl.textContent = '\uD83D\uDD34 CRITICAL SERVICE DISRUPTION';
                 if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
             } else {
                 badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 py-2.5 rounded-lg border border-yellow-200 dark:border-yellow-800/50';
-                badgeEl.textContent = 'EXPECT DELAYS / SINGLE TRACK';
+                badgeEl.textContent = '\uD83D\uDFE1 EXPECT DELAYS / SINGLE TRACK';
                 if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-yellow-500');
             }
         }
@@ -8399,7 +8476,7 @@ const Admin = {
         const closePreview = () => {
             restoreZ();
             if (actionsRow && prevActionsHtml != null) actionsRow.innerHTML = prevActionsHtml;
-            if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal', true);
             else modal.classList.add('hidden');
         };
 
@@ -8423,9 +8500,9 @@ const Admin = {
         }
 
         const topClose = modalCard?.querySelector('button.text-gray-400, button.rounded-full');
-        if (topClose) topClose.onclick = (e) => { e.preventDefault(); closePreview(); };
+        if (topClose) topClose.onclick = (e) => { e.preventDefault(); e.stopPropagation(); closePreview(); };
 
-        openSmoothModal('disruption-modal');
+        openSmoothModal('disruption-modal', null, { skipHash: true });
     },
 
     // --- 4.5 TRANSIT INCIDENT MANAGER (GUARDIAN PHASE 6) ---
@@ -8477,16 +8554,16 @@ const Admin = {
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Severity Tier</label>
                         <div class="relative" id="disr-tier-container">
                             <select id="disr-tier" class="hidden">
-                                <option value="CRITICAL">?? CRITICAL (Sever Line)</option>
-                                <option value="WARNING">?? WARNING (Expect Delays)</option>
+                                <option value="CRITICAL">CRITICAL (Sever Line)</option>
+                                <option value="WARNING">WARNING (Expect Delays)</option>
                             </select>
                             <div onclick="document.getElementById('disr-tier-list').classList.toggle('hidden'); document.getElementById('disr-tier-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">?? CRITICAL (Sever Line)</span></span>
+                                <span id="disr-tier-display" class="truncate"><span class="text-red-600">CRITICAL (Sever Line)</span></span>
                                 <svg id="disr-tier-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             <ul id="disr-tier-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>?? CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">?? CRITICAL (Sever Line)</li>
-                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>?? WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">?? WARNING (Expect Delays)</li>
+                                <li onclick="document.getElementById('disr-tier').value='CRITICAL'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-red-600\\'>CRITICAL (Sever Line)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-red-50 dark:hover:bg-gray-700 text-red-600 dark:text-red-400 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">CRITICAL (Sever Line)</li>
+                                <li onclick="document.getElementById('disr-tier').value='WARNING'; document.getElementById('disr-tier-display').innerHTML='<span class=\\'text-yellow-600\\'>WARNING (Expect Delays)</span>'; document.getElementById('disr-tier-list').classList.add('hidden'); document.getElementById('disr-tier-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-yellow-50 dark:hover:bg-gray-700 text-yellow-600 dark:text-yellow-400 transition-colors cursor-pointer">WARNING (Expect Delays)</li>
                             </ul>
                         </div>
                     </div>
@@ -8556,7 +8633,7 @@ const Admin = {
         const saveBtn = document.getElementById('disr-save-btn');
         const listDiv = document.getElementById('disr-list');
 
-        // ??? GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
+        // GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
         if (msgInput) {
             msgInput.addEventListener('input', function() {
                 this.style.height = 'auto'; // Reset to recalculate true scrollHeight
@@ -8892,8 +8969,8 @@ const Admin = {
                             document.getElementById('disr-tier').value = data.tier || 'CRITICAL';
                             const tierDisplay = document.getElementById('disr-tier-display');
                             if (tierDisplay) {
-                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">?? CRITICAL (Sever Line)</span>';
-                                else tierDisplay.innerHTML = '<span class="text-yellow-600">?? WARNING (Expect Delays)</span>';
+                                if (data.tier === 'CRITICAL') tierDisplay.innerHTML = '<span class="text-red-600">CRITICAL (Sever Line)</span>';
+                                else tierDisplay.innerHTML = '<span class="text-yellow-600">WARNING (Expect Delays)</span>';
                             }
 
                             if (data.stations && data.stations.length >= 1) {
@@ -8936,7 +9013,7 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
-                // ??? GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
+                // GUARDIAN PHASE 14: The Disruption Graveyard Interceptor
                 const fetchRes = await window.guardianFetch(`${dynamicEndpoint}disruptions/${rId}/${id}.json`, {}, 6000);
                 if (fetchRes.ok) {
                     const disrData = await fetchRes.json();
@@ -9029,7 +9106,7 @@ const Admin = {
                         <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
-                    <!-- ??? GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
+                    <!-- GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
                     <div class="flex items-center justify-between mt-2">
                         <div class="flex-1 pr-2">
                             <label class="block text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Expiry Date (Optional)</label>
@@ -9092,7 +9169,7 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
                     <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                     <p class="text-[9px] text-gray-400 mt-1 mb-2">If set, the train will automatically reappear on the schedule after this date.</p>
-                    <!-- ??? GUARDIAN PHASE 1: Export Visibility Toggle -->
+                    <!-- GUARDIAN PHASE 1: Export Visibility Toggle -->
                     <label class="flex items-center cursor-pointer bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
                         <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
                         <span class="text-[10px] font-bold text-gray-600 dark:text-gray-300 ml-2 uppercase tracking-wide leading-none">Show "NO SVC" Tag on Export Image</span>
@@ -9396,7 +9473,7 @@ const Admin = {
             pickerContainer.classList.remove('hidden');
         };
 
-        // ??? GUARDIAN Phase 3: Added Notice Save Button Logic
+        // GUARDIAN Phase 3: Added Notice Save Button Logic
         noticeSaveBtn.onclick = async () => {
             const rId = routeSelect.value;
             const text = noticeInput.value.trim();
@@ -9430,7 +9507,7 @@ const Admin = {
                     }, 10000);
                 }
 
-                // ??? GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
+                // GUARDIAN FIX: Cache Purge (Routed securely through telemetry worker)
                 try {
                     await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -9464,7 +9541,7 @@ const Admin = {
                 const res = await window.guardianFetch(`${dynamicEndpoint}exclusions/${rId}.json?t=${Date.now()}`, {}, 6000);
                 const data = await res.json();
                 
-                // ??? GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
+                // GUARDIAN Phase 3 & Phase 1: Extract Grid Notice Text and Ephemerality natively
                 if (data && data._grid_notice) {
                     noticeInput.value = data._grid_notice.text || "";
                     
@@ -9487,7 +9564,7 @@ const Admin = {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
                     if (noticeExpiryInput) {
-                        // ??? GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
+                        // GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
                         const defaultExpiry = new Date();
                         defaultExpiry.setHours(defaultExpiry.getHours() + 24);
                         defaultExpiry.setMinutes(defaultExpiry.getMinutes() - defaultExpiry.getTimezoneOffset());
@@ -9541,7 +9618,7 @@ const Admin = {
                             <div class="text-[9px] text-gray-400 mt-0.5">${item.reason || 'No reason specified'}</div>
                             ${expiryHtml}
                         </div>
-                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')">?</button>
+                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')" aria-label="Delete">${Admin.icon('x', 'w-4 h-4')}</button>
                     `;
                     listDiv.appendChild(row);
                 });
@@ -9603,7 +9680,7 @@ const Admin = {
                 });
                 await Promise.all(promises);
 
-                // ??? GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                // GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                 try {
                     const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                         method: 'POST', 
@@ -9638,7 +9715,7 @@ const Admin = {
             try {
                 const res = await fetch(url, { method: 'DELETE' });
                 if (res.ok) {
-                    // ??? GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
+                    // GUARDIAN FIX: Removed Hardcoded Cloudflare Cache Purge Key (Secured)
                     try {
                         const purgeRes = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
                             method: 'POST', 
@@ -9816,7 +9893,7 @@ const Admin = {
 
             <div id="diag-body" class="hidden mt-4 space-y-4">
                 
-                <!-- ??? GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
+                <!-- GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
                 <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target Region (Matrix & Scan)</label>
                     <select id="diag-region-select" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
@@ -9828,7 +9905,7 @@ const Admin = {
                     </select>
                 </div>
 
-                <!-- ??? CACHE PROPAGATION MATRIX ACCORDION -->
+                <!-- CACHE PROPAGATION MATRIX ACCORDION -->
                 <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
                     <button id="matrix-header-btn" class="w-full px-3 py-3 bg-indigo-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-indigo-200/50 dark:hover:bg-indigo-900/60">
                         <span class="flex items-center">
@@ -9864,7 +9941,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ??? DEEP NETWORK SCAN ACCORDION -->
+                <!-- DEEP NETWORK SCAN ACCORDION -->
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm transition-all">
                     <button id="deepscan-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-blue-900/40 text-left text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-blue-900/60">
                         <span class="flex items-center">
@@ -9946,7 +10023,7 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- ??? GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
+                <!-- GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
                         <span class="flex items-center gap-2">
@@ -10155,14 +10232,14 @@ const Admin = {
                     const segPreview = (m.segments || [])
                         .filter((s) => s.km != null)
                         .slice(0, 8)
-                        .map((s) => `${esc(s.from)}?${esc(s.to)} ${s.km}km`)
+                        .map((s) => `${esc(s.from)} -> ${esc(s.to)} ${s.km}km`)
                         .join(' - ');
                     const more = (m.segments || []).length > 8 ? ' -' : '';
                     return `
                         <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
                             <div class="flex justify-between gap-2 font-mono text-[9px]">
                                 <span class="truncate">${esc(d.dayDir)} - ${esc(d.sheetKey)}</span>
-                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '?')}?${esc(d.suggestedZone || '?')}${d.mismatch ? ' ?' : ''}</span>
+                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '-')}/${esc(d.suggestedZone || '-')}${d.mismatch ? ' !' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
                                 path ${m.pathKm != null ? m.pathKm + ' km' : '-'}
@@ -10181,7 +10258,7 @@ const Admin = {
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5 mb-0.5">
                                     <span class="font-black uppercase tracking-wider text-[9px] opacity-80">${statusLabel}</span>
-                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} ? ${esc(suggested)}${esc(suggestedRange)}</span>
+                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} -> ${esc(suggested)}${esc(suggestedRange)}</span>
                                 </div>
                                 <div class="font-semibold truncate">${routeBit}</div>
                                 <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} - ${esc(r.destB || '')}</div>
@@ -10307,7 +10384,7 @@ const Admin = {
                 window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
                 try { window.__ntLastSimKey = null; } catch (e) {}
                 
-                // ??? GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
+                // GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
                     try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch(e){}
                 } else {
@@ -10334,7 +10411,7 @@ const Admin = {
                 if (location.hash === '#dev') history.back();
                 else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
                 
-                // ??? GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
+                // GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
                 if (typeof loadAllSchedules === 'function') {
                     loadAllSchedules(true).then(() => {
                         if (typeof updateTime === 'function') updateTime(); 
@@ -10355,7 +10432,7 @@ const Admin = {
                 try { window.__ntLastSimKey = null; } catch (e) {}
                 if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
                 
-                // ??? GUARDIAN PHASE 4: Clear Pipeline Override on exit
+                // GUARDIAN PHASE 4: Clear Pipeline Override on exit
                 try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
                 const pipelineDropdown = document.getElementById('sim-pipeline-override');
                 if (pipelineDropdown) pipelineDropdown.value = 'AUTO';
@@ -10546,7 +10623,7 @@ const Admin = {
                         }
                     }
 
-                    // ??? GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
+                    // GUARDIAN FIX: Adjusted padding and wrapping to ensure narrow mobile screens don't stretch
                     html += `
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                             <td class="px-1.5 py-2 border-r border-gray-100 dark:border-gray-800 align-top">
@@ -10572,7 +10649,7 @@ const Admin = {
         runBtn.onclick = async () => {
             resultsDiv.innerHTML = '<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Initializing scan...</div>';
             
-            // ??? GUARDIAN PHASE 2: Dynamic Region & Source Engine
+            // GUARDIAN PHASE 2: Dynamic Region & Source Engine
             const regionSelect = document.getElementById('diag-region-select');
             const sourceSelect = document.getElementById('deepscan-source-select');
             const scanRegion = regionSelect ? regionSelect.value : 'CURRENT';
@@ -11406,30 +11483,53 @@ const Admin = {
             
             <div id="maint-body" class="hidden mt-4 space-y-4">
                 <!-- Maintenance Controls -->
-                <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800">
-                    <div class="flex items-center justify-between mb-3">
+                <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800 space-y-3">
+                    <div class="flex items-center justify-between">
                         <div>
                             <span class="font-bold text-orange-800 dark:text-orange-200 text-sm">Maintenance Mode</span>
-                            <p class="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5">Shows yellow warning banner to online users.</p>
+                            <p class="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5">Yellow banner for online users. Leave scope empty = everyone.</p>
                         </div>
                         <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                             <input type="checkbox" name="toggle" id="maint-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
                             <label for="maint-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                         </div>
                     </div>
+                    <input type="text" id="maint-message" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm" placeholder="Optional context (e.g. Cape Town Northern Line update...)">
                     <div>
-                        <input type="text" id="maint-message" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm" placeholder="Optional context (e.g. Adding KZN routes...)">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5">Regions (optional)</p>
+                        <div id="maint-region-checks" class="flex flex-wrap gap-2">
+                            ${['GP', 'WC', 'KZN', 'EC'].map((code) => `
+                                <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/40 border border-orange-200 dark:border-orange-800/60 text-[10px] font-bold text-orange-900 dark:text-orange-200 cursor-pointer">
+                                    <input type="checkbox" class="maint-region-cb rounded border-orange-300 text-orange-600 focus:ring-orange-500" value="${code}">
+                                    ${code}
+                                </label>`).join('')}
+                        </div>
                     </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300">Routes (optional)</p>
+                            <button type="button" id="maint-routes-clear" class="text-[9px] font-bold text-orange-600 dark:text-orange-400 hover:underline focus:outline-none">Clear</button>
+                        </div>
+                        <div id="maint-route-checks" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-orange-200 dark:border-orange-800/60 bg-white/60 dark:bg-gray-900/30 p-2">
+                            <p class="text-[10px] text-orange-500 italic">Select a region to list its routes.</p>
+                        </div>
+                    </div>
+                    <button type="button" id="maint-scope-save" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save message &amp; scope</button>
                 </div>
 
-                <!-- Force schedule type (per region) -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800 space-y-3">
-                    <div>
-                        <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force schedule type</span>
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
+                <!-- Force schedule type (accordion, collapsed by default) -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="sched-override-header" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-blue-900/40 text-left text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-blue-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-blue-600 dark:text-blue-300">${Admin.icon('calendar', 'w-4 h-4')}</span> Force schedule type
+                        </span>
+                        <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="sched-override-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
+                        <div id="sched-override-regions" class="space-y-3"></div>
+                        <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
                     </div>
-                    <div id="sched-override-regions" class="space-y-3"></div>
-                    <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
                 </div>
 
                 <!-- Shadow-ban default experience (accordion, collapsed by default) -->
@@ -11496,7 +11596,81 @@ const Admin = {
         const chevron = document.getElementById('maint-chevron');
         const toggle = document.getElementById('maint-toggle');
         const maintMsg = document.getElementById('maint-message');
-        
+        const maintRegionBox = document.getElementById('maint-region-checks');
+        const maintRouteBox = document.getElementById('maint-route-checks');
+        const maintRoutesClear = document.getElementById('maint-routes-clear');
+        const maintScopeSave = document.getElementById('maint-scope-save');
+        let _maintSelectedRoutes = new Set();
+
+        const getMaintSelectedRegions = () =>
+            Array.from(maintRegionBox?.querySelectorAll('.maint-region-cb:checked') || []).map((el) => el.value);
+
+        const collectMaintPayload = (activeOverride) => {
+            const regions = getMaintSelectedRegions();
+            const routes = Array.from(_maintSelectedRoutes);
+            const payload = {
+                active: typeof activeOverride === 'boolean' ? activeOverride : !!(toggle && toggle.checked),
+                message: (maintMsg && maintMsg.value) || '',
+                updatedAt: Date.now(),
+                updatedBy: Admin.currentUser?.email || 'Admin',
+            };
+            // Empty arrays omitted → clients treat as global
+            if (regions.length) payload.regions = regions;
+            if (routes.length) payload.routes = routes;
+            return payload;
+        };
+
+        const renderMaintRouteChecks = () => {
+            if (!maintRouteBox) return;
+            const regions = getMaintSelectedRegions();
+            const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+            const list = Object.values(routesObj).filter((r) =>
+                r && r.isActive !== false && r.id && (!regions.length || regions.includes(r.region))
+            );
+            if (!list.length) {
+                maintRouteBox.innerHTML = `<p class="text-[10px] text-orange-500 italic">${regions.length ? 'No routes for selected regions.' : 'Select a region to list its routes — or leave empty for all users.'}</p>`;
+                return;
+            }
+            list.sort((a, b) => String(a.region).localeCompare(b.region) || String(a.name || a.id).localeCompare(b.name || b.id));
+            maintRouteBox.innerHTML = list.map((r) => {
+                const label = Admin.formatRouteLabelPlain
+                    ? Admin.formatRouteLabelPlain(r.name || r.id)
+                    : (r.name || r.id);
+                const checked = _maintSelectedRoutes.has(r.id) ? 'checked' : '';
+                return `<label class="flex items-start gap-2 text-[10px] text-orange-900 dark:text-orange-100 cursor-pointer py-0.5">
+                    <input type="checkbox" class="maint-route-cb mt-0.5 rounded border-orange-300 text-orange-600 focus:ring-orange-500" value="${r.id}" ${checked}>
+                    <span><span class="font-black text-orange-600 dark:text-orange-300">${r.region}</span> · ${label}</span>
+                </label>`;
+            }).join('');
+            maintRouteBox.querySelectorAll('.maint-route-cb').forEach((cb) => {
+                cb.onchange = () => {
+                    if (cb.checked) _maintSelectedRoutes.add(cb.value);
+                    else _maintSelectedRoutes.delete(cb.value);
+                };
+            });
+        };
+
+        maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
+            cb.onchange = () => {
+                // Drop routes that no longer belong to selected regions
+                const regions = getMaintSelectedRegions();
+                if (regions.length) {
+                    const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+                    _maintSelectedRoutes = new Set(
+                        Array.from(_maintSelectedRoutes).filter((id) => regions.includes(routesObj[id]?.region))
+                    );
+                }
+                renderMaintRouteChecks();
+            };
+        });
+        if (maintRoutesClear) {
+            maintRoutesClear.onclick = () => {
+                _maintSelectedRoutes = new Set();
+                renderMaintRouteChecks();
+            };
+        }
+        renderMaintRouteChecks();
+
         const nukeHeader = document.getElementById('nuke-header-btn');
         const nukeBody = document.getElementById('nuke-body');
         const nukeChevron = document.getElementById('nuke-chevron');
@@ -11510,6 +11684,9 @@ const Admin = {
         const banDefaultHeader = document.getElementById('shadow-ban-default-header');
         const banDefaultBody = document.getElementById('shadow-ban-default-body');
         const banDefaultChevron = document.getElementById('shadow-ban-default-chevron');
+        const schedOverrideHeader = document.getElementById('sched-override-header');
+        const schedOverrideBody = document.getElementById('sched-override-body');
+        const schedOverrideChevron = document.getElementById('sched-override-chevron');
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
@@ -11563,6 +11740,14 @@ const Admin = {
             };
         }
 
+        if (schedOverrideHeader && schedOverrideBody) {
+            schedOverrideHeader.onclick = () => {
+                schedOverrideBody.classList.toggle('hidden');
+                if (schedOverrideBody.classList.contains('hidden')) schedOverrideChevron?.classList.add('-rotate-90');
+                else schedOverrideChevron?.classList.remove('-rotate-90');
+            };
+        }
+
         if (header) {
             header.onclick = () => {
                 if (Admin.isGridMode) return;
@@ -11587,9 +11772,19 @@ const Admin = {
                 if (maintData !== null && typeof maintData === 'object') {
                     toggle.checked = !!maintData.active;
                     if (maintMsg) maintMsg.value = maintData.message || "";
+                    const regions = Array.isArray(maintData.regions) ? maintData.regions : [];
+                    const routes = Array.isArray(maintData.routes) ? maintData.routes : [];
+                    maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
+                        cb.checked = regions.includes(cb.value);
+                    });
+                    _maintSelectedRoutes = new Set(routes.map(String));
+                    renderMaintRouteChecks();
                 } else {
                     toggle.checked = !!maintData; // Legacy boolean fallback
                     if (maintMsg) maintMsg.value = "";
+                    _maintSelectedRoutes = new Set();
+                    maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => { cb.checked = false; });
+                    renderMaintRouteChecks();
                 }
 
                 try {
@@ -11694,30 +11889,46 @@ const Admin = {
             };
         }
 
+        const saveMaintenanceConfig = async (activeOverride, successMsg) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) {
+                if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                return false;
+            }
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const payload = collectMaintPayload(activeOverride);
+            const res = await window.guardianFetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            }, 10000);
+            if (!res.ok) throw new Error('Auth failed');
+            const scopeBits = [];
+            if (payload.regions?.length) scopeBits.push(payload.regions.join('+'));
+            if (payload.routes?.length) scopeBits.push(`${payload.routes.length} route(s)`);
+            const scopeNote = scopeBits.length ? ` · ${scopeBits.join(' · ')}` : ' · global';
+            if (typeof showToast === 'function') showToast((successMsg || 'Maintenance saved') + scopeNote, 'success');
+            return true;
+        };
+
         if (toggle) {
             toggle.addEventListener('change', async () => {
                 try {
-                    const secret = await Admin.getAuthKey();
-                    if (!secret) {
-                        if (typeof showToast === 'function') showToast("Authentication required.", "error");
-                        toggle.checked = !toggle.checked;
-                        return;
-                    }
-                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const res = await window.guardianFetch(`${dynamicEndpoint}config/maintenance.json?auth=${secret}`, {
-                        method: 'PUT',
-                        body: JSON.stringify({ active: toggle.checked, message: maintMsg && maintMsg.value || "" })
-                    }, 10000);
-                    if (res.ok) {
-                        if (typeof showToast === 'function') showToast(`Maintenance: ${toggle.checked ? "ENABLED" : "DISABLED"}`, "success");
-                    } else {
-                        throw new Error("Auth failed");
-                    }
-                } catch(e) {
-                    if (typeof showToast === 'function') showToast("Failed to update status.", "error");
-                    toggle.checked = !toggle.checked; 
+                    await saveMaintenanceConfig(toggle.checked, `Maintenance: ${toggle.checked ? 'ENABLED' : 'DISABLED'}`);
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to update status.', 'error');
+                    toggle.checked = !toggle.checked;
                 }
             });
+        }
+
+        if (maintScopeSave) {
+            maintScopeSave.onclick = async () => {
+                try {
+                    await saveMaintenanceConfig(undefined, 'Maintenance message & scope saved');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save maintenance scope.', 'error');
+                }
+            };
         }
 
         if (nukeFireBtn) {
@@ -11814,7 +12025,7 @@ const Admin = {
 
                 <!-- Kanban Board Area (Responsive Grid) -->
                 <div class="overflow-x-auto pb-4 custom-scrollbar snap-x flex-grow w-full">
-                    <!-- ??? GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
+                    <!-- GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
                     <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
@@ -12049,7 +12260,7 @@ const Admin = {
             
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                // ??? GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
+                // GUARDIAN FIX: Added cache-buster ?t=Date.now() to prevent ghost syncs
                 const res = await window.guardianFetch(`${dynamicEndpoint}roadmap.json?auth=${secret}&t=${Date.now()}`, {}, 10000);
                 
                 if (!res.ok) throw new Error("HTTP " + res.status);
@@ -12079,7 +12290,7 @@ const Admin = {
                     body: JSON.stringify({ status: newStatus, updatedAt: Date.now() })
                 });
                 
-                // ??? GUARDIAN FIX: Catch silent HTTP rejections
+                // GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to patch ticket.");
                 
                 // Update local RAM and re-render instantly
@@ -12104,7 +12315,7 @@ const Admin = {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const res = await fetch(`${dynamicEndpoint}roadmap/${ticketId}.json?auth=${secret}`, { method: 'DELETE' });
                 
-                // ??? GUARDIAN FIX: Catch silent HTTP rejections
+                // GUARDIAN FIX: Catch silent HTTP rejections
                 if (!res.ok) throw new Error("Failed to delete ticket.");
 
                 Admin.cachedRoadmapData = Admin.cachedRoadmapData.filter(t => t.id !== ticketId);
@@ -12356,7 +12567,7 @@ const Admin = {
                         body: JSON.stringify(payload)
                     });
 
-                    // ??? GUARDIAN FIX: Catch silent HTTP rejections
+                    // GUARDIAN FIX: Catch silent HTTP rejections
                     if (!res.ok) throw new Error("Failed to PUT ticket data.");
 
                     if (typeof showToast === 'function') showToast("Ticket saved!", "success");

@@ -74,14 +74,14 @@ function getRouteFare(sheetKey) {
     const profile = FARE_CONFIG.profiles[currentUserProfile] || FARE_CONFIG.profiles["Adult"];
     let useOffPeakRate = false;
 
-    // PRASA #TravelOffPeak: 09:30–14:30 every day (weekdays, weekends & public holidays).
-    const applyOffPeakWindow = FARE_CONFIG.offPeakEveryDay !== false;
-    let isWeekdaySheet = (currentDayType === 'weekday');
+    // Off-peak 09:30–14:30 on weekdays only (unless FARE_CONFIG.offPeakEveryDay).
+    const applyOffPeakEveryDay = FARE_CONFIG.offPeakEveryDay === true;
+    let isWeekdaySheet = (currentDayType === 'weekday' || currentDayType === 'monday');
     if (sheetKey) {
         isWeekdaySheet = sheetKey.includes('weekday');
     }
 
-    if (applyOffPeakWindow || isWeekdaySheet) {
+    if (applyOffPeakEveryDay || isWeekdaySheet) {
         let checkH, checkM;
 
         // GUARDIAN PHASE 2A: Decouple Off-Peak pricing from individual train departures.

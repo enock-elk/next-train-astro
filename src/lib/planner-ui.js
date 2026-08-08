@@ -16,7 +16,7 @@ import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
-    escapeHTML, getDistanceFromLatLonInKm, safeStorage 
+    escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
@@ -250,7 +250,9 @@ function computeZoneFare(zoneCode) {
     if (!zoneCode || !FARE_CONFIG.zones[zoneCode]) return null;
     const profile = FARE_CONFIG.profiles[$userProfile.get()] || FARE_CONFIG.profiles.Adult;
     let useOffPeak = false;
-    if (FARE_CONFIG.offPeakEveryDay !== false) {
+    const dayType = selectedPlannerDay || getCurrentDayType();
+    const dayAllowsOffPeak = FARE_CONFIG.offPeakEveryDay === true || usesWeekdayScheduleSheet(dayType);
+    if (dayAllowsOffPeak) {
         const { h, m } = plannerFareClockParts();
         const decimalTime = h + (m / 60);
         if (decimalTime >= FARE_CONFIG.offPeakStart && decimalTime < FARE_CONFIG.offPeakEnd) {

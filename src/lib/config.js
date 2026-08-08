@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.07";
+export const APP_VERSION = "V8_08.08";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -800,12 +800,12 @@ export const REFRESH_CONFIG = { standardInterval: 5 * 60 * 1000, activeInterval:
 
 // 5. Smart Pricing — PRASA Metrorail (Aug 2025 fare adjustment + TravelOffPeak)
 // Zone km bands and ticket prices from PRASA 2025 Fare Adjustment (effective 1 Aug 2025).
-// Off-peak window 09:30–14:30 from PRASA #TravelOffPeak (discount tickets valid only in-window).
+// Off-peak window 09:30–14:30 on weekdays only (no weekend / public-holiday off-peak).
 export const FARE_CONFIG = {
     offPeakStart: 9.5,  // 09:30
     offPeakEnd: 14.5,   // 14:30
-    /** Off-peak time window applies every day (weekdays, weekends, public holidays). */
-    offPeakEveryDay: true,
+    /** When false, off-peak discounts apply on weekday timetables only (not Sat/Sun/holidays). */
+    offPeakEveryDay: false,
 
     /**
      * Official travel-distance bands (inclusive max km for Z1–Z3).
@@ -856,25 +856,25 @@ export const DEFAULT_EXCLUSIONS = {
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.07",
-        title: "Map Times, Team & Alert Previews",
-        date: "06 Aug 2026",
+        id: "V8_08.08",
+        title: "Map Times & Fares",
+        date: "08 Aug 2026",
         forceShow: false,
         features: [
             "<b>Trip map:</b> Optional Show station times on the planner route map.",
-            "<b>About:</b> Team credits for Enock Kazembe and Melmoth Nxumalo with shared contact actions.",
+            "<b>Fares:</b> Weekend and public-holiday tickets no longer show weekday off-peak discounts.",
             "<b>Polish:</b> Clearer planner chrome, timetable wording, and holiday tomorrow notices."
         ]
     },
     {
         id: "V8_08.06",
-        title: "Alerts Schedule & Holiday Notice",
+        title: "Holiday Notice & Travel Day",
         date: "06 Aug 2026",
         forceShow: false,
         features: [
             "<b>Holiday notice:</b> Upcoming public holidays show once in a clear stacked card you dismiss when ready.",
             "<b>Travel Day:</b> Pick a planner date from one clean control — no double date field.",
-            "<b>Admin:</b> Scheduled service alerts with recurrence recipes, plus smoother drawer and tab gestures."
+            "<b>Polish:</b> Smoother drawer and tab gestures."
         ]
     },
     {

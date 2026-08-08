@@ -138,8 +138,12 @@ window.renderFullScheduleGrid = function(direction = 'A', dayOverride = null) {
             controlsDiv.className = "px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-between items-center shadow-md relative";
 
             const isWk = sheetDayType === 'weekday';
-            const shareUrl = `https://nexttrain.co.za/?action=route&route=${currentRouteId}&view=grid&dir=${direction}&day=${selectedDay}`;
-            const shareText = `Check out the ${sheetDayType} schedule to ${destName}`;
+            // Prefer modern ?rt=&v=g&dir=&d= share params (legacy action= still accepted by parsers)
+            const dayCode = sheetDayType === 'saturday' || sheetDayType === 'sunday' ? sheetDayType : 'weekday';
+            const shareUrl = (typeof buildRouteShareUrl === 'function')
+                ? buildRouteShareUrl({ routeId: currentRouteId, view: 'grid', dir: direction, day: dayCode })
+                : `https://nexttrain.co.za/?rt=${encodeURIComponent(currentRouteId)}&v=g${direction === 'B' ? '&dir=B' : ''}&d=${dayCode === 'saturday' ? 'sa' : dayCode === 'sunday' ? 'su' : 'wd'}`;
+            const shareText = `Check out the ${sheetDayType} schedule to ${destName} on Metrorail Next Train`;
             
             window.shareCurrentGrid = async () => {
                 if (typeof triggerHaptic === 'function') triggerHaptic(); 

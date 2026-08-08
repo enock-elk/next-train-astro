@@ -237,7 +237,7 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     const wkLabel = 'Mon - Fri';
     const satLabel = 'Sat / Hol';
     const shareUrl = buildGridShareUrl(routeId, direction, sheetDayType);
-    const shareText = `Check out the ${sheetDayType} schedule to ${destName}`;
+    const shareText = `Check out the ${sheetDayType} schedule to ${destName} on Metrorail Next Train`;
 
     if (typeof window !== 'undefined') {
         window._gridShareState = { routeId, dir: direction, day: sheetDayType };

@@ -2092,17 +2092,25 @@ const Admin = {
         // #region agent log
         try {
             const container = document.getElementById('admin-modules-container');
-            const kids = container ? Array.from(container.children).map((el, i) => ({
-                i,
-                id: el.id || '(no-id)',
-                cls: (el.className || '').toString().slice(0, 80),
-                loaded: el.dataset?.adminLoaded || null,
-                headerLen: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().length,
-                headerText: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().slice(0, 40),
-                childCount: el.children.length,
-                htmlLen: (el.innerHTML || '').length,
-            })) : [];
-            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H2-H3',location:'admin.js:renderAdminModules:postGrid',message:'admin grid tile snapshot',data:{count:kids.length,kids},timestamp:Date.now()})}).catch(()=>{});
+            const kids = container ? Array.from(container.children).map((el, i) => {
+                const cs = getComputedStyle(el);
+                return {
+                    i,
+                    id: el.id || '(no-id)',
+                    cls: (el.className || '').toString().slice(0, 80),
+                    loaded: el.dataset?.adminLoaded || null,
+                    shell: el.dataset?.adminShell || null,
+                    display: cs.display,
+                    headerLen: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().length,
+                    headerText: (el.querySelector('[id$="-header-btn"]')?.textContent || '').trim().slice(0, 40),
+                    childCount: el.children.length,
+                    htmlLen: (el.innerHTML || '').length,
+                    blankVisible: cs.display !== 'none' && !(el.querySelector('[id$="-header-btn"]')?.textContent || '').trim(),
+                };
+            }) : [];
+            const payload = {sessionId:'03887c',runId:'post-fix',hypothesisId:'H2-H5',location:'admin.js:renderAdminModules:postGrid',message:'admin grid tile snapshot',data:{count:kids.length,blankVisible:kids.filter(k=>k.blankVisible).map(k=>k.id),gsm:kids.find(k=>k.id==='action-required-panel')||null,alert:kids.find(k=>k.id==='alert-panel')||null,kids},timestamp:Date.now()};
+            try { const arr = JSON.parse(localStorage.getItem('debug_03887c')||'[]'); arr.push(payload); localStorage.setItem('debug_03887c', JSON.stringify(arr.slice(-40))); } catch (_) {}
+            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify(payload)}).catch(()=>{});
         } catch (_) {}
         // #endregion
         
@@ -3389,8 +3397,12 @@ const Admin = {
                 gridStyleEl.id = 'admin-grid-styles';
                 gridStyleEl.innerHTML = `
                     .admin-grid-view { display: grid; gap: 12px; align-items: start; padding-bottom: 20px; transition: grid-template-columns 0.3s ease; }
-                    .admin-grid-view > div { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
-                    .admin-grid-view > div:hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
+                    /* Hide empty HubModals shells — .hidden loses to this rule's display:flex otherwise */
+                    .admin-grid-view > div.hidden,
+                    .admin-grid-view > div:empty,
+                    .admin-grid-view > div[data-admin-shell="empty"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
+                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
+                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }
                     .admin-grid-view > div [id$="-header-btn"] > span:not(.admin-unread-badge) { flex-direction: column; align-items: center; width: 100%; display: flex; }
@@ -3459,12 +3471,21 @@ const Admin = {
                     }
                 `;
                 document.head.appendChild(gridStyleEl);
-            } else if (!gridStyleEl.textContent.includes('text-transform: uppercase')) {
-                gridStyleEl.textContent += `
+            } else {
+                if (!gridStyleEl.textContent.includes('text-transform: uppercase')) {
+                    gridStyleEl.textContent += `
                     .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) {
                       opacity: 1 !important; max-width: 100%; padding: 0 4px; line-height: 1.15;
                       font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
                     }`;
+                }
+                // Patch live sessions that still force display:flex onto empty/hidden shells
+                if (!gridStyleEl.textContent.includes('data-admin-shell')) {
+                    gridStyleEl.textContent += `
+                    .admin-grid-view > div.hidden,
+                    .admin-grid-view > div:empty,
+                    .admin-grid-view > div[data-admin-shell="empty"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
+                }
             }
 
             // GUARDIAN UX FIX: Drill-Down "X" Interceptor
@@ -7367,6 +7388,9 @@ const Admin = {
         }
         // Empty HubModals shell or failed prior load — (re)build tile chrome
         alertPanel.dataset.adminLoaded = "true";
+        delete alertPanel.dataset.adminShell;
+        alertPanel.removeAttribute('aria-hidden');
+        alertPanel.classList.remove('hidden');
 
         alertPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
 

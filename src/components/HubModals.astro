@@ -409,8 +409,9 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
         <div id="admin-modules-container">
-            <!-- Shell only — setupServiceAlertsManager fills chrome; keep id for insertBefore anchors -->
-            <div id="alert-panel" data-admin-loaded="false" class="hidden"></div>
+            <!-- Shell only — setupServiceAlertsManager fills chrome; keep id for insertBefore anchors.
+                 data-admin-shell=empty + hidden so grid CSS cannot force a blank tile (display:flex beats .hidden alone). -->
+            <div id="alert-panel" data-admin-loaded="false" data-admin-shell="empty" class="hidden" aria-hidden="true"></div>
         </div>
         <div id="admin-signout-container"></div>
     </div>

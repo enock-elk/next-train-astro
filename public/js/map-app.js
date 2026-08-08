@@ -633,6 +633,15 @@
             const closePicker = () => {
                 picker.classList.remove('is-open');
                 toggle.setAttribute('aria-expanded', 'false');
+                const panel = document.getElementById('region-panel');
+                if (panel) {
+                    panel.classList.remove('is-viewport-clamped');
+                    panel.style.position = '';
+                    panel.style.left = '';
+                    panel.style.right = '';
+                    panel.style.top = '';
+                    panel.style.width = '';
+                }
             };
             const openPicker = () => {
                 const legend = document.getElementById('legend-container');
@@ -646,16 +655,25 @@
                 try {
                     const panel = document.getElementById('region-panel');
                     if (panel) {
+                        panel.classList.remove('is-viewport-clamped');
                         panel.style.left = '0px';
                         panel.style.right = 'auto';
-                        const pickerLeft = picker.getBoundingClientRect().left;
+                        panel.style.top = '';
+                        panel.style.width = '';
+                        const toggleRect = toggle.getBoundingClientRect();
                         let pan = panel.getBoundingClientRect();
-                        if (pan.left < 8) {
-                            panel.style.left = `${8 - pickerLeft}px`;
-                            pan = panel.getBoundingClientRect();
-                        }
-                        if (pan.right > window.innerWidth - 8) {
-                            panel.style.left = `${(window.innerWidth - 8) - pan.width - pickerLeft}px`;
+                        const overflowLeft = pan.left < 8;
+                        const overflowRight = pan.right > window.innerWidth - 8;
+                        if (overflowLeft || overflowRight) {
+                            // Fixed to viewport — absolute+right cluster still clips on some phones
+                            const width = Math.min(220, window.innerWidth - 16);
+                            let left = Math.min(Math.max(8, toggleRect.left), window.innerWidth - 8 - width);
+                            panel.classList.add('is-viewport-clamped');
+                            panel.style.position = 'fixed';
+                            panel.style.left = `${left}px`;
+                            panel.style.right = 'auto';
+                            panel.style.top = `${toggleRect.bottom + 6}px`;
+                            panel.style.width = `${width}px`;
                         }
                     }
                 } catch (_) {}
@@ -666,7 +684,13 @@
                     const tr = toggle.getBoundingClientRect();
                     const pan = panel ? panel.getBoundingClientRect() : null;
                     const cs = panel ? getComputedStyle(panel) : null;
-                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify({sessionId:'03887c',runId:'post-fix',hypothesisId:'H1',location:'map-app.js:openPicker',message:'region dropdown geometry',data:{vw:window.innerWidth,picker:{left:pr.left,right:pr.right,width:pr.width},toggle:{left:tr.left,right:tr.right},panel:pan?{left:pan.left,right:pan.right,width:pan.width,overflowLeft:pan.left<0,overflowRight:pan.right>window.innerWidth}:null,css:{position:cs?.position,left:cs?.left,right:cs?.right,width:cs?.width},controlsRight:!!document.getElementById('map-top-controls')},timestamp:Date.now()})}).catch(()=>{});
+                    const codes = panel ? [...panel.querySelectorAll('.region-code')].map((el) => {
+                        const r = el.getBoundingClientRect();
+                        return { t: el.textContent.trim(), left: Math.round(r.left), clipped: r.left < 0 || r.right > window.innerWidth };
+                    }) : [];
+                    const payload = {sessionId:'03887c',runId:'post-fix',hypothesisId:'H1',location:'map-app.js:openPicker',message:'region dropdown geometry',data:{vw:window.innerWidth,picker:{left:pr.left,right:pr.right,width:pr.width},toggle:{left:tr.left,right:tr.right},panel:pan?{left:pan.left,right:pan.right,width:pan.width,overflowLeft:pan.left<0,overflowRight:pan.right>window.innerWidth}:null,css:{position:cs?.position,left:cs?.left,right:cs?.right,width:cs?.width},codes,clamped:!!panel?.classList.contains('is-viewport-clamped')},timestamp:Date.now()};
+                    try { const arr = JSON.parse(localStorage.getItem('debug_03887c')||'[]'); arr.push(payload); localStorage.setItem('debug_03887c', JSON.stringify(arr.slice(-40))); } catch (_) {}
+                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03887c'},body:JSON.stringify(payload)}).catch(()=>{});
                 } catch (_) {}
                 // #endregion
             };

@@ -67,9 +67,16 @@ const regionSeoSlugs = Object.fromEntries(
         border: 1px solid #e5e7eb;
         max-height: min(60vh, 420px); overflow-y: auto;
         box-sizing: border-box;
+        z-index: 1100;
       }
       /* Network lines sits further right — keep its menu right-aligned */
       .legend-panel { left: auto; right: 0; width: min(250px, calc(100vw - 1.5rem)); padding: 0.75rem; }
+      /* Fixed fallback when JS clamps — keeps badges inside the visual viewport */
+      .region-panel.is-viewport-clamped {
+        position: fixed;
+        top: auto;
+        margin: 0;
+      }
       .dark .region-panel, .dark .legend-panel {
         background: rgba(31, 41, 55, 0.96); color: #f3f4f6; border-color: #374151;
       }
@@ -251,7 +258,7 @@ const regionSeoSlugs = Object.fromEntries(
     window.REGION_SEO_SLUGS = REGION_SEO_SLUGS;
   </script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script is:inline src={withBase('js/map-app.js')}></script>
+  <script is:inline src={`${withBase('js/map-app.js')}?v=${APP_VERSION}`}></script>
   <script is:inline>
     (function () {
       function inAppSheet() {

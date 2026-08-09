@@ -65,8 +65,8 @@ async function handleOgTimetable(url, env, ctx) {
   if (route) {
     try {
       const db = await loadRegionDb(env, route.region, ctx);
-      // Wider/taller fill for the OG card (less empty blue padding).
-      grid = extractGridPreview(db, route, dir, day, 8, 9);
+      // Full sheet (all trains × stations) for a dense WhatsApp preview.
+      grid = extractGridPreview(db, route, dir, day);
     } catch (e) {
       console.warn('OG timetable schedule load failed', e.message || e);
     }

@@ -25,9 +25,10 @@ function sheetKeyFor(route, dir, day) {
 }
 
 /**
+ * Full-sheet preview for OG art (all trains × all stations by default).
  * @returns {{ stations: string[], trainIds: string[], cells: string[][], meta: string|null } | null}
  */
-export function extractGridPreview(db, route, dir, day, maxTrains = 8, maxStations = 10) {
+export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStations = 0) {
   if (!db || !route) return null;
   const key = sheetKeyFor(route, dir, day);
   if (!key) return null;
@@ -38,12 +39,16 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 8, maxStatio
   if (!dataRows.length) return null;
 
   const ignore = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
-  const trainIds = Object.keys(dataRows[0]).filter((k) => !ignore.has(k)).slice(0, maxTrains);
+  let trainIds = Object.keys(dataRows[0]).filter((k) => !ignore.has(k));
+  // Soft safety for pathological sheets (Worker CPU / SVG size).
+  const trainCap = maxTrains > 0 ? maxTrains : 48;
+  const stationCap = maxStations > 0 ? maxStations : 40;
+  trainIds = trainIds.slice(0, trainCap);
   if (!trainIds.length) return null;
 
   const stations = [];
   const cells = [];
-  for (const row of dataRows.slice(0, maxStations)) {
+  for (const row of dataRows.slice(0, stationCap)) {
     const name = String(row.STATION || '')
       .replace(/\s+STATION$/i, '')
       .replace(/\s+/g, ' ')

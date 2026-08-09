@@ -2,9 +2,8 @@
  * Stylized timetable / planner OG cards (SVG → PNG via resvg-wasm).
  * Fonts are embedded — Workers have no system fonts, so text is blank without them.
  *
- * Composition is title-first and center-weighted: WhatsApp often shows a small
- * left thumbnail (center-crop), so route names must stay readable there — not
- * only in Facebook's large top preview.
+ * Timetable art shows the FULL sheet (all trains × stations) as a dense grid so
+ * WhatsApp's large preview communicates "there's a real schedule here".
  */
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
 import resvgWasm from '@resvg/resvg-wasm/index_bg.wasm';
@@ -54,60 +53,79 @@ function truncate(s, n) {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
 
-/** Brand-blue timetable card — tight padding, large grid, readable title. */
+/** Dense full-sheet timetable — title stays readable; cells are intentionally tiny. */
 export function buildTimetableSvg({ origin, dest, day, grid }) {
   const W = OG_DESIGN_WIDTH;
   const H = OG_DESIGN_HEIGHT;
   const originT = truncate(origin, 20);
   const destT = truncate(dest, 20);
-  // Single-line title saves vertical blue padding vs stacked names.
   const title = `${originT} to ${destT}`;
-  const subtitle = `${day} timetable`;
+  const trainCount = grid?.trainIds?.length || 0;
+  const stationCount = grid?.stations?.length || 0;
+  const subtitle =
+    trainCount && stationCount
+      ? `${day} timetable · ${trainCount} trains · ${stationCount} stations`
+      : `${day} timetable`;
 
   let gridBody = '';
-  if (grid && grid.stations?.length) {
-    const padX = 18;
-    const trains = (grid.trainIds || []).slice(0, 8);
-    const stations = (grid.stations || []).slice(0, 9);
-    const stationW = 236;
+  if (grid && grid.stations?.length && grid.trainIds?.length) {
+    const padX = 14;
+    const trains = grid.trainIds;
+    const stations = grid.stations;
+    // Slim station col so many train columns fit; density is the point.
+    const stationW = trains.length >= 24 ? 88 : trains.length >= 16 ? 110 : 150;
     const tableInnerW = W - padX * 2;
-    const colW = trains.length
-      ? Math.floor((tableInnerW - stationW) / trains.length)
-      : 96;
+    const colW = Math.max(10, Math.floor((tableInnerW - stationW) / trains.length));
     const tableW = stationW + trains.length * colW;
     const left = Math.round((W - tableW) / 2);
-    const top = 128;
-    // Stretch rows so the grid eats the blue gap above the footer.
-    const footerTop = 596;
+    const top = 118;
+    const footerTop = 598;
     const availH = footerTop - top;
-    const rowH = Math.max(32, Math.floor(availH / (1 + stations.length)));
+    const rowH = Math.max(14, Math.floor(availH / (1 + stations.length)));
     const tableH = rowH * (1 + stations.length);
-    const textY = Math.round(rowH * 0.68);
-    const fontSize = rowH >= 42 ? 20 : rowH >= 36 ? 17 : 15;
+    const textY = Math.round(rowH * 0.72);
+    // Tiny type on purpose — users should see the grid fabric, not read every cell.
+    const timeFont = colW >= 36 ? 11 : colW >= 24 ? 9 : colW >= 16 ? 7 : 6;
+    const stationFont = Math.min(12, Math.max(7, rowH - 4));
+    const headFont = Math.min(timeFont, 9);
+    const stationChars = stationW >= 140 ? 16 : stationW >= 100 ? 12 : 9;
 
-    let headerCells = `<rect x="${left}" y="${top}" width="${stationW}" height="${rowH}" fill="#1e3a8a"/>
-      <text x="${left + 12}" y="${top + textY}" fill="#93c5fd" font-size="${fontSize}" font-family="${FONT}" font-weight="700">STATION</text>`;
-    trains.forEach((id, i) => {
-      const x = left + stationW + i * colW;
-      headerCells += `<rect x="${x}" y="${top}" width="${colW}" height="${rowH}" fill="#1e40af" stroke="#1e3a8a"/>
-        <text x="${x + colW / 2}" y="${top + textY}" fill="#dbeafe" font-size="${fontSize - 1}" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(String(id).slice(-4))}</text>`;
+    // Row bands (not per-cell rects) — cheaper SVG + smaller PNG for dense sheets.
+    let bands = `<rect x="${left}" y="${top}" width="${tableW}" height="${rowH}" fill="#1e3a8a"/>`;
+    stations.forEach((_, ri) => {
+      const y = top + rowH + ri * rowH;
+      bands += `<rect x="${left}" y="${y}" width="${tableW}" height="${rowH}" fill="${ri % 2 === 0 ? '#f8fafc' : '#e2e8f0'}"/>`;
     });
 
-    let rows = '';
+    let headerText = `<text x="${left + 6}" y="${top + textY}" fill="#93c5fd" font-size="${headFont}" font-family="${FONT}" font-weight="700">STN</text>`;
+    trains.forEach((id, i) => {
+      const x = left + stationW + i * colW + colW / 2;
+      const label = colW >= 22 ? String(id).slice(-4) : String(id).slice(-3);
+      headerText += `<text x="${x}" y="${top + textY}" fill="#dbeafe" font-size="${headFont}" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(label)}</text>`;
+    });
+
+    let bodyText = '';
     stations.forEach((st, ri) => {
-      const y = top + rowH + ri * rowH;
-      const bg = ri % 2 === 0 ? '#f8fafc' : '#e2e8f0';
-      rows += `<rect x="${left}" y="${y}" width="${stationW}" height="${rowH}" fill="${bg}" stroke="#cbd5e1"/>
-        <text x="${left + 12}" y="${y + textY}" fill="#0f172a" font-size="${fontSize}" font-family="${FONT}" font-weight="700">${esc(truncate(st, 18))}</text>`;
-      (grid.cells[ri] || []).slice(0, trains.length).forEach((t, ci) => {
-        const x = left + stationW + ci * colW;
-        rows += `<rect x="${x}" y="${y}" width="${colW}" height="${rowH}" fill="${bg}" stroke="#cbd5e1"/>
-          <text x="${x + colW / 2}" y="${y + textY}" fill="#1e293b" font-size="${fontSize}" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(t || '—')}</text>`;
+      const y = top + rowH + ri * rowH + textY;
+      bodyText += `<text x="${left + 5}" y="${y}" fill="#0f172a" font-size="${stationFont}" font-family="${FONT}" font-weight="700">${esc(truncate(st, stationChars))}</text>`;
+      (grid.cells[ri] || []).forEach((t, ci) => {
+        if (ci >= trains.length) return;
+        const x = left + stationW + ci * colW + colW / 2;
+        const val = t || '·';
+        bodyText += `<text x="${x}" y="${y}" fill="#334155" font-size="${timeFont}" font-family="${FONT}" font-weight="600" text-anchor="middle">${esc(val)}</text>`;
       });
     });
 
-    gridBody = `<rect x="${left - 4}" y="${top - 4}" width="${tableW + 8}" height="${tableH + 8}" rx="10" fill="#0f172a" opacity="0.16"/>
-      ${headerCells}${rows}`;
+    // Light column guides every 4 trains (readable structure without heavy strokes).
+    let guides = '';
+    for (let i = 1; i < trains.length; i++) {
+      if (i % 4 !== 0) continue;
+      const x = left + stationW + i * colW;
+      guides += `<line x1="${x}" y1="${top}" x2="${x}" y2="${top + tableH}" stroke="#94a3b8" stroke-width="0.6" opacity="0.45"/>`;
+    }
+
+    gridBody = `<rect x="${left - 3}" y="${top - 3}" width="${tableW + 6}" height="${tableH + 6}" rx="8" fill="#0f172a" opacity="0.14"/>
+      ${bands}${guides}${headerText}${bodyText}`;
   } else {
     gridBody = `<text x="600" y="340" fill="#e2e8f0" font-size="28" font-family="${FONT}" font-weight="600" text-anchor="middle">Open in Next Train for the full grid</text>`;
   }
@@ -121,11 +139,11 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
     </linearGradient>
   </defs>
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
-  <text x="600" y="28" fill="#93c5fd" font-size="16" font-family="${FONT}" font-weight="800" letter-spacing="2" text-anchor="middle">METRORAIL NEXT TRAIN</text>
-  <text x="600" y="74" fill="#ffffff" font-size="44" font-family="${FONT}" font-weight="800" text-anchor="middle">${esc(title)}</text>
-  <text x="600" y="108" fill="#bfdbfe" font-size="20" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(subtitle)}</text>
+  <text x="600" y="26" fill="#93c5fd" font-size="15" font-family="${FONT}" font-weight="800" letter-spacing="2" text-anchor="middle">METRORAIL NEXT TRAIN</text>
+  <text x="600" y="68" fill="#ffffff" font-size="40" font-family="${FONT}" font-weight="800" text-anchor="middle">${esc(title)}</text>
+  <text x="600" y="98" fill="#bfdbfe" font-size="17" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(subtitle)}</text>
   ${gridBody}
-  <text x="600" y="618" fill="#93c5fd" font-size="16" font-family="${FONT}" font-weight="700" text-anchor="middle">Tap to open live boards · free · works offline</text>
+  <text x="600" y="618" fill="#93c5fd" font-size="15" font-family="${FONT}" font-weight="700" text-anchor="middle">Tap to open live boards · free · works offline</text>
 </svg>`;
 }
 
@@ -158,7 +176,6 @@ export function buildPlannerSvg({ from, to, time, day }) {
 
 export async function svgToPng(svg) {
   await ensureWasm();
-  // Render 2× the design size for sharper WhatsApp/Facebook thumbs.
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: OG_IMAGE_WIDTH },
     font: {

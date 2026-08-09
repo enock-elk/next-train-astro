@@ -5,8 +5,10 @@
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
   "rules": [
-    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
   ],
+  "workers_dev": true,
   // Production host: nexttrain.co.za (orange-cloud → GitHub Pages / metrorail-app).
   // Human traffic uses fetch(request) → Cloudflare origin (no ORIGIN_URL loop).
   // ORIGIN_URL is kept as documentation of the live Pages project only.

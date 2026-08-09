@@ -102,7 +102,8 @@ export function parseShareIntent(url) {
 export function isSocialCrawler(ua) {
   const s = String(ua || '');
   if (!s) return false;
-  return /facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|SkypeUriPreview|vkShare|redditbot|Embedly|Quora Link Preview|Showyoubot|Outbrain|Pinterest|Applebot|Iframely|Snapchat/i.test(
+  // Include newer Meta crawlers (meta-externalagent / meta-externalfetcher)
+  return /facebookexternalhit|Facebot|FacebookBot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|SkypeUriPreview|vkShare|redditbot|Embedly|Quora Link Preview|Showyoubot|Outbrain|Pinterest|Applebot|Iframely|Snapchat/i.test(
     s
   );
 }

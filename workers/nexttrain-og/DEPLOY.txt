@@ -1,35 +1,54 @@
 nexttrain-og — what YOU still need to do
 ========================================
 
-Code is ready. DNS is already orange-clouded on Cloudflare.
-Your only remaining job is to deploy this Worker once from your computer.
+Code + routes are ready. Two fixes remain on YOUR side after redeploy:
 
-1. Open a terminal in the repo, then:
-
+-------------------------------------------------------------------
+1) REDEPLOY the Worker (after pulling latest code)
+-------------------------------------------------------------------
    cd workers/nexttrain-og
    npm install
-   npx wrangler login
    npm run deploy
 
-2. Smoke-test in the browser:
-   - https://nexttrain.co.za/og/health
-     → should show {"ok":true,...}
-   - https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd
-     → timetable-looking image
-   - https://nexttrain.co.za/
-     → normal app (still works)
+Then check:
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd
+   → must show station names + times (not a blank blue grid)
 
-3. Refresh the social preview:
-   - Open https://developers.facebook.com/tools/debug/
-   - Paste https://nexttrain.co.za/?rt=pta-pien&v=g&d=wd
-   - Click "Scrape Again"
-   - Send that link in a NEW WhatsApp chat (old chats keep the old icon)
+   https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
+   → HTML with og:title like "Pretoria → Pienaarspoort…"
+   → View Page Source (not the live app) to confirm
 
+-------------------------------------------------------------------
+2) CRITICAL: turn OFF Cloudflare Bot Fight Mode
+-------------------------------------------------------------------
+Facebook / WhatsApp are being challenged ("Just a moment…") before they
+reach the Worker. Free Bot Fight Mode CANNOT be skipped with WAF rules.
+
+In Cloudflare Dashboard → nexttrain.co.za:
+
+   Security → Bots → Bot Fight Mode → OFF
+
+(If you are on Pro and use Super Bot Fight Mode instead, create a WAF
+Custom Rule with Skip → Super Bot Fight Mode when User Agent contains
+facebookexternalhit OR WhatsApp OR meta-externalagent.)
+
+Without this step, Facebook Debugger will keep showing the homepage
+train icon no matter what the Worker does.
+
+-------------------------------------------------------------------
+3) Re-scrape the NEW share URL
+-------------------------------------------------------------------
+Use this URL (not bare /?rt=…):
+
+   https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
+
+Facebook Sharing Debugger → Scrape Again
+Then send that link in a NEW WhatsApp chat.
+
+-------------------------------------------------------------------
 Notes
------
-- Live files live in the metrorail-app GitHub Pages project (custom domain
-  nexttrain.co.za). Preview repo next-train-astro is NOT used as origin.
-- github.io/metrorail-app redirects to nexttrain.co.za — that is expected.
-  The Worker does not fetch that URL for humans; it uses Cloudflare origin
-  pass-through instead.
-- Routes attached: / and /og/* on nexttrain.co.za and www.nexttrain.co.za
+-------------------------------------------------------------------
+- Share buttons in the app now emit /og/share?… links (after you also
+  ship the Astro app update to metrorail-app / production).
+- Until the app update is live, you can still test /og/share?… manually.
+- Blank PNG was caused by missing fonts in the Worker (fixed in code).

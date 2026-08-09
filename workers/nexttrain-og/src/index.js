@@ -156,11 +156,25 @@ export default {
       return handleOgPlan(url, env);
     }
 
-    // Social crawlers on deep-link homepage shares
+    // Always-on OG HTML for share links (no UA check). Humans meta-refresh into the app.
+    // Stays under /og/* so SPA homepage canonical cannot steal the preview.
+    if (url.pathname === '/og/share') {
+      const stub = handleBotShare(url, env);
+      if (stub) {
+        stub.headers.set('X-NextTrain-OG', 'share');
+        return stub;
+      }
+      return new Response('Missing rt= or plan= share params', { status: 400 });
+    }
+
+    // Social crawlers on legacy deep-link homepage shares (/?rt= / ?plan=)
     const ua = request.headers.get('user-agent') || '';
     if (isSocialCrawler(ua) && (url.pathname === '/' || url.pathname === '')) {
       const stub = handleBotShare(url, env);
-      if (stub) return stub;
+      if (stub) {
+        stub.headers.set('X-NextTrain-OG', 'bot-home');
+        return stub;
+      }
     }
 
     // Health / self-test (no secrets)
@@ -171,6 +185,7 @@ export default {
         publicSite: env.PUBLIC_SITE || null,
         pagesProject: env.ORIGIN_URL || null,
         passThrough: 'cloudflare-origin',
+        sharePath: '/og/share',
       });
     }
 

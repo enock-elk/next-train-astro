@@ -46,28 +46,30 @@ export function compactTime(time) {
     return m ? m[1] : t;
 }
 
-export function buildPlannerShareUrl({ from, to, time, day, region, origin, pathname } = {}) {
+/**
+ * Public share links use /og/share so WhatsApp/Facebook scrape Worker OG HTML
+ * (not the SPA homepage). Humans hitting /og/share are meta-refreshed into /?…
+ */
+export function buildPlannerShareUrl({ from, to, time, day, region, origin } = {}) {
     const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
-    const basePath = pathname || (typeof location !== 'undefined' ? location.pathname : '/');
     const params = new URLSearchParams();
     params.set('plan', `${from || ''}~${to || ''}`);
     const t = compactTime(time);
     if (t) params.set('t', t);
     if (day) params.set('d', encodeDay(day));
     if (region) params.set('r', region);
-    return `${baseOrigin}${basePath}?${params.toString()}`;
+    return `${baseOrigin}/og/share?${params.toString()}`;
 }
 
-export function buildRouteShareUrl({ routeId, view = 'grid', dir = 'A', day = 'weekday', origin, pathname } = {}) {
+export function buildRouteShareUrl({ routeId, view = 'grid', dir = 'A', day = 'weekday', origin } = {}) {
     const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
-    const basePath = pathname || (typeof location !== 'undefined' ? location.pathname : '/');
     const params = new URLSearchParams();
     params.set('rt', routeId);
     const v = encodeView(view);
     if (v) params.set('v', v);
     if (dir === 'B') params.set('dir', 'B');
     if (day) params.set('d', encodeDay(day));
-    return `${baseOrigin}${basePath}?${params.toString()}`;
+    return `${baseOrigin}/og/share?${params.toString()}`;
 }
 
 function normalizeStationQuery(raw) {

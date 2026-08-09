@@ -92,9 +92,10 @@ export async function sendBlackBoxLogsToCloud() {
         try { parsed = JSON.parse(rawLogs); } catch { parsed = []; }
 
         const crashId = `bb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        // Path: Black Box → RTDB sys_logs/crashes/{id} → Crash Analytics → Escalate → Operations Roadmap
+        // `error` is a short index label only; full console lives in stack/raw/logs for admin formatting.
         const payload = {
             error: `BLACK_BOX_EXPORT (${Array.isArray(parsed) ? parsed.length : 0} lines)`,
-            // Full raw dump — admin crash panel reads stack + raw
             stack: rawLogs,
             raw: rawLogs,
             logs: parsed,

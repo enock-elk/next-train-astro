@@ -1,0 +1,74 @@
+nexttrain-og — what YOU still need to do
+========================================
+
+Code + routes are ready. Two fixes remain on YOUR side after redeploy:
+
+-------------------------------------------------------------------
+1) REDEPLOY the Worker (after pulling latest code)
+-------------------------------------------------------------------
+   cd workers/nexttrain-og
+   npm install
+   npm run deploy
+
+Then check:
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa6
+   → full sheet (all trains × stations) as a dense grid
+   → PNG is 3000×1575 for sharper WhatsApp rich previews (keep under ~600KB)
+
+   https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
+   → HTML with og:title like "Pretoria → Pienaarspoort · Weekday"
+   → og:image URL includes &v=wa6 (cache bust)
+   → og:image:width/height = 3000 / 1575
+   → twitter:card = summary_large_image
+   → View Page Source (not the live app) to confirm
+
+-------------------------------------------------------------------
+2) CRITICAL: turn OFF Cloudflare Bot Fight Mode
+-------------------------------------------------------------------
+Facebook / WhatsApp are being challenged ("Just a moment…") before they
+reach the Worker. Free Bot Fight Mode CANNOT be skipped with WAF rules.
+
+In Cloudflare Dashboard → nexttrain.co.za:
+
+   Security → Bots → Bot Fight Mode → OFF
+
+(If you are on Pro and use Super Bot Fight Mode instead, create a WAF
+Custom Rule with Skip → Super Bot Fight Mode when User Agent contains
+facebookexternalhit OR WhatsApp OR meta-externalagent.)
+
+Without this step, Facebook Debugger will keep showing the homepage
+train icon no matter what the Worker does.
+
+-------------------------------------------------------------------
+3) Re-scrape + re-share (WhatsApp caches hard)
+-------------------------------------------------------------------
+Use this URL (not bare /?rt=…):
+
+   https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
+
+Facebook Sharing Debugger → Scrape Again
+
+WhatsApp does NOT use the Facebook debugger cache. To force a fresh
+WhatsApp preview:
+  • Paste the link in a NEW chat (or add &n=1 once to the share URL)
+  • Wait for the preview to appear ABOVE the composer before sending
+  • Do not reuse an old bubble — WhatsApp keeps the old thumbnail
+
+Expected layouts:
+  • Large (image on top of title) — ideal when WhatsApp accepts the
+    1200×630 PNG (<600KB, landscape). Facebook Debugger already shows this.
+  • Compact (small image left of title) — WhatsApp sometimes still uses
+    this in the chat bubble. The new art puts giant centered station
+    names in the crop-safe zone so the route stays readable even then.
+
+The fb:app_id warning is optional and safe to ignore for WhatsApp previews.
+
+-------------------------------------------------------------------
+Notes
+-------------------------------------------------------------------
+- Share buttons in the app now emit /og/share?… links (after you also
+  ship the Astro app update to metrorail-app / production).
+- Until the app update is live, you can still test /og/share?… manually.
+- Blank PNG was caused by missing fonts in the Worker (fixed in code).
+- We cannot force WhatsApp’s UI chrome; we can only meet Meta’s image
+  rules and design the PNG so the title reads in both layouts.

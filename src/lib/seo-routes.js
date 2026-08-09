@@ -51,30 +51,35 @@ const DEFAULT_OPERATING_NOTE =
 const SEO_OVERRIDES = {
     'pta-pien': {
         slug: 'pretoria-to-pienaarspoort',
-        blurb: 'Live Metrorail times between Pretoria and Pienaarspoort for weekday and Saturday services.',
+        blurb:
+            'Pretoria to Pienaarspoort train schedule today — live Gauteng Metrorail times for weekday and Saturday services.',
         operatingNote:
             'Metrorail generally does not run on Sundays. Public holidays vary: some follow a Saturday/holiday timetable; others have no service.',
     },
     'pta-kempton': {
         slug: 'pretoria-to-kempton-park',
-        blurb: 'Pretoria / Kempton Park Metrorail timetable helper. Check the next train and full schedule in the app.',
+        blurb:
+            'Pretoria to Kempton Park train schedule today. Check the next train and full Gauteng Metrorail timetable in Next Train.',
         operatingNote:
             'Some trains on this corridor run on limited weekdays only. Always confirm the day type in Next Train before you travel.',
     },
     'pta-mabopane': {
         slug: 'pretoria-to-mabopane',
-        blurb: 'Schedules for the Pretoria–Mabopane corridor, with a one-tap jump into the live Next Train board.',
+        blurb:
+            'Pretoria to Mabopane train schedule today — weekday and Saturday boards with a one-tap jump into the live Next Train board.',
         operatingNote:
             'Weekday and Saturday sheets are available in the app. Sundays are typically no service across the network.',
     },
     'ct-bellv': {
         slug: 'cape-town-to-bellville',
-        blurb: 'Cape Town / Bellville Metrorail times for the Northern Line corridor (Western Cape).',
+        blurb:
+            'Cape Town to Bellville train schedule today — Northern Line Metrorail times for the Western Cape.',
         operatingNote: 'Use Next Train for weekday vs Saturday boards and holiday overrides for 2026.',
     },
     'kzn-umlazi': {
         slug: 'durban-to-umlazi',
-        blurb: 'Durban ↔ Umlazi Metrorail schedule landing for KwaZulu-Natal south corridor trips.',
+        blurb:
+            'Durban to Umlazi train schedule today — KwaZulu-Natal Metrorail south corridor times in Next Train.',
         operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid.',
     },
 };
@@ -100,7 +105,7 @@ function buildSeedForRoute(route) {
         routeId: route.id,
         blurb:
             override?.blurb ||
-            `Live Metrorail train times for ${origin} ↔ ${dest} (${province}). Open Next Train for the next departure, fares, and full timetable.`,
+            `${origin} to ${dest} train schedule today — live ${province} Metrorail times. Open Next Train for the next departure, fares, and full timetable.`,
         operatingNote: override?.operatingNote || DEFAULT_OPERATING_NOTE,
     };
 }
@@ -157,7 +162,7 @@ export function listSeoCorridors() {
             return {
                 ...c,
                 regionLabel: regionName(c.region),
-                blurb: `${c.label} Metrorail routes in ${regionName(c.region)}. Open Next Train for live boards and full weekend/weekday grids.`,
+                blurb: `${c.label} Metrorail train times and schedules today in ${regionName(c.region)}. Open Next Train for live boards and full weekday/Saturday grids.`,
                 routes,
             };
         })
@@ -182,6 +187,9 @@ export function listSeoRegions() {
                 region,
                 slug: meta.slug,
                 title: meta.title,
+                h1: meta.h1 || meta.title,
+                pageTitle: meta.pageTitle || `${meta.title} Train Times & Schedules Today`,
+                cityFocus: meta.cityFocus || regionName(region),
                 blurb: meta.blurb,
                 regionLabel: regionName(region),
                 routes,

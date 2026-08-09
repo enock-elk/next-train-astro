@@ -11,9 +11,9 @@ import {
   getCorridorLabel,
 } from '../lib/seo-routes.js';
 
-const title = 'Metrorail Route Timetables | Metrorail Next Train';
+const title = 'Metrorail Train Times & Schedules Today | Route Timetables';
 const description =
-  'Browse Pretoria, Cape Town, Durban and more Metrorail corridor pages, then open live schedules in Metrorail Next Train.';
+  'Browse Pretoria, Cape Town, Durban and East London Metrorail train times and schedules today — corridor pages with live boards in Metrorail Next Train.';
 const pages = listSeoRoutes();
 const regions = listSeoRegions();
 const byRegion = pages.reduce((acc, item) => {
@@ -38,10 +38,10 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
         <a href={withBase('/')} class="hover:underline">Next Train</a>
       </p>
       <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-        Metrorail route timetables
+        Metrorail train times & schedules today
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        Dedicated pages for every active Metrorail corridor we cover. Start with a province or line, then open the live Next Train board.
+        Dedicated pages for every active Metrorail corridor we cover. Start with a province or line, then open today’s live Next Train board.
       </p>
 
       {regions.length > 0 && (
@@ -54,7 +54,7 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
                   href={withBase(`regions/${r.slug}.html`)}
                   class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-3 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
                 >
-                  <span class="block text-sm font-bold text-slate-900 dark:text-white">{r.title}</span>
+                  <span class="block text-sm font-bold text-slate-900 dark:text-white">{r.h1 || r.title}</span>
                   <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">{r.routes.length} routes · {r.corridors.length} lines</span>
                 </a>
               </li>

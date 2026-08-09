@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nexttrain-og",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
+  ],
+  "workers_dev": true,
+  // Production host: nexttrain.co.za (orange-cloud → GitHub Pages / metrorail-app).
+  // Human traffic uses fetch(request) → Cloudflare origin (no ORIGIN_URL loop).
+  // ORIGIN_URL is kept as documentation of the live Pages project only.
+  "vars": {
+    "PUBLIC_SITE": "https://nexttrain.co.za",
+    "ORIGIN_URL": "https://enock-elk.github.io/metrorail-app",
+    "SCHEDULE_BASE": "https://metrorail-next-train-default-rtdb.firebaseio.com/",
+    "FALLBACK_OG_IMAGE": "https://nexttrain.co.za/icons/loading-logo.png"
+  },
+  "routes": [
+    { "pattern": "nexttrain.co.za/", "zone_name": "nexttrain.co.za" },
+    { "pattern": "nexttrain.co.za/og/*", "zone_name": "nexttrain.co.za" },
+    { "pattern": "www.nexttrain.co.za/", "zone_name": "nexttrain.co.za" },
+    { "pattern": "www.nexttrain.co.za/og/*", "zone_name": "nexttrain.co.za" }
+  ]
+}

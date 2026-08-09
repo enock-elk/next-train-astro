@@ -13,23 +13,25 @@ import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
 const pageTitle = 'Metrorail Next Train | 2026 Train Schedules for South Africa';
+/** Keep title stable; enrich description with today/times keywords only. */
 const pageDescription =
-  'Check live train schedules, download offline timetable images, and check fares for Metrorail South Africa.';
+  'Check live train schedules and train times today, download offline timetable images, and check fares for Metrorail South Africa — Gauteng, Cape Town, KZN and Eastern Cape.';
 const ogTitle = 'Metrorail Next Train | 2026 Updated Schedules';
 const ogDescription =
-  'Stop guessing. Get accurate train times, ticket prices, and updates for Gauteng, Cape Town, KZN, and Eastern Cape. Download timetables and plan your trip offline!';
+  'Stop guessing. Get accurate train times and schedules today, ticket prices, and updates for Gauteng, Cape Town, KZN, and Eastern Cape. Download timetables and plan your trip offline!';
 const twitterDescription =
-  'Live Metrorail schedules for Gauteng and Western Cape. Download timetables and plan your trip offline.';
+  'Live Metrorail schedules and train times today for Gauteng and Western Cape. Download timetables and plan your trip offline.';
 
 const softwareAppLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'Metrorail Next Train',
+  alternateName: 'Next Train',
   operatingSystem: 'Web, iOS, Android',
   applicationCategory: 'TravelApplication',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'ZAR' },
   description:
-    'Live Metrorail schedules and route maps for Gauteng (Pretoria, Johannesburg), Western Cape (Cape Town), KZN, and Eastern Cape. Download timetable images for offline use.',
+    'Live Metrorail schedules, train times today, and route maps for Gauteng (Pretoria, Johannesburg), Western Cape (Cape Town), KZN, and Eastern Cape. Download timetable images for offline use.',
   softwareVersion: APP_VERSION,
   featureList:
     'Offline Access, Full Timetable, Fare Calculator, Trip Planner, Network Map, Download Timetable Images',
@@ -40,6 +42,7 @@ const webSiteLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   name: 'Metrorail Next Train',
+  alternateName: 'Next Train',
   url: 'https://nexttrain.co.za/',
   potentialAction: {
     '@type': 'SearchAction',

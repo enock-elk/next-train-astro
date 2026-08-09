@@ -204,6 +204,136 @@ const Admin = {
 
     /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
+
+    /** True when a roadmap description is a black-box / console dump (style as terminal). */
+    isLogDumpDescription: (desc) => {
+        const t = String(desc || '').trim();
+        if (!t) return false;
+        if (/^BLACK\s*BOX/i.test(t) || t.startsWith('BLACK_BOX_EXPORT')) return true;
+        if (/\]\s+(ERROR|WARN|LOG|INFO)\s*:/.test(t) && t.includes('\n')) return true;
+        if ((t.startsWith('[') || t.startsWith('{')) && t.length > 180) return true;
+        return false;
+    },
+
+    /**
+     * Format black-box RTDB crash → readable roadmap description.
+     * Prefer structured logs[]; fall back to pretty raw JSON / stack.
+     */
+    formatBlackBoxTicketDescription: (crash, rawDetail) => {
+        let logs = Array.isArray(crash?.logs) ? crash.logs : null;
+        if (!logs) {
+            try {
+                const parsed = JSON.parse(rawDetail || crash?.stack || crash?.raw || 'null');
+                if (Array.isArray(parsed)) logs = parsed;
+                else if (parsed && Array.isArray(parsed.logs)) logs = parsed.logs;
+            } catch (_) { /* keep null */ }
+        }
+
+        const lines = [
+            'BLACK BOX EXPORT',
+            `Device: ${crash?.deviceId || 'unknown'}`,
+            `App: ${crash?.appVersion || 'unknown'}`,
+            `When: ${crash?.timestamp ? new Date(crash.timestamp).toISOString() : 'unknown'}`,
+            `Lines: ${Array.isArray(logs) ? logs.length : 'raw'}`,
+            '---',
+        ];
+
+        if (Array.isArray(logs) && logs.length) {
+            for (const l of logs) {
+                const d = new Date(l?.t || 0);
+                const timeStr = Number.isFinite(d.getTime())
+                    ? `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+                    : '--/-- --:--:--';
+                lines.push(`[${timeStr}] ${l?.type || 'LOG'}: ${l?.msg != null ? String(l.msg) : ''}`);
+            }
+        } else {
+            let dump = String(rawDetail || crash?.stack || crash?.raw || crash?.error || '').trim();
+            if (dump && (dump.startsWith('[') || dump.startsWith('{'))) {
+                try { dump = JSON.stringify(JSON.parse(dump), null, 2); } catch (_) { /* keep */ }
+            }
+            lines.push(dump || '(empty black box payload)');
+        }
+
+        // RTDB ticket body budget — keep full console readable without blowing the write
+        return lines.join('\n').slice(0, 45000);
+    },
+
+    /** Build roadmap prefill from a cached crash (never via oversized data-escalate attrs). */
+    formatCrashEscalation: (crash) => {
+        const isBlackBox = crash?.kind === 'blackbox_full'
+            || String(crash?.error || '').startsWith('BLACK_BOX_EXPORT');
+        const isDistress = crash?.kind === 'distress'
+            || String(crash?.error || '').startsWith('DISTRESS:');
+
+        let rawDetail = (Admin._crashRawById && Admin._crashRawById[crash.id]) || '';
+        if (!rawDetail) {
+            if (crash.stack && crash.stack !== 'N/A') rawDetail = String(crash.stack);
+            else if (crash.raw) rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
+            else if (crash.logs) rawDetail = JSON.stringify(crash.logs, null, 2);
+            else rawDetail = String(crash.error || '');
+        }
+        if (rawDetail && (rawDetail.trim().startsWith('[') || rawDetail.trim().startsWith('{'))) {
+            try { rawDetail = JSON.stringify(JSON.parse(rawDetail), null, 2); } catch (_) { /* keep */ }
+        }
+
+        const logCount = Array.isArray(crash.logs) ? crash.logs.length : null;
+        const title = isDistress
+            ? `Distress - ${crash.contact || crash.deviceId || 'user'} - ${crash.reason || 'help'}`
+            : isBlackBox
+            ? `Black Box (${logCount != null ? logCount : 'full'} lines) - ${crash.deviceId || crash.routeId || 'device'}`
+            : `Crash on ${crash.routeId || 'Global'}`;
+
+        let description;
+        if (isBlackBox) {
+            description = Admin.formatBlackBoxTicketDescription(crash, rawDetail);
+        } else if (isDistress) {
+            description = [
+                String(crash.error || 'DISTRESS'),
+                crash.contact ? `Contact: ${crash.contact}` : '',
+                crash.reason ? `Reason: ${crash.reason}` : '',
+                crash.note ? `Note: ${crash.note}` : '',
+                `Device: ${crash.deviceId || 'unknown'}`,
+                `App: ${crash.appVersion || 'unknown'}`,
+            ].filter(Boolean).join('\n');
+        } else {
+            description = [
+                String(crash.error || 'Unknown error'),
+                '',
+                `Route: ${crash.routeId || 'Global'}`,
+                `Version: ${crash.appVersion || 'unknown'}`,
+                `Device: ${crash.deviceId || 'unknown'}`,
+                crash.url ? `URL: ${crash.url}` : '',
+                crash.line ? `Line: ${crash.line}` : '',
+                '',
+                '--- STACK / RAW ---',
+                rawDetail || 'N/A',
+            ].filter((l, i, arr) => l !== '' || (arr[i - 1] !== '' && i !== arr.length - 1)).join('\n').slice(0, 45000);
+        }
+
+        return {
+            type: isDistress ? 'general' : 'bug',
+            severity: isBlackBox ? 'medium' : (isDistress ? 'medium' : 'high'),
+            title,
+            description,
+            source: `Crash ${crash.id || ''}`.trim(),
+            kind: isBlackBox ? 'blackbox_full' : (crash.kind || 'runtime_error'),
+            status: 'backlog',
+        };
+    },
+
+    /** Escalate from Crash Analytics by id — pulls full payload from cache, not HTML attrs. */
+    escalateFromCrash: (crashId) => {
+        const crash = (Admin.cachedCrashData || []).find((c) => c.id === crashId);
+        if (!crash) {
+            if (typeof showToast === 'function') showToast('Crash data not loaded — refresh Crash Analytics', 'error');
+            return;
+        }
+        const prefill = Admin.formatCrashEscalation(crash);
+        if (typeof Admin.escalateToRoadmap === 'function') Admin.escalateToRoadmap(prefill);
+        else if (typeof Admin.openTicketModal === 'function') Admin.openTicketModal(null, prefill);
+        else if (typeof showToast === 'function') showToast('Roadmap not ready yet', 'warning');
+    },
+
     copyCrashLog: async (crashId) => {
         const text = (Admin._crashRawById && Admin._crashRawById[crashId]) || '';
         if (!text) {
@@ -228,7 +358,6 @@ const Admin = {
         }
     },
     openDiagnosticErrorsModal: async () => {
-        const SENTRY_SAMPLE = 0.3;
         let modal = document.getElementById('admin-diag-errors-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -241,61 +370,93 @@ const Admin = {
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
                     <div>
                         <h3 class="text-base font-black text-gray-900 dark:text-white">System Errors 24H</h3>
-                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading...</p>
+                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading Sentry issues...</p>
                     </div>
                     <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" aria-label="Close">${Admin.icon('x', 'w-4 h-4')}</button>
                 </div>
                 <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading...</div>
+                <div class="p-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
+                    <button type="button" id="diag-open-crashes" class="w-full text-xs font-bold py-2.5 rounded-lg bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-colors">
+                        Open Crash Analytics (distress / black box)
+                    </button>
+                </div>
             </div>`;
         modal.classList.remove('hidden');
         document.getElementById('diag-errors-close').onclick = () => modal.classList.add('hidden');
+        document.getElementById('diag-open-crashes').onclick = () => {
+            modal.classList.add('hidden');
+            Admin.openCrashDistressPanel();
+        };
 
         const list = document.getElementById('diag-errors-list');
         const meta = document.getElementById('diag-errors-meta');
+        const esc = (str) => String(str ?? '').replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[m]));
+
         try {
             const secret = await Admin.getAuthKey();
-            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 10000);
-            const data = res.ok ? await res.json() : null;
-            const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-            const all = data
-                ? Object.keys(data).map((id) => ({ id, ...data[id] })).filter((c) => (c.timestamp || 0) >= cutoff)
-                : [];
-            const isDistress = (c) => c.kind === 'distress' || String(c.error || '').startsWith('DISTRESS:');
-            const distressCount = all.filter(isDistress).length;
-            // Distress / help belongs in Crash Analytics - keep this modal for JS/black-box noise only
-            const items = all.filter((c) => !isDistress(c));
-            items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            const n = items.length;
-            const est = Math.round(n / SENTRY_SAMPLE);
-            meta.textContent = `${n} JS/crash captures (~${est} est. @ sample ${SENTRY_SAMPLE}). Distress: use Crash Analytics.`;
-            if (!n) {
+            if (!secret) throw new Error('Not signed in as admin');
+
+            const workerUrl = 'https://nexttrain-telemetry.enock.workers.dev/sentry/issues';
+            const res = await window.guardianFetch(workerUrl, {
+                headers: { Authorization: `Bearer ${secret}` },
+            }, 12000);
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.ok === false) {
+                throw new Error(data.error || `Worker HTTP ${res.status}`);
+            }
+
+            const issues = Array.isArray(data.issues) ? data.issues : [];
+            const issueCount = data.issueCount != null ? data.issueCount : issues.length;
+            const events24h = data.events24h != null ? data.events24h : 0;
+            const tileHint = document.getElementById('stat-errors')?.textContent?.trim();
+            meta.textContent = `${issueCount} Sentry issue${issueCount === 1 ? '' : 's'} · ~${events24h} events/24h`
+                + (tileHint && tileHint !== '--' ? ` · tile shows ${tileHint} received` : '')
+                + (data.project ? ` · ${data.org}/${data.project}` : '');
+
+            if (!issues.length) {
                 list.innerHTML = `
-                    <p class="text-xs text-gray-500 text-center py-4">No JS / black-box diagnostic entries in the last 24h.</p>
-                    ${distressCount ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) - open Crash Analytics</button>` : ''}
-                `;
-                document.getElementById('diag-open-distress')?.addEventListener('click', () => {
-                    modal.classList.add('hidden');
-                    Admin.openCrashDistressPanel();
-                });
+                    <p class="text-xs text-gray-500 text-center py-6 leading-relaxed">
+                        No Sentry issues with activity in the last 24 hours.
+                        <span class="block mt-1 text-[10px]">Distress / black-box dumps stay in Crash Analytics.</span>
+                    </p>`;
                 return;
             }
-            list.innerHTML = items.map((c) => {
-                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '-';
-                const err = String(c.error || 'Unknown').replace(/</g, '&lt;').slice(0, 180);
-                return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <div class="flex justify-between text-[9px] text-gray-400 font-mono mb-1"><span>${when}</span><span>${(c.routeId || 'global').toString().replace(/</g, '&lt;')}</span></div>
-                    <div class="text-xs font-mono text-gray-800 dark:text-gray-200 break-words">${err}</div>
+
+            const levelCls = (level) => {
+                const l = String(level || '').toLowerCase();
+                if (l === 'fatal' || l === 'error') return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                if (l === 'warning') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+                return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+            };
+
+            list.innerHTML = issues.map((issue) => {
+                const when = issue.lastSeen ? new Date(issue.lastSeen).toLocaleString() : '-';
+                const title = esc(issue.title || 'Untitled');
+                const culprit = esc(issue.culprit || '');
+                const shortId = esc(issue.shortId || issue.id || '');
+                const href = issue.permalink ? esc(issue.permalink) : '';
+                const link = href
+                    ? `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0">Open in Sentry</a>`
+                    : '';
+                return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-left">
+                    <div class="flex justify-between items-start gap-2 mb-1">
+                        <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${levelCls(issue.level)}">${esc(issue.level || 'error')}</span>
+                        <span class="text-[9px] text-gray-400 font-mono">${esc(when)}</span>
+                    </div>
+                    <div class="text-xs font-semibold text-gray-900 dark:text-gray-100 break-words leading-snug">${title}</div>
+                    ${culprit ? `<div class="text-[10px] text-gray-500 dark:text-gray-400 font-mono mt-0.5 truncate" title="${culprit}">${culprit}</div>` : ''}
+                    <div class="flex flex-wrap items-center justify-between gap-2 mt-2 pt-1.5 border-t border-gray-200/80 dark:border-gray-700/80">
+                        <span class="text-[10px] text-gray-500 font-mono">${shortId} · ${Number(issue.events24h) || 0}×/24h · ${Number(issue.userCount) || 0} users</span>
+                        ${link}
+                    </div>
                 </div>`;
-            }).join('') + (distressCount
-                ? `<button type="button" id="diag-open-distress" class="w-full mt-2 text-xs font-bold py-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">${distressCount} distress / help report(s) - open Crash Analytics</button>`
-                : '');
-            document.getElementById('diag-open-distress')?.addEventListener('click', () => {
-                modal.classList.add('hidden');
-                Admin.openCrashDistressPanel();
-            });
+            }).join('');
         } catch (e) {
-            list.innerHTML = `<p class="text-xs text-red-500 text-center py-6">Failed to load: ${e.message || e}</p>`;
+            meta.textContent = 'Sentry list unavailable';
+            list.innerHTML = `<p class="text-xs text-red-500 text-center py-6 leading-relaxed">Failed to load Sentry issues.<br><span class="text-[10px] text-gray-500">${esc(e.message || e)}</span><br><span class="text-[10px] text-gray-500 mt-2 block">Confirm worker secrets + redeploy nexttrain-telemetry.</span></p>`;
         }
     },
 
@@ -668,11 +829,39 @@ const Admin = {
             Admin.exitDrillToGrid();
             return;
         }
-        window._adminDrillBackLock = true;
-        if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
+        // Intentional dismiss must NOT set _adminDrillBackLock — that guard exists so
+        // drill-exit history noise cannot close Dev Mode. Setting it here made X a no-op
+        // because closeSmoothModal('dev-modal') returns immediately while the lock is set.
+        window._adminDrillBackLock = false;
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true, { force: true });
         else document.getElementById('dev-modal')?.classList.add('hidden');
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
-        setTimeout(() => { window._adminDrillBackLock = false; }, 200);
+    },
+
+    /**
+     * Force-dismiss Dev Mode (even from a drilled tile) and show the Next Train board.
+     * Used by Time Simulation Apply/Exit so admins always see the simulated clock.
+     */
+    dismissDevModalToHome: () => {
+        try {
+            // Collapse any drilled tile first so closeSmoothModal won't step-back only.
+            if (Admin.isGridMode === false && typeof Admin.exitDrillToGrid === 'function') {
+                Admin.exitDrillToGrid({ fromPopState: true });
+            }
+            Admin.isGridMode = true;
+            window._adminDrillBackLock = false;
+            window._adminLightboxOpen = false;
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true, { force: true });
+            else document.getElementById('dev-modal')?.classList.add('hidden');
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
+            if (typeof switchTab === 'function') switchTab('next-train');
+            else if (typeof window.switchTab === 'function') window.switchTab('next-train');
+            try { document.body.classList.remove('modal-active'); } catch (_) {}
+            try { window.checkAndUnhide?.(); } catch (_) {}
+        } catch (e) {
+            console.warn('Admin.dismissDevModalToHome failed', e);
+            try { document.getElementById('dev-modal')?.classList.add('hidden'); } catch (_) {}
+        }
     },
 
     /** Compact unread count for tile badges (number only). */
@@ -902,7 +1091,7 @@ const Admin = {
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
                 errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
-                errorBox.title = 'System / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
+                errorBox.title = 'Sentry issues with activity in the last 24h. Distress / black box → Crash Analytics.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
@@ -3214,21 +3403,7 @@ const Admin = {
                     
                     const isBlackBox = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT');
                     const isDistress = crash.kind === 'distress' || String(crash.error || '').startsWith('DISTRESS:');
-                    const ticketDesc = isBlackBox
-                        ? String(rawDetail || crash.stack || crash.raw || crash.error || '').slice(0, 12000)
-                        : String(crash.error || '').slice(0, 240);
-                    const escalateAttr = Admin.encodeEscalatePayload({
-                        type: isDistress ? 'general' : 'bug',
-                        severity: isBlackBox ? 'medium' : (isDistress ? 'medium' : 'high'),
-                        title: isDistress
-                            ? `Distress - ${crash.contact || crash.deviceId || 'user'} - ${crash.reason || 'help'}`
-                            : isBlackBox
-                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) - ${crash.deviceId || crash.routeId || 'device'}`
-                            : `Crash on ${crash.routeId || 'Global'}`,
-                        description: ticketDesc,
-                        source: `Crash ${crash.id || ''}`
-                    });
-                    // Store raw text for copy buttons (avoid huge data-attrs on every button)
+                    // Store raw text for copy / escalate (full dump lives in JS cache — never in data-escalate attrs)
                     if (!Admin._crashRawById) Admin._crashRawById = {};
                     Admin._crashRawById[crash.id] = String(rawDetail || '');
 
@@ -3236,7 +3411,7 @@ const Admin = {
                         ? `<div class="flex flex-wrap gap-2 w-full mt-2">
                              <button class="flex-1 min-w-[4.5rem] text-slate-700 dark:text-slate-200 hover:text-white hover:bg-slate-700 text-[10px] font-bold bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.copyCrashLog('${safeJsCrashId}')">Copy Log</button>
                              ${rawDid !== 'Anonymous / Legacy' ? `<button class="flex-1 min-w-[4.5rem] text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${safeJsCrashId}', '${safeJsDid}')">Reply</button>` : ''}
-                             <button class="flex-1 min-w-[4.5rem] text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Escalate</button>
+                             <button class="flex-1 min-w-[4.5rem] text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.escalateFromCrash('${safeJsCrashId}')">Escalate</button>
                              <button class="flex-1 min-w-[4.5rem] text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-2.5 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveCrash('${safeJsCrashId}')">Resolve</button>
                            </div>`
                         : `<div class="flex justify-between items-center w-full mt-2 gap-2">
@@ -10876,50 +11051,57 @@ const Admin = {
         if (simApplyBtn) {
             simApplyBtn.addEventListener('click', () => {
                 if (!simTimeInput || !simEnabledCheckbox) return;
-                
+
                 // If they hit apply, we assume they want to turn it ON
                 simEnabledCheckbox.checked = true;
 
+                const timeVal = String(simTimeInput.value || '').trim();
+                if (!timeVal) {
+                    if (typeof showToast === 'function') showToast('Pick a simulation time first.', 'error');
+                    return;
+                }
+
                 window.isSimMode = true;
-                window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
+                window.simTimeStr = timeVal.length === 5 ? `${timeVal}:00` : timeVal;
                 try { window.__ntLastSimKey = null; } catch (e) {}
-                
+
                 // GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
-                    try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch(e){}
+                    try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch (e) {}
                 } else {
-                    try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
+                    try { sessionStorage.removeItem('dev_force_source'); } catch (e) {}
                 }
-                
+
                 if (dayDropdown && dayDropdown.value === 'specific') {
                     if (dateInput && dateInput.value) {
                         const d = new Date(dateInput.value);
-                        window.simDayIndex = d.getDay(); 
+                        window.simDayIndex = d.getDay();
                     } else {
-                        if (typeof showToast === 'function') showToast("Please select a valid date.", "error");
+                        if (typeof showToast === 'function') showToast('Please select a valid date.', 'error');
                         return;
                     }
                 } else if (dayDropdown) {
-                    window.simDayIndex = parseInt(dayDropdown.value);
+                    window.simDayIndex = parseInt(dayDropdown.value, 10);
                 } else {
                     window.simDayIndex = 1;
                 }
 
-                if (typeof showToast === 'function') showToast("Dev Simulation Active! Fetching data...", "success");
-                
-                // GUARDIAN FIX: Proper Router-aware Exit. Closes Hub, lets you see the result.
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
-                
-                // GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
-                if (typeof loadAllSchedules === 'function') {
-                    loadAllSchedules(true).then(() => {
-                        if (typeof updateTime === 'function') updateTime(); 
-                        if (typeof findNextTrains === 'function') findNextTrains();
-                    });
-                } else {
-                    if (typeof updateTime === 'function') updateTime(); 
+                if (typeof showToast === 'function') showToast('Simulation applied — live board updated.', 'success');
+
+                // Always land on the Next Train homescreen with sim clock visible.
+                // Do NOT history.back() / soft-close: drilled panels (#dev-*) would only
+                // step back to the grid, and the X/close race left admins stuck in Dev Mode.
+                Admin.dismissDevModalToHome();
+
+                const refreshBoard = () => {
+                    if (typeof updateTime === 'function') updateTime();
                     if (typeof findNextTrains === 'function') findNextTrains();
+                    if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+                };
+                refreshBoard();
+
+                if (typeof loadAllSchedules === 'function') {
+                    loadAllSchedules(true).then(refreshBoard).catch(refreshBoard);
                 }
             });
         }
@@ -10930,20 +11112,20 @@ const Admin = {
                 window.simTimeStr = null;
                 window.simDayIndex = null;
                 try { window.__ntLastSimKey = null; } catch (e) {}
-                if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
-                
+                if (simEnabledCheckbox) simEnabledCheckbox.checked = false;
+
                 // GUARDIAN PHASE 4: Clear Pipeline Override on exit
-                try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
+                try { sessionStorage.removeItem('dev_force_source'); } catch (e) {}
                 const pipelineDropdown = document.getElementById('sim-pipeline-override');
                 if (pipelineDropdown) pipelineDropdown.value = 'AUTO';
 
-                if (typeof showToast === 'function') showToast("Exited Developer Mode", "info");
-                
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+                if (typeof showToast === 'function') showToast('Simulation cleared', 'info');
 
-                if (typeof updateTime === 'function') updateTime(); 
+                Admin.dismissDevModalToHome();
+
+                if (typeof updateTime === 'function') updateTime();
                 if (typeof findNextTrains === 'function') findNextTrains();
+                if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
             });
         }
 
@@ -11754,19 +11936,6 @@ const Admin = {
             return { status: 'pending', dayType: entry?.defaultDayType || fallbackDayType };
         };
 
-        const setHolidayTab = (tab) => {
-            holidayTab = tab;
-            tabPending?.classList.toggle('ring-2', tab === 'pending');
-            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
-            tabApproved?.classList.toggle('ring-2', tab === 'approved');
-            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
-            Admin.fetchHolidayApprovals();
-        };
-
-        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
-        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
-        setHolidayTab('pending');
-
         Admin.fetchHolidayApprovals = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret || !listDiv) return;
@@ -11938,6 +12107,20 @@ const Admin = {
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load holiday approvals.<br><span class="text-[9px] text-gray-500">${escapeHTML(String(e.message || e))}</span></div>`;
             }
         };
+
+        const setHolidayTab = (tab) => {
+            holidayTab = tab;
+            tabPending?.classList.toggle('ring-2', tab === 'pending');
+            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
+            tabApproved?.classList.toggle('ring-2', tab === 'approved');
+            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
+            if (typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+        };
+
+        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
+        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
+        // Bind fetch first (above), then initial tab load — never call before assignment.
+        setHolidayTab('pending');
 
         if (header) {
             header.onclick = () => {
@@ -13012,10 +13195,18 @@ const Admin = {
 
                 const dateStr = Admin.formatDate(ticket.timestamp);
                 const safeTitle = safeHTML(ticket.title || 'Untitled');
-                let shortDesc = safeHTML(ticket.description || 'No description provided.');
-                
-                // Truncate description for card view
-                if (shortDesc.length > 80) shortDesc = shortDesc.substring(0, 80) + '...';
+                let shortDesc;
+                const rawDesc = String(ticket.description || '');
+                if (ticket.kind === 'blackbox_full' || Admin.isLogDumpDescription(rawDesc)) {
+                    const m = rawDesc.match(/Lines:\s*(\d+)/i);
+                    shortDesc = m
+                        ? `Black box console dump · ${m[1]} lines`
+                        : 'Black box console dump';
+                } else {
+                    shortDesc = safeHTML(rawDesc || 'No description provided.');
+                    // Truncate description for card view (plain tickets only)
+                    if (shortDesc.length > 80) shortDesc = shortDesc.substring(0, 80) + '...';
+                }
                 
                 const pStyles = getPriorityStyles(ticket.severity || 'medium');
                 
@@ -13225,7 +13416,12 @@ const Admin = {
             const statusMap = { backlog: 'To-Do / Backlog', progress: 'In Progress', done: 'Completed' };
             const statusText = statusMap[ticket.status || 'backlog'];
             const safeTitle = safeHTML(ticket.title);
-            const safeDesc = safeHTML(ticket.description || 'No description provided.');
+            // Trim so whitespace-pre-* never inherits template indent as fake alignment
+            const safeDesc = safeHTML(String(ticket.description || 'No description provided.').replace(/\r\n/g, '\n').trim());
+            const isDump = ticket.kind === 'blackbox_full' || Admin.isLogDumpDescription(ticket.description);
+            const descBlock = isDump
+                ? `<pre class="m-0 text-left text-[10px] sm:text-xs font-mono leading-relaxed whitespace-pre-wrap break-words text-green-400 bg-[#0a0a0a] p-3 sm:p-4 rounded-xl border border-green-900/50 min-h-[150px] max-h-[55vh] overflow-y-auto custom-scrollbar select-text">${safeDesc}</pre>`
+                : `<pre class="m-0 text-left text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-sans leading-relaxed whitespace-pre-wrap break-words min-h-[150px] overflow-y-auto custom-scrollbar select-text">${safeDesc}</pre>`;
 
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
@@ -13240,6 +13436,7 @@ const Admin = {
                                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                     ${statusText}
                                 </span>
+                                ${isDump ? '<span class="text-[10px] px-2 py-0.5 rounded border border-green-700/50 bg-green-950/40 text-green-400 font-bold uppercase tracking-wider">Black Box</span>' : ''}
                             </div>
                             <h3 class="text-lg sm:text-xl font-black text-gray-900 dark:text-white leading-tight break-words">${safeTitle}</h3>
                         </div>
@@ -13258,9 +13455,7 @@ const Admin = {
                     
                     <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar">
                         <h4 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Description</h4>
-                        <div class="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-[150px]">
-                            ${safeDesc}
-                        </div>
+                        ${descBlock}
                     </div>
                 </div>
             `;
@@ -13297,6 +13492,9 @@ const Admin = {
             } else if (prefillData) {
                 ticket = { ...ticket, ...prefillData };
             }
+
+            // Chip UI only knows bug/feature/route — map unknown escalate types
+            if (!['bug', 'feature', 'route'].includes(ticket.type)) ticket.type = 'bug';
             
             // Quick escapeHTML helper for modal payload
             const safeHTML = (str) => {
@@ -13305,6 +13503,9 @@ const Admin = {
                     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
                 });
             };
+
+            const isDumpPrefill = ticket.kind === 'blackbox_full' || Admin.isLogDumpDescription(ticket.description);
+            const descRows = isDumpPrefill ? 12 : 4;
 
             const typeOpts = [
                 { value: 'bug', label: 'Bug', icon: 'bug', active: 'border-rose-400 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300' },
@@ -13328,7 +13529,7 @@ const Admin = {
             };
 
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 transform transition-all scale-95 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${isDumpPrefill ? 'max-w-lg' : 'max-w-sm'} p-5 transform transition-all scale-95 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
                             <span class="inline-flex text-blue-500">${Admin.icon('note', 'w-5 h-5')}</span> ${ticketId ? 'Edit Ticket' : 'New Ticket'}
@@ -13365,8 +13566,8 @@ const Admin = {
                             </div>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Description</label>
-                            <textarea id="tkt-desc" rows="4" class="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none resize-none">${safeHTML(ticket.description)}</textarea>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Description${isDumpPrefill ? ' · Black Box log' : ''}</label>
+                            <textarea id="tkt-desc" rows="${descRows}" class="w-full p-3 ${isDumpPrefill ? 'bg-[#0a0a0a] text-green-400 border-green-900/50 font-mono text-[10px] leading-relaxed' : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white'} border rounded-lg outline-none resize-y min-h-[6rem] max-h-[40vh]">${safeHTML(ticket.description)}</textarea>
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Source / Reference (Optional)</label>
@@ -13418,6 +13619,10 @@ const Admin = {
                     timestamp: ticketId ? ticket.timestamp : Date.now(),
                     updatedAt: Date.now()
                 };
+                // Preserve black-box / crash kind so the view modal keeps terminal styling
+                const kind = ticket.kind
+                    || (Admin.isLogDumpDescription(desc) ? 'blackbox_full' : null);
+                if (kind) payload.kind = kind;
 
                 const targetId = ticketId || Date.now().toString();
 

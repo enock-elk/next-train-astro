@@ -169,7 +169,8 @@ export default {
         ok: true,
         routes: Object.keys(catalog).length,
         publicSite: env.PUBLIC_SITE || null,
-        originConfigured: Boolean(env.ORIGIN_URL),
+        pagesProject: env.ORIGIN_URL || null,
+        passThrough: 'cloudflare-origin',
       });
     }
 

@@ -664,13 +664,25 @@ const Admin = {
 
     /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
     closeDevModal: () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1-H2',location:'admin.js:closeDevModal',message:'closeDevModal entered',data:{isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,hash:location.hash||'',devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (!Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
+            // #region agent log
+            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:closeDevModal',message:'closeDevModal diverted to exitDrillToGrid',data:{isGridMode:false,hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             Admin.exitDrillToGrid();
             return;
         }
         window._adminDrillBackLock = true;
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'admin.js:closeDevModal',message:'closeDevModal about to call closeSmoothModal with lock ON',data:{lock:!!window._adminDrillBackLock,hasCloseFn:typeof closeSmoothModal==='function',hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
         else document.getElementById('dev-modal')?.classList.add('hidden');
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'admin.js:closeDevModal',message:'closeDevModal after closeSmoothModal',data:{devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden'),devOpacity0:!!document.getElementById('dev-modal')?.classList.contains('opacity-0'),hash:location.hash||'',lock:!!window._adminDrillBackLock},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
         setTimeout(() => { window._adminDrillBackLock = false; }, 200);
     },
@@ -10907,9 +10919,20 @@ const Admin = {
 
                 if (typeof showToast === 'function') showToast("Dev Simulation Active! Fetching data...", "success");
                 
+                // #region agent log
+                const _simExitPath = (location.hash === '#dev') ? 'history.back' : (typeof closeSmoothModal === 'function' ? 'closeSmoothModal' : 'none');
+                fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4-H5',location:'admin.js:simApply',message:'sim Apply exit attempt',data:{hash:location.hash||'',isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,exitPath:_simExitPath,devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+
                 // GUARDIAN FIX: Proper Router-aware Exit. Closes Hub, lets you see the result.
                 if (location.hash === '#dev') history.back();
                 else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+
+                // #region agent log
+                setTimeout(() => {
+                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4-H5',location:'admin.js:simApply',message:'sim Apply 250ms after exit',data:{hash:location.hash||'',isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden'),devOpacity0:!!document.getElementById('dev-modal')?.classList.contains('opacity-0')},timestamp:Date.now()})}).catch(()=>{});
+                }, 250);
+                // #endregion
                 
                 // GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
                 if (typeof loadAllSchedules === 'function') {

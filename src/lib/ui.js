@@ -92,10 +92,18 @@ function anyFixedModalOpen() {
 
 export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
-    if (window._adminDrillBackLock && modalId === 'dev-modal') return;
+    if (window._adminDrillBackLock && modalId === 'dev-modal') {
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'ui.js:closeSmoothModal',message:'BLOCKED by _adminDrillBackLock',data:{modalId,fromPopState:!!fromPopState,hash:location.hash||'',isGridMode:!!window.Admin?.isGridMode},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return;
+    }
 
     // Drilled Dev Mode: never close the whole modal — step back to the grid first
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
+        // #region agent log
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4',location:'ui.js:closeSmoothModal',message:'dev close diverted to exitDrillToGrid',data:{modalId,fromPopState:!!fromPopState,hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (typeof window.Admin.exitDrillToGrid === 'function') {
             window.Admin.exitDrillToGrid({ fromPopState });
             return;

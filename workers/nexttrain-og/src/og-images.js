@@ -52,7 +52,8 @@ function truncate(s, n) {
 export function buildTimetableSvg({ origin, dest, day, grid }) {
   const W = 1200;
   const H = 630;
-  const title = `${truncate(origin, 22)} → ${truncate(dest, 22)}`;
+  // Use ASCII "to" — Inter subset may lack the → glyph (shows as NO GLYPH)
+  const title = `${truncate(origin, 22)} to ${truncate(dest, 22)}`;
   const subtitle = `${day} timetable`;
 
   let gridBody = '';

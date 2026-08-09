@@ -45,6 +45,12 @@ Use this URL (not bare /?rt=…):
 Facebook Sharing Debugger → Scrape Again
 Then send that link in a NEW WhatsApp chat.
 
+In the debugger redirect path you must NOT see http-equiv refresh
+chasing into /?rt=… (that was stealing the preview). After redeploy,
+canonical / og:url should stay on /og/share?…
+
+The fb:app_id warning is optional and safe to ignore for WhatsApp previews.
+
 -------------------------------------------------------------------
 Notes
 -------------------------------------------------------------------

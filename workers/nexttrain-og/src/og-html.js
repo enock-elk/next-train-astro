@@ -99,6 +99,9 @@ export function renderOgHtml({
   siteName = 'Metrorail Next Train',
 }) {
   const openUrl = appUrl || url;
+  // IMPORTANT: Do NOT use <meta http-equiv="refresh"> — Facebook follows it,
+  // then scrapes the SPA homepage and replaces our OG tags with the train icon.
+  // Humans get a JS redirect + visible link instead (crawlers rarely run JS).
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -118,11 +121,19 @@ export function renderOgHtml({
 <meta name="twitter:description" content="${esc(description)}"/>
 <meta name="twitter:image" content="${esc(image)}"/>
 <link rel="canonical" href="${esc(url)}"/>
-<meta http-equiv="refresh" content="0;url=${esc(openUrl)}"/>
 </head>
-<body>
-<p><a href="${esc(openUrl)}">${esc(title)}</a></p>
+<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.45">
+<h1 style="font-size:1.25rem">${esc(title)}</h1>
 <p>${esc(description)}</p>
+<p><a href="${esc(openUrl)}" style="display:inline-block;background:#1d4ed8;color:#fff;font-weight:700;padding:0.75rem 1.25rem;border-radius:0.75rem;text-decoration:none">Open in Next Train</a></p>
+<script>
+(function () {
+  var bots = /facebookexternalhit|Facebot|FacebookBot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot/i;
+  if (!bots.test(navigator.userAgent || '')) {
+    location.replace(${JSON.stringify(openUrl)});
+  }
+})();
+</script>
 </body>
 </html>`;
 }

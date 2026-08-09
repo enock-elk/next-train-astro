@@ -838,6 +838,32 @@ const Admin = {
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
     },
 
+    /**
+     * Force-dismiss Dev Mode (even from a drilled tile) and show the Next Train board.
+     * Used by Time Simulation Apply/Exit so admins always see the simulated clock.
+     */
+    dismissDevModalToHome: () => {
+        try {
+            // Collapse any drilled tile first so closeSmoothModal won't step-back only.
+            if (Admin.isGridMode === false && typeof Admin.exitDrillToGrid === 'function') {
+                Admin.exitDrillToGrid({ fromPopState: true });
+            }
+            Admin.isGridMode = true;
+            window._adminDrillBackLock = false;
+            window._adminLightboxOpen = false;
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true, { force: true });
+            else document.getElementById('dev-modal')?.classList.add('hidden');
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
+            if (typeof switchTab === 'function') switchTab('next-train');
+            else if (typeof window.switchTab === 'function') window.switchTab('next-train');
+            try { document.body.classList.remove('modal-active'); } catch (_) {}
+            try { window.checkAndUnhide?.(); } catch (_) {}
+        } catch (e) {
+            console.warn('Admin.dismissDevModalToHome failed', e);
+            try { document.getElementById('dev-modal')?.classList.add('hidden'); } catch (_) {}
+        }
+    },
+
     /** Compact unread count for tile badges (number only). */
     formatBadgeCount: (n) => {
         const c = Number(n) || 0;
@@ -11025,50 +11051,57 @@ const Admin = {
         if (simApplyBtn) {
             simApplyBtn.addEventListener('click', () => {
                 if (!simTimeInput || !simEnabledCheckbox) return;
-                
+
                 // If they hit apply, we assume they want to turn it ON
                 simEnabledCheckbox.checked = true;
 
+                const timeVal = String(simTimeInput.value || '').trim();
+                if (!timeVal) {
+                    if (typeof showToast === 'function') showToast('Pick a simulation time first.', 'error');
+                    return;
+                }
+
                 window.isSimMode = true;
-                window.simTimeStr = simTimeInput.value + (simTimeInput.value.length === 5 ? ":00" : "");
+                window.simTimeStr = timeVal.length === 5 ? `${timeVal}:00` : timeVal;
                 try { window.__ntLastSimKey = null; } catch (e) {}
-                
+
                 // GUARDIAN PHASE 4: Save Pipeline Override to sessionStorage
                 if (pipelineDropdown && pipelineDropdown.value !== 'AUTO') {
-                    try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch(e){}
+                    try { sessionStorage.setItem('dev_force_source', pipelineDropdown.value); } catch (e) {}
                 } else {
-                    try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
+                    try { sessionStorage.removeItem('dev_force_source'); } catch (e) {}
                 }
-                
+
                 if (dayDropdown && dayDropdown.value === 'specific') {
                     if (dateInput && dateInput.value) {
                         const d = new Date(dateInput.value);
-                        window.simDayIndex = d.getDay(); 
+                        window.simDayIndex = d.getDay();
                     } else {
-                        if (typeof showToast === 'function') showToast("Please select a valid date.", "error");
+                        if (typeof showToast === 'function') showToast('Please select a valid date.', 'error');
                         return;
                     }
                 } else if (dayDropdown) {
-                    window.simDayIndex = parseInt(dayDropdown.value);
+                    window.simDayIndex = parseInt(dayDropdown.value, 10);
                 } else {
                     window.simDayIndex = 1;
                 }
 
-                if (typeof showToast === 'function') showToast("Dev Simulation Active! Fetching data...", "success");
-                
-                // GUARDIAN FIX: Proper Router-aware Exit. Closes Hub, lets you see the result.
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
-                
-                // GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
-                if (typeof loadAllSchedules === 'function') {
-                    loadAllSchedules(true).then(() => {
-                        if (typeof updateTime === 'function') updateTime(); 
-                        if (typeof findNextTrains === 'function') findNextTrains();
-                    });
-                } else {
-                    if (typeof updateTime === 'function') updateTime(); 
+                if (typeof showToast === 'function') showToast('Simulation applied — live board updated.', 'success');
+
+                // Always land on the Next Train homescreen with sim clock visible.
+                // Do NOT history.back() / soft-close: drilled panels (#dev-*) would only
+                // step back to the grid, and the X/close race left admins stuck in Dev Mode.
+                Admin.dismissDevModalToHome();
+
+                const refreshBoard = () => {
+                    if (typeof updateTime === 'function') updateTime();
                     if (typeof findNextTrains === 'function') findNextTrains();
+                    if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+                };
+                refreshBoard();
+
+                if (typeof loadAllSchedules === 'function') {
+                    loadAllSchedules(true).then(refreshBoard).catch(refreshBoard);
                 }
             });
         }
@@ -11079,20 +11112,20 @@ const Admin = {
                 window.simTimeStr = null;
                 window.simDayIndex = null;
                 try { window.__ntLastSimKey = null; } catch (e) {}
-                if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
-                
+                if (simEnabledCheckbox) simEnabledCheckbox.checked = false;
+
                 // GUARDIAN PHASE 4: Clear Pipeline Override on exit
-                try { sessionStorage.removeItem('dev_force_source'); } catch(e){}
+                try { sessionStorage.removeItem('dev_force_source'); } catch (e) {}
                 const pipelineDropdown = document.getElementById('sim-pipeline-override');
                 if (pipelineDropdown) pipelineDropdown.value = 'AUTO';
 
-                if (typeof showToast === 'function') showToast("Exited Developer Mode", "info");
-                
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+                if (typeof showToast === 'function') showToast('Simulation cleared', 'info');
 
-                if (typeof updateTime === 'function') updateTime(); 
+                Admin.dismissDevModalToHome();
+
+                if (typeof updateTime === 'function') updateTime();
                 if (typeof findNextTrains === 'function') findNextTrains();
+                if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
             });
         }
 
@@ -11902,19 +11935,6 @@ const Admin = {
             }
             return { status: 'pending', dayType: entry?.defaultDayType || fallbackDayType };
         };
-
-        const setHolidayTab = (tab) => {
-            holidayTab = tab;
-            tabPending?.classList.toggle('ring-2', tab === 'pending');
-            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
-            tabApproved?.classList.toggle('ring-2', tab === 'approved');
-            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
-            Admin.fetchHolidayApprovals();
-        };
-
-        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
-        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
-        setHolidayTab('pending');
 
         Admin.fetchHolidayApprovals = async () => {
             const secret = await Admin.getAuthKey();

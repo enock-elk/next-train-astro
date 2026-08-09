@@ -92,18 +92,10 @@ function anyFixedModalOpen() {
 
 export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
-    if (window._adminDrillBackLock && modalId === 'dev-modal') {
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'ui.js:closeSmoothModal',message:'BLOCKED by _adminDrillBackLock',data:{modalId,fromPopState:!!fromPopState,hash:location.hash||'',isGridMode:!!window.Admin?.isGridMode},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        return;
-    }
+    if (window._adminDrillBackLock && modalId === 'dev-modal') return;
 
     // Drilled Dev Mode: never close the whole modal — step back to the grid first
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4',location:'ui.js:closeSmoothModal',message:'dev close diverted to exitDrillToGrid',data:{modalId,fromPopState:!!fromPopState,hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (typeof window.Admin.exitDrillToGrid === 'function') {
             window.Admin.exitDrillToGrid({ fromPopState });
             return;
@@ -1207,6 +1199,8 @@ export function bindPlannerShellModals() {
  */
 export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    // Product: only true-offline toast chrome (no liefi / weak variants)
+    if (mode !== 'offline') return;
     const offlineToast = document.getElementById('offline-toast');
     if (!offlineToast) return;
 
@@ -1221,21 +1215,10 @@ export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
     offlineToast.classList.add('pointer-events-auto');
     const col = offlineToast.querySelector('.flex.flex-col') || offlineToast.lastElementChild;
     if (col) {
-        const title = mode === 'offline'
-            ? 'You are offline.'
-            : mode === 'weak'
-              ? 'Connection is very slow.'
-              : 'No usable internet.';
-        const detail = mode === 'offline'
-            ? 'Pull down to refresh when signal returns.'
-            : mode === 'weak'
-              ? 'Mobile data may be on, but the network is struggling. Still trying…'
-              : 'Data may be on, but we can’t reach Next Train servers. Check airtime or Wi‑Fi.';
-        const helpReason = mode === 'offline' ? 'offline' : 'server';
+        // Offline-only chrome (no liefi/weak alternate banners/toasts)
         col.innerHTML = `
-            <span class="text-sm font-bold tracking-wide">${title}</span>
-            <span class="text-[10px] text-gray-300 leading-snug">${detail}</span>
-            <a href="${helpUrl(helpReason)}" class="text-[10px] font-bold text-blue-300 underline mt-1">Need help? Recovery page</a>
+            <span class="text-sm font-bold tracking-wide">You are offline.</span>
+            <span class="text-[10px] text-gray-300 leading-snug">Pull down to refresh when signal returns.</span>
         `;
     }
 
@@ -1243,7 +1226,7 @@ export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
     if (window._lieFiToastTimeout) clearTimeout(window._lieFiToastTimeout);
     window._lieFiToastTimeout = setTimeout(() => {
         offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
-    }, mode === 'weak' ? 5000 : 7000);
+    }, 7000);
 }
 
 export function hideOfflineToast() {
@@ -1771,7 +1754,7 @@ if (typeof window !== 'undefined') {
             oi.style.display = 'none';
             oi.textContent = 'WORKING OFFLINE';
         }
-        // Re-probe — radio up ≠ usable internet (no airtime / blackhole)
+        // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
         setTimeout(() => {
             try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
         }, 400);

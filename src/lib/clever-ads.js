@@ -5,8 +5,9 @@
  * expand/collapse chrome (chevron). That is not Next Train UI. We contain the
  * host slot so it cannot cover onboarding or go fullscreen.
  *
- * Session inject schedule (after app stabilized):
- *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for the session.
+ * Page-load inject schedule (after app stabilized):
+ *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
+ * A refresh / new navigation starts a fresh 4-slot budget (in-memory only).
  */
 import { safeStorage } from './utils.js';
 import { isReloadPending, isStableForThirdParty } from './session-stability.js';
@@ -15,29 +16,31 @@ const LOADER_ID = 'CleverCoreLoader103008';
 const SCRIPT_SRC = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
 /** Soft wait for schedules / welcome; pending reloads always win until their until. */
 const STABILITY_MAX_WAIT_MS = 15000;
-/** Four timed inject attempts after stabilize, then hard stop for the tab session. */
+/** Four timed inject attempts after stabilize, then stop until the next page load. */
 const AD_INJECT_SCHEDULE_MS = [0, 30_000, 60_000, 120_000];
-const AD_SESSION_INJECT_CAP = AD_INJECT_SCHEDULE_MS.length;
-const AD_SESSION_INJECT_KEY = 'nt_ad_session_injects';
+const AD_PAGE_INJECT_CAP = AD_INJECT_SCHEDULE_MS.length;
+/** Legacy sticky key — cleared on boot so old tabs do not keep cancelling ads. */
+const AD_LEGACY_SESSION_INJECT_KEY = 'nt_ad_session_injects';
 
 let stabilityWaitStartedAt = 0;
+/** Resets automatically on full page load (module re-eval). Not persisted. */
+let pageInjectCount = 0;
 
-function getSessionInjectCount() {
-    try {
-        return Math.max(0, parseInt(sessionStorage.getItem(AD_SESSION_INJECT_KEY) || '0', 10) || 0);
-    } catch {
-        return 0;
-    }
+function getPageInjectCount() {
+    return pageInjectCount;
 }
 
-function bumpSessionInjectCount() {
-    try {
-        sessionStorage.setItem(AD_SESSION_INJECT_KEY, String(getSessionInjectCount() + 1));
-    } catch { /* ignore */ }
+function bumpPageInjectCount() {
+    pageInjectCount += 1;
+    return pageInjectCount;
 }
 
-function sessionInjectCapReached() {
-    return getSessionInjectCount() >= AD_SESSION_INJECT_CAP;
+function pageInjectCapReached() {
+    return pageInjectCount >= AD_PAGE_INJECT_CAP;
+}
+
+function clearLegacySessionInjectCap() {
+    try { sessionStorage.removeItem(AD_LEGACY_SESSION_INJECT_KEY); } catch { /* ignore */ }
 }
 
 function isWelcomeActive() {
@@ -122,14 +125,12 @@ function handleAdFailure(adContainer, reason, isFatal = false) {
 
 function injectAdScript(adContainer) {
     if (window._adNetworkDestroyed || window._adScriptInjected || !adContainer) return false;
-    if (sessionInjectCapReached()) {
-        console.log('🛡️ Guardian: Ad session inject cap reached — skipping further injects.');
-        window._adNetworkDestroyed = true;
+    if (pageInjectCapReached()) {
+        console.log('🛡️ Guardian: Ad page inject cap reached — skipping further injects until next load.');
         cloak(adContainer, true);
         return false;
     }
-    bumpSessionInjectCount();
-    const attempt = getSessionInjectCount();
+    const attempt = bumpPageInjectCount();
     window._adScriptInjected = true;
 
     const adTimeout = setTimeout(() => {
@@ -155,7 +156,7 @@ function injectAdScript(adContainer) {
         c.onload = () => {
             clearTimeout(adTimeout);
             window._adScriptLoaded = true;
-            console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_SESSION_INJECT_CAP}).`);
+            console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_PAGE_INJECT_CAP}).`);
             if (adContainer.classList.contains('ad-cloaked') && !window._adNetworkDestroyed && isSafeZone()) {
                 uncloak(adContainer);
                 setAdPadding(isAdFilled(adContainer));
@@ -206,6 +207,10 @@ export function initCleverAds() {
 
     const adContainer = document.getElementById('clever-core');
     if (!adContainer) return;
+
+    // Drop sticky tab budget from older builds so refresh always gets a clean 4/4
+    clearLegacySessionInjectCap();
+    pageInjectCount = 0;
 
     window._adNetworkDestroyed = false;
     window._adScriptInjected = false;
@@ -266,16 +271,15 @@ export function initCleverAds() {
             onComplete();
             return;
         }
-        if (sessionInjectCapReached()) {
-            window._adNetworkDestroyed = true;
+        if (pageInjectCapReached()) {
             cloak(adContainer, true);
-            stopSchedule('session cap');
+            stopSchedule('page cap');
             onComplete();
             return;
         }
         if (window._adTelemetryFired || isAdFilled(adContainer)) {
             refreshAdVisibility(adContainer);
-            stopSchedule(`filled after ${Math.max(0, attemptNo - 1)}/${AD_SESSION_INJECT_CAP}`);
+            stopSchedule(`filled after ${Math.max(0, attemptNo - 1)}/${AD_PAGE_INJECT_CAP}`);
             onComplete();
             return;
         }
@@ -288,7 +292,7 @@ export function initCleverAds() {
         window._adScriptLoaded = false;
         document.getElementById(LOADER_ID)?.remove();
 
-        console.log(`🛡️ Guardian: Ad inject ${attemptNo}/${AD_SESSION_INJECT_CAP} (T+${AD_INJECT_SCHEDULE_MS[attemptNo - 1] / 1000}s after stabilize)`);
+        console.log(`🛡️ Guardian: Ad inject ${attemptNo}/${AD_PAGE_INJECT_CAP} (T+${AD_INJECT_SCHEDULE_MS[attemptNo - 1] / 1000}s after stabilize)`);
         injectAdScript(adContainer);
         refreshAdVisibility(adContainer);
         onComplete();
@@ -296,16 +300,15 @@ export function initCleverAds() {
 
     const armNextScheduleSlot = () => {
         if (window._adNetworkDestroyed || scheduleExhausted) return;
-        if (sessionInjectCapReached()) {
-            stopSchedule('session cap');
-            return;
-        }
         if (window._adTelemetryFired || isAdFilled(adContainer)) {
             stopSchedule('already filled');
             return;
         }
-        if (nextScheduleIndex >= AD_INJECT_SCHEDULE_MS.length) {
-            stopSchedule('4/4 complete');
+        // Prefer "4/4 complete" over "page cap" — cap after the last slot is expected, not a 5th try
+        if (nextScheduleIndex >= AD_INJECT_SCHEDULE_MS.length || pageInjectCapReached()) {
+            stopSchedule(pageInjectCapReached() && nextScheduleIndex < AD_INJECT_SCHEDULE_MS.length
+                ? 'page cap'
+                : '4/4 complete');
             return;
         }
 
@@ -317,7 +320,14 @@ export function initCleverAds() {
         scheduleTimer = setTimeout(() => {
             scheduleTimer = null;
             runScheduledInject(attemptNo, () => {
-                if (!scheduleExhausted && !window._adNetworkDestroyed) armNextScheduleSlot();
+                if (scheduleExhausted || window._adNetworkDestroyed) return;
+                // Last slot: stop here. Do not arm a 5th slot (async SCRIPT_LOAD_ERROR
+                // from this attempt may still log after "stopped" — that is not a new inject).
+                if (attemptNo >= AD_PAGE_INJECT_CAP) {
+                    stopSchedule('4/4 complete');
+                    return;
+                }
+                armNextScheduleSlot();
             });
         }, waitMs);
     };

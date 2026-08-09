@@ -1,5 +1,11 @@
 /**
  * Black Box system terminal — 5-tap About title + PIN, session-authenticated.
+ *
+ * Cloud upload strategy (V8_08.10+):
+ * - Full console dump → sys_logs/blackbox/{id} (once)
+ * - Lean index card → sys_logs/crashes/{id} (summary + preview only)
+ * Crash Analytics lists the index; Copy Log / Load Full fetches the blob on demand.
+ * Escalate to Roadmap uses the summary, not the megabyte dump.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
 import { escapeHTML } from './utils.js';
@@ -9,6 +15,8 @@ import { openSmoothModal, closeSmoothModal, showToast, triggerHaptic } from './u
 const LOG_KEY = 'nt_blackbox_logs';
 const AUTH_KEY = 'nt_bb_session_authed';
 const PIN = '10101';
+/** Hard cap so one export cannot blow RTDB / admin fetch. */
+const MAX_UPLOAD_LINES = 600;
 
 function getDeviceId() {
     try {
@@ -27,6 +35,84 @@ function isSessionAuthed() {
 
 function setSessionAuthed() {
     try { sessionStorage.setItem(AUTH_KEY, '1'); } catch { /* ignore */ }
+}
+
+/** Prefer ERROR/WARN + recent LOG when over the line cap. */
+function selectLogsForUpload(logs) {
+    const arr = Array.isArray(logs) ? logs : [];
+    if (arr.length <= MAX_UPLOAD_LINES) return { logs: arr, truncated: false, originalCount: arr.length };
+
+    const signal = arr.filter((l) => {
+        const t = String(l?.type || '').toUpperCase();
+        return t === 'ERROR' || t === 'WARN';
+    });
+    const rest = arr.filter((l) => {
+        const t = String(l?.type || '').toUpperCase();
+        return t !== 'ERROR' && t !== 'WARN';
+    });
+    const errCap = signal.slice(-Math.min(400, MAX_UPLOAD_LINES));
+    const restCap = rest.slice(-(MAX_UPLOAD_LINES - errCap.length));
+    const merged = [...restCap, ...errCap].sort((a, b) => (a?.t || 0) - (b?.t || 0));
+    return { logs: merged, truncated: true, originalCount: arr.length };
+}
+
+/** Compact summary for crash inbox + roadmap escalate (no full dump). */
+export function summarizeBlackBoxLogs(logs) {
+    const arr = Array.isArray(logs) ? logs : [];
+    const counts = { LOG: 0, WARN: 0, ERROR: 0, OTHER: 0 };
+    const signal = [];
+    for (const l of arr) {
+        const t = String(l?.type || 'OTHER').toUpperCase();
+        if (counts[t] != null) counts[t] += 1;
+        else counts.OTHER += 1;
+        if (t === 'ERROR' || t === 'WARN') {
+            signal.push({
+                t: l?.t || 0,
+                type: t,
+                msg: String(l?.msg || '').slice(0, 220),
+            });
+        }
+    }
+    const recentSignal = signal.slice(-40);
+    const recentTail = arr.slice(-12).map((l) => ({
+        t: l?.t || 0,
+        type: String(l?.type || 'LOG'),
+        msg: String(l?.msg || '').slice(0, 180),
+    }));
+    return {
+        lineCount: arr.length,
+        counts,
+        recentSignal,
+        recentTail,
+    };
+}
+
+function formatPreviewText(summary, meta = {}) {
+    const c = summary?.counts || {};
+    const lines = [
+        `Black Box export · ${summary?.lineCount || 0} lines`,
+        `ERROR ${c.ERROR || 0} · WARN ${c.WARN || 0} · LOG ${c.LOG || 0}`,
+        meta.truncated ? `(upload truncated from ${meta.originalCount} → ${summary?.lineCount} lines)` : null,
+        meta.deviceId ? `Device: ${meta.deviceId}` : null,
+        meta.appVersion ? `App: ${meta.appVersion}` : null,
+        '',
+        '— Recent ERROR / WARN —',
+        ...(summary?.recentSignal || []).map((l) => {
+            const d = l.t ? new Date(l.t) : null;
+            const ts = d && !Number.isNaN(d.getTime())
+                ? `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                : '--';
+            return `[${ts}] ${l.type}: ${l.msg}`;
+        }),
+    ].filter((x) => x != null);
+    if (!(summary?.recentSignal || []).length) {
+        lines.push('(no ERROR/WARN in this export)');
+        lines.push('', '— Tail —');
+        for (const l of summary?.recentTail || []) {
+            lines.push(`${l.type}: ${l.msg}`);
+        }
+    }
+    return lines.join('\n').slice(0, 3500);
 }
 
 export function renderBlackBoxLogs() {
@@ -79,7 +165,10 @@ export function copyBlackBoxLogs() {
     }).catch(() => showToast('Copy failed', 'error'));
 }
 
-/** Upload the entire raw console log array (not a summary). */
+/**
+ * Upload: full dump → sys_logs/blackbox/{id}; lean card → sys_logs/crashes/{id}.
+ * Does not triple-store stack/raw/logs on the crash node.
+ */
 export async function sendBlackBoxLogsToCloud() {
     const sendBtn = document.getElementById('bb-send-btn');
     if (sendBtn) {
@@ -91,30 +180,63 @@ export async function sendBlackBoxLogsToCloud() {
         let parsed = [];
         try { parsed = JSON.parse(rawLogs); } catch { parsed = []; }
 
+        const selected = selectLogsForUpload(parsed);
+        const summary = summarizeBlackBoxLogs(selected.logs);
+        const deviceId = getDeviceId();
         const crashId = `bb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        const payload = {
-            error: `BLACK_BOX_EXPORT (${Array.isArray(parsed) ? parsed.length : 0} lines)`,
-            // Full raw dump — admin crash panel reads stack + raw
-            stack: rawLogs,
-            raw: rawLogs,
-            logs: parsed,
+        const preview = formatPreviewText(summary, {
+            truncated: selected.truncated,
+            originalCount: selected.originalCount,
+            deviceId,
+            appVersion: APP_VERSION,
+        });
+
+        const blobBody = {
+            deviceId,
+            appVersion: APP_VERSION,
+            exportedAt: Date.now(),
+            truncated: selected.truncated,
+            originalCount: selected.originalCount,
+            logs: selected.logs,
+        };
+
+        const blobRes = await fetch(`${DYNAMIC_BASE_URL}sys_logs/blackbox/${crashId}.json`, {
+            method: 'PUT',
+            body: JSON.stringify(blobBody),
+        });
+        if (!blobRes.ok) throw new Error(`blob HTTP ${blobRes.status}`);
+
+        const indexPayload = {
+            error: `BLACK_BOX_EXPORT (${summary.lineCount} lines · ${summary.counts.ERROR || 0}E/${summary.counts.WARN || 0}W)`,
+            kind: 'blackbox_export',
+            blobPath: `sys_logs/blackbox/${crashId}`,
+            summary,
+            preview,
             line: '0:0',
             url: 'BlackBox Export',
             timestamp: Date.now(),
             userAgent: navigator.userAgent,
             appVersion: APP_VERSION,
-            deviceId: getDeviceId(),
+            deviceId,
             routeId: 'blackbox',
-            kind: 'blackbox_full',
+            truncated: selected.truncated,
+            originalCount: selected.originalCount,
         };
 
         const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json`, {
             method: 'PUT',
-            body: JSON.stringify(payload),
+            body: JSON.stringify(indexPayload),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        showToast('Full console log sent to Crash Analytics', 'success');
-    } catch {
+        if (!res.ok) throw new Error(`index HTTP ${res.status}`);
+
+        showToast(
+            selected.truncated
+                ? `Black box sent (trimmed ${selected.originalCount}→${summary.lineCount} lines)`
+                : 'Black box sent (summary + full log)',
+            'success'
+        );
+    } catch (e) {
+        console.error('Black box upload failed', e);
         showToast('Transmission failed.', 'error');
     } finally {
         if (sendBtn) {

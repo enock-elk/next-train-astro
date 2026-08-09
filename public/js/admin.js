@@ -192,11 +192,16 @@ const Admin = {
     getAuthKey: async () => {
         if (window.firebaseAuth && window.firebaseAuth.currentUser) {
             try {
-                // Force token refresh to ensure it's valid for database rules
-                return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+                // Prefer cached token; force-refresh only if Firebase says it's near expiry.
+                // Forcing refresh on every admin fetch thrashed onIdTokenChanged on iOS and raced 401s.
+                return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, false);
             } catch(e) {
-                console.warn("Guardian: Failed to securely fetch ID Token", e);
-                return null;
+                try {
+                    return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+                } catch (e2) {
+                    console.warn("Guardian: Failed to securely fetch ID Token", e2);
+                    return null;
+                }
             }
         }
         return null;
@@ -204,8 +209,103 @@ const Admin = {
 
     /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
+
+    isBlackBoxCrash: (crash) => {
+        if (!crash) return false;
+        return crash.kind === 'blackbox_export'
+            || crash.kind === 'blackbox_full'
+            || String(crash.error || '').startsWith('BLACK_BOX_EXPORT');
+    },
+
+    /** Build a short preview from a fat legacy blackbox crash (or summary object). */
+    blackBoxPreviewFromCrash: (crash) => {
+        if (!crash) return '';
+        if (typeof crash.preview === 'string' && crash.preview.trim()) return crash.preview.slice(0, 3500);
+        if (crash.summary && typeof crash.summary === 'object') {
+            const c = crash.summary.counts || {};
+            const signal = Array.isArray(crash.summary.recentSignal) ? crash.summary.recentSignal : [];
+            const lines = [
+                `Black Box · ${crash.summary.lineCount || '?'} lines · ${c.ERROR || 0}E/${c.WARN || 0}W`,
+                ...signal.slice(-30).map((l) => `${l.type || '?'}: ${String(l.msg || '').slice(0, 200)}`),
+            ];
+            return lines.join('\n').slice(0, 3500);
+        }
+        let raw = '';
+        try {
+            if (crash.stack && crash.stack !== 'N/A') raw = String(crash.stack);
+            else if (crash.raw) raw = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
+            else if (crash.logs) raw = JSON.stringify(crash.logs, null, 2);
+        } catch (_) { raw = String(crash.error || ''); }
+        if (raw.trim().startsWith('[') || raw.trim().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    const errs = parsed.filter((l) => {
+                        const t = String(l?.type || '').toUpperCase();
+                        return t === 'ERROR' || t === 'WARN';
+                    }).slice(-40);
+                    const head = [`Legacy black box · ${parsed.length} lines (preview)`, ''];
+                    const body = (errs.length ? errs : parsed.slice(-20)).map((l) =>
+                        `${l?.type || '?'}: ${String(l?.msg || '').slice(0, 200)}`
+                    );
+                    return [...head, ...body].join('\n').slice(0, 3500);
+                }
+            } catch (_) { /* fall through */ }
+        }
+        return String(raw || crash.error || '').slice(0, 3500);
+    },
+
+    /** Drop megabyte stack/raw/logs from in-memory crash cache so the list can render. */
+    slimCachedCrashBodies: () => {
+        if (!Array.isArray(Admin.cachedCrashData)) return;
+        Admin.cachedCrashData.forEach((c) => {
+            if (!Admin.isBlackBoxCrash(c)) return;
+            if (!c.preview) c.preview = Admin.blackBoxPreviewFromCrash(c);
+            delete c.stack;
+            delete c.raw;
+            delete c.logs;
+        });
+    },
+
+    /** Resolve full black-box text (blob path, or re-fetch legacy crash node). */
+    fetchCrashFullLogText: async (crashId) => {
+        const cached = (Admin._crashRawById && Admin._crashRawById[crashId]) || '';
+        if (cached) return cached;
+        const crash = (Admin.cachedCrashData || []).find((c) => c.id === crashId);
+        const secret = await Admin.getAuthKey();
+        if (!secret) return crash?.preview || '';
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        try {
+            if (crash?.blobPath) {
+                const res = await window.guardianFetch(`${dynamicEndpoint}${crash.blobPath}.json?auth=${secret}`, {}, 20000);
+                if (!res.ok) throw new Error('blob ' + res.status);
+                const data = await res.json();
+                const text = JSON.stringify(data, null, 2);
+                if (!Admin._crashRawById) Admin._crashRawById = {};
+                Admin._crashRawById[crashId] = text;
+                return text;
+            }
+            // Legacy blackbox_full: body was stripped from cache — reload this node only
+            const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes/${crashId}.json?auth=${secret}`, {}, 20000);
+            if (!res.ok) throw new Error('crash ' + res.status);
+            const data = await res.json();
+            let text = '';
+            if (data?.stack && data.stack !== 'N/A') text = String(data.stack);
+            else if (data?.raw) text = typeof data.raw === 'string' ? data.raw : JSON.stringify(data.raw, null, 2);
+            else if (data?.logs) text = JSON.stringify(data.logs, null, 2);
+            else text = JSON.stringify(data, null, 2);
+            if (!Admin._crashRawById) Admin._crashRawById = {};
+            Admin._crashRawById[crashId] = text;
+            return text;
+        } catch (e) {
+            console.error('fetchCrashFullLogText', e);
+            return crash?.preview || '';
+        }
+    },
+
     copyCrashLog: async (crashId) => {
-        const text = (Admin._crashRawById && Admin._crashRawById[crashId]) || '';
+        if (typeof showToast === 'function') showToast('Preparing log…', 'info', 1200);
+        let text = await Admin.fetchCrashFullLogText(crashId);
         if (!text) {
             if (typeof showToast === 'function') showToast('No log text for this entry', 'warning');
             return;
@@ -663,27 +763,22 @@ const Admin = {
     },
 
     /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
-    closeDevModal: () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1-H2',location:'admin.js:closeDevModal',message:'closeDevModal entered',data:{isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,hash:location.hash||'',devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        if (!Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
-            // #region agent log
-            fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H2',location:'admin.js:closeDevModal',message:'closeDevModal diverted to exitDrillToGrid',data:{isGridMode:false,hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
+    closeDevModal: (opts = {}) => {
+        const force = !!opts.force;
+        // Grid X / forced exit: close Dev Mode. Drilled X (no force): step back to grid only.
+        if (!force && !Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
             Admin.exitDrillToGrid();
             return;
         }
-        window._adminDrillBackLock = true;
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'admin.js:closeDevModal',message:'closeDevModal about to call closeSmoothModal with lock ON',data:{lock:!!window._adminDrillBackLock,hasCloseFn:typeof closeSmoothModal==='function',hash:location.hash||''},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
+        // Never arm _adminDrillBackLock BEFORE closeSmoothModal — that guard
+        // early-returns and leaves #dev-modal open (X turns grey, modal stays).
+        window._adminDrillBackLock = false;
+        if (force) Admin.isGridMode = true;
         if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
         else document.getElementById('dev-modal')?.classList.add('hidden');
-        // #region agent log
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H1',location:'admin.js:closeDevModal',message:'closeDevModal after closeSmoothModal',data:{devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden'),devOpacity0:!!document.getElementById('dev-modal')?.classList.contains('opacity-0'),hash:location.hash||'',lock:!!window._adminDrillBackLock},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
+        // Arm lock AFTER close so a late popstate cannot re-enter close during normalize
+        window._adminDrillBackLock = true;
         setTimeout(() => { window._adminDrillBackLock = false; }, 200);
     },
 
@@ -1956,50 +2051,52 @@ const Admin = {
 
         authListenerFn(window.firebaseAuth, (user) => {
             const signoutContainer = document.getElementById('admin-signout-container');
-            
+            const nextUid = user?.uid || null;
+            const prevUid = Admin.currentUser?.uid || null;
+            // onIdTokenChanged fires on every token refresh — only treat real sign-in/out as session changes
+            const sessionChanged = nextUid !== prevUid;
+
             if (user) {
-                console.log("Guardian: Admin Authenticated. Analytics blocked.");
-                try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
-                // GUARDIAN UX: Mirror session to safeStorage to persist Dev Mode
-                try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
                 Admin.currentUser = user;
+                try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
+                try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
 
-                // GUARDIAN UX: Dynamic Email-Prefix Extractor for Admin Names
-                let displayName = user.email;
-                if (user.email && user.email.includes('@')) {
-                    const prefix = user.email.split('@')[0];
-                    displayName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
-                }
-                
-                // Fallback Sign-out Injection for absolute safety
-                if (signoutContainer) {
-                    signoutContainer.innerHTML = `
-                        <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <p class="text-xs text-gray-500 mb-2 text-center">Logged in as: <span class="font-bold text-gray-700 dark:text-gray-300">${displayName}</span></p>
-                            <button id="admin-signout-btn" class="w-full bg-gray-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-bold py-3 rounded-lg shadow-sm transition-colors text-sm focus:outline-none">
-                                Secure Sign Out
-                            </button>
-                        </div>
-                    `;
-                    const signOutBtn = document.getElementById('admin-signout-btn');
-                    if (signOutBtn) {
-                        signOutBtn.addEventListener('click', () => {
-                            window.firebaseSignOut(window.firebaseAuth).then(() => {
-                                if (typeof showToast === 'function') showToast("Signed out successfully.", "success");
-                                if (location.hash === '#dev') history.back();
-                                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
-                            });
-                        });
+                if (sessionChanged) {
+                    console.log("Guardian: Admin Authenticated. Analytics blocked.");
+
+                    let displayName = user.email;
+                    if (user.email && user.email.includes('@')) {
+                        const prefix = user.email.split('@')[0];
+                        displayName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
                     }
-                }
-                
-                // Fetch universal badges upon auth
-                Admin.syncAllBadges();
 
-            } else {
+                    if (signoutContainer) {
+                        signoutContainer.innerHTML = `
+                            <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <p class="text-xs text-gray-500 mb-2 text-center">Logged in as: <span class="font-bold text-gray-700 dark:text-gray-300">${displayName}</span></p>
+                                <button id="admin-signout-btn" class="w-full bg-gray-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-bold py-3 rounded-lg shadow-sm transition-colors text-sm focus:outline-none">
+                                    Secure Sign Out
+                                </button>
+                            </div>
+                        `;
+                        const signOutBtn = document.getElementById('admin-signout-btn');
+                        if (signOutBtn) {
+                            signOutBtn.addEventListener('click', () => {
+                                window.firebaseSignOut(window.firebaseAuth).then(() => {
+                                    if (typeof showToast === 'function') showToast("Signed out successfully.", "success");
+                                    if (location.hash === '#dev') history.back();
+                                    else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+                                });
+                            });
+                        }
+                    }
+
+                    Admin.syncAllBadges();
+                }
+
+            } else if (sessionChanged) {
                 console.log("Guardian: Admin Logged Out. Analytics restored.");
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
-                // GUARDIAN UX: Wipe mirrored session on secure signout
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
                 if (signoutContainer) signoutContainer.innerHTML = '';
@@ -2102,6 +2199,13 @@ const Admin = {
                 if (spinner) spinner.classList.remove('hidden');
                 loginBtn.disabled = true;
 
+                if (typeof window.firebaseSignIn !== 'function' || !window.firebaseAuth) {
+                    if (typeof showToast === 'function') showToast("Authentication Failed", "error");
+                    if (spinner) spinner.classList.add('hidden');
+                    loginBtn.disabled = false;
+                    return;
+                }
+
                 window.firebaseSignIn(window.firebaseAuth, email, password)
                     .then((userCredential) => {
                         // Close login WITHOUT history.back() - that raced popstate and closed admin
@@ -2122,7 +2226,8 @@ const Admin = {
                         if (typeof showToast === 'function') showToast(`Welcome back!`, "success");
                     })
                     .catch((error) => {
-                        if (typeof showToast === 'function') showToast("Authentication Failed", "error");
+                        const code = error?.code || 'unknown';
+                        if (typeof showToast === 'function') showToast(`Authentication Failed (${code})`, "error");
                         console.error("Guardian Login Error:", error);
                     })
                     .finally(() => {
@@ -3018,6 +3123,7 @@ const Admin = {
                         <div class="flex flex-wrap gap-2 justify-end">
                             <button id="crash-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                             <button id="crash-export-btn" class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Export</button>
+                            <button id="crash-purge-bb-btn" title="Delete Black Box dumps only (keeps real crashes)" class="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 hover:bg-amber-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Purge BB</button>
                             <button id="crash-clear-btn" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 rounded px-2 py-1 text-[10px] font-bold transition-colors shadow-sm focus:outline-none">Clear DB</button>
                         </div>
                     </div>
@@ -3030,6 +3136,7 @@ const Admin = {
         const chevron = document.getElementById('crash-chevron');
         const refreshBtn = document.getElementById('crash-refresh-btn');
         const exportBtn = document.getElementById('crash-export-btn');
+        const purgeBbBtn = document.getElementById('crash-purge-bb-btn');
         const clearBtn = document.getElementById('crash-clear-btn');
         const listDiv = document.getElementById('crash-list');
         const tabInbox = document.getElementById('crash-tab-inbox');
@@ -3128,19 +3235,26 @@ const Admin = {
         }
 
         Admin.renderCrashList = () => {
+            try {
             listDiv.innerHTML = '';
             const tab = Admin.currentCrashTab || 'inbox';
-            const targetData = Admin.cachedCrashData.filter((c) => {
+            // Inbox + Distress use active actions; Archive uses delete/copy only
+            const isInbox = tab !== 'archive';
+            const all = Array.isArray(Admin.cachedCrashData) ? Admin.cachedCrashData : [];
+            const targetData = all.filter((c) => {
                 if (tab === 'distress') return isDistressCrash(c);
                 if (tab === 'inbox') return c.status !== 'resolved' && !isDistressCrash(c);
                 return c.status === 'resolved';
             });
-            const distressN = (Admin.cachedCrashData || []).filter(isDistressCrash).length;
+            const distressN = all.filter(isDistressCrash).length;
             const distressCountEl = document.getElementById('crash-distress-count');
             if (distressCountEl) distressCountEl.textContent = String(distressN);
-            document.getElementById('crash-status-display').textContent =
-                tab === 'distress' ? `Distress / Help: ${targetData.length}`
-                : (tab === 'inbox' ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`);
+            const statusEl = document.getElementById('crash-status-display');
+            if (statusEl) {
+                statusEl.textContent =
+                    tab === 'distress' ? `Distress / Help: ${targetData.length}`
+                    : (tab === 'inbox' ? `Active Crashes: ${targetData.length}` : `Archived Crashes: ${targetData.length}`);
+            }
             
             if (targetData.length === 0) {
                 listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${tab === 'distress' ? 'No distress / help reports.' : (tab === 'inbox' ? 'No new crashes.' : 'Archive empty.')}</div>`;
@@ -3195,21 +3309,39 @@ const Admin = {
                 `;
                 
                 groupCrashes.forEach(crash => {
+                  try {
                     const dateStr = Admin.formatDate(crash.timestamp);
                     const safeErr = secureEscape(crash.error);
                     const safeRoute = secureEscape(crash.routeId || "Global");
                     const safeOS = secureEscape(crash.userAgent || "Unknown OS");
-                    const safeAppVersion = secureEscape(crash.appVersion || 'Unknown');
-                    const safeJsCrashId = (crash.id || '').replace(/'/g, "\\'");
-                    const safeLine = secureEscape(crash.line || '');
+                    const safeAppVersion = secureEscape(String(crash.appVersion || 'Unknown'));
+                    const safeJsCrashId = String(crash.id || '').replace(/'/g, "\\'");
+                    const safeLine = secureEscape(crash.line == null ? '' : String(crash.line));
                     const safeUrl = secureEscape(crash.url || '');
 
-                    // Full raw details (stack / raw / logs) - never truncate to a one-line summary
+                    const isBlackBox = typeof Admin.isBlackBoxCrash === 'function'
+                        ? Admin.isBlackBoxCrash(crash)
+                        : (crash.kind === 'blackbox_full' || crash.kind === 'blackbox_export' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT'));
+                    const isDistress = crash.kind === 'distress' || String(crash.error || '').startsWith('DISTRESS:');
+
+                    // Black box: show compact preview only (full dump lives in blob / lazy fetch)
                     let rawDetail = '';
-                    if (crash.stack && crash.stack !== 'N/A') rawDetail = String(crash.stack);
-                    else if (crash.raw) rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
-                    else if (crash.logs) rawDetail = JSON.stringify(crash.logs, null, 2);
-                    else {
+                    if (isBlackBox) {
+                        rawDetail = (typeof Admin.blackBoxPreviewFromCrash === 'function')
+                            ? Admin.blackBoxPreviewFromCrash(crash)
+                            : String(crash.preview || crash.error || '');
+                        if (crash.blobPath) {
+                            rawDetail += `\n\n[Full log at ${crash.blobPath} - use Copy Log]`;
+                        } else if (crash.kind === 'blackbox_full') {
+                            rawDetail += '\n\n[Legacy full dump - Copy Log re-fetches this node]';
+                        }
+                    } else if (crash.stack && crash.stack !== 'N/A') {
+                        rawDetail = String(crash.stack);
+                    } else if (crash.raw) {
+                        rawDetail = typeof crash.raw === 'string' ? crash.raw : JSON.stringify(crash.raw, null, 2);
+                    } else if (crash.logs) {
+                        rawDetail = JSON.stringify(crash.logs, null, 2);
+                    } else {
                         try {
                             const clone = { ...crash };
                             delete clone.id;
@@ -3218,16 +3350,21 @@ const Admin = {
                             rawDetail = String(crash.error || '');
                         }
                     }
-                    // Pretty-print JSON stacks (blackbox exports)
-                    if (rawDetail && (rawDetail.trim().startsWith('[') || rawDetail.trim().startsWith('{'))) {
+                    if (!isBlackBox && rawDetail && (rawDetail.trim().startsWith('[') || rawDetail.trim().startsWith('{'))) {
                         try { rawDetail = JSON.stringify(JSON.parse(rawDetail), null, 2); } catch (_) {}
                     }
-                    const safeRaw = secureEscape(rawDetail);
-                    
-                    const isBlackBox = crash.kind === 'blackbox_full' || String(crash.error || '').startsWith('BLACK_BOX_EXPORT');
-                    const isDistress = crash.kind === 'distress' || String(crash.error || '').startsWith('DISTRESS:');
+                    // Hard cap DOM size so one fat entry cannot blank the whole panel
+                    const DISPLAY_CAP = isBlackBox ? 4000 : 2500;
+                    const displayRaw = rawDetail.length > DISPLAY_CAP
+                        ? (rawDetail.slice(0, DISPLAY_CAP) + '\n... [truncated - Copy Log for full]')
+                        : rawDetail;
+                    const safeRaw = secureEscape(displayRaw);
+
+                    const lineHint = crash.summary?.lineCount
+                        || (Array.isArray(crash.logs) ? crash.logs.length : null)
+                        || 'export';
                     const ticketDesc = isBlackBox
-                        ? String(rawDetail || crash.stack || crash.raw || crash.error || '').slice(0, 12000)
+                        ? String(crash.preview || rawDetail || crash.error || '').slice(0, 900)
                         : String(crash.error || '').slice(0, 240);
                     const escalateAttr = Admin.encodeEscalatePayload({
                         type: isDistress ? 'general' : 'bug',
@@ -3235,14 +3372,16 @@ const Admin = {
                         title: isDistress
                             ? `Distress - ${crash.contact || crash.deviceId || 'user'} - ${crash.reason || 'help'}`
                             : isBlackBox
-                            ? `Black Box (${(Array.isArray(crash.logs) ? crash.logs.length : 'full')} lines) - ${crash.deviceId || crash.routeId || 'device'}`
+                            ? `Black Box (${lineHint} lines) - ${crash.deviceId || crash.routeId || 'device'}`
                             : `Crash on ${crash.routeId || 'Global'}`,
                         description: ticketDesc,
-                        source: `Crash ${crash.id || ''}`
+                        source: crash.blobPath
+                            ? `Crash ${crash.id || ''} · blob ${crash.blobPath}`
+                            : `Crash ${crash.id || ''}`
                     });
-                    // Store raw text for copy buttons (avoid huge data-attrs on every button)
+                    // Preview only in memory — Copy Log lazy-loads full text
                     if (!Admin._crashRawById) Admin._crashRawById = {};
-                    Admin._crashRawById[crash.id] = String(rawDetail || '');
+                    if (!isBlackBox) Admin._crashRawById[crash.id] = String(rawDetail || '').slice(0, 20000);
 
                     const actionHtml = isInbox 
                         ? `<div class="flex flex-wrap gap-2 w-full mt-2">
@@ -3293,6 +3432,7 @@ const Admin = {
                             '</div>';
                     }
 
+                    const appLabel = String(safeAppVersion || '').split(' - ')[0];
                     groupHTML += `
                         <div class="p-2.5 flex flex-col">
                             <div class="flex justify-between items-start mb-1.5">
@@ -3303,13 +3443,13 @@ const Admin = {
                             <div class="text-[10px] font-mono text-gray-800 dark:text-gray-200 break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 leading-snug mb-2">
                                 ${safeErr}
                             </div>
-                            <details class="mb-2 group/raw" ${isBlackBox ? 'open' : ''}>
-                                <summary class="cursor-pointer text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1 select-none">Raw crash details</summary>
+                            <details class="mb-2 group/raw">
+                                <summary class="cursor-pointer text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1 select-none">${isBlackBox ? 'Black box summary' : 'Raw crash details'}</summary>
                                 <pre class="text-[9px] font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words bg-black/5 dark:bg-black/40 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto custom-scrollbar leading-snug">${safeRaw}</pre>
                             </details>
                             <div class="flex flex-col space-y-1 bg-gray-50 dark:bg-gray-800/50 p-2 rounded border border-gray-100 dark:border-gray-700">
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Route: <span class="text-blue-500">${safeRoute}</span></span>
-                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">App: <span class="text-gray-800 dark:text-gray-200">${safeAppVersion.split(' - ')[0]}</span></span>
+                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">App: <span class="text-gray-800 dark:text-gray-200">${appLabel}</span></span>
                                 ${safeLine ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Line: <span class="text-gray-800 dark:text-gray-200">${safeLine}</span></span>` : ''}
                                 ${safeUrl ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">URL: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeUrl}</span></span>` : ''}
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">OS: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeOS}</span></span>
@@ -3317,11 +3457,19 @@ const Admin = {
                             ${actionHtml}
                         </div>
                     `;
+                  } catch (rowErr) {
+                    console.error('Crash row render failed', crash?.id, rowErr);
+                    groupHTML += `<div class="p-2.5 text-[10px] text-red-500">Failed to render crash ${secureEscape(crash?.id || '?')}</div>`;
+                  }
                 });
                 groupHTML += `</div>`;
                 groupCard.innerHTML = groupHTML;
                 listDiv.appendChild(groupCard);
             });
+            } catch (renderErr) {
+                console.error('renderCrashList failed', renderErr);
+                listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to render crash list.<br><span class="text-[9px] text-gray-500 font-mono">${String(renderErr?.message || renderErr).replace(/</g, '&lt;').slice(0, 180)}</span></div>`;
+            }
         };
 
         Admin.fetchCrashes = async () => {
@@ -3341,13 +3489,39 @@ const Admin = {
             
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 10000);
+                // Longer timeout: legacy blackbox_full triples can make crashes.json slow
+                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 30000);
                 
                 if (!res.ok) throw new Error("Fetch HTTP Error: " + res.status);
                 const data = await res.json();
-                
-                Admin.cachedCrashData = (data && typeof data === 'object') ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
-                Admin.cachedCrashData.sort((a, b) => b.timestamp - a.timestamp);
+
+                // Slim WHILE mapping so fat stack/raw/logs never linger on Admin.cachedCrashData
+                Admin.cachedCrashData = (data && typeof data === 'object')
+                    ? Object.keys(data).map((key) => {
+                        const entry = { id: key, ...(data[key] || {}) };
+                        const isBb = typeof Admin.isBlackBoxCrash === 'function'
+                            ? Admin.isBlackBoxCrash(entry)
+                            : (entry.kind === 'blackbox_full' || entry.kind === 'blackbox_export'
+                                || String(entry.error || '').startsWith('BLACK_BOX'));
+                        if (isBb) {
+                            if (!entry.preview && typeof Admin.blackBoxPreviewFromCrash === 'function') {
+                                entry.preview = Admin.blackBoxPreviewFromCrash(entry);
+                            }
+                            delete entry.stack;
+                            delete entry.raw;
+                            delete entry.logs;
+                        } else {
+                            if (typeof entry.stack === 'string' && entry.stack.length > 4000) {
+                                entry.stack = entry.stack.slice(0, 4000) + '\n...[truncated]';
+                            }
+                            if (typeof entry.raw === 'string' && entry.raw.length > 4000) {
+                                entry.raw = entry.raw.slice(0, 4000) + '\n...[truncated]';
+                            }
+                        }
+                        return entry;
+                    })
+                    : [];
+                Admin.cachedCrashData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 
                 const activeCount = Admin.cachedCrashData.filter(c => c.status !== 'resolved').length;
                 const crInboxCountSpan = document.getElementById('crash-inbox-count');
@@ -3356,7 +3530,51 @@ const Admin = {
                 Admin.renderCrashList();
             } catch(e) {
                 console.error("Crash logs fetch error:", e);
-                listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load crash logs.<br><span class="text-[9px] text-gray-500">Check Firebase rules or data.</span></div>`;
+                const msg = String(e?.message || e || 'unknown').replace(/</g, '&lt;').slice(0, 200);
+                listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load crash logs.<br><span class="text-[9px] text-gray-500 font-mono">${msg}</span><br><span class="text-[9px] text-amber-600 dark:text-amber-400">Tip: tap <b>Purge BB</b> to remove heavy Black Box dumps, then Refresh.</span></div>`;
+            }
+        };
+
+        Admin.purgeBlackBoxCrashes = async () => {
+            const confirmed = await Admin.secureConfirm(
+                'Purge Black Box dumps',
+                "Delete all BLACK_BOX / blackbox_* crash entries (and companion blobs)? Real JS crashes stay."
+            );
+            if (!confirmed) return;
+            const secret = await Admin.getAuthKey();
+            if (!secret) return;
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            try {
+                // Ensure we have ids (even if list render failed)
+                if (!Array.isArray(Admin.cachedCrashData) || !Admin.cachedCrashData.length) {
+                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?shallow=true&auth=${secret}`, {}, 15000);
+                    if (!res.ok) throw new Error('shallow ' + res.status);
+                    const keys = await res.json();
+                    Admin.cachedCrashData = keys && typeof keys === 'object'
+                        ? Object.keys(keys).map((id) => ({ id, error: id.startsWith('bb_') ? 'BLACK_BOX_EXPORT' : '', kind: id.startsWith('bb_') ? 'blackbox_full' : '' }))
+                        : [];
+                }
+                const targets = Admin.cachedCrashData.filter((c) =>
+                    (typeof Admin.isBlackBoxCrash === 'function' && Admin.isBlackBoxCrash(c))
+                    || String(c.id || '').startsWith('bb_')
+                );
+                if (!targets.length) {
+                    if (typeof showToast === 'function') showToast('No Black Box entries found', 'info');
+                    return;
+                }
+                if (typeof showToast === 'function') showToast(`Purging ${targets.length} Black Box dump(s)…`, 'info');
+                await Promise.all(targets.map(async (c) => {
+                    await fetch(`${dynamicEndpoint}sys_logs/crashes/${c.id}.json?auth=${secret}`, { method: 'DELETE' });
+                    const blobPath = c.blobPath || `sys_logs/blackbox/${c.id}`;
+                    try {
+                        await fetch(`${dynamicEndpoint}${blobPath}.json?auth=${secret}`, { method: 'DELETE' });
+                    } catch (_) { /* ignore */ }
+                }));
+                if (typeof showToast === 'function') showToast(`Purged ${targets.length} Black Box dump(s)`, 'success');
+                Admin.fetchCrashes();
+            } catch (e) {
+                console.error(e);
+                if (typeof showToast === 'function') showToast('Purge failed: ' + (e.message || e), 'error');
             }
         };
 
@@ -3419,7 +3637,19 @@ const Admin = {
             if (!secret) return;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const crash = (Admin.cachedCrashData || []).find((c) => c.id === id);
                 await fetch(`${dynamicEndpoint}sys_logs/crashes/${id}.json?auth=${secret}`, { method: 'DELETE' });
+                // Also remove companion black-box blob when present
+                if (crash?.blobPath) {
+                    try {
+                        await fetch(`${dynamicEndpoint}${crash.blobPath}.json?auth=${secret}`, { method: 'DELETE' });
+                    } catch (_) { /* ignore blob cleanup failures */ }
+                } else if (typeof Admin.isBlackBoxCrash === 'function' && Admin.isBlackBoxCrash(crash)) {
+                    try {
+                        await fetch(`${dynamicEndpoint}sys_logs/blackbox/${id}.json?auth=${secret}`, { method: 'DELETE' });
+                    } catch (_) { /* ignore */ }
+                }
+                if (Admin._crashRawById) delete Admin._crashRawById[id];
                 if (typeof showToast === 'function') showToast("Crash deleted.", "success");
                 Admin.fetchCrashes();
             } catch (e) {
@@ -3440,6 +3670,10 @@ const Admin = {
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, { method: 'DELETE' }, 10000);
+                try {
+                    await window.guardianFetch(`${dynamicEndpoint}sys_logs/blackbox.json?auth=${secret}`, { method: 'DELETE' }, 10000);
+                } catch (_) { /* older DBs may lack blackbox node */ }
+                Admin._crashRawById = {};
                 if (typeof showToast === 'function') showToast("Crash logs wiped clean.", "success");
                 Admin.fetchCrashes();
             } catch (e) {
@@ -3451,6 +3685,7 @@ const Admin = {
         };
         
         clearBtn.onclick = () => Admin.clearCrashes();
+        if (purgeBbBtn) purgeBbBtn.onclick = () => Admin.purgeBlackBoxCrashes();
     },
 
     // --- 2.8 GROWTH SPRINT PHASE 5: THE DRILL-DOWN DASHBOARD ENGINE ---
@@ -10919,20 +11154,9 @@ const Admin = {
 
                 if (typeof showToast === 'function') showToast("Dev Simulation Active! Fetching data...", "success");
                 
-                // #region agent log
-                const _simExitPath = (location.hash === '#dev') ? 'history.back' : (typeof closeSmoothModal === 'function' ? 'closeSmoothModal' : 'none');
-                fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4-H5',location:'admin.js:simApply',message:'sim Apply exit attempt',data:{hash:location.hash||'',isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,exitPath:_simExitPath,devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-
-                // GUARDIAN FIX: Proper Router-aware Exit. Closes Hub, lets you see the result.
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
-
-                // #region agent log
-                setTimeout(() => {
-                    fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d3cb0e'},body:JSON.stringify({sessionId:'d3cb0e',runId:'pre-fix',hypothesisId:'H4-H5',location:'admin.js:simApply',message:'sim Apply 250ms after exit',data:{hash:location.hash||'',isGridMode:!!Admin.isGridMode,lock:!!window._adminDrillBackLock,devHidden:!!document.getElementById('dev-modal')?.classList.contains('hidden'),devOpacity0:!!document.getElementById('dev-modal')?.classList.contains('opacity-0')},timestamp:Date.now()})}).catch(()=>{});
-                }, 250);
-                // #endregion
+                // Leave Dev Mode entirely (not just exitDrillToGrid on #dev-*).
+                if (typeof Admin.closeDevModal === 'function') Admin.closeDevModal({ force: true });
+                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
                 
                 // GUARDIAN HOTFIX: Force network sync to apply Pipeline Overrides, then update UI
                 if (typeof loadAllSchedules === 'function') {
@@ -10962,8 +11186,8 @@ const Admin = {
 
                 if (typeof showToast === 'function') showToast("Exited Developer Mode", "info");
                 
-                if (location.hash === '#dev') history.back();
-                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal');
+                if (typeof Admin.closeDevModal === 'function') Admin.closeDevModal({ force: true });
+                else if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
 
                 if (typeof updateTime === 'function') updateTime(); 
                 if (typeof findNextTrains === 'function') findNextTrains();
@@ -11777,19 +12001,6 @@ const Admin = {
             return { status: 'pending', dayType: entry?.defaultDayType || fallbackDayType };
         };
 
-        const setHolidayTab = (tab) => {
-            holidayTab = tab;
-            tabPending?.classList.toggle('ring-2', tab === 'pending');
-            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
-            tabApproved?.classList.toggle('ring-2', tab === 'approved');
-            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
-            Admin.fetchHolidayApprovals();
-        };
-
-        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
-        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
-        setHolidayTab('pending');
-
         Admin.fetchHolidayApprovals = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret || !listDiv) return;
@@ -11974,6 +12185,19 @@ const Admin = {
             };
         }
         if (refreshBtn) refreshBtn.onclick = () => Admin.fetchHolidayApprovals();
+
+        // Wire tabs AFTER fetchHolidayApprovals exists (calling setHolidayTab earlier threw on iOS)
+        const setHolidayTab = (tab) => {
+            holidayTab = tab;
+            tabPending?.classList.toggle('ring-2', tab === 'pending');
+            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
+            tabApproved?.classList.toggle('ring-2', tab === 'approved');
+            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
+            if (typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+        };
+        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
+        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
+        setHolidayTab('pending');
     },
 
 // --- 8. MAINTENANCE MODE MANAGER ---

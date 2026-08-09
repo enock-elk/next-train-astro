@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.08";
+export const APP_VERSION = "V8_08.11";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -855,6 +855,37 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.11",
+        title: "Crash Inbox Resilience",
+        date: "09 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Crash Analytics:</b> Fat Black Box dumps are slimmed on load; one bad row can no longer blank the inbox.",
+            "<b>Purge BB:</b> New button deletes Black Box exports only, keeping real crash reports."
+        ]
+    },
+    {
+        id: "V8_08.10",
+        title: "Black Box + Local Admin",
+        date: "09 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Black Box:</b> Cloud send stores a lean Crash Analytics card + a separate full-log blob (no more mega dumps in the inbox list).",
+            "<b>Escalate:</b> Roadmap tickets get a short summary; Copy Log still pulls the full dump on demand.",
+            "<b>Local admin:</b> Allow localhost API-key referrers so Dev Mode login works on Astro (:4321)."
+        ]
+    },
+    {
+        id: "V8_08.09",
+        title: "Dev Mode Close Fixes",
+        date: "09 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Dev Mode X:</b> Top-right close now exits Developer Mode instead of sticking open.",
+            "<b>Time Simulation:</b> Apply leaves admin and returns you to the live board."
+        ]
+    },
     {
         id: "V8_08.08",
         title: "Map, Fares & Home Board",

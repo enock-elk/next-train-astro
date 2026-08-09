@@ -244,5 +244,5 @@ export function initAdminBridge() {
     if (typeof window === 'undefined') return;
     window.ensureAdminLoaded = ensureAdminLoaded;
     armAdminUnlock();
-    console.log('🛡️ Guardian: Admin unlock armed (admin.js not loaded)');
+    // Silent until the 5-tap title backdoor loads admin.js
 }

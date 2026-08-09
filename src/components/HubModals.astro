@@ -231,7 +231,7 @@ import { withBase } from '../lib/config.js';
         <div class="p-3 border-t border-gray-800 bg-black rounded-b-xl shrink-0 flex gap-2">
             <button type="button" id="bb-clear-btn" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-mono font-bold py-2.5 rounded shadow-sm transition-colors text-xs uppercase focus:outline-none">Clear</button>
             <button type="button" id="bb-copy-btn" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-mono font-bold py-2.5 rounded shadow-sm transition-colors text-xs uppercase focus:outline-none">Copy All</button>
-            <button type="button" id="bb-send-btn" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-500 border border-green-800/50 font-mono font-bold py-2.5 rounded shadow-sm transition-colors text-xs uppercase focus:outline-none">Send to Cloud</button>
+            <button type="button" id="bb-send-btn" title="Uploads a lean Crash Analytics card + full log blob (not the whole dump in the inbox list)" class="flex-1 bg-green-900/40 hover:bg-green-800/60 text-green-500 border border-green-800/50 font-mono font-bold py-2.5 rounded shadow-sm transition-colors text-xs uppercase focus:outline-none">Send to Cloud</button>
         </div>
     </div>
 </div>
@@ -436,28 +436,26 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
-<!-- NETWORK STRUGGLE (Empathy Engine) -->
-<div id="network-struggle-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[150] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+<!-- NETWORK STRUGGLE / CAPTIVE PORTAL -->
+<div id="network-struggle-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[150] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300" data-struggle-mode="weak">
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-orange-200 dark:border-orange-900/50">
         <div class="text-center">
             <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-orange-100 dark:bg-orange-900/30 mb-4 shadow-inner ring-4 ring-orange-50 dark:ring-orange-900/20">
                 <svg class="w-8 h-8 text-orange-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48 0a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
             </div>
-            <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Weak Signal Detected</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+            <h3 id="network-struggle-title" class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Weak Signal Detected</h3>
+            <p id="network-struggle-body" class="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
                 Your connection is struggling. We need a few seconds of stable internet to download the timetables so they work offline.
             </p>
             <div class="flex flex-col space-y-3">
+                <button type="button" id="network-struggle-open-portal" class="hidden w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex justify-center items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    Open browser to sign in
+                </button>
                 <button type="button" id="network-struggle-retry" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex justify-center items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                     Try Again
                 </button>
-                <a
-                    href={withBase('help.html') + '?reason=server'}
-                    class="w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-xl transition-colors focus:outline-none text-sm"
-                >
-                    Recovery help &amp; contact
-                </a>
                 <button type="button" id="network-struggle-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-4 rounded-xl transition-colors focus:outline-none text-sm">
                     Dismiss
                 </button>

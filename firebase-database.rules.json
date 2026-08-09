@@ -4,7 +4,7 @@
     ".write": false,
 
     "config": {
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "maintenance": { ".read": true },
       "killswitch": { ".read": true },
       "special_event": { ".read": true },
@@ -26,7 +26,7 @@
     },
     "schedules": {
       ".read": true,
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
     "notices": {
       ".read": true,
@@ -44,7 +44,7 @@
     },
     "exclusions": {
       ".read": true,
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
     "disruptions": {
       ".read": true,
@@ -85,8 +85,14 @@
           ".write": "!data.exists()"
         }
       },
+      "blackbox": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$exportId": {
+          ".write": "!data.exists()"
+        }
+      },
       "routing_fails": {
-        ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'",
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$deadEndId": {
           ".write": "!data.exists()"
         }
@@ -116,7 +122,7 @@
 
     "disruptions_archive": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-      ".write": "auth != null && auth.token.email === 'enockelk@gmail.com'"
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 
     "roadmap": {

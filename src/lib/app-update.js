@@ -282,11 +282,76 @@ export async function cleanupLegacySpaShell() {
     }
 }
 
+/** Open a cleartext HTTP URL so captive Wi‑Fi portals can intercept and show login. */
+export function openCaptivePortalBrowser() {
+    // neverssl.com is intentionally HTTP — HTTPS often bypasses hotel/cafe login pages
+    const url = 'http://neverssl.com/';
+    try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    } catch { /* ignore */ }
+    try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    } catch { /* ignore */ }
+}
+
+/**
+ * @param {'weak'|'captive'} [mode]
+ */
 export function initNetworkStruggleModal() {
     if (typeof window === 'undefined' || window.__ntNetworkStruggleBound) return;
     window.__ntNetworkStruggleBound = true;
 
-    window.triggerNetworkStruggleModal = function triggerNetworkStruggleModal() {
+    const applyStruggleMode = (mode = 'weak') => {
+        const modal = document.getElementById('network-struggle-modal');
+        if (!modal) return;
+        const captive = mode === 'captive';
+        modal.dataset.struggleMode = captive ? 'captive' : 'weak';
+        const title = document.getElementById('network-struggle-title');
+        const body = document.getElementById('network-struggle-body');
+        const portalBtn = document.getElementById('network-struggle-open-portal');
+        const retryBtn = document.getElementById('network-struggle-retry');
+        if (title) {
+            title.textContent = captive ? 'Wi‑Fi Sign-In Required' : 'Weak Signal Detected';
+        }
+        if (body) {
+            body.textContent = captive
+                ? 'This Wi‑Fi needs you to sign in before the internet works. Open your phone’s browser to complete login, then return here and tap Try Again.'
+                : 'Your connection is struggling. We need a few seconds of stable internet to download the timetables so they work offline.';
+        }
+        if (portalBtn) {
+            portalBtn.classList.toggle('hidden', !captive);
+            portalBtn.classList.toggle('flex', captive);
+        }
+        if (retryBtn) {
+            retryBtn.textContent = '';
+            retryBtn.innerHTML = captive
+                ? `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>I've signed in — Try Again`
+                : `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>Try Again`;
+        }
+    };
+
+    window.openCaptivePortalBrowser = openCaptivePortalBrowser;
+
+    window.triggerNetworkStruggleModal = function triggerNetworkStruggleModal(mode = 'weak') {
+        const normalized = mode === 'captive' ? 'captive' : 'weak';
+        const modal = document.getElementById('network-struggle-modal');
+        if (modal && !modal.classList.contains('hidden') && modal.dataset.struggleMode === normalized) {
+            return; // already showing this mode
+        }
+        // Captive popup: at most once per 45s so guardianFetch HTML traps don't spam
+        if (normalized === 'captive') {
+            const now = Date.now();
+            if (window.__ntCaptiveModalAt && now - window.__ntCaptiveModalAt < 45_000) return;
+            window.__ntCaptiveModalAt = now;
+        }
+        applyStruggleMode(normalized);
         try { triggerHaptic(); } catch (e) {}
         try {
             history.pushState({ modal: 'network-struggle' }, '', '#network-struggle');
@@ -294,17 +359,24 @@ export function initNetworkStruggleModal() {
         if (typeof window.openSmoothModal === 'function') {
             window.openSmoothModal('network-struggle-modal');
         } else {
-            document.getElementById('network-struggle-modal')?.classList.remove('hidden');
+            modal?.classList.remove('hidden');
         }
     };
 
     document.addEventListener('click', (e) => {
+        const portal = e.target.closest?.('#network-struggle-open-portal');
         const retry = e.target.closest?.('#network-struggle-retry');
         const dismiss = e.target.closest?.('#network-struggle-dismiss');
+        if (portal) {
+            e.preventDefault();
+            openCaptivePortalBrowser();
+            return;
+        }
         if (retry) {
             if (typeof window.closeSmoothModal === 'function') {
                 window.closeSmoothModal('network-struggle-modal');
             }
+            try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
             setTimeout(() => {
                 if (typeof window.loadAllSchedules === 'function') window.loadAllSchedules(true);
                 else window.location.reload();

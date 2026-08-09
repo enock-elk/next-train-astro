@@ -115,11 +115,16 @@ function scheduleStruggleUiFlush() {
 
 function paintConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
-    const soft = reason === 'slow_boot' || reason === 'weak';
-    if (!soft) {
-        isLieFi = true;
-        try { $isOffline.set(true); } catch { /* ignore */ }
+
+    // Network guards for non-offline reasons — no banner / toast chrome.
+    // Product: only the classic "WORKING OFFLINE" banner is shown to users.
+    if (reason !== 'offline') {
+        if (reason === 'liefi') isLieFi = true;
+        return;
     }
+
+    isLieFi = true;
+    try { $isOffline.set(true); } catch { /* ignore */ }
 
     if (typeof window.clearMaintenanceBanner === 'function') {
         try { window.clearMaintenanceBanner(); } catch { /* ignore */ }
@@ -129,28 +134,28 @@ function paintConnectionStruggleUi(reason = 'offline') {
     if (oi) {
         oi.dataset.struggleUi = '1';
         oi.style.display = 'flex';
-        if (reason === 'offline') {
-            oi.textContent = 'WORKING OFFLINE';
-        } else if (reason === 'slow_boot') {
-            oi.textContent = 'CONNECTION SLOW';
-        } else {
-            oi.textContent = 'NO USABLE INTERNET';
-        }
+        oi.textContent = 'WORKING OFFLINE';
     }
 
-    const toastMode = reason === 'offline' ? 'offline' : (reason === 'slow_boot' ? 'weak' : 'liefi');
-    showOfflineToast(soft ? 20_000 : 0, toastMode);
+    showOfflineToast(0, 'offline');
 }
 
 /**
- * Paint offline / weak-connection chrome. `navigator.onLine` alone is not enough —
- * mobile data can be "up" with no usable path (no airtime, captive portal, blackhole).
+ * Offline chrome only (banner + toast). Weak / Lie-Fi still arm network guards
+ * via isLieFi / captive modal, but do not paint alternate banners.
  * Banner + toast only after ≥30s of trying and only while the tab is foreground.
  * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
  */
 export function engageConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
     noteStruggleAttempt();
+
+    // Non-offline: apply guards immediately; never queue slow/usable banners
+    if (reason !== 'offline') {
+        if (reason === 'liefi') isLieFi = true;
+        return;
+    }
+
     bindStruggleVisibilityListener();
 
     if (!isActiveForegroundSession() || !struggleElapsedOk()) {
@@ -183,17 +188,20 @@ export async function probeReachability(timeoutMs = 3500) {
         clearTimeout(timer);
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('text/html')) {
+            isLieFi = true; // halt network sync immediately — do not wait for 30s banner paint
             engageConnectionStruggleUi('liefi');
+            try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
             return 'captive';
         }
         if (!res.ok) {
+            isLieFi = true;
             engageConnectionStruggleUi('liefi');
             return 'captive';
         }
         isLieFi = false;
         clearStruggleClock();
         const oi = document.getElementById('offline-indicator');
-        if (oi && /CONNECTION SLOW|NO USABLE INTERNET/i.test(oi.textContent || '')) {
+        if (oi && oi.dataset.struggleUi === '1' && navigator.onLine) {
             oi.style.display = 'none';
             delete oi.dataset.struggleUi;
         }
@@ -367,7 +375,9 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
             _networkStruggleCount = 0;
+            isLieFi = true;
             engageConnectionStruggleUi('liefi');
+            try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
             throw new Error('Captive Portal Detected');
         }
 
@@ -875,9 +885,12 @@ export async function loadAllSchedules(force = false) {
             } catch(err) { console.error("🛡️ Guardian: Cached DB shadow-clone parsing failed.", err); }
         }
 
+
         // 2. BACKGROUND NETWORK SYNC (LIE-FI PROTECTED)
         if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) {
             console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
+            // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
+            if (typeof window.revealAppShell === 'function') window.revealAppShell();
             return;
         }
 

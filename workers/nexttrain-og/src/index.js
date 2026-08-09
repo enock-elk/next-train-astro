@@ -4,7 +4,11 @@
  * Bot + ?rt= / ?plan=  → lightweight OG HTML stub
  * /og/timetable.png    → grid-looking PNG
  * /og/plan.png         → planner invite PNG
- * Everyone else        → proxy ORIGIN_URL
+ * Everyone else        → pass through to Cloudflare DNS origin (GitHub Pages)
+ *
+ * Do NOT fetch ORIGIN_URL for HTML: github.io/metrorail-app 301s back to
+ * nexttrain.co.za (custom domain), which would loop. Same-URL fetch(request)
+ * goes to the zone origin and does not re-enter this Worker.
  */
 import catalog from './catalog.json';
 import { isSocialCrawler, parseShareIntent, dayLabel, stationLabel, decodeDay } from './parse.js';
@@ -36,24 +40,9 @@ function svgResponse(svg, cacheSeconds = 300) {
   });
 }
 
-async function proxyOrigin(request, env) {
-  const origin = String(env.ORIGIN_URL || '').replace(/\/$/, '');
-  if (!origin) {
-    return new Response('ORIGIN_URL not configured', { status: 502 });
-  }
-  const url = new URL(request.url);
-  const target = new URL(url.pathname + url.search, origin + '/');
-  const headers = new Headers(request.headers);
-  headers.delete('host');
-  const init = {
-    method: request.method,
-    headers,
-    redirect: 'manual',
-  };
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = request.body;
-  }
-  return fetch(new Request(target.toString(), init));
+/** Pass normal browsers to GitHub Pages via Cloudflare origin (no Worker loop). */
+function passToOrigin(request) {
+  return fetch(request);
 }
 
 async function handleOgTimetable(url, env, ctx) {
@@ -184,6 +173,6 @@ export default {
       });
     }
 
-    return proxyOrigin(request, env);
+    return passToOrigin(request);
   },
 };

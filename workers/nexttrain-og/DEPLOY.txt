@@ -1,45 +1,35 @@
-nexttrain-og — deploy checklist (infra)
-=======================================
+nexttrain-og — what YOU still need to do
+========================================
 
-This Worker restores WhatsApp / Facebook link previews for timetable (?rt=)
-and trip-planner (?plan=) shares, and serves stylized /og/*.png cards.
+Code is ready. DNS is already orange-clouded on Cloudflare.
+Your only remaining job is to deploy this Worker once from your computer.
 
-1. Cloudflare DNS
-   - nexttrain.co.za must be on Cloudflare with the orange cloud (proxied).
-   - GitHub Pages alone cannot intercept crawler User-Agents.
+1. Open a terminal in the repo, then:
 
-2. Upstream origin (avoid loops)
-   - Set Worker var ORIGIN_URL to the real origin host that serves the Astro
-     app (e.g. https://enock-elk.github.io/next-train-astro OR a dedicated
-     origin hostname). Do NOT set ORIGIN_URL to https://nexttrain.co.za
-     when this Worker is routed on that hostname.
-
-3. Attach routes (uncomment in wrangler.jsonc after the zone is ready)
-   - nexttrain.co.za/
-   - nexttrain.co.za/og/*
-   - www.nexttrain.co.za/  and  www.nexttrain.co.za/og/*
-
-4. Vars (already defaulted in wrangler.jsonc)
-   - PUBLIC_SITE=https://nexttrain.co.za
-   - ORIGIN_URL=<upstream>
-   - SCHEDULE_BASE=https://metrorail-next-train-default-rtdb.firebaseio.com/
-   - Confirm schedules/{gauteng,westerncape,kzn,easterncape}.json are
-     anonymously readable (they are today).
-
-5. Deploy
    cd workers/nexttrain-og
    npm install
+   npx wrangler login
    npm run deploy
 
-6. Smoke test
-   - GET /og/health
-   - GET /og/timetable.png?rt=pta-pien&dir=A&d=wd  (should be PNG)
-   - Facebook Sharing Debugger on
-     https://nexttrain.co.za/?rt=pta-pien&v=g&d=wd
-   - Fresh WhatsApp message (OG cache is sticky — change a query param
-     or use the debugger “Scrape Again”).
+2. Smoke-test in the browser:
+   - https://nexttrain.co.za/og/health
+     → should show {"ok":true,...}
+   - https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd
+     → timetable-looking image
+   - https://nexttrain.co.za/
+     → normal app (still works)
 
-7. Catalog refresh
-   When ROUTES change in src/lib/config.js:
-   npm run gen-catalog
-   then redeploy.
+3. Refresh the social preview:
+   - Open https://developers.facebook.com/tools/debug/
+   - Paste https://nexttrain.co.za/?rt=pta-pien&v=g&d=wd
+   - Click "Scrape Again"
+   - Send that link in a NEW WhatsApp chat (old chats keep the old icon)
+
+Notes
+-----
+- Live files live in the metrorail-app GitHub Pages project (custom domain
+  nexttrain.co.za). Preview repo next-train-astro is NOT used as origin.
+- github.io/metrorail-app redirects to nexttrain.co.za — that is expected.
+  The Worker does not fetch that URL for humans; it uses Cloudflare origin
+  pass-through instead.
+- Routes attached: / and /og/* on nexttrain.co.za and www.nexttrain.co.za

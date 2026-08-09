@@ -11,13 +11,13 @@ Code + routes are ready. Two fixes remain on YOUR side after redeploy:
    npm run deploy
 
 Then check:
-   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa3
-   → huge centered route names (Pretoria / to / Pienaarspoort)
-   → smaller readable grid under the title (not a dense blur)
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa4
+   → compact header + near-full-width grid (little blue padding)
+   → route title on one line above the table
 
    https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
    → HTML with og:title like "Pretoria → Pienaarspoort · Weekday"
-   → og:image URL includes &v=wa3 (cache bust)
+   → og:image URL includes &v=wa4 (cache bust)
    → twitter:card = summary_large_image
    → View Page Source (not the live app) to confirm
 

@@ -65,8 +65,8 @@ async function handleOgTimetable(url, env, ctx) {
   if (route) {
     try {
       const db = await loadRegionDb(env, route.region, ctx);
-      // Keep the OG grid sparse — WhatsApp often shrinks to a left thumb.
-      grid = extractGridPreview(db, route, dir, day, 5, 5);
+      // Wider/taller fill for the OG card (less empty blue padding).
+      grid = extractGridPreview(db, route, dir, day, 8, 9);
     } catch (e) {
       console.warn('OG timetable schedule load failed', e.message || e);
     }

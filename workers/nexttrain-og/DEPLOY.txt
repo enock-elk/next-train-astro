@@ -11,11 +11,14 @@ Code + routes are ready. Two fixes remain on YOUR side after redeploy:
    npm run deploy
 
 Then check:
-   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd
-   → must show station names + times (not a blank blue grid)
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa3
+   → huge centered route names (Pretoria / to / Pienaarspoort)
+   → smaller readable grid under the title (not a dense blur)
 
    https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
-   → HTML with og:title like "Pretoria → Pienaarspoort…"
+   → HTML with og:title like "Pretoria → Pienaarspoort · Weekday"
+   → og:image URL includes &v=wa3 (cache bust)
+   → twitter:card = summary_large_image
    → View Page Source (not the live app) to confirm
 
 -------------------------------------------------------------------
@@ -36,18 +39,26 @@ Without this step, Facebook Debugger will keep showing the homepage
 train icon no matter what the Worker does.
 
 -------------------------------------------------------------------
-3) Re-scrape the NEW share URL
+3) Re-scrape + re-share (WhatsApp caches hard)
 -------------------------------------------------------------------
 Use this URL (not bare /?rt=…):
 
    https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
 
 Facebook Sharing Debugger → Scrape Again
-Then send that link in a NEW WhatsApp chat.
 
-In the debugger redirect path you must NOT see http-equiv refresh
-chasing into /?rt=… (that was stealing the preview). After redeploy,
-canonical / og:url should stay on /og/share?…
+WhatsApp does NOT use the Facebook debugger cache. To force a fresh
+WhatsApp preview:
+  • Paste the link in a NEW chat (or add &n=1 once to the share URL)
+  • Wait for the preview to appear ABOVE the composer before sending
+  • Do not reuse an old bubble — WhatsApp keeps the old thumbnail
+
+Expected layouts:
+  • Large (image on top of title) — ideal when WhatsApp accepts the
+    1200×630 PNG (<600KB, landscape). Facebook Debugger already shows this.
+  • Compact (small image left of title) — WhatsApp sometimes still uses
+    this in the chat bubble. The new art puts giant centered station
+    names in the crop-safe zone so the route stays readable even then.
 
 The fb:app_id warning is optional and safe to ignore for WhatsApp previews.
 
@@ -58,3 +69,5 @@ Notes
   ship the Astro app update to metrorail-app / production).
 - Until the app update is live, you can still test /og/share?… manually.
 - Blank PNG was caused by missing fonts in the Worker (fixed in code).
+- We cannot force WhatsApp’s UI chrome; we can only meet Meta’s image
+  rules and design the PNG so the title reads in both layouts.

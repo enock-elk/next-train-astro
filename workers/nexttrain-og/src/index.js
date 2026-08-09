@@ -21,9 +21,11 @@ function siteBase(env, requestUrl) {
 }
 
 function pngResponse(bytes, cacheSeconds = 300) {
-  return new Response(bytes, {
+  const body = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return new Response(body, {
     headers: {
       'Content-Type': 'image/png',
+      'Content-Length': String(body.byteLength),
       'Cache-Control': `public, max-age=${cacheSeconds}, s-maxage=${cacheSeconds}`,
       'Access-Control-Allow-Origin': '*',
     },
@@ -63,7 +65,8 @@ async function handleOgTimetable(url, env, ctx) {
   if (route) {
     try {
       const db = await loadRegionDb(env, route.region, ctx);
-      grid = extractGridPreview(db, route, dir, day);
+      // Keep the OG grid sparse — WhatsApp often shrinks to a left thumb.
+      grid = extractGridPreview(db, route, dir, day, 5, 5);
     } catch (e) {
       console.warn('OG timetable schedule load failed', e.message || e);
     }

@@ -894,6 +894,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Dev Mode:</b> The X button closes the admin panel reliably again.",
+            "<b>Time simulation:</b> Apply closes Dev Mode and opens the Next Train board on the simulated clock.",
             "<b>Region switch:</b> Choosing a route no longer pops the route picker open a second time.",
             "<b>Share previews:</b> Sharper timetable images for WhatsApp and Facebook."
         ]

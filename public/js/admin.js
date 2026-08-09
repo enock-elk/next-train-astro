@@ -12108,6 +12108,20 @@ const Admin = {
             }
         };
 
+        const setHolidayTab = (tab) => {
+            holidayTab = tab;
+            tabPending?.classList.toggle('ring-2', tab === 'pending');
+            tabPending?.classList.toggle('ring-amber-400', tab === 'pending');
+            tabApproved?.classList.toggle('ring-2', tab === 'approved');
+            tabApproved?.classList.toggle('ring-emerald-400', tab === 'approved');
+            if (typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+        };
+
+        tabPending?.addEventListener('click', () => setHolidayTab('pending'));
+        tabApproved?.addEventListener('click', () => setHolidayTab('approved'));
+        // Bind fetch first (above), then initial tab load — never call before assignment.
+        setHolidayTab('pending');
+
         if (header) {
             header.onclick = () => {
                 if (Admin.isGridMode) return;

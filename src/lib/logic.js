@@ -42,6 +42,19 @@ export let memoryFallbackCache = {};
 export let lastRenderedMinute = -1;
 export let scheduleAbortController = null; 
 export let regionSwapGeneration = 0;
+/** Cancels a deferred post-swap route-picker open (user already chose a route). */
+let pendingRoutePickerTimer = null;
+
+/** Cancel any deferred open of #route-modal after a region swap. */
+export function cancelPendingRoutePicker() {
+    if (pendingRoutePickerTimer) {
+        clearTimeout(pendingRoutePickerTimer);
+        pendingRoutePickerTimer = null;
+    }
+}
+if (typeof window !== 'undefined') {
+    window.cancelPendingRoutePicker = cancelPendingRoutePicker;
+}
 export let isLieFi = false;
 export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
@@ -1146,7 +1159,8 @@ export function ensureRoutePinnedForRegion(region) {
 export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     console.log(`🛡️ Guardian: Executing seamless SPA region swap to ${newRegion}...`);
     regionSwapGeneration++;
-    
+    cancelPendingRoutePicker();
+
     $userRegion.set(newRegion);
     syncRegionDisplayDom(newRegion);
     try { window.syncCrmRegionAnalytics?.(newRegion); } catch { /* ignore */ }
@@ -1231,9 +1245,16 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         nextRouteId = savedDefault;
     }
 
+    // Open the route picker once, soon after the swap — never from loadAllSchedules().then().
+    // That late path raced: user picked a route → board painted → aborted load still resolved
+    // → picker reopened. Generation + cancelPendingRoutePicker kill any stale timer.
+    const swapGen = regionSwapGeneration;
     const openRoutePickerAfterSwap = () => {
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
-        setTimeout(() => {
+        cancelPendingRoutePicker();
+        pendingRoutePickerTimer = setTimeout(() => {
+            pendingRoutePickerTimer = null;
+            if (swapGen !== regionSwapGeneration) return;
             if (window.Renderer?.renderRouteMenu) {
                 window.Renderer.renderRouteMenu(
                     'route-list',
@@ -1276,7 +1297,13 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             if (pien) window.Renderer.renderSkeletonLoader(pien);
         }
 
+        // Let the user pick immediately; do not wait for schedule download.
+        const mainContentEarly = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
+        if (mainContentEarly) mainContentEarly.style.display = '';
+        openRoutePickerAfterSwap();
+
         loadAllSchedules(true).then(() => {
+            if (swapGen !== regionSwapGeneration) return;
             hideRegionSwapLoader();
             if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
                 window.checkServiceAlerts();
@@ -1290,18 +1317,13 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             if (typeof window !== 'undefined' && typeof window.updateNextTrainView === 'function') {
                 window.updateNextTrainView();
             }
-            const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
-            if (mainContent) mainContent.style.display = '';
-            openRoutePickerAfterSwap();
         }).catch(() => {
+            if (swapGen !== regionSwapGeneration) return;
             hideRegionSwapLoader();
             // Still unlock the board with correct region headers if download fails.
             if (typeof window !== 'undefined' && typeof window.findNextTrains === 'function') {
                 window.findNextTrains();
             }
-            const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
-            if (mainContent) mainContent.style.display = '';
-            openRoutePickerAfterSwap();
         });
     } else {
         hideRegionSwapLoader();

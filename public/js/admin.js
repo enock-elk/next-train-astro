@@ -829,11 +829,13 @@ const Admin = {
             Admin.exitDrillToGrid();
             return;
         }
-        window._adminDrillBackLock = true;
-        if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
+        // Intentional dismiss must NOT set _adminDrillBackLock — that guard exists so
+        // drill-exit history noise cannot close Dev Mode. Setting it here made X a no-op
+        // because closeSmoothModal('dev-modal') returns immediately while the lock is set.
+        window._adminDrillBackLock = false;
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true, { force: true });
         else document.getElementById('dev-modal')?.classList.add('hidden');
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
-        setTimeout(() => { window._adminDrillBackLock = false; }, 200);
     },
 
     /** Compact unread count for tile badges (number only). */

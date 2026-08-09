@@ -795,6 +795,8 @@ export function initLiveBoardUi() {
         const id = item.getAttribute('data-route-id');
         if (!id || !ROUTES[id]) return;
         triggerHaptic();
+        // Kill any deferred post-region-swap picker reopen before we close.
+        try { window.cancelPendingRoutePicker?.(); } catch { /* ignore */ }
         // Browsing a route must never re-pin it — the pin is an explicit user
         // action owned by #pin-route-btn (and the first-run welcome choice).
         $currentRouteId.set(id);

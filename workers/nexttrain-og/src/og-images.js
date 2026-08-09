@@ -12,7 +12,7 @@ import fontRegular from '../assets/Inter-Regular.ttf';
 import fontSemiBold from '../assets/Inter-SemiBold.ttf';
 import fontBold from '../assets/Inter-Bold.ttf';
 import { dayLabel, stationLabel } from './parse.js';
-import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
+import { OG_DESIGN_HEIGHT, OG_DESIGN_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 const FONT = 'Inter';
 export { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT };
@@ -56,8 +56,8 @@ function truncate(s, n) {
 
 /** Brand-blue timetable card — tight padding, large grid, readable title. */
 export function buildTimetableSvg({ origin, dest, day, grid }) {
-  const W = OG_IMAGE_WIDTH;
-  const H = OG_IMAGE_HEIGHT;
+  const W = OG_DESIGN_WIDTH;
+  const H = OG_DESIGN_HEIGHT;
   const originT = truncate(origin, 20);
   const destT = truncate(dest, 20);
   // Single-line title saves vertical blue padding vs stacked names.
@@ -130,8 +130,8 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
 }
 
 export function buildPlannerSvg({ from, to, time, day }) {
-  const W = OG_IMAGE_WIDTH;
-  const H = OG_IMAGE_HEIGHT;
+  const W = OG_DESIGN_WIDTH;
+  const H = OG_DESIGN_HEIGHT;
   const timeLine = time ? `Depart ${time}` : 'Open your trip plan';
   const dayLine = day ? dayLabel(day) : 'Today';
   const fromT = truncate(stationLabel(from), 22);
@@ -158,6 +158,7 @@ export function buildPlannerSvg({ from, to, time, day }) {
 
 export async function svgToPng(svg) {
   await ensureWasm();
+  // Render 2× the design size for sharper WhatsApp/Facebook thumbs.
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: OG_IMAGE_WIDTH },
     font: {

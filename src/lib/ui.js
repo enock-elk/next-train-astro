@@ -90,9 +90,14 @@ function anyFixedModalOpen() {
     return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
 }
 
-export function closeSmoothModal(modalId, fromPopState = false) {
+export function closeSmoothModal(modalId, fromPopState = false, opts = {}) {
     if (typeof window === 'undefined') return;
-    if (window._adminDrillBackLock && modalId === 'dev-modal') return;
+    // Drill-exit guard: ignore accidental closes. Explicit dismisses pass { force: true }.
+    if (window._adminDrillBackLock && modalId === 'dev-modal' && !opts?.force) return;
+    // User dismissed / picked a route — do not let a stale region-swap timer reopen the picker.
+    if (modalId === 'route-modal') {
+        try { window.cancelPendingRoutePicker?.(); } catch { /* ignore */ }
+    }
 
     // Drilled Dev Mode: never close the whole modal — step back to the grid first
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {

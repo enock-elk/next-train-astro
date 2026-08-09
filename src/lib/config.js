@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.08";
+export const APP_VERSION = "V8_08.09";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -887,6 +887,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.09",
+        title: "Admin Close & Region Picker",
+        date: "09 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Dev Mode:</b> The X button closes the admin panel reliably again.",
+            "<b>Region switch:</b> Choosing a route no longer pops the route picker open a second time.",
+            "<b>Share previews:</b> Sharper timetable images for WhatsApp and Facebook."
+        ]
+    },
     {
         id: "V8_08.08",
         title: "Map, Fares & Home Board",

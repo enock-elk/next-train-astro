@@ -10867,6 +10867,42 @@ const Admin = {
             };
         }
 
+        /**
+         * Astro cutover: app version lives in public/app-version.json (not SPA js/config.js).
+         * Accept JSON `{version}` or legacy `const APP_VERSION = '…'` text.
+         */
+        const parseAppVersionPayload = async (res) => {
+            if (!res || !res.ok) return null;
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            if (ct.includes('json')) {
+                const j = await res.json();
+                const v = j && (j.version || j.appVersion || j.APP_VERSION);
+                return v ? String(v).split(' - ')[0] : 'Unknown';
+            }
+            const confText = await res.text();
+            try {
+                const j = JSON.parse(confText);
+                const v = j && (j.version || j.appVersion || j.APP_VERSION);
+                if (v) return String(v).split(' - ')[0];
+            } catch { /* not JSON */ }
+            const verMatch = confText.match(/const APP_VERSION\s*=\s*["']([^"']+)["']/);
+            return verMatch ? verMatch[1].split(' - ')[0] : 'Unknown';
+        };
+
+        /** Fetch JSON for diagnostics; surface worker deny bodies (e.g. Unauthorized Domain). */
+        const fetchDiagJson = async (url) => {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) {
+                let detail = `HTTP ${res.status}`;
+                try {
+                    const errBody = await res.clone().json();
+                    if (errBody && errBody.error) detail += ` — ${errBody.error}`;
+                } catch { /* ignore */ }
+                throw new Error(detail);
+            }
+            return res.json();
+        };
+
         const fetchDbForZoneAudit = async (targetRegion, scanSource) => {
             if (scanSource === 'RAM') {
                 if (typeof fullDatabase === 'undefined' || !fullDatabase) {
@@ -10891,9 +10927,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const res = await fetch(fetchUrl);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const rawData = await res.json();
+            const rawData = await fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
@@ -11260,25 +11294,26 @@ const Admin = {
                     return paths[actualRegion];
                 };
 
-                // The Golden Rule: Fetching raw resources completely bypassing local PWA cache policies.
+                // Astro: probe app-version.json (SPA used js/config.js APP_VERSION scrape).
+                // Cloudflare column = production CDN host; GitHub = jsDelivr metrorail-app deploy.
                 const pipelines = [
                     {
                         name: 'Cloudflare Edge',
-                        configUrl: 'https://nexttrain.co.za/js/config.js',
+                        configUrl: 'https://nexttrain.co.za/app-version.json',
                         dbUrl: `https://nexttrain-cache.enock.workers.dev/${getRegionDbPath('CLOUDFLARE')}`,
                         expectApp: true
                     },
                     {
                         name: 'GitHub CDN',
-                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/js/config.js',
+                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/app-version.json',
                         dbUrl: `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${getRegionDbPath('GITHUB')}`,
                         expectApp: true
                     },
                     {
                         name: 'Firebase Live',
-                        configUrl: 'https://metrorail-next-train.firebaseapp.com/js/config.js',
+                        configUrl: null,
                         dbUrl: `https://metrorail-next-train-default-rtdb.firebaseio.com/${getRegionDbPath('FIREBASE')}`,
-                        expectApp: false // We don't host the active frontend UI here, so don't punish it if config.js is missing
+                        expectApp: false // RTDB has schedules only — no app shell version
                     }
                 ];
 
@@ -11293,23 +11328,25 @@ const Admin = {
                     try {
                         // Concurrent non-blocking fetches using cache: 'no-store'
                         const [confRes, dbRes] = await Promise.all([
-                            fetch(pipe.configUrl, { cache: 'no-store' }).catch(e => null),
-                            fetch(pipe.dbUrl, { cache: 'no-store' }).catch(e => null)
+                            pipe.configUrl
+                                ? fetch(pipe.configUrl, { cache: 'no-store' }).catch(() => null)
+                                : Promise.resolve(null),
+                            fetch(pipe.dbUrl, { cache: 'no-store' }).catch(() => null)
                         ]);
 
                         latency = Date.now() - start;
 
-                        // Parse Config.js App Version & Header Time
                         if (confRes && confRes.ok) {
-                            const confText = await confRes.text();
-                            const verMatch = confText.match(/const APP_VERSION\s*=\s*["']([^"']+)["']/);
-                            appVer = verMatch ? verMatch[1].split(' - ')[0] : 'Unknown';
+                            const parsed = await parseAppVersionPayload(confRes);
+                            appVer = parsed || 'Unknown';
                             const lastMod = confRes.headers.get('Last-Modified');
                             if (lastMod) appTime = formatNiceDate(lastMod);
                             else appTime = "Cache Verified";
                         } else if (!pipe.expectApp) {
                             appVer = "N/A";
                             appTime = "RTDB Data Only";
+                        } else if (confRes && !confRes.ok) {
+                            appTime = `HTTP ${confRes.status}`;
                         }
 
                         // Parse Database Freshness
@@ -11327,10 +11364,19 @@ const Admin = {
                                 let dbVer = targetObj.lastUpdated || 'Unknown';
                                 dbTime = formatNiceDate(dbVer);
                             }
+                        } else if (dbRes && !dbRes.ok) {
+                            try {
+                                const errBody = await dbRes.clone().json();
+                                dbTime = errBody && errBody.error
+                                    ? `HTTP ${dbRes.status} — ${errBody.error}`
+                                    : `HTTP ${dbRes.status}`;
+                            } catch {
+                                dbTime = `HTTP ${dbRes.status}`;
+                            }
                         }
 
                         // Color-coding latency & validation matrix
-                        if (appVer !== "Error" && dbTime !== "Fetch Failed") {
+                        if (appVer !== "Error" && dbTime !== "Fetch Failed" && !String(dbTime).startsWith('HTTP ')) {
                             if (latency < 500) {
                                 latencyClass = "text-green-600 dark:text-green-400";
                             } else if (latency < 1000) {
@@ -11439,9 +11485,7 @@ const Admin = {
 
                     resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${loadingMsg}</div>`;
                     
-                    const res = await fetch(fetchUrl);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    let rawData = await res.json();
+                    let rawData = await fetchDiagJson(fetchUrl);
                     
                     if (targetRegion === 'GP' && rawData.gauteng) dbToScan = rawData.gauteng;
                     else if (targetRegion === 'WC' && rawData.westerncape) dbToScan = rawData.westerncape;
@@ -11450,7 +11494,10 @@ const Admin = {
                     else if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) dbToScan = rawData.schedules;
                     else dbToScan = rawData;
                 } catch(e) {
-                    resultsDiv.innerHTML = `<div class="text-xs text-red-500 font-bold bg-red-50 p-2 rounded">Error: Failed to fetch ${targetRegion} from ${scanSource}. ${e.message}</div>`;
+                    const hint = /Unauthorized Domain|Missing Origin/i.test(String(e.message || ''))
+                        ? ' Deploy workers/nexttrain-cache (allowlist enock-elk.github.io) or run diagnostics on nexttrain.co.za.'
+                        : '';
+                    resultsDiv.innerHTML = `<div class="text-xs text-red-500 font-bold bg-red-50 p-2 rounded">Error: Failed to fetch ${targetRegion} from ${scanSource}. ${e.message}${hint}</div>`;
                     return;
                 }
             } else {
@@ -11773,9 +11820,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const res = await fetch(fetchUrl);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const rawData = await res.json();
+            const rawData = await fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;

@@ -164,6 +164,9 @@ export default defineConfig({
         background_color: '#1d4ed8',
         display: 'standalone',
         orientation: 'portrait',
+        lang: 'en',
+        dir: 'ltr',
+        categories: ['travel', 'navigation', 'utilities'],
         scope: baseWithSlash,
         // SPA used "./" relative to a root manifest, which resolves to the origin
         // root — same value baseWithSlash produces here.
@@ -187,6 +190,23 @@ export default defineConfig({
             type: 'image/png',
             purpose: 'any'
           }
+        ],
+        // Store / PWA Builder packaging screenshots (narrow phone + wide desktop).
+        screenshots: [
+          {
+            src: `${baseWithSlash}screenshots/next-train-narrow.png`,
+            sizes: '1080x1920',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Next Train live board on phone',
+          },
+          {
+            src: `${baseWithSlash}screenshots/next-train-wide.png`,
+            sizes: '1920x1080',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Next Train on a wide display',
+          },
         ],
         // Long-press shortcuts already present on installed SPA home screens.
         // handleShortcutActions() reads ?action= on boot.

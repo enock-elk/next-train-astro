@@ -155,6 +155,15 @@ if (!existsSync(manifestPath)) {
   if (!Array.isArray(m.shortcuts) || m.shortcuts.length < 2) {
     fail('manifest missing SPA shortcuts (Trip Planner + Network Map)');
   }
+  if (m.dir !== 'ltr') fail(`manifest dir is "${m.dir}", want "ltr"`);
+  if (!Array.isArray(m.categories) || !m.categories.includes('travel')) {
+    fail('manifest categories must include travel (store-quality / PWA Builder)');
+  }
+  if (!Array.isArray(m.screenshots) || m.screenshots.length < 1) {
+    fail('manifest screenshots missing — PWA Builder / Play packaging need at least one');
+  }
+  const hasNarrow = m.screenshots.some((s) => s.form_factor === 'narrow');
+  if (!hasNarrow) fail('manifest screenshots need a narrow (phone) form_factor entry');
 }
 
 // 6. Built HTML must link the same manifest filename we emit.
@@ -167,6 +176,10 @@ if (indexHtml.includes('manifest.webmanifest')) {
 }
 if (!indexHtml.includes('apple-mobile-web-app-title" content="Next Train"')) {
   fail('iOS home-screen title must be "Next Train" (not Train 2.0)');
+}
+// PWA Builder / Puppeteer often miss SW when register() only lives in a deferred chunk.
+if (!indexHtml.includes('serviceWorker.register')) {
+  fail('index.html must contain an early serviceWorker.register(...) for SW discoverability');
 }
 
 // 7. Precache must use canonical .html URLs (build.format: 'file').
@@ -199,6 +212,23 @@ if (!existsSync(swPath)) {
   }
   if (/\{url:\\?"js\/admin\.js\\?"/.test(sw) || sw.includes('url:"js/admin.js"') || sw.includes('url:"/js/admin.js"')) {
     fail('sw.js must not precache js/admin.js — admin is lazy-loaded on unlock only');
+  }
+}
+
+// 8. Digital Asset Links for TWA / Play (must ship at /.well-known/assetlinks.json).
+const assetLinksPath = join(DIST, '.well-known', 'assetlinks.json');
+if (!existsSync(assetLinksPath)) {
+  fail('dist/.well-known/assetlinks.json missing — TWA verification will 404');
+} else {
+  const links = JSON.parse(readFileSync(assetLinksPath, 'utf8'));
+  const entry = Array.isArray(links) ? links[0] : null;
+  const pkg = entry?.target?.package_name;
+  const fps = entry?.target?.sha256_cert_fingerprints;
+  if (pkg !== 'za.co.nexttrain.app') {
+    fail(`assetlinks package_name is "${pkg}", want za.co.nexttrain.app`);
+  }
+  if (!Array.isArray(fps) || !fps.length || !/^[0-9A-F:]+$/i.test(fps[0])) {
+    fail('assetlinks sha256_cert_fingerprints must include at least one colon-hex fingerprint');
   }
 }
 

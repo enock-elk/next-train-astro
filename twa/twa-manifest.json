@@ -1,0 +1,60 @@
+{
+  "packageId": "za.co.nexttrain.app",
+  "host": "nexttrain.co.za",
+  "name": "Metrorail Next Train",
+  "launcherName": "Next Train",
+  "display": "standalone",
+  "themeColor": "#1D4ED8",
+  "themeColorDark": "#1D4ED8",
+  "navigationColor": "#1D4ED8",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#1D4ED8",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#1D4ED8",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://nexttrain.co.za/icons/loading-logo.png",
+  "maskableIconUrl": "",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android-keystore/next-train-upload.jks",
+    "alias": "next-train"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Trip Planner",
+      "shortName": "Plan Trip",
+      "url": "/?action=planner",
+      "chosenIconUrl": "https://nexttrain.co.za/icons/icon-192.png"
+    },
+    {
+      "name": "Network Map",
+      "shortName": "View Map",
+      "url": "/?action=map",
+      "chosenIconUrl": "https://nexttrain.co.za/icons/icon-192.png"
+    }
+  ],
+  "webManifestUrl": "https://nexttrain.co.za/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://nexttrain.co.za/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [
+    {
+      "name": "upload",
+      "value": "A2:A4:D8:FC:C6:51:08:E5:F2:F7:3D:74:27:D8:09:20:34:BC:EC:7C:C2:22:FF:70:37:1D:26:69:38:DA:D1:47"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "generatorApp": "bubblewrap-cli"
+}

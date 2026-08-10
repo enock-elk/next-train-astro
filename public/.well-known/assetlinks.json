@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "za.co.nexttrain.app",
+      "sha256_cert_fingerprints": [
+        "A2:A4:D8:FC:C6:51:08:E5:F2:F7:3D:74:27:D8:09:20:34:BC:EC:7C:C2:22:FF:70:37:1D:26:69:38:DA:D1:47"
+      ]
+    }
+  }
+]

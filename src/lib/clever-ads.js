@@ -86,6 +86,10 @@ function setAdPadding(on) {
     document.querySelectorAll('.view-section').forEach((el) => {
         el.classList.toggle('ad-active-padding', !!on);
     });
+    // Reserve the bottom slot before the creative paints (CLS).
+    try {
+        document.body.classList.toggle('nt-ads-ready', !!on);
+    } catch { /* ignore */ }
 }
 
 function cloak(adContainer, fatal = false) {
@@ -337,6 +341,8 @@ export function initCleverAds() {
         if (shouldDeferForSessionStability()) return;
         scheduleStarted = true;
         stabilizedAt = Date.now();
+        // Reserve bottom inset before the creative arrives — avoids layout jump (CLS).
+        setAdPadding(true);
         console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
         armNextScheduleSlot();
     };

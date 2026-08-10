@@ -25,12 +25,14 @@ const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const mapHref = withBase(`map.html?region=${encodeURIComponent(entry.region)}`);
 const REGION_MAP_IMAGES = {
-  GP: 'images/network-map.png',
-  WC: 'images/network-map_wc.png',
-  KZN: 'images/network-map_kzn.png',
-  EC: 'images/network-map_ec.png',
+  GP: { png: 'images/network-map.png', webp: 'images/network-map.webp' },
+  WC: { png: 'images/network-map_wc.png', webp: 'images/network-map_wc.webp' },
+  KZN: { png: 'images/network-map_kzn.png', webp: 'images/network-map_kzn.webp' },
+  EC: { png: 'images/network-map_ec.png', webp: 'images/network-map_ec.webp' },
 };
-const mapImageSrc = withBase(REGION_MAP_IMAGES[entry.region] || REGION_MAP_IMAGES.GP);
+const mapImages = REGION_MAP_IMAGES[entry.region] || REGION_MAP_IMAGES.GP;
+const mapImageSrc = withBase(mapImages.png);
+const mapImageWebp = withBase(mapImages.webp);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -73,16 +75,19 @@ const jsonLd = {
           href={mapHref}
           class="block group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
         >
-          <img
-            src={mapImageSrc}
-            alt={`${entry.regionLabel} Metrorail network map`}
-            class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2]"
-            loading="eager"
-            fetchpriority="high"
-            decoding="async"
-            width="1200"
-            height="800"
-          />
+          <picture>
+            <source srcset={mapImageWebp} type="image/webp" />
+            <img
+              src={mapImageSrc}
+              alt={`${entry.regionLabel} Metrorail network map`}
+              class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2]"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+              width="1200"
+              height="800"
+            />
+          </picture>
           <div class="px-4 py-3 flex items-center justify-between gap-3">
             <span class="text-sm font-bold text-slate-900 dark:text-white">
               Open interactive map · {entry.region}

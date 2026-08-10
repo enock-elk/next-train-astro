@@ -48,9 +48,30 @@ export function parseRouteDeepLink() {
     };
 }
 
+function schedulesReady() {
+    const s = $schedules.get();
+    return !!(s && typeof s === 'object' && Object.keys(s).length > 0);
+}
+
+/** Wait for IndexedDB/cache paint inside loadAllSchedules — do not wait on the network waterfall. */
+async function waitForSchedulePaint(loadPromise, maxMs = 2500) {
+    if (schedulesReady()) return true;
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+        if (schedulesReady()) return true;
+        await Promise.race([
+            loadPromise.then(() => {}, () => {}),
+            new Promise((r) => setTimeout(r, 40)),
+        ]);
+        if (schedulesReady()) return true;
+    }
+    return schedulesReady();
+}
+
 /**
  * Cold-start / share deep link: open the linked route (and grid when view=grid).
  * SPA parity: honor shared route + region so legacy `?action=route&route=…` still works.
+ * Paint-first: open grid from IndexedDB cache ASAP; network refresh continues in background.
  */
 export async function applyRouteDeepLink() {
     const link = parseRouteDeepLink();
@@ -83,7 +104,16 @@ export async function applyRouteDeepLink() {
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
 
-    await loadAllSchedules(true);
+    // Kick full load (cache → network) but do not block the grid on Firebase/CF timeouts.
+    const loadPromise = loadAllSchedules(true);
+    const painted = await waitForSchedulePaint(loadPromise, 2500);
+    if (!painted) {
+        // Cold cache miss: wait a bit longer for first network bytes, still capped.
+        await Promise.race([
+            loadPromise.then(() => {}, () => {}),
+            new Promise((r) => setTimeout(r, 6000)),
+        ]);
+    }
 
     if (typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent('deep_link_open', { type: 'route', route_id: link.routeId, view: link.view || 'board' });
@@ -92,6 +122,12 @@ export async function applyRouteDeepLink() {
 
     if (link.view === 'grid') {
         setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);
+        // If grid was empty on first try, retry once schedules arrive.
+        if (!schedulesReady()) {
+            loadPromise.then(() => {
+                if (schedulesReady()) renderFullScheduleGrid(link.dir, link.day);
+            }).catch(() => {});
+        }
     } else if (link.view === 'fares' || link.view === 'fare') {
         setTimeout(async () => {
             try {
@@ -100,6 +136,9 @@ export async function applyRouteDeepLink() {
             } catch (_) { /* ignore */ }
         }, 120);
     }
+
+    // Let network waterfall finish without holding the share UX.
+    loadPromise.catch(() => {});
     return true;
 }
 

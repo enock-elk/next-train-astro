@@ -25,8 +25,16 @@ import {
     currentTime, currentDayType, currentDayIndex 
 } from './logic.js';
 
-import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
+
+// Delay-report UI is off for cutover (DELAY_REPORTS_UI_ENABLED=false). Keep stubs here so
+// renderer does not static-import delay-reports → firebase-vendor on the home critical path.
+function buildTrainReportSlotHtml() {
+    return '';
+}
+function buildTrainTitleReportButton({ label, className = '' }) {
+    return `<span class="${className}"><span class="truncate">${escapeHTML(label)}</span></span>`;
+}
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';

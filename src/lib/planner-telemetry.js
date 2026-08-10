@@ -11,7 +11,6 @@
 import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';
 import { safeStorage } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
-import { bootFirebase } from './firebase-boot.js';
 
 /** Optional signed-in Firebase uid (null for guests / anonymous). */
 function authUid() {
@@ -51,7 +50,11 @@ function uid() {
 async function ensureAuthToken() {
     if (typeof window === 'undefined') return '';
     try {
-        if (!window.firebaseAuth) await bootFirebase();
+        // Dynamic import keeps firebase-vendor out of the planner/home critical chunk.
+        if (!window.firebaseAuth) {
+            const { bootFirebase } = await import('./firebase-boot.js');
+            await bootFirebase();
+        }
         if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
             await window.firebaseSignInAnonymously(window.firebaseAuth);
         }

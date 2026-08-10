@@ -18,7 +18,8 @@ import { MANUAL_GRID_ORDER } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel
+    formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel,
+    scheduleCacheSlot, routeSheetKeyForDay
 } from './utils.js';
 
 import { 
@@ -1199,13 +1200,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (!route) return;
 
     const selectedDay = dayType || 'weekday';
-    let sheetDayType = selectedDay;
-    if (selectedDay === 'sunday') sheetDayType = 'weekday'; 
-
-    const keyA = `${sheetDayType}_to_a`;
-    const keyB = `${sheetDayType}_to_b`;
-    const schedA = $schedules.get()[keyA];
-    const schedB = $schedules.get()[keyB];
+    // Resolve weekday / saturday / pub_to_* cache slots (WC public_holiday → pub sheets).
+    const keyA = scheduleCacheSlot(selectedDay, route.region, 'a');
+    const keyB = scheduleCacheSlot(selectedDay, route.region, 'b');
+    const firebaseKeyA = routeSheetKeyForDay(route, selectedDay, 'a') || route.sheetKeys?.[keyA];
+    const firebaseKeyB = routeSheetKeyForDay(route, selectedDay, 'b') || route.sheetKeys?.[keyB];
+    const schedA = $schedules.get()?.[keyA];
+    const schedB = $schedules.get()?.[keyB];
 
     const bgColor = '#ffffff'; 
     const textColor = '#111827'; 
@@ -1216,7 +1217,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const headerTextColor = '#1e293b'; 
     const zebraBg = '#f8fafc'; 
 
-    let dummyDayIdx = selectedDay === 'weekday' ? 1 : 6;
+    let dummyDayIdx = (selectedDay === 'weekday' || selectedDay === 'sunday') ? 1 : 6;
 
     let hasExceptions = false;
     const checkExclusions = (sched) => {
@@ -1248,7 +1249,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
     const dateText = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-    const scheduleTypeLabel = selectedDay === 'weekday' ? 'WEEKDAY' : 'WEEKEND';
+    const scheduleTypeLabel = selectedDay === 'weekday' || selectedDay === 'sunday'
+        ? 'WEEKDAY'
+        : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
+            : (selectedDay === 'saturday' ? 'SATURDAY' : 'WEEKEND'));
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
     const displayRouteName = formatRouteLabelPlain(route.name);
@@ -1277,11 +1281,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     }
 
     const htmlA = schedA 
-        ? Renderer._buildGridHTML(schedA, route.sheetKeys[keyA], activeRouteId, dummyDayIdx, false, true) 
+        ? Renderer._buildGridHTML(schedA, firebaseKeyA || keyA, activeRouteId, dummyDayIdx, false, true) 
         : `<div class="p-8 text-center italic border rounded" style="color:${mutedColor}; border-color:${borderColor}">No service scheduled for this direction.</div>`;
         
     const htmlB = schedB 
-        ? Renderer._buildGridHTML(schedB, route.sheetKeys[keyB], activeRouteId, dummyDayIdx, false, true) 
+        ? Renderer._buildGridHTML(schedB, firebaseKeyB || keyB, activeRouteId, dummyDayIdx, false, true) 
         : `<div class="p-8 text-center italic border rounded" style="color:${mutedColor}; border-color:${borderColor}">No service scheduled for this direction.</div>`;
 
     exportContainer.innerHTML = `

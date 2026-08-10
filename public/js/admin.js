@@ -4088,6 +4088,7 @@ const Admin = {
                                 <option value="">All days</option>
                                 <option value="weekday">Weekday</option>
                                 <option value="saturday">Saturday</option>
+                                <option value="public_holiday">Public Holiday</option>
                                 <option value="sunday">Sunday</option>
                             </select>
                         </div>
@@ -9878,11 +9879,7 @@ const Admin = {
                             <span id="excl-schedule-type-display" class="truncate">Weekday Schedule</span>
                             <svg id="excl-schedule-type-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
-                        <ul id="excl-schedule-type-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                            <li onclick="document.getElementById('excl-schedule-type').value='weekday'; document.getElementById('excl-schedule-type-display').textContent=this.textContent; document.getElementById('excl-schedule-type-list').classList.add('hidden'); document.getElementById('excl-schedule-type-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Weekday Schedule</li>
-                            <li onclick="document.getElementById('excl-schedule-type').value='saturday'; document.getElementById('excl-schedule-type-display').textContent=this.textContent; document.getElementById('excl-schedule-type-list').classList.add('hidden'); document.getElementById('excl-schedule-type-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Saturday Schedule</li>
-                            <li onclick="document.getElementById('excl-schedule-type').value='sunday'; document.getElementById('excl-schedule-type-display').textContent=this.textContent; document.getElementById('excl-schedule-type-list').classList.add('hidden'); document.getElementById('excl-schedule-type-chevron').classList.remove('rotate-180');" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors cursor-pointer">Sunday Schedule</li>
-                        </ul>
+                        <ul id="excl-schedule-type-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left"></ul>
                     </div>
                     <button id="excl-load-trains-btn" class="w-1/3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold rounded-lg text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors focus:outline-none">Load</button>
                 </div>
@@ -9944,6 +9941,47 @@ const Admin = {
         const noticeSaveBtn = document.getElementById('excl-save-notice-btn');
 
         const schedTypeSelect = document.getElementById('excl-schedule-type');
+
+        /** WC routes expose a dedicated Public Holiday sheet family for train picking. */
+        const syncExclScheduleTypeOptions = () => {
+            const rId = routeSelect?.value;
+            const route = (rId && typeof ROUTES !== 'undefined') ? ROUTES[rId] : null;
+            const isWc = !!(route && route.region === 'WC' && (route.sheetKeys?.pub_to_a || route.sheetKeys?.pub_to_b));
+            const list = document.getElementById('excl-schedule-type-list');
+            const display = document.getElementById('excl-schedule-type-display');
+            if (!schedTypeSelect || !list) return;
+
+            const prev = schedTypeSelect.value || 'weekday';
+            const items = [
+                { value: 'weekday', label: 'Weekday Schedule' },
+                { value: 'saturday', label: 'Saturday Schedule' },
+            ];
+            if (isWc) items.push({ value: 'public_holiday', label: 'Public Holiday Schedule' });
+            items.push({ value: 'sunday', label: 'Sunday Schedule' });
+
+            schedTypeSelect.innerHTML = items
+                .map((i) => `<option value="${i.value}">${i.label}</option>`)
+                .join('');
+            list.innerHTML = items.map((i, idx) => {
+                const border = idx < items.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : '';
+                return `<li data-excl-day="${i.value}" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors ${border} cursor-pointer">${i.label}</li>`;
+            }).join('');
+
+            list.querySelectorAll('li[data-excl-day]').forEach((li) => {
+                li.addEventListener('click', () => {
+                    const val = li.getAttribute('data-excl-day');
+                    schedTypeSelect.value = val;
+                    if (display) display.textContent = li.textContent;
+                    list.classList.add('hidden');
+                    document.getElementById('excl-schedule-type-chevron')?.classList.remove('rotate-180');
+                });
+            });
+
+            const allowed = items.some((i) => i.value === prev) ? prev : 'weekday';
+            schedTypeSelect.value = allowed;
+            const selected = items.find((i) => i.value === allowed);
+            if (display && selected) display.textContent = selected.label;
+        };
         const loadTrainsBtn = document.getElementById('excl-load-trains-btn');
         const trainGrid = document.getElementById('excl-train-grid');
         const pickerContainer = document.getElementById('excl-train-picker');
@@ -10100,6 +10138,7 @@ const Admin = {
                         banner.classList.add('hidden');
                     }
                 }
+                syncExclScheduleTypeOptions();
                 if (rId && ROUTES[rId]) {
                     const r = ROUTES[rId];
                     
@@ -10141,7 +10180,10 @@ const Admin = {
                 }
             });
             
+            syncExclScheduleTypeOptions();
             routeSelect.dispatchEvent(new Event('change'));
+        } else {
+            syncExclScheduleTypeOptions();
         }
 
         const days = ['S','M','T','W','T','F','S'];
@@ -10171,6 +10213,11 @@ const Admin = {
                 sheetKey = (dir === 'A') ? route.sheetKeys.weekday_to_a : route.sheetKeys.weekday_to_b;
             } else if (type === 'saturday') {
                 sheetKey = (dir === 'A') ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
+            } else if (type === 'public_holiday') {
+                // WC dedicated *_pub sheets; fall back to saturday if a pub key is missing.
+                sheetKey = (dir === 'A')
+                    ? (route.sheetKeys.pub_to_a || route.sheetKeys.saturday_to_a)
+                    : (route.sheetKeys.pub_to_b || route.sheetKeys.saturday_to_b);
             } else if (type === 'sunday') {
                 sheetKey = (dir === 'A') ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
             }

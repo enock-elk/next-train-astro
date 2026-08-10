@@ -43,7 +43,10 @@ function clearLegacySessionInjectCap() {
     try { sessionStorage.removeItem(AD_LEGACY_SESSION_INJECT_KEY); } catch { /* ignore */ }
 }
 
-/** iPhone / iPad — classic single Clever embed (no 4-slot remove/reinsert schedule). */
+/**
+ * iPhone / iPad (Safari tab OR Home Screen / installed PWA).
+ * Classic Clever embed is used for all Apple mobile — not PWA-only.
+ */
 function isAppleMobile() {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || navigator.vendor || '';

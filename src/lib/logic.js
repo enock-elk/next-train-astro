@@ -47,10 +47,15 @@ export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
 
-/** Banner/toast only after this much continuous struggle + foreground (non-offline paths). */
+/** Legacy struggle-clock for non-offline paths (kept for guardianFetch weak toasts). */
 const STRUGGLE_UI_MIN_MS = 30_000;
-/** Offline banner: re-probe after this much *active foreground* time, then paint. */
-const OFFLINE_BANNER_CONFIRM_ACTIVE_MS = 5_000;
+/**
+ * Radios appear ON but probe failed: accumulate this much *foreground* time,
+ * re-probe, then paint WORKING OFFLINE + toast.
+ */
+const OFFLINE_BANNER_CONFIRM_ACTIVE_MS = 15_000;
+/** Light recovery poll while degraded / banner shown (foreground only). */
+const RECOVERY_POLL_MS = 20_000;
 let _struggleClockStartedAt = 0;
 let _pendingStruggleReason = null;
 let _struggleUiTimer = null;
@@ -60,6 +65,8 @@ let _offlineConfirmActiveMs = 0;
 let _offlineConfirmLastTs = 0;
 let _offlineConfirmInFlight = false;
 let _offlineBannerPainted = false;
+let _recoveryPollTimer = null;
+let _recoveryPollBound = false;
 
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
@@ -75,6 +82,13 @@ function clearOfflineBannerConfirm() {
     _offlineConfirmActiveMs = 0;
     _offlineConfirmLastTs = 0;
     _offlineConfirmInFlight = false;
+}
+
+function stopRecoveryPoll() {
+    if (_recoveryPollTimer) {
+        clearTimeout(_recoveryPollTimer);
+        _recoveryPollTimer = null;
+    }
 }
 
 function clearStruggleClock() {
@@ -95,6 +109,20 @@ function struggleElapsedOk() {
     return !!_struggleClockStartedAt && (Date.now() - _struggleClockStartedAt >= STRUGGLE_UI_MIN_MS);
 }
 
+function applyOnlineChrome() {
+    isLieFi = false;
+    _offlineBannerPainted = false;
+    clearStruggleClock();
+    stopRecoveryPoll();
+    const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
+    if (oi) {
+        oi.style.display = 'none';
+        delete oi.dataset.struggleUi;
+    }
+    try { hideOfflineToast(); } catch { /* ignore */ }
+    try { $isOffline.set(false); } catch { /* ignore */ }
+}
+
 function bindStruggleVisibilityListener() {
     if (_struggleVisibilityBound || typeof document === 'undefined') return;
     _struggleVisibilityBound = true;
@@ -103,20 +131,54 @@ function bindStruggleVisibilityListener() {
             try { hideOfflineToast(); } catch { /* ignore */ }
             const oi = document.getElementById('offline-indicator');
             if (oi && oi.dataset.struggleUi === '1') oi.style.display = 'none';
-            // Pause active-time accumulation while backgrounded
+            // Pause active-time accumulation + recovery polls while backgrounded
             _offlineConfirmLastTs = 0;
+            stopRecoveryPoll();
             return;
         }
         if (_offlineConfirmTimer || _offlineConfirmActiveMs > 0) {
             _offlineConfirmLastTs = Date.now();
         }
         if (_pendingStruggleReason) scheduleStruggleUiFlush();
+        // Resume light recovery checks when the user returns
+        if (_offlineBannerPainted || isLieFi || _offlineConfirmActiveMs > 0) {
+            startRecoveryPoll({ immediate: true });
+        }
     });
 }
 
 /**
- * First offline detection: wait 5s of foreground session time, probe again,
- * then paint the offline banner only if still offline / unusable.
+ * Battery-friendly reachability poll while degraded / banner shown.
+ * Foreground only; ~20s interval. Clears chrome as soon as the edge is reachable.
+ */
+function startRecoveryPoll(opts = {}) {
+    if (typeof window === 'undefined') return;
+    bindStruggleVisibilityListener();
+    if (_recoveryPollTimer) {
+        if (!opts.immediate) return;
+        clearTimeout(_recoveryPollTimer);
+        _recoveryPollTimer = null;
+    }
+
+    const delay = opts.immediate ? 400 : RECOVERY_POLL_MS;
+    _recoveryPollTimer = setTimeout(async () => {
+        _recoveryPollTimer = null;
+        if (!isActiveForegroundSession()) return;
+        if (!_offlineBannerPainted && !isLieFi && _offlineConfirmActiveMs === 0 && !_offlineConfirmInFlight) {
+            return; // nothing to recover
+        }
+        const result = await probeReachabilityCore(3000);
+        if (result === 'ok') {
+            applyOnlineChrome();
+            return;
+        }
+        // Still down — keep polling lightly while foreground
+        startRecoveryPoll();
+    }, delay);
+}
+
+/**
+ * Radios ON but no usable internet: wait 15s foreground → re-probe → banner + toast.
  */
 function armOfflineBannerConfirm() {
     if (typeof document === 'undefined') return;
@@ -149,25 +211,22 @@ function armOfflineBannerConfirm() {
             .then((result) => {
                 _offlineConfirmInFlight = false;
                 if (result === 'ok') {
-                    clearOfflineBannerConfirm();
-                    isLieFi = false;
-                    _offlineBannerPainted = false;
+                    applyOnlineChrome();
                     return;
                 }
-                // Still offline / unusable after 5s active — show banner + toast
-                _offlineBannerPainted = true;
+                // Still unusable after 15s active — show banner + auto-dismiss toast
                 clearOfflineBannerConfirm();
                 paintConnectionStruggleUi('offline');
             })
             .catch(() => {
                 _offlineConfirmInFlight = false;
-                _offlineBannerPainted = true;
                 clearOfflineBannerConfirm();
                 paintConnectionStruggleUi('offline');
             });
     };
 
     _offlineConfirmTimer = setTimeout(tick, 250);
+    startRecoveryPoll();
 }
 
 function scheduleStruggleUiFlush() {
@@ -203,6 +262,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
     }
 
     isLieFi = true;
+    _offlineBannerPainted = true;
     try { $isOffline.set(true); } catch { /* ignore */ }
 
     if (typeof window.clearMaintenanceBanner === 'function') {
@@ -217,38 +277,33 @@ function paintConnectionStruggleUi(reason = 'offline') {
     }
 
     showOfflineToast(0, 'offline');
+    startRecoveryPoll();
 }
 
 /**
- * Offline chrome only (banner + toast). Offline path: probe → 5s active → re-probe → paint.
- * Weak / Lie-Fi still arm network guards, but do not paint alternate banners.
+ * Offline chrome entry. Prefer probeReachability() — it owns radio-off vs radio-on rules.
  * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
  */
 export function engageConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
     noteStruggleAttempt();
 
-    // Non-offline: apply guards immediately; never queue slow/usable banners
     if (reason !== 'offline') {
         if (reason === 'liefi') isLieFi = true;
         return;
     }
 
-    // Offline: confirm with a second probe after 5s of foreground time
-    if (_offlineBannerPainted) {
-        paintConnectionStruggleUi('offline');
-        return;
-    }
-    armOfflineBannerConfirm();
+    // Full path: always probe (Bluetooth tether can still work when radios "look" off)
+    probeReachability().catch(() => {});
 }
 
 /**
  * Raw reachability probe — no banner / toast side effects.
+ * Always attempts the edge fetch (does not trust navigator.onLine alone — tether / USB).
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
 async function probeReachabilityCore(timeoutMs = 3500) {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
-    if (!navigator.onLine) return 'offline';
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -260,56 +315,53 @@ async function probeReachabilityCore(timeoutMs = 3500) {
         if (!res.ok) return 'captive';
         return 'ok';
     } catch {
-        return 'timeout';
+        // OS offline vs radios-up blackhole
+        return navigator.onLine ? 'timeout' : 'offline';
     }
 }
 
 /**
  * Active reachability probe (does not trust navigator.onLine).
- * Uses the Cloudflare schedule edge (NetworkOnly in SW) so a cached SW shell
- * cannot fake success.
- * Offline: arms a 5s active-session re-probe before showing the offline banner.
+ *
+ * - OS offline (data/Wi‑Fi appear off): still probe (tether). Fail → banner now.
+ * - OS online: probe. Fail → wait 15s foreground → re-probe → banner + toast.
+ * - Recovery: light foreground poll clears banner as soon as the edge answers.
+ *
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
 export async function probeReachability(timeoutMs = 3500) {
+    const osOnline = typeof navigator !== 'undefined' ? !!navigator.onLine : true;
     const result = await probeReachabilityCore(timeoutMs);
 
     if (result === 'ok') {
-        isLieFi = false;
-        _offlineBannerPainted = false;
-        clearStruggleClock();
-        const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
-        if (oi && oi.dataset.struggleUi === '1' && navigator.onLine) {
-            oi.style.display = 'none';
-            delete oi.dataset.struggleUi;
-        }
-        try { hideOfflineToast(); } catch { /* ignore */ }
-        try { $isOffline.set(false); } catch { /* ignore */ }
+        applyOnlineChrome();
         return 'ok';
     }
 
-    if (result === 'offline') {
-        engageConnectionStruggleUi('offline');
+    // Radios appear OFF — probe already ruled out tether/USB. Show banner promptly.
+    if (!osOnline || result === 'offline') {
+        paintConnectionStruggleUi('offline');
         return 'offline';
     }
 
+    // Radios ON but no usable internet (Lie-Fi / captive / timeout)
+    isLieFi = true;
     if (result === 'captive') {
-        isLieFi = true;
-        engageConnectionStruggleUi('liefi');
         try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
-        return 'captive';
     }
-
-    // Slow / blackhole — warn but allow schedule waterfall to keep trying
-    engageConnectionStruggleUi('weak');
-    return 'timeout';
+    if (_offlineBannerPainted) {
+        startRecoveryPoll();
+        return result;
+    }
+    armOfflineBannerConfirm();
+    return result;
 }
 
 /** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */
 export async function ensureReachabilityProbed() {
     if (_reachabilityProbed) {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
-        if (isLieFi) return 'captive';
+        if (_offlineBannerPainted) return 'offline';
+        if (isLieFi) return typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'captive';
         return 'ok';
     }
     _reachabilityProbed = true;

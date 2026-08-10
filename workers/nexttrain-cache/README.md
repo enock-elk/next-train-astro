@@ -2,34 +2,25 @@
 
 Worker URL: `https://nexttrain-cache.enock.workers.dev/`
 
-## Why V2
+This folder tracks the **active production worker** (origin firewall + 24h schedule cache + `/admin/purge`), with one Astro-era addition:
 
-Live worker rejects requests without an allowlisted `Origin`. After the Astro cutover, admin diagnostics on **GitHub Pages** (`https://enock-elk.github.io`) received `403 Unauthorized Domain`, so Cache Propagation / Deep Network Scan showed Cloudflare **Fetch Failed**.
+- Allowlist entry: `https://enock-elk.github.io`  
+  so GitHub Pages preview can run admin Cache Propagation / Deep Network Scan against Cloudflare.
 
-V2 keeps the origin gate (do not use `*`) and adds:
-
-- `https://enock-elk.github.io`
-- local Astro ports (`4321`, `3000`, `5500`)
-- production `https://nexttrain.co.za`
+Everything else matches the live Guardian firewall worker (Referer fallback, `startsWith` localhost allowlist, reflected `Access-Control-Allow-Origin`, purge server-to-server only).
 
 ## Deploy
 
-1. Cloudflare Dashboard → Workers → `nexttrain-cache` (or create it).
-2. Paste / sync [`worker.js`](./worker.js).
-3. Bind env `PURGE_SECRET` (same value admin purge uses).
-4. Confirm route: `nexttrain-cache.enock.workers.dev/*`.
-
-Verify from preview:
+1. Cloudflare Dashboard → Workers → `nexttrain-cache`.
+2. Replace script with [`worker.js`](./worker.js) (keep env `PURGE_SECRET`).
+3. Verify:
 
 ```bash
-curl -sS -H 'Origin: https://enock-elk.github.io' \
-  'https://nexttrain-cache.enock.workers.dev/schedules/gauteng.json' | head -c 80
+# Preview origin — must be 200
+curl -sS -D - -o /dev/null -H 'Origin: https://enock-elk.github.io' \
+  'https://nexttrain-cache.enock.workers.dev/schedules/gauteng.json' | head -15
 
+# Random origin — must be 403 Unauthorized Domain
 curl -sS -H 'Origin: https://evil.example' \
   'https://nexttrain-cache.enock.workers.dev/schedules/gauteng.json'
-# → {"error":"Access Denied: Unauthorized Domain"}
 ```
-
-## Note on SPA `cache.txt`
-
-`metrorail-app/tools/Cloudflare-Workers/cache.txt` still documents `Access-Control-Allow-Origin: *` without an origin gate. **Production already runs a hardened allowlist** — this folder is the Astro-era source of truth for that live behavior plus the GitHub Pages origin.

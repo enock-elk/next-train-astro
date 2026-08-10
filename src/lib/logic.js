@@ -18,7 +18,7 @@ import {
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
-    getDistanceFromLatLonInKm 
+    getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay
 } from './utils.js';
 import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
@@ -672,18 +672,32 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
     if (!targetDB) return {};
     const getSched = async (key) => {
         await new Promise(resolve => setTimeout(resolve, 0));
+        if (!key) return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: null };
         const rows = targetDB[key];
         const metaKey = key + "_meta"; 
         const metaDate = targetDB[metaKey]; 
         return parseJSONSchedule(rows, metaDate); 
     };
+    const hasRows = (sched) => !!(sched && Array.isArray(sched.rows) && sched.rows.length > 0);
 
-    return {
+    const result = {
         weekday_to_a: await getSched(route.sheetKeys.weekday_to_a),
         weekday_to_b: await getSched(route.sheetKeys.weekday_to_b),
         saturday_to_a: await getSched(route.sheetKeys.saturday_to_a),
         saturday_to_b: await getSched(route.sheetKeys.saturday_to_b)
     };
+
+    // WC public-holiday sheets (*_pub). Missing/empty → fall back to saturday so UI never breaks.
+    if (route.sheetKeys?.pub_to_a || route.sheetKeys?.pub_to_b) {
+        let pub_to_a = await getSched(route.sheetKeys.pub_to_a);
+        let pub_to_b = await getSched(route.sheetKeys.pub_to_b);
+        if (!hasRows(pub_to_a)) pub_to_a = result.saturday_to_a;
+        if (!hasRows(pub_to_b)) pub_to_b = result.saturday_to_b;
+        result.pub_to_a = pub_to_a;
+        result.pub_to_b = pub_to_b;
+    }
+
+    return result;
 }
 
 export async function buildGlobalStationIndexAsync(targetDB) {
@@ -847,6 +861,11 @@ export async function loadAllSchedules(force = false) {
             
             const mergedDb = { ...db, ...regionalData };
             delete mergedDb.gauteng; delete mergedDb.westerncape; delete mergedDb.kzn; delete mergedDb.easterncape; delete mergedDb.schedules;
+            // WC pub sheets live under westerncape/public_holidays — flatten for targetDB[key] lookups.
+            if (mergedDb.public_holidays && typeof mergedDb.public_holidays === 'object' && !Array.isArray(mergedDb.public_holidays)) {
+                Object.assign(mergedDb, mergedDb.public_holidays);
+                delete mergedDb.public_holidays;
+            }
             return mergedDb;
         };
 
@@ -1449,20 +1468,22 @@ export function updateTime() {
             }
         }
         
-        let newDayType = (day === 0) ? 'sunday' : (day === 6 ? 'saturday' : 'weekday');
         let dateKey = null;
-        
+        let holidayType = null;
+        const regionCode = $userRegion.get() || 'GP';
         if (dateToCheck) {
             var m = String(dateToCheck.getMonth() + 1).padStart(2, '0');
             var d = String(dateToCheck.getDate()).padStart(2, '0');
             dateKey = m + "-" + d;
-            const holidayType = resolveHolidayDayType(dateKey, $userRegion.get() || 'GP', dateToCheck.getFullYear())
-                || SPECIAL_DATES[dateKey];
-            if (holidayType) newDayType = holidayType;
+            holidayType = resolveHolidayDayType(dateKey, regionCode, dateToCheck.getFullYear())
+                || SPECIAL_DATES[dateKey]
+                || null;
         }
+        // Calendar Sunday wins over public holiday; WC remaps holiday saturday → public_holiday.
+        let newDayType = resolveOperatingDayType(day, holidayType, regionCode);
 
         const preOverrideDayType = newDayType;
-        newDayType = resolveDayTypeWithOverride(newDayType, $userRegion.get() || 'GP');
+        newDayType = resolveDayTypeWithOverride(newDayType, regionCode);
         
         if (newDayType !== currentDayType) {
             currentDayType = newDayType; 
@@ -1528,7 +1549,7 @@ export function updateTime() {
                     const activeRoute = $currentRouteId.get();
                     let sKey = null;
                     if (activeRoute && ROUTES[activeRoute]) {
-                        sKey = currentDayType === 'weekday' ? ROUTES[activeRoute].sheetKeys.weekday_to_a : ROUTES[activeRoute].sheetKeys.saturday_to_a;
+                        sKey = routeSheetKeyForDay(ROUTES[activeRoute], currentDayType, 'a');
                     }
                     window.updateFareDisplay(sKey, currentTime);
                 }

@@ -13,19 +13,73 @@ export function escapeHTML(str) {
     });
 }
 
-/** Timetable sheet family for a logical day type (public holidays use Saturday sheets). */
-export function usesWeekdayScheduleSheet(dayType) {
-    return dayType === 'weekday' || dayType === 'monday';
+/**
+ * Resolve operating day type from calendar DOW + optional holiday schedule type.
+ * Calendar Sunday always wins. WC remaps holiday saturday/public_holiday → public_holiday.
+ * Non-WC holidays keep saturday behaviour (including approval value public_holiday).
+ */
+export function resolveOperatingDayType(calendarDow, holidayType, region) {
+    if (calendarDow === 0) return 'sunday';
+    if (holidayType === 'sunday') return 'sunday';
+    if (holidayType === 'public_holiday' || holidayType === 'saturday') {
+        if ((region || 'GP') === 'WC') return 'public_holiday';
+        return 'saturday';
+    }
+    if (holidayType === 'weekday') return 'weekday';
+    if (calendarDow === 6) return 'saturday';
+    return 'weekday';
 }
 
-export function usesSaturdayScheduleSheet(dayType) {
-    return dayType === 'saturday' || dayType === 'public_holiday';
-}
-
-export function normalizeScheduleSheetDay(dayType) {
+/**
+ * Sheet family used for timetable lookups.
+ * WC public holidays use dedicated *_pub sheets; other regions keep Saturday sheets.
+ * Sunday has no sheets — callers should short-circuit; this returns 'weekday' for graph/connectivity fallbacks.
+ */
+export function resolveScheduleSheetFamily(dayType, region) {
     if (!dayType || dayType === 'sunday') return 'weekday';
-    if (dayType === 'public_holiday') return 'saturday';
-    return dayType;
+    if (dayType === 'weekday' || dayType === 'monday') return 'weekday';
+    if (dayType === 'public_holiday') return region === 'WC' ? 'public_holiday' : 'saturday';
+    if (dayType === 'saturday') return 'saturday';
+    return 'weekday';
+}
+
+/** Timetable sheet family for a logical day type. */
+export function usesWeekdayScheduleSheet(dayType, region) {
+    return resolveScheduleSheetFamily(dayType, region) === 'weekday' && dayType !== 'sunday';
+}
+
+export function usesSaturdayScheduleSheet(dayType, region) {
+    return resolveScheduleSheetFamily(dayType, region) === 'saturday';
+}
+
+export function usesPublicHolidayScheduleSheet(dayType, region) {
+    return resolveScheduleSheetFamily(dayType, region) === 'public_holiday';
+}
+
+export function normalizeScheduleSheetDay(dayType, region) {
+    if (!dayType || dayType === 'sunday') return 'weekday';
+    return resolveScheduleSheetFamily(dayType, region);
+}
+
+/** Cache slot on the per-route schedules object: weekday_to_a | saturday_to_b | pub_to_a | … */
+export function scheduleCacheSlot(dayType, region, ab = 'a') {
+    const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
+    const family = resolveScheduleSheetFamily(dayType, region);
+    if (family === 'public_holiday') return `pub_to_${dir}`;
+    if (family === 'saturday') return `saturday_to_${dir}`;
+    return `weekday_to_${dir}`;
+}
+
+/** Firebase / sheetKeys key for a route direction on the given day type. */
+export function routeSheetKeyForDay(route, dayType, ab = 'a') {
+    const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
+    const keys = route?.sheetKeys || {};
+    const family = resolveScheduleSheetFamily(dayType, route?.region);
+    if (family === 'public_holiday') {
+        return keys[`pub_to_${dir}`] || keys[`saturday_to_${dir}`] || null;
+    }
+    if (family === 'saturday') return keys[`saturday_to_${dir}`] || null;
+    return keys[`weekday_to_${dir}`] || null;
 }
 
 export function scheduleDayTypeLabel(dayType) {

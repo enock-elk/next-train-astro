@@ -96,14 +96,15 @@ function findNextTrains() {
     }
 
     sharedRoutes = sharedRoutes.filter(rId => getSharedStationCount(currentRouteId, rId) > 1);
-    let primarySheetKey = (currentDayType === 'weekday') ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+    const sheetFamily = (currentDayType === 'weekday') ? 'weekday' : (currentDayType === 'public_holiday' && currentRoute.region === 'WC' ? 'pub' : 'saturday');
+    let primarySheetKey = sheetFamily === 'weekday' ? currentRoute.sheetKeys.weekday_to_a : (sheetFamily === 'pub' ? (currentRoute.sheetKeys.pub_to_a || currentRoute.sheetKeys.saturday_to_a) : currentRoute.sheetKeys.saturday_to_a);
 
     // --- DESTINATION A ---
     if (isAtStation(selectedStation, currentRoute.destA)) {
         if(typeof renderAtDestination === 'function') renderAtDestination(pretoriaTimeEl);
     } else {
-        const schedule = (currentDayType === 'weekday') ? schedules.weekday_to_a : schedules.saturday_to_a;
-        const currentSheetKey = (currentDayType === 'weekday') ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+        const schedule = sheetFamily === 'weekday' ? schedules.weekday_to_a : (sheetFamily === 'pub' ? (schedules.pub_to_a || schedules.saturday_to_a) : schedules.saturday_to_a);
+        const currentSheetKey = sheetFamily === 'weekday' ? currentRoute.sheetKeys.weekday_to_a : (sheetFamily === 'pub' ? (currentRoute.sheetKeys.pub_to_a || currentRoute.sheetKeys.saturday_to_a) : currentRoute.sheetKeys.saturday_to_a);
         const { allJourneys: currentJourneys } = findNextJourneyToDestA(selectedStation, "00:00:00", schedule, currentRoute, currentDayIndex);
         
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -113,7 +114,7 @@ function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
-                const key = (currentDayType === 'weekday') ? otherRoute.sheetKeys.weekday_to_a : otherRoute.sheetKeys.saturday_to_a;
+                const key = sheetFamily === 'weekday' ? otherRoute.sheetKeys.weekday_to_a : (sheetFamily === 'pub' ? (otherRoute.sheetKeys.pub_to_a || otherRoute.sheetKeys.saturday_to_a) : otherRoute.sheetKeys.saturday_to_a);
                 const otherRows = fullDatabase[key];
                 const otherMeta = fullDatabase[key + "_meta"];
                 const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -164,8 +165,8 @@ function findNextTrains() {
     if (isAtStation(selectedStation, currentRoute.destB)) {
         if(typeof renderAtDestination === 'function') renderAtDestination(pienaarspoortTimeEl);
     } else {
-        const schedule = (currentDayType === 'weekday') ? schedules.weekday_to_b : schedules.saturday_to_b;
-        const currentSheetKey = (currentDayType === 'weekday') ? currentRoute.sheetKeys.weekday_to_b : currentRoute.sheetKeys.saturday_to_b;
+        const schedule = sheetFamily === 'weekday' ? schedules.weekday_to_b : (sheetFamily === 'pub' ? (schedules.pub_to_b || schedules.saturday_to_b) : schedules.saturday_to_b);
+        const currentSheetKey = sheetFamily === 'weekday' ? currentRoute.sheetKeys.weekday_to_b : (sheetFamily === 'pub' ? (currentRoute.sheetKeys.pub_to_b || currentRoute.sheetKeys.saturday_to_b) : currentRoute.sheetKeys.saturday_to_b);
         const { allJourneys: currentJourneys } = findNextJourneyToDestB(selectedStation, "00:00:00", schedule, currentRoute, currentDayIndex);
 
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -175,7 +176,7 @@ function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             
-                 const key = (currentDayType === 'weekday') ? otherRoute.sheetKeys.weekday_to_b : otherRoute.sheetKeys.saturday_to_b;
+                 const key = sheetFamily === 'weekday' ? otherRoute.sheetKeys.weekday_to_b : (sheetFamily === 'pub' ? (otherRoute.sheetKeys.pub_to_b || otherRoute.sheetKeys.saturday_to_b) : otherRoute.sheetKeys.saturday_to_b);
                  const otherRows = fullDatabase[key];
                  const otherMeta = fullDatabase[key + "_meta"];
                  const otherSchedule = parseJSONSchedule(otherRows, otherMeta);

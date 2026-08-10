@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -18,9 +18,9 @@ import {
 } from './logic.js';
 import { getLookaheadDayInfo, isTrainExcluded } from './live-board.js';
 
-/** Sheet day used for timetable lookups — Sunday has no sheets; public holidays use Saturday. */
-function scheduleDayType(dayType) {
-    return normalizeScheduleSheetDay(dayType);
+/** Sheet day used for timetable lookups — Sunday has no sheets; WC public holidays use *_pub. */
+function scheduleDayType(dayType, region) {
+    return normalizeScheduleSheetDay(dayType, region);
 }
 
 // SPA used script-scope globals. Prefer live window clock when the boot clock
@@ -496,7 +496,13 @@ export function getDirectionsForRoute(route, dayType) {
     if (!route?.sheetKeys) return [];
     // Sunday has no dedicated sheets — connectivity / graph builds use weekday.
     // planUnifiedTrip still short-circuits real Sunday planning via SUNDAY_SKIP.
-    const sheetDay = scheduleDayType(dayType);
+    const sheetDay = scheduleDayType(dayType, route.region);
+    if (sheetDay === 'public_holiday') {
+        return [
+            { key: route.sheetKeys.pub_to_a || route.sheetKeys.saturday_to_a },
+            { key: route.sheetKeys.pub_to_b || route.sheetKeys.saturday_to_b },
+        ].filter((d) => !!d.key);
+    }
     if (sheetDay === 'saturday') {
         return [
             { key: route.sheetKeys.saturday_to_a },
@@ -1016,7 +1022,9 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
         // Always probe real timetable sheets (weekday on Sundays) — empty
         // getDirectionsForRoute('sunday') previously made every corridor look dead
         // and falsely returned ERR_NO_SERVICE_TODAY.
-        const directions = getDirectionsForRoute(ROUTES[rId], scheduleDayType(dayType));
+        // Pass logical dayType (not pre-normalized) so WC public_holiday can use *_pub per route.region.
+        const probeDay = dayType === 'sunday' ? 'weekday' : dayType;
+        const directions = getDirectionsForRoute(ROUTES[rId], probeDay);
         if (directions.length === 0) return false;
         return directions.some((dir) => {
             if (!fullDatabase[dir.key]) return false;
@@ -1118,7 +1126,9 @@ function resolveIndexedStation(name) {
  * severance that can still reach the destination (alternate boarding).
  */
 export function findAlternateBoardOrigins(origin, dest, dayType = null) {
-    const sheetDay = scheduleDayType(dayType || getCurrentDayType());
+    // Keep public_holiday intact for WC routes; only map Sunday → weekday for connectivity probes.
+    const rawDay = dayType || getCurrentDayType();
+    const sheetDay = rawDay === 'sunday' ? 'weekday' : rawDay;
     const normOrigin = normalizeStationName(origin);
     const normDest = normalizeStationName(dest);
     const candidates = [];
@@ -1239,14 +1249,12 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             let checkDate = new Date(baseDate);
             checkDate.setDate(checkDate.getDate() + i);
             let dayOfWeek = checkDate.getDay();
-            let type = (dayOfWeek === 0) ? 'sunday' : (dayOfWeek === 6 ? 'saturday' : 'weekday');
-            
             const m = String(checkDate.getMonth() + 1).padStart(2, '0');
             const d = String(checkDate.getDate()).padStart(2, '0');
             const dateKey = `${m}-${d}`;
             const region = $userRegion.get() || 'GP';
-            const holidayType = resolveHolidayDayType(dateKey, region, checkDate.getFullYear()) || SPECIAL_DATES[dateKey];
-            if (holidayType) type = holidayType;
+            const holidayType = resolveHolidayDayType(dateKey, region, checkDate.getFullYear()) || SPECIAL_DATES[dateKey] || null;
+            let type = resolveOperatingDayType(dayOfWeek, holidayType, region);
             
             if (type === dayType || (dayType === 'sunday' && dayOfWeek === 0)) {
                 startOffset = i;

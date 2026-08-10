@@ -29,7 +29,7 @@ Legend: **DONE** · **PARTIAL** · **MISSING** · **ASTRO-ONLY**
 |------|--------|
 | Expand SEO route pages 20–50 | ASTRO-ONLY |
 | More grid `↔` → SVG | PARTIAL |
-| TWA / Play | MISSING |
+| TWA / Play | PARTIAL — DAL + Bubblewrap config in-repo (`docs/TWA-PLAY-STORE.md`); Play Console listing / signed AAB upload still ops |
 
 ## Ops notes
 

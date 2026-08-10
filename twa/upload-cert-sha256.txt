@@ -1,0 +1,8 @@
+# SHA-256 fingerprint for the Next Train Play upload key (za.co.nexttrain.app).
+# Keep in sync with public/.well-known/assetlinks.json and twa/twa-manifest.json.
+# Regenerate both with: node scripts/sync-assetlinks.mjs
+#
+# When Play App Signing is enabled, ALSO add the "App signing key certificate"
+# SHA-256 from Play Console → Setup → App integrity into assetlinks (script supports
+# EXTRA_FINGERPRINTS=colon:hex,colon:hex).
+A2:A4:D8:FC:C6:51:08:E5:F2:F7:3D:74:27:D8:09:20:34:BC:EC:7C:C2:22:FF:70:37:1D:26:69:38:DA:D1:47

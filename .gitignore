@@ -54,3 +54,15 @@ next-train-astro/
 .eslintcache
 .stylelintcache
 .turbo/
+
+# TWA / Play signing (never commit keystores or local passwords)
+twa/android-keystore/*.jks
+twa/android-keystore/*.keystore
+twa/*.keystore
+twa/.bubblewrap*
+twa/android/
+twa/app/
+twa/*.apk
+twa/*.aab
+twa/keystore-passwords.txt
+.env.twa

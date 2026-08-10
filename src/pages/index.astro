@@ -234,7 +234,6 @@ const faqLd = {
     import '../lib/renderer.js';
     import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
     import { initHub, checkServiceAlerts } from '../lib/hub.js';
-    import { initAdminBridge } from '../lib/admin-bridge.js';
     import {
         switchTab,
         initTabIndicator,
@@ -317,7 +316,10 @@ const faqLd = {
     initLiveBoardUi();
     initPlanner();
     initHub();
-    initAdminBridge();
+    // Admin + Firebase SDK stay off the critical home chunk (CWV / SW precache).
+    import('../lib/admin-bridge.js')
+        .then(({ initAdminBridge }) => initAdminBridge())
+        .catch((e) => console.warn('🛡️ Guardian: Admin bridge deferred load failed', e));
     setupBlackBoxLogger();
 
     // Legal docs don't need schedules — open as soon as the shell is ready

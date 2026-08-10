@@ -18,10 +18,8 @@ import {
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
-import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
-import { applyShadowBanCloak } from './trust.js';
 
 /** Plain text from HTML notices — insert spaces between block tags so title+body don't glue. */
 function htmlToPlainSnippet(html, maxWords = 8) {
@@ -1149,16 +1147,20 @@ export function initHub() {
     setColourPack(getColourPack());
     bindColourPackControls();
 
-    // Account (Phase 4)
-    bindAccountUi();
-    initAccount();
+    // Account + Firebase stay off the critical home chunk (CWV)
+    import('./account.js')
+        .then(({ bindAccountUi, initAccount }) => {
+            bindAccountUi();
+            initAccount();
+        })
+        .catch(() => {});
 
     // Cloaked shadow-ban UX (looks like bad connectivity — never disclose ban)
-    applyShadowBanCloak().catch(() => {});
+    const runShadowBanCloak = () =>
+        import('./trust.js').then((m) => m.applyShadowBanCloak()).catch(() => {});
+    runShadowBanCloak();
     // Re-check periodically so bans applied mid-session still take effect
-    setInterval(() => {
-        applyShadowBanCloak().catch(() => {});
-    }, 90_000);
+    setInterval(runShadowBanCloak, 90_000);
 
     // Delay reports (Phase 5)
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});

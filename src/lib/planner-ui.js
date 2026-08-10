@@ -19,7 +19,7 @@ import {
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
-import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
@@ -3170,9 +3170,9 @@ export async function applyPlannerDeepLink() {
         return false;
     }
 
-    try {
-        await loadAllSchedules(true);
-    } catch (e) { /* continue; poll may still resolve */ }
+    // Paint-first: start schedule load but open planner immediately; poll for stations
+    // instead of awaiting the full Firebase → CF → GitHub waterfall (~15s on 3G).
+    const loadPromise = loadAllSchedules(true).catch(() => {});
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -3188,7 +3188,11 @@ export async function applyPlannerDeepLink() {
             if (attempts === 1 || attempts % 4 === 0) {
                 ensureRoutePinnedForRegion(targetRegion);
                 if (!getMasterStationList()?.length) {
-                    loadAllSchedules(true).catch(() => {});
+                    loadPromise.then(() => {
+                        if (!getMasterStationList()?.length) {
+                            loadAllSchedules(true).catch(() => {});
+                        }
+                    });
                 }
             }
             const list = getMasterStationList();
@@ -3709,7 +3713,8 @@ export async function shareCurrentGrid() {
     const routeId = state.routeId || $currentRouteId.get();
     const dir = state.dir || 'A';
     const day = state.day || 'weekday';
-    const shareUrl = `${location.origin}${location.pathname}?action=route&route=${routeId}&view=grid&dir=${dir}&day=${day}`;
+    // Modern ?rt= shares — legacy action=route hits the OG worker stub trap in WhatsApp WebViews.
+    const shareUrl = buildRouteShareUrl({ routeId, view: 'grid', dir, day });
     const destName = state.destName || (dir === 'B' ? 'destination B' : 'destination A');
     const shareText = `Check out the ${day} schedule to ${destName}`;
     const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };

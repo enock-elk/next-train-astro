@@ -126,24 +126,31 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       } catch (e) {}
     </script>
 
-    <!-- Google Analytics 4 -->
-    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX"></script>
+    <!-- Google Analytics 4 — deferred like Clarity so SEO LCP/INP stay free of early third-party work -->
     <script is:inline>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      var gaConfig = {};
-      var isDevAnalytics = false;
-      var userRegion = 'GP';
-      try {
-        isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true';
-        var saved = localStorage.getItem('userRegion');
-        if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') userRegion = saved;
-      } catch(e) {}
-      if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
-      // Selected app region (not IP) — keeps SEO pages in the same regional buckets
-      gaConfig['user_properties'] = { crm_region: userRegion };
-      gtag('config', 'G-JM5DH6ERVX', gaConfig);
+      var bootGa = function () {
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX';
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        var gaConfig = {};
+        var isDevAnalytics = false;
+        var userRegion = 'GP';
+        try {
+          isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true';
+          var saved = localStorage.getItem('userRegion');
+          if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') userRegion = saved;
+        } catch(e) {}
+        if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
+        // Selected app region (not IP) — keeps SEO pages in the same regional buckets
+        gaConfig['user_properties'] = { crm_region: userRegion };
+        gtag('config', 'G-JM5DH6ERVX', gaConfig);
+      };
+      if ('requestIdleCallback' in window) requestIdleCallback(bootGa, { timeout: 4000 });
+      else window.addEventListener('load', function () { setTimeout(bootGa, 2500); });
     </script>
 
     <!-- Microsoft Clarity — deferred so LCP/INP on thin SEO pages stay free of early third-party work -->

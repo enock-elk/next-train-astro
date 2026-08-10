@@ -291,8 +291,8 @@ const regionSeoSlugs = Object.fromEntries(
     window.APP_BASE = APP_BASE;
     window.REGION_SEO_SLUGS = REGION_SEO_SLUGS;
   </script>
-  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script is:inline src={`${withBase('js/map-app.js')}?v=${APP_VERSION}`}></script>
+  <script is:inline defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script is:inline defer src={`${withBase('js/map-app.js')}?v=${APP_VERSION}`}></script>
   <script is:inline>
     (function () {
       function inAppSheet() {

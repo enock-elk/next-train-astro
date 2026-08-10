@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.10.1 — Cape Town Public Holidays (10 Aug 2026)
+
+- Western Cape public holidays no longer reuse Saturday timetables automatically.
+- Cape Town corridors load dedicated `*_pub` holiday schedules from Firebase.
+- Timetable grid and Trip Planner Travel Day expose a standalone Public Holiday option for Western Cape only.
+- Other regions keep the existing Saturday / holiday behaviour.
+
 ## V8_08.08 — Map, Fares & Home Board (08 Aug 2026)
 
 - Trip planner map: toggle station times on route labels.
@@ -21,7 +28,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 
 - Cleared planner and navigation bugs (guide/map sheet return, alert ranking, notice glitches).
 - Redesigned the Trip Planner results UI for clearer chrome and notices.
-- Stability polish around About, Black Box, and in-app sheets.
+- Stability polish around About and in-app sheets.
 
 
 

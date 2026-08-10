@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.11";
+export const APP_VERSION = "V8_08.10.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -869,34 +869,14 @@ export const DEFAULT_EXCLUSIONS = {
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.11",
-        title: "Crash Inbox Resilience",
-        date: "09 Aug 2026",
-        forceShow: false,
+        id: "V8_08.10.1",
+        title: "Cape Town Public Holidays",
+        date: "10 Aug 2026",
+        forceShow: true,
         features: [
-            "<b>Crash Analytics:</b> Fat Black Box dumps are slimmed on load; one bad row can no longer blank the inbox.",
-            "<b>Purge BB:</b> New button deletes Black Box exports only, keeping real crash reports."
-        ]
-    },
-    {
-        id: "V8_08.10",
-        title: "Black Box + Local Admin",
-        date: "09 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Black Box:</b> Cloud send stores a lean Crash Analytics card + a separate full-log blob (no more mega dumps in the inbox list).",
-            "<b>Escalate:</b> Roadmap tickets get a short summary; Copy Log still pulls the full dump on demand.",
-            "<b>Local admin:</b> Allow localhost API-key referrers so Dev Mode login works on Astro (:4321)."
-        ]
-    },
-    {
-        id: "V8_08.09",
-        title: "Dev Mode Close Fixes",
-        date: "09 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Dev Mode X:</b> Top-right close now exits Developer Mode instead of sticking open.",
-            "<b>Time Simulation:</b> Apply leaves admin and returns you to the live board."
+            "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays — they use dedicated holiday timetables.",
+            "<b>Timetable grid:</b> Western Cape day picker is now Mon–Fri, Saturday, or Public Holiday (separate from Sat).",
+            "<b>Trip Planner:</b> Travel Day for Western Cape includes a standalone Public Holiday option so holiday trips use the right trains."
         ]
     },
     {
@@ -931,7 +911,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Trip Planner redesign:</b> Cleaner results chrome, clearer notices, and a more polished trip-planning interface.",
             "<b>Bug fixes:</b> Guide and map return without reloading the app; alert ranking and planner glitches cleaned up.",
-            "<b>Stability:</b> Smoother navigation around About, Black Box, and in-app sheets."
+            "<b>Stability:</b> Smoother navigation around About and in-app sheets."
         ]
     },
     {

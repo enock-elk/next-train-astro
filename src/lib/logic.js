@@ -862,9 +862,15 @@ export async function loadAllSchedules(force = false) {
             const mergedDb = { ...db, ...regionalData };
             delete mergedDb.gauteng; delete mergedDb.westerncape; delete mergedDb.kzn; delete mergedDb.easterncape; delete mergedDb.schedules;
             // WC pub sheets live under westerncape/public_holidays — flatten for targetDB[key] lookups.
+            // Keep regional lastUpdated intact; stash pub stamp for Smart Sync (root lastUpdated is not bumped by pub sync).
             if (mergedDb.public_holidays && typeof mergedDb.public_holidays === 'object' && !Array.isArray(mergedDb.public_holidays)) {
-                Object.assign(mergedDb, mergedDb.public_holidays);
+                const pubNode = mergedDb.public_holidays;
+                const rootLastUpdated = mergedDb.lastUpdated;
+                const pubLastUpdated = pubNode.lastUpdated;
+                Object.assign(mergedDb, pubNode);
                 delete mergedDb.public_holidays;
+                if (rootLastUpdated != null) mergedDb.lastUpdated = rootLastUpdated;
+                if (pubLastUpdated != null) mergedDb.publicHolidaysLastUpdated = pubLastUpdated;
             }
             return mergedDb;
         };
@@ -1005,19 +1011,49 @@ export async function loadAllSchedules(force = false) {
 
         // GUARDIAN SMART SYNC: ping lastUpdated only — skip the multi-MB payload
         // when the cached regional DB is already current (critical on metered 3G).
+        // WC public holidays sync under westerncape/public_holidays without bumping the
+        // root westerncape/lastUpdated, so also ping that child stamp / require *_pub keys.
         let needsDownload = true;
         const fullDatabase = $fullDatabase.get();
         if (usedCache && !force && fullDatabase && fullDatabase.lastUpdated) {
             try {
-                const nodePath = String(REGIONS[$userRegion.get()]?.dbNode || '').replace(/\.json$/i, '');
+                const regionCode = $userRegion.get();
+                const nodePath = String(REGIONS[regionCode]?.dbNode || '').replace(/\.json$/i, '');
                 if (nodePath) {
                     const pingUrl = `${DYNAMIC_BASE_URL}${nodePath}/lastUpdated.json?t=${edgeCacheBucket}`;
                     const pingRes = await guardianFetch(pingUrl, { signal: fetchSignal }, 4000);
                     if (pingRes.ok) {
                         const remoteUpdated = await pingRes.json();
                         if (remoteUpdated && remoteUpdated === fullDatabase.lastUpdated) {
-                            console.log('🛡️ Guardian Smart Sync: Schedule is up-to-date. Skipping heavy payload download.');
-                            needsDownload = false;
+                            let pubStale = false;
+                            if (regionCode === 'WC') {
+                                const hasPubSheets = Object.keys(fullDatabase).some((k) => (
+                                    typeof k === 'string'
+                                    && k.endsWith('_pub')
+                                    && !k.endsWith('_meta')
+                                    && !k.endsWith('_zone')
+                                ));
+                                try {
+                                    const pubPingUrl = `${DYNAMIC_BASE_URL}${nodePath}/public_holidays/lastUpdated.json?t=${edgeCacheBucket}`;
+                                    const pubPingRes = await guardianFetch(pubPingUrl, { signal: fetchSignal }, 4000);
+                                    if (pubPingRes.ok) {
+                                        const remotePubUpdated = await pubPingRes.json();
+                                        if (remotePubUpdated
+                                            && (!hasPubSheets || remotePubUpdated !== fullDatabase.publicHolidaysLastUpdated)) {
+                                            pubStale = true;
+                                            console.log('🛡️ Guardian Smart Sync: WC public_holidays updated — forcing schedule refresh.');
+                                        }
+                                    } else if (!hasPubSheets) {
+                                        pubStale = true;
+                                    }
+                                } catch {
+                                    if (!hasPubSheets) pubStale = true;
+                                }
+                            }
+                            if (!pubStale) {
+                                console.log('🛡️ Guardian Smart Sync: Schedule is up-to-date. Skipping heavy payload download.');
+                                needsDownload = false;
+                            }
                         }
                     }
                 }

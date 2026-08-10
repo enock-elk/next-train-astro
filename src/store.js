@@ -79,9 +79,10 @@ export function hydrateStores() {
     });
 
     // 3. Network Listeners
-    window.addEventListener('offline', () => $isOffline.set(true));
+    // Do NOT set $isOffline on bare navigator offline — logic.js probes, waits 5s of
+    // active foreground time, re-probes, then paints WORKING OFFLINE. Radio-off alone
+    // must not flash the banner before confirmation.
     window.addEventListener('online', () => $isOffline.set(false));
-    $isOffline.set(!navigator.onLine);
 
     // 4. Device Identity — reuse SPA key/format; never mint a second ID if head boot already set one
     let uid = (typeof window !== 'undefined' && window.NEXT_TRAIN_DEVICE_ID)

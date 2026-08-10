@@ -47,17 +47,34 @@ export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
 
-/** Banner/toast only after this much continuous struggle + foreground. */
+/** Banner/toast only after this much continuous struggle + foreground (non-offline paths). */
 const STRUGGLE_UI_MIN_MS = 30_000;
+/** Offline banner: re-probe after this much *active foreground* time, then paint. */
+const OFFLINE_BANNER_CONFIRM_ACTIVE_MS = 5_000;
 let _struggleClockStartedAt = 0;
 let _pendingStruggleReason = null;
 let _struggleUiTimer = null;
 let _struggleVisibilityBound = false;
+let _offlineConfirmTimer = null;
+let _offlineConfirmActiveMs = 0;
+let _offlineConfirmLastTs = 0;
+let _offlineConfirmInFlight = false;
+let _offlineBannerPainted = false;
 
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
 function noteStruggleAttempt() {
     if (!_struggleClockStartedAt) _struggleClockStartedAt = Date.now();
+}
+
+function clearOfflineBannerConfirm() {
+    if (_offlineConfirmTimer) {
+        clearTimeout(_offlineConfirmTimer);
+        _offlineConfirmTimer = null;
+    }
+    _offlineConfirmActiveMs = 0;
+    _offlineConfirmLastTs = 0;
+    _offlineConfirmInFlight = false;
 }
 
 function clearStruggleClock() {
@@ -67,6 +84,7 @@ function clearStruggleClock() {
         clearTimeout(_struggleUiTimer);
         _struggleUiTimer = null;
     }
+    clearOfflineBannerConfirm();
 }
 
 function isActiveForegroundSession() {
@@ -85,10 +103,71 @@ function bindStruggleVisibilityListener() {
             try { hideOfflineToast(); } catch { /* ignore */ }
             const oi = document.getElementById('offline-indicator');
             if (oi && oi.dataset.struggleUi === '1') oi.style.display = 'none';
+            // Pause active-time accumulation while backgrounded
+            _offlineConfirmLastTs = 0;
             return;
+        }
+        if (_offlineConfirmTimer || _offlineConfirmActiveMs > 0) {
+            _offlineConfirmLastTs = Date.now();
         }
         if (_pendingStruggleReason) scheduleStruggleUiFlush();
     });
+}
+
+/**
+ * First offline detection: wait 5s of foreground session time, probe again,
+ * then paint the offline banner only if still offline / unusable.
+ */
+function armOfflineBannerConfirm() {
+    if (typeof document === 'undefined') return;
+    if (_offlineBannerPainted || _offlineConfirmInFlight) return;
+    bindStruggleVisibilityListener();
+    if (!_offlineConfirmLastTs) _offlineConfirmLastTs = Date.now();
+    if (_offlineConfirmTimer) return;
+
+    const tick = () => {
+        _offlineConfirmTimer = null;
+        const now = Date.now();
+        if (isActiveForegroundSession()) {
+            if (_offlineConfirmLastTs) {
+                _offlineConfirmActiveMs += now - _offlineConfirmLastTs;
+            }
+            _offlineConfirmLastTs = now;
+        } else {
+            _offlineConfirmLastTs = 0;
+            _offlineConfirmTimer = setTimeout(tick, 400);
+            return;
+        }
+
+        if (_offlineConfirmActiveMs < OFFLINE_BANNER_CONFIRM_ACTIVE_MS) {
+            _offlineConfirmTimer = setTimeout(tick, 250);
+            return;
+        }
+
+        _offlineConfirmInFlight = true;
+        probeReachabilityCore(3500)
+            .then((result) => {
+                _offlineConfirmInFlight = false;
+                if (result === 'ok') {
+                    clearOfflineBannerConfirm();
+                    isLieFi = false;
+                    _offlineBannerPainted = false;
+                    return;
+                }
+                // Still offline / unusable after 5s active — show banner + toast
+                _offlineBannerPainted = true;
+                clearOfflineBannerConfirm();
+                paintConnectionStruggleUi('offline');
+            })
+            .catch(() => {
+                _offlineConfirmInFlight = false;
+                _offlineBannerPainted = true;
+                clearOfflineBannerConfirm();
+                paintConnectionStruggleUi('offline');
+            });
+    };
+
+    _offlineConfirmTimer = setTimeout(tick, 250);
 }
 
 function scheduleStruggleUiFlush() {
@@ -141,9 +220,8 @@ function paintConnectionStruggleUi(reason = 'offline') {
 }
 
 /**
- * Offline chrome only (banner + toast). Weak / Lie-Fi still arm network guards
- * via isLieFi / captive modal, but do not paint alternate banners.
- * Banner + toast only after ≥30s of trying and only while the tab is foreground.
+ * Offline chrome only (banner + toast). Offline path: probe → 5s active → re-probe → paint.
+ * Weak / Lie-Fi still arm network guards, but do not paint alternate banners.
  * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
  */
 export function engageConnectionStruggleUi(reason = 'offline') {
@@ -156,30 +234,21 @@ export function engageConnectionStruggleUi(reason = 'offline') {
         return;
     }
 
-    bindStruggleVisibilityListener();
-
-    if (!isActiveForegroundSession() || !struggleElapsedOk()) {
-        _pendingStruggleReason = reason;
-        scheduleStruggleUiFlush();
+    // Offline: confirm with a second probe after 5s of foreground time
+    if (_offlineBannerPainted) {
+        paintConnectionStruggleUi('offline');
         return;
     }
-
-    _pendingStruggleReason = null;
-    paintConnectionStruggleUi(reason);
+    armOfflineBannerConfirm();
 }
 
 /**
- * Active reachability probe (does not trust navigator.onLine).
- * Uses the Cloudflare schedule edge (NetworkOnly in SW) so a cached SW shell
- * cannot fake success.
+ * Raw reachability probe — no banner / toast side effects.
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
-export async function probeReachability(timeoutMs = 3500) {
+async function probeReachabilityCore(timeoutMs = 3500) {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
-    if (!navigator.onLine) {
-        engageConnectionStruggleUi('offline');
-        return 'offline';
-    }
+    if (!navigator.onLine) return 'offline';
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -187,31 +256,53 @@ export async function probeReachability(timeoutMs = 3500) {
         const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timer);
         const ct = res.headers.get('content-type') || '';
-        if (ct.includes('text/html')) {
-            isLieFi = true; // halt network sync immediately — do not wait for 30s banner paint
-            engageConnectionStruggleUi('liefi');
-            try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
-            return 'captive';
-        }
-        if (!res.ok) {
-            isLieFi = true;
-            engageConnectionStruggleUi('liefi');
-            return 'captive';
-        }
+        if (ct.includes('text/html')) return 'captive';
+        if (!res.ok) return 'captive';
+        return 'ok';
+    } catch {
+        return 'timeout';
+    }
+}
+
+/**
+ * Active reachability probe (does not trust navigator.onLine).
+ * Uses the Cloudflare schedule edge (NetworkOnly in SW) so a cached SW shell
+ * cannot fake success.
+ * Offline: arms a 5s active-session re-probe before showing the offline banner.
+ * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
+ */
+export async function probeReachability(timeoutMs = 3500) {
+    const result = await probeReachabilityCore(timeoutMs);
+
+    if (result === 'ok') {
         isLieFi = false;
+        _offlineBannerPainted = false;
         clearStruggleClock();
-        const oi = document.getElementById('offline-indicator');
+        const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
         if (oi && oi.dataset.struggleUi === '1' && navigator.onLine) {
             oi.style.display = 'none';
             delete oi.dataset.struggleUi;
         }
         try { hideOfflineToast(); } catch { /* ignore */ }
+        try { $isOffline.set(false); } catch { /* ignore */ }
         return 'ok';
-    } catch (err) {
-        // Slow / blackhole — warn but allow schedule waterfall to keep trying
-        engageConnectionStruggleUi('weak');
-        return 'timeout';
     }
+
+    if (result === 'offline') {
+        engageConnectionStruggleUi('offline');
+        return 'offline';
+    }
+
+    if (result === 'captive') {
+        isLieFi = true;
+        engageConnectionStruggleUi('liefi');
+        try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
+        return 'captive';
+    }
+
+    // Slow / blackhole — warn but allow schedule waterfall to keep trying
+    engageConnectionStruggleUi('weak');
+    return 'timeout';
 }
 
 /** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */

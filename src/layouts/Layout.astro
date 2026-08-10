@@ -69,21 +69,18 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     <!-- Manifest + SW only exist after build (astro preview / deploy). Dev has no SW on purpose. -->
     {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
     <!-- Early, HTML-static SW register so PWABuilder HTML-parse + short Puppeteer
-         windows can discover /sw.js. String literals (not vars) help HTML parsers.
-         Update UX still uses virtual:pwa-register below. -->
-    {import.meta.env.PROD && base === '/' && (
-      <script is:inline>
+         windows can discover /sw.js. Emit URL/scope as string literals (not
+         define:vars) so HTML parsers see register('/…/sw.js', …). Update UX
+         still uses virtual:pwa-register below. -->
+    {import.meta.env.PROD && (
+      <script
+        is:inline
+        set:html={`
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+          navigator.serviceWorker.register('${withBase('sw.js')}', { scope: '${base}' }).catch(function () {});
         }
-      </script>
-    )}
-    {import.meta.env.PROD && base !== '/' && (
-      <script is:inline define:vars={{ __ntSwUrl: withBase('sw.js'), __ntSwScope: base }}>
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register(__ntSwUrl, { scope: __ntSwScope }).catch(function () {});
-        }
-      </script>
+      `}
+      />
     )}
     <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
     <script is:inline>

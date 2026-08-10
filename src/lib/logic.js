@@ -7,7 +7,8 @@
 
 import { 
     $userRegion, $currentRouteId, $userProfile, $fullDatabase, $schedules, 
-    $globalStationIndex, $masterStationList, $ghostStationList, $globalExclusions, $globalDisruptions, 
+    $globalStationIndex, $masterStationList, $ghostStationList, $globalExclusions, $globalDisruptions,
+    $opsOverlaysReady,
     $isOffline, $isSimMode, $simTime 
 } from '../store.js';
 
@@ -916,6 +917,7 @@ export async function loadAllSchedules(force = false) {
             console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
             // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
             if (typeof window.revealAppShell === 'function') window.revealAppShell();
+            try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
 
@@ -940,6 +942,7 @@ export async function loadAllSchedules(force = false) {
         const reach = await ensureReachabilityProbed();
         if (reach === 'offline' || reach === 'captive') {
             console.warn("🛡️ Guardian: No usable internet (offline / captive). Skipping network waterfall.");
+            try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
@@ -1007,6 +1010,10 @@ export async function loadAllSchedules(force = false) {
             }
         } catch (e) {
             console.warn('Disruptions fetch failed.');
+        } finally {
+            // Planner must know overlays finished loading (even empty/failed) so it
+            // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
+            try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
         }
 
         // GUARDIAN SMART SYNC: ping lastUpdated only — skip the multi-MB payload

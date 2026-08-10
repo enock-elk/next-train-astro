@@ -31,6 +31,8 @@ export const $ghostStationList = atom([]);
 // ==========================================
 export const $globalExclusions = atom({});       // Ghost train bans
 export const $globalDisruptions = atom({});      // Live service alerts/severances
+/** True after the first ops-overlay fetch attempt (exclusions/disruptions) finishes — success or fail. */
+export const $opsOverlaysReady = atom(false);
 
 // ==========================================
 // 4. SYSTEM HEALTH & DIAGNOSTICS

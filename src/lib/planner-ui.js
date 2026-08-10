@@ -9,7 +9,7 @@
 
 import { 
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
-    $globalDisruptions, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
+    $globalDisruptions, $opsOverlaysReady, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
@@ -413,6 +413,40 @@ export let currentPlannerErrorPayload = null;
 export let selectedPlannerDay = null;
 /** ISO date (YYYY-MM-DD) when user picks a specific calendar day */
 export let selectedPlannerDate = null;
+/** Preferred depart time from the last executeTripPlan call (for disruption replan). */
+let lastPlannerPreferredTime = null;
+/** Signature of disruptions used for the currently shown planner result. */
+let lastPlannerDisruptionSig = '';
+let plannerDisrListenBound = false;
+
+function disruptionSignature(disr = $globalDisruptions.get()) {
+    try {
+        const flat = Object.values(disr || {}).flat().map((d) => `${d?.id}|${d?.tier}|${(d?.stations || []).join(',')}`);
+        return flat.sort().join(';');
+    } catch {
+        return '';
+    }
+}
+
+/** Wait briefly for exclusions/disruptions fetch so sinkhole cuts are not race-blind. */
+async function ensureOpsOverlaysReady(timeoutMs = 2800) {
+    if ($opsOverlaysReady.get()) return true;
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (ready) => {
+            if (settled) return;
+            settled = true;
+            try { unsub(); } catch { /* ignore */ }
+            clearTimeout(timer);
+            resolve(ready);
+        };
+        const unsub = $opsOverlaysReady.subscribe((v) => {
+            if (v) done(true);
+        });
+        const timer = setTimeout(() => done($opsOverlaysReady.get()), timeoutMs);
+        if ($opsOverlaysReady.get()) done(true);
+    });
+}
 
 function resolveDayTypeFromIso(isoDate) {
     if (!isoDate || typeof isoDate !== 'string') return null;
@@ -2641,6 +2675,25 @@ export function initPlanner() {
     }
     if (typeof window !== 'undefined') window.__ntPlannerInitBound = true;
 
+    // When live disruptions arrive after a plan, re-run so Irene/Centurion cuts
+    // replace sinkhole-blind through-trips (first open race).
+    if (!plannerDisrListenBound) {
+        plannerDisrListenBound = true;
+        $globalDisruptions.listen(() => {
+            try {
+                if (!plannerOrigin || !plannerDest) return;
+                const resultsSec = document.getElementById('planner-results-section');
+                if (!resultsSec || resultsSec.classList.contains('hidden')) return;
+                const sig = disruptionSignature();
+                if (sig === lastPlannerDisruptionSig) return;
+                console.log('🛡️ Guardian: Disruptions updated — replanning active trip.');
+                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime);
+            } catch (e) {
+                console.warn('🛡️ Guardian: Disruption replan failed', e);
+            }
+        });
+    }
+
     const fromSelect = document.getElementById('planner-from');
     const toSelect = document.getElementById('planner-to');
     const swapBtn = document.getElementById('planner-swap-btn');
@@ -3334,6 +3387,9 @@ export async function applyPlannerDeepLink() {
 
 // --- ORCHESTRATION ---
 export function executeTripPlan(origin, dest, preferredTime = null) {
+    lastPlannerPreferredTime = preferredTime;
+    plannerOrigin = origin;
+    plannerDest = dest;
     const resultsContainer = document.getElementById('planner-results-list');
     if (resultsContainer) {
         resultsContainer.innerHTML = `
@@ -3401,6 +3457,10 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             return;
         }
 
+        // Avoid publishing a full through-trip before the sinkhole overlay arrives.
+        updateSpinnerText('Checking live line alerts...');
+        await ensureOpsOverlaysReady(2800);
+
         spinnerTimers.forEach(t => clearTimeout(t));
         isSearching = false;
         if (typeof planUnifiedTrip === 'function') {
@@ -3419,6 +3479,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             }
         }
 
+        lastPlannerDisruptionSig = disruptionSignature();
         currentTripOptions = plannerResponse.trips || [];
         currentPlannerStatus = plannerResponse.status;
         currentPlannerErrorPayload = plannerResponse.errorPayload || null; 
@@ -3587,8 +3648,8 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     break;
                 }
                 case 'ERR_TIMETABLE_MISMATCH':
-                    errorTitle = "Connection too long";
-                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">A path exists, but transfers need more than a 4-hour wait on today’s schedule. If you know a better connection, report it below.</p>`;
+                    errorTitle = "No timed connection";
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Stations are linked on the network map, but this day’s timetable has no workable train sequence for the full trip. Try another travel day, or report a better connection below.</p>`;
                     showFeedbackBtn = true;
                     if (errorPayload?.hasIncident && errorPayload?.disruptionId) {
                         const btnText = errorPayload.buttonText || 'Line Severed';

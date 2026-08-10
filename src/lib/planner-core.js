@@ -1010,9 +1010,15 @@ export function runHeuristicFailureProbe(origin, dest, dayType = null) {
 
     let blockingDisruption = null;
 
+    // Only route-wide CRITICAL (no station geometry) blocks an entire corridor in
+    // the connectivity BFS. Segment cuts like Irene↔Centurion are handled by
+    // getTripDisruptions geometry + partial-journey evaluation — treating them as
+    // whole-route kills falsely marks distant origins as "boarding blocked".
     const getRouteSuspension = (rId) => {
         if (disr && disr[rId]) {
-            return disr[rId].find(d => d.tier === 'CRITICAL');
+            return disr[rId].find(d =>
+                d.tier === 'CRITICAL' && (!d.stations || d.stations.length === 0)
+            );
         }
         return null;
     };
@@ -1465,6 +1471,24 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
     };
     const testStations = getBackwardStationSequence(dest, dayType);
 
+    /** Segment CRITICAL cuts (e.g. Irene↔Centurion) — try these termini even when no raw trip was severed. */
+    const getCriticalBoundaryStations = () => {
+        const out = [];
+        const seen = new Set();
+        try {
+            for (const d of Object.values($globalDisruptions.get() || {}).flat()) {
+                if (d?.tier !== 'CRITICAL' || !Array.isArray(d.stations)) continue;
+                for (const s of d.stations) {
+                    const n = normalizeStationName(s);
+                    if (!n || seen.has(n)) continue;
+                    seen.add(n);
+                    out.push(s);
+                }
+            }
+        } catch { /* ignore */ }
+        return out;
+    };
+
     for (let offset = startOffset; offset <= maxOffset; offset++) {
         if (executionCounter++ > MAX_EXECUTION_LIMIT) {
             console.error("🛡️ Guardian: Unified Trip loop threshold critically exceeded. Triggering failsafe abort.");
@@ -1510,6 +1534,13 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             let targetsToTest = [...testStations];
             if (evalResult.severedTerminus && !targetsToTest.includes(evalResult.severedTerminus)) {
                 targetsToTest.unshift(evalResult.severedTerminus);
+            }
+            // Prefer live cut termini (Irene/Centurion) over walking back from dest —
+            // dest-side walk never surfaces Irene when Akasiaboom is on Mabopane.
+            for (const boundary of getCriticalBoundaryStations().reverse()) {
+                const bn = normalizeStationName(boundary);
+                const already = targetsToTest.some((s) => normalizeStationName(s) === bn);
+                if (!already) targetsToTest.unshift(boundary);
             }
 
             if ((evalResult.status === 'NO_PATH' || evalResult.status === 'IMPOSSIBLE_TODAY') && targetsToTest.length > 0) {

@@ -138,7 +138,7 @@ window.renderFullScheduleGrid = function(direction = 'A', dayOverride = null) {
             controlsDiv.className = "px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-between items-center shadow-md relative";
 
             const isWk = sheetDayType === 'weekday';
-            const shareUrl = `https://nexttrain.co.za/?action=route&route=${currentRouteId}&view=grid&dir=${direction}&day=${selectedDay}`;
+            const shareUrl = `https://nexttrain.co.za/og/share?rt=${encodeURIComponent(currentRouteId)}&v=g&dir=${direction === 'B' ? 'B' : 'A'}&d=${selectedDay === 'saturday' ? 'sa' : (selectedDay === 'sunday' ? 'su' : (selectedDay === 'public_holiday' ? 'ph' : 'wd'))}`;
             const shareText = `Check out the ${sheetDayType} schedule to ${destName}`;
             
             window.shareCurrentGrid = async () => {

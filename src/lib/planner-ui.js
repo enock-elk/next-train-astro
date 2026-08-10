@@ -16,7 +16,8 @@ import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
-    escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet
+    escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
+    resolveOperatingDayType
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
@@ -419,11 +420,11 @@ function resolveDayTypeFromIso(isoDate) {
     if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
     const day = d.getDay();
-    let dayType = day === 0 ? 'sunday' : (day === 6 ? 'saturday' : 'weekday');
     const key = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
-    const holidayType = resolveHolidayDayType(key, region, parts[0]) || (SPECIAL_DATES && SPECIAL_DATES[key]);
-    if (holidayType) dayType = holidayType;
+    const holidayType = resolveHolidayDayType(key, region, parts[0]) || (SPECIAL_DATES && SPECIAL_DATES[key]) || null;
+    // Calendar Sunday wins; WC remaps holiday saturday → public_holiday.
+    const dayType = resolveOperatingDayType(day, holidayType, region);
     return { dayType, dayIndex: day, label: isoDate };
 }
 
@@ -657,15 +658,18 @@ function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
 }
 
 function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
-    if (value === 'specific' || (isoDate && value !== 'weekday' && value !== 'saturday' && value !== 'sunday')) {
+    const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
+    const satLabel = region === 'WC' ? 'Saturday' : 'Saturday / Public Holiday';
+    if (value === 'specific' || (isoDate && value !== 'weekday' && value !== 'saturday' && value !== 'sunday' && value !== 'public_holiday')) {
         return isoDate ? `Date · ${isoDate}` : 'Pick a date…';
     }
-    if (isoDate && (value === 'weekday' || value === 'saturday' || value === 'sunday')) {
+    if (isoDate && (value === 'weekday' || value === 'saturday' || value === 'sunday' || value === 'public_holiday')) {
         // Specific date was resolved into a day-type — still show the date
         if (selectedPlannerDate) return `Date · ${selectedPlannerDate}`;
     }
     if (value === 'weekday') return 'Weekday (Mon-Fri)';
-    if (value === 'saturday') return 'Saturday / Public Holiday';
+    if (value === 'saturday') return satLabel;
+    if (value === 'public_holiday') return 'Public Holiday';
     if (value === 'sunday') return 'Sunday';
     return 'Weekday (Mon-Fri)';
 }
@@ -789,6 +793,7 @@ export function selectCustomTrip(idx) {
 
 export function toggleMainDayDropdown(e) {
     if (e) e.stopPropagation();
+    syncPlannerDayDropdownForRegion();
     if (typeof window !== 'undefined' && window.toggleDropdownScrim) {
         window.toggleDropdownScrim('main-day-list', 'main-day-chevron');
     } else {
@@ -950,7 +955,7 @@ export function selectHeaderDay(e, value, text) {
     
     const daySelectDisp = document.getElementById('main-day-display');
     if (daySelectDisp) {
-        let mainTxt = value === 'weekday' ? 'Weekday (Mon-Fri)' : (value === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
+        let mainTxt = plannerDayDisplayText(value);
         daySelectDisp.textContent = mainTxt;
         
         const mList = document.getElementById('main-day-list');
@@ -2589,11 +2594,51 @@ export const PlannerRenderer = {
     }
 };
 
+/** Keep Travel Day options in sync with region (WC gets standalone Public Holiday). */
+function syncPlannerDayDropdownForRegion() {
+    const list = document.getElementById('main-day-list');
+    if (!list) return;
+    const region = $userRegion.get() || 'GP';
+    const satLabel = region === 'WC' ? 'Saturday' : 'Saturday / Public Holiday';
+    const satLi = list.querySelector('li[data-day="saturday"]');
+    if (satLi) {
+        satLi.textContent = satLabel;
+        satLi.setAttribute('onclick', `if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', '${satLabel}')`);
+    }
+    let pubLi = list.querySelector('li[data-day="public_holiday"]');
+    if (region === 'WC') {
+        if (!pubLi) {
+            pubLi = document.createElement('li');
+            pubLi.setAttribute('data-day', 'public_holiday');
+            pubLi.className = 'p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700';
+            pubLi.textContent = 'Public Holiday';
+            pubLi.setAttribute('onclick', "if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'public_holiday', 'Public Holiday')");
+            const sundayLi = list.querySelector('li[data-day="sunday"]');
+            if (sundayLi) list.insertBefore(pubLi, sundayLi);
+            else list.appendChild(pubLi);
+        }
+    } else if (pubLi) {
+        pubLi.remove();
+        if (selectedPlannerDay === 'public_holiday') {
+            selectedPlannerDay = 'saturday';
+            const display = document.getElementById('main-day-display');
+            if (display && !selectedPlannerDate) display.textContent = plannerDayDisplayText('saturday');
+        }
+    }
+    const display = document.getElementById('main-day-display');
+    if (display && !selectedPlannerDate && selectedPlannerDay) {
+        display.textContent = plannerDayDisplayText(selectedPlannerDay);
+    }
+}
+
 // --- INITIALIZATION ---
 export function initPlanner() {
     // Vite HMR / re-entry used to stack duplicate click listeners on the swap
     // button (on top of the old inline onclick) → even swaps looked like a no-op.
-    if (typeof window !== 'undefined' && window.__ntPlannerInitBound) return;
+    if (typeof window !== 'undefined' && window.__ntPlannerInitBound) {
+        syncPlannerDayDropdownForRegion();
+        return;
+    }
     if (typeof window !== 'undefined') window.__ntPlannerInitBound = true;
 
     const fromSelect = document.getElementById('planner-from');
@@ -2614,6 +2659,11 @@ export function initPlanner() {
         
         let selDay = (typeof selectedPlannerDay !== 'undefined' && selectedPlannerDay) ? selectedPlannerDay : getCurrentDayType();
         let selText = plannerDayDisplayText(selDay, selectedPlannerDate);
+        const region = $userRegion.get() || 'GP';
+        const satLabel = region === 'WC' ? 'Saturday' : 'Saturday / Public Holiday';
+        const pubLi = region === 'WC'
+            ? `<li data-day="public_holiday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'public_holiday', 'Public Holiday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'public_holiday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Public Holiday</li>`
+            : '';
 
         daySelectDiv.innerHTML = `
             <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Travel Day</label>
@@ -2623,7 +2673,8 @@ export function initPlanner() {
             </div>
             <ul id="main-day-list" class="absolute z-[200] top-full mt-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden text-left max-h-[min(40vh,16rem)] overflow-y-auto custom-scrollbar">
                 <li data-day="weekday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'weekday', 'Weekday (Mon-Fri)')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'weekday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday (Mon-Fri)</li>
-                <li data-day="saturday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', 'Saturday / Public Holiday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'saturday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday / Public Holiday</li>
+                <li data-day="saturday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'saturday', '${satLabel}')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'saturday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">${satLabel}</li>
+                ${pubLi}
                 <li data-day="sunday" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'sunday', 'Sunday')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 ${selDay === 'sunday' && !selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
                 <li data-day="specific" onclick="if(typeof window._selectMainDay === 'function') window._selectMainDay(event, 'specific', 'Pick a date…')" class="p-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selectedPlannerDate ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Pick a date…</li>
             </ul>
@@ -2879,6 +2930,14 @@ export function initPlanner() {
                 history.replaceState({ view: 'home' }, '', '#home');
                 hidePlannerResults();
             }
+        });
+    }
+
+    syncPlannerDayDropdownForRegion();
+    if (typeof window !== 'undefined' && !window.__ntPlannerDayRegionSub) {
+        window.__ntPlannerDayRegionSub = true;
+        $userRegion.subscribe(() => {
+            syncPlannerDayDropdownForRegion();
         });
     }
 }
@@ -3931,15 +3990,22 @@ export function swapPlannerResults() {
 }
 
 export function getPlanningDayLabel() {
+    const region = $userRegion.get() || 'GP';
     const holiday = getPlannerHolidayContext();
     if (holiday) {
         if (holiday.scheduleType === 'sunday') return `${holiday.name} · No Service`;
-        if (holiday.scheduleType === 'saturday') return `${holiday.name} · Saturday Schedule`;
+        if (region === 'WC' && (holiday.scheduleType === 'saturday' || holiday.scheduleType === 'public_holiday')) {
+            return `${holiday.name} · Public Holiday Schedule`;
+        }
+        if (holiday.scheduleType === 'saturday' || holiday.scheduleType === 'public_holiday') {
+            return `${holiday.name} · Saturday Schedule`;
+        }
         return `${holiday.name} Schedule`;
     }
     const day = selectedPlannerDay || getCurrentDayType();
     if (day === 'sunday') return "Sunday";
-    if (day === 'saturday') return "Saturday / Public Holiday Schedule";
+    if (day === 'public_holiday') return "Public Holiday Schedule";
+    if (day === 'saturday') return region === 'WC' ? "Saturday Schedule" : "Saturday / Public Holiday Schedule";
     return "Weekday Schedule";
 }
 
@@ -3957,10 +4023,18 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         
         let selDay = selectedPlannerDay || getCurrentDayType();
         const holiday = getPlannerHolidayContext();
-        let selText = selDay === 'weekday' ? 'Weekday' : (selDay === 'saturday' ? 'Saturday' : 'Sunday');
+        const headerRegion = $userRegion.get() || 'GP';
+        let selText = selDay === 'weekday' ? 'Weekday'
+            : (selDay === 'public_holiday' ? 'Pub Hol'
+            : (selDay === 'saturday' ? 'Saturday' : 'Sunday'));
         if (holiday) {
-            selText = holiday.scheduleType === 'sunday' ? 'Holiday · None' : 'Holiday · Sat';
+            selText = holiday.scheduleType === 'sunday'
+                ? 'Holiday · None'
+                : (headerRegion === 'WC' ? 'Holiday · Pub' : 'Holiday · Sat');
         }
+        const headerPubLi = headerRegion === 'WC'
+            ? `<li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'public_holiday', 'Public Holiday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'public_holiday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Public Holiday</li>`
+            : '';
 
         badge.innerHTML = `
             <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-3 relative min-w-[5.5rem]">
@@ -3970,6 +4044,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
                 <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-hidden z-[200] text-left">
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Weekday')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday</li>
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday</li>
+                    ${headerPubLi}
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
                 </ul>
             </div>

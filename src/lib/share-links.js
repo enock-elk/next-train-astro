@@ -13,6 +13,7 @@ function encodeDay(day) {
     const d = String(day || '').toLowerCase();
     if (d === 'saturday' || d === 'weekend' || d === 'sa') return 'sa';
     if (d === 'sunday' || d === 'su') return 'su';
+    if (d === 'public_holiday' || d === 'ph' || d === 'holiday') return 'ph';
     return 'wd';
 }
 
@@ -20,6 +21,7 @@ function decodeDay(raw) {
     const d = String(raw || '').toLowerCase();
     if (d === 'sa' || d === 'saturday' || d === 'weekend') return 'saturday';
     if (d === 'su' || d === 'sunday') return 'sunday';
+    if (d === 'ph' || d === 'public_holiday' || d === 'holiday') return 'public_holiday';
     if (d === 'wd' || d === 'weekday' || d === 'weekdays') return 'weekday';
     return 'weekday';
 }

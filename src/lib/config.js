@@ -475,8 +475,9 @@ export const ROUTES = {
             weekday_to_a: 'hani_to_ct_weekday', 
             weekday_to_b: 'ct_to_hani_weekday', 
             saturday_to_a: 'hani_to_ct_sat', 
-            saturday_to_b: 'ct_to_hani_sat' 
-        } 
+            saturday_to_b: 'ct_to_hani_sat',
+            pub_to_a: 'hani_to_ct_pub', 
+            pub_to_b: 'ct_to_hani_pub' } 
     },
     'ct-kapteinsklip': { 
         id: 'ct-kapteinsklip', 
@@ -492,8 +493,9 @@ export const ROUTES = {
             weekday_to_a: 'kap_to_ct_weekday', 
             weekday_to_b: 'ct_to_kap_weekday', 
             saturday_to_a: 'kap_to_ct_sat', 
-            saturday_to_b: 'ct_to_kap_sat' 
-        } 
+            saturday_to_b: 'ct_to_kap_sat',
+            pub_to_a: 'kap_to_ct_pub', 
+            pub_to_b: 'ct_to_kap_pub' } 
     },
     'ct-nolu': { 
         id: 'ct-nolu', 
@@ -509,8 +511,9 @@ export const ROUTES = {
             weekday_to_a: 'nolu_to_ct_weekday', 
             weekday_to_b: 'ct_to_nolu_weekday', 
             saturday_to_a: 'nolu_to_ct_sat', 
-            saturday_to_b: 'ct_to_nolu_sat' 
-        } 
+            saturday_to_b: 'ct_to_nolu_sat',
+            pub_to_a: 'nolu_to_ct_pub', 
+            pub_to_b: 'ct_to_nolu_pub' } 
     },
     'bellville-mutual': { 
         id: 'bellville-mutual', 
@@ -526,8 +529,9 @@ export const ROUTES = {
             weekday_to_a: 'mutul_to_bellv_weekday', 
             weekday_to_b: 'bellv_to_mutul_weekday', 
             saturday_to_a: 'mutul_to_bellv_sat', 
-            saturday_to_b: 'bellv_to_mutul_sat' 
-        } 
+            saturday_to_b: 'bellv_to_mutul_sat',
+            pub_to_a: 'mutul_to_bellv_pub', 
+            pub_to_b: 'bellv_to_mutul_pub' } 
     },
     'ct-simon': { 
         id: 'ct-simon', 
@@ -543,8 +547,9 @@ export const ROUTES = {
             weekday_to_a: 'simon_to_ct_weekday', 
             weekday_to_b: 'ct_to_simon_weekday', 
             saturday_to_a: 'simon_to_ct_sat', 
-            saturday_to_b: 'ct_to_simon_sat' 
-        } 
+            saturday_to_b: 'ct_to_simon_sat',
+            pub_to_a: 'simon_to_ct_pub', 
+            pub_to_b: 'ct_to_simon_pub' } 
     },
     'ct-flats': { 
         id: 'ct-flats', 
@@ -561,8 +566,9 @@ export const ROUTES = {
             weekday_to_a: 'rtret_to_ct_weekday', 
             weekday_to_b: 'ct_to_rtret_weekday', 
             saturday_to_a: 'rtret_to_ct_sat', 
-            saturday_to_b: 'ct_to_rtret_sat' 
-        } 
+            saturday_to_b: 'ct_to_rtret_sat',
+            pub_to_a: 'rtret_to_ct_pub', 
+            pub_to_b: 'ct_to_rtret_pub' } 
     },
     'ct-bellv': { 
         id: 'ct-bellv', 
@@ -578,8 +584,9 @@ export const ROUTES = {
             weekday_to_a: 'bellv_to_ct_weekday', 
             weekday_to_b: 'ct_to_bellv_weekday', 
             saturday_to_a: 'bellv_to_ct_sat', 
-            saturday_to_b: 'ct_to_bellv_sat' 
-        } 
+            saturday_to_b: 'ct_to_bellv_sat',
+            pub_to_a: 'bellv_to_ct_pub', 
+            pub_to_b: 'ct_to_bellv_pub' } 
     },
     'ct-kraai': { 
         id: 'ct-kraai', 
@@ -595,8 +602,9 @@ export const ROUTES = {
             weekday_to_a: 'kraai_to_ct_weekday', 
             weekday_to_b: 'ct_to_kraai_weekday', 
             saturday_to_a: 'kraai_to_ct_sat', 
-            saturday_to_b: 'ct_to_kraai_sat' 
-        } 
+            saturday_to_b: 'ct_to_kraai_sat',
+            pub_to_a: 'kraai_to_ct_pub', 
+            pub_to_b: 'ct_to_kraai_pub' } 
     },
     'ct-eerst': { 
         id: 'ct-eerst', 
@@ -612,8 +620,9 @@ export const ROUTES = {
             weekday_to_a: 'eerst_to_ct_weekday', 
             weekday_to_b: 'ct_to_eerst_weekday', 
             saturday_to_a: 'eerst_to_ct_sat', 
-            saturday_to_b: 'ct_to_eerst_sat' 
-        } 
+            saturday_to_b: 'ct_to_eerst_sat',
+            pub_to_a: 'eerst_to_ct_pub', 
+            pub_to_b: 'ct_to_eerst_pub' } 
     },
     'ct-strnd': { 
         id: 'ct-strnd', 
@@ -629,8 +638,9 @@ export const ROUTES = {
             weekday_to_a: 'strnd_to_ct_weekday', 
             weekday_to_b: 'ct_to_strnd_weekday', 
             saturday_to_a: 'strnd_to_ct_sat', 
-            saturday_to_b: 'ct_to_strnd_sat' 
-        } 
+            saturday_to_b: 'ct_to_strnd_sat',
+            pub_to_a: 'strnd_to_ct_pub', 
+            pub_to_b: 'ct_to_strnd_pub' } 
     },
     'eerst-dtoit': { 
         id: 'eerst-dtoit', 
@@ -646,8 +656,9 @@ export const ROUTES = {
             weekday_to_a: 'dtoit_to_eerst_weekday', 
             weekday_to_b: 'eerst_to_dtoit_weekday', 
             saturday_to_a: 'dtoit_to_eerst_sat', 
-            saturday_to_b: 'eerst_to_dtoit_sat' 
-        } 
+            saturday_to_b: 'eerst_to_dtoit_sat',
+            pub_to_a: 'dtoit_to_eerst_pub', 
+            pub_to_b: 'eerst_to_dtoit_pub' } 
     },
     'ct-well': { 
         id: 'ct-well', 
@@ -663,8 +674,9 @@ export const ROUTES = {
             weekday_to_a: 'well_to_ct_weekday', 
             weekday_to_b: 'ct_to_well_weekday', 
             saturday_to_a: 'well_to_ct_sat', 
-            saturday_to_b: 'ct_to_well_sat' 
-        } 
+            saturday_to_b: 'ct_to_well_sat',
+            pub_to_a: 'well_to_ct_pub', 
+            pub_to_b: 'ct_to_well_pub' } 
     },
     'ct-malm': { 
         id: 'ct-malm', 
@@ -680,8 +692,9 @@ export const ROUTES = {
             weekday_to_a: 'malm_to_ct_weekday', 
             weekday_to_b: 'ct_to_malm_weekday', 
             saturday_to_a: 'malm_to_ct_sat', 
-            saturday_to_b: 'ct_to_malm_sat' 
-        } 
+            saturday_to_b: 'ct_to_malm_sat',
+            pub_to_a: 'malm_to_ct_pub', 
+            pub_to_b: 'ct_to_malm_pub' } 
     },
 
     // ==========================================

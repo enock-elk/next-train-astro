@@ -13,7 +13,8 @@ import {
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
-    getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet
+    getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
+    usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -95,8 +96,7 @@ export function getLookaheadDayInfo(daysAhead = 1) {
     baseDate.setDate(baseDate.getDate() + daysAhead);
 
     const dayOfWeek = baseDate.getDay(); // 0 = Sunday, 6 = Saturday
-    let dayType = (dayOfWeek === 0) ? 'sunday' : (dayOfWeek === 6 ? 'saturday' : 'weekday');
-    
+
     // Calendar weekday name for the physical date (e.g. Monday).
     let dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dayOfWeek];
     if (daysAhead === 1) dayName = "Tomorrow";
@@ -108,23 +108,23 @@ export function getLookaheadDayInfo(daysAhead = 1) {
 
     // Override the Schedule Type if it's a Special Date (Public Holiday).
     // Approved region overrides (when loaded) win over the static SPECIAL_DATES map.
+    // Calendar Sunday always wins; WC remaps holiday saturday → public_holiday.
     const holidayName = (typeof HOLIDAY_NAMES !== 'undefined' && HOLIDAY_NAMES[dateKey]) || null;
     const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
     const resolvedHoliday = resolveHolidayDayType(dateKey, region, baseDate.getFullYear())
-        || (typeof SPECIAL_DATES !== 'undefined' ? SPECIAL_DATES[dateKey] : null);
-    if (resolvedHoliday) {
-        dayType = resolvedHoliday;
+        || (typeof SPECIAL_DATES !== 'undefined' ? SPECIAL_DATES[dateKey] : null)
+        || null;
+    const dayType = resolveOperatingDayType(dayOfWeek, resolvedHoliday, region);
+    if (resolvedHoliday && holidayName) {
         // When the sheet is not the usual weekday (e.g. Women's Day Observed ->
-        // Saturday timetable on a Monday), surface the holiday so the UI does
+        // Saturday/pub timetable on a Monday), surface the holiday so the UI does
         // not claim "Monday" while showing weekend trains.
-        if (holidayName) {
-            if (daysAhead === 1) {
-                dayName = `Tomorrow (${holidayName})`;
-            } else if (dayType === 'saturday' && dayOfWeek !== 6) {
-                dayName = `${holidayName}`;
-            } else if (dayType === 'sunday' && dayOfWeek !== 0) {
-                dayName = holidayName;
-            }
+        if (daysAhead === 1) {
+            dayName = `Tomorrow (${holidayName})`;
+        } else if ((dayType === 'saturday' || dayType === 'public_holiday') && dayOfWeek !== 6) {
+            dayName = `${holidayName}`;
+        } else if (dayType === 'sunday' && dayOfWeek !== 0) {
+            dayName = holidayName;
         }
     }
 
@@ -159,16 +159,22 @@ export function simulateNextActiveService(selectedStation, destination) {
             continue;
         }
 
-        // Skip Saturday/holiday sheets when this route has no weekend timetable.
+        // Skip Saturday/holiday sheets when this route has no weekend (or pub) timetable.
+        const region = currentRoute.region || getCurrentRegion();
+        const cacheSlot = scheduleCacheSlot(nextDayInfo.type, region, isDestA ? 'a' : 'b');
         if (nextDayInfo.type === 'saturday' && !routeHasSaturdayService()) {
             daysAhead++;
             continue;
         }
+        if (nextDayInfo.type === 'public_holiday') {
+            const pubSched = getSchedules()[cacheSlot];
+            if (!scheduleHasService(pubSched) && !routeHasSaturdayService()) {
+                daysAhead++;
+                continue;
+            }
+        }
 
-        const sheetKey = isDestA
-            ? (nextDayInfo.type === 'weekday' ? 'weekday_to_a' : 'saturday_to_a')
-            : (nextDayInfo.type === 'weekday' ? 'weekday_to_b' : 'saturday_to_b');
-
+        const sheetKey = cacheSlot;
         const schedule = getSchedules()[sheetKey];
         
         if (schedule && schedule.rows && schedule.rows.length > 0) {
@@ -646,9 +652,7 @@ export function findNextTrains() {
     
     if (!selectedStation) {
         if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
-        const fallbackSheetKey = usesWeekdayScheduleSheet(getCurrentDayType())
-            ? currentRoute.sheetKeys.weekday_to_a
-            : currentRoute.sheetKeys.saturday_to_a;
+        const fallbackSheetKey = routeSheetKeyForDay(currentRoute, getCurrentDayType(), 'a');
         if (typeof window.updateFareDisplay === 'function') window.updateFareDisplay(fallbackSheetKey);
         return;
     }
@@ -691,8 +695,11 @@ export function findNextTrains() {
         return;
     }
 
-    // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape)
-    if (usesSaturdayScheduleSheet(getCurrentDayType()) && !routeHasSaturdayService()) {
+    // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape).
+    // WC public_holiday uses pub sheets (already saturday-fallbacked when missing).
+    const boardRegion = currentRoute.region || getCurrentRegion();
+    const boardDayType = getCurrentDayType();
+    if (usesSaturdayScheduleSheet(boardDayType, boardRegion) && !routeHasSaturdayService()) {
         if (typeof window.renderNoWeekendService === 'function') {
             if (isAtStation(selectedStation, currentRoute.destA)) {
                 if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
@@ -706,6 +713,25 @@ export function findNextTrains() {
             }
         }
         return;
+    }
+    if (usesPublicHolidayScheduleSheet(boardDayType, boardRegion)) {
+        const pubA = getSchedules()?.pub_to_a;
+        const pubB = getSchedules()?.pub_to_b;
+        if (!scheduleHasService(pubA) && !scheduleHasService(pubB) && !routeHasSaturdayService()) {
+            if (typeof window.renderNoWeekendService === 'function') {
+                if (isAtStation(selectedStation, currentRoute.destA)) {
+                    if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
+                } else {
+                    window.renderNoWeekendService(pretoriaTimeEl(), currentRoute.destA);
+                }
+                if (isAtStation(selectedStation, currentRoute.destB)) {
+                    if (typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
+                } else {
+                    window.renderNoWeekendService(pienaarspoortTimeEl(), currentRoute.destB);
+                }
+            }
+            return;
+        }
     }
 
     let sharedRoutes = [];
@@ -725,14 +751,14 @@ export function findNextTrains() {
     }
 
     sharedRoutes = sharedRoutes.filter(rId => getSharedStationCount(getCurrentRouteId(), rId) > 1);
-    let primarySheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+    let primarySheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'a');
 
     // --- DESTINATION A ---
     if (isAtStation(selectedStation, currentRoute.destA)) {
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
     } else {
-        const schedule = usesWeekdayScheduleSheet(getCurrentDayType()) ? getSchedules().weekday_to_a : getSchedules().saturday_to_a;
-        const currentSheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_a : currentRoute.sheetKeys.saturday_to_a;
+        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'a')];
+        const currentSheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'a');
         const { allJourneys: currentJourneys } = findNextJourneyToDestA(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
         
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -742,7 +768,7 @@ export function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
-                const key = usesWeekdayScheduleSheet(getCurrentDayType()) ? otherRoute.sheetKeys.weekday_to_a : otherRoute.sheetKeys.saturday_to_a;
+                const key = routeSheetKeyForDay(otherRoute, boardDayType, 'a');
                 const otherRows = getFullDatabase()[key];
                 const otherMeta = getFullDatabase()[key + "_meta"];
                 const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -796,8 +822,8 @@ export function findNextTrains() {
     if (isAtStation(selectedStation, currentRoute.destB)) {
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
     } else {
-        const schedule = usesWeekdayScheduleSheet(getCurrentDayType()) ? getSchedules().weekday_to_b : getSchedules().saturday_to_b;
-        const currentSheetKey = usesWeekdayScheduleSheet(getCurrentDayType()) ? currentRoute.sheetKeys.weekday_to_b : currentRoute.sheetKeys.saturday_to_b;
+        const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'b')];
+        const currentSheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'b');
         const { allJourneys: currentJourneys } = findNextJourneyToDestB(selectedStation, "00:00:00", schedule, currentRoute, getCurrentDayIndex());
 
         let mergedJourneys = currentJourneys.map(j => ({...j, sourceRoute: currentRoute.name, sheetKey: currentSheetKey}));
@@ -807,7 +833,7 @@ export function findNextTrains() {
         sharedRoutes.forEach(rId => {
             const otherRoute = ROUTES[rId];
             
-                 const key = usesWeekdayScheduleSheet(getCurrentDayType()) ? otherRoute.sheetKeys.weekday_to_b : otherRoute.sheetKeys.saturday_to_b;
+                 const key = routeSheetKeyForDay(otherRoute, boardDayType, 'b');
                  const otherRows = getFullDatabase()[key];
                  const otherMeta = getFullDatabase()[key + "_meta"];
                  const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
@@ -1250,12 +1276,14 @@ export function updateLastUpdatedText() {
     let displayDate = getFullDatabase().lastUpdated || "Unknown";
     const isValidDate = (d) => d && d !== "undefined" && d !== "null" && String(d).length > 5;
     
-    if (usesWeekdayScheduleSheet(getCurrentDayType()) || getCurrentDayType() === 'monday') { 
+    const region = getCurrentRegion();
+    const dayType = getCurrentDayType();
+    const slot = scheduleCacheSlot(dayType, region, 'a');
+    const activeSched = getSchedules()?.[slot];
+    if (activeSched && isValidDate(activeSched.lastUpdated)) {
+        displayDate = activeSched.lastUpdated;
+    } else if (dayType === 'sunday' || usesWeekdayScheduleSheet(dayType, region)) {
         if (getSchedules().weekday_to_a && isValidDate(getSchedules().weekday_to_a.lastUpdated)) displayDate = getSchedules().weekday_to_a.lastUpdated;
-    } else if (usesSaturdayScheduleSheet(getCurrentDayType())) {
-        if (getSchedules().saturday_to_a && isValidDate(getSchedules().saturday_to_a.lastUpdated)) displayDate = getSchedules().saturday_to_a.lastUpdated;
-    } else if (getCurrentDayType() === 'sunday') {
-         if (getSchedules().weekday_to_a && isValidDate(getSchedules().weekday_to_a.lastUpdated)) displayDate = getSchedules().weekday_to_a.lastUpdated;
     }
     
     displayDate = formatEffectiveDate(displayDate);

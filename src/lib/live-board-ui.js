@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -455,12 +455,16 @@ export function openScheduleModal(destination, dayOverride = null) {
         } else if (dayOverride === 'saturday') {
             targetDayIdx = 6;
             titleSuffix = ' (Weekend/Holiday)';
+        } else if (dayOverride === 'public_holiday') {
+            targetDayIdx = 6;
+            titleSuffix = ' (Public Holiday)';
         }
 
+        const ab = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'a' : 'b';
         if (dayOverride === 'weekday' || dayOverride === 'sunday') {
-            sheetKey = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'weekday_to_a' : 'weekday_to_b';
-        } else if (dayOverride === 'saturday') {
-            sheetKey = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'saturday_to_a' : 'saturday_to_b';
+            sheetKey = `weekday_to_${ab}`;
+        } else if (dayOverride === 'saturday' || dayOverride === 'public_holiday') {
+            sheetKey = scheduleCacheSlot(dayOverride, route.region, ab);
         }
 
         const schedule = ($schedules.get() || {})[sheetKey];
@@ -473,9 +477,8 @@ export function openScheduleModal(destination, dayOverride = null) {
         journeys = currentScheduleData?.[destination] || [];
         if ((!journeys || journeys.length === 0) && selectedStation) {
             const dayType = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
-            const sheetKey = dayType === 'weekday'
-                ? (normalizeStationName(destination) === normalizeStationName(route.destA) ? 'weekday_to_a' : 'weekday_to_b')
-                : (normalizeStationName(destination) === normalizeStationName(route.destA) ? 'saturday_to_a' : 'saturday_to_b');
+            const ab = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'a' : 'b';
+            const sheetKey = scheduleCacheSlot(dayType, route.region, ab);
             const schedule = ($schedules.get() || {})[sheetKey];
             if (schedule) {
                 journeys = normalizeStationName(destination) === normalizeStationName(route.destA)

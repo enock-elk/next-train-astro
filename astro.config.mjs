@@ -207,6 +207,24 @@ export default defineConfig({
         ],
         categories: ['travel', 'navigation', 'utilities'],
         dir: 'ltr',
+        // Prefer this PWA until a Play TWA package ID exists for related_applications.
+        prefer_related_applications: false,
+        display_override: ['standalone', 'browser'],
+        // Re-open shared trips / shortcuts in the existing installed window.
+        launch_handler: {
+          client_mode: 'focus-existing',
+        },
+        // OS share sheet → planner boot (GET params: title, text, url).
+        share_target: {
+          action: baseWithSlash,
+          method: 'GET',
+          enctype: 'application/x-www-form-urlencoded',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+          },
+        },
         // Long-press shortcuts already present on installed SPA home screens.
         // handleShortcutActions() reads ?action= on boot.
         shortcuts: [
@@ -215,14 +233,14 @@ export default defineConfig({
             short_name: 'Plan Trip',
             description: 'Plan a direct or transfer trip',
             url: `${baseWithSlash}?action=planner`,
-            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192' }]
+            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192', type: 'image/png' }]
           },
           {
             name: 'Network Map',
             short_name: 'View Map',
             description: 'View the full rail network map',
             url: `${baseWithSlash}?action=map`,
-            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192' }]
+            icons: [{ src: `${baseWithSlash}icons/icon-192.png`, sizes: '192x192', type: 'image/png' }]
           }
         ]
       }

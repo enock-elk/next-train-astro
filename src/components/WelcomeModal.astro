@@ -176,9 +176,13 @@ import { withBase } from '../lib/config.js';
         let activeRegion = $userRegion.get() || 'GP';
         const params = new URLSearchParams(window.location.search);
         // SPA parity: bare ?route=, short ?rt=, legacy action=route / action=planner / plan= / action=map
+        // Plus Web Share Target (?title=&text=&url=) and bare ?action=planner shortcut.
         const hasRouteDeepLink = !!params.get('rt') || !!params.get('route');
         const hasPlannerDeepLink = (params.get('action') === 'planner' && params.get('from') && params.get('to')) || !!params.get('plan');
+        const hasPlannerShortcut = params.get('action') === 'planner' && !params.get('from') && !params.get('to') && !params.get('plan');
         const hasMapDeepLink = String(params.get('action') || '').toLowerCase() === 'map';
+        const hasShareTarget = !!(params.get('title') || params.get('text') || params.get('url'));
+        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget;
         // Soft SEO hint for first-time only — never override a returning user's region
         const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
         if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
@@ -189,7 +193,7 @@ import { withBase } from '../lib/config.js';
         // Do NOT strip region/from/to here when a share deep link is present — legacy SPA
         // links need those params until applyPlannerDeepLink / applyRouteDeepLink run.
         // Bare SEO ?region= hints (no share action) can be cleared safely.
-        if ((params.has('region') || params.has('r')) && !hasRouteDeepLink && !hasPlannerDeepLink && !hasMapDeepLink) {
+        if ((params.has('region') || params.has('r')) && !hasInboundShare) {
             try {
                 const urlObj = new URL(window.location.href);
                 urlObj.searchParams.delete('region');
@@ -200,7 +204,7 @@ import { withBase } from '../lib/config.js';
 
         // Brand-new users + legacy map onboarding deep-links
         // Shared route/planner links skip Welcome so the destination opens immediately
-        if ((!welcomeSeen || isOnboardMap) && !hasRouteDeepLink && !hasPlannerDeepLink && !hasMapDeepLink) {
+        if ((!welcomeSeen || isOnboardMap) && !hasInboundShare) {
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);

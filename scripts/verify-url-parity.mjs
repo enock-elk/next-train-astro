@@ -155,6 +155,9 @@ if (!existsSync(manifestPath)) {
   if (!Array.isArray(m.shortcuts) || m.shortcuts.length < 2) {
     fail('manifest missing SPA shortcuts (Trip Planner + Network Map)');
   }
+  if (!m.shortcuts.every((s) => s.icons?.every((i) => i.type === 'image/png'))) {
+    fail('manifest shortcut icons must declare type image/png');
+  }
   const shots = Array.isArray(m.screenshots) ? m.screenshots : [];
   if (shots.length < 2) {
     fail('manifest needs at least 2 screenshots (narrow + wide) for store packaging');
@@ -169,6 +172,22 @@ if (!existsSync(manifestPath)) {
     if (!rel || !existsSync(join(DIST, rel))) {
       fail(`manifest screenshot missing from dist: ${s.src}`);
     }
+  }
+  if (m.prefer_related_applications !== false) {
+    fail('manifest prefer_related_applications must be false until a Play package exists');
+  }
+  if (!Array.isArray(m.display_override) || !m.display_override.includes('standalone')) {
+    fail('manifest display_override must include standalone');
+  }
+  const launchMode = m.launch_handler?.client_mode;
+  const launchOk = launchMode === 'focus-existing'
+    || (Array.isArray(launchMode) && launchMode.includes('focus-existing'));
+  if (!launchOk) {
+    fail('manifest launch_handler.client_mode must be focus-existing');
+  }
+  const st = m.share_target;
+  if (!st || st.method !== 'GET' || !st.params?.text || !st.params?.url) {
+    fail('manifest share_target must be GET with text + url params for OS share sheet → planner');
   }
 }
 

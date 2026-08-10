@@ -247,6 +247,8 @@ const faqLd = {
     import {
         prepareDeeplinkIntents,
         consumeHashDeeplinks,
+        applyPlannerShortcutDeepLink,
+        applyShareTargetDeepLink,
         flushPendingDeeplinkIntents,
         applyMapDeepLink
     } from '../lib/deeplink.js';
@@ -349,6 +351,18 @@ const faqLd = {
             }
 
             if (await applyMapDeepLink()) {
+                checkServiceAlerts();
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
+            if (await applyPlannerShortcutDeepLink()) {
+                checkServiceAlerts();
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
+            if (await applyShareTargetDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();
                 return;

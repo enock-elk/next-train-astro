@@ -4,7 +4,14 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
-import { parsePlannerDeepLink, parseRouteDeepLinkParams, parseMapDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import {
+    parsePlannerDeepLink,
+    parseRouteDeepLinkParams,
+    parseMapDeepLink,
+    parsePlannerShortcutDeepLink,
+    parseShareTargetDeepLink,
+    stripShareParamsFromUrl,
+} from './share-links.js';
 
 const INTENT_KEY = 'nt_pending_deeplink';
 const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
@@ -57,7 +64,9 @@ export function snapshotShareDeeplink() {
         const planner = parsePlannerDeepLink(location.search);
         const route = parseRouteDeepLinkParams(location.search);
         const map = parseMapDeepLink(location.search);
-        const snap = planner || route || map || null;
+        const plannerShortcut = parsePlannerShortcutDeepLink(location.search);
+        const shareTarget = parseShareTargetDeepLink(location.search);
+        const snap = planner || route || map || plannerShortcut || shareTarget || null;
         if (snap) sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
         return snap;
     } catch {
@@ -146,6 +155,56 @@ export async function flushPendingDeeplinkIntents() {
         const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
         openFareModalForCurrentRoute();
     }
+}
+
+/**
+ * Home-screen shortcut `?action=planner` with no stations — open the planner tab.
+ */
+export async function applyPlannerShortcutDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    const link = (snap && snap.kind === 'planner-shortcut')
+        ? snap
+        : parsePlannerShortcutDeepLink(location.search);
+    if (!link || link.kind !== 'planner-shortcut') return false;
+    if (snap && snap.kind === 'planner-shortcut') consumeShareDeeplinkSnapshot();
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+    stripShareParamsFromUrl();
+    if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+    return true;
+}
+
+/**
+ * Web Share Target — open planner; full trips reuse applyPlannerDeepLink via snapshot.
+ * Unresolved shares still land on the planner with a toast of the shared text.
+ */
+export async function applyShareTargetDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    // Share-target parser may upgrade to planner/route — those are handled elsewhere.
+    if (snap && (snap.kind === 'planner' || snap.kind === 'route')) return false;
+
+    const link = (snap && snap.kind === 'share-target')
+        ? snap
+        : parseShareTargetDeepLink(location.search);
+    if (!link || link.kind !== 'share-target') return false;
+    if (snap && snap.kind === 'share-target') consumeShareDeeplinkSnapshot();
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+
+    stripShareParamsFromUrl();
+    if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+
+    const hint = [link.text, link.title, link.url].filter(Boolean).join(' — ').slice(0, 120);
+    if (hint && typeof window.showToast === 'function') {
+        window.showToast(`Shared to Trip Planner${hint ? `: ${hint}` : ''}`, 'info', 4000);
+    }
+    return true;
 }
 
 /**

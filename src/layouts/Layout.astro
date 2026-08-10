@@ -68,6 +68,23 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
          plugin output, so linking it there only produces 404 noise. -->
     <!-- Manifest + SW only exist after build (astro preview / deploy). Dev has no SW on purpose. -->
     {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
+    <!-- Early, HTML-static SW register so PWABuilder HTML-parse + short Puppeteer
+         windows can discover /sw.js. String literals (not vars) help HTML parsers.
+         Update UX still uses virtual:pwa-register below. -->
+    {import.meta.env.PROD && base === '/' && (
+      <script is:inline>
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+        }
+      </script>
+    )}
+    {import.meta.env.PROD && base !== '/' && (
+      <script is:inline define:vars={{ __ntSwUrl: withBase('sw.js'), __ntSwScope: base }}>
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register(__ntSwUrl, { scope: __ntSwScope }).catch(function () {});
+        }
+      </script>
+    )}
     <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
@@ -538,18 +555,18 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         if (indicator) indicator.style.display = offline ? 'flex' : 'none';
       });
 
-      // 3. Drop legacy SPA worker/caches, then version-enforce before ads
+      // 3. SW update lifecycle immediately (PROD) — do not wait on legacy cleanup.
+      // Head also registers /sw.js statically for PWABuilder discovery; Workbox
+      // coalesces the same script URL.
+      if (import.meta.env.PROD) {
+        bindAppUpdateLifecycle(registerSW);
+      }
+
+      // 4. Drop legacy SPA worker/caches, then version-enforce + ads
       cleanupLegacySpaShell().finally(() => {
         initNetworkStruggleModal();
         enforceAppVersion();
-
-        // 4. CleverAds (safe-zone + session-stability; skips queued refresh windows)
         initCleverAds();
-
-        // 5. Register Service Worker + force-update path (PROD/preview only)
-        if (import.meta.env.PROD) {
-          bindAppUpdateLifecycle(registerSW);
-        }
       });
     </script>
   </body>

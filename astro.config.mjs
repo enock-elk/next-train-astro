@@ -188,6 +188,25 @@ export default defineConfig({
             purpose: 'any'
           }
         ],
+        // Store listing / PWABuilder Recommended — narrow (phone) + wide (desktop).
+        screenshots: [
+          {
+            src: `${baseWithSlash}screenshots/narrow-live-board.png`,
+            sizes: '1080x1920',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Pick your route on the live board',
+          },
+          {
+            src: `${baseWithSlash}screenshots/wide-trip-planner.png`,
+            sizes: '1920x1080',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Plan multi-transfer trips',
+          },
+        ],
+        categories: ['travel', 'navigation', 'utilities'],
+        dir: 'ltr',
         // Long-press shortcuts already present on installed SPA home screens.
         // handleShortcutActions() reads ?action= on boot.
         shortcuts: [

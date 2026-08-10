@@ -155,6 +155,21 @@ if (!existsSync(manifestPath)) {
   if (!Array.isArray(m.shortcuts) || m.shortcuts.length < 2) {
     fail('manifest missing SPA shortcuts (Trip Planner + Network Map)');
   }
+  const shots = Array.isArray(m.screenshots) ? m.screenshots : [];
+  if (shots.length < 2) {
+    fail('manifest needs at least 2 screenshots (narrow + wide) for store packaging');
+  }
+  const hasNarrow = shots.some((s) => s.form_factor === 'narrow');
+  const hasWide = shots.some((s) => s.form_factor === 'wide');
+  if (!hasNarrow || !hasWide) {
+    fail('manifest screenshots must include form_factor narrow and wide');
+  }
+  for (const s of shots) {
+    const rel = String(s.src || '').replace(/^\//, '');
+    if (!rel || !existsSync(join(DIST, rel))) {
+      fail(`manifest screenshot missing from dist: ${s.src}`);
+    }
+  }
 }
 
 // 6. Built HTML must link the same manifest filename we emit.
@@ -167,6 +182,10 @@ if (indexHtml.includes('manifest.webmanifest')) {
 }
 if (!indexHtml.includes('apple-mobile-web-app-title" content="Next Train"')) {
   fail('iOS home-screen title must be "Next Train" (not Train 2.0)');
+}
+// PWABuilder HTML-parses for a static register() call; keep it in the shell.
+if (!indexHtml.includes('serviceWorker.register')) {
+  fail('index.html must contain a static serviceWorker.register(...) for PWABuilder detection');
 }
 
 // 7. Precache must use canonical .html URLs (build.format: 'file').

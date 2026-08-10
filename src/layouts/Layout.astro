@@ -363,6 +363,13 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         transform: translateY(0);
       }
 
+      /* Planner: column flex so #planner-spacer can pin Share/Feedback to the shell bottom
+         when error cards are short; tall trips still grow the page and scroll normally. */
+      #view-trip-planner.view-section.active {
+        display: flex;
+        flex-direction: column;
+      }
+
       /* Community keeps an internal feed scroll when that chrome is enabled */
       #view-community.view-section.active {
         display: flex;
@@ -379,11 +386,18 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* SPA shell: min height only — no locked viewport height (that pinned the header) */
+      /* Fill the device height (minus body padding) so short planner/error states
+         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
       #main-content.app-shell {
-        min-height: 600px;
+        min-height: max(600px, calc(100dvh - 2rem));
         height: auto;
         max-height: none;
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell {
+          /* body: pt-12 + pb-4 */
+          min-height: max(600px, calc(100dvh - 4rem));
+        }
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {

@@ -1839,34 +1839,24 @@ if (typeof window !== 'undefined') {
     // Offline transition toast (once per offline episode; indicator stays via $isOffline)
     window.addEventListener('online', () => {
         window._hasShownOfflineToast = false;
-        hideOfflineToast();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.display = 'none';
-            oi.textContent = 'WORKING OFFLINE';
-        }
-        // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
+        // Fresh probe — radios up ≠ usable internet; clears banner immediately on success
         setTimeout(() => {
-            try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
-        }, 400);
+            try {
+                if (typeof window.probeReachability === 'function') window.probeReachability();
+                else window.ensureReachabilityProbed?.();
+            } catch { /* ignore */ }
+        }, 200);
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        if (typeof window.engageConnectionStruggleUi === 'function') {
+        // Still probe — Bluetooth / USB tether can work when cellular+Wi‑Fi look off
+        if (typeof window.probeReachability === 'function') {
+            window.probeReachability().catch(() => {});
+        } else if (typeof window.engageConnectionStruggleUi === 'function') {
             window.engageConnectionStruggleUi('offline');
-        } else {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) {
-                oi.style.display = 'flex';
-                oi.textContent = 'WORKING OFFLINE';
-            }
-            if (!window._hasShownOfflineToast) {
-                window._hasShownOfflineToast = true;
-                showOfflineToast(0, 'offline');
-            }
         }
     });
 }

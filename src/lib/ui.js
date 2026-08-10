@@ -537,7 +537,14 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
 // --- GLOBAL TOAST NOTIFICATIONS ---
 let toastTimeout = null;
 
-export function showToast(message, type = 'info', duration = 2500, actionHTML = '') { 
+/**
+ * @param {string} message
+ * @param {'info'|'success'|'error'|'warning'} [type]
+ * @param {number} [duration]
+ * @param {string} [actionHTML]
+ * @param {string} [messageClass] Tailwind classes for the message span (default text-sm)
+ */
+export function showToast(message, type = 'info', duration = 2500, actionHTML = '', messageClass = 'text-sm font-medium') { 
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
     
@@ -598,10 +605,11 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
     toastEl.className = `flex items-center justify-between px-4 py-3 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} max-w-[90vw]`; 
 
+    const msgClass = messageClass || 'text-sm font-medium';
     toastEl.innerHTML = `
         <div class="flex items-center gap-2 overflow-hidden">
             ${iconHTML}
-            <span class="text-sm font-medium tracking-wide break-words line-clamp-2">${message}</span>
+            <span class="${msgClass} tracking-wide break-words line-clamp-2">${message}</span>
         </div>
         ${actionHTML ? `<div class="ml-3 pl-3 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
     `;
@@ -611,6 +619,50 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     
     toastEl.classList.add('show'); 
     toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
+}
+
+/** Apple phones/tablets (incl. iPadOS desktop UA with touch). */
+export function isAppleMobile() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ may report as MacIntel with touch
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+}
+
+/** Home Screen / installed PWA (iOS standalone or display-mode standalone). */
+export function isStandalonePwa() {
+    if (typeof window === 'undefined') return false;
+    try {
+        if (window.navigator?.standalone === true) return true;
+    } catch { /* ignore */ }
+    try {
+        return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    } catch {
+        return false;
+    }
+}
+
+export function isIosPwa() {
+    return isAppleMobile() && isStandalonePwa();
+}
+
+/** Offline recovery hint — iOS PWAs have no pull-to-refresh. */
+export function offlineRecoveryHint() {
+    if (isIosPwa()) {
+        return 'Close and reopen Next Train from your Home Screen when signal returns.';
+    }
+    if (isAppleMobile()) {
+        return 'Close and reopen Next Train when signal returns.';
+    }
+    return 'Pull down to refresh when signal returns.';
+}
+
+/** Keep #offline-toast seed copy aligned with the current platform. */
+export function syncOfflineToastSeed() {
+    if (typeof document === 'undefined') return;
+    const detail = document.querySelector('#offline-toast .flex.flex-col span:last-child');
+    if (detail) detail.textContent = offlineRecoveryHint();
 }
 
 
@@ -1218,7 +1270,7 @@ export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
         // Offline-only chrome (no liefi/weak alternate banners/toasts)
         col.innerHTML = `
             <span class="text-sm font-bold tracking-wide">You are offline.</span>
-            <span class="text-[10px] text-gray-300 leading-snug">Pull down to refresh when signal returns.</span>
+            <span class="text-[10px] text-gray-300 leading-snug">${offlineRecoveryHint()}</span>
         `;
     }
 
@@ -1731,10 +1783,12 @@ if (typeof window !== 'undefined') {
         document.addEventListener('DOMContentLoaded', () => {
             bindMaintenanceBanner();
             bindExitAndRedirectModals();
+            syncOfflineToastSeed();
         });
     } else {
         bindMaintenanceBanner();
         bindExitAndRedirectModals();
+        syncOfflineToastSeed();
     }
 
     import('./deeplink.js').then((m) => {

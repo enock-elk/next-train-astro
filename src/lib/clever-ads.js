@@ -43,6 +43,14 @@ function clearLegacySessionInjectCap() {
     try { sessionStorage.removeItem(AD_LEGACY_SESSION_INJECT_KEY); } catch { /* ignore */ }
 }
 
+/** iPhone / iPad — classic single Clever embed (no 4-slot remove/reinsert schedule). */
+function isAppleMobile() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+}
+
 function isWelcomeActive() {
     const welcome = document.getElementById('welcome-modal');
     return welcome && !welcome.classList.contains('hidden');
@@ -217,6 +225,8 @@ export function initCleverAds() {
     window._adScriptLoaded = false;
     window._adTelemetryFired = false;
 
+    const appleMobile = isAppleMobile();
+
     let stabilizedAt = 0;
     let nextScheduleIndex = 0;
     let scheduleTimer = null;
@@ -332,11 +342,36 @@ export function initCleverAds() {
         }, waitMs);
     };
 
+    /**
+     * iOS: one classic Clever embed after safe-zone (index.html-style), no retry schedule.
+     * Ordinary load failures stay non-fatal so we do not permanently destroy the slot.
+     */
+    const startIosClassicEmbed = () => {
+        const tryOnce = () => {
+            if (window._adNetworkDestroyed || scheduleExhausted) return;
+            if (!isSafeZone() || shouldDeferForSessionStability()) {
+                scheduleTimer = setTimeout(tryOnce, 1500);
+                return;
+            }
+            if (!window._adScriptInjected && !document.getElementById(LOADER_ID)) {
+                console.log('🛡️ Guardian: iOS CleverAds — classic single embed.');
+                injectAdScript(adContainer);
+            }
+            refreshAdVisibility(adContainer);
+            stopSchedule('ios classic embed');
+        };
+        tryOnce();
+    };
+
     const startInjectSchedule = () => {
         if (scheduleStarted || window._adNetworkDestroyed || scheduleExhausted) return;
         if (shouldDeferForSessionStability()) return;
         scheduleStarted = true;
         stabilizedAt = Date.now();
+        if (appleMobile) {
+            startIosClassicEmbed();
+            return;
+        }
         console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
         armNextScheduleSlot();
     };

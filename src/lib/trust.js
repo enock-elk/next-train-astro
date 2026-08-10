@@ -507,7 +507,7 @@ function applyBanModeFouc() {
     if (!strip) {
         strip = document.createElement('div');
         strip.id = 'nt-ban-fouc-offline';
-        strip.textContent = '📡 You are offline. Pull down to refresh when signal returns.';
+        strip.textContent = '📡 You are offline. Reopen the app when signal returns.';
         document.body.insertBefore(strip, document.body.firstChild);
     }
 

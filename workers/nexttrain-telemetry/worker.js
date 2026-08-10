@@ -67,11 +67,98 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
     return data.access_token;
 }
 
+const ADMIN_EMAILS = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
+
+/** Verify Firebase ID token + admin allowlist. Always required for mutating admin routes. */
+async function requireAdmin(request, env, { requireConfiguredKey = false } = {}) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return { ok: false, status: 401, error: 'Missing or Invalid Authorization Header' };
+    }
+    const idToken = authHeader.slice('Bearer '.length).trim();
+    if (!idToken) {
+        return { ok: false, status: 401, error: 'Missing or Invalid Authorization Header' };
+    }
+
+    const apiKey = env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+        if (requireConfiguredKey) {
+            return { ok: false, status: 500, error: 'Server misconfigured: FIREBASE_WEB_API_KEY missing' };
+        }
+        // Legacy telemetry path: skip verification when key unset (pre-existing behaviour).
+        return { ok: true, email: null, idToken };
+    }
+
+    try {
+        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
+            return { ok: false, status: 401, error: 'Unauthorized: Invalid Firebase Token' };
+        }
+        const user = verifyData.users[0];
+        const email = String(user.email || '').toLowerCase();
+        if (!email || !ADMIN_EMAILS.includes(email)) {
+            return { ok: false, status: 403, error: 'Forbidden: Admin access required.' };
+        }
+        return { ok: true, email, idToken };
+    } catch (err) {
+        return { ok: false, status: 500, error: 'Auth Verification Failed', details: err.message };
+    }
+}
+
+async function purgeCloudflareZoneEverything(env) {
+    const zoneId = env.CF_ZONE_ID;
+    const token = env.CF_API_TOKEN;
+    if (!zoneId || !token) {
+        return {
+            ok: false,
+            status: 500,
+            body: {
+                error: 'Server misconfigured: set CF_ZONE_ID and CF_API_TOKEN (Zone.Cache Purge) on this Worker',
+            },
+        };
+    }
+
+    const cfRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ purge_everything: true }),
+    });
+    const cfData = await cfRes.json().catch(() => ({}));
+    if (!cfRes.ok || cfData.success === false) {
+        return {
+            ok: false,
+            status: cfRes.status === 401 || cfRes.status === 403 ? 502 : 502,
+            body: {
+                error: 'Cloudflare purge failed',
+                details: cfData.errors || cfData,
+            },
+        };
+    }
+    return {
+        ok: true,
+        status: 200,
+        body: {
+            success: true,
+            message: 'Cloudflare zone cache purge requested (same as dashboard Purge Everything)',
+            zoneId,
+            result: cfData.result || null,
+        },
+    };
+}
+
 export default {
     async fetch(request, env, ctx) {
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
             'Access-Control-Max-Age': '86400',
         };
@@ -81,6 +168,10 @@ export default {
         }
 
         const url = new URL(request.url);
+        const json = (status, body) => new Response(JSON.stringify(body), {
+            status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
 
         // First-visit soft guess only — client persists as selected region (GP fallback).
         if (url.pathname === '/region' && request.method === 'GET') {
@@ -103,6 +194,41 @@ export default {
             });
         }
 
+        // Admin: Cloudflare zone "Purge Everything" (dashboard equivalent).
+        // Intentionally NOT wired to legacy /admin/purge — those call sites fire on
+        // routine notice/alert edits and must not wipe the whole CDN.
+        if (request.method === 'POST' && url.pathname === '/admin/purge-cloudflare-cache') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            const purged = await purgeCloudflareZoneEverything(env);
+            return json(purged.status, {
+                ...purged.body,
+                triggeredBy: auth.email,
+                at: Date.now(),
+            });
+        }
+
+        // Legacy admin clients POST here after notice/alert edits. Clear this
+        // Worker's short-lived telemetry Cache API entry only (no zone purge).
+        if (request.method === 'POST' && url.pathname === '/admin/purge') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            try {
+                const cache = caches.default;
+                await cache.delete(new Request('https://nexttrain-internal-cache.local/telemetry'));
+            } catch { /* ignore */ }
+            return json(200, {
+                success: true,
+                message: 'Telemetry worker cache cleared (zone CDN untouched)',
+                triggeredBy: auth.email,
+                at: Date.now(),
+            });
+        }
+
         if (request.method !== 'GET') {
             return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
         }
@@ -119,36 +245,9 @@ export default {
             }
         }
 
-        const idToken = authHeader.split('Bearer ')[1];
-
-        if (env.FIREBASE_WEB_API_KEY) {
-            try {
-                const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_WEB_API_KEY}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idToken: idToken })
-                });
-
-                const verifyData = await verifyRes.json();
-
-                if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
-                    return new Response(JSON.stringify({ error: 'Unauthorized: Invalid Firebase Token' }), {
-                        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
-                }
-
-                const user = verifyData.users[0];
-                const adminEmails = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
-                if (!user.email || !adminEmails.includes(user.email.toLowerCase())) {
-                    return new Response(JSON.stringify({ error: 'Forbidden: Admin access required.' }), {
-                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
-                }
-            } catch (err) {
-                return new Response(JSON.stringify({ error: 'Auth Verification Failed', details: err.message }), {
-                    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-            }
+        const auth = await requireAdmin(request, env, { requireConfiguredKey: false });
+        if (!auth.ok) {
+            return json(auth.status, { error: auth.error, details: auth.details || null });
         }
 
         let telemetryData = {

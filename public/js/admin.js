@@ -12306,8 +12306,11 @@ const Admin = {
             host.appendChild(maintPanel);
         }
 
-        // Re-init if an older admin session left a panel without the multi-banner accordion
-        if (maintPanel.dataset.loaded === "true" && !document.getElementById('maint-mode-header')) {
+        // Re-init if an older admin session left a panel without newer controls
+        if (
+            maintPanel.dataset.loaded === "true"
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-everything-btn'))
+        ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
         }
@@ -12454,6 +12457,14 @@ const Admin = {
                         <button id="nuke-fire-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
                             Fire Killswitch
                         </button>
+
+                        <div class="border-t border-red-200 dark:border-red-800 pt-3 space-y-2">
+                            <p class="text-[11px] text-orange-700 dark:text-orange-300 font-bold leading-snug">Cloudflare edge cache</p>
+                            <p class="text-[10px] text-orange-600/90 dark:text-orange-400/90 leading-snug">Same as Dashboard → Caching → Configuration → <span class="font-bold">Purge Everything</span>. Clears CDN-cached HTML / SW / assets for nexttrain.co.za (does not wipe user devices or fire the killswitch).</p>
+                            <button id="cf-purge-everything-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
+                                Purge Cloudflare Cache
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -12730,6 +12741,7 @@ const Admin = {
         const nukeBody = document.getElementById('nuke-body');
         const nukeChevron = document.getElementById('nuke-chevron');
         const nukeFireBtn = document.getElementById('nuke-fire-btn');
+        const cfPurgeBtn = document.getElementById('cf-purge-everything-btn');
 
         const promoHeader = document.getElementById('promo-header-btn');
         const promoBody = document.getElementById('promo-body');
@@ -13138,7 +13150,7 @@ const Admin = {
                     const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
                     if (res.ok) {
                         try {
-                            await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge', { 
+                            await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge-cloudflare-cache', { 
                                 method: 'POST', 
                                 headers: {'Authorization': `Bearer ${secret}`} 
                             });
@@ -13153,6 +13165,52 @@ const Admin = {
                 } finally {
                     nukeFireBtn.textContent = "Fire Killswitch";
                     nukeFireBtn.disabled = false;
+                }
+            };
+        }
+
+        if (cfPurgeBtn) {
+            cfPurgeBtn.onclick = async () => {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    if (typeof showToast === 'function') showToast("Authentication required.", "error");
+                    return;
+                }
+
+                const confirmed = await Admin.secureConfirm(
+                    "Purge Cloudflare Cache",
+                    "Type 'PURGE' to clear the Cloudflare edge cache for nexttrain.co.za (Purge Everything):",
+                    "PURGE"
+                );
+                if (!confirmed) return;
+
+                const label = cfPurgeBtn.textContent;
+                cfPurgeBtn.textContent = "Purging...";
+                cfPurgeBtn.disabled = true;
+                try {
+                    const res = await fetch('https://nexttrain-telemetry.enock.workers.dev/admin/purge-cloudflare-cache', {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${secret}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ reason: 'admin_panel', at: Date.now() }),
+                    });
+                    let data = null;
+                    try { data = await res.json(); } catch { /* ignore */ }
+                    if (res.ok && data?.success) {
+                        if (typeof showToast === 'function') {
+                            showToast("Cloudflare cache purged — fresh origin fetch in ~5s", "success", 5000);
+                        }
+                    } else {
+                        const detail = data?.error || data?.details?.[0]?.message || `HTTP ${res.status}`;
+                        if (typeof showToast === 'function') showToast(`Cloudflare purge failed: ${detail}`, "error", 6000);
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast("Network error contacting purge endpoint", "error");
+                } finally {
+                    cfPurgeBtn.textContent = label || "Purge Cloudflare Cache";
+                    cfPurgeBtn.disabled = false;
                 }
             };
         }

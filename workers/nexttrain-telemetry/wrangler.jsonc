@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexttrain-telemetry",
+  "main": "worker.js",
+  "compatibility_date": "2026-03-22",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN stay in the dashboard).
+  "vars": {
+    "GA_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",
+    "GA_PROPERTY_ID": "514537103",
+    "SENTRY_ORG": "actuary-consulting-pty-ltd",
+    "SENTRY_PROJECT": "javascript",
+    "FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
+    "CF_ZONE_ID": "12ae447dd10517a217c534114653c2a3"
+  }
+}

@@ -20,7 +20,7 @@ import {
     resolveOperatingDayType
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
-import { buildPlannerShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
@@ -3768,7 +3768,13 @@ export async function shareCurrentGrid() {
     const routeId = state.routeId || $currentRouteId.get();
     const dir = state.dir || 'A';
     const day = state.day || 'weekday';
-    const shareUrl = `${location.origin}${location.pathname}?action=route&route=${routeId}&view=grid&dir=${dir}&day=${day}`;
+    const shareUrl = buildRouteShareUrl({
+        routeId,
+        view: 'grid',
+        dir,
+        day,
+        origin: 'https://nexttrain.co.za',
+    });
     const destName = state.destName || (dir === 'B' ? 'destination B' : 'destination A');
     const shareText = `Check out the ${day} schedule to ${destName}`;
     const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };

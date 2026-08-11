@@ -25,6 +25,7 @@ import {
     rememberBody,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
 const BODY_MAX = 280;
 const FEED_LIMIT = 40;
@@ -32,6 +33,13 @@ const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
 const AUTH_COOLDOWN_MS = 20 * 1000;
+
+/** @type {(() => void) | null} */
+let postsUnsub = null;
+/** @type {string | null} */
+let postsListenRouteId = null;
+/** Skip full "Loading…" flash on realtime patches */
+let feedSilentRepaint = false;
 
 /** WhatsApp / Channels reaction set */
 export const WA_REACTIONS = [
@@ -193,6 +201,99 @@ function findCachedPost(postId) {
     return cachedFeedPosts.find((p) => p.postId === postId) || null;
 }
 
+function postsVisibleFilter(list, myUid) {
+    return (list || [])
+        .filter((p) => p && typeof p === 'object' && p.body)
+        .filter((p) => {
+            if (p.hidden && p.uid !== myUid) return false;
+            if (p.shadowOnly && p.uid !== myUid) return false;
+            return true;
+        })
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function mergeOverlayPosts(routeId, list) {
+    const acct = $account.get();
+    const myUid = acct.status === 'signed-in' ? acct.uid : null;
+    const merged = [...list];
+    const overlay = (localOverlayByRoute[routeId] || []).filter((p) => p.uid === myUid);
+    const ids = new Set(merged.map((p) => p.postId));
+    overlay.forEach((p) => {
+        if (!ids.has(p.postId)) merged.push(p);
+    });
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    return merged;
+}
+
+function stopRealtimePosts() {
+    if (typeof postsUnsub === 'function') {
+        try { postsUnsub(); } catch { /* ignore */ }
+    }
+    postsUnsub = null;
+    postsListenRouteId = null;
+}
+
+/**
+ * Live RTDB feed when communityRealtime is enabled for this route.
+ * Falls back to REST (fetchRoutePosts) when flag off or SDK unavailable.
+ */
+async function startRealtimePosts(routeId) {
+    stopRealtimePosts();
+    if (!routeId) return false;
+    await fetchFeatures();
+    if (!isFeatureEnabled(FEATURE_KEYS.COMMUNITY_REALTIME, routeId)) return false;
+
+    await bootFirebase();
+    if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return false;
+
+    // Guests need anonymous auth for some SDK paths; posts node is public-read.
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+
+    try {
+        const baseRef = window.firebaseDbRef(
+            window.firebaseDb,
+            `route_community/${routeId}/posts`
+        );
+        const q = (window.firebaseDbQuery && window.firebaseDbOrderByChild && window.firebaseDbLimitToLast)
+            ? window.firebaseDbQuery(
+                baseRef,
+                window.firebaseDbOrderByChild('timestamp'),
+                window.firebaseDbLimitToLast(FEED_LIMIT)
+            )
+            : baseRef;
+
+        postsListenRouteId = routeId;
+        postsUnsub = window.firebaseDbOnValue(q, (snap) => {
+            if (postsListenRouteId !== routeId) return;
+            const data = snap?.val?.() || null;
+            const acct = $account.get();
+            const myUid = acct.status === 'signed-in' ? acct.uid : null;
+            const list = data
+                ? postsVisibleFilter(Object.values(data), myUid)
+                : [];
+            cachedFeedPosts = mergeOverlayPosts(routeId, list);
+            feedSilentRepaint = true;
+            applyFeedFilter(routeId);
+            feedSilentRepaint = false;
+            // Keep unread badge honest while room is open
+            if (routeId === getPinnedRouteId() && safeStorage.getItem('activeTab') === 'community') {
+                markCommunityRouteSeen(routeId);
+            }
+        }, (err) => {
+            console.warn('Community realtime listener failed; falling back to REST', err);
+            stopRealtimePosts();
+            renderCommunityFeed(routeId, { forceRest: true });
+        });
+        return true;
+    } catch (e) {
+        console.warn('Community realtime start failed', e);
+        stopRealtimePosts();
+        return false;
+    }
+}
+
 export async function fetchRoutePosts(routeId) {
     if (!routeId || !navigator.onLine) return [];
     try {
@@ -209,22 +310,8 @@ export async function fetchRoutePosts(routeId) {
         if (!data) return [];
         const acct = $account.get();
         const myUid = acct.status === 'signed-in' ? acct.uid : null;
-        const list = Object.values(data)
-            .filter((p) => p && typeof p === 'object' && p.body)
-            .filter((p) => {
-                if (p.hidden && p.uid !== myUid) return false;
-                if (p.shadowOnly && p.uid !== myUid) return false;
-                return true;
-            })
-            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-        const overlay = (localOverlayByRoute[routeId] || []).filter((p) => p.uid === myUid);
-        const ids = new Set(list.map((p) => p.postId));
-        overlay.forEach((p) => {
-            if (!ids.has(p.postId)) list.push(p);
-        });
-        list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        return list;
+        const list = postsVisibleFilter(Object.values(data), myUid);
+        return mergeOverlayPosts(routeId, list);
     } catch {
         return [];
     }
@@ -860,7 +947,7 @@ export function startCommunityUnreadWatch() {
     });
 }
 
-export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
+export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts = {}) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
@@ -869,9 +956,34 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
 
-    listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
-    if (emptyEl) emptyEl.classList.add('hidden');
+    const forceRest = !!opts.forceRest;
+    if (!feedSilentRepaint) {
+        listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
+        if (emptyEl) emptyEl.classList.add('hidden');
+    }
 
+    // Prefer live listener when feature is on for this route
+    if (!forceRest) {
+        const live = await startRealtimePosts(routeId);
+        if (live) {
+            // Listener will paint; still fetch reactions once
+            const reactionsMap = await fetchPostReactions(routeId);
+            cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
+            if (!cachedFeedPosts.length) {
+                // First paint may race before first onValue — soft REST seed
+                const posts = await fetchRoutePosts(routeId);
+                if (postsListenRouteId === routeId && posts.length && !cachedFeedPosts.length) {
+                    cachedFeedPosts = posts;
+                    applyFeedFilter(routeId);
+                }
+            } else {
+                applyFeedFilter(routeId);
+            }
+            return;
+        }
+    }
+
+    stopRealtimePosts();
     const [posts, reactionsMap] = await Promise.all([
         fetchRoutePosts(routeId),
         fetchPostReactions(routeId),
@@ -987,6 +1099,7 @@ export function openRouteCommunity(opts = {}) {
 }
 
 export function leaveCommunityRoom() {
+    stopRealtimePosts();
     leaveCommunityPresence();
 }
 
@@ -1018,7 +1131,10 @@ async function handlePostSubmit() {
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
     showToast('Posted to the route feed', 'success');
-    await renderCommunityFeed(routeId);
+    // Realtime listener will refresh; REST fallback still re-renders
+    if (!postsListenRouteId || postsListenRouteId !== routeId) {
+        await renderCommunityFeed(routeId);
+    }
     if (btn) btn.disabled = false;
 }
 

@@ -41,6 +41,8 @@ export default defineConfig({
         enabled: false,
       },
       workbox: {
+        // FCM background handler (compat) — keeps push working with the PWA SW.
+        importScripts: [`${baseWithSlash}firebase-messaging-sw-bridge.js`],
         // Drop prior Workbox precaches when the revision set changes (Astro SW).
         // Legacy SPA buckets (`metrorail-next-train-*`) are purged client-side in
         // cleanupLegacySpaShell() on first Astro boot.

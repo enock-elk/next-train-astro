@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.11 — Lab line: realtime community + alerts (11 Aug 2026)
+
+- Long-lived `lab` branch + `lab.nexttrain.co.za` deploy workflow (independent of `main` / production).
+- RTDB `config/features` corridor gates for realtime chat, delay-report UI, and push.
+- Community feed can subscribe live via Firebase `onValue` (lab on by default; prod off until allow-listed).
+- Settings notifications wire into FCM token registration when `PUBLIC_FIREBASE_VAPID_KEY` is set.
+- Docs: `docs/PHASE-LAB-LINE.md`, `docs/PHASE-COMMUNITY-REALTIME.md`.
+
 ## V8_08.10.1 — Cape Town Public Holidays (10 Aug 2026)
 
 - Western Cape public holidays no longer reuse Saturday timetables automatically.

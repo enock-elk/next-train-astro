@@ -23,9 +23,20 @@ import {
     isBlockedLocally,
     checkContentSafety,
 } from './trust.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
-/** Commuter-facing real-time alert reporting — off for SPA→Astro parity cutover. */
-export const DELAY_REPORTS_UI_ENABLED = false;
+/** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
+export let DELAY_REPORTS_UI_ENABLED = false;
+
+/**
+ * Commuter-facing delay / status report UI — gated by config/features.delayReportsUi
+ * (lab defaults on; production defaults off until corridor allow-list is set).
+ */
+export function isDelayReportsUiEnabled(routeId = $currentRouteId.get()) {
+    const on = isFeatureEnabled(FEATURE_KEYS.DELAY_REPORTS_UI, routeId || '');
+    DELAY_REPORTS_UI_ENABLED = on;
+    return on;
+}
 
 const GUEST_GLOBAL_MS = 45 * 60 * 1000;
 const GUEST_ROUTE_MS = 2 * 60 * 60 * 1000;
@@ -226,7 +237,7 @@ function flagColorClass(status) {
 export function buildTrainReportSlotHtml({
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
 }) {
-    if (!DELAY_REPORTS_UI_ENABLED) return '';
+    if (!isDelayReportsUiEnabled(routeId)) return '';
     const reportable = isTrainInReportWindow(scheduledTime);
     const attrs = [
         `data-train-report-slot`,
@@ -249,7 +260,7 @@ export function buildTrainTitleReportButton({
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
     className = '',
 }) {
-    if (!DELAY_REPORTS_UI_ENABLED) {
+    if (!isDelayReportsUiEnabled(routeId)) {
         return `<span class="${className}"><span class="truncate">${escapeHTML(label)}</span></span>`;
     }
     const attrs = [
@@ -267,7 +278,8 @@ export function buildTrainTitleReportButton({
 }
 
 export async function hydrateTrainReportSlots(root = document) {
-    if (!DELAY_REPORTS_UI_ENABLED) return;
+    await fetchFeatures();
+    if (!isDelayReportsUiEnabled()) return;
     const slots = (root || document).querySelectorAll?.('[data-train-report-slot][data-reportable="1"]');
     if (!slots?.length) return;
 
@@ -321,8 +333,8 @@ function showTrainReportStep(step) {
 }
 
 export function openTrainReportModal(opts = {}) {
-    if (!DELAY_REPORTS_UI_ENABLED) return;
     const routeId = opts.routeId || $currentRouteId.get() || '';
+    if (!isDelayReportsUiEnabled(routeId)) return;
     const trainId = opts.trainId || '';
     const scheduledTime = opts.scheduledTime || '';
     const station = opts.station || document.getElementById('station-select')?.value || '';
@@ -510,7 +522,8 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
     const text = document.getElementById('delay-report-banner-text');
     if (!banner) return;
 
-    if (!DELAY_REPORTS_UI_ENABLED) {
+    await fetchFeatures();
+    if (!isDelayReportsUiEnabled(routeId)) {
         banner.classList.add('hidden');
         badge?.classList.add('hidden');
         return;
@@ -546,7 +559,8 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
 }
 
 export async function getPlannerCrowdDelayHtml(routeIds = []) {
-    if (!DELAY_REPORTS_UI_ENABLED) return '';
+    await fetchFeatures();
+    if (!isDelayReportsUiEnabled()) return '';
     const ids = [...new Set((routeIds || []).filter(Boolean))];
     if (!ids.length) return '';
     const batches = await Promise.all(ids.slice(0, 4).map((id) => fetchRecentRouteReports(id)));
@@ -567,17 +581,22 @@ export async function getPlannerCrowdDelayHtml(routeIds = []) {
 export function bindDelayReportUi() {
     if (typeof document === 'undefined' || window.__ntDelayReportBound) return;
     window.__ntDelayReportBound = true;
-    if (!DELAY_REPORTS_UI_ENABLED) {
-        document.getElementById('delay-report-banner')?.classList.add('hidden');
-        return;
-    }
+
+    const hideBannerIfOff = () => {
+        if (!isDelayReportsUiEnabled()) {
+            document.getElementById('delay-report-banner')?.classList.add('hidden');
+        }
+    };
 
     document.getElementById('delay-report-cancel')?.addEventListener('click', () => closeSmoothModal('delay-report-modal'));
     document.getElementById('tr-done-btn')?.addEventListener('click', () => closeSmoothModal('delay-report-modal'));
     document.getElementById('tr-late-back')?.addEventListener('click', () => showTrainReportStep('status'));
 
     document.querySelectorAll('[data-tr-status]').forEach((btn) => {
-        btn.addEventListener('click', () => finishSimpleStatus(btn.getAttribute('data-tr-status')));
+        btn.addEventListener('click', () => {
+            if (!isDelayReportsUiEnabled()) return;
+            finishSimpleStatus(btn.getAttribute('data-tr-status'));
+        });
     });
 
     document.querySelectorAll('[data-tr-bucket]').forEach((btn) => {
@@ -591,6 +610,7 @@ export function bindDelayReportUi() {
     });
 
     document.getElementById('tr-late-submit')?.addEventListener('click', async () => {
+        if (!isDelayReportsUiEnabled()) return;
         const bucket = document.getElementById('tr-late-bucket')?.value;
         if (!bucket) {
             const err = document.getElementById('tr-error');
@@ -619,7 +639,6 @@ export function bindDelayReportUi() {
         });
     });
 
-    // Legacy corridor entry (banner) → open with current station, no train (still usable)
     document.getElementById('delay-report-banner-cta')?.addEventListener('click', () => {
         openTrainReportModal({
             routeId: $currentRouteId.get(),
@@ -634,8 +653,17 @@ export function bindDelayReportUi() {
         }
     });
 
-    const rid = $currentRouteId.get();
-    if (rid) refreshDelayReportSurface(rid);
+    window.addEventListener('nt-features-updated', () => {
+        hideBannerIfOff();
+        const rid = $currentRouteId.get();
+        if (rid) refreshDelayReportSurface(rid);
+    });
+
+    fetchFeatures().then(() => {
+        hideBannerIfOff();
+        const rid = $currentRouteId.get();
+        if (rid) refreshDelayReportSurface(rid);
+    }).catch(hideBannerIfOff);
 }
 
 if (typeof window !== 'undefined') {

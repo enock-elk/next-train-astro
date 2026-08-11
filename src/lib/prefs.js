@@ -127,7 +127,7 @@ export function hydratePrefs() {
     syncNotifyUi();
 }
 
-/** Phase 8 — preference stub for room / delay push (FCM later) */
+/** Phase 8 — preference for room / delay push (FCM when VAPID configured) */
 export function getNotifyPref() {
     return safeStorage.getItem(NOTIFY_PREF_KEY) === 'true';
 }
@@ -143,17 +143,27 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
         } else if (Notification.permission === 'denied') {
             hint.textContent = 'Blocked in browser settings';
         } else if (enabled && Notification.permission === 'granted') {
-            hint.textContent = 'On — push delivery coming soon';
+            const hasVapid = (() => {
+                try { return !!(import.meta.env?.PUBLIC_FIREBASE_VAPID_KEY); } catch { return false; }
+            })();
+            hint.textContent = hasVapid
+                ? 'On — alerts for your routes'
+                : 'On — browser permission saved (FCM key pending)';
         } else {
-            hint.textContent = 'Room activity & delay confirms (soon)';
+            hint.textContent = 'Route notices & delay confirms';
         }
     }
 }
 
 export async function setNotifyPref(wantOn) {
     if (!wantOn) {
-        safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
-        syncNotifyUi(false);
+        try {
+            const { disablePushNotifications } = await import('./push-notify.js');
+            await disablePushNotifications();
+        } catch {
+            safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
+            syncNotifyUi(false);
+        }
         return false;
     }
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -165,15 +175,32 @@ export async function setNotifyPref(wantOn) {
     if (perm === 'default') {
         try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
     }
-    const ok = perm === 'granted';
-    safeStorage.setItem(NOTIFY_PREF_KEY, ok ? 'true' : 'false');
-    syncNotifyUi(ok);
-    if (ok && typeof window.showToast === 'function') {
-        window.showToast('Notifications enabled — delivery wiring comes next', 'success');
-    } else if (!ok && typeof window.showToast === 'function') {
-        window.showToast('Permission needed for notifications', 'error');
+    if (perm !== 'granted') {
+        safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
+        syncNotifyUi(false);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Permission needed for notifications', 'error');
+        }
+        return false;
     }
-    return ok;
+
+    try {
+        const { enablePushNotifications } = await import('./push-notify.js');
+        const result = await enablePushNotifications();
+        syncNotifyUi(true);
+        if (typeof window.showToast === 'function') {
+            window.showToast(result.message || 'Notifications enabled', 'success');
+        }
+        return true;
+    } catch (e) {
+        console.warn('Push enable failed', e);
+        safeStorage.setItem(NOTIFY_PREF_KEY, 'true');
+        syncNotifyUi(true);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Notifications enabled — delivery may be limited', 'success');
+        }
+        return true;
+    }
 }
 
 /**

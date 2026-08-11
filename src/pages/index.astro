@@ -244,6 +244,7 @@ const faqLd = {
         bindMaintenanceBanner
     } from '../lib/ui.js';
     import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
+    import { fetchFeatures } from '../lib/features.js';
     import {
         prepareDeeplinkIntents,
         consumeHashDeeplinks,
@@ -271,6 +272,10 @@ const faqLd = {
     syncRegionDisplayDom($userRegion.get() || 'GP');
     syncCrmRegionAnalytics($userRegion.get() || 'GP');
     hydratePrefs();
+    // Corridor feature flags (chat realtime / delay UI / push) — non-blocking
+    fetchFeatures().then(() => {
+        import('../lib/push-notify.js').then((m) => m.hydratePushNotifications?.()).catch(() => {});
+    }).catch(() => {});
     startClock();
     syncClockShims();
     setInterval(syncClockShims, 1000);

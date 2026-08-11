@@ -19,7 +19,23 @@ import {
     updateProfile,
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { getDatabase, ref as dbRef, set, update, get, onValue, onDisconnect, remove } from 'firebase/database';
+import {
+    getDatabase,
+    ref as dbRef,
+    set,
+    update,
+    get,
+    onValue,
+    onChildAdded,
+    onChildChanged,
+    onChildRemoved,
+    onDisconnect,
+    remove,
+    query,
+    orderByChild,
+    limitToLast,
+} from 'firebase/database';
+import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: 'AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY',
@@ -73,8 +89,26 @@ export async function bootFirebase() {
         window.firebaseDbUpdate = update;
         window.firebaseDbGet = get;
         window.firebaseDbOnValue = onValue;
+        window.firebaseDbOnChildAdded = onChildAdded;
+        window.firebaseDbOnChildChanged = onChildChanged;
+        window.firebaseDbOnChildRemoved = onChildRemoved;
+        window.firebaseDbQuery = query;
+        window.firebaseDbOrderByChild = orderByChild;
+        window.firebaseDbLimitToLast = limitToLast;
         window.firebaseDbOnDisconnect = onDisconnect;
         window.firebaseDbRemove = remove;
+
+        // FCM is optional (Safari / insecure contexts / missing SW)
+        try {
+            const messagingOk = await isMessagingSupported();
+            if (messagingOk) {
+                window.firebaseMessaging = getMessaging(app);
+                window.firebaseGetToken = getToken;
+                window.firebaseOnMessage = onMessage;
+            }
+        } catch (msgErr) {
+            console.warn('Firebase Messaging unavailable', msgErr);
+        }
 
         _ready = true;
     } catch (e) {

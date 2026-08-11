@@ -9,8 +9,17 @@
       "killswitch": { ".read": true },
       "special_event": { ".read": true },
       "schedule_override": { ".read": true },
+      "features": { ".read": true },
       "shadow_ban_mode": {
         ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      }
+    },
+
+    "push_subscriptions": {
+      "$deviceId": {
+        ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || (data.exists() && data.child('uid').val() === auth.uid))",
+        ".write": "auth != null && (!data.exists() || !data.hasChild('uid') || data.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['token', 'updatedAt', 'deviceId']) && newData.child('token').isString() && newData.child('token').val().length > 10 && newData.child('token').val().length < 500 && newData.child('updatedAt').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
       }
     },
     "holiday_approvals": {

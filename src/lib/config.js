@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.10.1";
+export const APP_VERSION = "V8_08.11";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -868,6 +868,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.11",
+        title: "Community realtime (lab)",
+        date: "11 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Lab line:</b> new features ship first on lab.nexttrain.co.za while production stays independent.",
+            "<b>Route chat:</b> community feed can update live when the corridor flag is on.",
+            "<b>Alerts:</b> delay reports and push prefs are corridor-gated for a safe pilot rollout."
+        ]
+    },
     {
         id: "V8_08.10.1",
         title: "Cape Town Public Holidays",

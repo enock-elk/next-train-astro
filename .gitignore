@@ -54,3 +54,6 @@ next-train-astro/
 .eslintcache
 .stylelintcache
 .turbo/
+
+# Local parallel lab checkout
+.worktrees/

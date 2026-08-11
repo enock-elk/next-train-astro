@@ -1,0 +1,120 @@
+# Deploy lab → Cloudflare Pages (lab.nexttrain.co.za)
+#
+# Long-lived experiment line. Does NOT touch metrorail-app or nexttrain.co.za.
+# Does NOT use this repo's GitHub Pages slot (that stays on main → preview).
+#
+# Triggers: push to `lab`.
+#
+# ONE-TIME SETUP
+# 1. Cloudflare dashboard → Workers & Pages → Create / connect GitHub
+#    repo enock-elk/next-train-astro, production branch `lab`
+#    OR use direct upload via this workflow (secrets below).
+# 2. Custom domain: lab.nexttrain.co.za (CNAME to the Pages project).
+# 3. Repo secrets (for wrangler deploy path):
+#      CLOUDFLARE_API_TOKEN   — Pages Edit
+#      CLOUDFLARE_ACCOUNT_ID
+# 4. Optional:
+#      PUBLIC_FIREBASE_VAPID_KEY — Web Push certificate key from Firebase Console
+#
+# If Cloudflare secrets are missing, the workflow still builds + uploads an artifact.
+name: Deploy lab → Cloudflare Pages
+
+on:
+  push:
+    branches: [lab]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: deploy-lab-pages
+  cancel-in-progress: true
+
+env:
+  SITE_ORIGIN: https://lab.nexttrain.co.za
+  CF_PROJECT_NAME: next-train-lab
+
+jobs:
+  build-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build lab bundle
+        run: npm run build
+        env:
+          PUBLIC_SITE_URL: https://lab.nexttrain.co.za
+          PUBLIC_BASE_PATH: /
+          PUBLIC_LAB_MODE: 'true'
+          PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
+
+      - name: De-index the lab site
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > dist/robots.txt
+          rm -f dist/sitemap.xml
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const tag = '<meta name=\"robots\" content=\"noindex, nofollow\">';
+            const labBadge = '<meta name=\"nt-channel\" content=\"lab\">';
+            function walk(dir) {
+              for (const name of fs.readdirSync(dir)) {
+                const p = path.join(dir, name);
+                if (fs.statSync(p).isDirectory()) walk(p);
+                else if (name.endsWith('.html')) {
+                  let html = fs.readFileSync(p, 'utf8');
+                  html = html.replace(/<meta name=\"robots\"[^>]*>/g, '');
+                  html = html.replace('<head>', '<head>' + tag + labBadge);
+                  fs.writeFileSync(p, html);
+                }
+              }
+            }
+            walk('dist');
+          "
+
+      - name: Write lab deploy stamp
+        run: |
+          cat > dist/lab-deploy.json <<EOF
+          {
+            "channel": "lab",
+            "sha": "${{ github.sha }}",
+            "ref": "${{ github.ref_name }}",
+            "site": "https://lab.nexttrain.co.za",
+            "deployedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Upload lab artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-dist
+          path: dist
+          retention-days: 14
+
+      - name: Deploy to Cloudflare Pages (when secrets present)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set."
+            echo "Lab dist artifact uploaded. Connect the lab branch in Cloudflare Pages,"
+            echo "or add the secrets and re-run this workflow to publish lab.nexttrain.co.za."
+            exit 0
+          fi
+          npm exec --yes wrangler@3 pages deploy dist \
+            --project-name="$CF_PROJECT_NAME" \
+            --branch=lab \
+            --commit-dirty=true

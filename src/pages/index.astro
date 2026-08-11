@@ -135,7 +135,7 @@ const faqLd = {
         
         <Header />
 
-        <!-- SPA surface: Next Train + Trip Planner only (Community stays in DOM for later, off chrome) -->
+        <!-- Production: Next Train + Trip Planner only. Lab: Community top tab visible for testing. -->
         <div id="app-top-tabs" class="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-30 relative" role="tablist" aria-label="Primary">
             <button id="tab-next-train" class="tab-btn active" type="button" role="tab" aria-selected="true">
                 Next Train
@@ -143,7 +143,15 @@ const faqLd = {
             <button id="tab-trip-planner" class="tab-btn" type="button" role="tab" aria-selected="false">
                 Trip Planner
             </button>
-            <button id="tab-community" class="hidden" type="button" tabindex="-1" aria-hidden="true" aria-selected="false">
+            <button
+                id="tab-community"
+                class:list={['tab-btn', { hidden: import.meta.env.PUBLIC_LAB_MODE !== 'true' }]}
+                type="button"
+                role="tab"
+                tabindex={import.meta.env.PUBLIC_LAB_MODE === 'true' ? 0 : -1}
+                aria-hidden={import.meta.env.PUBLIC_LAB_MODE === 'true' ? 'false' : 'true'}
+                aria-selected="false"
+            >
                 Community
                 <span id="community-unread-badge-top" class="hidden">0</span>
             </button>
@@ -272,6 +280,23 @@ const faqLd = {
     syncRegionDisplayDom($userRegion.get() || 'GP');
     syncCrmRegionAnalytics($userRegion.get() || 'GP');
     hydratePrefs();
+    // Lab hostname fallback: show Community top tab even if build env missed PUBLIC_LAB_MODE
+    try {
+        const host = String(location.hostname || '').toLowerCase();
+        if (host === 'lab.nexttrain.co.za' || host.startsWith('lab.')) {
+            const communityTab = document.getElementById('tab-community');
+            if (communityTab) {
+                communityTab.classList.remove('hidden');
+                communityTab.removeAttribute('aria-hidden');
+                communityTab.tabIndex = 0;
+            }
+            if (!safeStorage.getItem('navStyle')) {
+                import('../lib/prefs.js').then(({ setNavStyle, NAV_STYLES }) => {
+                    setNavStyle(NAV_STYLES.BOTTOM);
+                }).catch(() => {});
+            }
+        }
+    } catch (e) { /* ignore */ }
     // Corridor feature flags (chat realtime / delay UI / push) — non-blocking
     fetchFeatures().then(() => {
         import('../lib/push-notify.js').then((m) => m.hydratePushNotifications?.()).catch(() => {});

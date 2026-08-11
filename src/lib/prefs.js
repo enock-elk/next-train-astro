@@ -34,7 +34,13 @@ const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
 export function getNavStyle() {
     const v = safeStorage.getItem(NAV_STYLE_KEY);
-    return v === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
+    if (v === NAV_STYLES.BOTTOM) return NAV_STYLES.BOTTOM;
+    if (v === NAV_STYLES.TOP) return NAV_STYLES.TOP;
+    // Lab first visit: bottom nav so Community is obvious without hunting.
+    try {
+        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return NAV_STYLES.BOTTOM;
+    } catch { /* ignore */ }
+    return NAV_STYLES.TOP;
 }
 
 export function setNavStyle(style) {

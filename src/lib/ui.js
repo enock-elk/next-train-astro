@@ -1132,10 +1132,15 @@ export function setupSwipeNavigation() {
         const diffX = endX - touchStartX;
         const diffY = endY - touchStartY;
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            // SPA chrome is two tabs; skip Community for swipe parity
-            const order = ['next-train', 'trip-planner'];
+            // Lab: include Community in swipe order when the top tab is visible.
+            const communityTab = document.getElementById('tab-community');
+            const communityVisible = !!(communityTab && !communityTab.classList.contains('hidden'));
+            const order = communityVisible
+                ? ['next-train', 'trip-planner', 'community']
+                : ['next-train', 'trip-planner'];
             const cur = safeStorage.getItem('activeTab') || 'next-train';
-            const idx = Math.max(0, order.indexOf(cur === 'community' ? 'next-train' : cur));
+            const safeCur = order.includes(cur) ? cur : 'next-train';
+            const idx = Math.max(0, order.indexOf(safeCur));
             if (diffX > 0) switchTab(order[Math.max(0, idx - 1)]);
             else switchTab(order[Math.min(order.length - 1, idx + 1)]);
         }

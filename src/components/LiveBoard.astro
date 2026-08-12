@@ -25,7 +25,6 @@
                 <svg class="w-5 h-5 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
         </div>
-        <p id="last-updated-date" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1">Schedule Effective from: --</p>
     </div>
 
     <!-- Commuter delay reports (gated via config/features delayReportsUi) -->
@@ -86,15 +85,11 @@
         </div>
     </div>
 
-    <!-- Full timetable (visible as shell chrome; JS still toggles when route is ready) -->
-    <div id="grid-trigger-container" class="mb-4 mt-2 px-1">
-        <button type="button" id="view-full-timetable-btn" class="w-full flex items-center justify-center space-x-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 group focus:outline-none">
-            <svg class="w-5 h-5 shrink-0 opacity-95 group-hover:scale-105 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-                <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
-            </svg>
-            <span class="tracking-wide">VIEW FULL TIMETABLE</span>
+    <!-- Full timetable CTA — title + effective date inside (brand redesign) -->
+    <div id="grid-trigger-container" class="mb-5 mt-1">
+        <button type="button" id="view-full-timetable-btn" class="w-full flex flex-col items-center justify-center gap-0.5 px-3.5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-center shadow-md transition-colors focus:outline-none group border border-blue-700/40 dark:border-blue-400/30 active:scale-[0.99]">
+            <span class="block text-sm font-black uppercase tracking-wide text-white leading-tight">View full timetable</span>
+            <span id="last-updated-date" class="block text-[11px] font-bold text-blue-100 tracking-wide truncate max-w-full">Effective from: —</span>
         </button>
     </div>
 

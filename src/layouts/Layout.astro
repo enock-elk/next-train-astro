@@ -370,8 +370,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       }
       .view-section.active {
         display: block;
-        /* SPA: content grows; the page (not an inner pane) scrolls — header moves with it */
+        /* Fill leftover shell height so short tabs don't collapse */
         flex: 1 1 auto;
+        min-height: 0;
         overflow: visible;
         opacity: 1;
         transform: translateY(0);
@@ -382,14 +383,36 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       #view-trip-planner.view-section.active {
         display: flex;
         flex-direction: column;
+        min-height: calc(100dvh - 9.5rem);
       }
 
-      /* Community keeps an internal feed scroll when that chrome is enabled */
+      /* Community: fill viewport under header/nav; feed scrolls internally */
       #view-community.view-section.active {
         display: flex;
         flex-direction: column;
-        min-height: 0;
+        flex: 1 1 auto;
+        min-height: calc(100dvh - 9.5rem);
+        height: calc(100dvh - 9.5rem);
+        max-height: calc(100dvh - 9.5rem);
         overflow: hidden;
+      }
+      body.nav-bottom #view-community.view-section.active {
+        min-height: calc(100dvh - 11rem);
+        height: calc(100dvh - 11rem);
+        max-height: calc(100dvh - 11rem);
+      }
+      #view-community .community-pane {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+      }
+
+      #view-next-train.view-section.active {
+        min-height: calc(100dvh - 9.5rem);
+      }
+      body.nav-bottom #view-next-train.view-section.active,
+      body.nav-bottom #view-trip-planner.view-section.active {
+        min-height: calc(100dvh - 11rem);
       }
 
       /* Travel Day / inline menus must paint below the trigger without clipping */
@@ -400,16 +423,28 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* Fill the device height (minus body padding) so short planner/error states
-         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
+      /* Shell fills the device; flex children (tabs) can stretch into leftover space */
       #main-content.app-shell {
         min-height: max(600px, calc(100dvh - 2rem));
-        height: auto;
+        height: max(600px, calc(100dvh - 2rem));
         max-height: none;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
           /* body: pt-12 + pb-4 */
+          min-height: max(600px, calc(100dvh - 4rem));
+          height: max(600px, calc(100dvh - 4rem));
+        }
+      }
+      /* Tall Next Train / Planner content: grow the shell and scroll the page */
+      #main-content.app-shell:has(#view-next-train.active),
+      #main-content.app-shell:has(#view-trip-planner.active) {
+        height: auto;
+        min-height: max(600px, calc(100dvh - 2rem));
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell:has(#view-next-train.active),
+        #main-content.app-shell:has(#view-trip-planner.active) {
           min-height: max(600px, calc(100dvh - 4rem));
         }
       }

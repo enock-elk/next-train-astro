@@ -272,35 +272,16 @@ html[data-colour-pack="ember"].dark {
   border-color: var(--nt-border);
 }
 
-/* Classic / SPA: keep Tailwind blue-600 / blue-400 on the indicator.
-   Non-classic packs retint below. */
-html[data-colour-pack="midnight"] #tab-sliding-indicator,
-html[data-colour-pack="contrast"] #tab-sliding-indicator,
-html[data-colour-pack="signal"] #tab-sliding-indicator,
-html[data-colour-pack="ember"] #tab-sliding-indicator {
+/* Brand-left header: solid pack primary (Ember → amber/orange) */
+#tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
 
-/* Never flatten the SPA title gradient to a solid pack fill */
-#app-title {
-  background-image: linear-gradient(to right, #2563eb, #4f46e5);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
-}
-html.dark #app-title {
-  background-image: linear-gradient(to right, #60a5fa, #818cf8);
-}
-
-html[data-colour-pack="midnight"] #app-title,
-html[data-colour-pack="contrast"] #app-title,
-html[data-colour-pack="signal"] #app-title,
-html[data-colour-pack="ember"] #app-title {
-  background-image: linear-gradient(
-    to right,
-    var(--nt-primary),
-    color-mix(in srgb, var(--nt-primary) 55%, #4f46e5)
-  );
+#app-title.header-title {
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  color: var(--nt-primary) !important;
 }
 
 .view-section {
@@ -348,29 +329,24 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-/* Pack-tinted CTAs only for non-classic packs.
-   Classic must keep SPA Tailwind: bg-blue-600 / text-white (also in dark). */
-html[data-colour-pack="midnight"] #locate-btn,
-html[data-colour-pack="contrast"] #locate-btn,
-html[data-colour-pack="signal"] #locate-btn,
-html[data-colour-pack="ember"] #locate-btn,
-html[data-colour-pack="midnight"] #view-full-timetable-btn,
-html[data-colour-pack="contrast"] #view-full-timetable-btn,
-html[data-colour-pack="signal"] #view-full-timetable-btn,
-html[data-colour-pack="ember"] #view-full-timetable-btn {
+/* Pack-tinted CTAs (GPS + full timetable) — Ember turns these amber/orange */
+#locate-btn,
+#view-full-timetable-btn {
   background-color: var(--nt-primary) !important;
   border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
 }
-html[data-colour-pack="midnight"] #locate-btn:hover,
-html[data-colour-pack="contrast"] #locate-btn:hover,
-html[data-colour-pack="signal"] #locate-btn:hover,
-html[data-colour-pack="ember"] #locate-btn:hover,
-html[data-colour-pack="midnight"] #view-full-timetable-btn:hover,
-html[data-colour-pack="contrast"] #view-full-timetable-btn:hover,
-html[data-colour-pack="signal"] #view-full-timetable-btn:hover,
-html[data-colour-pack="ember"] #view-full-timetable-btn:hover {
+#locate-btn:hover,
+#view-full-timetable-btn:hover {
   background-color: var(--nt-primary-hover) !important;
+}
+#view-full-timetable-btn #last-updated-date {
+  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
+  font-weight: 700;
+  text-align: center;
+}
+#view-full-timetable-btn {
+  text-align: center;
 }
 
 /* Colour pack picker (Settings) */

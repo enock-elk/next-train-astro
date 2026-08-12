@@ -71,6 +71,7 @@ const versionBadge = String(APP_VERSION);
             <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             <div class="text-left">
               <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Dark Mode</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light / dark</p>
             </div>
           </div>
           <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
@@ -78,6 +79,39 @@ const versionBadge = String(APP_VERSION);
             <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
           </div>
         </button>
+
+        <div class="py-3 px-4 border-b border-gray-100 dark:border-gray-800">
+          <div class="flex items-center space-x-4 mb-3">
+            <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+            <div class="text-left">
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Colour Pack</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="settings-colour-pack-display">Classic</p>
+            </div>
+          </div>
+          <div id="colour-pack-picker" class="ml-9 grid grid-cols-3 gap-2 relative z-10" role="group" aria-label="Colour pack">
+            <button type="button" data-colour-pack-option="classic" class="colour-pack-option cursor-pointer" aria-pressed="true" style="--pack-accent:#2563eb">
+              <span class="colour-pack-swatch" style="--swatch-a:#eff6ff;--swatch-b:#2563eb;--swatch-c:#1e40af"></span>
+              <span class="pack-label">Classic</span>
+            </button>
+            <button type="button" data-colour-pack-option="midnight" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#0284c7">
+              <span class="colour-pack-swatch" style="--swatch-a:#f1f5f9;--swatch-b:#0ea5e9;--swatch-c:#0f172a"></span>
+              <span class="pack-label">Midnight</span>
+            </button>
+            <button type="button" data-colour-pack-option="contrast" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#0f172a">
+              <span class="colour-pack-swatch" style="--swatch-a:#f8fafc;--swatch-b:#0f172a;--swatch-c:#2563eb"></span>
+              <span class="pack-label">Contrast</span>
+            </button>
+            <button type="button" data-colour-pack-option="signal" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#059669">
+              <span class="colour-pack-swatch" style="--swatch-a:#ecfdf5;--swatch-b:#059669;--swatch-c:#064e3b"></span>
+              <span class="pack-label">Signal</span>
+            </button>
+            <button type="button" data-colour-pack-option="ember" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#d97706">
+              <span class="colour-pack-swatch" style="--swatch-a:#fffbeb;--swatch-b:#d97706;--swatch-c:#92400e"></span>
+              <span class="pack-label">Ember</span>
+            </button>
+          </div>
+          <p class="ml-9 mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">Ember is the yellow/orange brand look. Packs tint chrome and CTAs; alerts keep their colours.</p>
+        </div>
 
         <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">

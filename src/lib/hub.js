@@ -1018,9 +1018,9 @@ export async function checkServiceAlerts() {
 
         bellBtn.classList.remove('hidden');
 
-        // Mirror #open-nav-btn exactly: top-2 · p-2 · w-6 icon · shadow-sm (right vs left)
-        let bellClass = 'absolute top-2 right-4 z-[70] p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
-        let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
+        // Brand-left header: inline bell next to ⋮ (not absolute SPA chrome)
+        let bellClass = 'relative p-2 rounded-full focus:outline-none transition-colors ';
+        let dotClass = 'absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 ';
         if (severity === 'critical') {
             bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
             dotClass += 'bg-red-600';
@@ -1033,7 +1033,7 @@ export async function checkServiceAlerts() {
         }
         bellBtn.className = bellClass;
         const bellSvg = bellBtn.querySelector('svg');
-        if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
+        if (bellSvg) bellSvg.setAttribute('class', 'w-5 h-5');
         if (dot) dot.className = dotClass;
 
         if (!hasSeen) {

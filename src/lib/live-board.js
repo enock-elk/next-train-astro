@@ -1288,7 +1288,7 @@ export function updateLastUpdatedText() {
     
     displayDate = formatEffectiveDate(displayDate);
     
-    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Schedule Effective from: ${displayDate}`;
+    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Effective from: ${displayDate}`;
 }
 
 export function startSmartRefresh() {

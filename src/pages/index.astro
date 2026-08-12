@@ -209,7 +209,7 @@ const faqLd = {
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
@@ -347,6 +347,7 @@ const faqLd = {
         // Shell is already visible — schedules hydrate in the background.
         revealAppShell();
         try {
+            bindKillswitchWatch();
             if (await applyRouteDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();

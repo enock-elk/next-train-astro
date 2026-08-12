@@ -445,8 +445,11 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 export async function checkKillswitch(force = false) {
     if (typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) return false;
     try {
-        const timeBucket = Math.floor(Date.now() / 300000);
-        const res = await guardianFetch(`${DYNAMIC_BASE_URL}config/killswitch.json?t=${timeBucket}`, {}, 3000);
+        const res = await guardianFetch(
+            `${DYNAMIC_BASE_URL}config/killswitch.json?t=${Date.now()}`,
+            { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } },
+            3000
+        );
         if (!res.ok) return false;
         const data = await res.json();
         if (!data || !data.timestamp) return false;
@@ -487,6 +490,24 @@ export async function checkKillswitch(force = false) {
         console.warn("Killswitch check failed:", e);
         return false;
     }
+}
+
+/** Re-check NUKE when the app is online — including Hub-open sessions that skip schedule load. */
+export function bindKillswitchWatch() {
+    if (typeof window === 'undefined' || window.__ntKillswitchWatch) return;
+    window.__ntKillswitchWatch = true;
+    let lastPoke = 0;
+    const poke = () => {
+        const now = Date.now();
+        if (now - lastPoke < 15_000) return;
+        lastPoke = now;
+        checkKillswitch().catch(() => {});
+    };
+    window.addEventListener('online', poke);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') poke();
+    });
+    poke();
 }
 
 /** Remote special-event route activation without a deploy. */
@@ -1624,6 +1645,7 @@ if (typeof window !== 'undefined') {
     window.syncRegionDisplayDom = syncRegionDisplayDom;
     window.ensureMapImageLoaded = ensureMapImageLoaded;
     window.checkKillswitch = checkKillswitch;
+    window.bindKillswitchWatch = bindKillswitchWatch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     window.fetchScheduleOverride = fetchScheduleOverride;
     window.updateTime = updateTime;

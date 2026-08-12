@@ -37,10 +37,10 @@ export function withBase(path = '/') {
     return `${base}${p}`;
 }
 
-// GUARDIAN: Set to 'true' to force an immediate hard reload on startup. 
+// GUARDIAN: Set to 'true' to force an immediate hard reload on startup.
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
-// V6.00.10: Set to false to prevent infinite reload loops if SW caching fails.
-export const FORCE_UPDATE_REQUIRED = true;
+// Admin NUKE (killswitch.json) still wipes caches for online clients.
+export const FORCE_UPDATE_REQUIRED = false;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.

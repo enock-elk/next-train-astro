@@ -1,6 +1,7 @@
 ---
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
 import '../styles/appearance.css';
+import AppFonts from '../components/AppFonts.astro';
 import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 const {
@@ -160,10 +161,8 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       window.__NT_BASE__ = base;
     </script>
 
-    <!-- Google Fonts — lean weights (match SEO ContentLayout) for fewer blocking font files / LCP -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Google Fonts — non-blocking so FCP/LCP are not gated on fonts.googleapis.com -->
+    <AppFonts />
     {unlockShellEarly && (
       <link rel="preload" as="image" href={withBase('icons/loading-logo-splash.webp')} type="image/webp" fetchpriority="high" />
     )}
@@ -327,7 +326,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       /* SPA FOUC rule: .hidden must beat utility display:flex on install CTAs */
       .hidden { display: none !important; }
 
-      body { font-family: 'Inter', sans-serif; }
+      body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
       body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
       
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }

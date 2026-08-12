@@ -4,6 +4,7 @@
  * Safe for cold visitors — no app store hydration required.
  */
 import '../styles/appearance.css';
+import AppFonts from '../components/AppFonts.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 interface Props {
@@ -88,10 +89,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <meta name="application-name" content="Metrorail Next Train" />
     <meta name="apple-mobile-web-app-title" content="Next Train" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Lean font set for SEO pages (CWV) — avoid full Inter weight axis -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet" />
+    <AppFonts />
 
     <script is:inline define:vars={{ forceDark, forceLight }}>
       try {
@@ -126,12 +124,10 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       } catch (e) {}
     </script>
 
-    <!-- Google Analytics 4 -->
-    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX"></script>
+    <!-- Device identity is not required on SEO pages; idle-defer GA4 so LCP keeps the pipe -->
     <script is:inline>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
       var gaConfig = {};
       var isDevAnalytics = false;
       var userRegion = 'GP';
@@ -141,9 +137,20 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') userRegion = saved;
       } catch(e) {}
       if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
-      // Selected app region (not IP) — keeps SEO pages in the same regional buckets
       gaConfig['user_properties'] = { crm_region: userRegion };
-      gtag('config', 'G-JM5DH6ERVX', gaConfig);
+      window.__ntGaConfig = gaConfig;
+      var bootGa = function () {
+        if (window.__ntGaBooted) return;
+        window.__ntGaBooted = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX';
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', 'G-JM5DH6ERVX', window.__ntGaConfig || {});
+      };
+      if ('requestIdleCallback' in window) requestIdleCallback(bootGa, { timeout: 4000 });
+      else window.addEventListener('load', function () { setTimeout(bootGa, 2500); });
     </script>
 
     <!-- Microsoft Clarity — deferred so LCP/INP on thin SEO pages stay free of early third-party work -->
@@ -202,7 +209,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
 
     <slot name="head" />
   </head>
-  <body class:list={['font-[Inter,sans-serif] antialiased text-gray-800 dark:text-gray-200 transition-colors duration-300', bodyClass]}>
+  <body class:list={['font-[Inter,system-ui,sans-serif] antialiased text-gray-800 dark:text-gray-200 transition-colors duration-300', bodyClass]}>
     <slot />
   </body>
 </html>

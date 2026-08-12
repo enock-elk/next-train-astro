@@ -157,6 +157,14 @@ export function closeAppHub(skipHistory = false) {
 
 export function openAppHub() {
     triggerHaptic();
+    // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
+    // the hub is actually opened so first tap is not a no-op.
+    import('./account.js')
+        .then(({ bindAccountUi, initAccount }) => {
+            bindAccountUi();
+            initAccount();
+        })
+        .catch(() => {});
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
     sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
@@ -1147,26 +1155,40 @@ export function initHub() {
     setColourPack(getColourPack());
     bindColourPackControls();
 
-    // Account + Firebase stay off the critical home chunk (CWV)
-    import('./account.js')
-        .then(({ bindAccountUi, initAccount }) => {
-            bindAccountUi();
-            initAccount();
-        })
-        .catch(() => {});
+    // Account / community / delay-reports pull firebase-vendor. Idle-defer so
+    // home LCP is not competing with Auth+RTDB. First user intent still boots
+    // them immediately (openAppHub, Community tab, live-board hydrate).
+    const idleImport = (loader) => {
+        const run = () => { try { loader(); } catch { /* ignore */ } };
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4500 });
+        else setTimeout(run, 2500);
+    };
+
+    idleImport(() => {
+        import('./account.js')
+            .then(({ bindAccountUi, initAccount }) => {
+                bindAccountUi();
+                initAccount();
+            })
+            .catch(() => {});
+    });
 
     // Cloaked shadow-ban UX (looks like bad connectivity — never disclose ban)
     const runShadowBanCloak = () =>
         import('./trust.js').then((m) => m.applyShadowBanCloak()).catch(() => {});
-    runShadowBanCloak();
+    idleImport(runShadowBanCloak);
     // Re-check periodically so bans applied mid-session still take effect
     setInterval(runShadowBanCloak, 90_000);
 
     // Delay reports (Phase 5)
-    import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
+    idleImport(() => {
+        import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
+    });
 
     // Route community (Phase 6)
-    import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
+    idleImport(() => {
+        import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
+    });
 
     // Notifications pref (Phase 8 stub)
     import('./prefs.js').then(({ getNotifyPref, setNotifyPref, syncNotifyUi }) => {

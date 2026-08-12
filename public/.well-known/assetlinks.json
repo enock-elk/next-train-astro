@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "za.co.nexttrain.app",
       "sha256_cert_fingerprints": [
-        "74:1C:2D:BC:87:39:3C:CE:AE:1D:40:AB:77:1A:60:98:A7:CA:19:6D:86:07:25:ED:BE:16:E2:E6:24:45:7F:E8"
+        "74:1C:2D:BC:87:39:3C:CE:AE:1D:40:AB:77:1A:60:98:A7:CA:19:6D:86:07:25:ED:BE:16:E2:E6:24:45:7F:E8",
+        "44:47:3E:A5:A1:01:66:AA:B5:F7:15:13:51:F0:C3:50:F4:E5:A7:DA:77:B2:28:7A:57:41:6D:7E:A4:55:5B:B7"
       ]
     }
   }

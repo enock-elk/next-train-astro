@@ -1067,9 +1067,13 @@ export function switchTab(tab) {
     safeStorage.setItem('activeTab', tab);
     syncBottomNavActive(tab);
 
-    // Presence only while Community is visible
+    // Presence only while Community is visible. Bind first so a cold Community
+    // tab (before hub idle-import) still has click handlers.
     if (tab === 'community') {
-        import('./community.js').then((m) => m.openRouteCommunity?.()).catch(() => {});
+        import('./community.js').then((m) => {
+            m.bindCommunityUi?.();
+            m.openRouteCommunity?.();
+        }).catch(() => {});
     } else if (prev === 'community') {
         import('./community.js').then((m) => m.leaveCommunityRoom?.()).catch(() => {});
     }

@@ -537,7 +537,14 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
 // --- GLOBAL TOAST NOTIFICATIONS ---
 let toastTimeout = null;
 
-export function showToast(message, type = 'info', duration = 2500, actionHTML = '') { 
+/**
+ * @param {string} message
+ * @param {'info'|'success'|'error'|'warning'} [type]
+ * @param {number} [duration]
+ * @param {string} [actionHTML]
+ * @param {string} [messageClass] Tailwind classes for the message span (default text-sm)
+ */
+export function showToast(message, type = 'info', duration = 2500, actionHTML = '', messageClass = 'text-sm font-medium') { 
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
     
@@ -598,10 +605,11 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
     toastEl.className = `flex items-center justify-between px-4 py-3 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} max-w-[90vw]`; 
 
+    const msgClass = messageClass || 'text-sm font-medium';
     toastEl.innerHTML = `
         <div class="flex items-center gap-2 overflow-hidden">
             ${iconHTML}
-            <span class="text-sm font-medium tracking-wide break-words line-clamp-2">${message}</span>
+            <span class="${msgClass} tracking-wide break-words line-clamp-2">${message}</span>
         </div>
         ${actionHTML ? `<div class="ml-3 pl-3 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
     `;
@@ -611,6 +619,80 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     
     toastEl.classList.add('show'); 
     toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
+}
+
+/** Apple phones/tablets (incl. iPadOS desktop UA with touch). */
+export function isAppleMobile() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ may report as MacIntel with touch
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+}
+
+/** Home Screen / installed PWA (iOS standalone or display-mode standalone). */
+export function isStandalonePwa() {
+    if (typeof window === 'undefined') return false;
+    try {
+        if (window.navigator?.standalone === true) return true;
+    } catch { /* ignore */ }
+    try {
+        return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    } catch {
+        return false;
+    }
+}
+
+export function isIosPwa() {
+    return isAppleMobile() && isStandalonePwa();
+}
+
+/** Offline recovery hint — toast also offers a reload control. */
+export function offlineRecoveryHint() {
+    return 'Tap reload when signal returns.';
+}
+
+function bindOfflineToastReload(root) {
+    if (!root || root.dataset.reloadBound === '1') return;
+    root.dataset.reloadBound = '1';
+    root.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-offline-reload]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            if (typeof window.softReloadApp === 'function') {
+                window.softReloadApp();
+                return;
+            }
+        } catch { /* ignore */ }
+        try { window.location.reload(); } catch { /* ignore */ }
+    });
+}
+
+/** Keep #offline-toast seed copy + reload control aligned. */
+export function syncOfflineToastSeed() {
+    if (typeof document === 'undefined') return;
+    const toast = document.getElementById('offline-toast');
+    if (!toast) return;
+    const col = toast.querySelector('.flex.flex-col');
+    if (col) {
+        col.innerHTML = `
+            <span class="text-sm font-bold tracking-wide">You are offline.</span>
+            <span class="text-[10px] text-gray-300 leading-snug">${offlineRecoveryHint()}</span>
+        `;
+    }
+    if (!toast.querySelector('[data-offline-reload]')) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-offline-reload', '1');
+        btn.setAttribute('aria-label', 'Reload app');
+        btn.title = 'Reload';
+        btn.className = 'text-xl leading-none shrink-0 px-1 py-0.5 rounded-lg hover:bg-white/10 active:scale-95 transition';
+        btn.textContent = '🔄️';
+        toast.appendChild(btn);
+    }
+    bindOfflineToastReload(toast);
 }
 
 
@@ -1213,20 +1295,30 @@ export function showOfflineToast(minIntervalMs = 0, mode = 'offline') {
 
     offlineToast.classList.remove('pointer-events-none');
     offlineToast.classList.add('pointer-events-auto');
-    const col = offlineToast.querySelector('.flex.flex-col') || offlineToast.lastElementChild;
+    const col = offlineToast.querySelector('.flex.flex-col');
     if (col) {
-        // Offline-only chrome (no liefi/weak alternate banners/toasts)
         col.innerHTML = `
             <span class="text-sm font-bold tracking-wide">You are offline.</span>
-            <span class="text-[10px] text-gray-300 leading-snug">Pull down to refresh when signal returns.</span>
+            <span class="text-[10px] text-gray-300 leading-snug">${offlineRecoveryHint()}</span>
         `;
     }
+    if (!offlineToast.querySelector('[data-offline-reload]')) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-offline-reload', '1');
+        btn.setAttribute('aria-label', 'Reload app');
+        btn.title = 'Reload';
+        btn.className = 'text-xl leading-none shrink-0 px-1 py-0.5 rounded-lg hover:bg-white/10 active:scale-95 transition';
+        btn.textContent = '🔄️';
+        offlineToast.appendChild(btn);
+    }
+    bindOfflineToastReload(offlineToast);
 
     offlineToast.classList.remove('translate-y-[150%]', 'opacity-0');
     if (window._lieFiToastTimeout) clearTimeout(window._lieFiToastTimeout);
     window._lieFiToastTimeout = setTimeout(() => {
         offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
-    }, 7000);
+    }, 12000);
 }
 
 export function hideOfflineToast() {
@@ -1731,10 +1823,12 @@ if (typeof window !== 'undefined') {
         document.addEventListener('DOMContentLoaded', () => {
             bindMaintenanceBanner();
             bindExitAndRedirectModals();
+            syncOfflineToastSeed();
         });
     } else {
         bindMaintenanceBanner();
         bindExitAndRedirectModals();
+        syncOfflineToastSeed();
     }
 
     import('./deeplink.js').then((m) => {
@@ -1745,34 +1839,24 @@ if (typeof window !== 'undefined') {
     // Offline transition toast (once per offline episode; indicator stays via $isOffline)
     window.addEventListener('online', () => {
         window._hasShownOfflineToast = false;
-        hideOfflineToast();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.display = 'none';
-            oi.textContent = 'WORKING OFFLINE';
-        }
-        // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
+        // Fresh probe — radios up ≠ usable internet; clears banner immediately on success
         setTimeout(() => {
-            try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
-        }, 400);
+            try {
+                if (typeof window.probeReachability === 'function') window.probeReachability();
+                else window.ensureReachabilityProbed?.();
+            } catch { /* ignore */ }
+        }, 200);
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        if (typeof window.engageConnectionStruggleUi === 'function') {
+        // Still probe — Bluetooth / USB tether can work when cellular+Wi‑Fi look off
+        if (typeof window.probeReachability === 'function') {
+            window.probeReachability().catch(() => {});
+        } else if (typeof window.engageConnectionStruggleUi === 'function') {
             window.engageConnectionStruggleUi('offline');
-        } else {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) {
-                oi.style.display = 'flex';
-                oi.textContent = 'WORKING OFFLINE';
-            }
-            if (!window._hasShownOfflineToast) {
-                window._hasShownOfflineToast = true;
-                showOfflineToast(0, 'offline');
-            }
         }
     });
 }

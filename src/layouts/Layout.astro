@@ -516,8 +516,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       <span class="text-xl flex-shrink-0 animate-pulse">📡</span>
       <div class="flex flex-col">
         <span class="text-sm font-bold tracking-wide">You are offline.</span>
-        <span class="text-[10px] text-gray-300 leading-snug">Pull down to refresh when signal returns.</span>
+        <span class="text-[10px] text-gray-300 leading-snug">Tap reload when signal returns.</span>
       </div>
+      <button type="button" data-offline-reload="1" aria-label="Reload app" title="Reload" class="text-xl leading-none shrink-0 px-1 py-0.5 rounded-lg hover:bg-white/10 active:scale-95 transition">🔄️</button>
     </div>
 
     <!-- Page Content Injected Here -->

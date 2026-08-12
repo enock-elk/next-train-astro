@@ -38,9 +38,10 @@ async function peekIncomingVersion() {
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
 function showCrucialUpdateToast(incomingVersion) {
     const label = incomingVersion || 'Latest';
-    const msg = `Crucial system update incoming: ${label}.`;
+    // Short + text-xs so narrow phones (e.g. S25 FE) stay on one line
+    const msg = `Update incoming: ${label}`;
     try {
-        showToast(msg, 'error', 5000);
+        showToast(msg, 'error', 5000, '', 'text-xs font-medium');
     } catch { /* ignore */ }
 
     // Fallback banner if #toast is not in the DOM yet (early boot / race).
@@ -50,7 +51,7 @@ function showCrucialUpdateToast(incomingVersion) {
             el = document.createElement('div');
             el.id = 'nt-force-update-banner';
             el.setAttribute('role', 'status');
-            el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] max-w-[90vw] px-4 py-3 rounded-xl shadow-2xl bg-red-900/95 text-white text-sm font-bold border border-red-700';
+            el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] max-w-[90vw] px-4 py-3 rounded-xl shadow-2xl bg-red-900/95 text-white text-xs font-bold border border-red-700';
             document.body.appendChild(el);
         }
         el.textContent = msg;

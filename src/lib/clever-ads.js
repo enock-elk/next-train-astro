@@ -43,6 +43,17 @@ function clearLegacySessionInjectCap() {
     try { sessionStorage.removeItem(AD_LEGACY_SESSION_INJECT_KEY); } catch { /* ignore */ }
 }
 
+/**
+ * iPhone / iPad (Safari tab OR Home Screen / installed PWA).
+ * Classic Clever embed is used for all Apple mobile — not PWA-only.
+ */
+function isAppleMobile() {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+}
+
 function isWelcomeActive() {
     const welcome = document.getElementById('welcome-modal');
     return welcome && !welcome.classList.contains('hidden');
@@ -171,6 +182,62 @@ function injectAdScript(adContainer) {
     }
 }
 
+/**
+ * Original Clever publisher snippet (index.html bottom): insertBefore first script.
+ * Used on Apple mobile instead of appending into #clever-core.
+ */
+function injectClassicCleverScript(adContainer) {
+    if (window._adNetworkDestroyed || window._adScriptInjected) return false;
+    if (document.getElementById(LOADER_ID)) {
+        window._adScriptInjected = true;
+        return false;
+    }
+    bumpPageInjectCount();
+    window._adScriptInjected = true;
+
+    const adTimeout = setTimeout(() => {
+        if (!window._adScriptLoaded) handleAdFailure(adContainer, 'TIMEOUT_15S_EXCEEDED', false);
+    }, 15000);
+
+    try {
+        // Vendor snippet parity (callbacks left unset — not used by Next Train)
+        (function (doc, win) {
+            var a, c = doc.createElement('script'), f = win.frameElement;
+            c.id = LOADER_ID;
+            c.src = SCRIPT_SRC;
+            c.async = true;
+            c.type = 'text/javascript';
+            c.setAttribute('data-target', win.name || (f && f.getAttribute('id')) || '');
+            c.setAttribute('data-cfasync', 'false');
+            c.onload = () => {
+                clearTimeout(adTimeout);
+                window._adScriptLoaded = true;
+                console.log('🛡️ Guardian: iOS CleverAds classic script loaded.');
+                if (adContainer && !window._adNetworkDestroyed && isSafeZone()) {
+                    uncloak(adContainer);
+                    setAdPadding(isAdFilled(adContainer));
+                }
+            };
+            c.onerror = () => {
+                clearTimeout(adTimeout);
+                handleAdFailure(adContainer, 'SCRIPT_LOAD_ERROR', false);
+            };
+            try {
+                a = parent.document.getElementsByTagName('script')[0] || doc.getElementsByTagName('script')[0];
+            } catch (e) {
+                a = false;
+            }
+            if (!a) a = doc.getElementsByTagName('head')[0] || doc.getElementsByTagName('body')[0];
+            a.parentNode.insertBefore(c, a);
+        })(document, window);
+        return true;
+    } catch (e) {
+        console.warn('🛡️ Guardian: Classic Clever inject suppressed', e);
+        handleAdFailure(adContainer, 'EVAL_EXCEPTION', false);
+        return false;
+    }
+}
+
 function refreshAdVisibility(adContainer) {
     if (window._adNetworkDestroyed || !adContainer) return;
 
@@ -216,6 +283,8 @@ export function initCleverAds() {
     window._adScriptInjected = false;
     window._adScriptLoaded = false;
     window._adTelemetryFired = false;
+
+    const appleMobile = isAppleMobile();
 
     let stabilizedAt = 0;
     let nextScheduleIndex = 0;
@@ -332,11 +401,36 @@ export function initCleverAds() {
         }, waitMs);
     };
 
+    /**
+     * iOS: original Clever index.html bottom snippet (insertBefore first script), once.
+     * Ordinary load failures stay non-fatal so we do not permanently destroy the slot.
+     */
+    const startIosClassicEmbed = () => {
+        const tryOnce = () => {
+            if (window._adNetworkDestroyed || scheduleExhausted) return;
+            if (!isSafeZone() || shouldDeferForSessionStability()) {
+                scheduleTimer = setTimeout(tryOnce, 1500);
+                return;
+            }
+            if (!window._adScriptInjected && !document.getElementById(LOADER_ID)) {
+                console.log('🛡️ Guardian: iOS CleverAds — classic publisher embed (index.html style).');
+                injectClassicCleverScript(adContainer);
+            }
+            refreshAdVisibility(adContainer);
+            stopSchedule('ios classic embed');
+        };
+        tryOnce();
+    };
+
     const startInjectSchedule = () => {
         if (scheduleStarted || window._adNetworkDestroyed || scheduleExhausted) return;
         if (shouldDeferForSessionStability()) return;
         scheduleStarted = true;
         stabilizedAt = Date.now();
+        if (appleMobile) {
+            startIosClassicEmbed();
+            return;
+        }
         console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
         armNextScheduleSlot();
     };

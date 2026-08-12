@@ -16,7 +16,7 @@ import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { isLieFi } from './logic.js';
+import { isLieFi, probeReachability, resetReachabilityProbe } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
 import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
@@ -180,8 +180,48 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
+const NO_USABLE_INTERNET_UPDATE_MSG =
+    'No usable internet. Updates need active mobile data or Wi‑Fi with internet — not just radio on.';
+
+/** Live probe — radios up ≠ reachable Next Train edge. */
+async function confirmUsableInternet(timeoutMs = 4000) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
+    if (isLieFi) {
+        // Force a fresh probe; prior Lie-Fi may have cleared
+    }
+    try {
+        resetReachabilityProbe();
+        return await probeReachability(timeoutMs);
+    } catch {
+        return 'timeout';
+    }
+}
+
+/** Soft reload — keeps SW cache + IndexedDB (safe for iOS Home Screen PWAs). */
+export function softReloadApp() {
+    triggerHaptic();
+    closeAppHub(true);
+    showToast('Reloading…', 'info', 2000);
+    markPendingReload('soft_reload', 800);
+    setTimeout(() => {
+        try {
+            window.location.reload();
+        } catch {
+            window.location.href = window.location.pathname || '/';
+        }
+    }, 250);
+}
+
 export async function performHardCacheClear(source = 'modal_confirm') {
     triggerHaptic();
+
+    // Never wipe offline data without a confirmed usable path to our edge
+    const reach = await confirmUsableInternet(4000);
+    if (reach !== 'ok') {
+        showToast(NO_USABLE_INTERNET_UPDATE_MSG, 'warning', 4500);
+        return;
+    }
+
     if (source === 'modal_confirm') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
         await new Promise((r) => setTimeout(r, 600));
@@ -224,11 +264,19 @@ export async function performHardCacheClear(source = 'modal_confirm') {
     }, 500);
 }
 
-export function showCacheClearWarning() {
-    if (!navigator.onLine) {
+export async function showCacheClearWarning() {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
         showToast('You must be online to check for updates.', 'warning');
         return;
     }
+
+    showToast('Checking connection…', 'info', 2500);
+    const reach = await confirmUsableInternet(4000);
+    if (reach !== 'ok') {
+        showToast(NO_USABLE_INTERNET_UPDATE_MSG, 'warning', 4500);
+        return;
+    }
+
     triggerHaptic();
     closeAppHub(true);
     let modal = document.getElementById('cache-clear-modal');
@@ -1100,6 +1148,7 @@ export function initHub() {
     window.resetProfile = resetProfile;
     window.performHardCacheClear = performHardCacheClear;
     window.showCacheClearWarning = showCacheClearWarning;
+    window.softReloadApp = softReloadApp;
     window.checkServiceAlerts = checkServiceAlerts;
     window.submitPollVote = submitPollVote;
 
@@ -1362,7 +1411,10 @@ export function initHub() {
     });
 
     // Updates
-    document.getElementById('check-updates-btn')?.addEventListener('click', showCacheClearWarning);
+    document.getElementById('check-updates-btn')?.addEventListener('click', () => {
+        showCacheClearWarning().catch(() => {});
+    });
+    document.getElementById('reload-app-btn')?.addEventListener('click', softReloadApp);
 
     // About / Help / Changelog
     document.getElementById('settings-about-btn')?.addEventListener('click', () => {

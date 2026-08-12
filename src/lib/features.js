@@ -11,13 +11,16 @@
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config → all on.
  * Production: missing config → all off (safe merge).
  */
-import { DYNAMIC_BASE_URL } from './config.js';
+import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
 
 export const FEATURE_KEYS = {
     COMMUNITY_REALTIME: 'communityRealtime',
     DELAY_REPORTS_UI: 'delayReportsUi',
     PUSH_NOTIFY: 'pushNotify',
+    RIDE_CHECKIN: 'rideCheckIn',
 };
+
+export { PILOT_ROUTE_IDS };
 
 const CACHE_TTL_MS = 60 * 1000;
 
@@ -31,12 +34,23 @@ const LAB_DEFAULTS = {
     communityRealtime: { enabled: true, routeIds: ['*'] },
     delayReportsUi: { enabled: true, routeIds: ['*'] },
     pushNotify: { enabled: true, routeIds: ['*'] },
+    rideCheckIn: { enabled: true, routeIds: ['*'] },
 };
 
+/** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
 const PROD_DEFAULTS = {
     communityRealtime: { enabled: false, routeIds: [] },
     delayReportsUi: { enabled: false, routeIds: [] },
     pushNotify: { enabled: false, routeIds: [] },
+    rideCheckIn: { enabled: false, routeIds: [] },
+};
+
+/** Suggested first production allow-list (paste into RTDB config/features). */
+export const PILOT_FEATURES_SEED = {
+    communityRealtime: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
+    delayReportsUi: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
+    pushNotify: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
+    rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
 };
 
 /**

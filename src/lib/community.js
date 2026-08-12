@@ -10,7 +10,7 @@
  * Shadow-ban policy: rules reject writes; client still shows the author's
  * own post in a session overlay so they appear silenced without schema rewrites.
  */
-import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
@@ -28,7 +28,10 @@ import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } 
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
 const BODY_MAX = 280;
-const FEED_LIMIT = 40;
+/** Blaze cost control — plan: limitToLast(5–10). */
+const FEED_LIMIT = 10;
+/** Pilot freshness — hide / ignore posts older than 24h (Worker cron also wipes). */
+const POST_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
@@ -202,9 +205,11 @@ function findCachedPost(postId) {
 }
 
 function postsVisibleFilter(list, myUid) {
+    const cut = Date.now() - POST_TTL_MS;
     return (list || [])
         .filter((p) => p && typeof p === 'object' && p.body)
         .filter((p) => {
+            if ((p.timestamp || 0) < cut) return false;
             if (p.hidden && p.uid !== myUid) return false;
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
@@ -394,6 +399,46 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     }
 
     try {
+        // Prefer Cloudflare write bouncer when configured (rate + sanitize + Admin write).
+        if (COMMUNITY_WORKER_URL) {
+            const token = await ensureAuthToken();
+            if (!token) return { ok: false, message: 'Sign in to post in this route’s community.' };
+            const res = await fetch(`${COMMUNITY_WORKER_URL}/community/post`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    ...payload,
+                    region: $userRegion.get() || 'GP',
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 429) {
+                return { ok: false, message: data.error || 'Slow down — try again shortly.' };
+            }
+            if (!res.ok || !data.ok) {
+                if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
+                    if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                    localOverlayByRoute[routeId].push({ ...payload, shadowOnly: true });
+                    recordRateHit();
+                    return { ok: true, post: payload, shadowSilenced: true };
+                }
+                throw new Error(data.error || `Post failed (${res.status})`);
+            }
+            if (data.shadowSilenced) {
+                if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                localOverlayByRoute[routeId].push({ ...(data.post || payload), shadowOnly: true });
+                recordRateHit();
+                rememberBody(text);
+                return { ok: true, post: data.post || payload, shadowSilenced: true };
+            }
+            recordRateHit();
+            rememberBody(text);
+            return { ok: true, post: data.post || payload };
+        }
+
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts/${postId}.json${q}`,
@@ -1103,6 +1148,27 @@ export function leaveCommunityRoom() {
     leaveCommunityPresence();
 }
 
+/** Destroy chat listeners when the Community tab is not visible (Blaze control). */
+function bindCommunityVisibilityTeardown() {
+    if (typeof document === 'undefined' || window.__ntCommunityVisBound) return;
+    window.__ntCommunityVisBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopRealtimePosts();
+            leaveCommunityPresence();
+            return;
+        }
+        if (safeStorage.getItem('activeTab') === 'community') {
+            const routeSel = document.getElementById('community-route-select');
+            const rid = routeSel?.value || $currentRouteId.get();
+            if (rid) {
+                startRealtimePosts(rid);
+                joinCommunityPresence(rid);
+            }
+        }
+    });
+}
+
 async function handlePostSubmit() {
     const routeSel = document.getElementById('community-route-select');
     const composer = document.getElementById('community-composer');
@@ -1164,6 +1230,7 @@ async function expandReplies(postId, routeId, container) {
 export function bindCommunityUi() {
     if (typeof document === 'undefined' || window.__ntCommunityBound) return;
     window.__ntCommunityBound = true;
+    bindCommunityVisibilityTeardown();
 
     const open = (e) => {
         e?.preventDefault?.();

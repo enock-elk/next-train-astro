@@ -59,6 +59,7 @@ jobs:
           PUBLIC_BASE_PATH: /
           PUBLIC_LAB_MODE: 'true'
           PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
+          PUBLIC_COMMUNITY_WORKER_URL: ${{ secrets.PUBLIC_COMMUNITY_WORKER_URL }}
 
       - name: De-index the lab site
         run: |

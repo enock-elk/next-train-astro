@@ -46,12 +46,19 @@ const AUTH_ROUTE_MS = 8 * 60 * 1000;
 const SURFACE_WINDOW_MS = 3 * 60 * 60 * 1000;
 const REPORT_WINDOW_SEC = 20 * 60; // ±20 min around scheduled station time
 const RATE_KEY = 'delayReportRateV1';
+const VALIDATE_RATE_KEY = 'delayValidateRateV1';
+/** Distinct devices needed before a chip goes fully public (prototype: 3). */
+export const VERIFY_THRESHOLD = 3;
 
 const LATE_MID = { '1-5': 3, '6-10': 8, '11-20': 15, '21+': 25, unsure: 10 };
 
 /** @type {Record<string, object[]>} */
 let routeReportCache = {};
 let routeReportCacheAt = {};
+/** @type {Record<string, () => void>} */
+const routeListeners = {};
+/** trainKey → localStorage validated this session/device */
+const VALIDATED_PREFIX = 'delayValidated_';
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
@@ -184,6 +191,7 @@ export function aggregateTrainReports(reports, keyParts) {
     const counts = { early: 0, on_time: 0, late: 0, cancelled: 0 };
     let lateSum = 0;
     let lateN = 0;
+    const devices = new Set();
     matched.forEach((r) => {
         const s = r.trainStatus || r.status;
         if (s === 'early' || s === 'on_time' || s === 'late' || s === 'cancelled') counts[s] += 1;
@@ -193,6 +201,8 @@ export function aggregateTrainReports(reports, keyParts) {
             lateSum += LATE_MID[r.lateBucket] || 10;
             lateN += 1;
         }
+        if (r.deviceId) devices.add(String(r.deviceId));
+        else if (r.uid) devices.add(`u:${r.uid}`);
     });
 
     let top = 'late';
@@ -201,21 +211,123 @@ export function aggregateTrainReports(reports, keyParts) {
         if (n > topN) { top = k; topN = n; }
     });
 
+    const distinct = devices.size || matched.length;
+    const isVerified = distinct >= VERIFY_THRESHOLD;
+
     return {
         count: matched.length,
+        distinctDevices: distinct,
+        isVerified,
         status: top,
-        avgLateMin: lateN ? Math.round(lateSum / lateN) : null,
+        avgLateMin: lateN ? Math.round(lateSum / lateN) : (top === 'late' ? 10 : top === 'early' ? 3 : null),
         scheduledTime: keyParts.scheduledTime,
         arrivalTime: keyParts.arrivalTime || matched[0]?.arrivalTime || null,
+        trainKey: key,
     };
 }
 
 function statusLabel(agg) {
     if (!agg) return '';
     if (agg.status === 'cancelled') return 'Cancelled / not coming';
-    if (agg.status === 'early') return `Now ~ ${agg.avgLateMin || 3} min early`;
+    if (agg.status === 'early') return `~${agg.avgLateMin || 3} min early`;
     if (agg.status === 'on_time') return 'On time';
-    return `Now ~ ${agg.avgLateMin || 10} min late`;
+    return `~${agg.avgLateMin || 10} min late`;
+}
+
+function expectedTimeLabel(agg) {
+    if (!agg || agg.status === 'on_time' || agg.status === 'cancelled') return '';
+    const base = agg.arrivalTime || agg.scheduledTime;
+    if (!base) return '';
+    const sec = timeToSeconds(base);
+    if (sec == null || Number.isNaN(sec)) return '';
+    const delta = (agg.avgLateMin || 0) * 60;
+    const adj = agg.status === 'early' ? Math.max(0, sec - delta) : sec + delta;
+    const hh = String(Math.floor(adj / 3600) % 24).padStart(2, '0');
+    const mm = String(Math.floor((adj % 3600) / 60)).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
+function hasLocalValidated(trainKey) {
+    return !!safeStorage.getItem(VALIDATED_PREFIX + trainKey);
+}
+
+function markLocalValidated(trainKey) {
+    safeStorage.setItem(VALIDATED_PREFIX + trainKey, '1');
+}
+
+function showBanner(banner, on) {
+    if (!banner) return;
+    if (on) {
+        banner.classList.remove('hidden');
+        banner.removeAttribute('hidden');
+        banner.setAttribute('aria-hidden', 'false');
+    } else {
+        banner.classList.add('hidden');
+        banner.setAttribute('hidden', '');
+        banner.setAttribute('aria-hidden', 'true');
+    }
+}
+
+/**
+ * Live RTDB listener for a route's delay_reports (invalidates cache + rehydrates board).
+ */
+export async function startDelayReportsListener(routeId) {
+    if (!routeId) return;
+    stopDelayReportsListener(routeId);
+    await fetchFeatures();
+    if (!isDelayReportsUiEnabled(routeId)) return;
+
+    await bootFirebase();
+    if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+
+    try {
+        const baseRef = window.firebaseDbRef(window.firebaseDb, 'delay_reports');
+        const q = (window.firebaseDbQuery && window.firebaseDbOrderByChild && window.firebaseDbEqualTo)
+            ? window.firebaseDbQuery(
+                baseRef,
+                window.firebaseDbOrderByChild('routeId'),
+                window.firebaseDbEqualTo(routeId)
+            )
+            : baseRef;
+
+        const unsub = window.firebaseDbOnValue(q, (snap) => {
+            const data = snap?.val?.() || null;
+            const cut = Date.now() - SURFACE_WINDOW_MS;
+            let list = [];
+            if (data) {
+                list = Object.values(data)
+                    .filter((r) => r && r.routeId === routeId && r.statusOpen !== 'closed' && r.status !== 'closed' && (r.timestamp || 0) > cut)
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            }
+            routeReportCache[routeId] = list;
+            routeReportCacheAt[routeId] = Date.now();
+            if ($currentRouteId.get() === routeId) {
+                refreshDelayReportSurface(routeId);
+                hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+            }
+        }, (err) => {
+            console.warn('Delay reports realtime failed', err);
+            stopDelayReportsListener(routeId);
+        });
+        routeListeners[routeId] = typeof unsub === 'function' ? unsub : () => {};
+    } catch (e) {
+        console.warn('Delay reports listener start failed', e);
+    }
+}
+
+export function stopDelayReportsListener(routeId) {
+    if (routeId && routeListeners[routeId]) {
+        try { routeListeners[routeId](); } catch { /* ignore */ }
+        delete routeListeners[routeId];
+        return;
+    }
+    Object.keys(routeListeners).forEach((id) => {
+        try { routeListeners[id](); } catch { /* ignore */ }
+        delete routeListeners[id];
+    });
 }
 
 function statusColorClass(status) {
@@ -277,16 +389,21 @@ export function buildTrainTitleReportButton({
     </button>`;
 }
 
+function chipAttrs(routeId, trainId, scheduledTime, arrivalTime, station, destination) {
+    return `data-route="${escapeHTML(routeId || '')}" data-train="${escapeHTML(trainId || '')}" data-dep="${escapeHTML(scheduledTime || '')}" data-arr="${escapeHTML(arrivalTime || '')}" data-station="${escapeHTML(station || '')}" data-dest="${escapeHTML(destination || '')}"`;
+}
+
 export async function hydrateTrainReportSlots(root = document) {
     await fetchFeatures();
     if (!isDelayReportsUiEnabled()) return;
-    const slots = (root || document).querySelectorAll?.('[data-train-report-slot][data-reportable="1"]');
+    const slots = (root || document).querySelectorAll?.('[data-train-report-slot]');
     if (!slots?.length) return;
 
     const routeIds = [...new Set([...slots].map((s) => s.getAttribute('data-route')).filter(Boolean))];
     const byRoute = {};
     await Promise.all(routeIds.map(async (rid) => {
         byRoute[rid] = await fetchRecentRouteReports(rid);
+        if (!routeListeners[rid]) startDelayReportsListener(rid);
     }));
 
     slots.forEach((slot) => {
@@ -296,34 +413,124 @@ export async function hydrateTrainReportSlots(root = document) {
         const arrivalTime = slot.getAttribute('data-arr');
         const station = slot.getAttribute('data-station');
         const destination = slot.getAttribute('data-dest');
+        const reportable = slot.getAttribute('data-reportable') === '1';
+        const attrs = chipAttrs(routeId, trainId, scheduledTime, arrivalTime, station, destination);
         const agg = aggregateTrainReports(byRoute[routeId] || [], {
             routeId, trainId, scheduledTime, station, arrivalTime,
         });
 
-        if (!agg) return;
+        if (!agg) {
+            if (!reportable) {
+                slot.innerHTML = '';
+                return;
+            }
+            slot.innerHTML = `
+              <button type="button" class="w-full mt-0.5 text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 py-2 rounded-lg transition-colors flex justify-center items-center shadow-sm focus:outline-none" data-open-train-report ${attrs}>
+                Report status
+              </button>`;
+            return;
+        }
 
-        const usual = formatTimeDisplay(arrivalTime || scheduledTime);
-        const usualLabel = arrivalTime ? `Usually arrives ${usual}` : `Usually ${usual}`;
         const liveCls = statusColorClass(agg.status);
-        const flagCls = flagColorClass(agg.status);
+        const exp = expectedTimeLabel(agg);
+        const validated = hasLocalValidated(agg.trainKey);
 
+        if (agg.isVerified) {
+            slot.innerHTML = `
+              <div class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-950/30 shadow-sm" data-train-key="${escapeHTML(agg.trainKey)}">
+                <div class="flex items-center gap-1 mb-0.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300">Live alert</span>
+                  ${exp ? `<span class="ml-auto text-[9px] font-black text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800">EXP ${escapeHTML(exp)}</span>` : ''}
+                </div>
+                <p class="text-[10px] font-black ${liveCls} leading-tight">${escapeHTML(statusLabel(agg))}</p>
+                <div class="mt-1.5 pt-1.5 border-t border-orange-200/60 dark:border-orange-800/40 flex justify-between items-center gap-2">
+                  <span class="text-[9px] text-orange-600/90 dark:text-orange-400 font-bold">${agg.count} report${agg.count === 1 ? '' : 's'}</span>
+                  ${validated
+                ? `<span class="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded text-[8px] font-bold">Validated</span>`
+                : `<div class="flex gap-1">
+                        <button type="button" class="delay-validate-btn bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-green-600 px-1.5 py-1 rounded shadow-sm focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}" aria-label="Confirm report">👍</button>
+                        <button type="button" class="delay-validate-btn bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 px-1.5 py-1 rounded shadow-sm focus:outline-none" data-validate="down" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" aria-label="Disagree">👎</button>
+                      </div>`}
+                </div>
+              </div>`;
+            return;
+        }
+
+        // Pending corroboration
         slot.innerHTML = `
-          <button type="button" class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 shadow-sm focus:outline-none hover:border-blue-300 dark:hover:border-blue-700" data-open-train-report
-            data-route="${escapeHTML(routeId || '')}" data-train="${escapeHTML(trainId || '')}" data-dep="${escapeHTML(scheduledTime || '')}"
-            data-arr="${escapeHTML(arrivalTime || '')}" data-station="${escapeHTML(station || '')}" data-dest="${escapeHTML(destination || '')}">
-            <div class="flex items-center gap-1 mb-0.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
-              <span class="text-[8px] font-black uppercase tracking-widest text-gray-500">Live update</span>
-              <svg class="w-3 h-3 ml-auto ${flagCls}" fill="currentColor" viewBox="0 0 20 20"><path d="M3 3a1 1 0 011-1h.5a1 1 0 01.8.4L7 5h8a1 1 0 01.8 1.6l-1.5 2a1 1 0 000 1.2l1.5 2A1 1 0 0115 13H7l-1.7 2.6A1 1 0 014.5 16H4a1 1 0 01-1-1V3z"/></svg>
-            </div>
-            <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-tight">${escapeHTML(usualLabel)}</p>
-            <p class="text-[10px] font-black ${liveCls} leading-tight">${escapeHTML(statusLabel(agg))}</p>
-            <p class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-0.5">
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/></svg>
-              ${agg.count} report${agg.count === 1 ? '' : 's'}
+          <div class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 shadow-sm">
+            <p class="text-[9px] text-gray-600 dark:text-gray-300 leading-tight">
+              <span class="font-bold">Pending:</span> Commuters report ${escapeHTML(statusLabel(agg))} (${agg.distinctDevices}/${VERIFY_THRESHOLD})
             </p>
-          </button>`;
+            ${validated
+            ? `<span class="mt-1 inline-block text-[8px] font-bold text-green-700 dark:text-green-300">Thanks — counted</span>`
+            : `<button type="button" class="delay-validate-btn mt-1.5 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-[9px] font-bold text-gray-700 dark:text-gray-200 py-1 rounded shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}">Verify delay</button>`}
+          </div>`;
     });
+}
+
+/** Thumb / verify — writes a corroborating report (counts toward threshold). */
+export async function submitDelayValidation({ routeId, trainId, scheduledTime, arrivalTime, station, destination, trainKey, status, agree }) {
+    if (!routeId || !agree) return { ok: false, message: 'Dismissed' };
+    if (trainKey && hasLocalValidated(trainKey)) return { ok: true, message: 'Already validated' };
+
+    const rate = checkDelayReportRateLimit(routeId);
+    // Softer: allow validate even if full report rate hit — use short local cooldown
+    const last = Number(safeStorage.getItem(VALIDATE_RATE_KEY) || 0);
+    if (Date.now() - last < 60 * 1000) {
+        return { ok: false, message: 'Slow down — try again in a minute.' };
+    }
+
+    const key = trainKey || trainReportKey({ routeId, trainId, scheduledTime, station });
+    const token = await ensureAuthToken();
+    const authParam = token ? `?auth=${encodeURIComponent(token)}` : '';
+    const reportId = `dv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const acct = $account.get();
+    const payload = {
+        reportId,
+        routeId,
+        region: $userRegion.get() || 'GP',
+        station: station || null,
+        trainId: trainId || null,
+        scheduledTime: scheduledTime || null,
+        arrivalTime: arrivalTime || null,
+        destination: destination || null,
+        trainKey: key,
+        trainStatus: status || 'late',
+        status: status || 'late',
+        lateBucket: status === 'late' ? 'unsure' : null,
+        note: null,
+        severity: 'moderate',
+        uid: acct.status === 'signed-in' ? acct.uid : null,
+        deviceId: getDeviceId(),
+        isGuest: acct.status !== 'signed-in',
+        timestamp: Date.now(),
+        statusOpen: 'open',
+        appVersion: APP_VERSION,
+        source: 'live_board_validate',
+        isValidation: true,
+    };
+
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}delay_reports/${reportId}.json${authParam}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Validate failed (${res.status})`);
+        markLocalValidated(key);
+        safeStorage.setItem(VALIDATE_RATE_KEY, String(Date.now()));
+        if (!rate.ok) { /* skip full rate hit for validates */ }
+        else recordRateHit(routeId);
+        delete routeReportCache[routeId];
+        delete routeReportCacheAt[routeId];
+        await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+        showToast('Thanks — your confirm helps others', 'success');
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Could not confirm' };
+    }
 }
 
 function showTrainReportStep(step) {
@@ -524,20 +731,22 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
 
     await fetchFeatures();
     if (!isDelayReportsUiEnabled(routeId)) {
-        banner.classList.add('hidden');
+        showBanner(banner, false);
         badge?.classList.add('hidden');
         return;
     }
 
     if (!routeId) {
-        banner.classList.add('hidden');
+        showBanner(banner, false);
         return;
     }
+
+    if (!routeListeners[routeId]) startDelayReportsListener(routeId);
 
     const reports = await fetchRecentRouteReports(routeId);
     const withTrain = reports.filter((r) => r.trainId);
     if (!withTrain.length) {
-        banner.classList.add('hidden');
+        showBanner(banner, false);
         badge?.classList.add('hidden');
         return;
     }
@@ -551,7 +760,7 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
             ? `Train ${top.trainId}: ${statusLabel({ status: top.trainStatus || 'late', avgLateMin: LATE_MID[top.lateBucket] || 10 })} · ${when}`
             : `${count} recent train reports · latest ${when}`;
     }
-    banner.classList.remove('hidden');
+    showBanner(banner, true);
     if (badge) {
         badge.textContent = String(count);
         badge.classList.remove('hidden');
@@ -584,7 +793,7 @@ export function bindDelayReportUi() {
 
     const hideBannerIfOff = () => {
         if (!isDelayReportsUiEnabled()) {
-            document.getElementById('delay-report-banner')?.classList.add('hidden');
+            showBanner(document.getElementById('delay-report-banner'), false);
         }
     };
 
@@ -625,6 +834,34 @@ export function bindDelayReportUi() {
     });
 
     document.addEventListener('click', (e) => {
+        const validateBtn = e.target?.closest?.('.delay-validate-btn');
+        if (validateBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const agree = validateBtn.getAttribute('data-validate') !== 'down';
+            if (!agree) {
+                showToast('Thanks — report noted', 'info');
+                const key = validateBtn.getAttribute('data-train-key');
+                if (key) markLocalValidated(key);
+                hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+                return;
+            }
+            submitDelayValidation({
+                routeId: validateBtn.getAttribute('data-route') || $currentRouteId.get(),
+                trainId: validateBtn.getAttribute('data-train'),
+                scheduledTime: validateBtn.getAttribute('data-dep'),
+                arrivalTime: validateBtn.getAttribute('data-arr'),
+                station: validateBtn.getAttribute('data-station'),
+                destination: validateBtn.getAttribute('data-dest'),
+                trainKey: validateBtn.getAttribute('data-train-key'),
+                status: validateBtn.getAttribute('data-status') || 'late',
+                agree: true,
+            }).then((r) => {
+                if (!r.ok && r.message) showToast(r.message, 'error');
+            });
+            return;
+        }
+
         const btn = e.target?.closest?.('[data-open-train-report]');
         if (!btn) return;
         e.preventDefault();
@@ -646,8 +883,12 @@ export function bindDelayReportUi() {
         });
     });
 
+    let lastRouteListen = '';
     $currentRouteId.subscribe((id) => {
+        if (lastRouteListen && lastRouteListen !== id) stopDelayReportsListener(lastRouteListen);
+        lastRouteListen = id || '';
         if (id) {
+            startDelayReportsListener(id);
             refreshDelayReportSurface(id);
             setTimeout(() => hydrateTrainReportSlots(document.getElementById('view-next-train') || document), 400);
         }
@@ -656,13 +897,20 @@ export function bindDelayReportUi() {
     window.addEventListener('nt-features-updated', () => {
         hideBannerIfOff();
         const rid = $currentRouteId.get();
-        if (rid) refreshDelayReportSurface(rid);
+        if (rid) {
+            startDelayReportsListener(rid);
+            refreshDelayReportSurface(rid);
+            hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+        }
     });
 
     fetchFeatures().then(() => {
         hideBannerIfOff();
         const rid = $currentRouteId.get();
-        if (rid) refreshDelayReportSurface(rid);
+        if (rid) {
+            startDelayReportsListener(rid);
+            refreshDelayReportSurface(rid);
+        }
     }).catch(hideBannerIfOff);
 }
 
@@ -672,4 +920,5 @@ if (typeof window !== 'undefined') {
     window.refreshDelayReportSurface = refreshDelayReportSurface;
     window.hydrateTrainReportSlots = hydrateTrainReportSlots;
     window.buildTrainReportSlotHtml = buildTrainReportSlotHtml;
+    window.startDelayReportsListener = startDelayReportsListener;
 }

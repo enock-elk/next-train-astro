@@ -33,6 +33,7 @@ import {
     remove,
     query,
     orderByChild,
+    equalTo,
     limitToLast,
 } from 'firebase/database';
 import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
@@ -94,6 +95,7 @@ export async function bootFirebase() {
         window.firebaseDbOnChildRemoved = onChildRemoved;
         window.firebaseDbQuery = query;
         window.firebaseDbOrderByChild = orderByChild;
+        window.firebaseDbEqualTo = equalTo;
         window.firebaseDbLimitToLast = limitToLast;
         window.firebaseDbOnDisconnect = onDisconnect;
         window.firebaseDbRemove = remove;

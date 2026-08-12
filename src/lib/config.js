@@ -72,6 +72,21 @@ export const FIREBASE_BASE_URL = "https://metrorail-next-train-default-rtdb.fire
 // Dynamic Data (Admin Bans, Alerts, Maintenance) ALWAYS uses Firebase for real-time capability.
 export const DYNAMIC_BASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
 
+/** High-density corridors for live reports / chat / check-in pilots. */
+export const PILOT_ROUTE_IDS = ['pta-pien', 'pta-mabopane', 'ct-bellv'];
+
+/**
+ * Community write bouncer (Cloudflare Worker). Empty = direct RTDB writes (lab/dev).
+ * Production should set PUBLIC_COMMUNITY_WORKER_URL at build time.
+ */
+export const COMMUNITY_WORKER_URL = (() => {
+    try {
+        return String(import.meta.env?.PUBLIC_COMMUNITY_WORKER_URL || '').replace(/\/$/, '');
+    } catch {
+        return '';
+    }
+})();
+
 export const REGIONS = {
     'GP': { 
         dbNode: 'schedules/gauteng.json', 
@@ -870,13 +885,13 @@ export const DEFAULT_EXCLUSIONS = {
 export const CHANGELOG_DATA = [
     {
         id: "V8_08.11",
-        title: "Community realtime (lab)",
+        title: "Live board + route chat (lab)",
         date: "11 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Lab line:</b> new features ship first on lab.nexttrain.co.za while production stays independent.",
-            "<b>Route chat:</b> community feed can update live when the corridor flag is on.",
-            "<b>Alerts:</b> delay reports and push prefs are corridor-gated for a safe pilot rollout."
+            "<b>Live alerts:</b> report Early / On time / Late on the train card — pending until a few riders agree, then a verified chip with EXP time.",
+            "<b>Route chat:</b> lean corridor rooms with a short live feed (destroyed when you leave the tab).",
+            "<b>I’m here:</b> station check-in shows soft last-seen chips — no GPS trails."
         ]
     },
     {

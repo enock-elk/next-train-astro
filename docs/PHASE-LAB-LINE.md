@@ -70,30 +70,21 @@ Client: [`src/lib/features.js`](../src/lib/features.js)
 - **Lab** (`PUBLIC_LAB_MODE=true` or host `lab.*`): missing config → all features **on**.
 - **Production**: missing config → all features **off** (safe merge).
 
-Example RTDB node `config/features`:
-
-```json
-{
-  "communityRealtime": { "enabled": true, "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv", "kzn-umlazi"] },
-  "delayReportsUi": { "enabled": true, "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv", "kzn-umlazi"] },
-  "pushNotify": { "enabled": true, "routeIds": ["pta-pien", "ct-bellv"] }
-}
-```
+Paste the default pilot seed: [`config-features-pilot.json`](./config-features-pilot.json) (3 corridors). Full ops: [`PHASE-LIVE-STRATEGY.md`](./PHASE-LIVE-STRATEGY.md).
 
 Nationwide later: set `"routeIds": ["*"]`. Killswitch: `"enabled": false`.
 
-Deploy rules after pulling this branch so `config/features` is publicly readable and `push_subscriptions` accepts device tokens.
+Deploy rules after pulling this branch so `config/features` is publicly readable and `push_subscriptions` / `ride_pings` accept device writes.
 
-## Pilot corridors (suggested)
+## Pilot corridors (default)
 
 | Region | routeId | Why |
 |--------|---------|-----|
 | GP | `pta-pien` | Flagship / brand |
-| GP | `pta-mabopane` | High volume |
+| GP | `pta-mabopane` | High volume / WhatsApp culture |
 | WC | `ct-bellv` | WC flagship |
-| KZN | `kzn-umlazi` | KZN flagship |
 
-Swap using Clarity/GA if you have better top routes.
+Add `kzn-umlazi` later if Clarity/GA shows density.
 
 ## Merge to main checklist
 

@@ -16,6 +16,13 @@ Client registration is in place. Sending pushes still needs a small Cloud Functi
 
 Until that sender exists, users still get in-app surfaces + browser permission; FCM delivery of remote events is incomplete.
 
-## Tracking later
+## Chat fortress (Wave 2)
 
-Do not build `train_positions` until pilot metrics (posts/day, delay confirms, push opt-in, moderation load) look healthy. See [PHASE-LAB-LINE.md](./PHASE-LAB-LINE.md).
+- Feed cap: `limitToLast(10)` in [`src/lib/community.js`](../src/lib/community.js); listener destroyed on Community leave / tab hide.
+- Client filters posts older than **24h**; Worker cron deletes stale RTDB nodes.
+- Write path: Cloudflare Worker [`workers/nexttrain-community`](../workers/nexttrain-community) (`POST /community/post`) when `PUBLIC_COMMUNITY_WORKER_URL` is set — rate limit, sanitize (strip HTML / foreign URLs; allow `nexttrain.co.za`), Admin RTDB write.
+- Direct client RTDB writes remain as lab/dev fallback when the Worker URL is empty.
+
+## Tracking later (Wave 4)
+
+Do not build continuous GPS / `train_positions` / TWA until pilot metrics (posts/day, delay confirms, push opt-in, moderation load, check-ins) look healthy. See [PHASE-LIVE-STRATEGY.md](./PHASE-LIVE-STRATEGY.md) and [PHASE-LAB-LINE.md](./PHASE-LAB-LINE.md).

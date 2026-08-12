@@ -148,6 +148,16 @@
       }
     },
 
+    "ride_pings": {
+      "$routeId": {
+        ".read": true,
+        "$deviceId": {
+          ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.child('deviceId').val() === $deviceId && newData.child('deviceId').val() === $deviceId) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['routeId', 'deviceId', 'station', 'at', 'expiresAt']) && newData.child('routeId').val() === $routeId && newData.child('deviceId').val() === $deviceId && newData.child('station').isString() && newData.child('station').val().length > 0 && newData.child('station').val().length < 120 && newData.child('at').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= newData.child('at').val() + 1200000 && (!newData.hasChild('coarseLat') || newData.child('coarseLat').isNumber()) && (!newData.hasChild('coarseLng') || newData.child('coarseLng').isNumber()))"
+        }
+      }
+    },
+
     "route_community": {
       "$routeId": {
         "posts": {

@@ -2,13 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
-## V8_08.11 — Lab line: realtime community + alerts (11 Aug 2026)
+## V8_08.11 — Lab line: board-first live + lean chat (11 Aug 2026)
 
 - Long-lived `lab` branch + `lab.nexttrain.co.za` deploy workflow (independent of `main` / production).
-- RTDB `config/features` corridor gates for realtime chat, delay-report UI, and push.
-- Community feed can subscribe live via Firebase `onValue` (lab on by default; prod off until allow-listed).
-- Settings notifications wire into FCM token registration when `PUBLIC_FIREBASE_VAPID_KEY` is set.
-- Docs: `docs/PHASE-LAB-LINE.md`, `docs/PHASE-COMMUNITY-REALTIME.md`.
+- Board live alerts: pending (n/3) → verified chip with EXP time + thumbs; RTDB listeners by route.
+- RTDB `config/features` corridor gates (`delayReportsUi`, `communityRealtime`, `pushNotify`, `rideCheckIn`) — pilot seed for `pta-pien`, `pta-mabopane`, `ct-bellv`.
+- Lean route chat: `limitToLast(10)`, 24h TTL, listener teardown off-tab; optional Cloudflare write bouncer (`workers/nexttrain-community`).
+- Station check-in / last-seen chips (`ride_pings`) — no GPS trails.
+- Docs: `docs/PHASE-LIVE-STRATEGY.md`, `docs/config-features-pilot.json`, lab/community phase notes.
 
 ## V8_08.10.1 — Cape Town Public Holidays (10 Aug 2026)
 

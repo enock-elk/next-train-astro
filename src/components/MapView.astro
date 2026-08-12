@@ -1,10 +1,12 @@
 ---
 /**
- * Interactive network map as a primary tab (Leaflet via /map.html embed).
+ * Interactive network map as a primary tab (Leaflet via /map embed).
+ * Contribute = volunteer GPS tied to a train for ~10 minutes (not social share).
  * Behaviour: src/lib/map-tab.js
  */
 import { withBase } from '../lib/config.js';
-const mapSrc = withBase('/map.html') + '?embed=1';
+/* Extensionless /map — CF Pages 308s /map.html → /map; avoid .html in iframes. */
+const mapSrc = withBase('/map') + '?embed=1';
 ---
 
 <div id="view-map" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
@@ -12,7 +14,7 @@ const mapSrc = withBase('/map.html') + '?embed=1';
         <div class="shrink-0 px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
             <div class="min-w-0">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Network map</p>
-                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">GPS optional — share only when you choose</p>
+                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">Leaflet · help others track a train</p>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
                 <button
@@ -26,15 +28,31 @@ const mapSrc = withBase('/map.html') + '?embed=1';
                 </button>
                 <button
                     type="button"
-                    id="map-tab-share-btn"
+                    id="map-tab-contribute-btn"
                     class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Share your location with friends"
+                    title="Volunteer your location for a train (10 minutes)"
                 >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
-                    Share
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                    Contribute
                 </button>
             </div>
         </div>
+
+        <!-- Train picker for trip-tied contribution -->
+        <div id="map-contribute-sheet" class="hidden shrink-0 border-b border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-black text-gray-900 dark:text-white">Contribute to a train</p>
+                    <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Your location helps others for 10 minutes. Only trains about to leave, moving, or just arrived.</p>
+                </div>
+                <button type="button" id="map-contribute-cancel" class="shrink-0 p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 focus:outline-none" aria-label="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <ul id="map-contribute-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar"></ul>
+            <p id="map-contribute-empty" class="hidden text-[11px] font-semibold text-gray-500 dark:text-gray-400 py-1">No trains in the 10‑minute window on this board. Pick a route/station first, or open a trip in Plan.</p>
+        </div>
+
         <div class="relative flex-1 min-h-0 bg-gray-100 dark:bg-gray-950">
             <iframe
                 id="map-tab-frame"

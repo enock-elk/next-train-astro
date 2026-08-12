@@ -407,51 +407,37 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         min-height: calc(100dvh - 9.5rem);
       }
 
-      /* Community: fill viewport under header/nav; feed scrolls internally */
-      #view-community.view-section.active {
-        display: flex;
-        flex-direction: column;
-        flex: 1 1 auto;
-        min-height: calc(100dvh - 9.5rem);
-        height: calc(100dvh - 9.5rem);
-        max-height: calc(100dvh - 9.5rem);
-        overflow: hidden;
-      }
-      body.nav-bottom #view-community.view-section.active {
-        min-height: calc(100dvh - 11rem);
-        height: calc(100dvh - 11rem);
-        max-height: calc(100dvh - 11rem);
-      }
-      #view-community .community-pane {
-        flex: 1 1 auto;
-        min-height: 0;
-        height: 100%;
-      }
-
-      /* Map tab: fill leftover shell; iframe fills pane */
+      /* Community + Map: flex-fill leftover shell (header / optional top tabs /
+         bottom nav are shrink-0 siblings — no magic 11rem viewport math). */
+      #view-community.view-section.active,
       #view-map.view-section.active {
         display: flex;
         flex-direction: column;
         flex: 1 1 auto;
-        min-height: calc(100dvh - 9.5rem);
-        height: calc(100dvh - 9.5rem);
-        max-height: calc(100dvh - 9.5rem);
+        min-height: 0;
+        height: auto;
+        max-height: none;
         overflow: hidden;
         padding: 0;
       }
-      body.nav-bottom #view-map.view-section.active {
-        min-height: calc(100dvh - 11rem);
-        height: calc(100dvh - 11rem);
-        max-height: calc(100dvh - 11rem);
-      }
+      #view-community .community-pane,
       #view-map .map-tab-pane {
         flex: 1 1 auto;
         min-height: 0;
         height: 100%;
       }
-      #main-content.app-shell:has(#view-map.active) {
+      #main-content.app-shell:has(#view-map.active),
+      #main-content.app-shell:has(#view-community.active) {
         height: max(600px, calc(100dvh - 2rem));
+        max-height: max(600px, calc(100dvh - 2rem));
         overflow: hidden;
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell:has(#view-map.active),
+        #main-content.app-shell:has(#view-community.active) {
+          height: max(600px, calc(100dvh - 4rem));
+          max-height: max(600px, calc(100dvh - 4rem));
+        }
       }
 
       #view-next-train.view-section.active {

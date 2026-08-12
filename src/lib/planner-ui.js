@@ -3743,6 +3743,11 @@ export function renderSelectedTrip(container, index) {
     } else {
         renderTripResult(container, currentTripOptions, index);
     }
+
+    // Soft offer: contribute location when this trip is in the live 10‑min window
+    try {
+        import('./map-tab.js').then((m) => m.maybeOfferPlannerContribute?.()).catch(() => {});
+    } catch { /* ignore */ }
 }
 
 export function startPlannerPulse(currentIndex) {

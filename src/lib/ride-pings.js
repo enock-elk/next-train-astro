@@ -7,8 +7,8 @@
  *   at, expiresAt, uid?, coarseLat?, coarseLng?, appVersion, source
  * }
  *
- * No GPS trails — optional coarse coords only to snap station client-side.
- * TTL ~18 minutes; one active ride per device (overwrite same device key).
+ * No GPS trails — optional coarse coords only to snap station / show on Leaflet.
+ * TTL ~10 minutes (rules allow up to 20); one active ride per device.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
 import { safeStorage, escapeHTML, normalizeStationName } from './utils.js';
@@ -18,7 +18,7 @@ import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
-export const RIDE_PING_TTL_MS = 18 * 60 * 1000;
+export const RIDE_PING_TTL_MS = 10 * 60 * 1000;
 const ACTIVE_KEY = 'ridePingActiveV1';
 
 /** @type {Record<string, () => void>} */
@@ -95,14 +95,24 @@ export function summarizeRidePings(pings, focusStation = '') {
 export async function fetchRouteRidePings(routeId) {
     if (!routeId || !navigator.onLine) return [];
     try {
+        // Prefer public read (rules .read: true). A stale ?auth= token makes Firebase
+        // REST return 401 even for public paths — fall back without auth.
         const token = await ensureAuthToken();
-        const q = token ? `?auth=${encodeURIComponent(token)}` : '';
-        const res = await fetch(
-            `${DYNAMIC_BASE_URL}ride_pings/${encodeURIComponent(routeId)}.json${q}`,
-            { cache: 'no-store' }
-        );
-        if (!res.ok) return [];
-        const data = await res.json();
+        const urls = [
+            `${DYNAMIC_BASE_URL}ride_pings/${encodeURIComponent(routeId)}.json`,
+        ];
+        if (token) {
+            urls.unshift(`${urls[0]}?auth=${encodeURIComponent(token)}`);
+        }
+        let data = null;
+        for (const url of urls) {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (res.ok) {
+                data = await res.json();
+                break;
+            }
+            if (res.status !== 401 && res.status !== 403) break;
+        }
         if (!data || typeof data !== 'object') return [];
         return activePings(Object.values(data));
     } catch {
@@ -159,6 +169,7 @@ export async function submitRideCheckIn({
     destination = null,
     coarseLat = null,
     coarseLng = null,
+    source = 'board_checkin',
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
@@ -183,12 +194,13 @@ export async function submitRideCheckIn({
         coarseLat: typeof coarseLat === 'number' ? Math.round(coarseLat * 1000) / 1000 : null,
         coarseLng: typeof coarseLng === 'number' ? Math.round(coarseLng * 1000) / 1000 : null,
         appVersion: APP_VERSION,
-        source: 'board_checkin',
+        source: source || 'board_checkin',
     };
 
     try {
         const token = await ensureAuthToken();
-        const authParam = token ? `?auth=${encodeURIComponent(token)}` : '';
+        if (!token) throw new Error('Sign-in required to contribute (anonymous is fine).');
+        const authParam = `?auth=${encodeURIComponent(token)}`;
         const res = await fetch(
             `${DYNAMIC_BASE_URL}ride_pings/${encodeURIComponent(routeId)}/${encodeURIComponent(deviceId)}.json${authParam}`,
             {
@@ -198,8 +210,13 @@ export async function submitRideCheckIn({
             }
         );
         if (!res.ok) throw new Error(`Check-in failed (${res.status})`);
-        safeStorage.setItem(ACTIVE_KEY, JSON.stringify({ routeId, station: st, at: now, expiresAt: payload.expiresAt }));
-        showToast(`Checked in at ${st}`, 'success');
+        safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
+            routeId, station: st, trainId: trainId || null, at: now, expiresAt: payload.expiresAt,
+        }));
+        const toastMsg = trainId
+            ? `Contributing on train ${trainId} · ${Math.round(RIDE_PING_TTL_MS / 60000)} min`
+            : `Checked in at ${st}`;
+        showToast(toastMsg, 'success');
         renderRideSeenChip(routeId);
         return { ok: true, ping: payload };
     } catch (e) {

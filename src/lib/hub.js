@@ -1207,7 +1207,7 @@ export function initHub() {
     setupMapLogic();
 
     /** In-app sheet for guide / interactive map — keeps planner state (no full remount). */
-    const isMapSheetUrl = (url) => /\/map\.html?(?:\?|#|$)/i.test(String(url || ''));
+    const isMapSheetUrl = (url) => /\/map(?:\.html)?(?:\?|#|$)/i.test(String(url || ''));
 
     const applySheetChrome = (overlay, mode, title) => {
         const chrome = document.getElementById('nt-inapp-sheet-chrome');
@@ -1365,7 +1365,7 @@ export function initHub() {
             if (typeof window.switchTab === 'function' && document.getElementById('view-map')) {
                 window.switchTab('map');
             } else {
-                openInAppSheet(withBase('/map.html'), 'Network Map');
+                openInAppSheet(withBase('/map'), 'Network Map');
             }
         }, 120);
     });

@@ -1399,10 +1399,52 @@
                 };
             }
 
-            // Parent Map tab / external nudge
+            /** Contributor markers from parent Map tab (ride_pings with coarse GPS). */
+            let ridePingLayer = null;
+            function renderRidePingMarkers(pings) {
+                if (ridePingLayer) {
+                    map.removeLayer(ridePingLayer);
+                    ridePingLayer = null;
+                }
+                if (!pings || !pings.length) return;
+                const group = L.layerGroup();
+                pings.forEach(function (p) {
+                    if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+                    const label = (p.trainId ? ('Train ' + p.trainId) : 'Rider')
+                        + (p.station ? (' · ' + p.station) : '');
+                    L.circleMarker([p.lat, p.lng], {
+                        radius: 8,
+                        color: '#d97706',
+                        weight: 2,
+                        fillColor: '#fbbf24',
+                        fillOpacity: 0.85
+                    }).bindPopup(
+                        "<div class='text-xs font-bold text-center text-gray-900'>" + label
+                        + "<br><span class='text-[10px] text-gray-500 font-normal'>Volunteer · ~10 min window</span></div>"
+                    ).addTo(group);
+                });
+                ridePingLayer = group.addTo(map);
+            }
+
+            // Parent Map tab / external nudge (locate + trip contribute markers)
             window.addEventListener('message', function (ev) {
                 const data = ev && ev.data;
-                if (!data || data.type !== 'nt-map-locate') return;
+                if (!data || typeof data !== 'object') return;
+                if (data.type === 'nt-map-ride-pings') {
+                    renderRidePingMarkers(data.pings || []);
+                    return;
+                }
+                if (data.type === 'nt-map-contribute' && typeof data.lat === 'number') {
+                    const ll = L.latLng(data.lat, data.lng);
+                    applyUserLocation(ll, 40);
+                    renderRidePingMarkers([{
+                        lat: data.lat, lng: data.lng,
+                        trainId: data.trainId, station: data.station
+                    }]);
+                    map.flyTo(ll, 14, { duration: 1.0 });
+                    return;
+                }
+                if (data.type !== 'nt-map-locate') return;
                 if (typeof data.lat === 'number' && typeof data.lng === 'number') {
                     const ll = L.latLng(data.lat, data.lng);
                     applyUserLocation(ll, data.accuracy);
@@ -1413,37 +1455,32 @@
                 else if (locateIcon) locateIcon.classList.add('animate-spin');
             });
 
+            // Standalone /map: Contribute opens parent picker when embedded; else locates + toast.
             const shareBtn = document.getElementById('custom-share-location-btn');
             if (shareBtn) {
                 shareBtn.onclick = async (e) => {
                     e.stopPropagation();
                     try {
-                        if (window.parent && window.parent !== window && typeof window.parent.shareMyLocation === 'function') {
-                            await window.parent.shareMyLocation();
-                            return;
+                        if (window.parent && window.parent !== window) {
+                            if (typeof window.parent.openContributePicker === 'function') {
+                                window.parent.openContributePicker();
+                                return;
+                            }
+                            if (typeof window.parent.shareMyLocation === 'function') {
+                                await window.parent.shareMyLocation();
+                                return;
+                            }
                         }
                     } catch (_) {}
-                    const doShare = async (lat, lng) => {
-                        const url = 'https://maps.google.com/?q=' + lat + ',' + lng;
-                        const payload = { title: 'My location — Next Train', text: "I'm on the Metrorail network:\n" + url, url };
-                        try {
-                            if (navigator.share) await navigator.share(payload);
-                            else if (navigator.clipboard && navigator.clipboard.writeText) {
-                                await navigator.clipboard.writeText(url);
-                                alert('Location link copied');
-                            }
-                        } catch (err) {
-                            if (err && err.name !== 'AbortError') console.warn('Share failed', err);
-                        }
-                    };
-                    if (lastKnownLatLng) {
-                        await doShare(lastKnownLatLng.lat, lastKnownLatLng.lng);
-                        return;
-                    }
                     if (locateIcon) locateIcon.classList.add('animate-spin');
-                    map.once('locationfound', async function (ev) {
-                        await doShare(ev.latlng.lat, ev.latlng.lng);
+                    map.once('locationfound', function (ev) {
+                        applyUserLocation(ev.latlng, ev.accuracy);
+                        alert('Open Next Train → Map → Contribute to tie this location to a train for 10 minutes.');
                     });
+                    if (!lastKnownLatLng) map.locate({ setView: true, maxZoom: 15, enableHighAccuracy: true });
+                    else {
+                        alert('Open Next Train → Map → Contribute to tie this location to a train for 10 minutes.');
+                    }
                 };
             }
 

@@ -101,13 +101,18 @@ jobs:
           test -f dist/sw.js
           test -f dist/sitemap.xml
           test -d dist/routes
-          echo "Production build surface looks correct."
+          test -f dist/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' dist/.well-known/assetlinks.json
+          echo "Production build surface looks correct (incl. Digital Asset Links)."
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: nexttrain-production-dist
           path: dist
+          # Required: upload-artifact v4.4+ drops dotfolders by default, which
+          # strips public/.well-known/assetlinks.json (Digital Asset Links / TWA).
+          include-hidden-files: true
           retention-days: 14
 
   publish:
@@ -119,6 +124,13 @@ jobs:
         with:
           name: nexttrain-production-dist
           path: dist
+
+      - name: Assert Digital Asset Links survived artifact hop
+        run: |
+          set -euo pipefail
+          test -f dist/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' dist/.well-known/assetlinks.json
+          echo "Downloaded dist/.well-known/assetlinks.json OK"
 
       - name: Checkout live host (metrorail-app)
         uses: actions/checkout@v4
@@ -209,6 +221,8 @@ jobs:
           test -f site/CNAME
           test -f site/.nojekyll
           test -d site/_astro
+          test -f site/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' site/.well-known/assetlinks.json
           grep -qx 'nexttrain.co.za' site/CNAME
           # Must not leave Astro source tree on the live host
           if [ -d site/src ] || [ -f site/package.json ] || [ -f site/astro.config.mjs ]; then

@@ -872,7 +872,8 @@ export const CHANGELOG_DATA = [
         id: "V8_08.10.1",
         title: "Cape Town Public Holidays",
         date: "10 Aug 2026",
-        forceShow: true,
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
         features: [
             "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays — they use dedicated holiday timetables.",
             "<b>Timetable grid:</b> Western Cape day picker is now Mon–Fri, Saturday, or Public Holiday (separate from Sat).",

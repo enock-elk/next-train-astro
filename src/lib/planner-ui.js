@@ -3282,9 +3282,9 @@ export async function applyPlannerDeepLink() {
         return false;
     }
 
-    try {
-        await loadAllSchedules(true);
-    } catch (e) { /* continue; poll may still resolve */ }
+    // Paint-first: start schedule load but open planner immediately; poll for stations
+    // instead of awaiting the full Firebase → CF → GitHub waterfall (~15s on 3G).
+    const loadPromise = loadAllSchedules(true).catch(() => {});
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -3300,7 +3300,11 @@ export async function applyPlannerDeepLink() {
             if (attempts === 1 || attempts % 4 === 0) {
                 ensureRoutePinnedForRegion(targetRegion);
                 if (!getMasterStationList()?.length) {
-                    loadAllSchedules(true).catch(() => {});
+                    loadPromise.then(() => {
+                        if (!getMasterStationList()?.length) {
+                            loadAllSchedules(true).catch(() => {});
+                        }
+                    });
                 }
             }
             const list = getMasterStationList();

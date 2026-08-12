@@ -121,7 +121,15 @@ const faqLd = {
 
     <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
     <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <img src="/icons/loading-logo.png" alt="" class="w-16 h-16 mb-4 animate-pulse" width="64" height="64" />
+        <img
+            src={withBase('icons/loading-logo-splash.webp')}
+            alt=""
+            class="w-16 h-16 mb-4 animate-pulse"
+            width="64"
+            height="64"
+            fetchpriority="high"
+            decoding="async"
+        />
         <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
         <a
             href={withBase('help.html') + '?reason=boot'}
@@ -214,9 +222,9 @@ const faqLd = {
         try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
     };
-    // Fix loader image base path for GitHub Pages preview
+    // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
     const loaderImg = document.querySelector('#loading-overlay img');
-    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo.png'));
+    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
 
     // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
     // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
@@ -234,7 +242,6 @@ const faqLd = {
     import '../lib/renderer.js';
     import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
     import { initHub, checkServiceAlerts } from '../lib/hub.js';
-    import { initAdminBridge } from '../lib/admin-bridge.js';
     import {
         switchTab,
         initTabIndicator,
@@ -319,7 +326,10 @@ const faqLd = {
     initLiveBoardUi();
     initPlanner();
     initHub();
-    initAdminBridge();
+    // Admin + Firebase SDK stay off the critical home chunk (CWV / SW precache).
+    import('../lib/admin-bridge.js')
+        .then(({ initAdminBridge }) => initAdminBridge())
+        .catch((e) => console.warn('🛡️ Guardian: Admin bridge deferred load failed', e));
     setupBlackBoxLogger();
 
     // Legal docs don't need schedules — open as soon as the shell is ready

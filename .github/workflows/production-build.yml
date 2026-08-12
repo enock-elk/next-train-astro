@@ -62,4 +62,6 @@ jobs:
         with:
           name: nexttrain-production-dist
           path: dist
+          # Required so /.well-known/assetlinks.json survives the artifact hop.
+          include-hidden-files: true
           retention-days: 14

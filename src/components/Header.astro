@@ -1,21 +1,16 @@
 ---
-// Header: ⋮ menu on the left (matches the left-opening sidenav) · brand · alerts right
+// Header: menu (left, matches the left-opening sidenav) · brand · alerts right.
+// Offline status is NOT here — it docks above the bottom nav (see index.astro).
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-center justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
 
-    <div id="offline-wrapper" class="absolute top-0 left-0 right-0 flex justify-center z-[60] pointer-events-none">
-        <div id="offline-indicator" style="display: none;" class="pointer-events-auto w-max bg-amber-400 text-gray-900 border-amber-500 border-b border-x border-t-0 dark:bg-gray-900/95 dark:text-amber-400 dark:border-amber-500/80 dark:shadow-[0_4px_12px_rgba(245,158,11,0.15)] backdrop-blur-md text-xs font-black uppercase px-4 py-1 rounded-b-lg shadow-md flex items-center justify-center tracking-widest whitespace-nowrap transition-colors">
-            WORKING OFFLINE
-        </div>
-    </div>
-
     <div class="shrink-0 self-start mt-1 relative z-[70]">
         <button id="open-nav-btn" type="button" class="p-2 -ml-1 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition-colors" aria-label="Menu">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="5" r="1.75"></circle>
-                <circle cx="12" cy="12" r="1.75"></circle>
-                <circle cx="12" cy="19" r="1.75"></circle>
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16"></path>
+                <path d="M4 12h16"></path>
+                <path d="M4 17h16"></path>
             </svg>
         </button>
     </div>

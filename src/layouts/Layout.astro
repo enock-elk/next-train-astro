@@ -303,7 +303,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
           var params = new URLSearchParams(location.search);
           var packParam = params.get('pack') || params.get('colourPack');
           if (packParam === 'ember' || packParam === 'classic' || packParam === 'midnight'
-              || packParam === 'contrast' || packParam === 'signal') {
+              || packParam === 'contrast' || packParam === 'signal' || packParam === 'paper') {
             localStorage.setItem('colourPack', packParam);
             localStorage.setItem('ntLabEmberSeededV1', '1');
           }
@@ -318,7 +318,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         } catch (e) {}
         var pack = null;
         try { pack = localStorage.getItem('colourPack'); } catch (e) {}
-        var valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
+        var valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'paper';
         var fallbackPack = document.documentElement.getAttribute('data-lab-mode') === 'true' ? 'ember' : 'classic';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : fallbackPack);
 

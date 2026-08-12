@@ -17,7 +17,7 @@
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic · midnight · contrast · signal · ember
+ * Packs: classic · midnight · contrast · signal · ember · paper
  * ---------------------------------------------------------------------------
  */
 
@@ -254,6 +254,67 @@ html[data-colour-pack="ember"].dark {
   --nt-theme-meta: #78350f;
 }
 
+/* Paper — warm cream page, sage primary, terracotta accent (editorial / low glare).
+   Text stays near-black and borders stay visible so it survives outdoor screens. */
+html[data-colour-pack="paper"] {
+  --nt-primary: #6e7f53;
+  --nt-primary-hover: #59683f;
+  --nt-primary-fg: #ffffff;
+  --nt-primary-soft: #edf0e2;
+  --nt-surface: #fbf7f0;
+  --nt-surface-muted: #f3ebdf;
+  --nt-text: #262220;
+  --nt-text-muted: #6f655a;
+  --nt-border: #e3d8c7;
+  --nt-theme-meta: #6e7f53;
+  --nt-accent: #a9784e;
+
+  --nt-blue-50: 240 243 232;
+  --nt-blue-100: 226 232 210;
+  --nt-blue-200: 205 216 180;
+  --nt-blue-300: 179 195 146;
+  --nt-blue-400: 150 170 116;
+  --nt-blue-500: 124 145 90;
+  --nt-blue-600: 110 127 83;
+  --nt-blue-700: 89 104 63;
+  --nt-blue-800: 71 83 54;
+  --nt-blue-900: 55 64 42;
+}
+
+html.dark[data-colour-pack="paper"],
+html[data-colour-pack="paper"].dark {
+  --nt-primary: #a9be8b;
+  --nt-primary-hover: #c3d3a8;
+  --nt-primary-fg: #22281a;
+  --nt-primary-soft: rgba(110, 127, 83, 0.3);
+  --nt-surface: #1f1c19;
+  --nt-surface-muted: #17140f;
+  --nt-text: #f2ebe0;
+  --nt-text-muted: #b9ac9b;
+  --nt-border: #3a332b;
+  --nt-theme-meta: #1f1c19;
+  --nt-accent: #c99a6e;
+
+  --nt-blue-50: 55 64 42;
+  --nt-blue-100: 71 83 54;
+  --nt-blue-200: 89 104 63;
+  --nt-blue-300: 110 127 83;
+  --nt-blue-400: 150 170 116;
+  --nt-blue-500: 169 190 139;
+  --nt-blue-600: 169 190 139;
+  --nt-blue-700: 195 211 168;
+  --nt-blue-800: 214 226 194;
+  --nt-blue-900: 240 243 232;
+}
+
+/* Paper reads as printed stock: hairline rules instead of heavy card shadows. */
+html[data-colour-pack="paper"] #main-content {
+  box-shadow: 0 1px 2px rgba(38, 34, 32, 0.06), 0 12px 32px rgba(38, 34, 32, 0.08);
+}
+html[data-colour-pack="paper"] .colour-pack-swatch {
+  border: 1px solid var(--nt-border);
+}
+
 /* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
 #main-content {
   background-color: var(--nt-surface);
@@ -292,7 +353,8 @@ html[data-colour-pack="ember"].dark {
 html[data-colour-pack="midnight"] #main-content,
 html[data-colour-pack="contrast"] #main-content,
 html[data-colour-pack="signal"] #main-content,
-html[data-colour-pack="ember"] #main-content {
+html[data-colour-pack="ember"] #main-content,
+html[data-colour-pack="paper"] #main-content {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
 }
@@ -305,10 +367,13 @@ html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
+html[data-colour-pack="paper"] .app-header,
+html[data-colour-pack="paper"] #app-top-tabs,
 html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="paper"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
 }
@@ -316,7 +381,8 @@ html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
 html[data-colour-pack="midnight"] .view-section,
 html[data-colour-pack="contrast"] .view-section,
 html[data-colour-pack="signal"] .view-section,
-html[data-colour-pack="ember"] .view-section {
+html[data-colour-pack="ember"] .view-section,
+html[data-colour-pack="paper"] .view-section {
   background-color: var(--nt-surface-muted) !important;
 }
 
@@ -408,7 +474,53 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   pointer-events: none;
 }
 
-/* Keep header chrome (hamburger / bell / maint) below app modals */
+/* Offline status docks at the bottom of the shell (above the nav) so it never
+   competes with the brand / alerts row for header space. Collapses to zero
+   height when #offline-indicator is display:none. */
+.nt-offline-dock {
+  width: 100%;
+}
+.nt-offline-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.75rem;
+  background-color: #fbbf24;
+  color: #1c1917;
+  border-top: 1px solid rgba(180, 83, 9, 0.35);
+  font-size: 0.625rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nt-offline-strip::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #b45309;
+  flex-shrink: 0;
+  animation: nt-offline-pulse 1.8s ease-in-out infinite;
+}
+@keyframes nt-offline-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+html.dark .nt-offline-strip {
+  background-color: #292524;
+  color: #fbbf24;
+  border-top-color: rgba(251, 191, 36, 0.4);
+}
+html.dark .nt-offline-strip::before {
+  background: #fbbf24;
+}
+
+/* Keep header chrome (menu / bell / maint) below app modals */
 #app-header {
   position: relative;
   z-index: 10;

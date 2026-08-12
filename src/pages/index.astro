@@ -180,6 +180,11 @@ const faqLd = {
         <MapView />
         <CommunityView />
 
+        <!-- Offline status docks here (bottom of shell) instead of overlapping the header -->
+        <div id="offline-wrapper" class="shrink-0 nt-offline-dock" aria-live="polite">
+            <div id="offline-indicator" style="display: none;" class="nt-offline-strip">WORKING OFFLINE</div>
+        </div>
+
         <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-40 bottom-nav-bar" aria-label="Primary" aria-hidden="true">
             <div class="grid grid-cols-4 gap-0 max-w-md mx-auto">
                 <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-blue-600 dark:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">

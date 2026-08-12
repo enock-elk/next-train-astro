@@ -1,0 +1,54 @@
+---
+/**
+ * Interactive network map as a primary tab (Leaflet via /map.html embed).
+ * Behaviour: src/lib/map-tab.js
+ */
+import { withBase } from '../lib/config.js';
+const mapSrc = withBase('/map.html') + '?embed=1';
+---
+
+<div id="view-map" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
+    <div class="map-tab-pane flex flex-col flex-1 min-h-0 h-full">
+        <div class="shrink-0 px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Network map</p>
+                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">GPS optional — share only when you choose</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                    type="button"
+                    id="map-tab-locate-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Show my location on the map"
+                >
+                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                    Locate
+                </button>
+                <button
+                    type="button"
+                    id="map-tab-share-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Share your location with friends"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+                    Share
+                </button>
+            </div>
+        </div>
+        <div class="relative flex-1 min-h-0 bg-gray-100 dark:bg-gray-950">
+            <iframe
+                id="map-tab-frame"
+                title="Metrorail network map"
+                class="absolute inset-0 w-full h-full border-0"
+                data-map-src={mapSrc}
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                allow="geolocation"
+            ></iframe>
+            <div id="map-tab-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500 dark:text-gray-400 pointer-events-none">
+                <svg class="w-8 h-8 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                <p class="text-xs font-bold">Open Map tab to load the network</p>
+            </div>
+        </div>
+    </div>
+</div>

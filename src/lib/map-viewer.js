@@ -67,7 +67,7 @@ function closeMap() {
         delete closeBtn2.dataset.plannerReturnLabel;
     }
     try { sessionStorage.removeItem('nt_map_from_planner'); } catch { /* ignore */ }
-    if (location.hash === '#map') {
+    if (location.hash === '#prasa-map') {
         try { history.back(); return; } catch { /* fall through */ }
     }
     if (typeof closeSmoothModal === 'function') closeSmoothModal('map-modal');

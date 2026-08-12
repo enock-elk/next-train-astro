@@ -1341,25 +1341,38 @@
             const locateBtn = document.getElementById('custom-locate-btn');
             const locateIcon = locateBtn ? locateBtn.querySelector('svg') : null;
 
-            map.on('locationfound', function(e) {
-                lastKnownLatLng = e.latlng;
-                const radius = e.accuracy / 2;
+            function applyUserLocation(latlng, accuracy) {
+                lastKnownLatLng = latlng;
+                const radius = (accuracy || 40) / 2;
                 if (!userMarker) {
-                    userMarker = L.marker(e.latlng, {icon: pulsingIcon}).addTo(map)
+                    userMarker = L.marker(latlng, {icon: pulsingIcon}).addTo(map)
                         .bindPopup("<div class='text-xs font-bold text-center text-gray-900'>You are here<br><span class='text-[10px] text-gray-500 font-normal'>Within " + Math.round(radius) + " meters</span></div>");
-                    userRadius = L.circle(e.latlng, radius, {
+                    userRadius = L.circle(latlng, radius, {
                         color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.15, weight: 1
                     }).addTo(map);
                 } else {
-                    userMarker.setLatLng(e.latlng);
-                    userRadius.setLatLng(e.latlng);
+                    userMarker.setLatLng(latlng);
+                    userRadius.setLatLng(latlng);
                     userRadius.setRadius(radius);
                 }
-                
                 if (locateIcon) {
                     locateIcon.classList.remove('animate-spin', 'text-gray-400');
                     locateIcon.classList.add('text-blue-600', 'dark:text-blue-400');
                 }
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'nt-map-location',
+                            lat: latlng.lat,
+                            lng: latlng.lng,
+                            accuracy: accuracy || radius * 2
+                        }, '*');
+                    }
+                } catch (_) {}
+            }
+
+            map.on('locationfound', function(e) {
+                applyUserLocation(e.latlng, e.accuracy);
             });
 
             map.on('locationerror', function(e) {
@@ -1383,6 +1396,54 @@
                         if (locateIcon) locateIcon.classList.add('animate-spin');
                         // Map is already watching, we just wait for locationfound to fire
                     }
+                };
+            }
+
+            // Parent Map tab / external nudge
+            window.addEventListener('message', function (ev) {
+                const data = ev && ev.data;
+                if (!data || data.type !== 'nt-map-locate') return;
+                if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+                    const ll = L.latLng(data.lat, data.lng);
+                    applyUserLocation(ll, data.accuracy);
+                    map.flyTo(ll, 15, { duration: 1.2 });
+                    return;
+                }
+                if (lastKnownLatLng) map.flyTo(lastKnownLatLng, 15, { duration: 1.2 });
+                else if (locateIcon) locateIcon.classList.add('animate-spin');
+            });
+
+            const shareBtn = document.getElementById('custom-share-location-btn');
+            if (shareBtn) {
+                shareBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    try {
+                        if (window.parent && window.parent !== window && typeof window.parent.shareMyLocation === 'function') {
+                            await window.parent.shareMyLocation();
+                            return;
+                        }
+                    } catch (_) {}
+                    const doShare = async (lat, lng) => {
+                        const url = 'https://maps.google.com/?q=' + lat + ',' + lng;
+                        const payload = { title: 'My location — Next Train', text: "I'm on the Metrorail network:\n" + url, url };
+                        try {
+                            if (navigator.share) await navigator.share(payload);
+                            else if (navigator.clipboard && navigator.clipboard.writeText) {
+                                await navigator.clipboard.writeText(url);
+                                alert('Location link copied');
+                            }
+                        } catch (err) {
+                            if (err && err.name !== 'AbortError') console.warn('Share failed', err);
+                        }
+                    };
+                    if (lastKnownLatLng) {
+                        await doShare(lastKnownLatLng.lat, lastKnownLatLng.lng);
+                        return;
+                    }
+                    if (locateIcon) locateIcon.classList.add('animate-spin');
+                    map.once('locationfound', async function (ev) {
+                        await doShare(ev.latlng.lat, ev.latlng.lng);
+                    });
                 };
             }
 

@@ -428,6 +428,32 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         height: 100%;
       }
 
+      /* Map tab: fill leftover shell; iframe fills pane */
+      #view-map.view-section.active {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: calc(100dvh - 9.5rem);
+        height: calc(100dvh - 9.5rem);
+        max-height: calc(100dvh - 9.5rem);
+        overflow: hidden;
+        padding: 0;
+      }
+      body.nav-bottom #view-map.view-section.active {
+        min-height: calc(100dvh - 11rem);
+        height: calc(100dvh - 11rem);
+        max-height: calc(100dvh - 11rem);
+      }
+      #view-map .map-tab-pane {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+      }
+      #main-content.app-shell:has(#view-map.active) {
+        height: max(600px, calc(100dvh - 2rem));
+        overflow: hidden;
+      }
+
       #view-next-train.view-section.active {
         min-height: calc(100dvh - 9.5rem);
       }

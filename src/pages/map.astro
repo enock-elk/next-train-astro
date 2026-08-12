@@ -46,6 +46,8 @@ const regionSeoSlugs = Object.fromEntries(
         right: 12px;
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
+      /* Parent Map tab toolbar already has Share — keep Locate FAB only. */
+      html.nt-map-embedded #custom-share-location-btn { display: none !important; }
       .map-chrome-btn {
         pointer-events: auto;
         width: 2.25rem; height: 2.25rem;
@@ -274,7 +276,11 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
   </div>
 
-  <div class="fixed bottom-6 right-4 z-[1000] pointer-events-none">
+  <div class="fixed bottom-6 right-4 z-[1000] pointer-events-none flex flex-col items-end gap-2">
+    <button id="custom-share-location-btn" type="button" class="h-12 px-3.5 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg border border-blue-700/40 hover:scale-105 transition-transform pointer-events-auto text-xs font-bold focus:outline-none" aria-label="Share my location">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+      Share
+    </button>
     <button id="custom-locate-btn" type="button" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
       <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
     </button>
@@ -300,11 +306,19 @@ const regionSeoSlugs = Object.fromEntries(
           return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
         } catch (_) { return false; }
       }
-      // Parent sheet already has Back — align Network Lines on the same top row.
-      if (inAppSheet()) {
+      function inMapTab() {
+        try {
+          if (new URLSearchParams(location.search).get('embed') === '1') return true;
+          return !!(window.parent && window.parent !== window && window.parent.__ntMapTabEmbed);
+        } catch (_) { return false; }
+      }
+      // Parent sheet / Map tab already has chrome — hide Back.
+      if (inAppSheet() || inMapTab()) {
         document.documentElement.classList.add('nt-map-embedded');
         document.getElementById('map-back-wrap')?.classList.add('hidden');
-        try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
+        if (inAppSheet()) {
+          try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
+        }
       }
       document.addEventListener('click', function (e) {
         if (!inAppSheet()) return;

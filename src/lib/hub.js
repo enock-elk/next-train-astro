@@ -1131,9 +1131,9 @@ export function initHub() {
             if (replyModal && !replyModal.classList.contains('hidden') && hash !== '#devreply') {
                 closeSmoothModal('developer-reply-modal');
             }
-            // Keep notice open while lightbox (#lightbox) or legacy #map preview is on top
+            // Keep notice open while lightbox (#lightbox) or static map preview is on top
             if (noticeModal && !noticeModal.classList.contains('hidden')
-                && hash !== '#notice' && hash !== '#lightbox' && hash !== '#map') {
+                && hash !== '#notice' && hash !== '#lightbox' && hash !== '#prasa-map') {
                 closeSmoothModal('notice-modal');
             }
         });
@@ -1361,7 +1361,13 @@ export function initHub() {
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/map.html'), 'Network Map'), 120);
+        setTimeout(() => {
+            if (typeof window.switchTab === 'function' && document.getElementById('view-map')) {
+                window.switchTab('map');
+            } else {
+                openInAppSheet(withBase('/map.html'), 'Network Map');
+            }
+        }, 120);
     });
 
     // Updates

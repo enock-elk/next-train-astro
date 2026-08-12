@@ -239,7 +239,7 @@ export async function setNotifyPref(wantOn) {
 
 /**
  * Apply top vs bottom navigation chrome.
- * Bottom: Home · Plan · Community · More.
+ * Bottom: Home · Plan · Map · Community · More.
  * Top tabs are hidden in bottom mode to reclaim vertical space.
  */
 export function applyNavChrome(style = getNavStyle()) {

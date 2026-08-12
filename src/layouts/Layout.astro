@@ -28,10 +28,11 @@ const resolvedOgTitle = ogTitle || title;
 const resolvedOgDescription = ogDescription || description;
 const resolvedTwitterTitle = twitterTitle || resolvedOgTitle;
 const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
+const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
 ---
 
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
@@ -297,9 +298,29 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
-        const pack = localStorage.getItem('colourPack');
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
-        document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
+        // Lab / ?pack=ember: seed Ember (yellow/orange brand) so restored chrome is obvious
+        try {
+          var params = new URLSearchParams(location.search);
+          var packParam = params.get('pack') || params.get('colourPack');
+          if (packParam === 'ember' || packParam === 'classic' || packParam === 'midnight'
+              || packParam === 'contrast' || packParam === 'signal') {
+            localStorage.setItem('colourPack', packParam);
+            localStorage.setItem('ntLabEmberSeededV1', '1');
+          }
+          var host = String(location.hostname || '').toLowerCase();
+          var isLab = document.documentElement.getAttribute('data-lab-mode') === 'true'
+            || host === 'lab.nexttrain.co.za' || host.indexOf('lab.') === 0;
+          if (isLab && !localStorage.getItem('ntLabEmberSeededV1')) {
+            var cur = localStorage.getItem('colourPack');
+            if (!cur || cur === 'classic') localStorage.setItem('colourPack', 'ember');
+            localStorage.setItem('ntLabEmberSeededV1', '1');
+          }
+        } catch (e) {}
+        var pack = null;
+        try { pack = localStorage.getItem('colourPack'); } catch (e) {}
+        var valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
+        var fallbackPack = document.documentElement.getAttribute('data-lab-mode') === 'true' ? 'ember' : 'classic';
+        document.documentElement.setAttribute('data-colour-pack', valid ? pack : fallbackPack);
 
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());

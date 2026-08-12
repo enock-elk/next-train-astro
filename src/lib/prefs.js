@@ -50,9 +50,37 @@ export function setNavStyle(style) {
     return next;
 }
 
+function isLabMode() {
+    try {
+        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return true;
+    } catch { /* ignore */ }
+    if (typeof location !== 'undefined') {
+        const host = String(location.hostname || '').toLowerCase();
+        if (host === 'lab.nexttrain.co.za' || host.startsWith('lab.')) return true;
+    }
+    return false;
+}
+
+/**
+ * Lab defaults to Ember (yellow/orange brand) so the restored chrome is obvious.
+ * One-time seed: migrate unset/classic → ember on lab; later picks stick.
+ */
+function seedLabEmberPack() {
+    if (typeof window === 'undefined' || !isLabMode()) return;
+    const SEED = 'ntLabEmberSeededV1';
+    if (safeStorage.getItem(SEED)) return;
+    const current = safeStorage.getItem(COLOUR_PACK_KEY);
+    if (!current || current === COLOUR_PACKS.CLASSIC) {
+        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.EMBER);
+    }
+    safeStorage.setItem(SEED, '1');
+}
+
 export function getColourPack() {
+    seedLabEmberPack();
     const v = safeStorage.getItem(COLOUR_PACK_KEY);
-    return VALID_PACKS.has(v) ? v : COLOUR_PACKS.CLASSIC;
+    if (VALID_PACKS.has(v)) return v;
+    return isLabMode() ? COLOUR_PACKS.EMBER : COLOUR_PACKS.CLASSIC;
 }
 
 function syncThemeColorMeta() {

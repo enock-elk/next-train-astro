@@ -1166,7 +1166,7 @@ export function initHub() {
     // Route community (Phase 6)
     import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
 
-    // Station check-in / last-seen (Wave 3)
+    // Live ride sharing / last-seen (Wave 3)
     import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});
 
     // Notifications pref (Phase 8 stub)

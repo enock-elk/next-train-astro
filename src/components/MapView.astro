@@ -4,9 +4,12 @@
  * Contribute = volunteer GPS tied to a train for ~10 minutes (not social share).
  * Behaviour: src/lib/map-tab.js
  */
-import { withBase } from '../lib/config.js';
-/* Extensionless /map — CF Pages 308s /map.html → /map; avoid .html in iframes. */
-const mapSrc = withBase('/map') + '?embed=1';
+import { withBase, APP_VERSION } from '../lib/config.js';
+/**
+ * Extensionless /map only. Browsers cached the old permanent redirect
+ * (/map → /map.html), so the version query is required to bypass that cache.
+ */
+const mapSrc = `${withBase('/map')}?embed=1&v=${APP_VERSION}`;
 ---
 
 <div id="view-map" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
@@ -65,7 +68,15 @@ const mapSrc = withBase('/map') + '?embed=1';
             ></iframe>
             <div id="map-tab-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500 dark:text-gray-400 pointer-events-none">
                 <svg class="w-8 h-8 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-                <p class="text-xs font-bold">Open Map tab to load the network</p>
+                <p class="text-xs font-bold">Loading network map…</p>
+            </div>
+            <div id="map-tab-fallback" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-gray-100 dark:bg-gray-950">
+                <p class="text-sm font-black text-gray-900 dark:text-white">Map didn’t load</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">An old cached redirect can block the embedded map. Reload it, or open the full map in a new tab.</p>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="map-tab-retry" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-bold focus:outline-none">Reload map</button>
+                    <a id="map-tab-open-full" href={mapSrc.replace('&embed=1', '').replace('?embed=1&', '?').replace('?embed=1', '')} target="_blank" rel="noopener" class="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200">Open full map</a>
+                </div>
             </div>
         </div>
     </div>

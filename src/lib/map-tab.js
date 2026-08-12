@@ -5,7 +5,7 @@
  * just arrived) for ~10 minutes so others can see where that ride was last seen.
  * Not a social “share my pin” link.
  */
-import { withBase } from './config.js';
+import { withBase, APP_VERSION } from './config.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { $currentRouteId } from '../store.js';
 import { timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime } from './utils.js';
@@ -37,17 +37,47 @@ function nowSeconds() {
     return timeToSeconds(t || '00:00:00');
 }
 
-function ensureFrameSrc() {
+/**
+ * Extensionless /map with a version query. `/map.html` 308s to `/map`, and the
+ * old permanent `/map → /map.html` redirect stays in the browser cache, so a
+ * plain `/map` request can still loop; the query bypasses that cached entry.
+ */
+function mapFrameSrc() {
+    const frame = frameEl();
+    const raw = frame?.getAttribute('data-map-src') || `${withBase('/map')}?embed=1`;
+    let src = String(raw).replace(/\/map\.html(\?|$)/, '/map$1');
+    if (!/[?&]v=/.test(src)) {
+        src += (src.includes('?') ? '&' : '?') + `v=${encodeURIComponent(APP_VERSION)}`;
+    }
+    return src;
+}
+
+let frameWatchdog = 0;
+
+function showFrameFallback() {
+    document.getElementById('map-tab-placeholder')?.classList.add('hidden');
+    document.getElementById('map-tab-fallback')?.classList.remove('hidden');
+    setStatus('Map didn’t load — reload or open full map');
+}
+
+function armFrameWatchdog() {
+    if (frameWatchdog) clearTimeout(frameWatchdog);
+    frameWatchdog = setTimeout(() => {
+        if (!frameLoaded) showFrameFallback();
+    }, 8000);
+}
+
+function ensureFrameSrc(force = false) {
     const frame = frameEl();
     if (!frame) return;
-    // Prefer extensionless /map (CF Pages). Fallback keeps ?embed=1.
-    let src = frame.getAttribute('data-map-src') || withBase('/map') + '?embed=1';
-    // Never load /map.html in the iframe — CF Pages 308s it to /map, and old
-    // _redirects 301 /map → /map.html caused ERR_TOO_MANY_REDIRECTS on lab.
-    src = String(src).replace(/\/map\.html(\?|$)/, '/map$1');
-    if (!frame.getAttribute('src')) {
+    if (force || !frame.getAttribute('src')) {
+        frameLoaded = false;
+        document.getElementById('map-tab-fallback')?.classList.add('hidden');
+        document.getElementById('map-tab-placeholder')?.classList.remove('hidden');
+        // Cache-bust on retry so a cached redirect chain isn't replayed.
+        const src = force ? `${mapFrameSrc()}&r=${Date.now()}` : mapFrameSrc();
         frame.setAttribute('src', src);
-        document.getElementById('map-tab-placeholder')?.classList.add('hidden');
+        armFrameWatchdog();
     }
 }
 
@@ -385,10 +415,16 @@ export function bindMapTabUi() {
     });
     document.getElementById('map-contribute-cancel')?.addEventListener('click', hideContributeSheet);
 
+    document.getElementById('map-tab-retry')?.addEventListener('click', () => {
+        ensureFrameSrc(true);
+    });
+
     const frame = frameEl();
     frame?.addEventListener('load', () => {
         frameLoaded = true;
+        if (frameWatchdog) clearTimeout(frameWatchdog);
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');
+        document.getElementById('map-tab-fallback')?.classList.add('hidden');
         syncRidePingsToMap();
     });
 

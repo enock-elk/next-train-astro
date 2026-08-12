@@ -828,6 +828,6 @@ export function initLiveBoardUi() {
 
     // Phase 5 — delay report CTA + crowd banner (also bound from hub; safe to double-guard)
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
-    // Wave 3 — station check-in / last-seen chips
+    // Wave 3 — live ride sharing / last-seen chips
     import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});
 }

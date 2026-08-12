@@ -181,7 +181,7 @@ const faqLd = {
         <CommunityView />
 
         <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-40 bottom-nav-bar" aria-label="Primary" aria-hidden="true">
-            <div class="grid grid-cols-5 gap-0 max-w-md mx-auto">
+            <div class="grid grid-cols-4 gap-0 max-w-md mx-auto">
                 <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-blue-600 dark:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Next Train</span>
@@ -200,14 +200,6 @@ const faqLd = {
                         <span id="community-unread-badge" class="hidden absolute -top-1.5 -right-2.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
                     </span>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Community</span>
-                </button>
-                <button type="button" id="bottom-nav-more" data-bottom-nav="more" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="More: Settings">
-                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="5" r="2"></circle>
-                        <circle cx="12" cy="12" r="2"></circle>
-                        <circle cx="12" cy="19" r="2"></circle>
-                    </svg>
-                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">More</span>
                 </button>
             </div>
         </nav>
@@ -338,11 +330,6 @@ const faqLd = {
         window.triggerHaptic?.();
         switchTab('community');
     });
-    document.getElementById('bottom-nav-more')?.addEventListener('click', () => {
-        window.triggerHaptic?.();
-        window.openAppHub?.();
-    });
-
     import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
 
     const hash = location.hash;

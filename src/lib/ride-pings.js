@@ -1,5 +1,5 @@
 /**
- * Station-first ride check-in / last-seen (Wave 3).
+ * Live ride sharing — riders volunteer where a train was last seen (Wave 3).
  *
  * RTDB: ride_pings/{routeId}/{deviceId}
  * {
@@ -47,6 +47,18 @@ async function ensureAuthToken() {
         }
     }
     return '';
+}
+
+/**
+ * RTDB REST answers 401 for both "bad token" and "rules deny". The ride_pings
+ * rules in firebase-database.rules.json must be deployed for live sharing to
+ * work at all: `npm run firebase:rules`.
+ */
+function permissionMessage(status) {
+    if (status === 401 || status === 403) {
+        return 'Live ride sharing isn’t enabled on the server yet (database rules not deployed).';
+    }
+    return `Couldn’t share your ride (${status}).`;
 }
 
 function ageLabel(at) {
@@ -160,7 +172,7 @@ export function stopRidePingsListener(routeId) {
 }
 
 /**
- * Check in at current station / optional train (no continuous GPS).
+ * Share a ride from the current station / optional train (no continuous GPS).
  */
 export async function submitRideCheckIn({
     routeId = $currentRouteId.get(),
@@ -173,7 +185,7 @@ export async function submitRideCheckIn({
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
-        return { ok: false, message: 'Check-in isn’t on for this corridor yet.' };
+        return { ok: false, message: 'Ride sharing isn’t on for this corridor yet.' };
     }
     const st = (station || document.getElementById('station-select')?.value || '').trim();
     if (!routeId || !st) return { ok: false, message: 'Pick a station first.' };
@@ -209,18 +221,19 @@ export async function submitRideCheckIn({
                 body: JSON.stringify(payload),
             }
         );
-        if (!res.ok) throw new Error(`Check-in failed (${res.status})`);
+        if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
             routeId, station: st, trainId: trainId || null, at: now, expiresAt: payload.expiresAt,
         }));
+        const mins = Math.round(RIDE_PING_TTL_MS / 60000);
         const toastMsg = trainId
-            ? `Contributing on train ${trainId} · ${Math.round(RIDE_PING_TTL_MS / 60000)} min`
-            : `Checked in at ${st}`;
+            ? `Sharing your ride on train ${trainId} · ${mins} min`
+            : `Sharing your ride from ${st} · ${mins} min`;
         showToast(toastMsg, 'success');
         renderRideSeenChip(routeId);
         return { ok: true, ping: payload };
     } catch (e) {
-        return { ok: false, message: e?.message || 'Could not check in' };
+        return { ok: false, message: e?.message || 'Couldn’t share your ride' };
     }
 }
 
@@ -243,13 +256,14 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
 
     if (!summary) {
         host.classList.remove('hidden');
-        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"><span class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>No recent check-ins on this corridor</span>`;
+        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"><span class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>No riders sharing on this corridor</span>`;
         return;
     }
 
+    const trainBit = summary.trainId ? `Train ${escapeHTML(summary.trainId)} · ` : '';
     const label = station && normalizeStationName(summary.station) === normalizeStationName(station)
-        ? `Last seen here · ${escapeHTML(summary.age)}${summary.count > 1 ? ` · ${summary.count} riders` : ''}`
-        : `Last seen at ${escapeHTML(summary.station)} · ${escapeHTML(summary.age)}`;
+        ? `${trainBit}Last seen here · ${escapeHTML(summary.age)}${summary.count > 1 ? ` · ${summary.count} riders` : ''}`
+        : `${trainBit}Last seen at ${escapeHTML(summary.station)} · ${escapeHTML(summary.age)}`;
 
     host.classList.remove('hidden');
     host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${label}</span>`;
@@ -277,7 +291,7 @@ export function bindRideCheckInUi() {
         triggerHaptic();
         const routeId = $currentRouteId.get();
         const station = document.getElementById('station-select')?.value || '';
-        const result = await submitRideCheckIn({ routeId, station });
+        const result = await submitRideCheckIn({ routeId, station, source: 'board_share' });
         if (!result.ok && result.message) showToast(result.message, 'error');
     });
 

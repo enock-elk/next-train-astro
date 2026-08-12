@@ -891,7 +891,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Live alerts:</b> report Early / On time / Late on the train card — pending until a few riders agree, then a verified chip with EXP time.",
             "<b>Route chat:</b> lean corridor rooms with a short live feed (destroyed when you leave the tab).",
-            "<b>I’m here:</b> station check-in shows soft last-seen chips — no GPS trails."
+            "<b>Share my ride:</b> volunteer where a train was last seen for 10 minutes — no GPS trails."
         ]
     },
     {

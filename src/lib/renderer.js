@@ -29,7 +29,6 @@ import {
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
-import { trainGoingLabel } from './train-ghosts.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -662,10 +661,11 @@ export const Renderer = {
             }
             const normDest = Renderer._applyUIIntercepts(normalizeStationName(destination));
             
-            let trainTitle = trainGoingLabel(reportTrainId, destination);
+            let trainTitle = `Direct Train ${safeTrainName}`;
             let titleColor = "text-gray-900 dark:text-white";
             
             if (journey.isLastTrain) {
+                trainTitle = `Direct Train ${safeTrainName}`;
                 titleColor = "text-red-600 dark:text-red-400";
             }
 
@@ -724,13 +724,14 @@ export const Renderer = {
             let titleColor = "text-gray-900 dark:text-white";
             if (journey.isLastTrain) titleColor = "text-red-600 dark:text-red-400";
 
+            let train1Label = `Train ${safeTrainName}`;
             const shuttleBtn = buildTrainTitleReportButton({
-                label: `Shuttle ${trainGoingLabel(reportTrainId, rawDest || destination)}`,
+                label: `Shuttle ${train1Label}`,
                 ...reportCtx,
                 className: `inline-flex items-center justify-center max-w-full text-[11px] font-black ${titleColor} uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80`,
             });
             const connectBtn = buildTrainTitleReportButton({
-                label: `Connect ${trainGoingLabel(conn.train, conn.actualDestination || destination)}`,
+                label: `Connect Train ${conn.train}`,
                 routeId: reportRouteId,
                 trainId: conn.train,
                 scheduledTime: conn.departureTime,

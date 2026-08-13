@@ -944,6 +944,12 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
     const count = withTrain.length;
     const mins = Math.max(1, Math.round((Date.now() - (top.timestamp || Date.now())) / 60000));
     const when = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+    banner.setAttribute('data-route', top.routeId || routeId || '');
+    banner.setAttribute('data-train', top.trainId || '');
+    banner.setAttribute('data-dep', top.scheduledTime || '');
+    banner.setAttribute('data-arr', top.arrivalTime || '');
+    banner.setAttribute('data-station', top.station || '');
+    banner.setAttribute('data-dest', top.destination || '');
     if (text) {
         const going = trainGoingLabel(top.trainId, top.destination);
         const seen = top.station ? ` · last seen ${String(top.station).replace(/ STATION$/i, '')}` : '';
@@ -1181,10 +1187,15 @@ export function bindDelayReportUi() {
         });
     });
 
-    document.getElementById('delay-report-banner-cta')?.addEventListener('click', () => {
+    document.getElementById('delay-report-banner')?.addEventListener('click', () => {
+        const banner = document.getElementById('delay-report-banner');
         openTrainReportModal({
-            routeId: $currentRouteId.get(),
-            station: document.getElementById('station-select')?.value || '',
+            routeId: banner?.getAttribute('data-route') || $currentRouteId.get(),
+            trainId: banner?.getAttribute('data-train') || '',
+            scheduledTime: banner?.getAttribute('data-dep') || '',
+            arrivalTime: banner?.getAttribute('data-arr') || '',
+            station: banner?.getAttribute('data-station') || document.getElementById('station-select')?.value || '',
+            destination: banner?.getAttribute('data-dest') || '',
         });
     });
 

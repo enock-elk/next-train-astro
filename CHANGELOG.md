@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.21 — Locate, reports button, original cards, Messages chat (13 Aug 2026)
+
+- Next Train locate button is back beside the station field.
+- Commuter reports is a tappable button that opens that train’s status sheet.
+- Description boxes use the original Direct / Shuttle / Connect train labels again. Flags stay on the name.
+- Messages & Feedback shows the full commuter ↔ admin thread in the Community chat layout.
+
 ## V8_08.20 — Pinned bottom bar, light Classic default (13 Aug 2026)
 
 - The bottom navigation is locked to the bottom of the viewport. Header and main content scroll together above it.

@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.20";
+export const APP_VERSION = "V8_08.21";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.21",
+        title: "Locate, reports, and Messages chat",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Locate is back</b> on Next Train, next to the station field. Commuter reports is a button — tap it to open that train’s status.",
+            "<b>Train cards</b> use the original Direct / Shuttle / Connect labels again, with the flag still on the name.",
+            "<b>Messages & Feedback</b> is a two-way chat like Community: your notes and the team’s replies in one thread."
+        ]
+    },
     {
         id: "V8_08.20",
         title: "Pinned bottom bar, light Classic",

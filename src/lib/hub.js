@@ -470,8 +470,8 @@ async function submitFeedback() {
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
-        // closeSmoothModal may history.back() early — restore parked overlay after pop closes feedback
-        setTimeout(() => restoreFeedbackReturnOverlay(), 380);
+        feedbackReturnModalId = null;
+        setTimeout(() => openMessagesThread(), 420);
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -740,7 +740,53 @@ function getThreadDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
 }
 
-async function fetchInboxThread() {
+const LOCAL_INBOX_KEY = 'ntInboxLocalV1';
+
+function readLocalInbox() {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(LOCAL_INBOX_KEY) || '[]');
+        return Array.isArray(raw) ? raw.filter((m) => m && (m.message || m.text)) : [];
+    } catch {
+        return [];
+    }
+}
+
+function rememberLocalInbox(msg) {
+    if (!msg || !(msg.message || msg.text)) return;
+    const list = readLocalInbox();
+    const key = msg.id || `${msg.timestamp}|${String(msg.message || msg.text).slice(0, 48)}`;
+    if (list.some((m) => (m.id && m.id === msg.id) || (`${m.timestamp}|${String(m.message || m.text).slice(0, 48)}` === key))) {
+        return;
+    }
+    list.push(msg);
+    safeStorage.setItem(LOCAL_INBOX_KEY, JSON.stringify(list.slice(-80)));
+}
+
+function mergeInboxThread(remote, local) {
+    const byKey = new Map();
+    const add = (m) => {
+        if (!m || !(m.message || m.text)) return;
+        const text = String(m.message || m.text);
+        const key = m.id || `${m.timestamp || 0}|${text.slice(0, 48)}`;
+        if ([...byKey.values()].some((x) => x.timestamp === m.timestamp && String(x.message || x.text) === text)) return;
+        byKey.set(key, m);
+    };
+    (remote || []).forEach(add);
+    (local || []).forEach(add);
+    return [...byKey.values()].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function isCommuterInboxMsg(m) {
+    return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
+}
+
+function inboxClock(ts) {
+    const d = new Date(ts || Date.now());
+    if (Number.isNaN(d.getTime())) return '--:--';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+async function fetchRemoteInbox() {
     const deviceId = getThreadDeviceId();
     if (!deviceId) return [];
     const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json?t=${Date.now()}`);
@@ -749,31 +795,41 @@ async function fetchInboxThread() {
     if (!data || typeof data !== 'object') return [];
     return Object.entries(data)
         .map(([id, m]) => ({ id, ...(m || {}) }))
-        .filter((m) => m && (m.message || m.text))
-        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        .filter((m) => m && (m.message || m.text));
+}
+
+async function fetchInboxThread() {
+    let remote = [];
+    try { remote = await fetchRemoteInbox(); } catch { remote = []; }
+    return mergeInboxThread(remote, readLocalInbox());
 }
 
 function renderMessagesThread(list) {
     const host = document.getElementById('messages-thread-list');
     if (!host) return;
     if (!list.length) {
-        host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">No messages yet. Send one below — the team will reply here.</p>';
+        host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below — you and the team will see the full chat here.</p>';
         return;
     }
     host.innerHTML = list.map((m) => {
-        const mine = m.from === 'commuter';
+        const mine = isCommuterInboxMsg(m);
         const raw = m.message || m.text || '';
         const body = mine ? escapeHTML(raw) : sanitizeHTML(raw);
-        const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
-        const align = mine ? 'items-end' : 'items-start';
-        const bubble = mine
-            ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
-            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md';
+        const clock = inboxClock(m.timestamp);
         const who = mine ? 'You' : 'Next Train';
-        return `<div class="flex flex-col ${align}">
-      <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">${who}</span>
-      <div class="max-w-[85%] px-3 py-2 text-sm leading-snug ${bubble} whitespace-pre-wrap break-words">${body}</div>
-      <span class="text-[9px] text-gray-400 mt-0.5">${escapeHTML(when)}</span>
+        const avatar = mine
+            ? ''
+            : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
+        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}">
+      ${avatar}
+      <div class="inbox-bubble-wrap">
+        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}">
+          <div class="inbox-bubble-name-row">${who}</div>
+          <div class="inbox-bubble-body">
+            <div class="inbox-msg-text">${body}<span class="inbox-msg-time">${clock}</span></div>
+          </div>
+        </div>
+      </div>
     </div>`;
     }).join('');
     host.scrollTop = host.scrollHeight;
@@ -798,6 +854,7 @@ async function postCommuterInboxCopy({ text, feedbackType }) {
         type: feedbackType || 'general',
         read: true,
     };
+    rememberLocalInbox({ id: msgId, ...payload });
     const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const res = await fetch(
         `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${msgId}.json${authParam}`,
@@ -813,6 +870,7 @@ async function postCommuterInboxCopy({ text, feedbackType }) {
 export async function openMessagesThread() {
     triggerHaptic();
     closeAppHub(true);
+    document.getElementById('developer-reply-banner')?.classList.add('hidden');
     const host = document.getElementById('messages-thread-list');
     if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
     setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
@@ -820,7 +878,7 @@ export async function openMessagesThread() {
         const list = await fetchInboxThread();
         renderMessagesThread(list);
         const deviceId = getThreadDeviceId();
-        const unread = list.filter((m) => m.from !== 'commuter' && !m.read);
+        const unread = list.filter((m) => !isCommuterInboxMsg(m) && !m.read && m.id);
         if (unread.length && deviceId) {
             const updates = {};
             unread.forEach((m) => {
@@ -835,7 +893,7 @@ export async function openMessagesThread() {
             syncInboxBadges(0);
         }
     } catch {
-        renderMessagesThread([]);
+        renderMessagesThread(readLocalInbox());
     }
 }
 
@@ -894,91 +952,8 @@ export async function checkServiceAlerts() {
             replyBanner.classList.remove('hidden');
 
             if (viewReplyBtn) {
-                // Sidenav "Messages & Feedback" opens the same reply sheet.
-                window.__ntOpenAdminReply = () => viewReplyBtn.click();
-                viewReplyBtn.onclick = () => {
-                    triggerHaptic();
-
-                    const replyContent = document.getElementById('developer-reply-content');
-                    const markReadBtn = document.getElementById('mark-reply-read-btn');
-
-                    if (replyContent) {
-                        const replyModalCard = document.querySelector('#developer-reply-modal > div');
-                        if (replyModalCard && !replyModalCard.dataset.styled) {
-                            replyModalCard.dataset.styled = 'true';
-                            replyModalCard.classList.add('max-h-[85vh]', 'flex', 'flex-col', 'p-0', 'overflow-hidden');
-                            replyModalCard.classList.remove('p-6');
-
-                            const headerDiv = replyModalCard.querySelector('.flex.items-center.justify-between');
-                            if (headerDiv) {
-                                headerDiv.classList.add('p-5', 'bg-white', 'dark:bg-gray-800', 'border-b', 'border-gray-200', 'dark:border-gray-700', 'shrink-0');
-                                headerDiv.classList.remove('mb-4');
-                            }
-
-                            replyContent.classList.add('overflow-y-auto', 'custom-scrollbar', 'flex-grow', 'p-5', 'rounded-none', 'border-0', 'mb-0');
-                            replyContent.classList.remove('mb-6', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-gray-700');
-                        }
-
-                        replyContent.innerHTML = sanitizeHTML(adminReply.message || '');
-                    }
-
-                    if (markReadBtn) {
-                        markReadBtn.textContent = 'Got it, Thanks!';
-                        markReadBtn.disabled = false;
-
-                        const actionsContainer = document.getElementById('admin-message-actions') || markReadBtn.parentNode;
-                        actionsContainer.className = 'flex space-x-3 w-full shrink-0 p-5 pt-0';
-                        markReadBtn.className = 'flex-1 bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm';
-
-                        markReadBtn.onclick = async () => {
-                            triggerHaptic();
-                            markReadBtn.disabled = true;
-                            markReadBtn.textContent = 'Marking...';
-                            try {
-                                await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}/${adminReply._key}.json`, {
-                                    method: 'PATCH',
-                                    body: JSON.stringify({ read: true, readAt: Date.now(), acknowledged: true })
-                                });
-                            } catch (e) {}
-
-                            if (location.hash === '#devreply') history.back();
-                            else closeSmoothModal('developer-reply-modal');
-                            replyBanner.classList.add('hidden');
-                            syncInboxBadges(0);
-                            window.__ntOpenAdminReply = null;
-                        };
-
-                        let replyToAdminBtn = document.getElementById('reply-to-admin-btn');
-                        if (!replyToAdminBtn) {
-                            replyToAdminBtn = document.createElement('button');
-                            replyToAdminBtn.id = 'reply-to-admin-btn';
-                            replyToAdminBtn.type = 'button';
-                            replyToAdminBtn.className = 'flex-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-2 border-blue-600 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none flex items-center justify-center text-sm';
-                            replyToAdminBtn.innerHTML = '<svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> Reply to Admin';
-                            actionsContainer.appendChild(replyToAdminBtn);
-                        }
-
-                        replyToAdminBtn.onclick = () => {
-                            triggerHaptic();
-                            let truncatedAdminMsg = htmlToPlainSnippet(adminReply.message || '', 8);
-                            truncatedAdminMsg = truncatedAdminMsg.replace(/—.*/, '').trim();
-                            // Keep snippet inside the bracket block so admin quote parsing
-                            // never treats the quoted text as the commuter’s reply body.
-                            const safeSnippet = String(truncatedAdminMsg || '')
-                                .replace(/[\[\]]/g, '')
-                                .replace(/\s+/g, ' ')
-                                .trim();
-                            openFeedbackReplyFromOverlay('developer-reply-modal', {
-                                label: 'Replying to Admin:',
-                                snippet: truncatedAdminMsg,
-                                rawMsg: `[REPLY TO ADMIN: ${adminReply._key} | ${safeSnippet}]`,
-                            });
-                        };
-                    }
-
-                    history.pushState({ modal: 'devreply' }, '', '#devreply');
-                    openSmoothModal('developer-reply-modal', 'dev-banner');
-                };
+                window.__ntOpenAdminReply = () => openMessagesThread();
+                viewReplyBtn.onclick = () => openMessagesThread();
             }
 
             const devReplyCloseTop = document.querySelector('#developer-reply-modal button.text-gray-400');
@@ -1608,13 +1583,20 @@ export function initHub() {
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
     // Feedback (live board CTA + Settings Support row)
-    const openFeedback = (e) => {
+    const openFeedback = async (e) => {
         e?.preventDefault?.();
         e?.stopPropagation?.();
         triggerHaptic();
         clearFeedbackReplyMode();
         restoreFeedbackReturnOverlay(); // drop any parked alert/inbox overlay from a prior reply
         closeAppHub(true);
+        try {
+            const thread = await fetchInboxThread();
+            if (thread.length) {
+                openMessagesThread();
+                return;
+            }
+        } catch { /* fall through to the form */ }
         setTimeout(() => openSmoothModal('feedback-modal'), 50);
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);

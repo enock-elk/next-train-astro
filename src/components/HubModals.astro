@@ -450,9 +450,9 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
-<!-- MESSAGES THREAD (commuter POV) -->
+<!-- MESSAGES THREAD (commuter POV — community chat UI) -->
 <div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md h-[min(90dvh,40rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Account</p>
@@ -462,18 +462,102 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="messages-thread-list" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-2 bg-gray-50 dark:bg-gray-950">
+        <div id="messages-thread-list" class="inbox-thread-list flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-[#efeae2] dark:bg-gray-950">
             <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
         </div>
         <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-1.5">
             <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 min-h-[1rem]" aria-live="polite"></p>
-            <div class="flex gap-2">
+            <div class="flex gap-2 items-end">
             <textarea id="messages-thread-input" rows="2" maxlength="800" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Write a message…"></textarea>
             <button type="submit" id="messages-thread-send" class="self-end px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black focus:outline-none">Send</button>
             </div>
         </form>
     </div>
 </div>
+
+<style is:global>
+  #messages-thread-modal .inbox-row {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+  }
+  #messages-thread-modal .inbox-bubble-wrap {
+    width: 78%;
+    max-width: 78%;
+    flex: 0 0 78%;
+    min-width: 0;
+  }
+  #messages-thread-modal .inbox-bubble {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  #messages-thread-modal .inbox-bubble-own {
+    background: #d9fdd3;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+  }
+  html.dark #messages-thread-modal .inbox-bubble-own {
+    background: #005c4b;
+    color: #e7f8f5;
+  }
+  #messages-thread-modal .inbox-bubble-other {
+    background: #ffffff;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+    border: 1px solid rgba(229, 231, 235, 0.9);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-other {
+    background: #1f2937;
+    color: #f3f4f6;
+    border-color: #374151;
+  }
+  #messages-thread-modal .inbox-bubble-name-row {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.055);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-name-row {
+    background: rgba(255, 255, 255, 0.07);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-own .inbox-bubble-name-row {
+    background: rgba(0, 0, 0, 0.18);
+  }
+  #messages-thread-modal .inbox-bubble-body {
+    padding: 0.35rem 0.65rem 0.4rem;
+  }
+  #messages-thread-modal .inbox-msg-text {
+    font-size: 0.84rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #messages-thread-modal .inbox-msg-text p { margin: 0 0 0.35rem; }
+  #messages-thread-modal .inbox-msg-text p:last-child { margin-bottom: 0; }
+  #messages-thread-modal .inbox-msg-time {
+    float: right;
+    margin: 0.2rem 0 0 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.1;
+    opacity: 0.65;
+    white-space: nowrap;
+  }
+  #messages-thread-modal .inbox-avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.15rem;
+  }
+</style>
 
 <!-- ADMIN REPLY -->
 <div id="developer-reply-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">

@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "8.8.20",
+  "version": "8.8.21",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",

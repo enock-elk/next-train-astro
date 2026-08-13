@@ -6,12 +6,13 @@
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-center justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
 
     <div class="shrink-0 self-start mt-1 relative z-[70]">
-        <button id="open-nav-btn" type="button" class="p-2 -ml-1 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition-colors" aria-label="Menu">
+        <button id="open-nav-btn" type="button" class="relative p-2 -ml-1 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition-colors" aria-label="Menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 7h16"></path>
                 <path d="M4 12h16"></path>
                 <path d="M4 17h16"></path>
             </svg>
+            <span id="open-nav-badge" class="hidden absolute top-1 right-1 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>
         </button>
     </div>
 

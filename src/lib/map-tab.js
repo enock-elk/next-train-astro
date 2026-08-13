@@ -7,13 +7,27 @@
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, triggerHaptic } from './ui.js';
-import { $currentRouteId } from '../store.js';
-import { timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime } from './utils.js';
+import { $currentRouteId, $globalStationIndex } from '../store.js';
+import {
+    timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
+    normalizeStationName, getDistanceFromLatLonInKm,
+} from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
 
-/** ±10 minutes around scheduled station departure */
-export const CONTRIBUTE_WINDOW_SEC = 10 * 60;
+/**
+ * A train stays linkable for 30 minutes either side of its scheduled time —
+ * Metrorail delays routinely run that long, so a tighter window would reject
+ * the riders who are most worth hearing from.
+ */
+export const CONTRIBUTE_WINDOW_SEC = 30 * 60;
+
+/** How far from the train's expected station a rider can be and still match. */
+export const CONTRIBUTE_MATCH_KM = 5;
+
+/** Others' pins refresh while the Map tab is open. */
+const PINGS_REFRESH_MS = 45 * 1000;
+let pingsTimer = 0;
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -98,14 +112,40 @@ function postToMap(payload) {
     } catch { /* ignore */ }
 }
 
+/** Coords for a station name from the global index (keys are display names). */
+function stationCoords(name) {
+    const index = $globalStationIndex.get() || {};
+    if (!name) return null;
+    const direct = index[name];
+    if (direct && typeof direct.lat === 'number') return direct;
+    const target = normalizeStationName(name);
+    for (const [key, value] of Object.entries(index)) {
+        if (value && typeof value.lat === 'number' && normalizeStationName(key) === target) return value;
+    }
+    return null;
+}
+
 /**
- * Trains on the live board (and optional planner trip) within the contribute window.
+ * Does the rider's position agree with where this train should be?
+ * Returns km to the train's expected station, or null when we can't tell.
  */
-export function listContributeCandidates() {
+function distanceToExpectedStation(candidate, coords) {
+    if (!coords || typeof coords.lat !== 'number') return null;
+    const st = stationCoords(candidate.station);
+    if (!st) return null;
+    return getDistanceFromLatLonInKm(coords.lat, coords.lng, st.lat, st.lon);
+}
+
+/**
+ * Trains on the live board (and the open planner trip) inside the 30-minute
+ * window. When we know the rider's position, each candidate is also scored for
+ * whether that position makes sense for the train.
+ */
+export function listContributeCandidates(coords = lastCoords) {
     const routeId = $currentRouteId.get();
     const station = document.getElementById('station-select')?.value || '';
     const now = nowSeconds();
-    /** @type {Array<{ trainId: string, scheduledTime: string, arrivalTime?: string, station: string, destination: string, routeId: string, source: string }>} */
+    /** @type {Array<{ trainId: string, scheduledTime: string, arrivalTime?: string, station: string, destination: string, routeId: string, source: string, driftMin: number, distanceKm: number|null, plausible: boolean }>} */
     const out = [];
     const seen = new Set();
 
@@ -114,11 +154,20 @@ export function listContributeCandidates() {
         if (!isRealTime(c.scheduledTime)) return;
         const dep = timeToSeconds(c.scheduledTime);
         if (dep == null || Number.isNaN(dep)) return;
-        if (Math.abs(now - dep) > CONTRIBUTE_WINDOW_SEC) return;
+        const drift = now - dep;
+        if (Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
         const key = `${c.routeId}|${c.trainId}|${c.scheduledTime}|${c.station}`;
         if (seen.has(key)) return;
         seen.add(key);
-        out.push(c);
+
+        const distanceKm = distanceToExpectedStation(c, coords);
+        out.push({
+            ...c,
+            driftMin: Math.round(drift / 60),
+            distanceKm,
+            // Unknown distance stays linkable — we only block a clear mismatch.
+            plausible: distanceKm == null || distanceKm <= CONTRIBUTE_MATCH_KM,
+        });
     };
 
     // Board schedule keyed by destination
@@ -169,18 +218,31 @@ function hideContributeSheet() {
     document.getElementById('map-contribute-sheet')?.classList.add('hidden');
 }
 
-function showContributeSheet() {
+function driftLabel(driftMin) {
+    if (driftMin === 0) return 'due now';
+    if (driftMin > 0) return `${driftMin} min ago`;
+    return `in ${Math.abs(driftMin)} min`;
+}
+
+async function showContributeSheet() {
     const sheet = document.getElementById('map-contribute-sheet');
     const list = document.getElementById('map-contribute-list');
     const empty = document.getElementById('map-contribute-empty');
     if (!sheet || !list) return;
 
+    sheet.classList.remove('hidden');
+
+    // Position first — it decides which trains are a believable match.
+    if (!lastCoords) {
+        setStatus('Getting your location…');
+        await locateOnMapTab();
+    }
+
     const candidates = listContributeCandidates();
     list.innerHTML = '';
     if (!candidates.length) {
         empty?.classList.remove('hidden');
-        sheet.classList.remove('hidden');
-        setStatus('No trains in the 10‑minute window');
+        setStatus('No trains within 30 minutes on this board');
         return;
     }
     empty?.classList.add('hidden');
@@ -189,13 +251,26 @@ function showContributeSheet() {
         const li = document.createElement('li');
         const dep = formatTimeDisplay(c.scheduledTime) || c.scheduledTime.slice(0, 5);
         const label = c.trainId === 'trip'
-            ? `Trip · ${escapeHTML(c.station)} → ${escapeHTML(c.destination)} · ${escapeHTML(dep)}`
-            : `Train ${escapeHTML(c.trainId)} · dep ${escapeHTML(dep)}${c.destination ? ` → ${escapeHTML(c.destination)}` : ''}`;
-        li.innerHTML = `<button type="button" data-contribute-idx="${i}" class="w-full text-left px-3 py-2 rounded-xl bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800/60 text-[11px] font-bold text-gray-900 dark:text-white hover:border-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">${label}<span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${c.source === 'planner' ? 'From your trip plan' : 'From live board'} · 10 min window</span></button>`;
+            ? `Trip · ${escapeHTML(c.station)} → ${escapeHTML(c.destination)}`
+            : `Train ${escapeHTML(c.trainId)}${c.destination ? ` → ${escapeHTML(c.destination)}` : ''}`;
+
+        const near = c.distanceKm == null
+            ? 'position unknown'
+            : `${c.distanceKm.toFixed(1)} km from ${escapeHTML(c.station)}`;
+        const meta = `${escapeHTML(dep)} · ${driftLabel(c.driftMin)} · ${near}`;
+
+        const tone = c.plausible
+            ? 'border-amber-200 dark:border-amber-800/60 hover:border-blue-400'
+            : 'border-gray-200 dark:border-gray-700 opacity-60';
+        const note = c.plausible
+            ? `${c.source === 'planner' ? 'From your trip plan' : 'From live board'} · shares for 10 min`
+            : 'Too far from this train to link';
+
+        li.innerHTML = `<button type="button" data-contribute-idx="${i}" ${c.plausible ? '' : 'disabled'} class="w-full text-left px-3 py-2 rounded-xl bg-white dark:bg-gray-900 border ${tone} text-[11px] font-bold text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed">${label}<span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${meta}</span><span class="block text-[10px] text-gray-400 dark:text-gray-500">${note}</span></button>`;
         list.appendChild(li);
     });
 
-    list.querySelectorAll('[data-contribute-idx]').forEach((btn) => {
+    list.querySelectorAll('[data-contribute-idx]:not([disabled])').forEach((btn) => {
         btn.addEventListener('click', () => {
             const idx = Number(btn.getAttribute('data-contribute-idx'));
             const chosen = candidates[idx];
@@ -203,8 +278,8 @@ function showContributeSheet() {
         });
     });
 
-    sheet.classList.remove('hidden');
-    setStatus('Pick a train to contribute');
+    const matches = candidates.filter((c) => c.plausible).length;
+    setStatus(matches ? 'Pick the train you’re on' : 'No train matches your position');
 }
 
 function getPosition() {
@@ -316,10 +391,12 @@ export async function contributeForTrain(candidate) {
     }
 }
 
+/** Push every rider who opted in on this corridor onto the embedded map. */
 export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
     if (!routeId) return;
     try {
         const { fetchRouteRidePings } = await import('./ride-pings.js');
+        const mine = getDeviceId();
         const pings = await fetchRouteRidePings(routeId);
         const markers = (pings || [])
             .filter((p) => typeof p.coarseLat === 'number' && typeof p.coarseLng === 'number')
@@ -330,9 +407,37 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                 station: p.station || '',
                 at: p.at,
                 expiresAt: p.expiresAt,
+                mine: p.deviceId === mine,
             }));
         postToMap({ type: 'nt-map-ride-pings', pings: markers });
+
+        const others = markers.filter((m) => !m.mine).length;
+        if (others > 0) {
+            setStatus(`${others} rider${others === 1 ? '' : 's'} sharing on this corridor`);
+        }
     } catch { /* optional */ }
+}
+
+function getDeviceId() {
+    try {
+        return localStorage.getItem('next_train_device_id') || '';
+    } catch {
+        return '';
+    }
+}
+
+function startPingsPolling() {
+    stopPingsPolling();
+    pingsTimer = setInterval(() => {
+        if (document.getElementById('view-map')?.classList.contains('active')) {
+            syncRidePingsToMap();
+        }
+    }, PINGS_REFRESH_MS);
+}
+
+function stopPingsPolling() {
+    if (pingsTimer) clearInterval(pingsTimer);
+    pingsTimer = 0;
 }
 
 export function openContributePicker() {
@@ -387,15 +492,17 @@ export function activateMapTab() {
     ensureFrameSrc();
     setStatus(lastCoords
         ? `Located · ±${Math.round(lastCoords.accuracy || 0)} m`
-        : 'Leaflet map · Contribute ties you to a train');
+        : 'You and other riders sharing right now');
     if (frameLoaded) {
         postToMap({ type: 'nt-map-locate' });
         syncRidePingsToMap();
     }
+    startPingsPolling();
 }
 
 export function deactivateMapTab() {
     hideContributeSheet();
+    stopPingsPolling();
 }
 
 export function bindMapTabUi() {

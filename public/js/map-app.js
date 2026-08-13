@@ -1399,7 +1399,7 @@
                 };
             }
 
-            /** Contributor markers from parent Map tab (ride_pings with coarse GPS). */
+            /** Rider markers from the parent Map tab (ride_pings with coarse GPS). */
             let ridePingLayer = null;
             function renderRidePingMarkers(pings) {
                 if (ridePingLayer) {
@@ -1412,15 +1412,22 @@
                     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
                     const label = (p.trainId ? ('Train ' + p.trainId) : 'Rider')
                         + (p.station ? (' · ' + p.station) : '');
+                    const ageMin = p.at ? Math.max(0, Math.round((Date.now() - p.at) / 60000)) : null;
+                    const when = ageMin === null ? 'sharing now'
+                        : (ageMin < 1 ? 'just now' : ageMin + ' min ago');
+                    // Own pin reads blue like the locate dot; other riders are amber.
+                    const mine = !!p.mine;
                     L.circleMarker([p.lat, p.lng], {
-                        radius: 8,
-                        color: '#d97706',
+                        radius: mine ? 9 : 8,
+                        color: mine ? '#1d4ed8' : '#d97706',
                         weight: 2,
-                        fillColor: '#fbbf24',
+                        fillColor: mine ? '#3b82f6' : '#fbbf24',
                         fillOpacity: 0.85
                     }).bindPopup(
-                        "<div class='text-xs font-bold text-center text-gray-900'>" + label
-                        + "<br><span class='text-[10px] text-gray-500 font-normal'>Volunteer · ~10 min window</span></div>"
+                        "<div class='text-xs font-bold text-center text-gray-900'>"
+                        + (mine ? 'You · ' : '') + label
+                        + "<br><span class='text-[10px] text-gray-500 font-normal'>" + when
+                        + " · shared for 10 min</span></div>"
                     ).addTo(group);
                 });
                 ridePingLayer = group.addTo(map);

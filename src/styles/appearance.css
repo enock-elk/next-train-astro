@@ -17,7 +17,7 @@
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic · midnight · contrast · signal · ember · paper
+ * Packs: classic · midnight · contrast · signal · ember · earthy
  * ---------------------------------------------------------------------------
  */
 
@@ -254,9 +254,9 @@ html[data-colour-pack="ember"].dark {
   --nt-theme-meta: #78350f;
 }
 
-/* Paper — warm cream page, sage primary, terracotta accent (editorial / low glare).
+/* Earthy — warm cream page, sage primary, terracotta accent (editorial / low glare).
    Text stays near-black and borders stay visible so it survives outdoor screens. */
-html[data-colour-pack="paper"] {
+html[data-colour-pack="earthy"] {
   --nt-primary: #6e7f53;
   --nt-primary-hover: #59683f;
   --nt-primary-fg: #ffffff;
@@ -281,8 +281,8 @@ html[data-colour-pack="paper"] {
   --nt-blue-900: 55 64 42;
 }
 
-html.dark[data-colour-pack="paper"],
-html[data-colour-pack="paper"].dark {
+html.dark[data-colour-pack="earthy"],
+html[data-colour-pack="earthy"].dark {
   --nt-primary: #a9be8b;
   --nt-primary-hover: #c3d3a8;
   --nt-primary-fg: #22281a;
@@ -307,11 +307,11 @@ html[data-colour-pack="paper"].dark {
   --nt-blue-900: 240 243 232;
 }
 
-/* Paper reads as printed stock: hairline rules instead of heavy card shadows. */
-html[data-colour-pack="paper"] #main-content {
+/* Earthy reads as printed stock: hairline rules instead of heavy card shadows. */
+html[data-colour-pack="earthy"] #main-content {
   box-shadow: 0 1px 2px rgba(38, 34, 32, 0.06), 0 12px 32px rgba(38, 34, 32, 0.08);
 }
-html[data-colour-pack="paper"] .colour-pack-swatch {
+html[data-colour-pack="earthy"] .colour-pack-swatch {
   border: 1px solid var(--nt-border);
 }
 
@@ -354,7 +354,7 @@ html[data-colour-pack="midnight"] #main-content,
 html[data-colour-pack="contrast"] #main-content,
 html[data-colour-pack="signal"] #main-content,
 html[data-colour-pack="ember"] #main-content,
-html[data-colour-pack="paper"] #main-content {
+html[data-colour-pack="earthy"] #main-content {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
 }
@@ -367,13 +367,13 @@ html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
-html[data-colour-pack="paper"] .app-header,
-html[data-colour-pack="paper"] #app-top-tabs,
+html[data-colour-pack="earthy"] .app-header,
+html[data-colour-pack="earthy"] #app-top-tabs,
 html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="paper"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
 }
@@ -382,7 +382,7 @@ html[data-colour-pack="midnight"] .view-section,
 html[data-colour-pack="contrast"] .view-section,
 html[data-colour-pack="signal"] .view-section,
 html[data-colour-pack="ember"] .view-section,
-html[data-colour-pack="paper"] .view-section {
+html[data-colour-pack="earthy"] .view-section {
   background-color: var(--nt-surface-muted) !important;
 }
 

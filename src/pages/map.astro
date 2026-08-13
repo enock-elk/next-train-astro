@@ -48,6 +48,10 @@ const regionSeoSlugs = Object.fromEntries(
         right: 12px;
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
+      /* Home-screen Map tab is the stripped "where is my train" view: region and
+         Network Lines stay in the full map opened from the sidenav. */
+      html.nt-map-embedded #region-picker,
+      html.nt-map-embedded #legend-container { display: none !important; }
       /* Parent Map tab toolbar already has Contribute — keep Locate FAB only. */
       html.nt-map-embedded #custom-share-location-btn { display: none !important; }
       .map-chrome-btn {

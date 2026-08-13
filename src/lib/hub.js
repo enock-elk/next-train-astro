@@ -634,6 +634,30 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
     }
 }
 
+/**
+ * Red badges for unread admin replies: on the header menu button (so it is
+ * visible with the drawer closed) and on the sidenav Messages row.
+ */
+export function syncInboxBadges(count = 0) {
+    if (typeof document === 'undefined') return;
+    const n = Math.max(0, Number(count) || 0);
+    const label = n > 9 ? '9+' : String(n);
+
+    const rowBadge = document.getElementById('sidenav-inbox-badge');
+    if (rowBadge) {
+        rowBadge.textContent = label;
+        rowBadge.classList.toggle('hidden', n === 0);
+    }
+    const sub = document.getElementById('sidenav-inbox-sub');
+    if (sub) {
+        sub.textContent = n > 0
+            ? `${n} new ${n === 1 ? 'reply' : 'replies'} from the team`
+            : 'Contact the team';
+    }
+    const navDot = document.getElementById('open-nav-badge');
+    if (navDot) navDot.classList.toggle('hidden', n === 0);
+}
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
@@ -657,6 +681,7 @@ export async function checkServiceAlerts() {
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => inboxData[k] && !inboxData[k].read);
+                        syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
@@ -688,6 +713,8 @@ export async function checkServiceAlerts() {
             replyBanner.classList.remove('hidden');
 
             if (viewReplyBtn) {
+                // Sidenav "Messages & Feedback" opens the same reply sheet.
+                window.__ntOpenAdminReply = () => viewReplyBtn.click();
                 viewReplyBtn.onclick = () => {
                     triggerHaptic();
 
@@ -736,6 +763,8 @@ export async function checkServiceAlerts() {
                             if (location.hash === '#devreply') history.back();
                             else closeSmoothModal('developer-reply-modal');
                             replyBanner.classList.add('hidden');
+                            syncInboxBadges(0);
+                            window.__ntOpenAdminReply = null;
                         };
 
                         let replyToAdminBtn = document.getElementById('reply-to-admin-btn');
@@ -1404,7 +1433,17 @@ export function initHub() {
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
-    document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
+    // Messages row: unread admin reply wins, otherwise compose feedback.
+    document.getElementById('settings-feedback-btn')?.addEventListener('click', () => {
+        if (typeof window.__ntOpenAdminReply === 'function') {
+            closeAppHub(true);
+            setTimeout(() => {
+                try { window.__ntOpenAdminReply(); } catch { openFeedback(); }
+            }, 140);
+            return;
+        }
+        openFeedback();
+    });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     // Clear reply mode when modal is cancelled/closed via footer/X
     document.querySelectorAll('#feedback-modal [onclick*="feedback-modal"]').forEach((btn) => {

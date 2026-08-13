@@ -12,7 +12,7 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember' | 'paper'} ColourPackId */
+/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember' | 'earthy'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
@@ -20,7 +20,7 @@ export const COLOUR_PACKS = {
     CONTRAST: 'contrast',
     SIGNAL: 'signal',
     EMBER: 'ember',
-    PAPER: 'paper',
+    EARTHY: 'earthy',
 };
 
 export const COLOUR_PACK_LABELS = {
@@ -29,8 +29,16 @@ export const COLOUR_PACK_LABELS = {
     contrast: 'High contrast',
     signal: 'Signal',
     ember: 'Ember',
-    paper: 'Paper',
+    earthy: 'Earthy',
 };
+
+/** Earthy shipped briefly as "paper" — keep old saved prefs working. */
+const PACK_ALIASES = { paper: COLOUR_PACKS.EARTHY };
+
+function normalizePack(pack) {
+    const raw = String(pack || '');
+    return PACK_ALIASES[raw] || raw;
+}
 
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
@@ -80,7 +88,7 @@ function seedLabEmberPack() {
 
 export function getColourPack() {
     seedLabEmberPack();
-    const v = safeStorage.getItem(COLOUR_PACK_KEY);
+    const v = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
     if (VALID_PACKS.has(v)) return v;
     return isLabMode() ? COLOUR_PACKS.EMBER : COLOUR_PACKS.CLASSIC;
 }
@@ -109,7 +117,8 @@ export function syncColourPackUi(pack = getColourPack()) {
 }
 
 export function setColourPack(pack) {
-    const next = VALID_PACKS.has(pack) ? pack : COLOUR_PACKS.CLASSIC;
+    const requested = normalizePack(pack);
+    const next = VALID_PACKS.has(requested) ? requested : COLOUR_PACKS.CLASSIC;
     safeStorage.setItem(COLOUR_PACK_KEY, next);
     if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-colour-pack', next);

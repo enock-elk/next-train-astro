@@ -1,7 +1,8 @@
 ---
 /**
- * SPA-parity App Hub — flat left drawer matching metrorail-app / spa-reference.
- * Sections: Preferences · Network Maps · Data & Sync · About & Updates
+ * App Hub — flat left drawer.
+ * Sections: Account · Theme & Preferences (accordion) · Network Maps · Data & Sync · About
+ * Region lives in the route picker modal, not here.
  */
 import { APP_VERSION } from '../lib/config.js';
 const versionBadge = String(APP_VERSION);
@@ -19,41 +20,24 @@ const versionBadge = String(APP_VERSION);
 >
   <div class="flex-grow overflow-y-auto w-full custom-scrollbar pb-24 pt-0">
 
-    <!-- PREFERENCES -->
+    <!-- ACCOUNT -->
     <div>
-      <h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-5 mb-2 mt-4">Preferences</h3>
+      <h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-5 mb-2 mt-4">Account</h3>
       <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
 
-        <div class="relative" id="sidenav-region-wrapper">
-          <button
-            type="button"
-            class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group"
-            id="sidenav-region-container"
-          >
-            <div class="flex items-center space-x-4">
-              <svg class="w-5 h-5 text-green-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <div class="text-left">
-                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Active Region</p>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="sidenav-region-display">Gauteng</p>
-              </div>
+        <button type="button" id="settings-account-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+          <div class="flex items-center space-x-4 min-w-0">
+            <span id="settings-account-avatar" class="relative w-9 h-9 shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center overflow-hidden" data-signed-in="false">
+              <img id="settings-account-avatar-img" class="hidden w-full h-full object-cover" alt="" />
+              <span id="settings-account-avatar-ph" class="text-sm font-black text-blue-700 dark:text-blue-300 select-none">?</span>
+            </span>
+            <div class="text-left min-w-0">
+              <p id="settings-account-name" class="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">Account</p>
+              <p id="settings-account-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">Guest · Sign in optional</p>
             </div>
-            <svg id="sidenav-region-chevron" class="w-4 h-4 text-gray-300 dark:text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-          </button>
-
-          <select id="app-hub-region-select" class="hidden" tabindex="-1" aria-hidden="true">
-            <option value="GP">Gauteng</option>
-            <option value="WC">Western Cape</option>
-            <option value="KZN">KwaZulu-Natal</option>
-            <option value="EC">Eastern Cape</option>
-          </select>
-
-          <ul id="sidenav-region-list" class="absolute z-[200] w-[calc(100%-2rem)] left-4 top-[2.75rem] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden flex-col overflow-hidden text-left">
-            <li data-region-target="GP" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Gauteng</li>
-            <li data-region-target="WC" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">Western Cape</li>
-            <li data-region-target="KZN" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">KwaZulu-Natal</li>
-            <li data-region-target="EC" class="px-4 py-3 text-sm font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors cursor-pointer">Eastern Cape</li>
-          </ul>
-        </div>
+          </div>
+          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
 
         <button type="button" id="settings-profile-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">
@@ -66,69 +50,90 @@ const versionBadge = String(APP_VERSION);
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
 
-        <button type="button" id="settings-theme-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+        <button type="button" id="settings-feedback-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">
-            <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            <span class="relative inline-flex">
+              <svg class="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span id="sidenav-inbox-badge" class="hidden absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
+            </span>
             <div class="text-left">
-              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Dark Mode</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light / dark</p>
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Messages &amp; Feedback</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="sidenav-inbox-sub">Contact the team</p>
             </div>
           </div>
-          <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-            <input type="checkbox" id="settings-theme-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-            <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- THEME & PREFERENCES (accordion) -->
+    <div class="pt-5">
+      <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
+        <button
+          type="button"
+          id="prefs-accordion-toggle"
+          class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group"
+          aria-expanded="false"
+          aria-controls="prefs-accordion-panel"
+        >
+          <div class="flex items-center space-x-4">
+            <svg class="w-5 h-5 text-violet-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+            <div class="text-left">
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Theme &amp; Preferences</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="prefs-accordion-sub">Classic · Light</p>
+            </div>
           </div>
+          <svg id="prefs-accordion-chevron" class="w-4 h-4 text-gray-300 dark:text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
         </button>
 
-        <div class="py-3 px-4 border-b border-gray-100 dark:border-gray-800">
-          <div class="flex items-center space-x-4 mb-3">
-            <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
-            <div class="text-left">
-              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Colour Pack</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="settings-colour-pack-display">Classic</p>
+        <div id="prefs-accordion-panel" class="hidden flex-col border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30">
+
+          <div class="py-3 px-4 border-b border-gray-100 dark:border-gray-800">
+            <p class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Colour Pack · <span id="settings-colour-pack-display" class="normal-case tracking-normal">Classic</span></p>
+            <div id="colour-pack-picker" class="grid grid-cols-3 gap-2 relative z-10" role="group" aria-label="Colour pack">
+              <button type="button" data-colour-pack-option="classic" class="colour-pack-option cursor-pointer" aria-pressed="true" style="--pack-accent:#2563eb">
+                <span class="colour-pack-swatch" style="--swatch-a:#eff6ff;--swatch-b:#2563eb;--swatch-c:#1e40af"></span>
+                <span class="pack-label">Classic</span>
+              </button>
+              <button type="button" data-colour-pack-option="earthy" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#6e7f53">
+                <span class="colour-pack-swatch" style="--swatch-a:#fbf7f0;--swatch-b:#6e7f53;--swatch-c:#a9784e"></span>
+                <span class="pack-label">Earthy</span>
+              </button>
+              <button type="button" data-colour-pack-option="ember" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#d97706">
+                <span class="colour-pack-swatch" style="--swatch-a:#fffbeb;--swatch-b:#d97706;--swatch-c:#92400e"></span>
+                <span class="pack-label">Ember</span>
+              </button>
             </div>
+            <p class="mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">Earthy is the warm cream + sage look. Packs tint chrome and CTAs; alerts keep their colours.</p>
           </div>
-          <div id="colour-pack-picker" class="ml-9 grid grid-cols-3 gap-2 relative z-10" role="group" aria-label="Colour pack">
-            <button type="button" data-colour-pack-option="classic" class="colour-pack-option cursor-pointer" aria-pressed="true" style="--pack-accent:#2563eb">
-              <span class="colour-pack-swatch" style="--swatch-a:#eff6ff;--swatch-b:#2563eb;--swatch-c:#1e40af"></span>
-              <span class="pack-label">Classic</span>
-            </button>
-            <button type="button" data-colour-pack-option="midnight" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#0284c7">
-              <span class="colour-pack-swatch" style="--swatch-a:#f1f5f9;--swatch-b:#0ea5e9;--swatch-c:#0f172a"></span>
-              <span class="pack-label">Midnight</span>
-            </button>
-            <button type="button" data-colour-pack-option="contrast" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#0f172a">
-              <span class="colour-pack-swatch" style="--swatch-a:#f8fafc;--swatch-b:#0f172a;--swatch-c:#2563eb"></span>
-              <span class="pack-label">Contrast</span>
-            </button>
-            <button type="button" data-colour-pack-option="signal" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#059669">
-              <span class="colour-pack-swatch" style="--swatch-a:#ecfdf5;--swatch-b:#059669;--swatch-c:#064e3b"></span>
-              <span class="pack-label">Signal</span>
-            </button>
-            <button type="button" data-colour-pack-option="ember" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#d97706">
-              <span class="colour-pack-swatch" style="--swatch-a:#fffbeb;--swatch-b:#d97706;--swatch-c:#92400e"></span>
-              <span class="pack-label">Ember</span>
-            </button>
-            <button type="button" data-colour-pack-option="paper" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#6e7f53">
-              <span class="colour-pack-swatch" style="--swatch-a:#fbf7f0;--swatch-b:#6e7f53;--swatch-c:#a9784e"></span>
-              <span class="pack-label">Paper</span>
-            </button>
-          </div>
-          <p class="ml-9 mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">Paper is the warm cream + sage editorial look; Ember is yellow/orange. Packs tint chrome and CTAs; alerts keep their colours.</p>
+
+          <button type="button" id="settings-theme-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+            <div class="flex items-center space-x-4">
+              <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+              <div class="text-left">
+                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Dark Mode</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light / dark</p>
+              </div>
+            </div>
+            <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+              <input type="checkbox" id="settings-theme-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+              <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+            </div>
+          </button>
+
+          <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
+            <div class="flex items-center space-x-4">
+              <svg class="w-5 h-5 text-pink-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+              <div class="text-left">
+                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Vibrations</p>
+              </div>
+            </div>
+            <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+              <input type="checkbox" id="settings-haptics-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+              <label for="settings-haptics-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+            </div>
+          </button>
         </div>
-
-        <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
-          <div class="flex items-center space-x-4">
-            <svg class="w-5 h-5 text-pink-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-            <div class="text-left">
-              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Vibrations</p>
-            </div>
-          </div>
-          <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-            <input type="checkbox" id="settings-haptics-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-            <label for="settings-haptics-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-          </div>
-        </button>
       </div>
     </div>
 
@@ -141,7 +146,7 @@ const versionBadge = String(APP_VERSION);
             <svg class="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             <div class="text-left">
               <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">GPS Network Map</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Interactive &amp; Tracking</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Full map · regions &amp; lines</p>
             </div>
           </div>
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
@@ -202,8 +207,6 @@ const versionBadge = String(APP_VERSION);
 
 <script>
   // @ts-nocheck
-  import { $userRegion } from '../store.js';
-
   const closeNav = () => {
     if (typeof window.closeAppHub === 'function') window.closeAppHub();
   };
@@ -237,60 +240,51 @@ const versionBadge = String(APP_VERSION);
     }, { passive: true });
   }
 
-  const regionContainer = document.getElementById('sidenav-region-container');
-  const regionList = document.getElementById('sidenav-region-list');
-  const regionChevron = document.getElementById('sidenav-region-chevron');
+  // Theme & Preferences accordion
+  const prefsToggle = document.getElementById('prefs-accordion-toggle');
+  const prefsPanel = document.getElementById('prefs-accordion-panel');
+  const prefsChevron = document.getElementById('prefs-accordion-chevron');
+  const PREFS_OPEN_KEY = 'ntPrefsAccordionOpen';
 
-  regionContainer?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (typeof window.toggleDropdownScrim === 'function') {
-      window.toggleDropdownScrim('sidenav-region-list', 'sidenav-region-chevron');
-    } else {
-      regionList?.classList.toggle('hidden');
-      regionChevron?.classList.toggle('rotate-180');
+  const setPrefsOpen = (open, persist = true) => {
+    if (!prefsPanel) return;
+    prefsPanel.classList.toggle('hidden', !open);
+    prefsPanel.classList.toggle('flex', open);
+    prefsToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    prefsChevron?.classList.toggle('rotate-180', open);
+    if (persist) {
+      try { localStorage.setItem(PREFS_OPEN_KEY, open ? '1' : '0'); } catch (e) { /* ignore */ }
     }
-  });
+  };
 
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#sidenav-region-wrapper') && regionList && !regionList.classList.contains('hidden')) {
-      regionList.classList.add('hidden');
-      regionChevron?.classList.remove('rotate-180');
-    }
-  });
+  let prefsInitialOpen = false;
+  try { prefsInitialOpen = localStorage.getItem(PREFS_OPEN_KEY) === '1'; } catch (e) { /* ignore */ }
+  setPrefsOpen(prefsInitialOpen, false);
 
-  $userRegion.subscribe((region) => {
-    import('../lib/logic.js').then(({ syncRegionDisplayDom }) => {
-      syncRegionDisplayDom(region || 'GP');
-    }).catch(() => {
-      const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
-      const disp = document.getElementById('sidenav-region-display');
-      if (disp) disp.textContent = regionNames[region] || 'Gauteng';
-      const sel = document.getElementById('app-hub-region-select');
-      if (sel) sel.value = region || 'GP';
-    });
-  });
-
-  document.querySelectorAll('#sidenav-region-list [data-region-target]').forEach((item) => {
-    item.addEventListener('click', async (e) => {
-      const target = e.currentTarget.getAttribute('data-region-target');
-      if (!target) return;
-      regionList?.classList.add('hidden');
-      regionChevron?.classList.remove('rotate-180');
-      if (typeof window.toggleDropdownScrim === 'function') window.toggleDropdownScrim();
-      const { handleRegionChange } = await import('../lib/logic.js');
-      await handleRegionChange(target);
-      closeNav();
-    });
+  prefsToggle?.addEventListener('click', () => {
+    const open = prefsToggle.getAttribute('aria-expanded') !== 'true';
+    setPrefsOpen(open);
+    if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
   });
 
   const themeToggle = document.getElementById('settings-theme-toggle');
   const themeCheckbox = document.getElementById('settings-theme-checkbox');
+
+  const syncPrefsSummary = () => {
+    const sub = document.getElementById('prefs-accordion-sub');
+    if (!sub) return;
+    const pack = document.getElementById('settings-colour-pack-display')?.textContent || 'Classic';
+    const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
+    sub.textContent = `${pack} · ${mode}`;
+  };
+
   const applyTheme = (isDark) => {
     document.documentElement.classList.toggle('dark', isDark);
     try {
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     } catch (err) { /* Safari private / WebView Access Denied */ }
     if (themeCheckbox) themeCheckbox.checked = isDark;
+    syncPrefsSummary();
   };
   if (themeCheckbox) themeCheckbox.checked = document.documentElement.classList.contains('dark');
   themeToggle?.addEventListener('click', (e) => {
@@ -299,6 +293,11 @@ const versionBadge = String(APP_VERSION);
     }
   });
   themeCheckbox?.addEventListener('change', (e) => applyTheme(e.target.checked));
+
+  document.getElementById('colour-pack-picker')?.addEventListener('click', () => {
+    setTimeout(syncPrefsSummary, 0);
+  });
+  syncPrefsSummary();
 </script>
 
 <style>

@@ -35,7 +35,7 @@
                 <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-0.5">Commuter reports</p>
                 <p id="delay-report-banner-text" class="text-xs font-bold text-gray-800 dark:text-gray-200 leading-snug"></p>
             </div>
-            <button type="button" id="delay-report-banner-cta" class="shrink-0 text-[10px] font-bold text-amber-800 dark:text-amber-300 underline underline-offset-2 focus:outline-none">Report</button>
+            <button type="button" id="delay-report-banner-cta" class="hidden" tabindex="-1" aria-hidden="true"></button>
         </div>
     </div>
 
@@ -52,16 +52,14 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
             </div>
-            <button id="locate-btn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl shadow-md transition-colors flex-shrink-0 h-[54px] w-[54px] flex items-center justify-center focus:outline-none" title="Find my nearest station" aria-label="Find Nearest Station">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
-            </button>
+            <button id="locate-btn" type="button" class="hidden" tabindex="-1" aria-hidden="true"></button>
         </div>
         <!-- Live presence (gated via config/features rideCheckIn) -->
         <div class="mt-2 flex items-center justify-between gap-2 min-h-[1.25rem]">
             <div id="ride-seen-chip" class="hidden min-w-0 flex-1" aria-live="polite"></div>
             <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" id="ride-nearby-btn" class="hidden text-[11px] font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-2.5 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="See timetable trains near your location">Trains near you</button>
-                <button type="button" id="ride-checkin-btn" data-presence-action="share" class="hidden text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-2.5 py-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Share a rough location for 10 minutes — train optional">Show where I am</button>
+                <button type="button" id="ride-checkin-btn" data-presence-action="share" class="hidden" tabindex="-1" aria-hidden="true"></button>
             </div>
         </div>
     </div>

@@ -264,19 +264,19 @@ html[data-colour-pack="ember"].dark {
 html[data-colour-pack="earthy"] {
   --nt-primary: #6B705C;
   --nt-primary-hover: #5C6150;
-  --nt-primary-fg: #F5F1E9;
-  --nt-primary-soft: #EBE8DF;
-  --nt-surface: #F5F1E9;
-  --nt-surface-muted: #EFEBE3;
+  --nt-primary-fg: #FAF8F3;
+  --nt-primary-soft: #F3F0E8;
+  --nt-surface: #FAF8F3;
+  --nt-surface-muted: #F5F2EA;
   --nt-text: #353535;
   --nt-text-muted: #8A8278;
-  --nt-border: #DDD6CB;
-  --nt-theme-meta: #F5F1E9;
+  --nt-border: #E8E2D6;
+  --nt-theme-meta: #FAF8F3;
   --nt-accent: #A58E74;
 
-  --nt-blue-50: 245 241 233;
-  --nt-blue-100: 235 232 223;
-  --nt-blue-200: 221 214 203;
+  --nt-blue-50: 250 248 243;
+  --nt-blue-100: 243 240 232;
+  --nt-blue-200: 232 226 214;
   --nt-blue-300: 201 193 181;
   --nt-blue-400: 154 150 132;
   --nt-blue-500: 125 128 110;

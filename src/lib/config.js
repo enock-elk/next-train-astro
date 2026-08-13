@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.18";
+export const APP_VERSION = "V8_08.19";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.19",
+        title: "A quieter Next Train board",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Next Train is leaner:</b> locate, share location, and report / I’m on this train left the board. Tap the flag on the train name for status and “I’m on it.” Share and locate stay on Map.",
+            "<b>Sightings:</b> reports say where the train was last seen, and where the timetable says it should be. On-train sharing keeps updating the location.",
+            "<b>Status colours:</b> early is yellow, on time is green, late is red. Earthy paper is brighter again."
+        ]
+    },
     {
         id: "V8_08.18",
         title: "Earthy — calmer cream and sage",

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19 — Quieter Next Train board (13 Aug 2026)
+
+- Next Train no longer shows locate, share location, Report status, or I’m on this train. Those live on Map (share / locate) or the train-name **flag** (status + I’m on it / waiting).
+- Train labels include destination and timetable position. Reports are sightings (last seen + status). On-train share refreshes location every 45s.
+- Status colours: early = yellow, on time = green, late = red, cancelled stays grey. Earthy backgrounds are brighter. Ride pings always re-fetch so other devices can see a share.
+
 ## V8_08.18 — Earthy retuned to editorial cream + sage (13 Aug 2026)
 
 - Earthy matches the Understanding Burnout palette: eggshell `#F5F1E9`, muted sage `#6B705C`, dusty terracotta `#A58E74`, charcoal `#353535`.

@@ -13,6 +13,7 @@ import {
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
+import { trainGoingLabel } from './train-ghosts.js';
 
 /**
  * A train stays linkable for 30 minutes either side of its scheduled time —
@@ -433,7 +434,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         }
     }
 
-    const { scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
+    const { scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M, timetableWhereLabel } = await import('./train-ghosts.js');
     const ranked = scoreAllTrainsForFix(coords.lat, coords.lng);
     const board = listContributeCandidates(coords);
     const byId = new Map(board.map((c) => [String(c.trainId), c]));
@@ -475,7 +476,9 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             : '';
         const when = Number.isFinite(c.driftMin) ? driftLabel(c.driftMin) : '';
         const dist = formatDistanceM(c.metres);
-        const dest = c.destination ? ` → ${escapeHTML(c.destination)}` : '';
+        const dest = c.destination ? String(c.destination).replace(/ STATION$/i, '') : '';
+        const going = dest ? `${c.trainId} → ${dest}` : `Train ${c.trainId}`;
+        const where = timetableWhereLabel(c.trainId) || '';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `w-full text-left px-3.5 py-3 rounded-xl border ${
@@ -484,8 +487,9 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
                 : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
         } focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`;
         btn.innerHTML = `
-            <p class="text-sm font-black text-gray-900 dark:text-white">Train ${escapeHTML(c.trainId)}${dest}</p>
+            <p class="text-sm font-black text-gray-900 dark:text-white">${escapeHTML(going)}</p>
             <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${[dep, when, dist].filter(Boolean).join(' · ')}</p>
+            ${where ? `<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(where)}</p>` : ''}
             <p class="text-[11px] mt-1 ${c.plausible ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-amber-700 dark:text-amber-300'}">${
                 c.plausible
                     ? 'Close enough to track this train'
@@ -676,6 +680,7 @@ export async function startOnTrainShare({
     source = 'board_on_train',
     skipVolunteer = false,
     scheduledTime = '',
+    intent: forcedIntent = '',
 } = {}) {
     triggerHaptic();
     const id = trainId === 'trip' ? null : (trainId || null);
@@ -690,11 +695,11 @@ export async function startOnTrainShare({
 
     hideContributeSheet();
 
-    let intent = 'onboard';
-    if (!skipVolunteer) {
+    let intent = forcedIntent === 'waiting' || forcedIntent === 'onboard' ? forcedIntent : 'onboard';
+    if (!skipVolunteer && !forcedIntent) {
         const choice = await promptOnTrainSheet({
-            title: `Train ${id}`,
-            body: `Are you on train ${id}, or waiting at the station? We’ll only move the live clock if you’re on it and moving.`,
+            title: trainGoingLabel(id, destination),
+            body: `Are you on ${trainGoingLabel(id, destination)}, or waiting at the station? We’ll only move the live clock if you’re on it and moving.`,
             primary: 'I’m on it',
             secondary: 'I’m waiting',
             tertiary: 'Not now',
@@ -738,9 +743,9 @@ export async function startOnTrainShare({
     if (decision.action === 'confirm' && decision.best?.trainId) {
         const pick = await promptOnTrainSheet({
             title: 'Different train?',
-            body: `You’re more likely on train ${decision.best.trainId} than ${id}. Show you as ${decision.best.trainId}?`,
-            primary: `Yes, ${decision.best.trainId}`,
-            secondary: `Keep ${id}`,
+            body: `You’re more likely on ${trainGoingLabel(decision.best.trainId)} than ${trainGoingLabel(id, destination)}. Show you as ${trainGoingLabel(decision.best.trainId)}?`,
+            primary: `Yes, ${trainGoingLabel(decision.best.trainId)}`,
+            secondary: `Keep ${trainGoingLabel(id, destination)}`,
             tertiary: 'Cancel',
         });
         if (pick === 'tertiary') return { ok: false, cancelled: true };
@@ -850,6 +855,10 @@ async function finishRideShare({
             expiresInMs: RIDE_PING_TTL_MS,
         });
         syncRidePingsToMap(routeId);
+        if (trainId) {
+            const { startOnboardPingLoop } = await import('./ride-pings.js');
+            startOnboardPingLoop();
+        }
         return { ok: true, trainId };
     } catch (e) {
         showToast(e?.message || 'Couldn’t share', 'error');

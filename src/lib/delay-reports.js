@@ -26,6 +26,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import { trainGoingLabel, timetableWhereLabel } from './train-ghosts.js';
 
 /** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
 export let DELAY_REPORTS_UI_ENABLED = false;
@@ -392,17 +393,17 @@ export function stopDelayReportsListener(routeId) {
 }
 
 function statusColorClass(status) {
-    if (status === 'cancelled') return 'text-red-600 dark:text-red-400';
-    if (status === 'early') return 'text-green-600 dark:text-green-400';
-    if (status === 'on_time') return 'text-amber-700 dark:text-amber-300';
+    if (status === 'cancelled') return 'text-gray-600 dark:text-gray-300';
+    if (status === 'early') return 'text-amber-600 dark:text-amber-300';
+    if (status === 'on_time') return 'text-green-600 dark:text-green-400';
     return 'text-red-600 dark:text-red-400';
 }
 
 function flagColorClass(status) {
-    if (status === 'cancelled') return 'text-red-500';
-    if (status === 'late') return 'text-amber-500';
-    if (status === 'early') return 'text-green-500';
-    if (status === 'on_time') return 'text-emerald-500';
+    if (status === 'cancelled') return 'text-gray-500';
+    if (status === 'late') return 'text-red-500';
+    if (status === 'early') return 'text-amber-500';
+    if (status === 'on_time') return 'text-green-500';
     return 'text-blue-500';
 }
 
@@ -445,7 +446,7 @@ export function buildTrainTitleReportButton({
         `data-station="${escapeHTML(station || '')}"`,
         `data-dest="${escapeHTML(destination || '')}"`,
     ].join(' ');
-    return `<button type="button" class="${className}" ${attrs} title="Report train ${escapeHTML(String(trainId || ''))}">
+    return `<button type="button" class="${className}" ${attrs} title="Train ${escapeHTML(String(trainId || ''))} — status and I’m on it">
       <span class="truncate">${escapeHTML(label)}</span>
       ${flagSvgHtml(null)}
     </button>`;
@@ -480,21 +481,13 @@ export async function hydrateTrainReportSlots(root = document) {
         const arrivalTime = slot.getAttribute('data-arr');
         const station = slot.getAttribute('data-station');
         const destination = slot.getAttribute('data-dest');
-        const reportable = slot.getAttribute('data-reportable') === '1';
         const attrs = chipAttrs(routeId, trainId, scheduledTime, arrivalTime, station, destination);
         const agg = aggregateTrainReports(byRoute[routeId] || [], {
             routeId, trainId, scheduledTime, station, arrivalTime,
         });
 
         if (!agg) {
-            if (!reportable) {
-                slot.innerHTML = '';
-                return;
-            }
-            slot.innerHTML = `
-              <button type="button" class="w-full mt-0.5 text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 py-2 rounded-lg transition-colors flex justify-center items-center shadow-sm focus:outline-none" data-open-train-report ${attrs}>
-                Report status
-              </button>`;
+            slot.innerHTML = '';
             return;
         }
 
@@ -700,11 +693,30 @@ export function openTrainReportModal(opts = {}) {
 
     const ownKey = trainReportKey({ routeId, trainId, scheduledTime, station });
     const own = getOwnReport(ownKey);
+    const dest = opts.destination || '';
     const title = document.getElementById('train-report-title');
     if (title) {
-        if (own && trainId) title.textContent = `Update train ${trainId}`;
-        else if (trainId) title.textContent = `Report train ${trainId}`;
-        else title.textContent = 'Report status';
+        if (trainId) title.textContent = trainGoingLabel(trainId, dest);
+        else title.textContent = 'Train status';
+    }
+    const sub = document.getElementById('train-report-sub');
+    if (sub) {
+        const where = trainId ? timetableWhereLabel(trainId) : '';
+        const bits = [where, station ? `Last seen ${String(station).replace(/ STATION$/i, '')}` : '']
+            .filter(Boolean);
+        sub.textContent = bits.join(' · ');
+        sub.classList.toggle('hidden', !bits.length);
+    }
+    const rideBox = document.getElementById('tr-ride-actions');
+    if (rideBox) {
+        rideBox.dataset.train = trainId || '';
+        rideBox.dataset.station = station || '';
+        rideBox.dataset.dest = dest || '';
+        rideBox.dataset.route = routeId || '';
+        rideBox.dataset.time = scheduledTime || '';
+        import('./ride-pings.js').then((m) => {
+            rideBox.classList.toggle('hidden', !(trainId && m.isRideCheckInEnabled?.(routeId)));
+        }).catch(() => { rideBox.classList.add('hidden'); });
     }
     const hint = document.getElementById('tr-update-hint');
     if (hint) {
@@ -933,9 +945,13 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
     const mins = Math.max(1, Math.round((Date.now() - (top.timestamp || Date.now())) / 60000));
     const when = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
     if (text) {
-        text.textContent = count === 1
-            ? `Train ${top.trainId}: ${statusLabel({ status: top.trainStatus || 'late', avgLateMin: LATE_MID[top.lateBucket] || 10 })} · ${when}`
-            : `${count} recent train reports · latest ${when}`;
+        const going = trainGoingLabel(top.trainId, top.destination);
+        const seen = top.station ? ` · last seen ${String(top.station).replace(/ STATION$/i, '')}` : '';
+        const status = statusLabel({ status: top.trainStatus || 'late', avgLateMin: LATE_MID[top.lateBucket] || 10 });
+        const cls = statusColorClass(top.trainStatus || top.status || 'late');
+        text.innerHTML = count === 1
+            ? `${escapeHTML(going)}${escapeHTML(seen)}: <span class="${cls}">${escapeHTML(status)}</span> · ${escapeHTML(when)}`
+            : `${count} recent sightings · latest ${escapeHTML(going)} · ${escapeHTML(when)}`;
     }
     showBanner(banner, true);
     if (badge) {
@@ -1053,9 +1069,9 @@ function showCorroborationSheet(report, trainKey) {
     const label = statusLabel({ status, avgLateMin: LATE_MID[report.lateBucket] || 10 });
     const title = document.getElementById('delay-ask-title');
     const body = document.getElementById('delay-ask-body');
-    if (title) title.textContent = `Train ${report.trainId}`;
+    if (title) title.textContent = trainGoingLabel(report.trainId, report.destination);
     if (body) {
-        body.textContent = `Reported ${label}${report.station ? ` at ${report.station}` : ''}. Still true from where you are?`;
+        body.textContent = `Reported ${label}${report.station ? ` · last seen ${String(report.station).replace(/ STATION$/i, '')}` : ''}. Still true from where you are?`;
     }
     sheet.dataset.route = report.routeId || '';
     sheet.dataset.train = report.trainId || '';
@@ -1170,6 +1186,40 @@ export function bindDelayReportUi() {
             routeId: $currentRouteId.get(),
             station: document.getElementById('station-select')?.value || '',
         });
+    });
+
+    document.getElementById('tr-im-on-it')?.addEventListener('click', () => {
+        triggerHaptic();
+        const box = document.getElementById('tr-ride-actions');
+        const trainId = box?.dataset.train || document.getElementById('tr-train')?.value;
+        if (!trainId) return;
+        closeSmoothModal('delay-report-modal');
+        import('./map-tab.js').then((m) => m.startOnTrainShare({
+            trainId,
+            station: box?.dataset.station || document.getElementById('station-select')?.value || '',
+            destination: box?.dataset.dest || '',
+            routeId: box?.dataset.route || $currentRouteId.get(),
+            source: 'flag_on_train',
+            skipVolunteer: true,
+            scheduledTime: box?.dataset.time || '',
+        })).catch(() => {});
+    });
+    document.getElementById('tr-im-waiting')?.addEventListener('click', () => {
+        triggerHaptic();
+        const box = document.getElementById('tr-ride-actions');
+        const trainId = box?.dataset.train || document.getElementById('tr-train')?.value;
+        if (!trainId) return;
+        closeSmoothModal('delay-report-modal');
+        import('./map-tab.js').then((m) => m.startOnTrainShare({
+            trainId,
+            station: box?.dataset.station || document.getElementById('station-select')?.value || '',
+            destination: box?.dataset.dest || '',
+            routeId: box?.dataset.route || $currentRouteId.get(),
+            source: 'flag_waiting',
+            skipVolunteer: true,
+            intent: 'waiting',
+            scheduledTime: box?.dataset.time || '',
+        })).catch(() => {});
     });
 
     document.getElementById('delay-ask-confirm')?.addEventListener('click', () => {

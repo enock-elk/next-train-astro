@@ -366,3 +366,36 @@ export function lagMinutesFromFix(lat, lng, ghost, speedMps, stationIndex) {
     const sign = ghost.progress >= riderProg ? 1 : -1;
     return sign * metresToMinutes(along, ghost, speedMps);
 }
+
+function shortStation(name) {
+    return String(name || '').replace(/ STATION$/i, '').trim();
+}
+
+/** "1165 → Pienaarspoort" — never a bare train number. */
+export function trainGoingLabel(trainId, destination) {
+    const id = String(trainId || '').trim();
+    const dest = shortStation(destination);
+    if (id && dest) return `${id} → ${dest}`;
+    if (id) return `Train ${id}`;
+    return dest || 'Train';
+}
+
+/** Where the timetable says this train should be right now. */
+export function timetableWhereLabel(trainId, opts = {}) {
+    const ghost = expectedPosition(trainId, opts.now, opts);
+    if (!ghost?.stops?.length) return '';
+    const last = ghost.lastIdx >= 0 ? ghost.stops[ghost.lastIdx] : null;
+    const next = Number.isInteger(ghost.nextIdx) ? ghost.stops[ghost.nextIdx] : ghost.stops[0];
+    const clock = (stop) => String(stop?.time || '').slice(0, 5);
+    if (!ghost.started && next) {
+        return `Timetable: due ${shortStation(next.station)} ${clock(next)}`.trim();
+    }
+    if (ghost.finished && last) {
+        return `Timetable: arrived ${shortStation(last.station)}`;
+    }
+    if (last && next && last.station !== next.station) {
+        return `Timetable: ${shortStation(last.station)} → ${shortStation(next.station)}`;
+    }
+    if (last) return `Timetable: at ${shortStation(last.station)}`;
+    return '';
+}

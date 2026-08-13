@@ -28,7 +28,8 @@ import {
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
-import { decorateJourneyLive, trainHasLivePing, isRideCheckInEnabled } from './ride-pings.js';
+import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
+import { trainGoingLabel } from './train-ghosts.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -540,9 +541,7 @@ export const Renderer = {
         const livePulseHtml = trainHasLivePing(liveTrainId)
             ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live — open map"><span class="block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.35)] animate-pulse"></span></button>`
             : '';
-        const onTrainHtml = (isRideCheckInEnabled() && liveTrainId)
-            ? `<button type="button" class="nt-on-train-btn mt-1 w-full text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:underline focus:outline-none" data-on-train="${escapeHTML(String(liveTrainId))}" data-station="${escapeHTML(liveStation)}" data-dest="${escapeHTML(destination || '')}" data-route="${escapeHTML((typeof window !== 'undefined' && window._liveRouteId) || '')}" data-time="${escapeHTML(String(rawTime || ''))}">I’m on this train</button>`
-            : '';
+        const onTrainHtml = '';
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
         const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-tight font-bold py-1.5 px-0.5 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors leading-tight focus:outline-none">See Upcoming Trains</button>`;
@@ -663,11 +662,10 @@ export const Renderer = {
             }
             const normDest = Renderer._applyUIIntercepts(normalizeStationName(destination));
             
-            let trainTitle = `Direct Train ${safeTrainName}`;
+            let trainTitle = trainGoingLabel(reportTrainId, destination);
             let titleColor = "text-gray-900 dark:text-white";
             
             if (journey.isLastTrain) {
-                trainTitle = `Direct Train ${safeTrainName}`;
                 titleColor = "text-red-600 dark:text-red-400";
             }
 
@@ -723,17 +721,16 @@ export const Renderer = {
             const connDep = escapeHTML(formatTimeDisplay(conn.departureTime));
             const finalDestTitle = Renderer._applyUIIntercepts(escapeHTML(destination));
 
-            let train1Label = `Train ${safeTrainName}`;
             let titleColor = "text-gray-900 dark:text-white";
             if (journey.isLastTrain) titleColor = "text-red-600 dark:text-red-400";
 
             const shuttleBtn = buildTrainTitleReportButton({
-                label: `Shuttle ${train1Label}`,
+                label: `Shuttle ${trainGoingLabel(reportTrainId, rawDest || destination)}`,
                 ...reportCtx,
                 className: `inline-flex items-center justify-center max-w-full text-[11px] font-black ${titleColor} uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80`,
             });
             const connectBtn = buildTrainTitleReportButton({
-                label: `Connect Train ${conn.train}`,
+                label: `Connect ${trainGoingLabel(conn.train, conn.actualDestination || destination)}`,
                 routeId: reportRouteId,
                 trainId: conn.train,
                 scheduledTime: conn.departureTime,

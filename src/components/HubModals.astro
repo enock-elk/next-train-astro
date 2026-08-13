@@ -85,6 +85,7 @@ import { withBase } from '../lib/config.js';
             <div class="min-w-0 pr-2">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live board</p>
                 <h3 id="train-report-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight truncate">Report this train</h3>
+                <p id="train-report-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug"></p>
             </div>
             <button type="button" id="delay-report-cancel" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition focus:outline-none shrink-0" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -103,14 +104,19 @@ import { withBase } from '../lib/config.js';
         <div class="p-5 overflow-y-auto flex-grow custom-scrollbar">
             <!-- Step 1: status -->
             <div id="tr-step-status" class="space-y-3">
+                <div id="tr-ride-actions" class="hidden space-y-2 pb-3 mb-1 border-b border-gray-100 dark:border-gray-800">
+                    <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Are you on it?</p>
+                    <button type="button" id="tr-im-on-it" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">I’m on it</button>
+                    <button type="button" id="tr-im-waiting" class="w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">I’m waiting</button>
+                </div>
                 <p class="text-sm font-bold text-gray-800 dark:text-gray-200">How was this train?</p>
-                <button type="button" data-tr-status="early" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50/80 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/40 transition focus:outline-none">
-                    <span class="block text-sm font-black text-green-800 dark:text-green-300">Came early</span>
-                    <span class="block text-[11px] text-green-700/80 dark:text-green-400/80 mt-0.5">It arrived before the scheduled time.</span>
+                <button type="button" data-tr-status="early" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition focus:outline-none">
+                    <span class="block text-sm font-black text-amber-800 dark:text-amber-300">Came early</span>
+                    <span class="block text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">It arrived before the scheduled time.</span>
                 </button>
-                <button type="button" data-tr-status="on_time" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition focus:outline-none">
-                    <span class="block text-sm font-black text-amber-800 dark:text-amber-300">On time</span>
-                    <span class="block text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">It arrived around the scheduled time.</span>
+                <button type="button" data-tr-status="on_time" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50/80 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/40 transition focus:outline-none">
+                    <span class="block text-sm font-black text-green-800 dark:text-green-300">On time</span>
+                    <span class="block text-[11px] text-green-700/80 dark:text-green-400/80 mt-0.5">It arrived around the scheduled time.</span>
                 </button>
                 <button type="button" data-tr-status="late" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-red-200 dark:border-red-800/60 bg-red-50/80 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 transition focus:outline-none">
                     <span class="block text-sm font-black text-red-700 dark:text-red-300">Running late</span>

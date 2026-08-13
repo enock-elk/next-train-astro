@@ -398,6 +398,7 @@ export async function submitRideCheckIn({
     speedMps = null,
     source = 'board_checkin',
     waitingFor = null,
+    quiet = false,
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
@@ -446,11 +447,14 @@ export async function submitRideCheckIn({
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
-            routeId, station: st, trainId: trainId || null, at: now, expiresAt: payload.expiresAt,
+            routeId, station: st, trainId: trainId || null, destination: destination || null,
+            at: now, expiresAt: payload.expiresAt,
         }));
+        const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
+        routeCache[routeId] = activePings([payload, ...existing]);
         const mins = Math.round(RIDE_PING_TTL_MS / 60000);
         const toastMsg = trainId
-            ? `Others can see train ${trainId}`
+            ? `Others can see ${trainId}${destination ? ` → ${stationShort(destination)}` : ''}`
             : waitingFor
                 ? `You’re visible as a commuter — not on train ${waitingFor} yet`
                 : `You’re visible at ${stationShort(st)} · ${mins} min`;
@@ -461,7 +465,7 @@ export async function submitRideCheckIn({
             confirmedCloser: source === 'closer_confirm',
             trainId: trainId || '',
         });
-        showToast(toastMsg, 'success');
+        if (!quiet) showToast(toastMsg, 'success');
         notifyPingsUpdated(routeId);
         return { ok: true, ping: payload };
     } catch (e) {
@@ -499,6 +503,7 @@ export async function stopRideShare({ quiet = false } = {}) {
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.removeItem(ACTIVE_KEY);
+        stopOnboardPingLoop();
         notifyPingsUpdated(routeId);
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
         if (!quiet) showToast('Sharing ended', 'info');
@@ -506,6 +511,42 @@ export async function stopRideShare({ quiet = false } = {}) {
     } catch (e) {
         return { ok: false, message: e?.message || 'Couldn’t stop sharing' };
     }
+}
+
+let onboardPingTimer = 0;
+
+export function stopOnboardPingLoop() {
+    if (onboardPingTimer) {
+        clearInterval(onboardPingTimer);
+        onboardPingTimer = 0;
+    }
+}
+
+/** While attached to a train, refresh the ping so others see movement. */
+export function startOnboardPingLoop() {
+    stopOnboardPingLoop();
+    onboardPingTimer = setInterval(async () => {
+        const active = getActiveShare();
+        if (!active?.trainId) {
+            stopOnboardPingLoop();
+            return;
+        }
+        try {
+            const pos = await oneShotGps();
+            await submitRideCheckIn({
+                routeId: active.routeId,
+                station: active.station,
+                trainId: active.trainId,
+                destination: active.destination || null,
+                coarseLat: pos.lat,
+                coarseLng: pos.lng,
+                heading: pos.heading,
+                speedMps: pos.speedMps,
+                source: 'onboard_ping',
+                quiet: true,
+            });
+        } catch { /* keep last ping */ }
+    }, 45000);
 }
 
 /**
@@ -604,20 +645,9 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         return;
     }
 
-    cta?.classList.remove('hidden');
+    cta?.classList.add('hidden');
     document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
     const mine = getActiveShare();
-    if (cta) {
-        if (mine) {
-            cta.textContent = 'Stop sharing';
-            cta.title = 'Stop showing others where you are';
-            cta.setAttribute('data-presence-action', 'stop');
-        } else {
-            cta.textContent = 'Show where I am';
-            cta.title = 'Share a rough location for 10 minutes — train optional';
-            cta.setAttribute('data-presence-action', 'share');
-        }
-    }
 
     const station = document.getElementById('station-select')?.value || '';
     const pings = routeCache[routeId] || [];
@@ -641,11 +671,11 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     }
     if (summary.peopleCount) {
         const places = summary.topStations.map((s) => escapeHTML(stationShort(s))).join(', ');
-        const people = `${summary.peopleCount} ${summary.peopleCount === 1 ? 'person' : 'people'}${places ? ` · ${places}` : ''}`;
+        const people = `${summary.peopleCount} commuter${summary.peopleCount === 1 ? '' : 's'} last seen${places ? ` · ${places}` : ''}${summary.age ? ` · ${escapeHTML(summary.age)}` : ''}`;
         bits.push(`<button type="button" data-focus-map class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none">${people}</button>`);
     }
     if (summary.topTrainId) {
-        bits.push(`<button type="button" data-focus-train="${escapeHTML(summary.topTrainId)}" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_0_3px_rgba(59,130,246,0.35)]"></span>Train ${escapeHTML(summary.topTrainId)} is live · ${summary.topTrainSharing} sharing</button>`);
+        bits.push(`<button type="button" data-focus-train="${escapeHTML(summary.topTrainId)}" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_0_3px_rgba(59,130,246,0.35)]"></span>${escapeHTML(String(summary.topTrainId))} is live · last seen ${escapeHTML(stationShort(summary.station || ''))}</button>`);
     }
 
     host.classList.remove('hidden');
@@ -660,8 +690,9 @@ export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
         return;
     }
     if (!routeListeners[routeId]) startRidePingsListener(routeId);
-    if (!routeCache[routeId]) {
-        routeCache[routeId] = await fetchRouteRidePings(routeId);
+    const fetched = await fetchRouteRidePings(routeId);
+    if (fetched.length || !routeCache[routeId]?.length) {
+        routeCache[routeId] = fetched;
     }
     notifyPingsUpdated(routeId);
 }

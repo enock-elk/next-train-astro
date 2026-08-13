@@ -1,0 +1,18 @@
+{
+  "communityRealtime": {
+    "enabled": true,
+    "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv"]
+  },
+  "delayReportsUi": {
+    "enabled": true,
+    "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv"]
+  },
+  "pushNotify": {
+    "enabled": true,
+    "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv"]
+  },
+  "rideCheckIn": {
+    "enabled": true,
+    "routeIds": ["pta-pien", "pta-mabopane", "ct-bellv"]
+  }
+}

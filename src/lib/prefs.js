@@ -12,7 +12,7 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
+/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember' | 'earthy'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
@@ -20,6 +20,7 @@ export const COLOUR_PACKS = {
     CONTRAST: 'contrast',
     SIGNAL: 'signal',
     EMBER: 'ember',
+    EARTHY: 'earthy',
 };
 
 export const COLOUR_PACK_LABELS = {
@@ -28,13 +29,28 @@ export const COLOUR_PACK_LABELS = {
     contrast: 'High contrast',
     signal: 'Signal',
     ember: 'Ember',
+    earthy: 'Earthy',
 };
+
+/** Earthy shipped briefly as "paper" — keep old saved prefs working. */
+const PACK_ALIASES = { paper: COLOUR_PACKS.EARTHY };
+
+function normalizePack(pack) {
+    const raw = String(pack || '');
+    return PACK_ALIASES[raw] || raw;
+}
 
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
 export function getNavStyle() {
     const v = safeStorage.getItem(NAV_STYLE_KEY);
-    return v === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
+    if (v === NAV_STYLES.BOTTOM) return NAV_STYLES.BOTTOM;
+    if (v === NAV_STYLES.TOP) return NAV_STYLES.TOP;
+    // Lab first visit: bottom nav so Community is obvious without hunting.
+    try {
+        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return NAV_STYLES.BOTTOM;
+    } catch { /* ignore */ }
+    return NAV_STYLES.TOP;
 }
 
 export function setNavStyle(style) {
@@ -44,9 +60,37 @@ export function setNavStyle(style) {
     return next;
 }
 
+function isLabMode() {
+    try {
+        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return true;
+    } catch { /* ignore */ }
+    if (typeof location !== 'undefined') {
+        const host = String(location.hostname || '').toLowerCase();
+        if (host === 'lab.nexttrain.co.za' || host.startsWith('lab.')) return true;
+    }
+    return false;
+}
+
+/**
+ * Lab defaults to Ember (yellow/orange brand) so the restored chrome is obvious.
+ * One-time seed: migrate unset/classic → ember on lab; later picks stick.
+ */
+function seedLabEmberPack() {
+    if (typeof window === 'undefined' || !isLabMode()) return;
+    const SEED = 'ntLabEmberSeededV1';
+    if (safeStorage.getItem(SEED)) return;
+    const current = safeStorage.getItem(COLOUR_PACK_KEY);
+    if (!current || current === COLOUR_PACKS.CLASSIC) {
+        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.EMBER);
+    }
+    safeStorage.setItem(SEED, '1');
+}
+
 export function getColourPack() {
-    const v = safeStorage.getItem(COLOUR_PACK_KEY);
-    return VALID_PACKS.has(v) ? v : COLOUR_PACKS.CLASSIC;
+    seedLabEmberPack();
+    const v = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
+    if (VALID_PACKS.has(v)) return v;
+    return isLabMode() ? COLOUR_PACKS.EMBER : COLOUR_PACKS.CLASSIC;
 }
 
 function syncThemeColorMeta() {
@@ -73,7 +117,8 @@ export function syncColourPackUi(pack = getColourPack()) {
 }
 
 export function setColourPack(pack) {
-    const next = VALID_PACKS.has(pack) ? pack : COLOUR_PACKS.CLASSIC;
+    const requested = normalizePack(pack);
+    const next = VALID_PACKS.has(requested) ? requested : COLOUR_PACKS.CLASSIC;
     safeStorage.setItem(COLOUR_PACK_KEY, next);
     if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-colour-pack', next);
@@ -127,7 +172,7 @@ export function hydratePrefs() {
     syncNotifyUi();
 }
 
-/** Phase 8 — preference stub for room / delay push (FCM later) */
+/** Phase 8 — preference for room / delay push (FCM when VAPID configured) */
 export function getNotifyPref() {
     return safeStorage.getItem(NOTIFY_PREF_KEY) === 'true';
 }
@@ -143,17 +188,27 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
         } else if (Notification.permission === 'denied') {
             hint.textContent = 'Blocked in browser settings';
         } else if (enabled && Notification.permission === 'granted') {
-            hint.textContent = 'On — push delivery coming soon';
+            const hasVapid = (() => {
+                try { return !!(import.meta.env?.PUBLIC_FIREBASE_VAPID_KEY); } catch { return false; }
+            })();
+            hint.textContent = hasVapid
+                ? 'On — alerts for your routes'
+                : 'On — browser permission saved (FCM key pending)';
         } else {
-            hint.textContent = 'Room activity & delay confirms (soon)';
+            hint.textContent = 'Official notices and confirmed delays';
         }
     }
 }
 
 export async function setNotifyPref(wantOn) {
     if (!wantOn) {
-        safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
-        syncNotifyUi(false);
+        try {
+            const { disablePushNotifications } = await import('./push-notify.js');
+            await disablePushNotifications();
+        } catch {
+            safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
+            syncNotifyUi(false);
+        }
         return false;
     }
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -165,20 +220,37 @@ export async function setNotifyPref(wantOn) {
     if (perm === 'default') {
         try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
     }
-    const ok = perm === 'granted';
-    safeStorage.setItem(NOTIFY_PREF_KEY, ok ? 'true' : 'false');
-    syncNotifyUi(ok);
-    if (ok && typeof window.showToast === 'function') {
-        window.showToast('Notifications enabled — delivery wiring comes next', 'success');
-    } else if (!ok && typeof window.showToast === 'function') {
-        window.showToast('Permission needed for notifications', 'error');
+    if (perm !== 'granted') {
+        safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
+        syncNotifyUi(false);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Permission needed for notifications', 'error');
+        }
+        return false;
     }
-    return ok;
+
+    try {
+        const { enablePushNotifications } = await import('./push-notify.js');
+        const result = await enablePushNotifications();
+        syncNotifyUi(true);
+        if (typeof window.showToast === 'function') {
+            window.showToast(result.message || 'Notifications enabled', 'success');
+        }
+        return true;
+    } catch (e) {
+        console.warn('Push enable failed', e);
+        safeStorage.setItem(NOTIFY_PREF_KEY, 'true');
+        syncNotifyUi(true);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Notifications enabled — delivery may be limited', 'success');
+        }
+        return true;
+    }
 }
 
 /**
  * Apply top vs bottom navigation chrome.
- * Bottom: Home · Plan · Community · More.
+ * Bottom: Home · Plan · Map · Community · More.
  * Top tabs are hidden in bottom mode to reclaim vertical space.
  */
 export function applyNavChrome(style = getNavStyle()) {

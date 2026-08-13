@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.10.1";
+export const APP_VERSION = "V8_08.15";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -71,6 +71,21 @@ export const FIREBASE_BASE_URL = "https://metrorail-next-train-default-rtdb.fire
 
 // Dynamic Data (Admin Bans, Alerts, Maintenance) ALWAYS uses Firebase for real-time capability.
 export const DYNAMIC_BASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
+
+/** High-density corridors for live reports / chat / check-in pilots. */
+export const PILOT_ROUTE_IDS = ['pta-pien', 'pta-mabopane', 'ct-bellv'];
+
+/**
+ * Community write bouncer (Cloudflare Worker). Empty = direct RTDB writes (lab/dev).
+ * Production should set PUBLIC_COMMUNITY_WORKER_URL at build time.
+ */
+export const COMMUNITY_WORKER_URL = (() => {
+    try {
+        return String(import.meta.env?.PUBLIC_COMMUNITY_WORKER_URL || '').replace(/\/$/, '');
+    } catch {
+        return '';
+    }
+})();
 
 export const REGIONS = {
     'GP': { 
@@ -868,6 +883,61 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.15",
+        title: "Trains near you, trip share, late vs skipped",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Trains near you:</b> a full list of nearby timetable trains — and whether you’re close enough to track one.",
+            "<b>Too far from the line:</b> others can still see you, just not as a train tracker. We’ll tell you why.",
+            "<b>Leaving soon?</b> If your trip leaves within 15 minutes and you’re near the station, we’ll ask you to share. Still at the platform after it should have left? Tell us if it’s late or you didn’t board."
+        ]
+    },
+    {
+        id: "V8_08.14",
+        title: "Show where I am — Waze for trains",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Show where I am:</b> one tap shares a rough location for 10 minutes — you don’t have to be on a train. Stop anytime.",
+            "<b>People + trains:</b> the board shows who is visible at stations, and a blue pulse only when a train is live.",
+            "<b>Alerts:</b> optional pings for official corridor notices and confirmed delays — never when someone just drops a pin."
+        ]
+    },
+    {
+        id: "V8_08.13",
+        title: "Live deltas, map pulse, rider marks",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Live times:</b> when riders share, stations still ahead can show a live arrival — the printed timetable stays as the small scheduled time.",
+            "<b>Blue pulse:</b> a live train on the board opens the map so you can join. Locate near the rails may ask if you’re on that train.",
+            "<b>Private marks:</b> Bronze → Platinum labels for sharing and confirming — only you see them, no leaderboard."
+        ]
+    },
+    {
+        id: "V8_08.12",
+        title: "Earthy packs, live reports, map trains",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Earthy & Ember:</b> packs now colour the whole shell — no leftover white cards. Alerts stay red / amber / blue.",
+            "<b>Train flags:</b> tap Shuttle Train 1151 to report early / on time / late / no-show, and update if it arrives a minute later.",
+            "<b>Messages:</b> Messages & Feedback opens your thread with the team. Map shares vet for 30s, then show a blue train others can join."
+        ]
+    },
+    {
+        id: "V8_08.11",
+        title: "Live board + route chat (lab)",
+        date: "11 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Live alerts:</b> report Early / On time / Late on the train card — pending until a few riders agree, then a verified chip with EXP time.",
+            "<b>Route chat:</b> lean corridor rooms with a short live feed (destroyed when you leave the tab).",
+            "<b>Share my ride:</b> volunteer where a train was last seen for 10 minutes — no GPS trails."
+        ]
+    },
     {
         id: "V8_08.10.1",
         title: "Cape Town Public Holidays",

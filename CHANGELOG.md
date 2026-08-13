@@ -2,6 +2,44 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.15 — Trains near you, trip share, late vs skipped (13 Aug 2026)
+
+- **Trains near you** opens as a modal (Next Train + Map) with distance and whether you can attach as a tracker.
+- Choosing a train more than **400 m** from its path still shares you as a person. Copy explains others can see you, not as a train tracker.
+- Planner: departure within **15 minutes** and near the from-station → share this trip (quick sign-in if needed). Far from the station → presence only.
+- After attaching to a train, if you’re still at the departure station when it should have left, we ask **late / didn’t board / I’m on it**. Late becomes a dashboard report; didn’t board stops tracking. If your position matches the train ghost, we keep using it.
+
+## V8_08.14 — Show where I am (13 Aug 2026)
+
+- Next Train **Show where I am** is a 10-minute presence share (one GPS fix). You do not have to be on a train. **I’m on this train** still vets and attaches to a timetable column.
+- Board chip lists people at stations separately from live trains. Map **Share my location** uses the same sheet. **Stop sharing** ends the ping.
+- Notifications: Settings toggle plus optional ask after pin / delay confirm. Official notices and verified delays only — not presence pings.
+
+## V8_08.13 — Live deltas, map pulse, rider marks (13 Aug 2026)
+
+- Timetable columns are the simulated fleet: ride pings compute a delay delta and shift only stations the ghost has not reached yet.
+- Next Train cards get a blue live pulse (and a corridor “Train XXXX is live” button) that opens the map Join popup.
+- “I’m on this train” / Share my ride: 30s vet, closest-train confirm if we disagree, then a 10-minute public ping.
+- After Locate, if you are within 50 m of the rails and a ghost is nearby, we ask if you are on that train.
+- Private Bronze → Platinum marks (share / confirm / 3-day streak). No public leaderboard.
+
+## V8_08.12 — Premium packs, live reports, map trains (13 Aug 2026)
+
+- Earthy and Ember (and other non-classic packs) colour cards, inputs, and chrome — leftover `bg-white` stickers are gone. Service alerts stay red / amber / blue.
+- Train titles show a flag; tap to report early / on time / late / cancelled-no-show and update your own report.
+- Overdue-station and on-train riders can confirm a live report; people behind the train are not asked.
+- Messages & Feedback opens the commuter’s inbox thread with a composer.
+- Map contribute vets GPS for 30s (track, station, speed, heading), then draws joinable blue train glyphs with a sharing count.
+
+## V8_08.11 — Lab line: board-first live + lean chat (11 Aug 2026)
+
+- Long-lived `lab` branch + `lab.nexttrain.co.za` deploy workflow (independent of `main` / production).
+- Board live alerts: pending (n/3) → verified chip with EXP time + thumbs; RTDB listeners by route.
+- RTDB `config/features` corridor gates (`delayReportsUi`, `communityRealtime`, `pushNotify`, `rideCheckIn`) — pilot seed for `pta-pien`, `pta-mabopane`, `ct-bellv`.
+- Lean route chat: `limitToLast(10)`, 24h TTL, listener teardown off-tab; optional Cloudflare write bouncer (`workers/nexttrain-community`).
+- Station check-in / last-seen chips (`ride_pings`) — no GPS trails.
+- Docs: `docs/PHASE-LIVE-STRATEGY.md`, `docs/config-features-pilot.json`, lab/community phase notes.
+
 ## V8_08.10.1 — Cape Town Public Holidays (10 Aug 2026)
 
 - Western Cape public holidays no longer reuse Saturday timetables automatically.

@@ -1045,7 +1045,7 @@ export function openPlannerNetworkMap() {
     const resultsSection = document.getElementById('planner-results-section');
     if (resultsSection) resultsSection.classList.remove('hidden');
     // Ensure results hash is under the map entry
-    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#map') {
+    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#prasa-map') {
         try { history.pushState({ view: 'planner-results' }, '', '#planner-results'); } catch { /* ignore */ }
     }
     try {
@@ -3747,6 +3747,11 @@ export function renderSelectedTrip(container, index) {
     } else {
         renderTripResult(container, currentTripOptions, index);
     }
+
+    // Soft offer: contribute location when this trip is in the live 10‑min window
+    try {
+        import('./map-tab.js').then((m) => m.maybeOfferPlannerContribute?.()).catch(() => {});
+    } catch { /* ignore */ }
 }
 
 export function startPlannerPulse(currentIndex) {

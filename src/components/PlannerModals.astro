@@ -20,7 +20,7 @@ import { withBase } from '../lib/config.js';
             <div class="flex items-center space-x-3">
                 <h3 id="map-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Network Map</h3>
             </div>
-            <button id="close-map-btn" onclick="if(location.hash === '#map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close Map">
+            <button id="close-map-btn" onclick="if(location.hash === '#prasa-map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close Map">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
@@ -34,7 +34,7 @@ import { withBase } from '../lib/config.js';
         </div>
 
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative">
-            <button id="close-map-btn-2" onclick="if(location.hash === '#map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close Map</button>
+            <button id="close-map-btn-2" onclick="if(location.hash === '#prasa-map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close Map</button>
         </div>
     </div>
 </div>

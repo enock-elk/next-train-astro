@@ -50,10 +50,11 @@ const MODAL_HASH = {
     'route-modal': '#route',
     'profile-modal': '#profile',
     'feedback-modal': '#feedback',
+    'messages-thread-modal': '#messages',
     'about-modal': '#about',
     'help-modal': '#help',
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
-    'map-modal': '#map',
+    'map-modal': '#prasa-map',
     'notice-modal': '#notice',
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
@@ -347,6 +348,7 @@ export function bindHistoryBackNavigation() {
             // or when we land back on #planner-results.
             const keepPlannerResults = hashNow === '#planner-results'
                 || hashNow === '#map'
+                || hashNow === '#prasa-map'
                 || hashNow === '#trip-map'
                 || hashNow === '#sheet'
                 || hashNow === '#sidenav'
@@ -377,6 +379,8 @@ export function bindHistoryBackNavigation() {
             }
         } else if (hash === '#community') {
             if (safeStorage.getItem('activeTab') !== 'community') switchTab('community');
+        } else if (hash === '#map') {
+            if (safeStorage.getItem('activeTab') !== 'map') switchTab('map');
         }
     });
 }
@@ -680,7 +684,7 @@ export function openLightbox(url) {
         if (closeBtn2) closeBtn2.onclick = lightboxCloseHandler;
 
         // Show map-modal visually WITHOUT openSmoothModal — that would push a second
-        // #map history entry and break Close Preview back to the alert (#notice).
+        // #prasa-map history entry and break Close Preview back to the alert (#notice).
         window._isModalAnimating = true;
         setTimeout(() => { window._isModalAnimating = false; }, 350);
         mapModal.classList.remove('hidden');
@@ -702,8 +706,8 @@ export function openLightbox(url) {
 
 export function closeLightbox(fromPopState = false) {
     if (typeof window === 'undefined') return;
-    // Cover #lightbox and any legacy double-push #map from older builds
-    if (!fromPopState && (location.hash === '#lightbox' || location.hash === '#map')) {
+    // Cover #lightbox and legacy static-map hashes from older builds (#map / #prasa-map)
+    if (!fromPopState && (location.hash === '#lightbox' || location.hash === '#prasa-map')) {
         history.back();
         return;
     }
@@ -956,26 +960,28 @@ export function moveTabIndicator(element) {
     });
 }
 
-/** Sync Home · Plan · Community active state on the bottom bar (Phase 8). More is hub-only. */
+/** Sync Home · Plan · Map · Community active state on the bottom bar. More is hub-only. */
 export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
     if (typeof document === 'undefined') return;
     const home = document.getElementById('bottom-nav-home');
     const plan = document.getElementById('bottom-nav-plan');
+    const map = document.getElementById('bottom-nav-map');
     const community = document.getElementById('bottom-nav-community');
-    if (!home && !plan && !community) return;
+    if (!home && !plan && !map && !community) return;
 
-    const mode = tab === 'community' ? 'community' : (tab === 'trip-planner' ? 'plan' : 'home');
+    const mode = tab === 'community'
+        ? 'community'
+        : (tab === 'map' ? 'map' : (tab === 'trip-planner' ? 'plan' : 'home'));
     const paint = (el, on) => {
         if (!el) return;
         el.classList.toggle('is-active', on);
-        el.classList.toggle('text-blue-600', on);
-        el.classList.toggle('dark:text-blue-400', on);
         el.classList.toggle('text-gray-400', !on);
         el.classList.toggle('dark:text-gray-500', !on);
         el.setAttribute('aria-current', on ? 'page' : 'false');
     };
     paint(home, mode === 'home');
     paint(plan, mode === 'plan');
+    paint(map, mode === 'map');
     paint(community, mode === 'community');
 }
 
@@ -1034,6 +1040,10 @@ export function switchTab(tab) {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {
             history.pushState({ tab: 'planner' }, '', '#planner');
         }
+    } else if (tab === 'map') {
+        if (location.hash !== '#map') {
+            history.pushState({ tab: 'map' }, '', '#map');
+        }
     } else if (tab === 'community') {
         if (location.hash !== '#community') {
             history.pushState({ tab: 'community' }, '', '#community');
@@ -1049,6 +1059,9 @@ export function switchTab(tab) {
     if (tab === 'next-train') {
         targetBtn = document.getElementById('tab-next-train');
         document.getElementById('view-next-train')?.classList.add('active');
+    } else if (tab === 'map') {
+        targetBtn = document.getElementById('tab-map');
+        document.getElementById('view-map')?.classList.add('active');
     } else if (tab === 'community') {
         targetBtn = document.getElementById('tab-community');
         document.getElementById('view-community')?.classList.add('active');
@@ -1063,6 +1076,7 @@ export function switchTab(tab) {
     }
     document.getElementById('tab-next-train')?.setAttribute('aria-selected', tab === 'next-train' ? 'true' : 'false');
     document.getElementById('tab-trip-planner')?.setAttribute('aria-selected', tab === 'trip-planner' ? 'true' : 'false');
+    document.getElementById('tab-map')?.setAttribute('aria-selected', tab === 'map' ? 'true' : 'false');
     document.getElementById('tab-community')?.setAttribute('aria-selected', tab === 'community' ? 'true' : 'false');
     safeStorage.setItem('activeTab', tab);
     syncBottomNavActive(tab);
@@ -1076,6 +1090,13 @@ export function switchTab(tab) {
         }).catch(() => {});
     } else if (prev === 'community') {
         import('./community.js').then((m) => m.leaveCommunityRoom?.()).catch(() => {});
+    }
+
+    // Map tab: load iframe + handshake
+    if (tab === 'map') {
+        import('./map-tab.js').then((m) => m.activateMapTab?.()).catch(() => {});
+    } else if (prev === 'map') {
+        import('./map-tab.js').then((m) => m.deactivateMapTab?.()).catch(() => {});
     }
 
     // Alerts / holiday notices deferred while off home tabs should fire on return.
@@ -1136,10 +1157,15 @@ export function setupSwipeNavigation() {
         const diffX = endX - touchStartX;
         const diffY = endY - touchStartY;
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-            // SPA chrome is two tabs; skip Community for swipe parity
-            const order = ['next-train', 'trip-planner'];
+            // Include Map; Community when the top tab is visible (lab).
+            const communityTab = document.getElementById('tab-community');
+            const communityVisible = !!(communityTab && !communityTab.classList.contains('hidden'));
+            const order = communityVisible
+                ? ['next-train', 'trip-planner', 'map', 'community']
+                : ['next-train', 'trip-planner', 'map'];
             const cur = safeStorage.getItem('activeTab') || 'next-train';
-            const idx = Math.max(0, order.indexOf(cur === 'community' ? 'next-train' : cur));
+            const safeCur = order.includes(cur) ? cur : 'next-train';
+            const idx = Math.max(0, order.indexOf(safeCur));
             if (diffX > 0) switchTab(order[Math.max(0, idx - 1)]);
             else switchTab(order[Math.min(order.length - 1, idx + 1)]);
         }

@@ -1,0 +1,97 @@
+---
+/**
+ * Interactive network map as a primary tab (Leaflet via /map embed).
+ * Share location = coarse GPS for ~10 minutes (train optional).
+ * Behaviour: src/lib/map-tab.js
+ */
+import { withBase, APP_VERSION } from '../lib/config.js';
+/**
+ * Extensionless /map only. Browsers cached the old permanent redirect
+ * (/map → /map.html), so the version query is required to bypass that cache.
+ */
+const mapSrc = `${withBase('/map')}?embed=1&v=${APP_VERSION}`;
+---
+
+<div id="view-map" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
+    <div class="map-tab-pane flex flex-col flex-1 min-h-0 h-full">
+        <div class="shrink-0 px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Network map</p>
+                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">You and other riders sharing right now</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                <button
+                    type="button"
+                    id="map-tab-locate-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Show my location on the map"
+                >
+                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                    Locate
+                </button>
+                <button
+                    type="button"
+                    id="map-tab-nearby-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="See timetable trains near you"
+                >
+                    Trains near you
+                </button>
+                <button
+                    type="button"
+                    id="map-tab-contribute-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Share a rough location for 10 minutes"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                    Share my location
+                </button>
+            </div>
+        </div>
+
+        <!-- Train picker for trip-tied contribution -->
+        <div id="map-contribute-sheet" class="hidden shrink-0 border-b border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-black text-gray-900 dark:text-white">I’m on a train</p>
+                    <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">We’ll check you’re near the tracks for 30 seconds, then attach you to that train for 10 minutes.</p>
+                </div>
+                <button type="button" id="map-contribute-cancel" class="shrink-0 p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 focus:outline-none" aria-label="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="map-vet-progress" class="hidden mb-2">
+                <p id="map-vet-label" class="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">Checking location…</p>
+                <div class="h-1.5 rounded-full bg-amber-200/80 dark:bg-amber-900/50 overflow-hidden">
+                    <div id="map-vet-bar" class="h-full w-0 bg-amber-600 dark:bg-amber-400 transition-[width] duration-300"></div>
+                </div>
+            </div>
+            <ul id="map-contribute-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar"></ul>
+            <p id="map-contribute-empty" class="hidden text-[11px] font-semibold text-gray-500 dark:text-gray-400 py-1">No trains within 30 minutes on this board. Pick a route and station first, or open a trip in Plan.</p>
+        </div>
+
+        <div class="relative flex-1 min-h-0 bg-gray-100 dark:bg-gray-950">
+            <iframe
+                id="map-tab-frame"
+                title="Metrorail network map"
+                class="absolute inset-0 w-full h-full border-0"
+                data-map-src={mapSrc}
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                allow="geolocation"
+            ></iframe>
+            <div id="map-tab-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500 dark:text-gray-400 pointer-events-none">
+                <svg class="w-8 h-8 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                <p class="text-xs font-bold">Loading network map…</p>
+            </div>
+            <div id="map-tab-fallback" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-gray-100 dark:bg-gray-950">
+                <p class="text-sm font-black text-gray-900 dark:text-white">Map didn’t load</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">An old cached redirect can block the embedded map. Reload it, or open the full map in a new tab.</p>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="map-tab-retry" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-bold focus:outline-none">Reload map</button>
+                    <a id="map-tab-open-full" href={mapSrc.replace('&embed=1', '').replace('?embed=1&', '?').replace('?embed=1', '')} target="_blank" rel="noopener" class="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200">Open full map</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

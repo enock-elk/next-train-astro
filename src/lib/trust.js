@@ -232,12 +232,21 @@ export function isBlockedLocally(uid) {
     return !!(uid && localBlockList.has(uid));
 }
 
+/** Strip allowed Next Train URLs before spam checks (plan: allow nexttrain.co.za only). */
+function withoutAllowedLinks(text) {
+    return String(text || '')
+        .replace(/https?:\/\/(?:www\.)?nexttrain\.co\.za\S*/gi, ' ')
+        .replace(/\bwww\.nexttrain\.co\.za\S*/gi, ' ')
+        .replace(/\bnexttrain\.co\.za\b/gi, ' ');
+}
+
 /** Basic link / promo spam */
 export function isLinkSpam(text) {
     if (!text) return false;
-    if (/https?:\/\/\S+/i.test(text)) return true;
-    if (/\bwww\.\S+/i.test(text)) return true;
-    if (/\b[\w-]+\.(com|net|org|io|co\.za|xyz|info)\b/i.test(text)) return true;
+    const probe = withoutAllowedLinks(text);
+    if (/https?:\/\/\S+/i.test(probe)) return true;
+    if (/\bwww\.\S+/i.test(probe)) return true;
+    if (/\b[\w-]+\.(com|net|org|io|co\.za|xyz|info)\b/i.test(probe)) return true;
     // Excessive repeated characters
     if (/(.)\1{8,}/.test(text)) return true;
     return false;

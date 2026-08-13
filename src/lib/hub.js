@@ -395,6 +395,8 @@ async function submitFeedback() {
         });
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
 
+        try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
+
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
@@ -640,6 +642,133 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
     }
 }
 
+/**
+ * Red badges for unread admin replies: on the header menu button (so it is
+ * visible with the drawer closed) and on the sidenav Messages row.
+ */
+export function syncInboxBadges(count = 0) {
+    if (typeof document === 'undefined') return;
+    const n = Math.max(0, Number(count) || 0);
+    const label = n > 9 ? '9+' : String(n);
+
+    const rowBadge = document.getElementById('sidenav-inbox-badge');
+    if (rowBadge) {
+        rowBadge.textContent = label;
+        rowBadge.classList.toggle('hidden', n === 0);
+    }
+    const sub = document.getElementById('sidenav-inbox-sub');
+    if (sub) {
+        sub.textContent = n > 0
+            ? `${n} new ${n === 1 ? 'reply' : 'replies'} from the team`
+            : 'Contact the team';
+    }
+    const navDot = document.getElementById('open-nav-badge');
+    if (navDot) navDot.classList.toggle('hidden', n === 0);
+}
+
+function getThreadDeviceId() {
+    return $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+}
+
+async function fetchInboxThread() {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId) return [];
+    const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json?t=${Date.now()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return Object.entries(data)
+        .map(([id, m]) => ({ id, ...(m || {}) }))
+        .filter((m) => m && (m.message || m.text))
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function renderMessagesThread(list) {
+    const host = document.getElementById('messages-thread-list');
+    if (!host) return;
+    if (!list.length) {
+        host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">No messages yet. Send one below — the team will reply here.</p>';
+        return;
+    }
+    host.innerHTML = list.map((m) => {
+        const mine = m.from === 'commuter';
+        const raw = m.message || m.text || '';
+        const body = mine ? escapeHTML(raw) : sanitizeHTML(raw);
+        const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        const align = mine ? 'items-end' : 'items-start';
+        const bubble = mine
+            ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
+            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md';
+        const who = mine ? 'You' : 'Next Train';
+        return `<div class="flex flex-col ${align}">
+      <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">${who}</span>
+      <div class="max-w-[85%] px-3 py-2 text-sm leading-snug ${bubble} whitespace-pre-wrap break-words">${body}</div>
+      <span class="text-[9px] text-gray-400 mt-0.5">${escapeHTML(when)}</span>
+    </div>`;
+    }).join('');
+    host.scrollTop = host.scrollHeight;
+}
+
+async function postCommuterInboxCopy({ text, feedbackType }) {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId || !text) return false;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+    let authToken = '';
+    if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+        try { authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true); } catch { /* ignore */ }
+    }
+    const msgId = `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        from: 'commuter',
+        deviceId,
+        message: String(text).slice(0, 2000),
+        timestamp: Date.now(),
+        type: feedbackType || 'general',
+        read: true,
+    };
+    const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${msgId}.json${authParam}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+    return res.ok;
+}
+
+export async function openMessagesThread() {
+    triggerHaptic();
+    closeAppHub(true);
+    const host = document.getElementById('messages-thread-list');
+    if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
+    try {
+        const list = await fetchInboxThread();
+        renderMessagesThread(list);
+        const deviceId = getThreadDeviceId();
+        const unread = list.filter((m) => m.from !== 'commuter' && !m.read);
+        if (unread.length && deviceId) {
+            const updates = {};
+            unread.forEach((m) => {
+                updates[`${m.id}/read`] = true;
+                updates[`${m.id}/readAt`] = Date.now();
+                updates[`${m.id}/acknowledged`] = true;
+            });
+            fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates),
+            }).catch(() => {});
+            syncInboxBadges(0);
+        }
+    } catch {
+        renderMessagesThread([]);
+    }
+}
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
@@ -663,6 +792,7 @@ export async function checkServiceAlerts() {
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => inboxData[k] && !inboxData[k].read);
+                        syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
@@ -694,6 +824,8 @@ export async function checkServiceAlerts() {
             replyBanner.classList.remove('hidden');
 
             if (viewReplyBtn) {
+                // Sidenav "Messages & Feedback" opens the same reply sheet.
+                window.__ntOpenAdminReply = () => viewReplyBtn.click();
                 viewReplyBtn.onclick = () => {
                     triggerHaptic();
 
@@ -742,6 +874,8 @@ export async function checkServiceAlerts() {
                             if (location.hash === '#devreply') history.back();
                             else closeSmoothModal('developer-reply-modal');
                             replyBanner.classList.add('hidden');
+                            syncInboxBadges(0);
+                            window.__ntOpenAdminReply = null;
                         };
 
                         let replyToAdminBtn = document.getElementById('reply-to-admin-btn');
@@ -1024,9 +1158,9 @@ export async function checkServiceAlerts() {
 
         bellBtn.classList.remove('hidden');
 
-        // Mirror #open-nav-btn exactly: top-2 · p-2 · w-6 icon · shadow-sm (right vs left)
-        let bellClass = 'absolute top-2 right-4 z-[70] p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
-        let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
+        // Brand-left header: inline bell next to ⋮ (not absolute SPA chrome)
+        let bellClass = 'relative p-2 rounded-full focus:outline-none transition-colors ';
+        let dotClass = 'absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 ';
         if (severity === 'critical') {
             bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
             dotClass += 'bg-red-600';
@@ -1039,13 +1173,17 @@ export async function checkServiceAlerts() {
         }
         bellBtn.className = bellClass;
         const bellSvg = bellBtn.querySelector('svg');
-        if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
+        if (bellSvg) bellSvg.setAttribute('class', 'w-5 h-5');
         if (dot) dot.className = dotClass;
 
         if (!hasSeen) {
             if (dot) dot.classList.remove('hidden');
             if (severity === 'critical') bellBtn.classList.add('animate-shake');
             else bellBtn.classList.remove('animate-shake');
+            const willAutoOpen = forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices();
+            import('./push-notify.js').then((m) => {
+                m.maybeNotifyOfficialNotice?.(activeNotice, { toast: !willAutoOpen });
+            }).catch(() => {});
 
             // Auto-open only on the home board (stabilized + route selected +
             // Next Train / Trip Planner). Bell still updates everywhere.
@@ -1108,6 +1246,7 @@ export function initHub() {
     window.showCacheClearWarning = showCacheClearWarning;
     window.checkServiceAlerts = checkServiceAlerts;
     window.submitPollVote = submitPollVote;
+    window.openMessagesThread = openMessagesThread;
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1137,9 +1276,9 @@ export function initHub() {
             if (replyModal && !replyModal.classList.contains('hidden') && hash !== '#devreply') {
                 closeSmoothModal('developer-reply-modal');
             }
-            // Keep notice open while lightbox (#lightbox) or legacy #map preview is on top
+            // Keep notice open while lightbox (#lightbox) or static map preview is on top
             if (noticeModal && !noticeModal.classList.contains('hidden')
-                && hash !== '#notice' && hash !== '#lightbox' && hash !== '#map') {
+                && hash !== '#notice' && hash !== '#lightbox' && hash !== '#prasa-map') {
                 closeSmoothModal('notice-modal');
             }
         });
@@ -1190,6 +1329,9 @@ export function initHub() {
         import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
     });
 
+    // Live ride sharing / last-seen (Wave 3)
+    import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});
+
     // Notifications pref (Phase 8 stub)
     import('./prefs.js').then(({ getNotifyPref, setNotifyPref, syncNotifyUi }) => {
         syncNotifyUi(getNotifyPref());
@@ -1228,7 +1370,7 @@ export function initHub() {
     setupMapLogic();
 
     /** In-app sheet for guide / interactive map — keeps planner state (no full remount). */
-    const isMapSheetUrl = (url) => /\/map\.html?(?:\?|#|$)/i.test(String(url || ''));
+    const isMapSheetUrl = (url) => /\/map(?:\.html)?(?:\?|#|$)/i.test(String(url || ''));
 
     const applySheetChrome = (overlay, mode, title) => {
         const chrome = document.getElementById('nt-inapp-sheet-chrome');
@@ -1379,10 +1521,12 @@ export function initHub() {
         } catch { /* ignore */ }
     };
 
+    // Full map (regions + Network Lines). The home Map tab is the stripped
+    // "where is my train" view, so this deliberately does NOT switch tabs.
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/map.html'), 'Network Map'), 120);
+        setTimeout(() => openInAppSheet(withBase('/map'), 'Network Map'), 120);
     });
 
     // Updates
@@ -1419,7 +1563,58 @@ export function initHub() {
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
-    document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
+    // Messages row: always the commuter thread (compose lives inside it).
+    document.getElementById('settings-feedback-btn')?.addEventListener('click', () => {
+        openMessagesThread();
+    });
+    document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('messages-thread-input');
+        const sendBtn = document.getElementById('messages-thread-send');
+        const text = input?.value?.trim() || '';
+        if (text.length < 5) {
+            showToast('Please write a bit more (at least 5 characters).', 'error');
+            return;
+        }
+        if (sendBtn) sendBtn.disabled = true;
+        try {
+            if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+                await window.firebaseSignInAnonymously(window.firebaseAuth);
+            }
+            let authToken = '';
+            if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+                authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+            }
+            const payload = {
+                type: 'thread_reply',
+                text,
+                email: '',
+                status: 'unread',
+                appVersion: APP_VERSION,
+                routeId: $currentRouteId.get() || 'none',
+                region: $userRegion.get() || 'GP',
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent,
+                deviceId: getThreadDeviceId() || 'unknown',
+                isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+            };
+            const authParam = authToken ? `?auth=${authToken}` : '';
+            const res = await fetch(`${DYNAMIC_BASE_URL}feedback.json${authParam}`, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`Failed (${res.status})`);
+            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
+            if (input) input.value = '';
+            renderMessagesThread(await fetchInboxThread());
+            showToast('Message sent.', 'success');
+        } catch (err) {
+            showToast(err?.message || 'Could not send message.', 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+        }
+    });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     // Clear reply mode when modal is cancelled/closed via footer/X
     document.querySelectorAll('#feedback-modal [onclick*="feedback-modal"]').forEach((btn) => {

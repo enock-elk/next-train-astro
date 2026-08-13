@@ -29,10 +29,11 @@ const resolvedOgTitle = ogTitle || title;
 const resolvedOgDescription = ogDescription || description;
 const resolvedTwitterTitle = twitterTitle || resolvedOgTitle;
 const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
+const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
 ---
 
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
@@ -311,9 +312,31 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
-        const pack = localStorage.getItem('colourPack');
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
-        document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
+        // Lab / ?pack=ember: seed Ember (yellow/orange brand) so restored chrome is obvious
+        try {
+          var params = new URLSearchParams(location.search);
+          var packParam = params.get('pack') || params.get('colourPack');
+          if (packParam === 'paper') packParam = 'earthy';
+          if (packParam === 'ember' || packParam === 'classic' || packParam === 'midnight'
+              || packParam === 'contrast' || packParam === 'signal' || packParam === 'earthy') {
+            localStorage.setItem('colourPack', packParam);
+            localStorage.setItem('ntLabEmberSeededV1', '1');
+          }
+          var host = String(location.hostname || '').toLowerCase();
+          var isLab = document.documentElement.getAttribute('data-lab-mode') === 'true'
+            || host === 'lab.nexttrain.co.za' || host.indexOf('lab.') === 0;
+          if (isLab && !localStorage.getItem('ntLabEmberSeededV1')) {
+            var cur = localStorage.getItem('colourPack');
+            if (!cur || cur === 'classic') localStorage.setItem('colourPack', 'ember');
+            localStorage.setItem('ntLabEmberSeededV1', '1');
+          }
+        } catch (e) {}
+        var pack = null;
+        try { pack = localStorage.getItem('colourPack'); } catch (e) {}
+        if (pack === 'paper') { pack = 'earthy'; try { localStorage.setItem('colourPack', 'earthy'); } catch (e) {} }
+        var valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
+        var fallbackPack = document.documentElement.getAttribute('data-lab-mode') === 'true' ? 'ember' : 'classic';
+        document.documentElement.setAttribute('data-colour-pack', valid ? pack : fallbackPack);
 
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
@@ -370,9 +393,8 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         background: transparent;
       }
       .dark .tab-btn { color: #9ca3af; }
-      /* SPA custom.css parity — not colour-pack tokens */
-      .tab-btn.active { color: #2563eb; border-color: #2563eb; }
-      .dark .tab-btn.active { color: #60a5fa; border-color: #60a5fa; }
+      .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
+      .dark .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
       /* Sliding indicator owns the underline visually */
       .tab-btn, .tab-btn.active { border-bottom-color: transparent !important; }
 
@@ -384,8 +406,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       }
       .view-section.active {
         display: block;
-        /* SPA: content grows; the page (not an inner pane) scrolls — header moves with it */
+        /* Fill leftover shell height so short tabs don't collapse */
         flex: 1 1 auto;
+        min-height: 0;
         overflow: visible;
         opacity: 1;
         transform: translateY(0);
@@ -396,14 +419,48 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       #view-trip-planner.view-section.active {
         display: flex;
         flex-direction: column;
+        min-height: calc(100dvh - 9.5rem);
       }
 
-      /* Community keeps an internal feed scroll when that chrome is enabled */
-      #view-community.view-section.active {
+      /* Community + Map: flex-fill leftover shell (header / optional top tabs /
+         bottom nav are shrink-0 siblings — no magic 11rem viewport math). */
+      #view-community.view-section.active,
+      #view-map.view-section.active {
         display: flex;
         flex-direction: column;
+        flex: 1 1 auto;
         min-height: 0;
+        height: auto;
+        max-height: none;
         overflow: hidden;
+        padding: 0;
+      }
+      #view-community .community-pane,
+      #view-map .map-tab-pane {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+      }
+      #main-content.app-shell:has(#view-map.active),
+      #main-content.app-shell:has(#view-community.active) {
+        height: max(600px, calc(100dvh - 2rem));
+        max-height: max(600px, calc(100dvh - 2rem));
+        overflow: hidden;
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell:has(#view-map.active),
+        #main-content.app-shell:has(#view-community.active) {
+          height: max(600px, calc(100dvh - 4rem));
+          max-height: max(600px, calc(100dvh - 4rem));
+        }
+      }
+
+      #view-next-train.view-section.active {
+        min-height: calc(100dvh - 9.5rem);
+      }
+      body.nav-bottom #view-next-train.view-section.active,
+      body.nav-bottom #view-trip-planner.view-section.active {
+        min-height: calc(100dvh - 11rem);
       }
 
       /* Travel Day / inline menus must paint below the trigger without clipping */
@@ -414,16 +471,28 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* Fill the device height (minus body padding) so short planner/error states
-         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
+      /* Shell fills the device; flex children (tabs) can stretch into leftover space */
       #main-content.app-shell {
         min-height: max(600px, calc(100dvh - 2rem));
-        height: auto;
+        height: max(600px, calc(100dvh - 2rem));
         max-height: none;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
           /* body: pt-12 + pb-4 */
+          min-height: max(600px, calc(100dvh - 4rem));
+          height: max(600px, calc(100dvh - 4rem));
+        }
+      }
+      /* Tall Next Train / Planner content: grow the shell and scroll the page */
+      #main-content.app-shell:has(#view-next-train.active),
+      #main-content.app-shell:has(#view-trip-planner.active) {
+        height: auto;
+        min-height: max(600px, calc(100dvh - 2rem));
+      }
+      @media (min-width: 640px) {
+        #main-content.app-shell:has(#view-next-train.active),
+        #main-content.app-shell:has(#view-trip-planner.active) {
           min-height: max(600px, calc(100dvh - 4rem));
         }
       }

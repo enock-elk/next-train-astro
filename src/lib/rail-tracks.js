@@ -94,6 +94,36 @@ function nearestNode(graph, lat, lon, maxM = SNAP_MAX_M) {
     return best;
 }
 
+/**
+ * Snap a GPS point onto the rail graph. Rejects if farther than maxM.
+ * @returns {Promise<{ ok: boolean, lat?: number, lon?: number, distanceM: number|null, trackBearing?: number|null }>}
+ */
+export async function snapToRail(lat, lon, region = 'GP', maxM = 150) {
+    const bundle = await loadRegionBundle(region);
+    if (!bundle?.graph || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return { ok: false, distanceM: null };
+    }
+    const id = nearestNode(bundle.graph, lat, lon, Math.max(maxM, SNAP_MAX_M));
+    if (id == null) return { ok: false, distanceM: null };
+    const n = bundle.graph.nodes[id];
+    const distanceM = haversineM(lat, lon, n.lat, n.lon);
+    let trackBearing = null;
+    const neighbors = bundle.graph.adj.get(id) || [];
+    if (neighbors.length) {
+        const nb = bundle.graph.nodes[neighbors[0].to];
+        if (nb) {
+            trackBearing = (Math.atan2(nb.lon - n.lon, nb.lat - n.lat) * 180) / Math.PI;
+        }
+    }
+    return {
+        ok: distanceM <= maxM,
+        lat: n.lat,
+        lon: n.lon,
+        distanceM,
+        trackBearing,
+    };
+}
+
 function shortestPath(graph, startId, endId) {
     if (startId === endId) return [startId];
     const dist = new Map([[startId, 0]]);

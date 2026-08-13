@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexttrain-community",
+  "main": "worker.js",
+  "compatibility_date": "2026-03-22",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
+    "FIREBASE_DATABASE_URL": "https://metrorail-next-train-default-rtdb.firebaseio.com",
+    "FIREBASE_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",
+    "POST_TTL_MS": "86400000",
+    "RATE_WINDOW_MS": "60000",
+    "RATE_MAX": "4",
+    "ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,http://localhost:4321"
+  },
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
+}

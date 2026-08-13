@@ -10,7 +10,7 @@
  * Shadow-ban policy: rules reject writes; client still shows the author's
  * own post in a session overlay so they appear silenced without schema rewrites.
  */
-import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
@@ -25,13 +25,24 @@ import {
     rememberBody,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
 const BODY_MAX = 280;
-const FEED_LIMIT = 40;
+/** Blaze cost control — plan: limitToLast(5–10). */
+const FEED_LIMIT = 10;
+/** Pilot freshness — hide / ignore posts older than 24h (Worker cron also wipes). */
+const POST_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_KEY = 'communityPostRateV1';
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 8;
 const AUTH_COOLDOWN_MS = 20 * 1000;
+
+/** @type {(() => void) | null} */
+let postsUnsub = null;
+/** @type {string | null} */
+let postsListenRouteId = null;
+/** Skip full "Loading…" flash on realtime patches */
+let feedSilentRepaint = false;
 
 /** WhatsApp / Channels reaction set */
 export const WA_REACTIONS = [
@@ -193,6 +204,101 @@ function findCachedPost(postId) {
     return cachedFeedPosts.find((p) => p.postId === postId) || null;
 }
 
+function postsVisibleFilter(list, myUid) {
+    const cut = Date.now() - POST_TTL_MS;
+    return (list || [])
+        .filter((p) => p && typeof p === 'object' && p.body)
+        .filter((p) => {
+            if ((p.timestamp || 0) < cut) return false;
+            if (p.hidden && p.uid !== myUid) return false;
+            if (p.shadowOnly && p.uid !== myUid) return false;
+            return true;
+        })
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function mergeOverlayPosts(routeId, list) {
+    const acct = $account.get();
+    const myUid = acct.status === 'signed-in' ? acct.uid : null;
+    const merged = [...list];
+    const overlay = (localOverlayByRoute[routeId] || []).filter((p) => p.uid === myUid);
+    const ids = new Set(merged.map((p) => p.postId));
+    overlay.forEach((p) => {
+        if (!ids.has(p.postId)) merged.push(p);
+    });
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    return merged;
+}
+
+function stopRealtimePosts() {
+    if (typeof postsUnsub === 'function') {
+        try { postsUnsub(); } catch { /* ignore */ }
+    }
+    postsUnsub = null;
+    postsListenRouteId = null;
+}
+
+/**
+ * Live RTDB feed when communityRealtime is enabled for this route.
+ * Falls back to REST (fetchRoutePosts) when flag off or SDK unavailable.
+ */
+async function startRealtimePosts(routeId) {
+    stopRealtimePosts();
+    if (!routeId) return false;
+    await fetchFeatures();
+    if (!isFeatureEnabled(FEATURE_KEYS.COMMUNITY_REALTIME, routeId)) return false;
+
+    await bootFirebase();
+    if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return false;
+
+    // Guests need anonymous auth for some SDK paths; posts node is public-read.
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+
+    try {
+        const baseRef = window.firebaseDbRef(
+            window.firebaseDb,
+            `route_community/${routeId}/posts`
+        );
+        const q = (window.firebaseDbQuery && window.firebaseDbOrderByChild && window.firebaseDbLimitToLast)
+            ? window.firebaseDbQuery(
+                baseRef,
+                window.firebaseDbOrderByChild('timestamp'),
+                window.firebaseDbLimitToLast(FEED_LIMIT)
+            )
+            : baseRef;
+
+        postsListenRouteId = routeId;
+        postsUnsub = window.firebaseDbOnValue(q, (snap) => {
+            if (postsListenRouteId !== routeId) return;
+            const data = snap?.val?.() || null;
+            const acct = $account.get();
+            const myUid = acct.status === 'signed-in' ? acct.uid : null;
+            const list = data
+                ? postsVisibleFilter(Object.values(data), myUid)
+                : [];
+            cachedFeedPosts = mergeOverlayPosts(routeId, list);
+            feedSilentRepaint = true;
+            applyFeedFilter(routeId);
+            feedSilentRepaint = false;
+            // Keep unread badge honest while room is open
+            if (routeId === getPinnedRouteId() && safeStorage.getItem('activeTab') === 'community') {
+                markCommunityRouteSeen(routeId);
+            }
+        }, (err) => {
+            console.warn('Community realtime listener failed; falling back to REST', err);
+            stopRealtimePosts();
+            renderCommunityFeed(routeId, { forceRest: true });
+        });
+        return true;
+    } catch (e) {
+        console.warn('Community realtime start failed', e);
+        stopRealtimePosts();
+        return false;
+    }
+}
+
 export async function fetchRoutePosts(routeId) {
     if (!routeId || !navigator.onLine) return [];
     try {
@@ -209,22 +315,8 @@ export async function fetchRoutePosts(routeId) {
         if (!data) return [];
         const acct = $account.get();
         const myUid = acct.status === 'signed-in' ? acct.uid : null;
-        const list = Object.values(data)
-            .filter((p) => p && typeof p === 'object' && p.body)
-            .filter((p) => {
-                if (p.hidden && p.uid !== myUid) return false;
-                if (p.shadowOnly && p.uid !== myUid) return false;
-                return true;
-            })
-            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-        const overlay = (localOverlayByRoute[routeId] || []).filter((p) => p.uid === myUid);
-        const ids = new Set(list.map((p) => p.postId));
-        overlay.forEach((p) => {
-            if (!ids.has(p.postId)) list.push(p);
-        });
-        list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        return list;
+        const list = postsVisibleFilter(Object.values(data), myUid);
+        return mergeOverlayPosts(routeId, list);
     } catch {
         return [];
     }
@@ -307,6 +399,46 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     }
 
     try {
+        // Prefer Cloudflare write bouncer when configured (rate + sanitize + Admin write).
+        if (COMMUNITY_WORKER_URL) {
+            const token = await ensureAuthToken();
+            if (!token) return { ok: false, message: 'Sign in to post in this route’s community.' };
+            const res = await fetch(`${COMMUNITY_WORKER_URL}/community/post`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    ...payload,
+                    region: $userRegion.get() || 'GP',
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 429) {
+                return { ok: false, message: data.error || 'Slow down — try again shortly.' };
+            }
+            if (!res.ok || !data.ok) {
+                if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
+                    if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                    localOverlayByRoute[routeId].push({ ...payload, shadowOnly: true });
+                    recordRateHit();
+                    return { ok: true, post: payload, shadowSilenced: true };
+                }
+                throw new Error(data.error || `Post failed (${res.status})`);
+            }
+            if (data.shadowSilenced) {
+                if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                localOverlayByRoute[routeId].push({ ...(data.post || payload), shadowOnly: true });
+                recordRateHit();
+                rememberBody(text);
+                return { ok: true, post: data.post || payload, shadowSilenced: true };
+            }
+            recordRateHit();
+            rememberBody(text);
+            return { ok: true, post: data.post || payload };
+        }
+
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/posts/${postId}.json${q}`,
@@ -860,7 +992,7 @@ export function startCommunityUnreadWatch() {
     });
 }
 
-export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
+export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts = {}) {
     const listEl = document.getElementById('community-feed-list');
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
@@ -869,9 +1001,34 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get()) {
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
 
-    listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
-    if (emptyEl) emptyEl.classList.add('hidden');
+    const forceRest = !!opts.forceRest;
+    if (!feedSilentRepaint) {
+        listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8 animate-pulse">Loading feed…</p>`;
+        if (emptyEl) emptyEl.classList.add('hidden');
+    }
 
+    // Prefer live listener when feature is on for this route
+    if (!forceRest) {
+        const live = await startRealtimePosts(routeId);
+        if (live) {
+            // Listener will paint; still fetch reactions once
+            const reactionsMap = await fetchPostReactions(routeId);
+            cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
+            if (!cachedFeedPosts.length) {
+                // First paint may race before first onValue — soft REST seed
+                const posts = await fetchRoutePosts(routeId);
+                if (postsListenRouteId === routeId && posts.length && !cachedFeedPosts.length) {
+                    cachedFeedPosts = posts;
+                    applyFeedFilter(routeId);
+                }
+            } else {
+                applyFeedFilter(routeId);
+            }
+            return;
+        }
+    }
+
+    stopRealtimePosts();
     const [posts, reactionsMap] = await Promise.all([
         fetchRoutePosts(routeId),
         fetchPostReactions(routeId),
@@ -987,7 +1144,29 @@ export function openRouteCommunity(opts = {}) {
 }
 
 export function leaveCommunityRoom() {
+    stopRealtimePosts();
     leaveCommunityPresence();
+}
+
+/** Destroy chat listeners when the Community tab is not visible (Blaze control). */
+function bindCommunityVisibilityTeardown() {
+    if (typeof document === 'undefined' || window.__ntCommunityVisBound) return;
+    window.__ntCommunityVisBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopRealtimePosts();
+            leaveCommunityPresence();
+            return;
+        }
+        if (safeStorage.getItem('activeTab') === 'community') {
+            const routeSel = document.getElementById('community-route-select');
+            const rid = routeSel?.value || $currentRouteId.get();
+            if (rid) {
+                startRealtimePosts(rid);
+                joinCommunityPresence(rid);
+            }
+        }
+    });
 }
 
 async function handlePostSubmit() {
@@ -1018,7 +1197,10 @@ async function handlePostSubmit() {
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
     showToast('Posted to the route feed', 'success');
-    await renderCommunityFeed(routeId);
+    // Realtime listener will refresh; REST fallback still re-renders
+    if (!postsListenRouteId || postsListenRouteId !== routeId) {
+        await renderCommunityFeed(routeId);
+    }
     if (btn) btn.disabled = false;
 }
 
@@ -1048,6 +1230,7 @@ async function expandReplies(postId, routeId, container) {
 export function bindCommunityUi() {
     if (typeof document === 'undefined' || window.__ntCommunityBound) return;
     window.__ntCommunityBound = true;
+    bindCommunityVisibilityTeardown();
 
     const open = (e) => {
         e?.preventDefault?.();

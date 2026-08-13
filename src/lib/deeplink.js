@@ -208,7 +208,7 @@ export async function applyShareTargetDeepLink() {
 }
 
 /**
- * Legacy SPA `?action=map` — open static network map modal (handleShortcutActions parity).
+ * Legacy SPA `?action=map` — open the interactive Map tab (fallback: static PRASA modal).
  */
 export async function applyMapDeepLink() {
     if (typeof window === 'undefined') return false;
@@ -229,9 +229,19 @@ export async function applyMapDeepLink() {
 
     stripShareParamsFromUrl();
 
-    if (typeof window.switchTab === 'function') window.switchTab('next-train');
+    const openTab = () => {
+        if (typeof window.switchTab !== 'function' || !document.getElementById('view-map')) return false;
+        window.switchTab('map');
+        if (typeof window.trackAnalyticsEvent === 'function') {
+            window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
+        }
+        if (typeof window.showToast === 'function') {
+            window.showToast('Opened network map', 'success', 2000);
+        }
+        return true;
+    };
 
-    const open = () => {
+    const openModal = () => {
         const mapModal = document.getElementById('map-modal');
         if (!mapModal) return false;
         if (typeof window.setupMapLogic === 'function') {
@@ -243,7 +253,7 @@ export async function applyMapDeepLink() {
             mapModal.classList.remove('hidden');
         }
         try {
-            if (location.hash !== '#map') history.pushState({ modal: 'map' }, '', '#map');
+            if (location.hash !== '#prasa-map') history.pushState({ modal: 'map' }, '', '#prasa-map');
         } catch { /* ignore */ }
         const mapImage = document.getElementById('map-image');
         if (mapImage) mapImage.style.transform = 'translate(0px, 0px) scale(1)';
@@ -256,10 +266,11 @@ export async function applyMapDeepLink() {
         return true;
     };
 
+    if (openTab()) return true;
     // Modal markup may still be mounting on cold start
-    if (open()) return true;
+    if (openModal()) return true;
     await new Promise((r) => setTimeout(r, 120));
-    return open();
+    return openTab() || openModal();
 }
 
 export function bindDeeplinkHashChange() {
@@ -304,7 +315,7 @@ export function bindPwaSameOriginLinks() {
         const sameDoc = norm(url.pathname) === norm(location.pathname) && url.search === location.search;
         const hash = url.hash || '';
 
-        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map')) {
+        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map' || hash === '#prasa-map')) {
             if (isLegalHash(hash) || hash === '#fare') {
                 if (location.hash !== hash) {
                     history.pushState({ deeplink: hash }, '', hash);
@@ -323,7 +334,12 @@ export function bindPwaSameOriginLinks() {
                 return;
             }
             if (hash === '#map') {
-                if (location.hash !== '#map') history.pushState({ modal: 'map' }, '', '#map');
+                if (typeof window.switchTab === 'function') window.switchTab('map');
+                if (location.hash !== '#map') history.pushState({ tab: 'map' }, '', '#map');
+                return;
+            }
+            if (hash === '#prasa-map') {
+                if (location.hash !== '#prasa-map') history.pushState({ modal: 'map' }, '', '#prasa-map');
                 if (typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal');
                 return;
             }

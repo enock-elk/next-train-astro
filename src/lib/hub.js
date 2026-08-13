@@ -176,9 +176,9 @@ export function closeAppHub(skipHistory = false) {
         setTimeout(() => { window._isSidenavClosing = false; }, 150);
     }
     if (sidenav) {
-        // Left drawer (SPA): closed = -translate-x-full / no .open
-        sidenav.classList.remove('translate-x-0', 'open');
-        sidenav.classList.add('-translate-x-full');
+        // Right drawer: closed = translate-x-full / no .open
+        sidenav.classList.remove('translate-x-0', 'open', '-translate-x-full');
+        sidenav.classList.add('translate-x-full');
     }
     if (overlay) {
         overlay.classList.add('opacity-0');
@@ -186,6 +186,7 @@ export function closeAppHub(skipHistory = false) {
         setTimeout(() => overlay.classList.add('hidden'), 300);
     }
     document.body.classList.remove('sidenav-open', 'modal-active');
+    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
 }
 
 export function openAppHub() {
@@ -194,6 +195,7 @@ export function openAppHub() {
     const overlay = document.getElementById('sidenav-overlay');
     sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
     sidenav?.classList.add('translate-x-0', 'open');
+    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
     if (overlay) {
         overlay.classList.remove('hidden');
         overlay.classList.add('open');
@@ -711,8 +713,8 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
 }
 
 /**
- * Red badges for unread admin replies: on the header menu button (so it is
- * visible with the drawer closed) and on the sidenav Messages row.
+ * Red badges for unread admin replies: on the bottom-nav Options button
+ * (visible with the drawer closed) and on the sidenav Messages row.
  */
 export function syncInboxBadges(count = 0) {
     if (typeof document === 'undefined') return;
@@ -1467,12 +1469,16 @@ export function initHub() {
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
         document.body.classList.add('overflow-hidden');
+        if (overlay.dataset.sheetMode === 'map') {
+            import('./ui.js').then((m) => m.setImmersiveChrome?.(true)).catch(() => {});
+        }
     };
 
     const hideSheetOverlay = (overlay) => {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
         document.body.classList.remove('overflow-hidden');
+        import('./ui.js').then((m) => m.setImmersiveChrome?.(false)).catch(() => {});
         const frame = document.getElementById('nt-inapp-sheet-frame');
         // Delay blanking so users never see an empty white iframe flash.
         setTimeout(() => {

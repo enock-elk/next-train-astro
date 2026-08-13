@@ -1,20 +1,9 @@
 ---
-// Header: menu (left, matches the left-opening sidenav) · brand · alerts right.
+// Header: brand left · alerts right. Options / sidenav live on the bottom nav.
 // Offline status is NOT here — it docks above the bottom nav (see index.astro).
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-center justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
-
-    <div class="shrink-0 self-start mt-1 relative z-[70]">
-        <button id="open-nav-btn" type="button" class="relative p-2 -ml-1 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition-colors" aria-label="Menu">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 7h16"></path>
-                <path d="M4 12h16"></path>
-                <path d="M4 17h16"></path>
-            </svg>
-            <span id="open-nav-badge" class="hidden absolute top-1 right-1 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>
-        </button>
-    </div>
 
     <div class="min-w-0 flex-1 header-brand-block">
         <h1 id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black text-blue-600 dark:text-blue-400 select-none cursor-pointer tracking-[-0.035em] leading-none">
@@ -33,7 +22,8 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
             <span id="notice-dot" class="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 bg-red-600 hidden"></span>
         </button>
-        <!-- Legacy alias kept for any gear-button callers -->
+        <!-- Legacy aliases — Options on the bottom nav opens the hub -->
+        <button id="open-nav-btn" type="button" class="hidden" tabindex="-1" aria-hidden="true"></button>
         <button id="open-settings-gear-btn" type="button" class="hidden" tabindex="-1" aria-hidden="true"></button>
     </div>
 </header>

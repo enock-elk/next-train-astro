@@ -185,8 +185,8 @@ const faqLd = {
             <div id="offline-indicator" style="display: none;" class="nt-offline-strip">WORKING OFFLINE</div>
         </div>
 
-        <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-40 bottom-nav-bar" aria-label="Primary" aria-hidden="true">
-            <div class="grid grid-cols-4 gap-0 max-w-md mx-auto">
+        <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">
+            <div class="grid grid-cols-5 gap-0 max-w-lg mx-auto">
                 <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Next Train</span>
@@ -205,6 +205,13 @@ const faqLd = {
                         <span id="community-unread-badge" class="hidden absolute -top-1.5 -right-2.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
                     </span>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Community</span>
+                </button>
+                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
+                    <span class="relative inline-flex mb-1">
+                        <img src={withBase('icons/icon-192.png')} alt="" class="w-5 h-5 sm:w-6 sm:h-6 rounded-md shadow-sm" width="24" height="24" />
+                        <span id="open-nav-badge" class="hidden absolute -top-1 -right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>
+                    </span>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Options</span>
                 </button>
             </div>
         </nav>
@@ -334,6 +341,14 @@ const faqLd = {
     document.getElementById('bottom-nav-community')?.addEventListener('click', () => {
         window.triggerHaptic?.();
         switchTab('community');
+    });
+    document.getElementById('bottom-nav-options')?.addEventListener('click', () => {
+        window.triggerHaptic?.();
+        if (document.body.classList.contains('sidenav-open')) {
+            window.closeAppHub?.();
+            return;
+        }
+        window.openAppHub?.();
     });
     import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
 

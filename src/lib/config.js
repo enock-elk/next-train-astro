@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.16";
+export const APP_VERSION = "V8_08.17";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.17",
+        title: "Options on the right, Classic look, honest sharing",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Options</b> is on the bottom bar (right of Community) — tap the Next Train logo to open settings from the right.",
+            "<b>Bottom bar stays put</b> except inside a full-screen map. Classic is the default look again.",
+            "<b>Waiting or far away?</b> Others see a commuter online — not that train, and the Next Train clocks don’t move. We only update a train when you’re on it and moving."
+        ]
+    },
     {
         id: "V8_08.16",
         title: "Safer messages — refuse, hold, wait",

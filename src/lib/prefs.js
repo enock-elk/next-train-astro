@@ -43,54 +43,35 @@ function normalizePack(pack) {
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
 export function getNavStyle() {
-    const v = safeStorage.getItem(NAV_STYLE_KEY);
-    if (v === NAV_STYLES.BOTTOM) return NAV_STYLES.BOTTOM;
-    if (v === NAV_STYLES.TOP) return NAV_STYLES.TOP;
-    // Lab first visit: bottom nav so Community is obvious without hunting.
-    try {
-        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return NAV_STYLES.BOTTOM;
-    } catch { /* ignore */ }
-    return NAV_STYLES.TOP;
+    // Product: always use the bottom bar (Options opens the hub).
+    return NAV_STYLES.BOTTOM;
 }
 
-export function setNavStyle(style) {
-    const next = style === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
-    safeStorage.setItem(NAV_STYLE_KEY, next);
-    applyNavChrome(next);
-    return next;
-}
-
-function isLabMode() {
-    try {
-        if (import.meta.env?.PUBLIC_LAB_MODE === 'true') return true;
-    } catch { /* ignore */ }
-    if (typeof location !== 'undefined') {
-        const host = String(location.hostname || '').toLowerCase();
-        if (host === 'lab.nexttrain.co.za' || host.startsWith('lab.')) return true;
-    }
-    return false;
+export function setNavStyle(_style) {
+    safeStorage.setItem(NAV_STYLE_KEY, NAV_STYLES.BOTTOM);
+    applyNavChrome(NAV_STYLES.BOTTOM);
+    return NAV_STYLES.BOTTOM;
 }
 
 /**
- * Lab defaults to Ember (yellow/orange brand) so the restored chrome is obvious.
- * One-time seed: migrate unset/classic → ember on lab; later picks stick.
+ * Classic is the product default. Undo the one-time lab Ember seed once
+ * so returning lab users see Classic unless they pick another pack after this.
  */
-function seedLabEmberPack() {
-    if (typeof window === 'undefined' || !isLabMode()) return;
-    const SEED = 'ntLabEmberSeededV1';
-    if (safeStorage.getItem(SEED)) return;
-    const current = safeStorage.getItem(COLOUR_PACK_KEY);
-    if (!current || current === COLOUR_PACKS.CLASSIC) {
-        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.EMBER);
+function seedClassicDefault() {
+    if (typeof window === 'undefined') return;
+    const REVERT = 'ntClassicDefaultV1';
+    if (safeStorage.getItem(REVERT)) return;
+    if (safeStorage.getItem('ntLabEmberSeededV1') && safeStorage.getItem(COLOUR_PACK_KEY) === COLOUR_PACKS.EMBER) {
+        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
     }
-    safeStorage.setItem(SEED, '1');
+    safeStorage.setItem(REVERT, '1');
 }
 
 export function getColourPack() {
-    seedLabEmberPack();
+    seedClassicDefault();
     const v = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
     if (VALID_PACKS.has(v)) return v;
-    return isLabMode() ? COLOUR_PACKS.EMBER : COLOUR_PACKS.CLASSIC;
+    return COLOUR_PACKS.CLASSIC;
 }
 
 function syncThemeColorMeta() {
@@ -249,9 +230,8 @@ export async function setNotifyPref(wantOn) {
 }
 
 /**
- * Apply top vs bottom navigation chrome.
- * Bottom: Home · Plan · Map · Community · More.
- * Top tabs are hidden in bottom mode to reclaim vertical space.
+ * Apply navigation chrome. Product is always the bottom bar
+ * (Home · Plan · Map · Community · Options). Top tabs stay hidden.
  */
 export function applyNavChrome(style = getNavStyle()) {
     if (typeof document === 'undefined') return;
@@ -267,8 +247,10 @@ export function applyNavChrome(style = getNavStyle()) {
         topTabs.setAttribute('aria-hidden', isBottom ? 'true' : 'false');
     }
     if (bottomNav) {
-        bottomNav.classList.toggle('hidden', !isBottom);
-        bottomNav.setAttribute('aria-hidden', isBottom ? 'false' : 'true');
+        const immersive = document.body?.classList.contains('nt-immersive');
+        const show = isBottom && !immersive;
+        bottomNav.classList.toggle('hidden', !show);
+        bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
 
     document.querySelectorAll('[data-nav-style-option]').forEach((btn) => {

@@ -3,9 +3,11 @@
  *
  * RTDB: ride_pings/{routeId}/{deviceId}
  * {
- *   routeId, deviceId, station, trainId?, destination?,
+ *   routeId, deviceId, station, trainId?, waitingFor?, destination?,
  *   at, expiresAt, uid?, coarseLat?, coarseLng?, appVersion, source
  * }
+ * trainId is set only when the rider is on-path and moving. Waiting / far
+ * shares keep trainId null so clocks and the dashboard stay off that train.
  *
  * No GPS trails — optional coarse coords only to snap station / show on Leaflet.
  * TTL ~10 minutes (rules allow up to 20); one active ride per device.
@@ -22,6 +24,8 @@ import {
     isStationAheadOfGhost,
     lagMinutesFromFix,
     addMinutesToTime,
+    scoreTrainForFix,
+    TRAIN_TRACKER_MAX_M,
 } from './train-ghosts.js';
 import { peekCachedRouteReports } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
@@ -147,10 +151,26 @@ export function getCachedRidePings(routeId = $currentRouteId.get()) {
     return routeCache[routeId] || [];
 }
 
+function pingTracksTrain(p, trainId) {
+    const id = String(trainId || '');
+    if (!id || String(p?.trainId || '') !== id) return false;
+    const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
+    const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
+    if (lat == null || lng == null) return false;
+    const metres = scoreTrainForFix(lat, lng, id);
+    if (!Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M) return false;
+    return typeof p.speedMps === 'number' && p.speedMps >= 1.5;
+}
+
+/** Train id others should see — only on-path and moving. Waiting / far = commuter. */
+export function pingPublicTrainId(p) {
+    return pingTracksTrain(p, p?.trainId) ? String(p.trainId) : null;
+}
+
 export function trainHasLivePing(trainId, routeId = $currentRouteId.get()) {
     if (!trainId) return false;
     const id = String(trainId);
-    return activePings(getCachedRidePings(routeId)).some((p) => String(p.trainId || '') === id);
+    return activePings(getCachedRidePings(routeId)).some((p) => pingTracksTrain(p, id));
 }
 
 function median(nums) {
@@ -177,7 +197,7 @@ function matchingDelayReport(trainId, routeId) {
 export function computeRideDelta(pings, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id) return null;
-    const live = activePings(pings).filter((p) => String(p.trainId || '') === id);
+    const live = activePings(pings).filter((p) => pingTracksTrain(p, id));
     if (!live.length) return null;
 
     const ghost = expectedPosition(id, opts.now, opts);
@@ -257,10 +277,10 @@ function notifyPingsUpdated(routeId) {
 export function summarizeRidePings(pings, focusStation = '') {
     const live = activePings(pings);
     if (!live.length) return null;
-    const people = live.filter((p) => !p.trainId);
+    const people = live.filter((p) => !pingTracksTrain(p, p.trainId));
     const trainCounts = {};
     live.forEach((p) => {
-        if (!p.trainId) return;
+        if (!pingTracksTrain(p, p.trainId)) return;
         const k = String(p.trainId);
         trainCounts[k] = (trainCounts[k] || 0) + 1;
     });
@@ -285,12 +305,12 @@ export function summarizeRidePings(pings, focusStation = '') {
         totalLive: live.length,
         peopleCount: people.length,
         trainCount: Object.keys(trainCounts).length,
-        topTrainId: topTrain ? topTrain[0] : (freshest?.trainId || null),
+        topTrainId: topTrain ? topTrain[0] : null,
         topTrainSharing: topTrain ? topTrain[1] : 0,
         topStations,
         station: freshest?.station || topStations[0] || '',
         at: freshest?.at,
-        trainId: topTrain ? topTrain[0] : (freshest?.trainId || null),
+        trainId: topTrain ? topTrain[0] : null,
         age: ageLabel(freshest?.at),
         stationCounts,
         atFocus,
@@ -377,6 +397,7 @@ export async function submitRideCheckIn({
     heading = null,
     speedMps = null,
     source = 'board_checkin',
+    waitingFor = null,
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
@@ -398,6 +419,7 @@ export async function submitRideCheckIn({
         deviceId,
         station: st,
         trainId: trainId || null,
+        waitingFor: waitingFor || null,
         destination: destination || null,
         at: now,
         expiresAt: now + RIDE_PING_TTL_MS,
@@ -429,7 +451,9 @@ export async function submitRideCheckIn({
         const mins = Math.round(RIDE_PING_TTL_MS / 60000);
         const toastMsg = trainId
             ? `Others can see train ${trainId}`
-            : `You’re visible at ${stationShort(st)} · ${mins} min`;
+            : waitingFor
+                ? `You’re visible as a commuter — not on train ${waitingFor} yet`
+                : `You’re visible at ${stationShort(st)} · ${mins} min`;
         const others = activePings(getCachedRidePings(routeId))
             .filter((p) => String(p.trainId || '') === String(trainId || '') && p.deviceId !== deviceId);
         awardShareMarks({

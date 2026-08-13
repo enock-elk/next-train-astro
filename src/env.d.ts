@@ -22,6 +22,7 @@ interface Window {
   GHOST_STATION_LIST?: string[];
   switchTab?: (tab: string) => void;
   syncBottomNavActive?: (tab?: string) => void;
+  setImmersiveChrome?: (on: boolean) => void;
   openAppHub?: () => void;
   closeAppHub?: () => void;
   openAccountModal?: () => void;

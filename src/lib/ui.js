@@ -960,18 +960,20 @@ export function moveTabIndicator(element) {
     });
 }
 
-/** Sync Home · Plan · Map · Community active state on the bottom bar. More is hub-only. */
+/** Sync Home · Plan · Map · Community · Options on the bottom bar. */
 export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
     if (typeof document === 'undefined') return;
     const home = document.getElementById('bottom-nav-home');
     const plan = document.getElementById('bottom-nav-plan');
     const map = document.getElementById('bottom-nav-map');
     const community = document.getElementById('bottom-nav-community');
-    if (!home && !plan && !map && !community) return;
+    const options = document.getElementById('bottom-nav-options');
+    if (!home && !plan && !map && !community && !options) return;
 
     const mode = tab === 'community'
         ? 'community'
         : (tab === 'map' ? 'map' : (tab === 'trip-planner' ? 'plan' : 'home'));
+    const hubOpen = document.body.classList.contains('sidenav-open');
     const paint = (el, on) => {
         if (!el) return;
         el.classList.toggle('is-active', on);
@@ -979,10 +981,11 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
         el.classList.toggle('dark:text-gray-500', !on);
         el.setAttribute('aria-current', on ? 'page' : 'false');
     };
-    paint(home, mode === 'home');
-    paint(plan, mode === 'plan');
-    paint(map, mode === 'map');
-    paint(community, mode === 'community');
+    paint(home, !hubOpen && mode === 'home');
+    paint(plan, !hubOpen && mode === 'plan');
+    paint(map, !hubOpen && mode === 'map');
+    paint(community, !hubOpen && mode === 'community');
+    paint(options, hubOpen);
 }
 
 /**
@@ -1031,8 +1034,27 @@ export function nudgeHomeAutoNotices() {
     }, 450);
 }
 
+/** Hide the bottom bar in full-screen sheets (sidenav Network Map). */
+export function setImmersiveChrome(on) {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('nt-immersive', !!on);
+    const bottomNav = document.getElementById('bottom-nav');
+    if (!bottomNav) return;
+    if (on) {
+        bottomNav.classList.add('hidden');
+        bottomNav.setAttribute('aria-hidden', 'true');
+        return;
+    }
+    bottomNav.classList.remove('hidden');
+    bottomNav.setAttribute('aria-hidden', 'false');
+}
+
 export function switchTab(tab) {
     if (typeof document === 'undefined') return;
+
+    if (document.body.classList.contains('sidenav-open') && typeof window.closeAppHub === 'function') {
+        window.closeAppHub(true);
+    }
 
     const prev = safeStorage.getItem('activeTab') || 'next-train';
 
@@ -1423,7 +1445,7 @@ export async function checkMaintenanceStatus() {
             }
             const placeBanner = (banner) => {
                 // Pin to the top of the header chrome (same visual as SPA top strip).
-                // Inside #app-header so hamburger z-[70] shares the stacking context and stays on top.
+                // Inside #app-header so the alerts control (z-[70]) stays above the strip.
                 banner.style.background = 'repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #d97706 10px, #d97706 20px)';
                 banner.className = 'absolute top-0 left-0 w-full z-[55] text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1 shadow-lg pointer-events-none';
                 banner.innerHTML = String(customMessage).toUpperCase();
@@ -1737,6 +1759,7 @@ if (typeof window !== 'undefined') {
     window.unlockBackgroundScroll = unlockBackgroundScroll;
     window.switchTab = switchTab;
     window.syncBottomNavActive = syncBottomNavActive;
+    window.setImmersiveChrome = setImmersiveChrome;
     window.openLegal = openLegal;
     window.bindPwaInstallPrompt = bindPwaInstallPrompt;
     window.bindHistoryBackNavigation = bindHistoryBackNavigation;

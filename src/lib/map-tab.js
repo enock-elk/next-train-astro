@@ -690,14 +690,41 @@ export async function startOnTrainShare({
 
     hideContributeSheet();
 
+    let intent = 'onboard';
     if (!skipVolunteer) {
         const choice = await promptOnTrainSheet({
-            title: 'Share your ride?',
-            body: `Share your location for 10 minutes so others can track train ${id}?`,
-            primary: 'Share for 10 min',
-            secondary: 'Not now',
+            title: `Train ${id}`,
+            body: `Are you on train ${id}, or waiting at the station? We’ll only move the live clock if you’re on it and moving.`,
+            primary: 'I’m on it',
+            secondary: 'I’m waiting',
+            tertiary: 'Not now',
         });
-        if (choice !== 'primary') return { ok: false, cancelled: true };
+        if (choice !== 'primary' && choice !== 'secondary') {
+            return { ok: false, cancelled: true };
+        }
+        intent = choice === 'secondary' ? 'waiting' : 'onboard';
+    }
+
+    if (intent === 'waiting') {
+        let pos;
+        try {
+            pos = await getPosition();
+        } catch {
+            showToast('Location is needed to show you as a commuter.', 'error');
+            return { ok: false };
+        }
+        lastCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const result = await finishRideShare({
+            trainId: null,
+            waitingFor: id,
+            station: station || document.getElementById('station-select')?.value || '',
+            destination,
+            routeId,
+            lat: lastCoords.lat,
+            lng: lastCoords.lng,
+            source: 'waiting',
+        });
+        return { ...result, asPerson: true, waiting: true };
     }
 
     setStatus('Checking you’re on the railway…');
@@ -727,9 +754,12 @@ export async function startOnTrainShare({
     const tooFar = Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M;
     const st = station || document.getElementById('station-select')?.value || '';
 
-    if (tooFar) {
+    const moving = !!(vet.isMoving || (typeof vet.speedMps === 'number' && vet.speedMps >= 1.5));
+
+    if (tooFar || !moving) {
         const result = await finishRideShare({
             trainId: null,
+            waitingFor: finalId,
             station: st,
             destination,
             routeId,
@@ -737,17 +767,19 @@ export async function startOnTrainShare({
             lng: vet.lng,
             heading: vet.heading,
             speedMps: vet.speedMps,
-            source: 'presence_too_far',
+            source: tooFar ? 'presence_too_far' : 'waiting_not_moving',
         });
         await promptOnTrainSheet({
-            title: 'Not close enough to track the train',
-            body: `You’re about ${formatDistanceM(metres)} from where train ${finalId} should be on the line. Other riders can see you, but not as a train tracker.`,
+            title: tooFar ? 'Not close enough to track the train' : 'We’ll show you as a commuter',
+            body: tooFar
+                ? `You’re about ${formatDistanceM(metres)} from where train ${finalId} should be. Other riders can see a commuter online — not that train, and it won’t change the Next Train board.`
+                : `You’re near the station but we don’t see train movement yet. Other riders can see you as a commuter. We’ll only update train ${finalId} once you’re on it and moving.`,
             primary: 'Got it',
             secondary: 'See trains near you',
         }).then((pick) => {
             if (pick === 'secondary') openNearbyTrainsModal({ lat: vet.lat, lng: vet.lng });
         });
-        return { ...result, asPerson: true, tooFar: true };
+        return { ...result, asPerson: true, tooFar, waiting: !tooFar };
     }
 
     const shared = await finishRideShare({
@@ -774,7 +806,7 @@ export async function startOnTrainShare({
 }
 
 async function finishRideShare({
-    trainId, station, destination, routeId, lat, lng, heading, speedMps, source,
+    trainId, station, destination, routeId, lat, lng, heading, speedMps, source, waitingFor,
 }) {
     try {
         const { submitRideCheckIn, isRideCheckInEnabled, RIDE_PING_TTL_MS } = await import('./ride-pings.js');
@@ -796,6 +828,7 @@ async function finishRideShare({
             heading,
             speedMps,
             source: source || 'board_on_train',
+            waitingFor: waitingFor || null,
         });
 
         if (!result.ok) {
@@ -844,7 +877,7 @@ export async function contributeForTrain(candidate) {
 export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
     if (!routeId) return;
     try {
-        const { fetchRouteRidePings } = await import('./ride-pings.js');
+        const { fetchRouteRidePings, pingPublicTrainId } = await import('./ride-pings.js');
         const mine = getDeviceId();
         const pings = await fetchRouteRidePings(routeId);
         const markers = (pings || [])
@@ -852,7 +885,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             .map((p) => ({
                 lat: p.coarseLat,
                 lng: p.coarseLng,
-                trainId: p.trainId || null,
+                trainId: pingPublicTrainId(p),
                 station: p.station || '',
                 at: p.at,
                 expiresAt: p.expiresAt,

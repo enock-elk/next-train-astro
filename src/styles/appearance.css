@@ -541,7 +541,7 @@ html.dark .nt-offline-strip::before {
   background-color: var(--nt-primary);
 }
 
-/* Maintenance strip pinned to top of header; hamburger stays above it (z-[70]) */
+/* Maintenance strip pinned to top of header; alerts stay above it (z-[70]) */
 #app-header.nt-maint-active {
   /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
   background-color: var(--nt-surface) !important;

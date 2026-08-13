@@ -298,7 +298,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
-        // Lab / ?pack=ember: seed Ember (yellow/orange brand) so restored chrome is obvious
+        // Optional ?pack= override. Default chrome is Classic.
         try {
           var params = new URLSearchParams(location.search);
           var packParam = params.get('pack') || params.get('colourPack');
@@ -306,23 +306,18 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
           if (packParam === 'ember' || packParam === 'classic' || packParam === 'midnight'
               || packParam === 'contrast' || packParam === 'signal' || packParam === 'earthy') {
             localStorage.setItem('colourPack', packParam);
-            localStorage.setItem('ntLabEmberSeededV1', '1');
           }
-          var host = String(location.hostname || '').toLowerCase();
-          var isLab = document.documentElement.getAttribute('data-lab-mode') === 'true'
-            || host === 'lab.nexttrain.co.za' || host.indexOf('lab.') === 0;
-          if (isLab && !localStorage.getItem('ntLabEmberSeededV1')) {
-            var cur = localStorage.getItem('colourPack');
-            if (!cur || cur === 'classic') localStorage.setItem('colourPack', 'ember');
-            localStorage.setItem('ntLabEmberSeededV1', '1');
+          if (!localStorage.getItem('ntClassicDefaultV1') && localStorage.getItem('ntLabEmberSeededV1')
+              && localStorage.getItem('colourPack') === 'ember') {
+            localStorage.setItem('colourPack', 'classic');
+            localStorage.setItem('ntClassicDefaultV1', '1');
           }
         } catch (e) {}
         var pack = null;
         try { pack = localStorage.getItem('colourPack'); } catch (e) {}
         if (pack === 'paper') { pack = 'earthy'; try { localStorage.setItem('colourPack', 'earthy'); } catch (e) {} }
         var valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
-        var fallbackPack = document.documentElement.getAttribute('data-lab-mode') === 'true' ? 'ember' : 'classic';
-        document.documentElement.setAttribute('data-colour-pack', valid ? pack : fallbackPack);
+        document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
 
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
@@ -541,6 +536,12 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
 
       #bottom-nav.bottom-nav-bar {
         padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+      }
+      /* Drawer sits above the bar so Options stays tappable for right-handers */
+      body.nav-bottom:not(.nt-immersive) #sidenav,
+      body.nav-bottom:not(.nt-immersive) #sidenav-overlay {
+        bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px) + 0.25rem);
+        height: auto;
       }
       #bottom-nav .bottom-nav-item {
         transition: color 0.15s ease, transform 0.12s ease;

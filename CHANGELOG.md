@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.17 — Options on the right, Classic look, honest sharing (13 Aug 2026)
+
+- Hamburger is gone. **Options** is the rightmost bottom-nav item (Next Train logo), to the right of Community. The hub slides in from the **right**.
+- The bottom bar stays visible except in immersive full-screen views (sidenav Network Map).
+- Sharing while **far** from that train’s path, or **waiting** at the station, shows a commuter online — not linked to the train and not on the Next Train dashboard clocks.
+- On-train **and moving** (within 400 m of the ghost) attaches the ping and can update estimates.
+- Default colour pack is **Classic** again (one-time revert of the lab Ember seed).
+
 ## V8_08.16 — Safer messages (13 Aug 2026)
 
 - User text (community, feedback, messages, delay notes) is checked **before send**. Non-`nexttrain.co.za` URLs and profanity (English + common ZA slang) are refused with a prompt.

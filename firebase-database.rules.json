@@ -227,6 +227,10 @@
         "trustScore": {
           ".read": "auth != null",
           ".write": "(auth != null && auth.uid === $uid && !data.exists() && newData.isNumber() && newData.val() === 0) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+        },
+        "marks": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['points']) && newData.child('points').isNumber() && newData.child('points').val() >= 0 && newData.child('points').val() <= 100000"
         }
       }
     },

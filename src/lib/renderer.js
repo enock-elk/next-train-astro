@@ -28,6 +28,7 @@ import {
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
+import { decorateJourneyLive, trainHasLivePing, isRideCheckInEnabled } from './ride-pings.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -517,14 +518,31 @@ export const Renderer = {
         }
         
         const rawTime = journey.departureTime || journey.train1.departureTime;
-        const safeDepTime = escapeHTML(formatTimeDisplay(rawTime));
         const safeTrainName = escapeHTML(journey.train || journey.train1.train);
         const safeDest = escapeHTML(destination);
+        const liveStation = (typeof document !== 'undefined' && document.getElementById('station-select')?.value) || '';
+        const liveTrainId = journey.train || journey.train1?.train || '';
+        const liveArrRaw = journey.arrivalTime || journey.train1?.arrivalAtTransfer || '';
+        const liveDeco = decorateJourneyLive(liveTrainId, liveStation, rawTime, liveArrRaw);
+        const clockTime = liveDeco.useLive ? liveDeco.liveTime : rawTime;
+        const safeDepTime = escapeHTML(formatTimeDisplay(clockTime));
         let timeDiffStr = (typeof window.calculateTimeDiffString === 'function') 
-            ? window.calculateTimeDiffString(rawTime) 
+            ? window.calculateTimeDiffString(clockTime) 
             : "";
             
         if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+        const schedNote = liveDeco.schedNote
+            ? `<div class="text-[9px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(liveDeco.schedNote)}</div>`
+            : '';
+        const liveHintHtml = liveDeco.liveHint
+            ? `<div class="text-[9px] font-bold text-blue-600 dark:text-blue-300 mt-0.5">${escapeHTML(liveDeco.liveHint)}</div>`
+            : '';
+        const livePulseHtml = trainHasLivePing(liveTrainId)
+            ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live — open map"><span class="block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.35)] animate-pulse"></span></button>`
+            : '';
+        const onTrainHtml = (isRideCheckInEnabled() && liveTrainId)
+            ? `<button type="button" class="nt-on-train-btn mt-1 w-full text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:underline focus:outline-none" data-on-train="${escapeHTML(String(liveTrainId))}" data-station="${escapeHTML(liveStation)}" data-dest="${escapeHTML(destination || '')}" data-route="${escapeHTML((typeof window !== 'undefined' && window._liveRouteId) || '')}">I’m on this train</button>`
+            : '';
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
         const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-tight font-bold py-1.5 px-0.5 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors leading-tight focus:outline-none">See Upcoming Trains</button>`;
@@ -653,7 +671,8 @@ export const Renderer = {
                 titleColor = "text-red-600 dark:text-red-400";
             }
 
-            let detailLine = journey.arrivalTime ? `Arrives ${escapeHTML(formatTimeDisplay(journey.arrivalTime))}` : "Arrival time n/a.";
+            const shownArr = liveDeco.useLive && liveDeco.liveArrival ? liveDeco.liveArrival : journey.arrivalTime;
+            let detailLine = shownArr ? `Arrives ${escapeHTML(formatTimeDisplay(shownArr))}` : "Arrival time n/a.";
             let detailColor = "text-gray-700 dark:text-gray-300";
 
             if (actualDest && normDest && actualDest !== normDest) {
@@ -673,18 +692,21 @@ export const Renderer = {
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        ${liveHintHtml}
+                        ${schedNote}
                         ${sharedTag}
                         ${buttonHtml}
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
                     <div class="flex-1 min-w-0 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden self-stretch">
-                        ${titleBtn}
+                        <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${titleBtn}</div>
                         <div class="text-[10px] ${detailColor} leading-tight truncate w-full px-1 min-w-0" title="${detailLine}">
                             ${detailLine}
                         </div>
                         ${disruptionHtml}
                         ${reportSlotHtml}
+                        ${onTrainHtml}
                     </div>
                 </div>
             `;
@@ -753,6 +775,8 @@ export const Renderer = {
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        ${liveHintHtml}
+                        ${schedNote}
                         ${sharedTag}
                         ${buttonHtml}
                     </div>
@@ -760,12 +784,13 @@ export const Renderer = {
                     <!-- DESCRIPTION BOX -->
                     <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] overflow-hidden self-stretch">
                         <div class="border-b border-gray-200 dark:border-gray-700 pb-2 mb-2 w-full min-w-0">
-                            ${shuttleBtn}
+                            <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${shuttleBtn}</div>
                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full px-1" title="To ${displayDest} (Arr ${arrivalAtTransfer})">To ${displayDest} <span class="font-normal opacity-80">(Arr ${arrivalAtTransfer})</span></div>
                         </div>
                         ${bottomBlock}
                         ${disruptionHtml}
                         ${reportSlotHtml}
+                        ${onTrainHtml}
                     </div>
                 </div>
             `;

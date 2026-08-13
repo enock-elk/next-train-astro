@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.12";
+export const APP_VERSION = "V8_08.13";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.13",
+        title: "Live deltas, map pulse, rider marks",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Live times:</b> when riders share, stations still ahead can show a live arrival — the printed timetable stays as the small scheduled time.",
+            "<b>Blue pulse:</b> a live train on the board opens the map so you can join. Locate near the rails may ask if you’re on that train.",
+            "<b>Private marks:</b> Bronze → Platinum labels for sharing and confirming — only you see them, no leaderboard."
+        ]
+    },
     {
         id: "V8_08.12",
         title: "Earthy packs, live reports, map trains",

@@ -143,6 +143,11 @@ export function isTrainInReportWindow(scheduledTime) {
     return Math.abs(getNowSeconds() - dep) <= REPORT_WINDOW_SEC;
 }
 
+/** Cached reports for the current route (no network). Used by live deltas. */
+export function peekCachedRouteReports(routeId) {
+    return routeReportCache[routeId] || [];
+}
+
 export async function fetchRecentRouteReports(routeId, maxAgeMs = SURFACE_WINDOW_MS) {
     if (!routeId || !navigator.onLine) return [];
     const cached = routeReportCache[routeId];
@@ -581,7 +586,9 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
         delete routeReportCache[routeId];
         delete routeReportCacheAt[routeId];
         await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
-        showToast('Thanks — your confirm helps others', 'success');
+        const { awardMark, marksLabel } = await import('./rider-marks.js');
+        const marks = awardMark('delay_confirm', { key: `delay:${key}` });
+        showToast(marks.awarded ? `Thanks — ${marksLabel(marks.state)}` : 'Thanks — your confirm helps others', 'success');
         return { ok: true };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not confirm' };

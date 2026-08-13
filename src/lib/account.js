@@ -259,6 +259,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
             ? (state.displayName || state.email || 'P').charAt(0).toUpperCase()
             : '?';
     }
+    import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
 }
 
 export function bindAccountUi() {
@@ -271,6 +272,7 @@ export function bindAccountUi() {
 
     $account.subscribe(syncAccountSettingsUi);
     syncAccountSettingsUi();
+    import('./rider-marks.js').then((m) => m.hydrateRemoteMarks()).catch(() => {});
 
     const open = () => {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();

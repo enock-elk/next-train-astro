@@ -1401,6 +1401,7 @@
 
             /** Rider markers from the parent Map tab (ride_pings with coarse GPS). */
             let ridePingLayer = null;
+            let rideTrainMarkers = {};
             const trainAnim = [];
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
@@ -1434,6 +1435,7 @@
                 const group = L.layerGroup();
                 const trains = {};
                 const loose = [];
+                rideTrainMarkers = {};
                 pings.forEach(function (p) {
                     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
                     if (p.trainId) {
@@ -1485,6 +1487,7 @@
                         };
                     });
                     marker.addTo(group);
+                    rideTrainMarkers[trainId] = marker;
                     if (speed > 1 && typeof heading === 'number') {
                         animateTrainMarker(marker, lat, lng, heading, speed, list[0].expiresAt);
                     }
@@ -1513,6 +1516,14 @@
                 if (!data || typeof data !== 'object') return;
                 if (data.type === 'nt-map-ride-pings') {
                     renderRidePingMarkers(data.pings || []);
+                    return;
+                }
+                if (data.type === 'nt-map-focus-train' && data.trainId) {
+                    const marker = rideTrainMarkers[String(data.trainId)];
+                    if (marker) {
+                        map.flyTo(marker.getLatLng(), 15, { duration: 1.0 });
+                        marker.openPopup();
+                    }
                     return;
                 }
                 if (data.type === 'nt-map-contribute' && typeof data.lat === 'number') {

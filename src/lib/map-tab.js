@@ -501,42 +501,205 @@ export async function locateOnMapTab() {
     }
 }
 
+function hideOnTrainSheet() {
+    document.getElementById('nt-on-train-sheet')?.classList.add('hidden');
+}
+
 /**
- * Volunteer coarse location for a specific train (10‑minute ride ping).
+ * @returns {Promise<'primary'|'secondary'|'tertiary'>}
  */
-export async function contributeForTrain(candidate) {
+function promptOnTrainSheet({ title, body, primary, secondary, tertiary } = {}) {
+    return new Promise((resolve) => {
+        const sheet = document.getElementById('nt-on-train-sheet');
+        const titleEl = document.getElementById('nt-on-train-title');
+        const bodyEl = document.getElementById('nt-on-train-body');
+        const primaryBtn = document.getElementById('nt-on-train-primary');
+        const secondaryBtn = document.getElementById('nt-on-train-secondary');
+        const tertiaryBtn = document.getElementById('nt-on-train-tertiary');
+        if (!sheet || !primaryBtn) {
+            resolve('secondary');
+            return;
+        }
+        if (titleEl) titleEl.textContent = title || 'Share your ride?';
+        if (bodyEl) bodyEl.textContent = body || '';
+        primaryBtn.textContent = primary || 'Share for 10 min';
+        if (secondaryBtn) secondaryBtn.textContent = secondary || 'Not now';
+        if (tertiaryBtn) {
+            if (tertiary) {
+                tertiaryBtn.textContent = tertiary;
+                tertiaryBtn.classList.remove('hidden');
+            } else {
+                tertiaryBtn.classList.add('hidden');
+            }
+        }
+        sheet.classList.remove('hidden');
+
+        const done = (value) => {
+            primaryBtn.removeEventListener('click', onPrimary);
+            secondaryBtn?.removeEventListener('click', onSecondary);
+            tertiaryBtn?.removeEventListener('click', onTertiary);
+            sheet.removeEventListener('click', onBackdrop);
+            hideOnTrainSheet();
+            resolve(value);
+        };
+        const onPrimary = () => done('primary');
+        const onSecondary = () => done('secondary');
+        const onTertiary = () => done('tertiary');
+        const onBackdrop = (e) => {
+            if (e.target === sheet) done('secondary');
+        };
+        primaryBtn.addEventListener('click', onPrimary);
+        secondaryBtn?.addEventListener('click', onSecondary);
+        tertiaryBtn?.addEventListener('click', onTertiary);
+        sheet.addEventListener('click', onBackdrop);
+    });
+}
+
+export async function focusTrainOnMap(trainId) {
+    if (!trainId) return;
     triggerHaptic();
-    if (!candidate?.routeId) {
+    const { switchTab } = await import('./ui.js');
+    switchTab('map');
+    await syncRidePingsToMap();
+    const send = () => postToMap({ type: 'nt-map-focus-train', trainId: String(trainId) });
+    send();
+    setTimeout(send, 500);
+    setTimeout(send, 1400);
+}
+
+const locatePromptSeen = new Set();
+
+/** After Locate: if snapped to rails and a ghost is nearby, ask once. */
+export async function maybePromptLocateOnTrain(detail) {
+    if (!detail || detail.isAuto) return;
+    const { isRideCheckInEnabled } = await import('./ride-pings.js');
+    if (!isRideCheckInEnabled()) return;
+    const lat = Number(detail.lat);
+    const lon = Number(detail.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    const { snapToRail } = await import('./rail-tracks.js');
+    const { resolveTrainAttachment, LOCATE_RAIL_M, LOCATE_GHOST_M } = await import('./train-ghosts.js');
+    const region = $userRegion.get() || 'GP';
+    const snap = await snapToRail(lat, lon, region, 80);
+    if (!snap.ok || (snap.distanceM ?? 999) > LOCATE_RAIL_M) return;
+
+    const decision = resolveTrainAttachment(snap.lat ?? lat, snap.lon ?? lon, null, { maxM: LOCATE_GHOST_M });
+    const best = decision.best;
+    if (!best?.trainId || best.metres > LOCATE_GHOST_M) return;
+    if (locatePromptSeen.has(best.trainId)) return;
+    locatePromptSeen.add(best.trainId);
+
+    const choice = await promptOnTrainSheet({
+        title: `Are you on train ${best.trainId}?`,
+        body: `You’re next to the rails and train ${best.trainId} should be nearby. Share so others can see it?`,
+        primary: `Yes — train ${best.trainId}`,
+        secondary: 'No thanks',
+    });
+    if (choice !== 'primary') return;
+    await startOnTrainShare({
+        trainId: best.trainId,
+        station: detail.station || document.getElementById('station-select')?.value || '',
+        destination: '',
+        routeId: $currentRouteId.get(),
+        source: 'locate_prompt',
+        skipVolunteer: true,
+    });
+}
+
+/**
+ * Board / map / locate: volunteer sheet → 30s vet → closest-train confirm → public ping.
+ */
+export async function startOnTrainShare({
+    trainId,
+    station,
+    destination = '',
+    routeId = $currentRouteId.get(),
+    source = 'board_on_train',
+    skipVolunteer = false,
+} = {}) {
+    triggerHaptic();
+    const id = trainId === 'trip' ? null : (trainId || null);
+    if (!routeId) {
         showToast('Pick a corridor first', 'error');
         return { ok: false };
     }
-    setStatus('Checking you’re on the railway…');
+    if (!id) {
+        showToast('Pick a train first', 'error');
+        return { ok: false };
+    }
 
-    const vet = await runContributeVet();
-    if (!vet.ok) return vet;
-    const coords = { lat: vet.lat, lng: vet.lng };
     hideContributeSheet();
 
+    if (!skipVolunteer) {
+        const choice = await promptOnTrainSheet({
+            title: 'Share your ride?',
+            body: `Share your location for 10 minutes so others can track train ${id}?`,
+            primary: 'Share for 10 min',
+            secondary: 'Not now',
+        });
+        if (choice !== 'primary') return { ok: false, cancelled: true };
+    }
+
+    setStatus('Checking you’re on the railway…');
+    const vet = await runContributeVet();
+    if (!vet.ok) return vet;
+
+    const { resolveTrainAttachment } = await import('./train-ghosts.js');
+    const decision = resolveTrainAttachment(vet.lat, vet.lng, id);
+    let finalId = id;
+    let confirmedCloser = false;
+    if (decision.action === 'confirm' && decision.best?.trainId) {
+        const pick = await promptOnTrainSheet({
+            title: 'Different train?',
+            body: `You’re more likely on train ${decision.best.trainId} than ${id}. Show you as ${decision.best.trainId}?`,
+            primary: `Yes, ${decision.best.trainId}`,
+            secondary: `Keep ${id}`,
+            tertiary: 'Cancel',
+        });
+        if (pick === 'tertiary') return { ok: false, cancelled: true };
+        if (pick === 'primary') {
+            finalId = decision.best.trainId;
+            confirmedCloser = true;
+        }
+    }
+
+    return finishRideShare({
+        trainId: finalId,
+        station: station || document.getElementById('station-select')?.value || '',
+        destination,
+        routeId,
+        lat: vet.lat,
+        lng: vet.lng,
+        heading: vet.heading,
+        speedMps: vet.speedMps,
+        source: confirmedCloser ? 'closer_confirm' : source,
+    });
+}
+
+async function finishRideShare({
+    trainId, station, destination, routeId, lat, lng, heading, speedMps, source,
+}) {
     try {
         const { submitRideCheckIn, isRideCheckInEnabled, RIDE_PING_TTL_MS } = await import('./ride-pings.js');
         const { fetchFeatures } = await import('./features.js');
         await fetchFeatures();
-        if (!isRideCheckInEnabled(candidate.routeId)) {
+        if (!isRideCheckInEnabled(routeId)) {
             showToast('Ride contribution isn’t on for this corridor yet', 'error');
             setStatus('Contribution not available on this corridor');
             return { ok: false };
         }
 
         const result = await submitRideCheckIn({
-            routeId: candidate.routeId,
-            station: candidate.station,
-            trainId: candidate.trainId === 'trip' ? null : candidate.trainId,
-            destination: candidate.destination || null,
-            coarseLat: coords.lat,
-            coarseLng: coords.lng,
-            heading: vet.heading,
-            speedMps: vet.speedMps,
-            source: candidate.source === 'planner' ? 'planner_contribute' : 'map_contribute',
+            routeId,
+            station,
+            trainId,
+            destination: destination || null,
+            coarseLat: lat,
+            coarseLng: lng,
+            heading,
+            speedMps,
+            source: source || 'board_on_train',
         });
 
         if (!result.ok) {
@@ -546,25 +709,36 @@ export async function contributeForTrain(candidate) {
         }
 
         const mins = Math.round((RIDE_PING_TTL_MS || 600000) / 60000);
-        setStatus(`Contributing · train ${candidate.trainId} · ${mins} min`);
-        showToast(`Sharing your ride for ${mins} minutes`, 'success');
-
+        setStatus(`Sharing · train ${trainId} · ${mins} min`);
         postToMap({
             type: 'nt-map-contribute',
-            lat: coords.lat,
-            lng: coords.lng,
-            trainId: candidate.trainId,
-            station: candidate.station,
+            lat,
+            lng,
+            trainId,
+            station,
             expiresInMs: RIDE_PING_TTL_MS,
         });
-
-        // Refresh corridor pings onto the map
-        syncRidePingsToMap(candidate.routeId);
-        return { ok: true };
+        syncRidePingsToMap(routeId);
+        return { ok: true, trainId };
     } catch (e) {
         showToast(e?.message || 'Could not contribute', 'error');
         return { ok: false, message: e?.message };
     }
+}
+
+/**
+ * Volunteer coarse location for a specific train (10‑minute ride ping).
+ */
+export async function contributeForTrain(candidate) {
+    return startOnTrainShare({
+        trainId: candidate?.trainId,
+        station: candidate?.station,
+        destination: candidate?.destination || '',
+        routeId: candidate?.routeId || $currentRouteId.get(),
+        source: candidate?.source === 'planner' ? 'planner_contribute'
+            : candidate?.source === 'map_join' ? 'map_join'
+            : 'map_contribute',
+    });
 }
 
 /** Push every rider who opted in on this corridor onto the embedded map. */
@@ -745,6 +919,9 @@ if (typeof window !== 'undefined') {
     window.activateMapTab = activateMapTab;
     window.openContributePicker = openContributePicker;
     window.contributeForTrain = contributeForTrain;
+    window.startOnTrainShare = startOnTrainShare;
+    window.focusTrainOnMap = focusTrainOnMap;
+    window.maybePromptLocateOnTrain = maybePromptLocateOnTrain;
     window.maybeOfferPlannerContribute = maybeOfferPlannerContribute;
     window.bindMapTabUi = bindMapTabUi;
     // Legacy name used by map-app share FAB — route to contribute picker

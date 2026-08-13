@@ -22,6 +22,7 @@ import {
 } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+export { stopsForTrain, expectedPosition, scoreTrainForFix } from './train-ghosts.js';
 
 // --- Store-backed globals (SPA parity shims) ---
 let allStations = [];
@@ -1168,6 +1169,17 @@ export function findNearestStation(isAuto = false) {
                         showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success");
                     }
 
+                    try {
+                        window.dispatchEvent(new CustomEvent('nt-locate-fix', {
+                            detail: {
+                                lat: userLat,
+                                lon: userLon,
+                                station: stationName,
+                                isAuto: !!isAuto,
+                            },
+                        }));
+                    } catch { /* ignore */ }
+
                     // GUARDIAN PHASE 1 (ANALYTICS): Inject 'auto_locate_success' event tracking
                     if (typeof trackAnalyticsEvent === 'function') {
                         trackAnalyticsEvent('auto_locate_success', {
@@ -1325,6 +1337,11 @@ export function attachLiveBoardGlobals() {
     window.startSmartRefresh = startSmartRefresh;
     window.updateLastUpdatedText = updateLastUpdatedText;
     window.allStations = allStations;
+    import('./train-ghosts.js').then((m) => {
+        window.stopsForTrain = m.stopsForTrain;
+        window.expectedPosition = m.expectedPosition;
+        window.scoreTrainForFix = m.scoreTrainForFix;
+    }).catch(() => {});
     // Keep renderer disruption badges in sync with active route
     const syncRoute = () => {
         window._liveRouteId = getCurrentRouteId();

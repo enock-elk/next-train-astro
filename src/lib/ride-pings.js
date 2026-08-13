@@ -17,6 +17,14 @@ import { $account } from './account.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import {
+    expectedPosition,
+    isStationAheadOfGhost,
+    lagMinutesFromFix,
+    addMinutesToTime,
+} from './train-ghosts.js';
+import { peekCachedRouteReports } from './delay-reports.js';
+import { awardShareMarks } from './rider-marks.js';
 
 export const RIDE_PING_TTL_MS = 10 * 60 * 1000;
 const ACTIVE_KEY = 'ridePingActiveV1';
@@ -71,6 +79,114 @@ function ageLabel(at) {
 function activePings(list) {
     const now = Date.now();
     return (list || []).filter((p) => p && p.station && (p.expiresAt || 0) > now && (p.at || 0) > now - RIDE_PING_TTL_MS);
+}
+
+export function getCachedRidePings(routeId = $currentRouteId.get()) {
+    return routeCache[routeId] || [];
+}
+
+export function trainHasLivePing(trainId, routeId = $currentRouteId.get()) {
+    if (!trainId) return false;
+    const id = String(trainId);
+    return activePings(getCachedRidePings(routeId)).some((p) => String(p.trainId || '') === id);
+}
+
+function median(nums) {
+    const a = [...nums].filter(Number.isFinite).sort((x, y) => x - y);
+    if (!a.length) return null;
+    const mid = Math.floor(a.length / 2);
+    return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+
+function matchingDelayReport(trainId, routeId) {
+    const id = String(trainId || '');
+    return peekCachedRouteReports(routeId).some((r) => {
+        if (!r || String(r.trainId || '') !== id) return false;
+        const s = r.trainStatus || r.status;
+        return s === 'late' || s === 'early';
+    });
+}
+
+/**
+ * Median lag of active pings vs the timetable ghost.
+ * Soft label from ≥1 ping; rewrite clocks only with ≥2 devices or 1 ping + a matching delay report.
+ * Apply only to stations the ghost has not reached yet.
+ */
+export function computeRideDelta(pings, trainId, opts = {}) {
+    const id = String(trainId || '');
+    if (!id) return null;
+    const live = activePings(pings).filter((p) => String(p.trainId || '') === id);
+    if (!live.length) return null;
+
+    const ghost = expectedPosition(id, opts.now, opts);
+    if (!ghost) return null;
+
+    const lags = live.map((p) => {
+        const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
+        const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
+        if (lat == null || lng == null) return null;
+        return lagMinutesFromFix(lat, lng, ghost, p.speedMps, opts.stationIndex);
+    }).filter(Number.isFinite);
+
+    const lagMin = median(lags);
+    if (lagMin == null) return null;
+
+    const devices = new Set(live.map((p) => p.deviceId || p.uid || `${p.coarseLat},${p.coarseLng}`));
+    const routeId = opts.routeId || $currentRouteId.get();
+    const hasDelay = matchingDelayReport(id, routeId);
+    const rounded = Math.round(lagMin);
+
+    return {
+        trainId: id,
+        lagMin: rounded,
+        pingCount: live.length,
+        deviceCount: devices.size,
+        soft: true,
+        rewrite: devices.size >= 2 || (devices.size >= 1 && hasDelay),
+        ghost,
+        liveHint: liveHint(rounded),
+    };
+}
+
+function liveHint(lagMin) {
+    if (!Number.isFinite(lagMin)) return 'Live';
+    if (lagMin === 0) return 'Live · on time';
+    const abs = Math.abs(lagMin);
+    return `Live · ~${abs} min ${lagMin > 0 ? 'late' : 'early'}`;
+}
+
+export function getRideDelta(trainId, routeId = $currentRouteId.get()) {
+    return computeRideDelta(getCachedRidePings(routeId), trainId, { routeId });
+}
+
+/** Live clock decoration for a board card whose selected station is still ahead. */
+export function decorateJourneyLive(trainId, station, rawTime, arrivalTime, routeId = $currentRouteId.get()) {
+    const delta = getRideDelta(trainId, routeId);
+    if (!delta?.ghost) {
+        return { useLive: false, liveHint: '', schedNote: '', liveTime: rawTime, liveArrival: arrivalTime || '', ahead: false };
+    }
+    const ahead = isStationAheadOfGhost(station, delta.ghost);
+    if (!ahead) {
+        return { useLive: false, liveHint: '', schedNote: '', liveTime: rawTime, liveArrival: arrivalTime || '', ahead: false };
+    }
+    const liveTime = delta.rewrite ? addMinutesToTime(rawTime, delta.lagMin) : rawTime;
+    const liveArrival = (delta.rewrite && arrivalTime) ? addMinutesToTime(arrivalTime, delta.lagMin) : (arrivalTime || '');
+    return {
+        useLive: !!delta.rewrite,
+        liveHint: delta.liveHint,
+        schedNote: delta.rewrite ? `Sched ${String(rawTime || '').slice(0, 5)}` : '',
+        liveTime,
+        liveArrival,
+        ahead: true,
+        delta,
+    };
+}
+
+function notifyPingsUpdated(routeId) {
+    renderRideSeenChip(routeId);
+    try {
+        window.dispatchEvent(new CustomEvent('nt-ride-pings-updated', { detail: { routeId } }));
+    } catch { /* ignore */ }
 }
 
 /**
@@ -150,7 +266,7 @@ export async function startRidePingsListener(routeId) {
             const data = snap?.val?.() || null;
             routeCache[routeId] = data ? activePings(Object.values(data)) : [];
             if ($currentRouteId.get() === routeId) {
-                renderRideSeenChip(routeId);
+                notifyPingsUpdated(routeId);
             }
         }, () => stopRidePingsListener(routeId));
         routeListeners[routeId] = typeof unsub === 'function' ? unsub : () => {};
@@ -233,9 +349,16 @@ export async function submitRideCheckIn({
         const toastMsg = trainId
             ? `Sharing your ride on train ${trainId} · ${mins} min`
             : `Sharing your ride from ${st} · ${mins} min`;
-        showToast(toastMsg, 'success');
-        renderRideSeenChip(routeId);
-        return { ok: true, ping: payload };
+        const others = activePings(getCachedRidePings(routeId))
+            .filter((p) => String(p.trainId || '') === String(trainId || '') && p.deviceId !== deviceId);
+        const marks = awardShareMarks({
+            joinedLive: others.length > 0,
+            confirmedCloser: source === 'closer_confirm',
+            trainId: trainId || '',
+        });
+        showToast(marks.awarded ? `${toastMsg} · ${marks.label}` : toastMsg, 'success');
+        notifyPingsUpdated(routeId);
+        return { ok: true, ping: payload, marks };
     } catch (e) {
         return { ok: false, message: e?.message || 'Couldn’t share your ride' };
     }
@@ -264,13 +387,16 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         return;
     }
 
-    const trainBit = summary.trainId ? `Train ${escapeHTML(summary.trainId)} · ` : '';
-    const label = station && normalizeStationName(summary.station) === normalizeStationName(station)
-        ? `${trainBit}Last seen here · ${escapeHTML(summary.age)}${summary.count > 1 ? ` · ${summary.count} riders` : ''}`
-        : `${trainBit}Last seen at ${escapeHTML(summary.station)} · ${escapeHTML(summary.age)}`;
+    const sharing = summary.totalLive;
+    const trainLabel = summary.trainId
+        ? `Train ${escapeHTML(summary.trainId)} is live · ${sharing} sharing`
+        : `${sharing} rider${sharing === 1 ? '' : 's'} sharing`;
+    const trainAttr = summary.trainId ? `data-focus-train="${escapeHTML(summary.trainId)}"` : '';
 
     host.classList.remove('hidden');
-    host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${label}</span>`;
+    host.innerHTML = `<button type="button" ${trainAttr} class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_0_3px_rgba(59,130,246,0.35)]"></span>${trainLabel}
+    </button>`;
 }
 
 export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
@@ -284,7 +410,7 @@ export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
     if (!routeCache[routeId]) {
         routeCache[routeId] = await fetchRouteRidePings(routeId);
     }
-    renderRideSeenChip(routeId);
+    notifyPingsUpdated(routeId);
 }
 
 export function bindRideCheckInUi() {
@@ -293,10 +419,52 @@ export function bindRideCheckInUi() {
 
     document.getElementById('ride-checkin-btn')?.addEventListener('click', async () => {
         triggerHaptic();
+        const onTrain = document.querySelector('#pretoria-time [data-on-train], #pienaarspoort-time [data-on-train]');
+        if (onTrain) {
+            const { startOnTrainShare } = await import('./map-tab.js');
+            await startOnTrainShare({
+                trainId: onTrain.getAttribute('data-on-train'),
+                station: onTrain.getAttribute('data-station') || document.getElementById('station-select')?.value || '',
+                destination: onTrain.getAttribute('data-dest') || '',
+                routeId: onTrain.getAttribute('data-route') || $currentRouteId.get(),
+                source: 'board_on_train',
+            });
+            return;
+        }
         const routeId = $currentRouteId.get();
         const station = document.getElementById('station-select')?.value || '';
         const result = await submitRideCheckIn({ routeId, station, source: 'board_share' });
         if (!result.ok && result.message) showToast(result.message, 'error');
+    });
+
+    document.addEventListener('click', (e) => {
+        const pulse = e.target.closest?.('[data-focus-train]');
+        if (pulse) {
+            e.preventDefault();
+            e.stopPropagation();
+            const trainId = pulse.getAttribute('data-focus-train');
+            if (trainId) {
+                import('./map-tab.js').then((m) => m.focusTrainOnMap(trainId)).catch(() => {});
+            }
+            return;
+        }
+        const onTrain = e.target.closest?.('[data-on-train]');
+        if (onTrain) {
+            e.preventDefault();
+            import('./map-tab.js').then((m) => m.startOnTrainShare({
+                trainId: onTrain.getAttribute('data-on-train'),
+                station: onTrain.getAttribute('data-station') || document.getElementById('station-select')?.value || '',
+                destination: onTrain.getAttribute('data-dest') || '',
+                routeId: onTrain.getAttribute('data-route') || $currentRouteId.get(),
+                source: 'board_on_train',
+            })).catch(() => {});
+        }
+    });
+
+    window.addEventListener('nt-locate-fix', (ev) => {
+        const detail = ev?.detail;
+        if (!detail || detail.isAuto) return;
+        import('./map-tab.js').then((m) => m.maybePromptLocateOnTrain(detail)).catch(() => {});
     });
 
     let lastRoute = '';
@@ -321,4 +489,7 @@ if (typeof window !== 'undefined') {
     window.submitRideCheckIn = submitRideCheckIn;
     window.refreshRideSeenSurface = refreshRideSeenSurface;
     window.bindRideCheckInUi = bindRideCheckInUi;
+    window.computeRideDelta = computeRideDelta;
+    window.getRideDelta = getRideDelta;
+    window.decorateJourneyLive = decorateJourneyLive;
 }

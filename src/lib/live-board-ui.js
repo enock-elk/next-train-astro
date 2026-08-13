@@ -830,4 +830,27 @@ export function initLiveBoardUi() {
     import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
     // Wave 3 — live ride sharing / last-seen chips
     import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});
+
+    if (!window.__ntLiveDeltaBound) {
+        window.__ntLiveDeltaBound = true;
+        let deltaTimer = 0;
+        window.addEventListener('nt-ride-pings-updated', () => {
+            clearTimeout(deltaTimer);
+            deltaTimer = setTimeout(() => {
+                try {
+                    const route = ROUTES[$currentRouteId.get()];
+                    if (!route || typeof window.processAndRenderJourney !== 'function') return;
+                    const data = currentScheduleData || {};
+                    const elA = document.getElementById('pretoria-time');
+                    const elB = document.getElementById('pienaarspoort-time');
+                    if (elA && data[route.destA]) {
+                        window.processAndRenderJourney(data[route.destA], elA, document.getElementById('pretoria-header'), route.destA);
+                    }
+                    if (elB && data[route.destB]) {
+                        window.processAndRenderJourney(data[route.destB], elB, document.getElementById('pienaarspoort-header'), route.destB);
+                    }
+                } catch { /* ignore */ }
+            }, 50);
+        });
+    }
 }

@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.13 — Live deltas, map pulse, rider marks (13 Aug 2026)
+
+- Timetable columns are the simulated fleet: ride pings compute a delay delta and shift only stations the ghost has not reached yet.
+- Next Train cards get a blue live pulse (and a corridor “Train XXXX is live” button) that opens the map Join popup.
+- “I’m on this train” / Share my ride: 30s vet, closest-train confirm if we disagree, then a 10-minute public ping.
+- After Locate, if you are within 50 m of the rails and a ghost is nearby, we ask if you are on that train.
+- Private Bronze → Platinum marks (share / confirm / 3-day streak). No public leaderboard.
+
 ## V8_08.12 — Premium packs, live reports, map trains (13 Aug 2026)
 
 - Earthy and Ember (and other non-classic packs) colour cards, inputs, and chrome — leftover `bg-white` stickers are gone. Service alerts stay red / amber / blue.

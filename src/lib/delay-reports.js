@@ -22,6 +22,8 @@ import {
     isShadowBanned,
     isBlockedLocally,
     checkContentSafety,
+    queueAutoModeration,
+    startRateLimitCountdown,
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 
@@ -90,15 +92,23 @@ export function checkDelayReportRateLimit(routeId) {
 
     if (signed) {
         if (data.global.length >= AUTH_GLOBAL_MAX) {
-            return { ok: false, message: 'Slow down — try again in a few minutes.' };
+            const oldest = data.global[0] || now;
+            const retryAfterMs = Math.max(1000, (oldest + AUTH_GLOBAL_MS) - now);
+            return { ok: false, reason: 'quota', retryAfterMs, message: `You’ve sent too many reports. Wait ${Math.ceil(retryAfterMs / 60000)} min before you can send another.` };
         }
         if (routeTimes.some((t) => now - t < AUTH_ROUTE_MS)) {
-            return { ok: false, message: 'You already reported this route recently.' };
+            const last = routeTimes[routeTimes.length - 1] || now;
+            const retryAfterMs = Math.max(1000, AUTH_ROUTE_MS - (now - last));
+            return { ok: false, reason: 'route', retryAfterMs, message: `You already reported this route. Wait ${Math.ceil(retryAfterMs / 60000)} min before you can send another.` };
         }
     } else if (data.global.length >= 1) {
-        return { ok: false, message: 'Guests can report once every 45 minutes. Sign in for higher limits.' };
+        const last = data.global[data.global.length - 1] || now;
+        const retryAfterMs = Math.max(1000, GUEST_GLOBAL_MS - (now - last));
+        return { ok: false, reason: 'quota', retryAfterMs, message: `Guests can report once every 45 minutes. Wait ${Math.ceil(retryAfterMs / 60000)} min, or sign in for higher limits.` };
     } else if (routeTimes.length >= 1) {
-        return { ok: false, message: 'Already reported for this route. Sign in to report again sooner.' };
+        const last = routeTimes[routeTimes.length - 1] || now;
+        const retryAfterMs = Math.max(1000, GUEST_ROUTE_MS - (now - last));
+        return { ok: false, reason: 'route', retryAfterMs, message: `Already reported for this route. Wait ${Math.ceil(retryAfterMs / 60000)} min, or sign in to report again sooner.` };
     }
     return { ok: true };
 }
@@ -765,11 +775,27 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
     const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
     const existing = getOwnReport(trainKey);
     const limit = checkDelayReportRateLimit(routeId);
-    if (!existing && !limit.ok) { showErr(limit.message); return false; }
+    if (!existing && !limit.ok) {
+        showErr(limit.message);
+        startRateLimitCountdown(errEl, limit.retryAfterMs || 60000, { reason: limit.reason || 'quota' });
+        return false;
+    }
 
-    if (note) {
-        const safety = checkContentSafety(note);
-        if (!safety.ok) { showErr(safety.message); return false; }
+    let noteToStore = note || '';
+    if (noteToStore) {
+        const safety = checkContentSafety(noteToStore);
+        if (safety.verdict === 'block') { showErr(safety.message); return false; }
+        if (safety.verdict === 'review') {
+            queueAutoModeration({
+                source: 'delay_note',
+                reason: safety.reason,
+                body: noteToStore,
+                routeId,
+                targetUid: $account.get().uid || null,
+            });
+            noteToStore = '';
+            showToast('Note held for review — the report will still go through.', 'info');
+        }
     }
 
     if (!navigator.onLine) { showErr('You appear offline.'); return false; }
@@ -805,7 +831,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
             trainStatus: status,
             status: status, // also used by older filters
             lateBucket: lateBucket || null,
-            note: note || null,
+            note: noteToStore || null,
             severity: severityFromStatus(status, lateBucket),
             uid: isGuest ? null : (acct.uid || null),
             deviceId: getDeviceId(),

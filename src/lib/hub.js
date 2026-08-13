@@ -21,7 +21,38 @@ import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js
 import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
-import { applyShadowBanCloak } from './trust.js';
+import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
+
+const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
+const FEEDBACK_WINDOW_MS = 30 * 60 * 1000;
+const FEEDBACK_MAX = 6;
+const FEEDBACK_COOLDOWN_MS = 20 * 1000;
+let feedbackWaitCancel = null;
+
+function checkFeedbackRate() {
+    return checkRateLimit(FEEDBACK_RATE_KEY, {
+        windowMs: FEEDBACK_WINDOW_MS,
+        max: FEEDBACK_MAX,
+        cooldownMs: FEEDBACK_COOLDOWN_MS,
+    });
+}
+
+function paintFeedbackWait(limit, hintId = 'feedback-mod-hint') {
+    const el = document.getElementById(hintId);
+    const submitBtn = document.getElementById('feedback-submit-btn');
+    const sendBtn = document.getElementById('messages-thread-send');
+    if (feedbackWaitCancel) feedbackWaitCancel();
+    feedbackWaitCancel = startRateLimitCountdown(el, limit.retryAfterMs || FEEDBACK_COOLDOWN_MS, {
+        reason: limit.reason || 'cooldown',
+        onDone: () => {
+            feedbackWaitCancel = null;
+            if (submitBtn) submitBtn.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+        },
+    });
+    if (submitBtn) submitBtn.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+}
 
 /** Plain text from HTML notices — insert spaces between block tags so title+body don't glue. */
 function htmlToPlainSnippet(html, maxWords = 8) {
@@ -313,6 +344,48 @@ async function submitFeedback() {
         return;
     }
 
+    const limit = checkFeedbackRate();
+    if (!limit.ok) {
+        showToast(limit.message, 'error');
+        paintFeedbackWait(limit);
+        return;
+    }
+
+    const safety = checkContentSafety(text);
+    if (safety.verdict === 'block') {
+        showToast(safety.message, 'error');
+        const hint = document.getElementById('feedback-mod-hint');
+        if (hint) hint.textContent = safety.message;
+        return;
+    }
+    if (safety.verdict === 'review') {
+        await queueAutoModeration({
+            source: 'feedback',
+            reason: safety.reason,
+            body: text,
+            routeId: $currentRouteId.get() || null,
+            publish: {
+                kind: 'feedback',
+                payload: {
+                    type,
+                    text,
+                    email,
+                    status: 'unread',
+                    appVersion: APP_VERSION,
+                    routeId: $currentRouteId.get() || 'none',
+                    region: $userRegion.get() || 'GP',
+                    timestamp: Date.now(),
+                    deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
+                },
+            },
+        });
+        recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
+        showToast(safety.message, 'info');
+        const hint = document.getElementById('feedback-mod-hint');
+        if (hint) hint.textContent = safety.message;
+        return;
+    }
+
     // Prefix thread-reply context so admin can render a single quote chip
     try {
         const contextBox = document.getElementById('feedback-reply-context');
@@ -388,6 +461,7 @@ async function submitFeedback() {
             body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
+        recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
 
         try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
 
@@ -1553,6 +1627,47 @@ export function initHub() {
             showToast('Please write a bit more (at least 5 characters).', 'error');
             return;
         }
+        const limit = checkFeedbackRate();
+        if (!limit.ok) {
+            showToast(limit.message, 'error');
+            paintFeedbackWait(limit, 'messages-thread-hint');
+            return;
+        }
+        const safety = checkContentSafety(text);
+        if (safety.verdict === 'block') {
+            showToast(safety.message, 'error');
+            const hint = document.getElementById('messages-thread-hint');
+            if (hint) hint.textContent = safety.message;
+            return;
+        }
+        if (safety.verdict === 'review') {
+            await queueAutoModeration({
+                source: 'feedback_thread',
+                reason: safety.reason,
+                body: text,
+                routeId: $currentRouteId.get() || null,
+                publish: {
+                    kind: 'feedback',
+                    payload: {
+                        type: 'thread_reply',
+                        text,
+                        email: '',
+                        status: 'unread',
+                        appVersion: APP_VERSION,
+                        routeId: $currentRouteId.get() || 'none',
+                        region: $userRegion.get() || 'GP',
+                        timestamp: Date.now(),
+                        deviceId: getThreadDeviceId() || 'unknown',
+                    },
+                },
+            });
+            recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
+            if (input) input.value = '';
+            showToast(safety.message, 'info');
+            const hint = document.getElementById('messages-thread-hint');
+            if (hint) hint.textContent = safety.message;
+            return;
+        }
         if (sendBtn) sendBtn.disabled = true;
         try {
             if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
@@ -1581,6 +1696,7 @@ export function initHub() {
                 body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(`Failed (${res.status})`);
+            recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
             await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
             if (input) input.value = '';
             renderMessagesThread(await fetchInboxThread());
@@ -1589,6 +1705,20 @@ export function initHub() {
             showToast(err?.message || 'Could not send message.', 'error');
         } finally {
             if (sendBtn) sendBtn.disabled = false;
+        }
+    });
+    document.getElementById('feedback-text')?.addEventListener('input', () => {
+        const hint = document.getElementById('feedback-mod-hint');
+        const safety = checkContentSafety(document.getElementById('feedback-text')?.value || '', { live: true });
+        if (hint && !feedbackWaitCancel) {
+            hint.textContent = safety.verdict === 'block' ? safety.message : '';
+        }
+    });
+    document.getElementById('messages-thread-input')?.addEventListener('input', () => {
+        const hint = document.getElementById('messages-thread-hint');
+        const safety = checkContentSafety(document.getElementById('messages-thread-input')?.value || '', { live: true });
+        if (hint && !feedbackWaitCancel) {
+            hint.textContent = safety.verdict === 'block' ? safety.message : '';
         }
     });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);

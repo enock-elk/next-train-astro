@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.15";
+export const APP_VERSION = "V8_08.16";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.16",
+        title: "Safer messages — refuse, hold, wait",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>No off-site links or swearing:</b> we stop the message before it sends and tell you why. nexttrain.co.za links are fine.",
+            "<b>Unsure?</b> The text goes to the admin Moderation tab and stays hidden until it’s approved.",
+            "<b>Slow down:</b> if you need to wait, you’ll see why and a countdown until you can send again."
+        ]
+    },
     {
         id: "V8_08.15",
         title: "Trains near you, trip share, late vs skipped",

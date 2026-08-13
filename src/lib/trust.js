@@ -8,10 +8,18 @@
  *   users/{uid}/trustScore
  *   delay_reports/{id}/{ verified, verifiedBy, verifiedAt }
  */
-import { DYNAMIC_BASE_URL, withBase } from './config.js';
+import { APP_VERSION, DYNAMIC_BASE_URL, withBase } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
 import { $isOffline, $deviceId } from '../store.js';
+import { checkContentSafety as inspectContent, rateLimitMessage } from './content-safety.js';
+
+export {
+    formatWait,
+    startRateLimitCountdown,
+    rateLimitMessage,
+    findDisallowedUrls,
+} from './content-safety.js';
 
 /** In-session block list (admin ban takes effect without reload) */
 export const localBlockList = new Set();
@@ -76,19 +84,41 @@ export function checkRateLimit(key, opts) {
     data.global = prune(data.global, windowMs);
 
     if (data.global.length >= max) {
-        return { ok: false, message: 'Slow down. Try again in a few minutes.' };
+        const oldest = data.global[0] || now;
+        const retryAfterMs = Math.max(1000, (oldest + windowMs) - now);
+        return {
+            ok: false,
+            reason: 'quota',
+            retryAfterMs,
+            message: rateLimitMessage('quota', retryAfterMs),
+        };
     }
     const last = data.global[data.global.length - 1];
     if (cooldownMs > 0 && last && now - last < cooldownMs) {
-        return { ok: false, message: 'Wait a moment before trying again.' };
+        const retryAfterMs = Math.max(1000, cooldownMs - (now - last));
+        return {
+            ok: false,
+            reason: 'cooldown',
+            retryAfterMs,
+            message: rateLimitMessage('cooldown', retryAfterMs),
+        };
     }
 
     if (routeId) {
         if (!data.routes) data.routes = {};
         const routeTimes = prune(data.routes[routeId] || [], routeWindowMs);
         data.routes[routeId] = routeTimes;
-        if (routeTimes.length >= routeMax || routeTimes.some((t) => now - t < routeWindowMs && routeMax === 1)) {
-            return { ok: false, message: 'You already did this for this route recently.' };
+        const blocked = routeTimes.length >= routeMax
+            || routeTimes.some((t) => now - t < routeWindowMs && routeMax === 1);
+        if (blocked) {
+            const oldest = routeTimes[0] || now;
+            const retryAfterMs = Math.max(1000, (oldest + routeWindowMs) - now);
+            return {
+                ok: false,
+                reason: 'route',
+                retryAfterMs,
+                message: rateLimitMessage('route', retryAfterMs),
+            };
         }
     }
     return { ok: true };
@@ -232,22 +262,10 @@ export function isBlockedLocally(uid) {
     return !!(uid && localBlockList.has(uid));
 }
 
-/** Strip allowed Next Train URLs before spam checks (plan: allow nexttrain.co.za only). */
-function withoutAllowedLinks(text) {
-    return String(text || '')
-        .replace(/https?:\/\/(?:www\.)?nexttrain\.co\.za\S*/gi, ' ')
-        .replace(/\bwww\.nexttrain\.co\.za\S*/gi, ' ')
-        .replace(/\bnexttrain\.co\.za\b/gi, ' ');
-}
-
-/** Basic link / promo spam */
+/** Basic link / promo spam (non-nexttrain.co.za URLs). */
 export function isLinkSpam(text) {
     if (!text) return false;
-    const probe = withoutAllowedLinks(text);
-    if (/https?:\/\/\S+/i.test(probe)) return true;
-    if (/\bwww\.\S+/i.test(probe)) return true;
-    if (/\b[\w-]+\.(com|net|org|io|co\.za|xyz|info)\b/i.test(probe)) return true;
-    // Excessive repeated characters
+    if (inspectContent(text).reason === 'url') return true;
     if (/(.)\1{8,}/.test(text)) return true;
     return false;
 }
@@ -280,17 +298,62 @@ export function isDuplicateBody(text, recentBodies = getRecentBodies()) {
 }
 
 /**
- * Content gate used before community / report writes.
- * @returns {{ ok: true } | { ok: false, message: string }}
+ * Content gate used before community / report / feedback writes.
+ * @returns {{ ok: boolean, verdict: 'allow'|'block'|'review', reason: string, message: string }}
  */
-export function checkContentSafety(text, { allowLinks = false } = {}) {
-    if (!allowLinks && isLinkSpam(text)) {
-        return { ok: false, message: 'Links and promo spam aren’t allowed.' };
+export function checkContentSafety(text, opts = {}) {
+    const verdict = inspectContent(text, opts);
+    if (verdict.verdict !== 'allow') return verdict;
+    if (!opts.live && isDuplicateBody(text)) {
+        return {
+            ok: false,
+            verdict: 'block',
+            reason: 'duplicate',
+            message: 'You already sent that message.',
+        };
     }
-    if (isDuplicateBody(text)) {
-        return { ok: false, message: 'You already sent that message.' };
+    return verdict;
+}
+
+/**
+ * Hold unsure text for an admin. Not shown publicly until approved.
+ * @param {{ source: string, reason?: string, body: string, routeId?: string, targetUid?: string, publish?: object }} opts
+ */
+export async function queueAutoModeration(opts = {}) {
+    const reportId = `mq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        reportId,
+        type: 'auto_hold',
+        source: opts.source || 'unknown',
+        reason: opts.reason || 'unsure',
+        routeId: opts.routeId || null,
+        targetUid: opts.targetUid || null,
+        targetPostId: opts.publish?.payload?.postId || opts.publish?.payload?.replyId || null,
+        snippet: String(opts.body || '').slice(0, 280),
+        body: String(opts.body || '').slice(0, 800),
+        publish: opts.publish || null,
+        reportedByUid: opts.targetUid || null,
+        reportedByDeviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || null,
+        timestamp: Date.now(),
+        status: 'open',
+        appVersion: APP_VERSION,
+    };
+    try {
+        if (!window.firebaseAuth) await bootFirebase();
+        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+            try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+        }
+        const q = await authQuery();
+        const res = await fetch(`${DYNAMIC_BASE_URL}moderation_queue/${reportId}.json${q}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Hold failed (${res.status})`);
+        return { ok: true, reportId, held: true };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Could not hold this message for review.' };
     }
-    return { ok: true };
 }
 
 export async function fetchTrustScore(uid) {

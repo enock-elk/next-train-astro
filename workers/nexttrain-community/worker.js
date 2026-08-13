@@ -54,30 +54,60 @@ function stripHtml(text) {
         .trim();
 }
 
-/** Keep nexttrain.co.za links; neutralize other URLs / domains. */
+const BLOCK_WORDS = new Set([
+    'fuck', 'fucker', 'fucking', 'motherfucker', 'shit', 'bullshit',
+    'bitch', 'asshole', 'cunt', 'whore', 'slut', 'dickhead', 'wanker',
+    'nigger', 'faggot', 'retard',
+    'fok', 'fokken', 'poes', 'doos', 'naai', 'hoer', 'moer',
+    'msunu', 'umsunu', 'isifebe',
+]);
+
+function foldForSafety(text) {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e')
+        .replace(/4/g, 'a').replace(/5/g, 's').replace(/@/g, 'a');
+}
+
+function hasDisallowedUrl(text) {
+    const re = /\b((?:https?:\/\/|www\.)[^\s]+|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\.[a-z]{2,})(?:\/\S*)?)/gi;
+    let m;
+    while ((m = re.exec(text))) {
+        try {
+            const raw = m[1];
+            const host = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).hostname;
+            if (!ALLOWED_HOST.test(host)) return true;
+        } catch {
+            return true;
+        }
+    }
+    return false;
+}
+
+function hasBlockedProfanity(text) {
+    const folded = foldForSafety(text);
+    const words = folded.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    if (words.some((w) => BLOCK_WORDS.has(w))) return true;
+    const compact = folded.replace(/[^a-z]+/g, '');
+    for (const bad of BLOCK_WORDS) {
+        if (bad.length >= 4 && compact.includes(bad)) return true;
+    }
+    return false;
+}
+
+/** Keep nexttrain.co.za links; refuse other URLs / profanity at the edge. */
 function sanitizeBody(raw) {
-    let text = stripHtml(raw);
-    text = text.replace(/https?:\/\/[^\s]+/gi, (url) => {
-        try {
-            const u = new URL(url);
-            if (ALLOWED_HOST.test(u.hostname)) return url;
-        } catch { /* drop */ }
-        return '[link removed]';
-    });
-    text = text.replace(/\bwww\.[^\s]+/gi, (url) => {
-        try {
-            const u = new URL(`https://${url}`);
-            if (ALLOWED_HOST.test(u.hostname)) return url;
-        } catch { /* drop */ }
-        return '[link removed]';
-    });
-    // Bare promo domains (keep nexttrain mentions without scheme as plain text)
-    text = text.replace(/\b[\w-]+\.(com|net|org|io|xyz|info|co\.za)\b/gi, (m) => {
-        if (/nexttrain\.co\.za$/i.test(m)) return m;
-        return '[link removed]';
-    });
-    if (text.length > BODY_MAX) text = text.slice(0, BODY_MAX);
-    return text.trim();
+    const text = stripHtml(raw);
+    if (hasDisallowedUrl(text)) {
+        return { ok: false, error: 'Only nexttrain.co.za links are allowed. Remove other websites and try again.' };
+    }
+    if (hasBlockedProfanity(text)) {
+        return { ok: false, error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
+    }
+    const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
+    return { ok: true, text: clipped.trim() };
 }
 
 function checkRate(key, windowMs, max) {
@@ -236,7 +266,12 @@ async function handlePost(request, env) {
     const max = Number(env.RATE_MAX || 4);
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     if (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, max * 2)) {
-        return json(env, request, 429, { ok: false, error: 'Slow down — try again shortly.' });
+        return json(env, request, 429, {
+            ok: false,
+            error: `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,
+            retryAfterMs: windowMs,
+            reason: 'cooldown',
+        });
     }
 
     let body;
@@ -251,7 +286,11 @@ async function handlePost(request, env) {
         return json(env, request, 400, { ok: false, error: 'Invalid routeId' });
     }
 
-    const text = sanitizeBody(body.body || '');
+    const cleaned = sanitizeBody(body.body || '');
+    if (!cleaned.ok) {
+        return json(env, request, 400, { ok: false, error: cleaned.error, blocked: true });
+    }
+    const text = cleaned.text;
     if (text.length < 2) {
         return json(env, request, 400, { ok: false, error: 'Write a short message.' });
     }
@@ -298,7 +337,7 @@ async function handlePost(request, env) {
         payload.replyTo = {
             postId: String(body.replyTo.postId || '').slice(0, 80),
             displayName: String(body.replyTo.displayName || '').slice(0, 80),
-            body: sanitizeBody(String(body.replyTo.body || '')).slice(0, 120),
+            body: (sanitizeBody(String(body.replyTo.body || '')).text || '').slice(0, 120),
         };
     }
 

@@ -23,6 +23,8 @@ import {
     recordRateHit as recordTrustRateHit,
     checkContentSafety,
     rememberBody,
+    queueAutoModeration,
+    startRateLimitCountdown,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
@@ -210,6 +212,7 @@ function postsVisibleFilter(list, myUid) {
         .filter((p) => p && typeof p === 'object' && p.body)
         .filter((p) => {
             if ((p.timestamp || 0) < cut) return false;
+            if (p.pendingReview) return false;
             if (p.hidden && p.uid !== myUid) return false;
             if (p.shadowOnly && p.uid !== myUid) return false;
             return true;
@@ -335,7 +338,7 @@ export async function fetchReplies(routeId, postId) {
         const acct = $account.get();
         const myUid = acct.status === 'signed-in' ? acct.uid : null;
         return Object.values(data)
-            .filter((r) => r && r.body && (!r.hidden || r.uid === myUid))
+            .filter((r) => r && r.body && !r.pendingReview && (!r.hidden || r.uid === myUid))
             .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     } catch {
         return [];
@@ -357,11 +360,43 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         return { ok: false, message: 'Action not permitted.' };
     }
 
-    const safety = checkContentSafety(text);
-    if (!safety.ok) return safety;
-
     const limit = checkCommunityRateLimit();
     if (!limit.ok) return limit;
+
+    const safety = checkContentSafety(text);
+    if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
+    if (safety.verdict === 'review') {
+        const held = await queueAutoModeration({
+            source: 'community_post',
+            reason: safety.reason,
+            body: text,
+            routeId,
+            targetUid: acct.uid,
+            publish: {
+                kind: 'community_post',
+                routeId,
+                payload: {
+                    postId: newId('cp'),
+                    routeId,
+                    region: $userRegion.get() || 'GP',
+                    body: text,
+                    category: 'general',
+                    uid: acct.uid,
+                    displayName: acct.displayName || 'Passenger',
+                    photoURL: acct.photoURL || null,
+                    deviceId: getDeviceId(),
+                    timestamp: Date.now(),
+                    hidden: false,
+                    replyCount: 0,
+                    appVersion: APP_VERSION,
+                },
+            },
+        });
+        if (!held.ok) return { ok: false, message: held.message || 'Could not send for review.' };
+        recordRateHit();
+        rememberBody(text);
+        return { ok: true, held: true, message: safety.message };
+    }
 
     const postId = newId('cp');
     const category = 'general';
@@ -416,7 +451,15 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
             });
             const data = await res.json().catch(() => ({}));
             if (res.status === 429) {
-                return { ok: false, message: data.error || 'Slow down — try again shortly.' };
+                return {
+                    ok: false,
+                    message: data.error || 'Please wait before you can send another message.',
+                    retryAfterMs: data.retryAfterMs || 20000,
+                    reason: data.reason || 'cooldown',
+                };
+            }
+            if (data.blocked) {
+                return { ok: false, message: data.error || 'That message isn’t allowed.' };
             }
             if (!res.ok || !data.ok) {
                 if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
@@ -479,11 +522,41 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     if (isBlockedLocally(acct.uid)) {
         return { ok: false, message: 'Action not permitted.' };
     }
-    const safety = checkContentSafety(text);
-    if (!safety.ok) return safety;
-
     const limit = checkCommunityRateLimit();
     if (!limit.ok) return limit;
+
+    const safety = checkContentSafety(text);
+    if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
+    if (safety.verdict === 'review') {
+        const held = await queueAutoModeration({
+            source: 'community_reply',
+            reason: safety.reason,
+            body: text,
+            routeId,
+            targetUid: acct.uid,
+            publish: {
+                kind: 'community_reply',
+                routeId,
+                postId,
+                payload: {
+                    replyId: newId('cr'),
+                    postId,
+                    routeId,
+                    body: text,
+                    uid: acct.uid,
+                    displayName: acct.displayName || 'Passenger',
+                    deviceId: getDeviceId(),
+                    timestamp: Date.now(),
+                    hidden: false,
+                    appVersion: APP_VERSION,
+                },
+            },
+        });
+        if (!held.ok) return { ok: false, message: held.message || 'Could not send for review.' };
+        recordRateHit();
+        rememberBody(text);
+        return { ok: true, held: true, message: safety.message };
+    }
 
     const replyId = newId('cr');
     const payload = {
@@ -1169,6 +1242,40 @@ function bindCommunityVisibilityTeardown() {
     });
 }
 
+let communityWaitCancel = null;
+
+function paintCommunityWait(limit) {
+    const errEl = document.getElementById('community-error');
+    const btn = document.getElementById('community-post-btn');
+    if (communityWaitCancel) communityWaitCancel();
+    communityWaitCancel = startRateLimitCountdown(errEl, limit.retryAfterMs || 20000, {
+        reason: limit.reason || 'cooldown',
+        onDone: () => {
+            communityWaitCancel = null;
+            if (btn) btn.disabled = false;
+            if (errEl && /wait/i.test(errEl.textContent || '')) errEl.textContent = '';
+        },
+    });
+    if (btn) btn.disabled = true;
+}
+
+function liveModerateComposer() {
+    const composer = document.getElementById('community-composer');
+    const errEl = document.getElementById('community-error');
+    const btn = document.getElementById('community-post-btn');
+    if (!composer || !errEl) return;
+    const safety = checkContentSafety(composer.value, { live: true });
+    if (safety.verdict === 'block') {
+        errEl.textContent = safety.message;
+        if (btn) btn.disabled = true;
+        return;
+    }
+    if (btn && !communityWaitCancel) btn.disabled = false;
+    if (errEl && (safety.reason === 'url' || safety.reason === 'profanity' || /allowed|swearing|links/i.test(errEl.textContent || ''))) {
+        errEl.textContent = '';
+    }
+}
+
 async function handlePostSubmit() {
     const routeSel = document.getElementById('community-route-select');
     const composer = document.getElementById('community-composer');
@@ -1183,6 +1290,9 @@ async function handlePostSubmit() {
     const result = await submitCommunityPost(body, routeId);
     if (!result.ok) {
         if (errEl) errEl.textContent = result.message;
+        if (result.retryAfterMs) {
+            paintCommunityWait(result);
+        }
         if (btn) btn.disabled = false;
         if (result.message?.includes('Sign in')) {
             setTimeout(() => openSmoothModal('account-modal'), 80);
@@ -1196,7 +1306,12 @@ async function handlePostSubmit() {
     }
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
-    showToast('Posted to the route feed', 'success');
+    if (result.held) {
+        showToast(result.message || 'Held for review — it won’t show until an admin approves it.', 'info');
+        if (errEl) errEl.textContent = result.message || 'Held for review. It won’t appear until approved.';
+    } else {
+        showToast('Posted to the route feed', 'success');
+    }
     // Realtime listener will refresh; REST fallback still re-renders
     if (!postsListenRouteId || postsListenRouteId !== routeId) {
         await renderCommunityFeed(routeId);
@@ -1316,6 +1431,7 @@ export function bindCommunityUi() {
         composerEl.style.height = 'auto';
         const next = Math.min(Math.max(composerEl.scrollHeight, 52), 160);
         composerEl.style.height = `${next}px`;
+        liveModerateComposer();
 
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         signalCommunityTyping(rid, true);
@@ -1395,9 +1511,14 @@ export function bindCommunityUi() {
             const result = await submitCommunityReply(postId, input?.value || '', routeId);
             if (!result.ok) {
                 showToast(result.message || 'Reply failed', 'error');
+                if (result.retryAfterMs) paintCommunityWait(result);
                 return;
             }
             if (input) input.value = '';
+            if (result.held) {
+                showToast(result.message || 'Held for review — it won’t show until approved.', 'info');
+                return;
+            }
             showToast('Reply posted', 'success');
             const box = document.querySelector(`.community-replies[data-replies-for="${postId}"]`);
             if (box) {

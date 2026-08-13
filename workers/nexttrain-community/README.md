@@ -2,7 +2,7 @@
 
 Cloudflare Worker that:
 
-1. **`POST /community/post`** — verifies Firebase ID token, rate-limits, sanitizes body (no HTML; strip URLs except `nexttrain.co.za`), writes via service-account Admin access to RTDB.
+1. **`POST /community/post`** — verifies Firebase ID token, rate-limits, refuses non-`nexttrain.co.za` URLs and profanity, writes via service-account Admin access to RTDB.
 2. **Hourly cron** — deletes `route_community/*/posts/*` older than 24h (pilot TTL).
 
 ## Deploy

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16 — Safer messages (13 Aug 2026)
+
+- User text (community, feedback, messages, delay notes) is checked **before send**. Non-`nexttrain.co.za` URLs and profanity (English + common ZA slang) are refused with a prompt.
+- Unsure / ambiguous wording is **held** in the admin Moderation tab and is not shown publicly until Approve. Reject leaves it unpublished.
+- Rate limits explain **why** you are waiting and show a live countdown until the next send.
+
 ## V8_08.15 — Trains near you, trip share, late vs skipped (13 Aug 2026)
 
 - **Trains near you** opens as a modal (Next Train + Map) with distance and whether you can attach as a tracker.

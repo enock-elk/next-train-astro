@@ -32,6 +32,7 @@ import { withBase } from '../lib/config.js';
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Details</label>
                 <textarea id="feedback-text" rows="5" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-inner resize-none" placeholder="Tell us what you noticed..."></textarea>
+                <p id="feedback-mod-hint" class="mt-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 min-h-[1rem]" aria-live="polite"></p>
             </div>
             <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                 <summary class="cursor-pointer flex items-center justify-between p-3.5 text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -458,9 +459,12 @@ import { withBase } from '../lib/config.js';
         <div id="messages-thread-list" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-2 bg-gray-50 dark:bg-gray-950">
             <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
         </div>
-        <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex gap-2">
+        <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-1.5">
+            <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 min-h-[1rem]" aria-live="polite"></p>
+            <div class="flex gap-2">
             <textarea id="messages-thread-input" rows="2" maxlength="800" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Write a message…"></textarea>
             <button type="submit" id="messages-thread-send" class="self-end px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black focus:outline-none">Send</button>
+            </div>
         </form>
     </div>
 </div>

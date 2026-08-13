@@ -6021,7 +6021,7 @@ const Admin = {
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports (message / user). Hide posts or shadow-ban without schema rewrites.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">User reports plus auto-held messages. Held text is hidden until you approve it.</p>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -6082,24 +6082,104 @@ const Admin = {
                     const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
-                    const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-                    const closed = status === 'closed' || status === 'resolved';
+                    const snippet = (r.body || r.snippet) ? String(r.body || r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                    const closed = status === 'closed' || status === 'resolved' || status === 'approved' || status === 'rejected';
+                    const autoHold = (r.type || '') === 'auto_hold';
+                    const reason = r.reason ? String(r.reason).replace(/</g, '&lt;') : '';
                     return `
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : autoHold ? 'ring-1 ring-amber-300 dark:ring-amber-700' : ''}" data-mq-id="${r.reportId || r._key}">
                             <div class="flex justify-between gap-2 mb-1">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} - ${r.routeId || '-'}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${autoHold ? 'AUTO HOLD' : type} - ${r.routeId || r.source || '-'}</p>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}</p>
-                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">"${snippet}"</p>` : ''}
-                            ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
+                            <p class="text-[10px] text-gray-500 font-mono mb-1">${reason ? `reason: ${reason} · ` : ''}uid: ${(r.targetUid || '-').toString().slice(0, 16)}</p>
+                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2 whitespace-pre-wrap">"${snippet}"</p>` : ''}
+                            ${closed ? `<span class="text-[10px] text-gray-400">${status}</span>` : `
                             <div class="flex flex-wrap gap-2 mt-1">
+                                ${autoHold ? `
+                                <button type="button" class="mq-approve text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve &amp; publish</button>
+                                <button type="button" class="mq-reject text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-id="${r.reportId || r._key}">Reject</button>
+                                ` : `
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
                                 <button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>
                                 <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
+                                `}
                             </div>`}
                         </div>`;
                 }).join('');
+
+                const setMqStatus = async (id, status) => {
+                    const s = await Admin.getAuthKey();
+                    const put = await fetch(`${dynamicEndpoint}moderation_queue/${id}/status.json?auth=${s}`, {
+                        method: 'PUT', body: JSON.stringify(status),
+                    });
+                    if (!put.ok) throw new Error('status fail');
+                };
+
+                const publishHeld = async (item) => {
+                    const s = await Admin.getAuthKey();
+                    const pub = item.publish || {};
+                    if (pub.kind === 'community_post' && pub.routeId && pub.payload?.postId) {
+                        const put = await fetch(`${dynamicEndpoint}route_community/${encodeURIComponent(pub.routeId)}/posts/${encodeURIComponent(pub.payload.postId)}.json?auth=${s}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...pub.payload, hidden: false, pendingReview: false, timestamp: Date.now() }),
+                        });
+                        if (!put.ok) throw new Error('publish post failed');
+                        return;
+                    }
+                    if (pub.kind === 'community_reply' && pub.routeId && pub.postId && pub.payload?.replyId) {
+                        const put = await fetch(`${dynamicEndpoint}route_community/${encodeURIComponent(pub.routeId)}/posts/${encodeURIComponent(pub.postId)}/replies/${encodeURIComponent(pub.payload.replyId)}.json?auth=${s}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...pub.payload, hidden: false, pendingReview: false, timestamp: Date.now() }),
+                        });
+                        if (!put.ok) throw new Error('publish reply failed');
+                        return;
+                    }
+                    if (pub.kind === 'feedback' && pub.payload) {
+                        const post = await fetch(`${dynamicEndpoint}feedback.json?auth=${s}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...pub.payload, status: 'unread', timestamp: Date.now(), fromModeration: true }),
+                        });
+                        if (!post.ok) throw new Error('publish feedback failed');
+                    }
+                };
+
+                list.querySelectorAll('.mq-approve').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        const item = items.find((x) => (x.reportId || x._key) === id);
+                        if (!id || !item) return;
+                        btn.disabled = true;
+                        try {
+                            await publishHeld(item);
+                            await setMqStatus(id, 'approved');
+                            if (typeof showToast === 'function') showToast('Approved and published', 'success');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-reject').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        btn.disabled = true;
+                        try {
+                            await setMqStatus(id, 'rejected');
+                            if (typeof showToast === 'function') showToast('Rejected — not published', 'info');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Could not reject', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
 
                 list.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {

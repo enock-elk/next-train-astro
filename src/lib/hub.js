@@ -1387,16 +1387,12 @@ export function initHub() {
         } catch { /* ignore */ }
     };
 
+    // Full map (regions + Network Lines). The home Map tab is the stripped
+    // "where is my train" view, so this deliberately does NOT switch tabs.
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => {
-            if (typeof window.switchTab === 'function' && document.getElementById('view-map')) {
-                window.switchTab('map');
-            } else {
-                openInAppSheet(withBase('/map'), 'Network Map');
-            }
-        }, 120);
+        setTimeout(() => openInAppSheet(withBase('/map'), 'Network Map'), 120);
     });
 
     // Updates

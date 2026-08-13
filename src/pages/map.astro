@@ -48,10 +48,10 @@ const regionSeoSlugs = Object.fromEntries(
         right: 12px;
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
-      /* Home-screen Map tab is the stripped "where is my train" view: region and
-         Network Lines stay in the full map opened from the sidenav. */
-      html.nt-map-embedded #region-picker,
-      html.nt-map-embedded #legend-container { display: none !important; }
+      /* Home Map tab (?embed=1) is the stripped "where is my train" view. Region
+         and Network Lines stay in the full map opened from the sidenav. */
+      html.nt-map-tab #region-picker,
+      html.nt-map-tab #legend-container { display: none !important; }
       /* Parent Map tab toolbar already has Contribute — keep Locate FAB only. */
       html.nt-map-embedded #custom-share-location-btn { display: none !important; }
       .map-chrome-btn {
@@ -312,10 +312,11 @@ const regionSeoSlugs = Object.fromEntries(
           return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
         } catch (_) { return false; }
       }
+      // Only ?embed=1 means the home Map tab. The sidenav sheet shares the same
+      // parent window, so a parent flag cannot tell the two apart.
       function inMapTab() {
         try {
-          if (new URLSearchParams(location.search).get('embed') === '1') return true;
-          return !!(window.parent && window.parent !== window && window.parent.__ntMapTabEmbed);
+          return new URLSearchParams(location.search).get('embed') === '1';
         } catch (_) { return false; }
       }
       // Parent sheet / Map tab already has chrome — hide Back.
@@ -326,6 +327,7 @@ const regionSeoSlugs = Object.fromEntries(
           try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
         }
       }
+      if (inMapTab()) document.documentElement.classList.add('nt-map-tab');
       document.addEventListener('click', function (e) {
         if (!inAppSheet()) return;
         var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;

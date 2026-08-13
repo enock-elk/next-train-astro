@@ -379,9 +379,8 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         background: transparent;
       }
       .dark .tab-btn { color: #9ca3af; }
-      /* SPA custom.css parity — not colour-pack tokens */
-      .tab-btn.active { color: #2563eb; border-color: #2563eb; }
-      .dark .tab-btn.active { color: #60a5fa; border-color: #60a5fa; }
+      .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
+      .dark .tab-btn.active { color: var(--nt-primary); border-color: var(--nt-primary); }
       /* Sliding indicator owns the underline visually */
       .tab-btn, .tab-btn.active { border-bottom-color: transparent !important; }
 

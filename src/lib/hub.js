@@ -389,6 +389,8 @@ async function submitFeedback() {
         });
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
 
+        try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
+
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
@@ -656,6 +658,109 @@ export function syncInboxBadges(count = 0) {
     }
     const navDot = document.getElementById('open-nav-badge');
     if (navDot) navDot.classList.toggle('hidden', n === 0);
+}
+
+function getThreadDeviceId() {
+    return $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+}
+
+async function fetchInboxThread() {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId) return [];
+    const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json?t=${Date.now()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return Object.entries(data)
+        .map(([id, m]) => ({ id, ...(m || {}) }))
+        .filter((m) => m && (m.message || m.text))
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function renderMessagesThread(list) {
+    const host = document.getElementById('messages-thread-list');
+    if (!host) return;
+    if (!list.length) {
+        host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">No messages yet. Send one below — the team will reply here.</p>';
+        return;
+    }
+    host.innerHTML = list.map((m) => {
+        const mine = m.from === 'commuter';
+        const raw = m.message || m.text || '';
+        const body = mine ? escapeHTML(raw) : sanitizeHTML(raw);
+        const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        const align = mine ? 'items-end' : 'items-start';
+        const bubble = mine
+            ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
+            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md';
+        const who = mine ? 'You' : 'Next Train';
+        return `<div class="flex flex-col ${align}">
+      <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">${who}</span>
+      <div class="max-w-[85%] px-3 py-2 text-sm leading-snug ${bubble} whitespace-pre-wrap break-words">${body}</div>
+      <span class="text-[9px] text-gray-400 mt-0.5">${escapeHTML(when)}</span>
+    </div>`;
+    }).join('');
+    host.scrollTop = host.scrollHeight;
+}
+
+async function postCommuterInboxCopy({ text, feedbackType }) {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId || !text) return false;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+    let authToken = '';
+    if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+        try { authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true); } catch { /* ignore */ }
+    }
+    const msgId = `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        from: 'commuter',
+        deviceId,
+        message: String(text).slice(0, 2000),
+        timestamp: Date.now(),
+        type: feedbackType || 'general',
+        read: true,
+    };
+    const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${msgId}.json${authParam}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+    return res.ok;
+}
+
+export async function openMessagesThread() {
+    triggerHaptic();
+    closeAppHub(true);
+    const host = document.getElementById('messages-thread-list');
+    if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
+    try {
+        const list = await fetchInboxThread();
+        renderMessagesThread(list);
+        const deviceId = getThreadDeviceId();
+        const unread = list.filter((m) => m.from !== 'commuter' && !m.read);
+        if (unread.length && deviceId) {
+            const updates = {};
+            unread.forEach((m) => {
+                updates[`${m.id}/read`] = true;
+                updates[`${m.id}/readAt`] = Date.now();
+                updates[`${m.id}/acknowledged`] = true;
+            });
+            fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates),
+            }).catch(() => {});
+            syncInboxBadges(0);
+        }
+    } catch {
+        renderMessagesThread([]);
+    }
 }
 
 export async function checkServiceAlerts() {
@@ -1131,6 +1236,7 @@ export function initHub() {
     window.showCacheClearWarning = showCacheClearWarning;
     window.checkServiceAlerts = checkServiceAlerts;
     window.submitPollVote = submitPollVote;
+    window.openMessagesThread = openMessagesThread;
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1429,16 +1535,57 @@ export function initHub() {
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
-    // Messages row: unread admin reply wins, otherwise compose feedback.
+    // Messages row: always the commuter thread (compose lives inside it).
     document.getElementById('settings-feedback-btn')?.addEventListener('click', () => {
-        if (typeof window.__ntOpenAdminReply === 'function') {
-            closeAppHub(true);
-            setTimeout(() => {
-                try { window.__ntOpenAdminReply(); } catch { openFeedback(); }
-            }, 140);
+        openMessagesThread();
+    });
+    document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('messages-thread-input');
+        const sendBtn = document.getElementById('messages-thread-send');
+        const text = input?.value?.trim() || '';
+        if (text.length < 5) {
+            showToast('Please write a bit more (at least 5 characters).', 'error');
             return;
         }
-        openFeedback();
+        if (sendBtn) sendBtn.disabled = true;
+        try {
+            if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+                await window.firebaseSignInAnonymously(window.firebaseAuth);
+            }
+            let authToken = '';
+            if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+                authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+            }
+            const payload = {
+                type: 'thread_reply',
+                text,
+                email: '',
+                status: 'unread',
+                appVersion: APP_VERSION,
+                routeId: $currentRouteId.get() || 'none',
+                region: $userRegion.get() || 'GP',
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent,
+                deviceId: getThreadDeviceId() || 'unknown',
+                isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+            };
+            const authParam = authToken ? `?auth=${authToken}` : '';
+            const res = await fetch(`${DYNAMIC_BASE_URL}feedback.json${authParam}`, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`Failed (${res.status})`);
+            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
+            if (input) input.value = '';
+            renderMessagesThread(await fetchInboxThread());
+            showToast('Message sent.', 'success');
+        } catch (err) {
+            showToast(err?.message || 'Could not send message.', 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+        }
     });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     // Clear reply mode when modal is cancelled/closed via footer/X

@@ -81,7 +81,7 @@
       "$deviceId": {
         ".read": true,
         "$messageId": {
-          ".write": "data.exists() && newData.exists() && newData.hasChild('message') && newData.child('message').val() === data.child('message').val() && newData.hasChild('timestamp') && newData.child('timestamp').val() === data.child('timestamp').val() && (!data.hasChild('feedbackId') || newData.child('feedbackId').val() === data.child('feedbackId').val())"
+          ".write": "auth != null && ((!data.exists() && newData.child('from').val() === 'commuter' && newData.child('deviceId').val() === $deviceId && newData.hasChild('message') && newData.hasChild('timestamp')) || (data.exists() && newData.exists() && newData.hasChild('message') && newData.child('message').val() === data.child('message').val() && newData.hasChild('timestamp') && newData.child('timestamp').val() === data.child('timestamp').val() && (!data.hasChild('feedbackId') || newData.child('feedbackId').val() === data.child('feedbackId').val())))"
         }
       }
     },
@@ -143,7 +143,7 @@
       ".read": true,
       ".indexOn": ["routeId", "timestamp", "trainKey"],
       "$reportId": {
-        ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".write": "auth != null && (!data.exists() || data.child('deviceId').val() === newData.child('deviceId').val() || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'routeId', 'timestamp', 'deviceId']) && newData.child('reportId').isString() && newData.child('reportId').val() === $reportId && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
       }
     },
@@ -153,7 +153,7 @@
         ".read": true,
         "$deviceId": {
           ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.child('deviceId').val() === $deviceId && newData.child('deviceId').val() === $deviceId) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-          ".validate": "!newData.exists() || (newData.hasChildren(['routeId', 'deviceId', 'station', 'at', 'expiresAt']) && newData.child('routeId').val() === $routeId && newData.child('deviceId').val() === $deviceId && newData.child('station').isString() && newData.child('station').val().length > 0 && newData.child('station').val().length < 120 && newData.child('at').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= newData.child('at').val() + 1200000 && (!newData.hasChild('coarseLat') || newData.child('coarseLat').isNumber()) && (!newData.hasChild('coarseLng') || newData.child('coarseLng').isNumber()))"
+          ".validate": "!newData.exists() || (newData.hasChildren(['routeId', 'deviceId', 'station', 'at', 'expiresAt']) && newData.child('routeId').val() === $routeId && newData.child('deviceId').val() === $deviceId && newData.child('station').isString() && newData.child('station').val().length > 0 && newData.child('station').val().length < 120 && newData.child('at').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= newData.child('at').val() + 1200000 && (!newData.hasChild('coarseLat') || newData.child('coarseLat').isNumber()) && (!newData.hasChild('coarseLng') || newData.child('coarseLng').isNumber()) && (!newData.hasChild('heading') || newData.child('heading').isNumber()) && (!newData.hasChild('speedMps') || newData.child('speedMps').isNumber()))"
         }
       }
     },

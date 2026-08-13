@@ -50,6 +50,7 @@ const MODAL_HASH = {
     'route-modal': '#route',
     'profile-modal': '#profile',
     'feedback-modal': '#feedback',
+    'messages-thread-modal': '#messages',
     'about-modal': '#about',
     'help-modal': '#help',
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
@@ -974,8 +975,6 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
     const paint = (el, on) => {
         if (!el) return;
         el.classList.toggle('is-active', on);
-        el.classList.toggle('text-blue-600', on);
-        el.classList.toggle('dark:text-blue-400', on);
         el.classList.toggle('text-gray-400', !on);
         el.classList.toggle('dark:text-gray-500', !on);
         el.setAttribute('aria-current', on ? 'page' : 'false');

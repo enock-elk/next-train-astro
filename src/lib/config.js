@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.11";
+export const APP_VERSION = "V8_08.12";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.12",
+        title: "Earthy packs, live reports, map trains",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Earthy & Ember:</b> packs now colour the whole shell — no leftover white cards. Alerts stay red / amber / blue.",
+            "<b>Train flags:</b> tap Shuttle Train 1151 to report early / on time / late / no-show, and update if it arrives a minute later.",
+            "<b>Messages:</b> Messages & Feedback opens your thread with the team. Map shares vet for 30s, then show a blue train others can join."
+        ]
+    },
     {
         id: "V8_08.11",
         title: "Live board + route chat (lab)",

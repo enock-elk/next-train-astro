@@ -59,6 +59,8 @@ let routeReportCacheAt = {};
 const routeListeners = {};
 /** trainKey → localStorage validated this session/device */
 const VALIDATED_PREFIX = 'delayValidated_';
+const OWN_REPORTS_KEY = 'delayOwnReportsV1';
+const ASKED_PREFIX = 'delayAsked_';
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
@@ -228,10 +230,54 @@ export function aggregateTrainReports(reports, keyParts) {
 
 function statusLabel(agg) {
     if (!agg) return '';
-    if (agg.status === 'cancelled') return 'Cancelled / not coming';
+    if (agg.status === 'cancelled') return 'Cancelled / no-show';
     if (agg.status === 'early') return `~${agg.avgLateMin || 3} min early`;
     if (agg.status === 'on_time') return 'On time';
     return `~${agg.avgLateMin || 10} min late`;
+}
+
+function readOwnReports() {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(OWN_REPORTS_KEY) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+        return {};
+    }
+}
+
+function getOwnReport(trainKey) {
+    if (!trainKey) return null;
+    const rec = readOwnReports()[trainKey];
+    if (!rec?.reportId) return null;
+    if (Date.now() - (rec.timestamp || 0) > SURFACE_WINDOW_MS) return null;
+    return rec;
+}
+
+function saveOwnReport(trainKey, rec) {
+    if (!trainKey || !rec?.reportId) return;
+    const all = readOwnReports();
+    all[trainKey] = { ...rec, timestamp: rec.timestamp || Date.now() };
+    safeStorage.setItem(OWN_REPORTS_KEY, JSON.stringify(all));
+}
+
+function flagSvgHtml(status) {
+    const cls = flagColorClass(status);
+    return `<svg class="nt-train-flag w-3.5 h-3.5 ml-1 shrink-0 ${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3v18M4 4h11.2c.9 0 1.4 1 .8 1.7L14 9.5l2 3.8c.6.7.1 1.7-.8 1.7H4"/></svg>`;
+}
+
+function paintTrainFlags(root, byRoute) {
+    (root || document).querySelectorAll?.('[data-open-train-report]').forEach((btn) => {
+        const routeId = btn.getAttribute('data-route');
+        const trainId = btn.getAttribute('data-train');
+        const scheduledTime = btn.getAttribute('data-dep');
+        const station = btn.getAttribute('data-station');
+        const agg = aggregateTrainReports(byRoute[routeId] || [], {
+            routeId, trainId, scheduledTime, station,
+        });
+        const flag = btn.querySelector('.nt-train-flag');
+        if (!flag) return;
+        flag.className = `nt-train-flag w-3.5 h-3.5 ml-1 shrink-0 ${flagColorClass(agg?.status)}`;
+    });
 }
 
 function expectedTimeLabel(agg) {
@@ -386,6 +432,7 @@ export function buildTrainTitleReportButton({
     ].join(' ');
     return `<button type="button" class="${className}" ${attrs} title="Report train ${escapeHTML(String(trainId || ''))}">
       <span class="truncate">${escapeHTML(label)}</span>
+      ${flagSvgHtml(null)}
     </button>`;
 }
 
@@ -396,17 +443,22 @@ function chipAttrs(routeId, trainId, scheduledTime, arrivalTime, station, destin
 export async function hydrateTrainReportSlots(root = document) {
     await fetchFeatures();
     if (!isDelayReportsUiEnabled()) return;
-    const slots = (root || document).querySelectorAll?.('[data-train-report-slot]');
-    if (!slots?.length) return;
+    const host = root || document;
+    const slots = host.querySelectorAll?.('[data-train-report-slot]');
+    const titles = host.querySelectorAll?.('[data-open-train-report]');
+    const routeIds = [...new Set([
+        ...[...(slots || [])].map((s) => s.getAttribute('data-route')),
+        ...[...(titles || [])].map((s) => s.getAttribute('data-route')),
+    ].filter(Boolean))];
+    if (!routeIds.length) return;
 
-    const routeIds = [...new Set([...slots].map((s) => s.getAttribute('data-route')).filter(Boolean))];
     const byRoute = {};
     await Promise.all(routeIds.map(async (rid) => {
         byRoute[rid] = await fetchRecentRouteReports(rid);
         if (!routeListeners[rid]) startDelayReportsListener(rid);
     }));
 
-    slots.forEach((slot) => {
+    (slots || []).forEach((slot) => {
         const routeId = slot.getAttribute('data-route');
         const trainId = slot.getAttribute('data-train');
         const scheduledTime = slot.getAttribute('data-dep');
@@ -468,6 +520,9 @@ export async function hydrateTrainReportSlots(root = document) {
             : `<button type="button" class="delay-validate-btn mt-1.5 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-[9px] font-bold text-gray-700 dark:text-gray-200 py-1 rounded shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}">Verify delay</button>`}
           </div>`;
     });
+
+    paintTrainFlags(root, byRoute);
+    maybeAskCorroboration(byRoute);
 }
 
 /** Thumb / verify — writes a corroborating report (counts toward threshold). */
@@ -564,15 +619,36 @@ export function openTrainReportModal(opts = {}) {
     const err = document.getElementById('tr-error');
     if (err) err.textContent = '';
 
+    const ownKey = trainReportKey({ routeId, trainId, scheduledTime, station });
+    const own = getOwnReport(ownKey);
     const title = document.getElementById('train-report-title');
     if (title) {
-        title.textContent = trainId
-            ? `Report train ${trainId}`
-            : 'Report status';
+        if (own && trainId) title.textContent = `Update train ${trainId}`;
+        else if (trainId) title.textContent = `Report train ${trainId}`;
+        else title.textContent = 'Report status';
     }
+    const hint = document.getElementById('tr-update-hint');
+    if (hint) {
+        hint.classList.toggle('hidden', !own);
+        if (own) {
+            const prev = own.status === 'cancelled' ? 'cancelled / no-show'
+                : own.status === 'early' ? 'early'
+                : own.status === 'on_time' ? 'on time'
+                : 'late';
+            hint.textContent = `You already reported this as ${prev}. You can update it if the train changed.`;
+        }
+    }
+    document.querySelectorAll('[data-tr-status]').forEach((b) => {
+        b.classList.toggle('ring-2', own && b.getAttribute('data-tr-status') === own.status);
+        b.classList.toggle('ring-blue-500', own && b.getAttribute('data-tr-status') === own.status);
+    });
 
     document.querySelectorAll('.tr-bucket-btn').forEach((b) => {
         b.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-950/40');
+        if (own?.lateBucket && b.getAttribute('data-tr-bucket') === own.lateBucket) {
+            b.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-950/40');
+            document.getElementById('tr-late-bucket').value = own.lateBucket;
+        }
     });
 
     showTrainReportStep('status');
@@ -617,8 +693,10 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         return false;
     }
 
+    const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
+    const existing = getOwnReport(trainKey);
     const limit = checkDelayReportRateLimit(routeId);
-    if (!limit.ok) { showErr(limit.message); return false; }
+    if (!existing && !limit.ok) { showErr(limit.message); return false; }
 
     if (note) {
         const safety = checkContentSafety(note);
@@ -643,8 +721,8 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
 
     try {
         const isGuest = acct.status !== 'signed-in';
-        const reportId = `dr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-        const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
+        const isUpdate = !!existing?.reportId;
+        const reportId = isUpdate ? existing.reportId : `dr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
         const payload = {
             reportId,
             routeId,
@@ -663,22 +741,24 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
             uid: isGuest ? null : (acct.uid || null),
             deviceId: getDeviceId(),
             isGuest,
-            timestamp: Date.now(),
+            timestamp: isUpdate ? (existing.timestamp || Date.now()) : Date.now(),
+            updatedAt: Date.now(),
             statusOpen: 'open',
             appVersion: APP_VERSION,
-            source: 'live_board_train',
+            source: isUpdate ? 'live_board_train_update' : 'live_board_train',
         };
 
         const token = await ensureAuthToken();
         const authParam = token ? `?auth=${encodeURIComponent(token)}` : '';
         const res = await fetch(`${DYNAMIC_BASE_URL}delay_reports/${reportId}.json${authParam}`, {
-            method: 'PUT',
+            method: isUpdate ? 'PATCH' : 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(`Submit failed (${res.status})`);
 
-        recordRateHit(routeId);
+        saveOwnReport(trainKey, { reportId, status, lateBucket: lateBucket || null, timestamp: payload.timestamp });
+        if (!isUpdate) recordRateHit(routeId);
         delete routeReportCache[routeId];
         delete routeReportCacheAt[routeId];
 
@@ -686,13 +766,15 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         if (summary) {
             let label = 'On time';
             if (status === 'early') label = 'Came early';
-            else if (status === 'cancelled') label = 'Cancelled / not coming';
+            else if (status === 'cancelled') label = 'Cancelled / no-show';
             else if (status === 'late') {
                 const map = { '1-5': '1–5 min late', '6-10': '6–10 min late', '11-20': '11–20 min late', '21+': '21+ min late', unsure: 'Late (not sure how long)' };
                 label = map[lateBucket] || 'Running late';
             }
-            summary.textContent = `You reported: ${label}`;
+            summary.textContent = isUpdate ? `Updated: ${label}` : `You reported: ${label}`;
         }
+        const doneTitle = document.querySelector('#tr-step-done p.text-lg');
+        if (doneTitle) doneTitle.textContent = isUpdate ? 'Report updated.' : 'Thanks! Report submitted.';
         showTrainReportStep('done');
         refreshDelayReportSurface(routeId);
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
@@ -785,6 +867,118 @@ export async function getPlannerCrowdDelayHtml(routeIds = []) {
         <p class="text-xs font-bold text-gray-800 dark:text-gray-200">${n} recent report${n === 1 ? '' : 's'}</p>
         <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">${label}</p>
     </div>`;
+}
+
+function readActiveRidePing() {
+    try {
+        const raw = JSON.parse(safeStorage.getItem('ridePingActiveV1') || 'null');
+        if (!raw || (raw.expiresAt || 0) < Date.now()) return null;
+        return raw;
+    } catch {
+        return null;
+    }
+}
+
+function userDepForTrain(trainId, routeId) {
+    const wantTrain = String(trainId || '');
+    const wantRoute = String(routeId || '');
+    const buttons = document.querySelectorAll('[data-open-train-report]');
+    for (const btn of buttons) {
+        if (btn.getAttribute('data-train') === wantTrain && btn.getAttribute('data-route') === wantRoute) {
+            return btn.getAttribute('data-dep') || '';
+        }
+    }
+    return '';
+}
+
+/**
+ * Ask only people who can still observe the event:
+ * overdue at their station, or currently sharing that train.
+ * Never ask people behind the train (their stop was earlier than the report).
+ */
+function maybeAskCorroboration(byRoute) {
+    if (typeof document === 'undefined') return;
+    const sheet = document.getElementById('delay-ask-sheet');
+    if (!sheet || !sheet.classList.contains('hidden')) return;
+    if (!document.getElementById('delay-report-modal')?.classList.contains('hidden')) return;
+
+    const routeId = $currentRouteId.get();
+    const reports = byRoute?.[routeId] || [];
+    if (!reports.length) return;
+
+    const userStation = document.getElementById('station-select')?.value || '';
+    const ping = readActiveRidePing();
+    const myId = getDeviceId();
+    const nowSec = getNowSeconds();
+
+    const candidate = reports.find((r) => {
+        if (!r?.trainId || r.deviceId === myId) return false;
+        const status = r.trainStatus || r.status;
+        if (!status || status === 'closed') return false;
+        const key = r.trainKey || trainReportKey({
+            routeId: r.routeId, trainId: r.trainId, scheduledTime: r.scheduledTime, station: r.station,
+        });
+        if (hasLocalValidated(key) || getOwnReport(key)) return false;
+        if (safeStorage.getItem(ASKED_PREFIX + key)) return false;
+
+        const onThatTrain = ping && String(ping.trainId || '') === String(r.trainId)
+            && ping.routeId === (r.routeId || routeId);
+        if (onThatTrain) return true;
+
+        const userDep = userDepForTrain(r.trainId, r.routeId || routeId);
+        const reportDep = r.scheduledTime || '';
+        if (!userDep && normalizeStationName(userStation) === normalizeStationName(r.station || '')) {
+            return isTrainInReportWindow(reportDep) && nowSec >= timeToSeconds(reportDep);
+        }
+        if (!userDep) return false;
+
+        const userSec = timeToSeconds(userDep);
+        const reportSec = timeToSeconds(reportDep);
+        if (userSec == null || reportSec == null) return false;
+        // Behind the train: this stop was scheduled earlier than the reported stop.
+        if (userSec < reportSec - 30) return false;
+        // Far ahead: their scheduled time has not come yet.
+        if (nowSec < userSec) return false;
+        return isTrainInReportWindow(userDep);
+    });
+
+    if (!candidate) return;
+    const key = candidate.trainKey || trainReportKey({
+        routeId: candidate.routeId, trainId: candidate.trainId,
+        scheduledTime: candidate.scheduledTime, station: candidate.station,
+    });
+    safeStorage.setItem(ASKED_PREFIX + key, '1');
+    showCorroborationSheet(candidate, key);
+}
+
+function showCorroborationSheet(report, trainKey) {
+    const sheet = document.getElementById('delay-ask-sheet');
+    if (!sheet) return;
+    const status = report.trainStatus || report.status || 'late';
+    const label = statusLabel({ status, avgLateMin: LATE_MID[report.lateBucket] || 10 });
+    const title = document.getElementById('delay-ask-title');
+    const body = document.getElementById('delay-ask-body');
+    if (title) title.textContent = `Train ${report.trainId}`;
+    if (body) {
+        body.textContent = `Reported ${label}${report.station ? ` at ${report.station}` : ''}. Still true from where you are?`;
+    }
+    sheet.dataset.route = report.routeId || '';
+    sheet.dataset.train = report.trainId || '';
+    sheet.dataset.dep = report.scheduledTime || '';
+    sheet.dataset.arr = report.arrivalTime || '';
+    sheet.dataset.station = report.station || '';
+    sheet.dataset.dest = report.destination || '';
+    sheet.dataset.trainKey = trainKey || '';
+    sheet.dataset.status = status;
+    sheet.classList.remove('hidden');
+    sheet.setAttribute('aria-hidden', 'false');
+}
+
+function hideCorroborationSheet() {
+    const sheet = document.getElementById('delay-ask-sheet');
+    if (!sheet) return;
+    sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
 }
 
 export function bindDelayReportUi() {
@@ -882,6 +1076,38 @@ export function bindDelayReportUi() {
             station: document.getElementById('station-select')?.value || '',
         });
     });
+
+    document.getElementById('delay-ask-confirm')?.addEventListener('click', () => {
+        const sheet = document.getElementById('delay-ask-sheet');
+        hideCorroborationSheet();
+        if (!sheet) return;
+        submitDelayValidation({
+            routeId: sheet.dataset.route || $currentRouteId.get(),
+            trainId: sheet.dataset.train,
+            scheduledTime: sheet.dataset.dep,
+            arrivalTime: sheet.dataset.arr,
+            station: sheet.dataset.station,
+            destination: sheet.dataset.dest,
+            trainKey: sheet.dataset.trainKey,
+            status: sheet.dataset.status || 'late',
+            agree: true,
+        }).then((r) => {
+            if (!r.ok && r.message) showToast(r.message, 'error');
+        });
+    });
+    document.getElementById('delay-ask-update')?.addEventListener('click', () => {
+        const sheet = document.getElementById('delay-ask-sheet');
+        hideCorroborationSheet();
+        openTrainReportModal({
+            routeId: sheet?.dataset.route || $currentRouteId.get(),
+            trainId: sheet?.dataset.train,
+            scheduledTime: sheet?.dataset.dep,
+            arrivalTime: sheet?.dataset.arr,
+            station: sheet?.dataset.station,
+            destination: sheet?.dataset.dest,
+        });
+    });
+    document.getElementById('delay-ask-dismiss')?.addEventListener('click', () => hideCorroborationSheet());
 
     let lastRouteListen = '';
     $currentRouteId.subscribe((id) => {

@@ -1401,21 +1401,96 @@
 
             /** Rider markers from the parent Map tab (ride_pings with coarse GPS). */
             let ridePingLayer = null;
+            const trainAnim = [];
+            function escapePing(s) {
+                return String(s || '').replace(/[&<>"']/g, function (c) {
+                    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+                });
+            }
+            function animateTrainMarker(marker, lat, lng, headingDeg, speedMps, expiresAt) {
+                const start = Date.now();
+                const rad = (headingDeg * Math.PI) / 180;
+                function tick() {
+                    if (!map.hasLayer(marker)) return;
+                    if (Date.now() > (expiresAt || start + 600000)) return;
+                    const dt = (Date.now() - start) / 1000;
+                    const distM = Math.min(speedMps * dt, 2500);
+                    const dLat = (Math.cos(rad) * distM) / 111320;
+                    const cosLat = Math.cos((lat * Math.PI) / 180) || 0.7;
+                    const dLng = (Math.sin(rad) * distM) / (111320 * cosLat);
+                    marker.setLatLng([lat + dLat, lng + dLng]);
+                    const id = requestAnimationFrame(tick);
+                    trainAnim.push(id);
+                }
+                trainAnim.push(requestAnimationFrame(tick));
+            }
             function renderRidePingMarkers(pings) {
+                trainAnim.splice(0).forEach(function (id) { try { cancelAnimationFrame(id); } catch (_) {} });
                 if (ridePingLayer) {
                     map.removeLayer(ridePingLayer);
                     ridePingLayer = null;
                 }
                 if (!pings || !pings.length) return;
                 const group = L.layerGroup();
+                const trains = {};
+                const loose = [];
                 pings.forEach(function (p) {
                     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
-                    const label = (p.trainId ? ('Train ' + p.trainId) : 'Rider')
-                        + (p.station ? (' · ' + p.station) : '');
-                    const ageMin = p.at ? Math.max(0, Math.round((Date.now() - p.at) / 60000)) : null;
-                    const when = ageMin === null ? 'sharing now'
-                        : (ageMin < 1 ? 'just now' : ageMin + ' min ago');
-                    // Own pin reads blue like the locate dot; other riders are amber.
+                    if (p.trainId) {
+                        const k = String(p.trainId);
+                        (trains[k] = trains[k] || []).push(p);
+                    } else loose.push(p);
+                });
+
+                Object.keys(trains).forEach(function (trainId) {
+                    const list = trains[trainId];
+                    const lat = list.reduce(function (s, p) { return s + p.lat; }, 0) / list.length;
+                    const lng = list.reduce(function (s, p) { return s + p.lng; }, 0) / list.length;
+                    const ids = {};
+                    list.forEach(function (p) { ids[p.deviceId || (p.lat + ',' + p.lng)] = 1; });
+                    const n = Object.keys(ids).length;
+                    const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || {}).speedMps || 0;
+                    const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || {}).heading;
+                    const icon = L.divIcon({
+                        className: 'nt-live-train',
+                        html: '<div class="nt-live-train-glyph"><span class="nt-live-train-name">Train '
+                            + escapePing(trainId) + '</span><span class="nt-live-train-n">'
+                            + n + ' sharing</span></div>',
+                        iconSize: [96, 32],
+                        iconAnchor: [48, 16]
+                    });
+                    const marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
+                    const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
+                    marker.bindPopup(
+                        "<div class='text-xs text-gray-900 text-center'>"
+                        + "<p class='font-black'>Train " + escapePing(trainId) + "</p>"
+                        + "<p class='text-[10px] text-gray-500 mt-0.5'>" + n + " Next Train rider"
+                        + (n === 1 ? '' : 's') + " sharing</p>"
+                        + "<button type='button' id='" + joinId + "' class='mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold'>Join this train</button>"
+                        + "</div>"
+                    );
+                    marker.on('popupopen', function () {
+                        const btn = document.getElementById(joinId);
+                        if (!btn) return;
+                        btn.onclick = function () {
+                            try {
+                                (window.parent || window).postMessage({
+                                    type: 'nt-map-join-train',
+                                    trainId: trainId,
+                                    station: list[0].station || '',
+                                    routeId: list[0].routeId || null
+                                }, '*');
+                            } catch (_) {}
+                            map.closePopup();
+                        };
+                    });
+                    marker.addTo(group);
+                    if (speed > 1 && typeof heading === 'number') {
+                        animateTrainMarker(marker, lat, lng, heading, speed, list[0].expiresAt);
+                    }
+                });
+
+                loose.forEach(function (p) {
                     const mine = !!p.mine;
                     L.circleMarker([p.lat, p.lng], {
                         radius: mine ? 9 : 8,
@@ -1425,9 +1500,8 @@
                         fillOpacity: 0.85
                     }).bindPopup(
                         "<div class='text-xs font-bold text-center text-gray-900'>"
-                        + (mine ? 'You · ' : '') + label
-                        + "<br><span class='text-[10px] text-gray-500 font-normal'>" + when
-                        + " · shared for 10 min</span></div>"
+                        + (mine ? 'You · ' : '') + (p.station || 'Rider')
+                        + "<br><span class='text-[10px] text-gray-500 font-normal'>shared for 10 min</span></div>"
                     ).addTo(group);
                 });
                 ridePingLayer = group.addTo(map);

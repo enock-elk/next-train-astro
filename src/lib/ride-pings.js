@@ -181,6 +181,8 @@ export async function submitRideCheckIn({
     destination = null,
     coarseLat = null,
     coarseLng = null,
+    heading = null,
+    speedMps = null,
     source = 'board_checkin',
 } = {}) {
     await fetchFeatures();
@@ -205,6 +207,8 @@ export async function submitRideCheckIn({
         uid: acct.status === 'signed-in' ? acct.uid : null,
         coarseLat: typeof coarseLat === 'number' ? Math.round(coarseLat * 1000) / 1000 : null,
         coarseLng: typeof coarseLng === 'number' ? Math.round(coarseLng * 1000) / 1000 : null,
+        heading: typeof heading === 'number' ? Math.round(heading) : null,
+        speedMps: typeof speedMps === 'number' ? Math.round(speedMps * 10) / 10 : null,
         appVersion: APP_VERSION,
         source: source || 'board_checkin',
     };

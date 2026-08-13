@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.12 — Premium packs, live reports, map trains (13 Aug 2026)
+
+- Earthy and Ember (and other non-classic packs) colour cards, inputs, and chrome — leftover `bg-white` stickers are gone. Service alerts stay red / amber / blue.
+- Train titles show a flag; tap to report early / on time / late / cancelled-no-show and update your own report.
+- Overdue-station and on-train riders can confirm a live report; people behind the train are not asked.
+- Messages & Feedback opens the commuter’s inbox thread with a composer.
+- Map contribute vets GPS for 30s (track, station, speed, heading), then draws joinable blue train glyphs with a sharing count.
+
 ## V8_08.11 — Lab line: board-first live + lean chat (11 Aug 2026)
 
 - Long-lived `lab` branch + `lab.nexttrain.co.za` deploy workflow (independent of `main` / production).

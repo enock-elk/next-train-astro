@@ -7,7 +7,7 @@
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, triggerHaptic } from './ui.js';
-import { $currentRouteId, $globalStationIndex } from '../store.js';
+import { $currentRouteId, $globalStationIndex, $userRegion } from '../store.js';
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
     normalizeStationName, getDistanceFromLatLonInKm,
@@ -24,6 +24,13 @@ export const CONTRIBUTE_WINDOW_SEC = 30 * 60;
 
 /** How far from the train's expected station a rider can be and still match. */
 export const CONTRIBUTE_MATCH_KM = 5;
+
+/** Foreground GPS sample window before a share is accepted. */
+export const VET_WINDOW_MS = 30 * 1000;
+const TRACK_MAX_M = 150;
+const STATION_NEAR_M = 250;
+const MOVE_MIN_M = 20;
+const HIGHWAY_KMH = 90;
 
 /** Others' pins refresh while the Map tab is open. */
 const PINGS_REFRESH_MS = 45 * 1000;
@@ -136,6 +143,173 @@ function distanceToExpectedStation(candidate, coords) {
     return getDistanceFromLatLonInKm(coords.lat, coords.lng, st.lat, st.lon);
 }
 
+function haversineM(a, b) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const x =
+        Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function nearestStationMeters(lat, lng) {
+    const index = $globalStationIndex.get() || {};
+    let best = Infinity;
+    Object.values(index).forEach((st) => {
+        if (!st || typeof st.lat !== 'number') return;
+        const d = getDistanceFromLatLonInKm(lat, lng, st.lat, st.lon) * 1000;
+        if (d < best) best = d;
+    });
+    return Number.isFinite(best) ? best : null;
+}
+
+function setVetProgress(pct, label) {
+    const bar = document.getElementById('map-vet-bar');
+    const wrap = document.getElementById('map-vet-progress');
+    const text = document.getElementById('map-vet-label');
+    wrap?.classList.remove('hidden');
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    if (text && label) text.textContent = label;
+}
+
+function hideVetProgress() {
+    document.getElementById('map-vet-progress')?.classList.add('hidden');
+}
+
+function sampleGpsFor(ms, onTick) {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error('Location isn’t available on this device.'));
+            return;
+        }
+        const samples = [];
+        const started = Date.now();
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                samples.push({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    speed: pos.coords.speed,
+                    heading: pos.coords.heading,
+                    t: Date.now(),
+                });
+                const pct = Math.min(100, ((Date.now() - started) / ms) * 100);
+                onTick?.(samples, pct);
+            },
+            (err) => {
+                if (err.code === 1) {
+                    navigator.geolocation.clearWatch(watchId);
+                    reject(err);
+                }
+            },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+        );
+        setTimeout(() => {
+            navigator.geolocation.clearWatch(watchId);
+            resolve(samples);
+        }, ms);
+    });
+}
+
+async function vetLocationSamples(samples) {
+    if (!samples.length) return { ok: false, message: 'Couldn’t get a GPS fix. Try again outdoors.' };
+    const first = samples[0];
+    const last = samples[samples.length - 1];
+    const displacement = haversineM(first, last);
+    const dt = Math.max(1, (last.t - first.t) / 1000);
+    const speedMps = typeof last.speed === 'number' && last.speed >= 0
+        ? last.speed
+        : displacement / dt;
+    const speedKmh = speedMps * 3.6;
+    if (speedKmh > HIGHWAY_KMH) {
+        return { ok: false, message: 'That speed doesn’t look like a train.' };
+    }
+    for (let i = 1; i < samples.length; i++) {
+        const d = haversineM(samples[i - 1], samples[i]);
+        const s = Math.max(0.2, (samples[i].t - samples[i - 1].t) / 1000);
+        if (d / s > 50) {
+            return { ok: false, message: 'GPS jumped — try again near the tracks.' };
+        }
+    }
+
+    const region = $userRegion.get() || 'GP';
+    let snap = null;
+    try {
+        const { snapToRail } = await import('./rail-tracks.js');
+        snap = await snapToRail(last.lat, last.lng, region, 400);
+    } catch { /* tracks optional */ }
+
+    const nearStation = nearestStationMeters(last.lat, last.lng);
+    const atPlatform = nearStation != null && nearStation < STATION_NEAR_M;
+    if (snap && snap.distanceM != null && snap.distanceM > TRACK_MAX_M && !atPlatform) {
+        return { ok: false, message: 'You need to be near the railway to contribute.' };
+    }
+
+    const isMoving = displacement >= MOVE_MIN_M;
+    if (!isMoving && !atPlatform && !(snap && snap.distanceM <= TRACK_MAX_M)) {
+        return { ok: false, message: 'Stand at a station, or contribute while the train is moving.' };
+    }
+
+    let heading = last.heading;
+    if ((heading == null || Number.isNaN(heading)) && samples.length >= 2) {
+        heading = (Math.atan2(last.lng - first.lng, last.lat - first.lat) * 180) / Math.PI;
+    }
+
+    const lat = snap?.ok ? snap.lat : last.lat;
+    const lng = snap?.ok ? snap.lon : last.lng;
+    lastCoords = { lat, lng, accuracy: last.accuracy };
+    return {
+        ok: true,
+        lat,
+        lng,
+        heading: typeof heading === 'number' ? heading : null,
+        speedMps,
+        isMoving,
+        atPlatform,
+        trackM: snap?.distanceM ?? null,
+    };
+}
+
+let lastVet = null;
+
+/**
+ * 30s foreground sample → snap to track / station. Used before contribute or join.
+ */
+export async function runContributeVet() {
+    if (lastVet && Date.now() - lastVet.at < 60000 && lastVet.result?.ok) {
+        return lastVet.result;
+    }
+    document.getElementById('map-contribute-sheet')?.classList.remove('hidden');
+    setStatus('Checking you’re on the railway… 30s');
+    setVetProgress(0, 'Hold still or stay on the train — 30 seconds');
+    try {
+        const samples = await sampleGpsFor(VET_WINDOW_MS, (_s, pct) => {
+            const left = Math.max(0, Math.ceil((100 - pct) / 100 * 30));
+            setVetProgress(pct, `Checking location… ${left}s`);
+            setStatus(`Checking you’re genuine… ${left}s`);
+        });
+        const vet = await vetLocationSamples(samples);
+        hideVetProgress();
+        lastVet = { at: Date.now(), result: vet };
+        if (!vet.ok) {
+            setStatus(vet.message);
+            showToast(vet.message, 'error');
+        }
+        return vet;
+    } catch (e) {
+        hideVetProgress();
+        const msg = e?.code === 1
+            ? 'Location permission denied'
+            : (e?.message || 'Couldn’t get location');
+        setStatus(msg);
+        showToast(msg, 'error');
+        return { ok: false, message: msg };
+    }
+}
+
 /**
  * Trains on the live board (and the open planner trip) inside the 30-minute
  * window. When we know the rider's position, each candidate is also scored for
@@ -231,14 +405,17 @@ async function showContributeSheet() {
     if (!sheet || !list) return;
 
     sheet.classList.remove('hidden');
+    empty?.classList.add('hidden');
+    list.innerHTML = '';
 
-    // Position first — it decides which trains are a believable match.
-    if (!lastCoords) {
-        setStatus('Getting your location…');
-        await locateOnMapTab();
+    const vet = await runContributeVet();
+    if (!vet.ok) {
+        empty?.classList.remove('hidden');
+        if (empty) empty.textContent = vet.message || 'Couldn’t verify your location.';
+        return;
     }
 
-    const candidates = listContributeCandidates();
+    const candidates = listContributeCandidates({ lat: vet.lat, lng: vet.lng });
     list.innerHTML = '';
     if (!candidates.length) {
         empty?.classList.remove('hidden');
@@ -333,15 +510,12 @@ export async function contributeForTrain(candidate) {
         showToast('Pick a corridor first', 'error');
         return { ok: false };
     }
-    setStatus('Getting location for contribution…');
-    hideContributeSheet();
+    setStatus('Checking you’re on the railway…');
 
-    let coords = lastCoords;
-    if (!coords) {
-        const located = await locateOnMapTab();
-        if (!located.ok) return located;
-        coords = located.coords;
-    }
+    const vet = await runContributeVet();
+    if (!vet.ok) return vet;
+    const coords = { lat: vet.lat, lng: vet.lng };
+    hideContributeSheet();
 
     try {
         const { submitRideCheckIn, isRideCheckInEnabled, RIDE_PING_TTL_MS } = await import('./ride-pings.js');
@@ -360,6 +534,8 @@ export async function contributeForTrain(candidate) {
             destination: candidate.destination || null,
             coarseLat: coords.lat,
             coarseLng: coords.lng,
+            heading: vet.heading,
+            speedMps: vet.speedMps,
             source: candidate.source === 'planner' ? 'planner_contribute' : 'map_contribute',
         });
 
@@ -407,7 +583,11 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                 station: p.station || '',
                 at: p.at,
                 expiresAt: p.expiresAt,
+                heading: p.heading,
+                speedMps: p.speedMps,
                 mine: p.deviceId === mine,
+                deviceId: p.deviceId,
+                routeId: p.routeId || routeId,
             }));
         postToMap({ type: 'nt-map-ride-pings', pings: markers });
 
@@ -545,6 +725,18 @@ export function bindMapTabUi() {
                 accuracy: data.accuracy,
             };
             setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
+        }
+        if (data.type === 'nt-map-join-train' && data.trainId) {
+            const routeId = $currentRouteId.get();
+            const station = document.getElementById('station-select')?.value || data.station || '';
+            contributeForTrain({
+                trainId: String(data.trainId),
+                scheduledTime: data.scheduledTime || '',
+                station,
+                destination: data.destination || '',
+                routeId: data.routeId || routeId,
+                source: 'map_join',
+            });
         }
     });
 }

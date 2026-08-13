@@ -116,9 +116,10 @@ import { withBase } from '../lib/config.js';
                     <span class="block text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">It arrived after the scheduled time.</span>
                 </button>
                 <button type="button" data-tr-status="cancelled" class="tr-status-btn w-full text-left p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800 transition focus:outline-none">
-                    <span class="block text-sm font-black text-gray-800 dark:text-gray-200">Cancelled / not coming</span>
-                    <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">This train won’t run as scheduled.</span>
+                    <span class="block text-sm font-black text-gray-800 dark:text-gray-200">Cancelled / no-show</span>
+                    <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">This train didn’t run or never arrived.</span>
                 </button>
+                <p id="tr-update-hint" class="hidden text-[10px] text-gray-500 dark:text-gray-400 pt-1"></p>
                 <p class="text-[10px] text-gray-400 pt-1">Anonymous to other passengers. Helps build live updates for this train.</p>
             </div>
 
@@ -155,6 +156,20 @@ import { withBase } from '../lib/config.js';
                 <p id="tr-done-summary" class="text-sm text-gray-600 dark:text-gray-400"></p>
                 <button type="button" id="tr-done-btn" class="mt-2 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Done</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Corroboration prompt: overdue at this station, or on that train — never behind it -->
+<div id="delay-ask-sheet" class="hidden fixed inset-x-0 bottom-0 z-[125] px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pointer-events-none" aria-hidden="true">
+    <div class="pointer-events-auto mx-auto max-w-md rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-gray-900 shadow-2xl p-4">
+        <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Live report</p>
+        <p id="delay-ask-title" class="text-sm font-black text-gray-900 dark:text-white mt-0.5">Train</p>
+        <p id="delay-ask-body" class="text-[12px] text-gray-600 dark:text-gray-300 mt-1 leading-snug">A commuter reported this train. Still true from where you are?</p>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+            <button type="button" id="delay-ask-confirm" class="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black focus:outline-none">Confirm</button>
+            <button type="button" id="delay-ask-update" class="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-[11px] font-black focus:outline-none">Update</button>
+            <button type="button" id="delay-ask-dismiss" class="py-2.5 rounded-xl text-gray-500 dark:text-gray-400 text-[11px] font-bold focus:outline-none">Not me</button>
         </div>
     </div>
 </div>
@@ -423,6 +438,28 @@ import { withBase } from '../lib/config.js';
             <div id="alert-panel" data-admin-loaded="false" data-admin-shell="empty" class="hidden" aria-hidden="true"></div>
         </div>
         <div id="admin-signout-container"></div>
+    </div>
+</div>
+
+<!-- MESSAGES THREAD (commuter POV) -->
+<div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Account</p>
+                <h3 class="text-base font-black text-gray-900 dark:text-white tracking-tight">Messages &amp; Feedback</h3>
+            </div>
+            <button type="button" id="messages-thread-close" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 focus:outline-none" aria-label="Close messages">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="messages-thread-list" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-2 bg-gray-50 dark:bg-gray-950">
+            <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
+        </div>
+        <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex gap-2">
+            <textarea id="messages-thread-input" rows="2" maxlength="800" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Write a message…"></textarea>
+            <button type="submit" id="messages-thread-send" class="self-end px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black focus:outline-none">Send</button>
+        </form>
     </div>
 </div>
 

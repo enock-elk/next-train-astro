@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.19";
+export const APP_VERSION = "V8_08.20";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.20",
+        title: "Pinned bottom bar, light Classic",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Bottom bar stays put:</b> Next Train, Plan, Map, Community, and Options stay at the bottom of the screen. The header and page scroll above them.",
+            "<b>Short pages:</b> Planner and Map leave space above the bar on tall phones so the bar never floats up.",
+            "<b>Default look:</b> light mode with the Classic colour theme. Dark mode and other packs stay if you already picked them."
+        ]
+    },
     {
         id: "V8_08.19",
         title: "A quieter Next Train board",

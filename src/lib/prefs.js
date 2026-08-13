@@ -53,6 +53,8 @@ export function setNavStyle(_style) {
     return NAV_STYLES.BOTTOM;
 }
 
+const THEME_KEY = 'theme';
+
 /**
  * Classic is the product default. Undo the one-time lab Ember seed once
  * so returning lab users see Classic unless they pick another pack after this.
@@ -67,8 +69,17 @@ function seedClassicDefault() {
     safeStorage.setItem(REVERT, '1');
 }
 
+/** Persist light when the user has never chosen a mode (do not follow the OS). */
+function seedLightDefault() {
+    if (typeof window === 'undefined') return;
+    if (!safeStorage.getItem(THEME_KEY)) {
+        safeStorage.setItem(THEME_KEY, 'light');
+    }
+}
+
 export function getColourPack() {
     seedClassicDefault();
+    seedLightDefault();
     const v = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
     if (VALID_PACKS.has(v)) return v;
     return COLOUR_PACKS.CLASSIC;

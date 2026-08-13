@@ -32,7 +32,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
 ---
 
 <!DOCTYPE html>
-<html lang="en" class="dark" data-lab-mode={labModeBoot ? 'true' : 'false'}>
+<html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
@@ -294,7 +294,12 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         // try/catch: Safari Private Mode / locked-down WebViews throw on localStorage
         let theme = null;
         try { theme = localStorage.getItem('theme'); } catch (e) {}
-        const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        // Product default is light Classic — do not follow the OS colour scheme.
+        if (!theme) {
+          theme = 'light';
+          try { localStorage.setItem('theme', 'light'); } catch (e) {}
+        }
+        const isDark = theme === 'dark';
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 
@@ -330,6 +335,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
       /* SPA FOUC rule: .hidden must beat utility display:flex on install CTAs */
       .hidden { display: none !important; }
 
+      html, body { height: 100%; }
       body { font-family: 'Inter', sans-serif; }
       body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
       
@@ -387,24 +393,23 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
       }
       .view-section.active {
         display: block;
-        /* Fill leftover shell height so short tabs don't collapse */
+        /* Fill leftover scrollport so short tabs leave space above the pinned nav */
         flex: 1 1 auto;
-        min-height: 0;
+        min-height: min-content;
         overflow: visible;
         opacity: 1;
         transform: translateY(0);
       }
 
-      /* Planner: column flex so #planner-spacer can pin Share/Feedback to the shell bottom
-         when error cards are short; tall trips still grow the page and scroll normally. */
+      /* Planner: column flex so #planner-spacer can pin Share/Feedback above the nav
+         when cards are short; tall trips grow #app-scroll and scroll with the header. */
       #view-trip-planner.view-section.active {
         display: flex;
         flex-direction: column;
-        min-height: calc(100dvh - 9.5rem);
+        min-height: min-content;
       }
 
-      /* Community + Map: flex-fill leftover shell (header / optional top tabs /
-         bottom nav are shrink-0 siblings — no magic 11rem viewport math). */
+      /* Community + Map: fill the scrollport; do not scroll the chrome. */
       #view-community.view-section.active,
       #view-map.view-section.active {
         display: flex;
@@ -422,60 +427,49 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         min-height: 0;
         height: 100%;
       }
-      #main-content.app-shell:has(#view-map.active),
-      #main-content.app-shell:has(#view-community.active) {
-        height: max(600px, calc(100dvh - 2rem));
-        max-height: max(600px, calc(100dvh - 2rem));
+      #app-scroll:has(#view-map.active),
+      #app-scroll:has(#view-community.active) {
         overflow: hidden;
-      }
-      @media (min-width: 640px) {
-        #main-content.app-shell:has(#view-map.active),
-        #main-content.app-shell:has(#view-community.active) {
-          height: max(600px, calc(100dvh - 4rem));
-          max-height: max(600px, calc(100dvh - 4rem));
-        }
-      }
-
-      #view-next-train.view-section.active {
-        min-height: calc(100dvh - 9.5rem);
-      }
-      body.nav-bottom #view-next-train.view-section.active,
-      body.nav-bottom #view-trip-planner.view-section.active {
-        min-height: calc(100dvh - 11rem);
       }
 
       /* Travel Day / inline menus must paint below the trigger without clipping */
       .view-section.active.dropdown-escape {
         overflow: visible !important;
       }
-      #main-content.app-shell.dropdown-escape {
+      #main-content.app-shell.dropdown-escape,
+      #main-content.app-shell.dropdown-escape #app-scroll {
         overflow: visible !important;
       }
 
-      /* Shell fills the device; flex children (tabs) can stretch into leftover space */
+      /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen. */
       #main-content.app-shell {
-        min-height: max(600px, calc(100dvh - 2rem));
-        height: max(600px, calc(100dvh - 2rem));
-        max-height: none;
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 0;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
-          /* body: pt-12 + pb-4 */
-          min-height: max(600px, calc(100dvh - 4rem));
-          height: max(600px, calc(100dvh - 4rem));
+          height: calc(100dvh - 2rem);
+          max-height: calc(100dvh - 2rem);
         }
       }
-      /* Tall Next Train / Planner content: grow the shell and scroll the page */
-      #main-content.app-shell:has(#view-next-train.active),
-      #main-content.app-shell:has(#view-trip-planner.active) {
-        height: auto;
-        min-height: max(600px, calc(100dvh - 2rem));
-      }
-      @media (min-width: 640px) {
-        #main-content.app-shell:has(#view-next-train.active),
-        #main-content.app-shell:has(#view-trip-planner.active) {
-          min-height: max(600px, calc(100dvh - 4rem));
+      @media (max-width: 639px) {
+        #main-content.app-shell {
+          border-radius: 0;
+          max-width: none;
+          box-shadow: none;
         }
+      }
+
+      #app-scroll.app-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        display: flex;
+        flex-direction: column;
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
@@ -535,6 +529,8 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
       }
 
       #bottom-nav.bottom-nav-bar {
+        flex-shrink: 0;
+        position: relative;
         padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers */
@@ -577,7 +573,7 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
     </style>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-stretch sm:items-center justify-center h-[100dvh] max-h-[100dvh] overflow-hidden p-0 sm:p-4 transition-colors duration-300">
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 

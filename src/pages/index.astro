@@ -131,9 +131,10 @@ const faqLd = {
         >App stuck? Get help</a>
     </div>
 
-    <!-- MAIN APP — fills device height; active tab expands into remaining space -->
+    <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
     <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">
-        
+
+        <div id="app-scroll" class="app-scroll">
         <Header />
 
         <!-- Production: Next Train + Trip Planner only. Lab: Community top tab visible for testing. -->
@@ -183,6 +184,7 @@ const faqLd = {
         <!-- Offline status docks here (bottom of shell) instead of overlapping the header -->
         <div id="offline-wrapper" class="shrink-0 nt-offline-dock" aria-live="polite">
             <div id="offline-indicator" style="display: none;" class="nt-offline-strip">WORKING OFFLINE</div>
+        </div>
         </div>
 
         <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">

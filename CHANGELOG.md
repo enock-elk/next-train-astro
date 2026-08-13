@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.20 — Pinned bottom bar, light Classic default (13 Aug 2026)
+
+- The bottom navigation is locked to the bottom of the viewport. Header and main content scroll together above it.
+- Short tabs (Planner inputs, Map) fill the space above the bar on tall phones so the bar never rides up with the card.
+- Default appearance is **light mode + Classic**. The OS colour scheme is no longer used when the user has not chosen a theme. An explicit dark / pack choice is kept.
+
 ## V8_08.19 — Quieter Next Train board (13 Aug 2026)
 
 - Next Train no longer shows locate, share location, Report status, or I’m on this train. Those live on Map (share / locate) or the train-name **flag** (status + I’m on it / waiting).

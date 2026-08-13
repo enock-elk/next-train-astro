@@ -9,7 +9,7 @@ import { showToast, triggerHaptic } from './ui.js';
 import { $currentRouteId, $globalStationIndex, $userRegion } from '../store.js';
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
-    normalizeStationName, getDistanceFromLatLonInKm,
+    normalizeStationName, getDistanceFromLatLonInKm, safeStorage,
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
@@ -391,6 +391,122 @@ function hideContributeSheet() {
     document.getElementById('map-contribute-sheet')?.classList.add('hidden');
 }
 
+function formatDistanceM(metres) {
+    if (!Number.isFinite(metres)) return 'distance unknown';
+    if (metres < 1000) return `${Math.round(metres)} m`;
+    return `${(metres / 1000).toFixed(1)} km`;
+}
+
+function hideNearbyTrainsModal() {
+    document.getElementById('nt-nearby-trains-modal')?.classList.add('hidden');
+}
+
+/**
+ * Full-screen list of timetable trains scored against the rider's fix.
+ */
+export async function openNearbyTrainsModal({ lat, lng } = {}) {
+    hideContributeSheet();
+    const modal = document.getElementById('nt-nearby-trains-modal');
+    const list = document.getElementById('nt-nearby-list');
+    const empty = document.getElementById('nt-nearby-empty');
+    if (!modal || !list) return;
+
+    modal.classList.remove('hidden');
+    list.innerHTML = `<p class="text-[12px] font-semibold text-gray-500 dark:text-gray-400 text-center py-6">Finding trains near you…</p>`;
+    empty?.classList.add('hidden');
+
+    let coords = (Number.isFinite(lat) && Number.isFinite(lng))
+        ? { lat, lng }
+        : lastCoords;
+    if (!coords) {
+        try {
+            const pos = await getPosition();
+            coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            lastCoords = coords;
+        } catch (e) {
+            list.innerHTML = '';
+            empty?.classList.remove('hidden');
+            if (empty) empty.textContent = e?.code === 1
+                ? 'Location is off — allow it to see trains near you.'
+                : (e?.message || 'Couldn’t get your location.');
+            return;
+        }
+    }
+
+    const { scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
+    const ranked = scoreAllTrainsForFix(coords.lat, coords.lng);
+    const board = listContributeCandidates(coords);
+    const byId = new Map(board.map((c) => [String(c.trainId), c]));
+    const rows = ranked.map((r) => {
+        const extra = byId.get(String(r.trainId)) || {};
+        return {
+            ...extra,
+            trainId: r.trainId,
+            metres: r.metres,
+            ghost: r.ghost,
+            plausible: r.metres <= TRAIN_TRACKER_MAX_M,
+            scheduledTime: extra.scheduledTime || '',
+            destination: extra.destination || '',
+            station: extra.station || document.getElementById('station-select')?.value || '',
+            routeId: extra.routeId || $currentRouteId.get(),
+            driftMin: extra.driftMin,
+        };
+    });
+    board.forEach((c) => {
+        if (rows.some((r) => String(r.trainId) === String(c.trainId))) return;
+        rows.push({
+            ...c,
+            metres: c.distanceKm != null ? c.distanceKm * 1000 : Infinity,
+            plausible: !!c.plausible && (c.distanceKm == null || c.distanceKm * 1000 <= TRAIN_TRACKER_MAX_M),
+        });
+    });
+    rows.sort((a, b) => (a.metres || Infinity) - (b.metres || Infinity));
+
+    list.innerHTML = '';
+    if (!rows.length) {
+        empty?.classList.remove('hidden');
+        return;
+    }
+    empty?.classList.add('hidden');
+
+    rows.forEach((c) => {
+        const dep = c.scheduledTime
+            ? (formatTimeDisplay(c.scheduledTime) || String(c.scheduledTime).slice(0, 5))
+            : '';
+        const when = Number.isFinite(c.driftMin) ? driftLabel(c.driftMin) : '';
+        const dist = formatDistanceM(c.metres);
+        const dest = c.destination ? ` → ${escapeHTML(c.destination)}` : '';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `w-full text-left px-3.5 py-3 rounded-xl border ${
+            c.plausible
+                ? 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-800 hover:border-blue-500'
+                : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
+        } focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`;
+        btn.innerHTML = `
+            <p class="text-sm font-black text-gray-900 dark:text-white">Train ${escapeHTML(c.trainId)}${dest}</p>
+            <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${[dep, when, dist].filter(Boolean).join(' · ')}</p>
+            <p class="text-[11px] mt-1 ${c.plausible ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-amber-700 dark:text-amber-300'}">${
+                c.plausible
+                    ? 'Close enough to track this train'
+                    : 'Too far from this train’s path — you’ll show as a person, not a tracker'
+            }</p>`;
+        btn.addEventListener('click', () => {
+            hideNearbyTrainsModal();
+            startOnTrainShare({
+                trainId: c.trainId,
+                station: c.station,
+                destination: c.destination || '',
+                routeId: c.routeId || $currentRouteId.get(),
+                source: c.source === 'planner' ? 'planner_contribute' : 'nearby_modal',
+                skipVolunteer: true,
+                scheduledTime: c.scheduledTime,
+            });
+        });
+        list.appendChild(btn);
+    });
+}
+
 function driftLabel(driftMin) {
     if (driftMin === 0) return 'due now';
     if (driftMin > 0) return `${driftMin} min ago`;
@@ -398,64 +514,7 @@ function driftLabel(driftMin) {
 }
 
 async function showContributeSheet() {
-    const sheet = document.getElementById('map-contribute-sheet');
-    const list = document.getElementById('map-contribute-list');
-    const empty = document.getElementById('map-contribute-empty');
-    if (!sheet || !list) return;
-
-    sheet.classList.remove('hidden');
-    empty?.classList.add('hidden');
-    list.innerHTML = '';
-
-    const vet = await runContributeVet();
-    if (!vet.ok) {
-        empty?.classList.remove('hidden');
-        if (empty) empty.textContent = vet.message || 'Couldn’t verify your location.';
-        return;
-    }
-
-    const candidates = listContributeCandidates({ lat: vet.lat, lng: vet.lng });
-    list.innerHTML = '';
-    if (!candidates.length) {
-        empty?.classList.remove('hidden');
-        setStatus('No trains within 30 minutes on this board');
-        return;
-    }
-    empty?.classList.add('hidden');
-
-    candidates.forEach((c, i) => {
-        const li = document.createElement('li');
-        const dep = formatTimeDisplay(c.scheduledTime) || c.scheduledTime.slice(0, 5);
-        const label = c.trainId === 'trip'
-            ? `Trip · ${escapeHTML(c.station)} → ${escapeHTML(c.destination)}`
-            : `Train ${escapeHTML(c.trainId)}${c.destination ? ` → ${escapeHTML(c.destination)}` : ''}`;
-
-        const near = c.distanceKm == null
-            ? 'position unknown'
-            : `${c.distanceKm.toFixed(1)} km from ${escapeHTML(c.station)}`;
-        const meta = `${escapeHTML(dep)} · ${driftLabel(c.driftMin)} · ${near}`;
-
-        const tone = c.plausible
-            ? 'border-amber-200 dark:border-amber-800/60 hover:border-blue-400'
-            : 'border-gray-200 dark:border-gray-700 opacity-60';
-        const note = c.plausible
-            ? `${c.source === 'planner' ? 'From your trip plan' : 'From live board'} · shares for 10 min`
-            : 'Too far from this train to link';
-
-        li.innerHTML = `<button type="button" data-contribute-idx="${i}" ${c.plausible ? '' : 'disabled'} class="w-full text-left px-3 py-2 rounded-xl bg-white dark:bg-gray-900 border ${tone} text-[11px] font-bold text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed">${label}<span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${meta}</span><span class="block text-[10px] text-gray-400 dark:text-gray-500">${note}</span></button>`;
-        list.appendChild(li);
-    });
-
-    list.querySelectorAll('[data-contribute-idx]:not([disabled])').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const idx = Number(btn.getAttribute('data-contribute-idx'));
-            const chosen = candidates[idx];
-            if (chosen) contributeForTrain(chosen);
-        });
-    });
-
-    const matches = candidates.filter((c) => c.plausible).length;
-    setStatus(matches ? 'Pick the train you’re on' : 'No train matches your position');
+    return openNearbyTrainsModal();
 }
 
 function getPosition() {
@@ -616,6 +675,7 @@ export async function startOnTrainShare({
     routeId = $currentRouteId.get(),
     source = 'board_on_train',
     skipVolunteer = false,
+    scheduledTime = '',
 } = {}) {
     triggerHaptic();
     const id = trainId === 'trip' ? null : (trainId || null);
@@ -644,7 +704,7 @@ export async function startOnTrainShare({
     const vet = await runContributeVet();
     if (!vet.ok) return vet;
 
-    const { resolveTrainAttachment } = await import('./train-ghosts.js');
+    const { resolveTrainAttachment, scoreTrainForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
     const decision = resolveTrainAttachment(vet.lat, vet.lng, id);
     let finalId = id;
     let confirmedCloser = false;
@@ -663,9 +723,36 @@ export async function startOnTrainShare({
         }
     }
 
-    return finishRideShare({
+    const metres = scoreTrainForFix(vet.lat, vet.lng, finalId);
+    const tooFar = Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M;
+    const st = station || document.getElementById('station-select')?.value || '';
+
+    if (tooFar) {
+        const result = await finishRideShare({
+            trainId: null,
+            station: st,
+            destination,
+            routeId,
+            lat: vet.lat,
+            lng: vet.lng,
+            heading: vet.heading,
+            speedMps: vet.speedMps,
+            source: 'presence_too_far',
+        });
+        await promptOnTrainSheet({
+            title: 'Not close enough to track the train',
+            body: `You’re about ${formatDistanceM(metres)} from where train ${finalId} should be on the line. Other riders can see you, but not as a train tracker.`,
+            primary: 'Got it',
+            secondary: 'See trains near you',
+        }).then((pick) => {
+            if (pick === 'secondary') openNearbyTrainsModal({ lat: vet.lat, lng: vet.lng });
+        });
+        return { ...result, asPerson: true, tooFar: true };
+    }
+
+    const shared = await finishRideShare({
         trainId: finalId,
-        station: station || document.getElementById('station-select')?.value || '',
+        station: st,
         destination,
         routeId,
         lat: vet.lat,
@@ -674,6 +761,16 @@ export async function startOnTrainShare({
         speedMps: vet.speedMps,
         source: confirmedCloser ? 'closer_confirm' : source,
     });
+    if (shared?.ok) {
+        scheduleTripWatch({
+            trainId: finalId,
+            station: st,
+            scheduledTime: scheduledTime || '',
+            routeId,
+            destination,
+        });
+    }
+    return shared;
 }
 
 async function finishRideShare({
@@ -708,7 +805,9 @@ async function finishRideShare({
         }
 
         const mins = Math.round((RIDE_PING_TTL_MS || 600000) / 60000);
-        setStatus(`Sharing · train ${trainId} · ${mins} min`);
+        setStatus(trainId
+            ? `Sharing · train ${trainId} · ${mins} min`
+            : `Sharing where you are · ${mins} min`);
         postToMap({
             type: 'nt-map-contribute',
             lat,
@@ -737,6 +836,7 @@ export async function contributeForTrain(candidate) {
         source: candidate?.source === 'planner' ? 'planner_contribute'
             : candidate?.source === 'map_join' ? 'map_join'
             : 'map_contribute',
+        scheduledTime: candidate?.scheduledTime || '',
     });
 }
 
@@ -800,8 +900,125 @@ export function openContributePicker() {
     });
 }
 
+const TRIP_WATCH_KEY = 'ntTripWatchV1';
+let tripWatchTimer = 0;
+
+function scheduledTimeToMs(scheduledTime) {
+    const sec = timeToSeconds(scheduledTime);
+    if (!scheduledTime || !Number.isFinite(sec)) return NaN;
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + sec * 1000;
+}
+
+export function clearTripWatch() {
+    if (tripWatchTimer) {
+        clearTimeout(tripWatchTimer);
+        tripWatchTimer = 0;
+    }
+    try { safeStorage.removeItem(TRIP_WATCH_KEY); } catch { /* ignore */ }
+}
+
+/** After a train attach: later ask late vs didn’t board if they’re still at the station. */
+export function scheduleTripWatch({ trainId, station, scheduledTime, routeId, destination } = {}) {
+    clearTripWatch();
+    if (!trainId) return;
+    const depMs = scheduledTimeToMs(scheduledTime);
+    const fireAt = Number.isFinite(depMs)
+        ? depMs + 2 * 60 * 1000
+        : Date.now() + 3 * 60 * 1000;
+    const delay = Math.min(8 * 60 * 1000, Math.max(90 * 1000, fireAt - Date.now()));
+    const payload = {
+        trainId,
+        station: station || '',
+        scheduledTime: scheduledTime || '',
+        routeId: routeId || '',
+        destination: destination || '',
+        fireAt: Date.now() + delay,
+    };
+    try { safeStorage.setItem(TRIP_WATCH_KEY, JSON.stringify(payload)); } catch { /* ignore */ }
+    tripWatchTimer = setTimeout(() => runTripWatch(payload), delay);
+}
+
+export function resumeTripWatch() {
+    if (tripWatchTimer) return;
+    let raw = null;
+    try { raw = JSON.parse(safeStorage.getItem(TRIP_WATCH_KEY) || 'null'); } catch { return; }
+    if (!raw?.trainId) return;
+    const delay = (raw.fireAt || 0) - Date.now();
+    if (delay > 20 * 60 * 1000) {
+        clearTripWatch();
+        return;
+    }
+    tripWatchTimer = setTimeout(() => runTripWatch(raw), Math.max(0, delay));
+}
+
+async function runTripWatch(watch) {
+    tripWatchTimer = 0;
+    try { safeStorage.removeItem(TRIP_WATCH_KEY); } catch { /* ignore */ }
+    const { getActiveShare, stopRideShare } = await import('./ride-pings.js');
+    const mine = getActiveShare();
+    if (!mine || String(mine.trainId || '') !== String(watch.trainId)) return;
+
+    let pos;
+    try {
+        pos = await getPosition();
+    } catch {
+        return;
+    }
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
+
+    const { scoreTrainForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
+    const ghostM = scoreTrainForFix(lat, lng, watch.trainId);
+    if (Number.isFinite(ghostM) && ghostM <= TRAIN_TRACKER_MAX_M) {
+        return;
+    }
+
+    const st = stationCoords(watch.station);
+    const stationM = st
+        ? haversineM({ lat, lng }, { lat: st.lat, lng: st.lon ?? st.lng })
+        : Infinity;
+    if (stationM > STATION_NEAR_M) return;
+
+    const pick = await promptOnTrainSheet({
+        title: `Still at ${watch.station || 'the station'}?`,
+        body: `Train ${watch.trainId} should have left. We can’t tell if it’s running late or you didn’t board.`,
+        primary: 'Train is late',
+        secondary: 'I didn’t board',
+        tertiary: 'I’m on it',
+    });
+
+    if (pick === 'primary') {
+        const { submitQuickDelayReport } = await import('./delay-reports.js');
+        const result = await submitQuickDelayReport({
+            routeId: watch.routeId || mine.routeId,
+            trainId: watch.trainId,
+            scheduledTime: watch.scheduledTime,
+            station: watch.station,
+            destination: watch.destination,
+            status: 'late',
+            lateBucket: 'unsure',
+            source: 'trip_watch',
+        });
+        showToast(
+            result.ok ? 'Thanks — we’ll show this train as late' : (result.message || 'Couldn’t send the late report'),
+            result.ok ? 'success' : 'error',
+        );
+        return;
+    }
+    if (pick === 'secondary') {
+        await stopRideShare({ quiet: true });
+        showToast('Thanks — we stopped tracking you', 'success');
+        return;
+    }
+    showToast(`Still showing you on train ${watch.trainId}`, 'info');
+}
+
 /**
- * Soft offer when user is viewing a planner trip that looks “now”.
+ * Soft offer when a planner trip leaves within 15 minutes.
+ * On tap: quick sign-in if needed, then share as a train tracker only if
+ * the rider is close to the departure station.
  */
 export function maybeOfferPlannerContribute() {
     const bannerId = 'planner-contribute-banner';
@@ -813,9 +1030,25 @@ export function maybeOfferPlannerContribute() {
     }
 
     const candidates = listContributeCandidates().filter((c) => c.source === 'planner');
-    if (!candidates.length) {
+    const c = candidates[0];
+    if (!c?.trainId) {
         banner?.remove();
         return;
+    }
+
+    const untilSec = timeToSeconds(c.scheduledTime) - nowSeconds();
+    if (untilSec > 15 * 60 || untilSec < -2 * 60) {
+        banner?.remove();
+        return;
+    }
+
+    const from = stationCoords(c.station);
+    if (lastCoords && from) {
+        const d = haversineM(lastCoords, { lat: from.lat, lng: from.lon ?? from.lng });
+        if (d > 800) {
+            banner?.remove();
+            return;
+        }
     }
 
     if (!banner) {
@@ -825,21 +1058,80 @@ export function maybeOfferPlannerContribute() {
         results.insertBefore(banner, results.firstChild);
     }
 
-    const c = candidates[0];
+    const mins = Math.max(1, Math.round(Math.abs(untilSec) / 60));
+    const when = untilSec >= 0 ? `Leaves in about ${mins} min` : `Due about ${mins} min ago`;
     banner.innerHTML = `
       <div class="flex items-start gap-2">
         <div class="min-w-0 flex-1">
-          <p class="text-[11px] font-black text-gray-900 dark:text-white">On this trip?</p>
-          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Show others train ${escapeHTML(c.trainId)} for 10 minutes.</p>
+          <p class="text-[11px] font-black text-gray-900 dark:text-white">${when}.</p>
+          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Share this trip to help other riders — and earn marks.</p>
         </div>
-        <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">I’m on this train</button>
+        <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">Share this trip</button>
         <button type="button" id="planner-contribute-dismiss" class="shrink-0 p-1 text-gray-400" aria-label="Dismiss">✕</button>
       </div>`;
     document.getElementById('planner-contribute-go')?.addEventListener('click', () => {
-        import('./ui.js').then((m) => m.switchTab?.('map')).catch(() => {});
-        setTimeout(() => contributeForTrain(c), 200);
+        sharePlannerTrip(c);
     });
     document.getElementById('planner-contribute-dismiss')?.addEventListener('click', () => banner.remove());
+}
+
+async function sharePlannerTrip(c) {
+    const { $account, openAccountModal, waitForSignedIn } = await import('./account.js');
+    if ($account.get().status !== 'signed-in') {
+        showToast('Quick sign-in to share this trip and earn marks.', 'info');
+        openAccountModal();
+        const ok = await waitForSignedIn();
+        if (!ok) {
+            showToast('Sign in when you’re ready — you can still use the trip plan.', 'info');
+            return;
+        }
+    }
+
+    showToast('Checking you’re near the station…', 'info');
+    let pos;
+    try {
+        pos = await getPosition();
+    } catch {
+        showToast('Location is needed to share this trip.', 'error');
+        return;
+    }
+    lastCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const from = stationCoords(c.station);
+    const nearStation = from
+        ? haversineM(lastCoords, { lat: from.lat, lng: from.lon ?? from.lng }) <= 400
+        : false;
+
+    if (nearStation) {
+        const { switchTab } = await import('./ui.js');
+        switchTab('map');
+        startOnTrainShare({
+            trainId: c.trainId,
+            station: c.station,
+            destination: c.destination || '',
+            routeId: c.routeId || $currentRouteId.get(),
+            source: 'planner_contribute',
+            skipVolunteer: true,
+            scheduledTime: c.scheduledTime,
+        });
+        return;
+    }
+
+    await finishRideShare({
+        trainId: null,
+        station: c.station,
+        destination: c.destination || '',
+        routeId: c.routeId || $currentRouteId.get(),
+        lat: lastCoords.lat,
+        lng: lastCoords.lng,
+        source: 'planner_presence_far',
+    });
+    const pick = await promptOnTrainSheet({
+        title: 'You’re a bit far from the station',
+        body: `Other riders can see you, but not as a train tracker for ${c.trainId}. Get closer to ${c.station || 'the station'} to appear on that train.`,
+        primary: 'See trains near you',
+        secondary: 'OK',
+    });
+    if (pick === 'primary') openNearbyTrainsModal({ lat: lastCoords.lat, lng: lastCoords.lng });
 }
 
 export function activateMapTab() {
@@ -871,11 +1163,27 @@ export function bindMapTabUi() {
     document.getElementById('map-tab-contribute-btn')?.addEventListener('click', () => {
         openContributePicker();
     });
+    document.getElementById('map-tab-nearby-btn')?.addEventListener('click', () => {
+        triggerHaptic();
+        openNearbyTrainsModal();
+    });
     // Back-compat if old Share button id remains in cache
     document.getElementById('map-tab-share-btn')?.addEventListener('click', () => {
         openContributePicker();
     });
     document.getElementById('map-contribute-cancel')?.addEventListener('click', hideContributeSheet);
+    document.getElementById('nt-nearby-close')?.addEventListener('click', hideNearbyTrainsModal);
+    document.getElementById('nt-nearby-dismiss')?.addEventListener('click', hideNearbyTrainsModal);
+    document.getElementById('nt-nearby-trains-modal')?.addEventListener('click', (e) => {
+        if (e.target?.id === 'nt-nearby-trains-modal') hideNearbyTrainsModal();
+    });
+    document.getElementById('nt-nearby-presence')?.addEventListener('click', async () => {
+        hideNearbyTrainsModal();
+        const { getActiveShare, startPresenceShare } = await import('./ride-pings.js');
+        if (getActiveShare()) return;
+        startPresenceShare({ source: 'nearby_presence', skipVolunteer: true, openNearby: false });
+    });
+    resumeTripWatch();
 
     document.getElementById('map-tab-retry')?.addEventListener('click', () => {
         ensureFrameSrc(true);
@@ -924,6 +1232,8 @@ if (typeof window !== 'undefined') {
     window.focusTrainOnMap = focusTrainOnMap;
     window.maybePromptLocateOnTrain = maybePromptLocateOnTrain;
     window.maybeOfferPlannerContribute = maybeOfferPlannerContribute;
+    window.openNearbyTrainsModal = openNearbyTrainsModal;
+    window.clearTripWatch = clearTripWatch;
     window.bindMapTabUi = bindMapTabUi;
     // Legacy name used by map-app share FAB — route to contribute picker
     window.shareMyLocation = openContributePicker;

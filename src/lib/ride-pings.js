@@ -445,7 +445,7 @@ export async function submitRideCheckIn({
     }
 }
 
-export async function stopRideShare() {
+export async function stopRideShare({ quiet = false } = {}) {
     const active = getActiveShare();
     const routeId = active?.routeId || $currentRouteId.get();
     const deviceId = getDeviceId();
@@ -476,7 +476,8 @@ export async function stopRideShare() {
         if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.removeItem(ACTIVE_KEY);
         notifyPingsUpdated(routeId);
-        showToast('Sharing ended', 'info');
+        import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
+        if (!quiet) showToast('Sharing ended', 'info');
         return { ok: true };
     } catch (e) {
         return { ok: false, message: e?.message || 'Couldn’t stop sharing' };
@@ -485,9 +486,13 @@ export async function stopRideShare() {
 
 /**
  * Anyone on the corridor: one GPS fix, no train required, 10 minutes.
- * Optional “on this train?” only if a ghost is nearby.
+ * After a share, open Trains near you so they can attach if they’re close.
  */
-export async function startPresenceShare({ source = 'board_presence' } = {}) {
+export async function startPresenceShare({
+    source = 'board_presence',
+    skipVolunteer = false,
+    openNearby = true,
+} = {}) {
     triggerHaptic();
     const routeId = $currentRouteId.get();
     if (!routeId) {
@@ -506,14 +511,16 @@ export async function startPresenceShare({ source = 'board_presence' } = {}) {
         return { ok: true, already: true };
     }
 
-    const { promptOnTrainSheet } = await import('./map-tab.js');
-    const choice = await promptOnTrainSheet({
-        title: 'Show others where you are?',
-        body: 'Share a rough location for 10 minutes so others on this corridor can see you. You don’t have to be on a train.',
-        primary: 'Show where I am',
-        secondary: 'Not now',
-    });
-    if (choice !== 'primary') return { ok: false, cancelled: true };
+    if (!skipVolunteer) {
+        const { promptOnTrainSheet } = await import('./map-tab.js');
+        const choice = await promptOnTrainSheet({
+            title: 'Show others where you are?',
+            body: 'Share a rough location for 10 minutes so others on this corridor can see you. You don’t have to be on a train.',
+            primary: 'Show where I am',
+            secondary: 'Not now',
+        });
+        if (choice !== 'primary') return { ok: false, cancelled: true };
+    }
 
     let coords = null;
     try {
@@ -545,30 +552,10 @@ export async function startPresenceShare({ source = 'board_presence' } = {}) {
         return result;
     }
 
-    if (coords) {
+    if (coords && openNearby) {
         try {
-            const { resolveTrainAttachment, LOCATE_GHOST_M } = await import('./train-ghosts.js');
-            const decision = resolveTrainAttachment(coords.lat, coords.lng, null, { maxM: LOCATE_GHOST_M });
-            const best = decision.best;
-            if (best?.trainId && best.metres <= LOCATE_GHOST_M) {
-                const ask = await promptOnTrainSheet({
-                    title: `On train ${best.trainId}?`,
-                    body: `Train ${best.trainId} should be nearby. Attach so others can track it — or stay visible just as you.`,
-                    primary: `Yes — train ${best.trainId}`,
-                    secondary: 'Just here',
-                });
-                if (ask === 'primary') {
-                    const { startOnTrainShare } = await import('./map-tab.js');
-                    await startOnTrainShare({
-                        trainId: best.trainId,
-                        station,
-                        destination: '',
-                        routeId,
-                        source: 'presence_train',
-                        skipVolunteer: true,
-                    });
-                }
-            }
+            const { openNearbyTrainsModal } = await import('./map-tab.js');
+            openNearbyTrainsModal({ lat: coords.lat, lng: coords.lng });
         } catch { /* optional */ }
     }
 
@@ -589,10 +576,12 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         host.classList.add('hidden');
         host.innerHTML = '';
         cta?.classList.add('hidden');
+        document.getElementById('ride-nearby-btn')?.classList.add('hidden');
         return;
     }
 
     cta?.classList.remove('hidden');
+    document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
     const mine = getActiveShare();
     if (cta) {
         if (mine) {
@@ -668,6 +657,11 @@ export function bindRideCheckInUi() {
         await startPresenceShare({ source: 'board_presence' });
     });
 
+    document.getElementById('ride-nearby-btn')?.addEventListener('click', () => {
+        triggerHaptic();
+        import('./map-tab.js').then((m) => m.openNearbyTrainsModal()).catch(() => {});
+    });
+
     document.addEventListener('click', (e) => {
         const people = e.target.closest?.('[data-focus-map]');
         if (people) {
@@ -694,6 +688,7 @@ export function bindRideCheckInUi() {
                 destination: onTrain.getAttribute('data-dest') || '',
                 routeId: onTrain.getAttribute('data-route') || $currentRouteId.get(),
                 source: 'board_on_train',
+                scheduledTime: onTrain.getAttribute('data-time') || '',
             })).catch(() => {});
         }
     });

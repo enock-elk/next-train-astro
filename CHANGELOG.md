@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.15 — Trains near you, trip share, late vs skipped (13 Aug 2026)
+
+- **Trains near you** opens as a modal (Next Train + Map) with distance and whether you can attach as a tracker.
+- Choosing a train more than **400 m** from its path still shares you as a person. Copy explains others can see you, not as a train tracker.
+- Planner: departure within **15 minutes** and near the from-station → share this trip (quick sign-in if needed). Far from the station → presence only.
+- After attaching to a train, if you’re still at the departure station when it should have left, we ask **late / didn’t board / I’m on it**. Late becomes a dashboard report; didn’t board stops tracking. If your position matches the train ghost, we keep using it.
+
 ## V8_08.14 — Show where I am (13 Aug 2026)
 
 - Next Train **Show where I am** is a 10-minute presence share (one GPS fix). You do not have to be on a train. **I’m on this train** still vets and attaches to a timetable column.

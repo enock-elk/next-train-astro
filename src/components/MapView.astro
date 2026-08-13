@@ -19,7 +19,7 @@ const mapSrc = `${withBase('/map')}?embed=1&v=${APP_VERSION}`;
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Network map</p>
                 <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">You and other riders sharing right now</p>
             </div>
-            <div class="flex items-center gap-1.5 shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                 <button
                     type="button"
                     id="map-tab-locate-btn"
@@ -28,6 +28,14 @@ const mapSrc = `${withBase('/map')}?embed=1&v=${APP_VERSION}`;
                 >
                     <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     Locate
+                </button>
+                <button
+                    type="button"
+                    id="map-tab-nearby-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="See timetable trains near you"
+                >
+                    Trains near you
                 </button>
                 <button
                     type="button"

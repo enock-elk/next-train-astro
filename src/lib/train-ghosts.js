@@ -15,6 +15,8 @@ export const GHOST_WINDOW_SEC = 30 * 60;
 export const CLOSER_TRAIN_M = 400;
 export const LOCATE_RAIL_M = 50;
 export const LOCATE_GHOST_M = 400;
+/** Max metres from the ghost to count as a train tracker (platform + GPS slop). */
+export const TRAIN_TRACKER_MAX_M = 400;
 
 const SKIP_COLS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 

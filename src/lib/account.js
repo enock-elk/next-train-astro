@@ -207,6 +207,39 @@ export function openAccountModal() {
     }
 }
 
+/** Wait until the commuter signs in, closes the account modal, or times out. */
+export function waitForSignedIn(timeoutMs = 90000) {
+    if ($account.get().status === 'signed-in') return Promise.resolve(true);
+    return new Promise((resolve) => {
+        let done = false;
+        let obs = null;
+        const finish = (ok) => {
+            if (done) return;
+            done = true;
+            try { unsub(); } catch { /* ignore */ }
+            try { obs?.disconnect(); } catch { /* ignore */ }
+            clearTimeout(timer);
+            resolve(ok);
+        };
+        const unsub = $account.subscribe((s) => {
+            if (s.status === 'signed-in') finish(true);
+        });
+        const timer = setTimeout(() => finish($account.get().status === 'signed-in'), timeoutMs);
+        const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
+        if (modal && typeof MutationObserver !== 'undefined') {
+            setTimeout(() => {
+                if (done) return;
+                obs = new MutationObserver(() => {
+                    if (modal.classList.contains('hidden') && $account.get().status !== 'signed-in') {
+                        finish(false);
+                    }
+                });
+                obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
+            }, 400);
+        }
+    });
+}
+
 export function closeAccountModal() {
     if (typeof window.closeSmoothModal === 'function') {
         window.closeSmoothModal('account-modal');
@@ -380,6 +413,7 @@ function friendlyAuthError(e) {
 
 if (typeof window !== 'undefined') {
     window.openAccountModal = openAccountModal;
+    window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
     window.$account = $account;
 }

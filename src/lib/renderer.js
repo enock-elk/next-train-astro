@@ -541,7 +541,7 @@ export const Renderer = {
             ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live — open map"><span class="block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.35)] animate-pulse"></span></button>`
             : '';
         const onTrainHtml = (isRideCheckInEnabled() && liveTrainId)
-            ? `<button type="button" class="nt-on-train-btn mt-1 w-full text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:underline focus:outline-none" data-on-train="${escapeHTML(String(liveTrainId))}" data-station="${escapeHTML(liveStation)}" data-dest="${escapeHTML(destination || '')}" data-route="${escapeHTML((typeof window !== 'undefined' && window._liveRouteId) || '')}">I’m on this train</button>`
+            ? `<button type="button" class="nt-on-train-btn mt-1 w-full text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:underline focus:outline-none" data-on-train="${escapeHTML(String(liveTrainId))}" data-station="${escapeHTML(liveStation)}" data-dest="${escapeHTML(destination || '')}" data-route="${escapeHTML((typeof window !== 'undefined' && window._liveRouteId) || '')}" data-time="${escapeHTML(String(rawTime || ''))}">I’m on this train</button>`
             : '';
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 

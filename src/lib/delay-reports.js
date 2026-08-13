@@ -599,6 +599,64 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
     }
 }
 
+/** Quiet late report from the trip-watch prompt (no report modal). */
+export async function submitQuickDelayReport({
+    routeId, trainId, scheduledTime, arrivalTime, station, destination,
+    status = 'late', lateBucket = 'unsure', source = 'trip_watch',
+} = {}) {
+    if (!routeId || !trainId) return { ok: false, message: 'Missing train' };
+    const limit = checkDelayReportRateLimit(routeId);
+    if (!limit.ok) return { ok: false, message: limit.message };
+    const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
+    const existing = getOwnReport(trainKey);
+    const acct = $account.get();
+    const isGuest = acct.status !== 'signed-in';
+    const reportId = existing?.reportId || `dr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        reportId,
+        routeId,
+        region: $userRegion.get() || 'GP',
+        station: station || null,
+        trainId,
+        scheduledTime: scheduledTime || null,
+        arrivalTime: arrivalTime || null,
+        destination: destination || null,
+        trainKey,
+        trainStatus: status,
+        status,
+        lateBucket: status === 'late' ? (lateBucket || 'unsure') : null,
+        note: null,
+        severity: severityFromStatus(status, lateBucket),
+        uid: isGuest ? null : (acct.uid || null),
+        deviceId: getDeviceId(),
+        isGuest,
+        timestamp: existing?.timestamp || Date.now(),
+        updatedAt: Date.now(),
+        statusOpen: 'open',
+        appVersion: APP_VERSION,
+        source,
+    };
+    try {
+        const token = await ensureAuthToken();
+        const authParam = token ? `?auth=${encodeURIComponent(token)}` : '';
+        const res = await fetch(`${DYNAMIC_BASE_URL}delay_reports/${reportId}.json${authParam}`, {
+            method: existing ? 'PATCH' : 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Report failed (${res.status})`);
+        saveOwnReport(trainKey, { reportId, status, lateBucket: payload.lateBucket, timestamp: payload.timestamp });
+        if (!existing) recordRateHit(routeId);
+        delete routeReportCache[routeId];
+        delete routeReportCacheAt[routeId];
+        refreshDelayReportSurface(routeId);
+        hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Could not send report' };
+    }
+}
+
 function showTrainReportStep(step) {
     document.getElementById('tr-step-status')?.classList.toggle('hidden', step !== 'status');
     document.getElementById('tr-step-late')?.classList.toggle('hidden', step !== 'late');
@@ -1156,6 +1214,7 @@ if (typeof window !== 'undefined') {
     window.openTrainReportModal = openTrainReportModal;
     window.refreshDelayReportSurface = refreshDelayReportSurface;
     window.hydrateTrainReportSlots = hydrateTrainReportSlots;
+    window.submitQuickDelayReport = submitQuickDelayReport;
     window.buildTrainReportSlotHtml = buildTrainReportSlotHtml;
     window.startDelayReportsListener = startDelayReportsListener;
 }

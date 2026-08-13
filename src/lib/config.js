@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.14";
+export const APP_VERSION = "V8_08.15";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.15",
+        title: "Trains near you, trip share, late vs skipped",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Trains near you:</b> a full list of nearby timetable trains — and whether you’re close enough to track one.",
+            "<b>Too far from the line:</b> others can still see you, just not as a train tracker. We’ll tell you why.",
+            "<b>Leaving soon?</b> If your trip leaves within 15 minutes and you’re near the station, we’ll ask you to share. Still at the platform after it should have left? Tell us if it’s late or you didn’t board."
+        ]
+    },
     {
         id: "V8_08.14",
         title: "Show where I am — Waze for trains",

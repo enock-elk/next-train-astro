@@ -256,61 +256,65 @@ html[data-colour-pack="ember"].dark {
   --nt-accent: #fb923c;
 }
 
-/* Earthy — warm paper, sage primary, terracotta accent. No near-white stickers. */
+/*
+ * Earthy — editorial cream + sage (Understanding Burnout palette).
+ * Eggshell paper, muted sage, dusty terracotta, soft charcoal.
+ * Desaturated and light: no forest-green fills, no kraft-tan paper.
+ */
 html[data-colour-pack="earthy"] {
-  --nt-primary: #6e7f53;
-  --nt-primary-hover: #59683f;
-  --nt-primary-fg: #f8f4ea;
-  --nt-primary-soft: #e4ead4;
-  --nt-surface: #f4ead8;
-  --nt-surface-muted: #efe4d0;
-  --nt-text: #1c1814;
-  --nt-text-muted: #6a5e52;
-  --nt-border: #d4c4ae;
-  --nt-theme-meta: #6e7f53;
-  --nt-accent: #a9784e;
+  --nt-primary: #6B705C;
+  --nt-primary-hover: #5C6150;
+  --nt-primary-fg: #F5F1E9;
+  --nt-primary-soft: #EBE8DF;
+  --nt-surface: #F5F1E9;
+  --nt-surface-muted: #EFEBE3;
+  --nt-text: #353535;
+  --nt-text-muted: #8A8278;
+  --nt-border: #DDD6CB;
+  --nt-theme-meta: #F5F1E9;
+  --nt-accent: #A58E74;
 
-  --nt-blue-50: 228 234 212;
-  --nt-blue-100: 212 222 188;
-  --nt-blue-200: 190 204 158;
-  --nt-blue-300: 164 182 128;
-  --nt-blue-400: 138 158 102;
-  --nt-blue-500: 118 138 86;
-  --nt-blue-600: 110 127 83;
-  --nt-blue-700: 89 104 63;
-  --nt-blue-800: 71 83 54;
-  --nt-blue-900: 55 64 42;
+  --nt-blue-50: 245 241 233;
+  --nt-blue-100: 235 232 223;
+  --nt-blue-200: 221 214 203;
+  --nt-blue-300: 201 193 181;
+  --nt-blue-400: 154 150 132;
+  --nt-blue-500: 125 128 110;
+  --nt-blue-600: 107 112 92;
+  --nt-blue-700: 92 97 80;
+  --nt-blue-800: 74 78 65;
+  --nt-blue-900: 53 56 48;
 }
 
 html.dark[data-colour-pack="earthy"],
 html[data-colour-pack="earthy"].dark {
-  --nt-primary: #a9be8b;
-  --nt-primary-hover: #c3d3a8;
-  --nt-primary-fg: #1a1814;
-  --nt-primary-soft: rgba(110, 127, 83, 0.32);
-  --nt-surface: #1a1713;
-  --nt-surface-muted: #12100c;
-  --nt-text: #f2ebe0;
-  --nt-text-muted: #b9ac9b;
-  --nt-border: #3a332b;
-  --nt-theme-meta: #1a1713;
-  --nt-accent: #c99a6e;
+  --nt-primary: #A3A792;
+  --nt-primary-hover: #C4C6B8;
+  --nt-primary-fg: #2C2A26;
+  --nt-primary-soft: rgba(107, 112, 92, 0.28);
+  --nt-surface: #2C2A26;
+  --nt-surface-muted: #24221F;
+  --nt-text: #F5F1E9;
+  --nt-text-muted: #C9C1B5;
+  --nt-border: #3F3C37;
+  --nt-theme-meta: #2C2A26;
+  --nt-accent: #C4A990;
 
-  --nt-blue-50: 42 38 32;
-  --nt-blue-100: 55 64 42;
-  --nt-blue-200: 71 83 54;
-  --nt-blue-300: 89 104 63;
-  --nt-blue-400: 110 127 83;
-  --nt-blue-500: 150 170 116;
-  --nt-blue-600: 169 190 139;
-  --nt-blue-700: 195 211 168;
-  --nt-blue-800: 214 226 194;
-  --nt-blue-900: 240 243 232;
+  --nt-blue-50: 44 42 38;
+  --nt-blue-100: 55 53 47;
+  --nt-blue-200: 63 60 55;
+  --nt-blue-300: 92 97 80;
+  --nt-blue-400: 125 128 110;
+  --nt-blue-500: 154 150 132;
+  --nt-blue-600: 163 167 146;
+  --nt-blue-700: 196 198 184;
+  --nt-blue-800: 221 214 203;
+  --nt-blue-900: 245 241 233;
 }
 
-/* Earthy reads as printed stock: hairline rules instead of heavy card shadows. */
+/* Earthy: quiet paper, not a heavy card. */
 html[data-colour-pack="earthy"] #main-content {
-  box-shadow: 0 1px 2px rgba(38, 34, 32, 0.06), 0 12px 32px rgba(38, 34, 32, 0.08);
+  box-shadow: 0 1px 2px rgba(53, 53, 53, 0.04), 0 16px 40px rgba(53, 53, 53, 0.05);
 }
 html[data-colour-pack="earthy"] .colour-pack-swatch {
   border: 1px solid var(--nt-border);
@@ -697,6 +701,28 @@ html[data-colour-pack="earthy"] .border-gray-200\/80 {
 html[data-colour-pack="earthy"] .hover\:bg-blue-50:hover,
 html[data-colour-pack="ember"] .hover\:bg-blue-50:hover {
   background-color: color-mix(in srgb, var(--nt-accent, var(--nt-primary)) 14%, var(--nt-surface)) !important;
+}
+
+html[data-colour-pack="earthy"] .text-gray-400,
+html[data-colour-pack="earthy"] .text-gray-500,
+html[data-colour-pack="earthy"] .text-gray-600 {
+  color: var(--nt-text-muted) !important;
+}
+html[data-colour-pack="earthy"] .text-gray-700,
+html[data-colour-pack="earthy"] .text-gray-800,
+html[data-colour-pack="earthy"] .text-gray-900,
+html[data-colour-pack="earthy"] .text-black {
+  color: var(--nt-text) !important;
+}
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-300,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-400,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-500 {
+  color: var(--nt-text-muted) !important;
+}
+html.dark[data-colour-pack="earthy"] .dark\:text-white,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-100,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-200 {
+  color: var(--nt-text) !important;
 }
 
 html[data-colour-pack="earthy"] #sidenav,

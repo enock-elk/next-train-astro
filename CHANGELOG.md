@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.18 — Earthy retuned to editorial cream + sage (13 Aug 2026)
+
+- Earthy matches the Understanding Burnout palette: eggshell `#F5F1E9`, muted sage `#6B705C`, dusty terracotta `#A58E74`, charcoal `#353535`.
+- Surfaces and the browser theme colour are light cream (not tan paper / dark olive chrome). Type is soft charcoal, not near-black. Dark mode is warm grey, not cave-black.
+
 ## V8_08.17 — Options on the right, Classic look, honest sharing (13 Aug 2026)
 
 - Hamburger is gone. **Options** is the rightmost bottom-nav item (Next Train logo), to the right of Community. The hub slides in from the **right**.

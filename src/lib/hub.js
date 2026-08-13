@@ -1174,6 +1174,10 @@ export async function checkServiceAlerts() {
             if (dot) dot.classList.remove('hidden');
             if (severity === 'critical') bellBtn.classList.add('animate-shake');
             else bellBtn.classList.remove('animate-shake');
+            const willAutoOpen = forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices();
+            import('./push-notify.js').then((m) => {
+                m.maybeNotifyOfficialNotice?.(activeNotice, { toast: !willAutoOpen });
+            }).catch(() => {});
 
             // Auto-open only on the home board (stabilized + route selected +
             // Next Train / Trip Planner). Bell still updates everywhere.

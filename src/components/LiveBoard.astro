@@ -56,10 +56,10 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
             </button>
         </div>
-        <!-- Live ride sharing / last-seen (gated via config/features rideCheckIn) -->
+        <!-- Live presence (gated via config/features rideCheckIn) -->
         <div class="mt-2 flex items-center justify-between gap-2 min-h-[1.25rem]">
             <div id="ride-seen-chip" class="hidden min-w-0 flex-1" aria-live="polite"></div>
-            <button type="button" id="ride-checkin-btn" class="hidden shrink-0 text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm px-0.5" title="Share your ride so others can see where this train is">Share my ride</button>
+            <button type="button" id="ride-checkin-btn" data-presence-action="share" class="hidden shrink-0 text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-2.5 py-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Share a rough location for 10 minutes — train optional">Show where I am</button>
         </div>
     </div>
 

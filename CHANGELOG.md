@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.14 — Show where I am (13 Aug 2026)
+
+- Next Train **Show where I am** is a 10-minute presence share (one GPS fix). You do not have to be on a train. **I’m on this train** still vets and attaches to a timetable column.
+- Board chip lists people at stations separately from live trains. Map **Share my location** uses the same sheet. **Stop sharing** ends the ping.
+- Notifications: Settings toggle plus optional ask after pin / delay confirm. Official notices and verified delays only — not presence pings.
+
 ## V8_08.13 — Live deltas, map pulse, rider marks (13 Aug 2026)
 
 - Timetable columns are the simulated fleet: ride pings compute a delay delta and shift only stations the ghost has not reached yet.

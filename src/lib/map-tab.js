@@ -1,9 +1,8 @@
 /**
  * Map tab — embed Leaflet /map + trip-tied location contribution.
  *
- * Contribute = volunteer coarse GPS tied to a train (moving / about to leave /
- * just arrived) for ~10 minutes so others can see where that ride was last seen.
- * Not a social “share my pin” link.
+ * Presence = coarse GPS for ~10 minutes so others can see you (train optional).
+ * Attaching a train still uses the 30s vet + closest-train confirm.
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -508,7 +507,7 @@ function hideOnTrainSheet() {
 /**
  * @returns {Promise<'primary'|'secondary'|'tertiary'>}
  */
-function promptOnTrainSheet({ title, body, primary, secondary, tertiary } = {}) {
+export function promptOnTrainSheet({ title, body, primary, secondary, tertiary } = {}) {
     return new Promise((resolve) => {
         const sheet = document.getElementById('nt-on-train-sheet');
         const titleEl = document.getElementById('nt-on-train-title');
@@ -520,9 +519,9 @@ function promptOnTrainSheet({ title, body, primary, secondary, tertiary } = {}) 
             resolve('secondary');
             return;
         }
-        if (titleEl) titleEl.textContent = title || 'Share your ride?';
+        if (titleEl) titleEl.textContent = title || 'Show others where you are?';
         if (bodyEl) bodyEl.textContent = body || '';
-        primaryBtn.textContent = primary || 'Share for 10 min';
+        primaryBtn.textContent = primary || 'Show where I am';
         if (secondaryBtn) secondaryBtn.textContent = secondary || 'Not now';
         if (tertiaryBtn) {
             if (tertiary) {
@@ -703,8 +702,8 @@ async function finishRideShare({
         });
 
         if (!result.ok) {
-            showToast(result.message || 'Could not contribute', 'error');
-            setStatus(result.message || 'Contribution failed');
+            showToast(result.message || 'Couldn’t share', 'error');
+            setStatus(result.message || 'Couldn’t share');
             return result;
         }
 
@@ -721,7 +720,7 @@ async function finishRideShare({
         syncRidePingsToMap(routeId);
         return { ok: true, trainId };
     } catch (e) {
-        showToast(e?.message || 'Could not contribute', 'error');
+        showToast(e?.message || 'Couldn’t share', 'error');
         return { ok: false, message: e?.message };
     }
 }
@@ -795,8 +794,10 @@ function stopPingsPolling() {
 }
 
 export function openContributePicker() {
-    triggerHaptic();
-    showContributeSheet();
+    import('./ride-pings.js').then((m) => m.startPresenceShare({ source: 'map_presence' })).catch(() => {
+        triggerHaptic();
+        showContributeSheet();
+    });
 }
 
 /**
@@ -829,9 +830,9 @@ export function maybeOfferPlannerContribute() {
       <div class="flex items-start gap-2">
         <div class="min-w-0 flex-1">
           <p class="text-[11px] font-black text-gray-900 dark:text-white">On this trip?</p>
-          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Contribute your location for 10 minutes so others can track train ${escapeHTML(c.trainId)}.</p>
+          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Show others train ${escapeHTML(c.trainId)} for 10 minutes.</p>
         </div>
-        <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">Contribute</button>
+        <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">I’m on this train</button>
         <button type="button" id="planner-contribute-dismiss" class="shrink-0 p-1 text-gray-400" aria-label="Dismiss">✕</button>
       </div>`;
     document.getElementById('planner-contribute-go')?.addEventListener('click', () => {
@@ -846,7 +847,7 @@ export function activateMapTab() {
     ensureFrameSrc();
     setStatus(lastCoords
         ? `Located · ±${Math.round(lastCoords.accuracy || 0)} m`
-        : 'You and other riders sharing right now');
+        : 'People sharing on this corridor');
     if (frameLoaded) {
         postToMap({ type: 'nt-map-locate' });
         syncRidePingsToMap();
@@ -926,4 +927,5 @@ if (typeof window !== 'undefined') {
     window.bindMapTabUi = bindMapTabUi;
     // Legacy name used by map-app share FAB — route to contribute picker
     window.shareMyLocation = openContributePicker;
+    window.promptOnTrainSheet = promptOnTrainSheet;
 }

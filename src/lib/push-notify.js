@@ -5,7 +5,7 @@
  */
 import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';
 import { safeStorage } from './utils.js';
-import { $currentRouteId, $deviceId } from '../store.js';
+import { $currentRouteId, $deviceId, $userRegion } from '../store.js';
 import { $account } from './account.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, isFeatureEnabled, fetchFeatures, isLabEnvironment } from './features.js';
@@ -211,7 +211,92 @@ export async function hydratePushNotifications() {
     syncNotifyUi(getNotifyPref());
 }
 
+function noticeBody(raw) {
+    return String(raw || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+}
+
+/**
+ * In-app toast + optional system notification. Never used for raw presence pings.
+ */
+export function alertLiveEvent({ title, body, dedupeKey, toast = true, system = true } = {}) {
+    if (dedupeKey && safeStorage.getItem(dedupeKey) === '1') return false;
+    if (dedupeKey) safeStorage.setItem(dedupeKey, '1');
+    const headline = title || 'Next Train';
+    const text = noticeBody(body);
+    if (toast && typeof window !== 'undefined' && typeof window.showToast === 'function') {
+        window.showToast(text ? `${headline}: ${text}` : headline, 'info', 5000);
+    }
+    if (system && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+            new Notification(headline, { body: text, tag: dedupeKey || headline });
+        } catch { /* ignore */ }
+    }
+    return true;
+}
+
+export function maybeNotifyOfficialNotice(notice, { toast = true } = {}) {
+    if (!getNotifyPref() || !notice) return false;
+    const id = notice.id || notice.timestamp || notice.message || notice.text || 'x';
+    const key = `notified_notice_${notice._sourceKey || 'x'}_${id}`;
+    return alertLiveEvent({
+        title: notice.severity === 'critical' ? 'Service alert' : 'Corridor notice',
+        body: notice.message || notice.text || '',
+        dedupeKey: key,
+        toast,
+        system: true,
+    });
+}
+
+export function maybeNotifyVerifiedDelay(agg, ctx = {}) {
+    if (!getNotifyPref() || !agg?.isVerified || !agg.trainKey) return false;
+    const routeId = ctx.routeId || $currentRouteId.get();
+    const region = $userRegion.get() || 'GP';
+    const pinned = safeStorage.getItem(`defaultRoute_${region}`) || '';
+    if (routeId && routeId !== $currentRouteId.get() && routeId !== pinned) return false;
+    const late = agg.status === 'cancelled'
+        ? 'Cancelled / no-show'
+        : agg.status === 'early'
+            ? `~${agg.avgLateMin || 3} min early`
+            : agg.status === 'on_time'
+                ? 'On time'
+                : `~${agg.avgLateMin || 10} min late`;
+    const station = ctx.station ? String(ctx.station).replace(/ STATION$/i, '') : '';
+    return alertLiveEvent({
+        title: ctx.trainId ? `Train ${ctx.trainId}` : 'Live alert',
+        body: station ? `${late} · ${station}` : late,
+        dedupeKey: `notified_delay_${agg.trainKey}`,
+        toast: true,
+        system: true,
+    });
+}
+
+export async function maybeOfferCorridorAlerts() {
+    if (getNotifyPref()) return false;
+    if (typeof window === 'undefined') return false;
+    try {
+        const { promptOnTrainSheet } = await import('./map-tab.js');
+        const pick = await promptOnTrainSheet({
+            title: 'Alerts for this corridor?',
+            body: 'Get a ping for official notices and confirmed delays. We won’t notify when someone just shares a location.',
+            primary: 'Turn on alerts',
+            secondary: 'Not now',
+        });
+        if (pick !== 'primary') return false;
+        await enablePushNotifications();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.enablePushNotifications = enablePushNotifications;
     window.registerPushToken = registerPushToken;
+    window.alertLiveEvent = alertLiveEvent;
+    window.maybeNotifyOfficialNotice = maybeNotifyOfficialNotice;
+    window.maybeNotifyVerifiedDelay = maybeNotifyVerifiedDelay;
 }

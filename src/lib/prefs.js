@@ -195,7 +195,7 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
                 ? 'On — alerts for your routes'
                 : 'On — browser permission saved (FCM key pending)';
         } else {
-            hint.textContent = 'Route notices & delay confirms';
+            hint.textContent = 'Official notices and confirmed delays';
         }
     }
 }

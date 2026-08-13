@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.13";
+export const APP_VERSION = "V8_08.14";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.14",
+        title: "Show where I am — Waze for trains",
+        date: "13 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Show where I am:</b> one tap shares a rough location for 10 minutes — you don’t have to be on a train. Stop anytime.",
+            "<b>People + trains:</b> the board shows who is visible at stations, and a blue pulse only when a train is live.",
+            "<b>Alerts:</b> optional pings for official corridor notices and confirmed delays — never when someone just drops a pin."
+        ]
+    },
     {
         id: "V8_08.13",
         title: "Live deltas, map pulse, rider marks",

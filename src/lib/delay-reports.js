@@ -493,6 +493,9 @@ export async function hydrateTrainReportSlots(root = document) {
         const validated = hasLocalValidated(agg.trainKey);
 
         if (agg.isVerified) {
+            import('./push-notify.js').then((m) => {
+                m.maybeNotifyVerifiedDelay?.(agg, { routeId, trainId, station });
+            }).catch(() => {});
             slot.innerHTML = `
               <div class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-950/30 shadow-sm" data-train-key="${escapeHTML(agg.trainKey)}">
                 <div class="flex items-center gap-1 mb-0.5">
@@ -586,9 +589,10 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
         delete routeReportCache[routeId];
         delete routeReportCacheAt[routeId];
         await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
-        const { awardMark, marksLabel } = await import('./rider-marks.js');
-        const marks = awardMark('delay_confirm', { key: `delay:${key}` });
-        showToast(marks.awarded ? `Thanks — ${marksLabel(marks.state)}` : 'Thanks — your confirm helps others', 'success');
+        const { awardMark } = await import('./rider-marks.js');
+        awardMark('delay_confirm', { key: `delay:${key}` });
+        showToast('Thanks — that helps others', 'success');
+        import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
         return { ok: true };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not confirm' };

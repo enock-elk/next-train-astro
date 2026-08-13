@@ -1468,7 +1468,7 @@
                         + "<p class='font-black'>Train " + escapePing(trainId) + "</p>"
                         + "<p class='text-[10px] text-gray-500 mt-0.5'>" + n + " Next Train rider"
                         + (n === 1 ? '' : 's') + " sharing</p>"
-                        + "<button type='button' id='" + joinId + "' class='mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold'>Join this train</button>"
+                        + "<button type='button' id='" + joinId + "' class='mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold'>I’m on this train</button>"
                         + "</div>"
                     );
                     marker.on('popupopen', function () {
@@ -1503,8 +1503,8 @@
                         fillOpacity: 0.85
                     }).bindPopup(
                         "<div class='text-xs font-bold text-center text-gray-900'>"
-                        + (mine ? 'You · ' : '') + (p.station || 'Rider')
-                        + "<br><span class='text-[10px] text-gray-500 font-normal'>shared for 10 min</span></div>"
+                        + (mine ? 'You · ' : '') + (p.station || 'Person')
+                        + "<br><span class='text-[10px] text-gray-500 font-normal'>visible for 10 min</span></div>"
                     ).addTo(group);
                 });
                 ridePingLayer = group.addTo(map);
@@ -1547,13 +1547,17 @@
                 else if (locateIcon) locateIcon.classList.add('animate-spin');
             });
 
-            // Standalone /map: Contribute opens parent picker when embedded; else locates + toast.
+            // Standalone /map: Share opens parent presence sheet when embedded.
             const shareBtn = document.getElementById('custom-share-location-btn');
             if (shareBtn) {
                 shareBtn.onclick = async (e) => {
                     e.stopPropagation();
                     try {
                         if (window.parent && window.parent !== window) {
+                            if (typeof window.parent.startPresenceShare === 'function') {
+                                window.parent.startPresenceShare({ source: 'map_presence' });
+                                return;
+                            }
                             if (typeof window.parent.openContributePicker === 'function') {
                                 window.parent.openContributePicker();
                                 return;
@@ -1567,11 +1571,11 @@
                     if (locateIcon) locateIcon.classList.add('animate-spin');
                     map.once('locationfound', function (ev) {
                         applyUserLocation(ev.latlng, ev.accuracy);
-                        alert('Open Next Train → Map → Contribute to tie this location to a train for 10 minutes.');
+                        alert('Open Next Train → Map → Share my location so others can see you for 10 minutes.');
                     });
                     if (!lastKnownLatLng) map.locate({ setView: true, maxZoom: 15, enableHighAccuracy: true });
                     else {
-                        alert('Open Next Train → Map → Contribute to tie this location to a train for 10 minutes.');
+                        alert('Open Next Train → Map → Share my location so others can see you for 10 minutes.');
                     }
                 };
             }

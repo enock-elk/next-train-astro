@@ -688,6 +688,7 @@ export function initLiveBoardUi() {
                 safeStorage.setItem(key, routeId);
                 trackAnalyticsEvent('click_pin_route', { action: 'pin', route_id: routeId });
                 showToast('Route pinned!', 'success', 2000);
+                import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
             }
             updatePinUI();
         });

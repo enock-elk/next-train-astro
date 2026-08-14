@@ -1106,6 +1106,8 @@ export const Renderer = {
         return Renderer._toTitleCase(name);
     },
 
+    // Public What's New list. Renders every CHANGELOG_DATA entry — commuter-visible
+    // benefits only. Never inject admin, Dev Hub, or internal / IP notes here.
     renderChangelogModal: (changelogData) => {
         if (typeof document === 'undefined') return;
         const sidenav = document.getElementById('sidenav');

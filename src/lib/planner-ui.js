@@ -26,6 +26,7 @@ import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
 import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
+import { prepareRichHtml } from './rich-text.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -1167,7 +1168,10 @@ export function openDisruptionModal(id) {
     }
     if (titleEl) titleEl.innerHTML = locationText;
     
-    if (bodyEl) bodyEl.innerHTML = targetDisruption.message || targetDisruption.longExplanation || "No additional details provided.";
+    if (bodyEl) {
+        const raw = targetDisruption.message || targetDisruption.longExplanation || "No additional details provided.";
+        bodyEl.innerHTML = prepareRichHtml(raw);
+    }
     
     if (badgeEl) {
         if (targetDisruption.tier === 'CRITICAL') {

@@ -2,7 +2,7 @@
  * Node checks for alert rich-text: contact autolink tokens and style/href guards.
  * Run: node scripts/verify-rich-text.mjs
  */
-import { splitContactTokens, isSafeHref, sanitizeStyleAttr } from '../src/lib/rich-text.js';
+import { splitContactTokens, isSafeHref, sanitizeStyleAttr, sanitizeRichHtml } from '../src/lib/rich-text.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -49,6 +49,13 @@ assert(!isSafeHref('data:text/html,x'), 'data href blocked');
     assert(!bad.includes('url('), 'url() stripped from style');
     const js = sanitizeStyleAttr('font-size: expression(alert(1))');
     assert(js === '', 'expression() style blocked');
+}
+
+{
+    const kept = sanitizeRichHtml('<font size="5" face="Verdana">Sinkhole</font><u>delay</u>');
+    assert(/<font[^>]*size="5"/i.test(kept), `FONT size kept: ${kept}`);
+    assert(/face="Verdana"/i.test(kept), `FONT face kept: ${kept}`);
+    assert(/<u>/i.test(kept), `underline kept: ${kept}`);
 }
 
 if (failures.length) {

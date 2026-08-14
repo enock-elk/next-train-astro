@@ -490,7 +490,9 @@ html.dark #app-header.nt-maint-active {
 #notice-content,
 #developer-reply-content,
 #alert-msg,
-#admin-reply-text {
+#admin-reply-text,
+#disr-msg,
+#disruption-modal-body {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -498,7 +500,9 @@ html.dark #app-header.nt-maint-active {
 #notice-content a,
 #developer-reply-content a,
 #alert-msg a,
-#admin-reply-text a {
+#admin-reply-text a,
+#disr-msg a,
+#disruption-modal-body a {
   overflow-wrap: anywhere;
   word-break: break-word;
 }

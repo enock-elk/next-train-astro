@@ -10,11 +10,11 @@ export const RICH_TEXT_STYLE_ID = 'nt-rich-text-styles';
 
 /** Same 3-tier sizes the admin editor uses (Tailwind text-sm otherwise wins). */
 export const RICH_TEXT_CSS = `
-.nt-rich-body, #notice-content, #developer-reply-content, #alert-msg, #admin-reply-text {
+.nt-rich-body, #notice-content, #developer-reply-content, #alert-msg, #admin-reply-text, #disr-msg, #disruption-modal-body {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.nt-rich-body a, #notice-content a, #developer-reply-content a, #alert-msg a, #admin-reply-text a {
+.nt-rich-body a, #notice-content a, #developer-reply-content a, #alert-msg a, #admin-reply-text a, #disr-msg a, #disruption-modal-body a {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -29,13 +29,14 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 .nt-rich-body font[face="Times New Roman"], .nt-rich-body font[face="times new roman"] {
   font-family: "Times New Roman", Times, serif !important;
 }
-.nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u {
+.nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u, #disr-msg u, #disruption-modal-body u {
   text-decoration: underline;
 }
 .nt-rich-body h1, .nt-rich-body h2, .nt-rich-body h3, .nt-rich-body h4,
 #notice-content h1, #notice-content h2, #notice-content h3, #notice-content h4,
 #developer-reply-content h1, #developer-reply-content h2, #developer-reply-content h3,
-#alert-msg h1, #alert-msg h2, #alert-msg h3, #admin-reply-text h3 {
+#alert-msg h1, #alert-msg h2, #alert-msg h3, #admin-reply-text h3,
+#disr-msg h3, #disruption-modal-body h3 {
   font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.3;

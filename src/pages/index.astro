@@ -240,7 +240,7 @@ const faqLd = {
 
     import { initPlanner, applyPlannerDeepLink } from '../lib/planner-ui.js';
     import '../lib/renderer.js';
-    import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
+    import { initLiveBoardUi, applyRouteDeepLink, openRegionRoutePicker } from '../lib/live-board-ui.js';
     import { initHub, checkServiceAlerts } from '../lib/hub.js';
     import {
         switchTab,
@@ -394,18 +394,18 @@ const faqLd = {
                 if (legacyDefault && ROUTES[legacyDefault] && ROUTES[legacyDefault].region === region) {
                     savedDefault = legacyDefault;
                     safeStorage.setItem('defaultRoute_' + region, legacyDefault);
+                    safeStorage.removeItem('defaultRoute');
                 }
             }
 
-            if (!savedDefault || !ROUTES[savedDefault] || ROUTES[savedDefault].region !== region) {
-                const regionRoutes = Object.values(ROUTES).filter(r => r.region === region && r.isActive && r.id !== 'special_event');
-                if (regionRoutes.length > 0) {
-                    savedDefault = regionRoutes[0].id;
-                    safeStorage.setItem('defaultRoute_' + region, savedDefault);
-                }
-            }
+            const pinnedOk = !!(
+                savedDefault &&
+                ROUTES[savedDefault] &&
+                ROUTES[savedDefault].region === region &&
+                ROUTES[savedDefault].isActive
+            );
 
-            if (savedDefault) {
+            if (pinnedOk) {
                 $currentRouteId.set(savedDefault);
                 console.log("🛡️ Guardian: Igniting Data Engine (background)…");
                 // Do not await — poor networks must not block chrome / map→home return.
@@ -416,6 +416,10 @@ const faqLd = {
                         if (location.hash === '#fare') await consumeHashDeeplinks();
                     })
                     .catch((e) => console.warn('🛡️ Guardian: Background schedule load failed', e));
+            } else {
+                // Unpin / no default: never invent first-in-list as pinned.
+                // Open this region's route picker so the user chooses.
+                openRegionRoutePicker();
             }
         } finally {
             revealAppShell();

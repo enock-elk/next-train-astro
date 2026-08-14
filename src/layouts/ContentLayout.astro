@@ -153,22 +153,30 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       else window.addEventListener('load', function () { setTimeout(bootGa, 2500); });
     </script>
 
-    <!-- Microsoft Clarity — deferred so LCP/INP on thin SEO pages stay free of early third-party work -->
+    <!-- Microsoft Clarity — same idle deferral as GA4 (timeout 4s) -->
     <script is:inline>
-      var blockClarity = false;
-      try { blockClarity = localStorage.getItem('analytics_ignore') === 'true'; } catch(e) {}
-      if (!blockClarity) {
-        var bootClarity = function () {
-          (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            t.crossOrigin="anonymous";
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-          })(window, document, "clarity", "script", "v1aj19921i");
-        };
-        if ('requestIdleCallback' in window) requestIdleCallback(bootClarity, { timeout: 4000 });
-        else window.addEventListener('load', function () { setTimeout(bootClarity, 2500); });
-      }
+      var bootClarity = function () {
+        if (window.__ntClarityBooted) return;
+        window.__ntClarityBooted = true;
+        var blockClarity = false;
+        try { blockClarity = localStorage.getItem('analytics_ignore') === 'true'; } catch(e) {}
+        if (blockClarity) return;
+        (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          t.crossOrigin="anonymous";
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "v1aj19921i");
+        try {
+          var id = window.NEXT_TRAIN_DEVICE_ID || localStorage.getItem('next_train_device_id');
+          if (id && typeof clarity === 'function') {
+            clarity('identify', id);
+            clarity('set', 'custom_id', id);
+          }
+        } catch (e) {}
+      };
+      if ('requestIdleCallback' in window) requestIdleCallback(bootClarity, { timeout: 4000 });
+      else window.addEventListener('load', function () { setTimeout(bootClarity, 2500); });
     </script>
 
     <!-- GUARDIAN: Sentry (deferred — SPA parity on secondary pages) -->

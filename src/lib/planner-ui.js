@@ -17,7 +17,7 @@ import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
-    resolveOperatingDayType
+    resolveOperatingDayType, formatDisplayDateTime
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
@@ -1189,9 +1189,7 @@ export function openDisruptionModal(id) {
     if (timeEl) {
         if (targetDisruption.postedAt) {
             const d = new Date(targetDisruption.postedAt);
-            const dateStr = d.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const timeStr = d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-            timeEl.textContent = `Posted: ${timeStr}, ${dateStr}`;
+            timeEl.textContent = `Posted: ${formatDisplayDateTime(d)}`;
         } else {
             timeEl.textContent = "Posted: Recently";
         }

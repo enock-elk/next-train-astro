@@ -380,7 +380,7 @@ const Admin = {
                 return;
             }
             list.innerHTML = items.map((c) => {
-                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '-';
+                const when = c.timestamp ? Admin.formatDate(c.timestamp) : '-';
                 const err = String(c.error || 'Unknown').replace(/</g, '&lt;').slice(0, 180);
                 return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <div class="flex justify-between text-[9px] text-gray-400 font-mono mb-1"><span>${when}</span><span>${(c.routeId || 'global').toString().replace(/</g, '&lt;')}</span></div>
@@ -809,10 +809,24 @@ const Admin = {
         return Number(val).toLocaleString('en-US');
     },
 
-    // --- UNIVERSAL DATE FORMATTER ---
+    // --- UNIVERSAL DATE FORMATTER (13 Aug 2026 — never 8/13/2026) ---
+    formatDateOnly: (ts) => {
+        if (!ts) return "Unknown";
+        if (typeof window.formatDisplayDate === 'function') {
+            return window.formatDisplayDate(ts) || "Unknown";
+        }
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return "Unknown";
+        const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+        return `${d.getDate()} ${month} ${d.getFullYear()}`;
+    },
     formatDate: (ts) => {
         if (!ts) return "Unknown";
+        if (typeof window.formatDisplayDateTime === 'function') {
+            return window.formatDisplayDateTime(ts) || "Unknown";
+        }
         const d = new Date(ts);
+        if (isNaN(d.getTime())) return "Unknown";
         const day = d.getDate();
         const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
         const year = d.getFullYear();
@@ -1821,9 +1835,7 @@ const Admin = {
         const statAllTime = document.getElementById('stat-alltime')?.textContent || '--';
         
         const now = new Date();
-        const dateStr = now.toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const timeStr = now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-        const fullDateTimeStr = `${dateStr} | ${timeStr}`;
+        const fullDateTimeStr = Admin.formatDate(now);
 
         const exportContainer = document.createElement('div');
         exportContainer.style.position = 'fixed';
@@ -1984,7 +1996,7 @@ const Admin = {
                 <p style="font-size: 12px; font-weight: 800; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Metrorail Next Train Telemetry</p>
             </div>
             <div id="export-svg-slot" style="height: 350px; margin-bottom: 20px;"></div>
-            <div style="text-align: right; font-size: 11px; font-weight: 800; color: #94a3b8;">Data via Google Analytics 4 | Snapshot generated: ${new Date().toLocaleString('en-ZA')}</div>
+            <div style="text-align: right; font-size: 11px; font-weight: 800; color: #94a3b8;">Data via Google Analytics 4 | Snapshot generated: ${Admin.formatDate(Date.now())}</div>
         `;
         
         // Deep clone the SVG into the export container to preserve all exact vector points
@@ -4062,8 +4074,8 @@ const Admin = {
                     </div>
                 </div>
                 <div id="de-tabs-swipe" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y">
-                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
-                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
+                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Trip Plans</button>
+                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Fails</button>
                 </div>
                 <div id="de-trip-filters" class="hidden space-y-2">
                     <button type="button" id="de-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
@@ -4117,7 +4129,7 @@ const Admin = {
         const sortBtn = document.getElementById('de-sort-btn');
         const countModeBtn = document.getElementById('de-count-mode-btn');
         const listDiv = document.getElementById('de-list');
-        Admin._deActiveTab = 'fails';
+        Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
 
@@ -4163,8 +4175,8 @@ const Admin = {
                 const endX = e.changedTouches?.[0]?.screenX || 0;
                 const diffX = endX - touchStartX;
                 if (Math.abs(diffX) < 48) return;
-                if (diffX > 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
-                else if (diffX < 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+                if (diffX > 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+                else if (diffX < 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
@@ -5043,8 +5055,7 @@ const Admin = {
                     <div class="feedback-thread-body hidden relative bg-white dark:bg-gray-900 p-2 sm:p-3">
                         <div class="absolute top-2 right-2 z-20" data-fb-more-wrap>
                             <button type="button" data-fb-more-toggle class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
-                                ${Admin.icon('more', 'w-3.5 h-3.5')} Options
-                                <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                Options
                             </button>
                             <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
                                 <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
@@ -5079,7 +5090,7 @@ const Admin = {
                         } else if (msgDateString === yesterday.toDateString()) {
                             dateDividerText = "Yesterday";
                         } else {
-                            dateDividerText = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+                            dateDividerText = Admin.formatDateOnly(date);
                         }
                         
                         groupHTML += `
@@ -5922,7 +5933,7 @@ const Admin = {
                 };
 
                 list.innerHTML = items.slice(0, 80).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
+                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
                     const sev = (r.severity || 'moderate').toUpperCase();
                     const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
                     const status = r.status || 'open';
@@ -6078,7 +6089,7 @@ const Admin = {
                 }
 
                 list.innerHTML = items.slice(0, 100).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
+                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
@@ -6536,7 +6547,7 @@ const Admin = {
 
                 list.innerHTML = '';
                 bans.forEach((b) => {
-                    const untilStr = b.until > 0 ? new Date(b.until).toLocaleString() : 'Permanent';
+                    const untilStr = b.until > 0 ? Admin.formatDate(b.until) : 'Permanent';
                     const remaining = b.until > 0
                         ? (() => {
                             const ms = b.until - now;
@@ -6656,7 +6667,7 @@ const Admin = {
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
                 const expired = banned && until > 0 && Date.now() > until;
-                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '-');
+                const untilStr = until > 0 ? Admin.formatDate(until) : (banned ? 'permanent' : '-');
                 const modeRaw = flags.shadowBanMode || 'offline';
                 const modeStr = banModeLabel(modeRaw);
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
@@ -9772,7 +9783,7 @@ const Admin = {
                     if (item.stations && item.stations.length === 2) targetStr = `${item.stations[0].replace(' STATION', '')} - ${item.stations[1].replace(' STATION', '')}`;
                     else if (item.stations && item.stations.length === 1) targetStr = item.stations[0].replace(' STATION', '');
 
-                    const expStr = item.expiresAt ? new Date(item.expiresAt).toLocaleDateString() : 'Never';
+                    const expStr = item.expiresAt ? Admin.formatDateOnly(item.expiresAt) : 'Never';
                     const expColor = isExpired ? 'text-red-500 font-bold' : 'text-gray-400';
 
                     const row = document.createElement('div');
@@ -10542,7 +10553,7 @@ const Admin = {
                     if (item.expiresAt) {
                         const expDate = new Date(item.expiresAt);
                         const isExpired = Date.now() > item.expiresAt;
-                        const expStr = `${expDate.toLocaleDateString()} ${expDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                        const expStr = Admin.formatDate(expDate);
                         
                         if (isExpired) {
                             expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">EXPIRED: ${expStr}</div>`;
@@ -12214,7 +12225,7 @@ const Admin = {
                     iso: `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
                     offset,
                     defaultDayType: defaults[key] || 'public_holiday',
-                    whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                    whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : Admin.formatDateOnly(d),
                 });
             }
             return out;
@@ -12768,7 +12779,7 @@ const Admin = {
                     scopeBits.push('All routes');
                 }
                 const expStr = it.expiresAt
-                    ? (expired ? 'Expired' : `Expires ${Admin.formatDate ? Admin.formatDate(it.expiresAt) : new Date(it.expiresAt).toLocaleString()}`)
+                    ? (expired ? 'Expired' : `Expires ${Admin.formatDate(it.expiresAt)}`)
                     : 'No expiry';
                 const msg = esc(String(it.message || 'MAINTENANCE IN PROGRESS'));
                 const idSafe = esc(String(it.id));

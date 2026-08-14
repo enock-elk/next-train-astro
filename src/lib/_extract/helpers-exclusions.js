@@ -5,7 +5,7 @@ function formatEffectiveDate(rawDateStr) {
         if (cleanStr.includes(',')) cleanStr = cleanStr.split(',')[0].trim();
         const d = new Date(cleanStr);
         if (!isNaN(d.getTime())) {
-            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
             return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
         }
     } catch(e) {}

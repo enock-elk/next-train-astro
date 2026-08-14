@@ -10,7 +10,7 @@
  * legacy path.
  */
 import { SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
-import { safeStorage, scheduleDayTypeLabel } from './utils.js';
+import { safeStorage, scheduleDayTypeLabel, formatDisplayDate } from './utils.js';
 import { openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices } from './ui.js';
 import { isReloadPending } from './session-stability.js';
 import { $userRegion, $currentRouteId } from '../store.js';
@@ -92,7 +92,7 @@ export function getUpcomingUnseenHolidays(now = new Date()) {
                 ? 'Today'
                 : offset === 1
                     ? 'Tomorrow'
-                    : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                    : formatDisplayDate(d),
             iso,
         });
     }

@@ -14,7 +14,8 @@ import {
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
-    usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay
+    usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
+    formatDisplayDate
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -206,11 +207,8 @@ export function formatEffectiveDate(rawDateStr) {
     let cleanStr = String(rawDateStr).replace(/^last updated[:\s-]*/i, '').trim();
     try {
         if (cleanStr.includes(',')) cleanStr = cleanStr.split(',')[0].trim();
-        const d = new Date(cleanStr);
-        if (!isNaN(d.getTime())) {
-            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-        }
+        const formatted = formatDisplayDate(cleanStr);
+        if (formatted) return formatted;
     } catch(e) {}
     return cleanStr;
 }
@@ -1269,6 +1267,50 @@ export function populateStationList() {
             window._renderNextTrainList();
         }
     }
+
+    // First-time hint only after stations exist — pulsing an empty "Loading..." field is useless.
+    maybeStartFromStationHint();
+}
+
+const FROM_STATION_HINT_KEY = 'nt_from_station_hint_seen';
+
+function stopFromStationHint() {
+    const wrap = typeof document !== 'undefined' ? document.getElementById('station-field-wrap') : null;
+    wrap?.classList.remove('nt-from-hint-pulse');
+    if (typeof window !== 'undefined' && window._ntFromHintTimer) {
+        clearTimeout(window._ntFromHintTimer);
+        window._ntFromHintTimer = null;
+    }
+}
+
+/** Persist after the commuter taps Select Station — they never see the pulse again. */
+export function markFromStationHintSeen() {
+    stopFromStationHint();
+    safeStorage.setItem(FROM_STATION_HINT_KEY, '1');
+}
+
+/**
+ * Gentle 10s pulse on the Next Train from-station field for first-time users.
+ * Starts only after schedule hydrate (station list non-empty) and no station chosen.
+ */
+export function maybeStartFromStationHint() {
+    if (typeof document === 'undefined') return;
+    if (safeStorage.getItem(FROM_STATION_HINT_KEY) === '1') return;
+    const wrap = document.getElementById('station-field-wrap');
+    const select = stationSelectEl();
+    const input = document.getElementById('station-search-input');
+    if (!wrap || !select) return;
+    if (!allStations.length) return;
+    if (select.value || (input && input.value.trim())) {
+        markFromStationHintSeen();
+        return;
+    }
+    if (wrap.classList.contains('nt-from-hint-pulse')) return;
+    wrap.classList.add('nt-from-hint-pulse');
+    if (typeof window !== 'undefined') {
+        if (window._ntFromHintTimer) clearTimeout(window._ntFromHintTimer);
+        window._ntFromHintTimer = setTimeout(() => stopFromStationHint(), 10000);
+    }
 }
 
 export function updateLastUpdatedText() {
@@ -1318,6 +1360,8 @@ export function attachLiveBoardGlobals() {
     window.isTrainExcluded = isTrainExcluded;
     window.findNextTrains = findNextTrains;
     window.populateStationList = populateStationList;
+    window.markFromStationHintSeen = markFromStationHintSeen;
+    window.maybeStartFromStationHint = maybeStartFromStationHint;
     window.findNearestStation = findNearestStation;
     window.calculateTimeDiffString = calculateTimeDiffString;
     window.getRouteFare = getRouteFare;

@@ -19,7 +19,7 @@ import { MANUAL_GRID_ORDER } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay
+    scheduleCacheSlot, routeSheetKeyForDay, formatDisplayDate
 } from './utils.js';
 
 import { 
@@ -1258,7 +1258,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
-    const dateText = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+    const exportNow = new Date();
+    const dateText = `${exportNow.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase()}, ${formatDisplayDate(exportNow).toUpperCase()}`;
     const scheduleTypeLabel = selectedDay === 'weekday' || selectedDay === 'sunday'
         ? 'WEEKDAY'
         : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'

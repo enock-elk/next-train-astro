@@ -274,6 +274,8 @@ function syncHapticsToggle() {
     if (cb) cb.checked = safeStorage.getItem('hapticsEnabled') !== 'false';
 }
 
+// What's New is a commuter surface. CHANGELOG_DATA copy must stay commuter-visible
+// only — no admin mode, no internal / IP work. See the CHANGELOG_DATA comment in config.js.
 function syncChangelogBadge() {
     const badge = document.getElementById('whats-new-badge');
     const verLabel = document.querySelector('#settings-app-version .font-mono');
@@ -284,6 +286,7 @@ function syncChangelogBadge() {
     if (badge) badge.classList.toggle('hidden', seenNorm === normalizeChangelogId(ver));
 }
 
+/** Opens the public What's New modal. Copy comes from CHANGELOG_DATA (commuter-only). */
 function openChangelog() {
     triggerHaptic();
     closeAppHub(true);

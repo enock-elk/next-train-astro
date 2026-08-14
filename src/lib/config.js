@@ -876,30 +876,36 @@ export const DEFAULT_EXCLUSIONS = {
 };
 
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
-// Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
+// Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
+// Badge / seen key use `id` (=== APP_VERSION for latest).
+//
+// COMMUTER-ONLY COPY (strict) — every entry is rendered in the public What's New panel:
+// - Never mention admin mode, Dev Hub, operator tools, or how staff publish content.
+// - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
+// - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
         id: "V8_08.15.1",
-        title: "Admin feedback & incidents",
+        title: "Clearer line notices",
         date: "15 Aug 2026",
         // Keep false unless you intentionally want What's New to auto-open once for this version.
         forceShow: false,
         features: [
-            "<b>Feedback:</b> Options stays pinned top-right. After a reply, admins can open WhatsApp or email without leaving the current tab.",
-            "<b>Attachments:</b> The paperclip chip now shows for commuter files and admin media in the same thread.",
-            "<b>Incidents:</b> Transit Incident Manager uses the same text formatting toolbar as alerts."
+            "<b>Disruption notices:</b> Delay and line-closed messages now keep titles, larger or smaller text, underline, and clear fonts so they are easier to read.",
+            "<b>Same look as alerts:</b> A stretch of line that is delayed or severed uses the same readable formatting as a service alert.",
+            "<b>On your screen:</b> Open a line notice from the board or planner to see the updated layout."
         ]
     },
     {
         id: "V8_08.14",
-        title: "Alert formatting & preview",
+        title: "Clearer service alerts",
         date: "14 Aug 2026",
         // Keep false unless you intentionally want What's New to auto-open once for this version.
         forceShow: false,
         features: [
-            "<b>Service alerts:</b> Small/large text, underline, titles, and Verdana / Times now show the same way for commuters as in admin.",
-            "<b>Preview Alert:</b> Admins see the exact user modal (Edit | Post) before publishing.",
-            "<b>Links:</b> Long URLs wrap; emails and phone numbers are tappable in alerts and admin replies."
+            "<b>Service alerts:</b> Titles, larger or smaller text, underline, and readable fonts now show correctly in the notice you open.",
+            "<b>Links:</b> Long web addresses wrap instead of running off the screen.",
+            "<b>Tap to contact:</b> Emails and phone numbers in an alert are tappable."
         ]
     },
     {

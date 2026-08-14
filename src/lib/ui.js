@@ -617,6 +617,69 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
 }
 
+const CHECK_TOAST_ID = 'nt-check-toast';
+
+function ensureCheckToastEl() {
+    if (typeof document === 'undefined') return null;
+    let el = document.getElementById(CHECK_TOAST_ID);
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = CHECK_TOAST_ID;
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.className = 'nt-check-toast hidden';
+    el.innerHTML = `
+        <p class="nt-check-toast-text text-sm font-medium tracking-wide leading-snug pr-2"></p>
+        <button type="button" class="nt-check-toast-close shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>`;
+    if (!document.getElementById('nt-check-toast-style')) {
+        const style = document.createElement('style');
+        style.id = 'nt-check-toast-style';
+        style.textContent = `
+            .nt-check-toast {
+                position: fixed;
+                left: 50%;
+                bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+                transform: translateX(-50%);
+                z-index: 160;
+                width: max-content;
+                max-width: min(92vw, 26rem);
+                display: flex;
+                align-items: flex-start;
+                gap: 0.5rem;
+                padding: 0.7rem 0.85rem;
+                border-radius: 1rem;
+                background: rgba(17, 24, 39, 0.94);
+                color: #f9fafb;
+                border: 1px solid rgba(55, 65, 81, 0.9);
+                box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+                backdrop-filter: blur(10px);
+            }
+            .nt-check-toast.hidden { display: none !important; }
+            html.dark .nt-check-toast { background: rgba(17, 24, 39, 0.96); }
+        `;
+        document.head.appendChild(style);
+    }
+    document.body.appendChild(el);
+    el.querySelector('.nt-check-toast-close')?.addEventListener('click', () => hideCheckToast());
+    return el;
+}
+
+/** Non-intrusive, dismissable status chip above the bottom nav (GPS / I’m on it checks). */
+export function showCheckToast(message) {
+    if (typeof document === 'undefined') return;
+    const el = ensureCheckToastEl();
+    if (!el) return;
+    const text = el.querySelector('.nt-check-toast-text');
+    if (text) text.textContent = String(message || '');
+    el.classList.remove('hidden');
+}
+
+export function hideCheckToast() {
+    document.getElementById(CHECK_TOAST_ID)?.classList.add('hidden');
+}
+
 
 // --- LIGHTBOX ENGINE ---
 function resetMapImageVisibility(mapImg) {
@@ -1751,6 +1814,8 @@ if (typeof window !== 'undefined') {
     window.closeSmoothModal = closeSmoothModal;
     window.toggleDropdownScrim = toggleDropdownScrim;
     window.showToast = showToast;
+    window.showCheckToast = showCheckToast;
+    window.hideCheckToast = hideCheckToast;
     window.showOfflineToast = showOfflineToast;
     window.hideOfflineToast = hideOfflineToast;
     window.openLightbox = openLightbox;

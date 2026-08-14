@@ -12,8 +12,8 @@
  * No GPS trails — optional coarse coords only to snap station / show on Leaflet.
  * TTL ~10 minutes (rules allow up to 20); one active ride per device.
  */
-import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
-import { safeStorage, escapeHTML, normalizeStationName, getDistanceFromLatLonInKm } from './utils.js';
+import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { safeStorage, escapeHTML, normalizeStationName, getDistanceFromLatLonInKm, formatTimeDisplay } from './utils.js';
 import { $currentRouteId, $deviceId, $globalStationIndex } from '../store.js';
 import { $account } from './account.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -26,6 +26,11 @@ import {
     addMinutesToTime,
     scoreTrainForFix,
     TRAIN_TRACKER_MAX_M,
+    ghostHeadingDeg,
+    headingAgrees,
+    findStopsForTrain,
+    progressAlongStops,
+    trainGoingLabel,
 } from './train-ghosts.js';
 import { peekCachedRouteReports } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
@@ -151,15 +156,137 @@ export function getCachedRidePings(routeId = $currentRouteId.get()) {
     return routeCache[routeId] || [];
 }
 
-function pingTracksTrain(p, trainId) {
+function pingTracksTrain(p, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id || String(p?.trainId || '') !== id) return false;
     const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
     const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
     if (lat == null || lng == null) return false;
-    const metres = scoreTrainForFix(lat, lng, id);
+    const metres = scoreTrainForFix(lat, lng, id, opts);
     if (!Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M) return false;
-    return typeof p.speedMps === 'number' && p.speedMps >= 1.5;
+    if (typeof p.speedMps !== 'number' || p.speedMps < 1.5) return false;
+    if (typeof p.heading === 'number') {
+        const ghost = expectedPosition(id, opts.now, opts);
+        if (!headingAgrees(p.heading, ghostHeadingDeg(ghost))) return false;
+    }
+    return true;
+}
+
+/** Sort key for verified sharers: heading, proximity, train-like speed, freshness. Lower is better. */
+export function compareRankedPings(a, b) {
+    if (!!a.headingOk !== !!b.headingOk) return a.headingOk ? -1 : 1;
+    const dm = (a.metres || Infinity) - (b.metres || Infinity);
+    if (dm) return dm;
+    if (!!a.trainLike !== !!b.trainLike) return a.trainLike ? -1 : 1;
+    const ds = (a.speedScore || 0) - (b.speedScore || 0);
+    if (ds) return ds;
+    return (b.at || 0) - (a.at || 0);
+}
+
+function scorePingAgainstGhost(p, trainId, ghost, opts = {}) {
+    const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
+    const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
+    const metres = (lat != null && lng != null)
+        ? scoreTrainForFix(lat, lng, trainId, opts)
+        : Infinity;
+    const ghostH = ghostHeadingDeg(ghost);
+    const headingOk = typeof p.heading === 'number'
+        ? headingAgrees(p.heading, ghostH)
+        : true;
+    const speed = typeof p.speedMps === 'number' ? p.speedMps : 0;
+    const trainLike = speed >= 3 && speed <= 35;
+    const speedScore = trainLike ? 0 : Math.abs(speed - 15);
+    return {
+        ping: p,
+        metres,
+        headingOk,
+        trainLike,
+        speedScore,
+        speed,
+        at: p.at || 0,
+    };
+}
+
+/**
+ * Rank verified on-path pings for one train. Do not average GPS — pick a driver.
+ * 1) heading agrees with the ghost  2) closer to the ghost
+ * 3) plausible train speed          4) fresher `at`
+ */
+export function rankVerifiedPings(pings, trainId, opts = {}) {
+    const id = String(trainId || '');
+    if (!id) return [];
+    const live = activePings(pings).filter((p) => pingTracksTrain(p, id, opts));
+    if (!live.length) return [];
+    const ghost = expectedPosition(id, opts.now, opts);
+    return live
+        .map((p) => scorePingAgainstGhost(p, id, ghost, opts))
+        .sort(compareRankedPings);
+}
+
+function journeyTrainId(j) {
+    return String(j?.train || j?.train1?.train || '').trim();
+}
+
+function scheduleDataMap() {
+    if (typeof window !== 'undefined' && window.currentScheduleData && typeof window.currentScheduleData === 'object') {
+        return window.currentScheduleData;
+    }
+    return {};
+}
+
+function destinationForTrain(trainId, route) {
+    if (!trainId || !route) return null;
+    const id = String(trainId);
+    const data = scheduleDataMap();
+    for (const dest of [route.destA, route.destB]) {
+        const journeys = dest ? (data[dest] || []) : [];
+        if (journeys.some((j) => journeyTrainId(j) === id)) return dest;
+    }
+    const { stops } = findStopsForTrain(id);
+    if (!stops.length) {
+        return null;
+    }
+    const last = stops[stops.length - 1]?.station || '';
+    if (normalizeStationName(last) === normalizeStationName(route.destA)) return route.destA;
+    if (normalizeStationName(last) === normalizeStationName(route.destB)) return route.destB;
+    return null;
+}
+
+function pickLiveGroup(pings, opts = {}) {
+    if (!pings?.length) return null;
+    const byTrain = {};
+    pings.forEach((p) => {
+        const k = String(p.trainId || '');
+        if (!k) return;
+        (byTrain[k] || (byTrain[k] = [])).push(p);
+    });
+    let best = null;
+    Object.entries(byTrain).forEach(([trainId, list]) => {
+        const ranked = rankVerifiedPings(list, trainId, opts);
+        if (!ranked.length) return;
+        const driver = ranked[0];
+        if (!best || compareRankedPings(driver, best.driver) < 0) {
+            best = { trainId, driver, ranked, count: ranked.length };
+        }
+    });
+    return best;
+}
+
+/** Live verified group per direction — header pin + badge. Not gated on the viewer’s station. */
+export function liveTrackersByDirection(routeId = $currentRouteId.get(), opts = {}) {
+    const route = ROUTES[routeId];
+    if (!route) return { a: null, b: null };
+    const verified = activePings(getCachedRidePings(routeId)).filter((p) => pingTracksTrain(p, p.trainId, opts));
+    const buckets = { a: [], b: [] };
+    verified.forEach((p) => {
+        const dest = destinationForTrain(p.trainId, route);
+        if (dest && normalizeStationName(dest) === normalizeStationName(route.destA)) buckets.a.push(p);
+        else if (dest && normalizeStationName(dest) === normalizeStationName(route.destB)) buckets.b.push(p);
+    });
+    return {
+        a: pickLiveGroup(buckets.a, opts),
+        b: pickLiveGroup(buckets.b, opts),
+    };
 }
 
 /** Train id others should see — only on-path and moving. Waiting / far = commuter. */
@@ -173,13 +300,6 @@ export function trainHasLivePing(trainId, routeId = $currentRouteId.get()) {
     return activePings(getCachedRidePings(routeId)).some((p) => pingTracksTrain(p, id));
 }
 
-function median(nums) {
-    const a = [...nums].filter(Number.isFinite).sort((x, y) => x - y);
-    if (!a.length) return null;
-    const mid = Math.floor(a.length / 2);
-    return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
-}
-
 function matchingDelayReport(trainId, routeId) {
     const id = String(trainId || '');
     return peekCachedRouteReports(routeId).some((r) => {
@@ -190,43 +310,41 @@ function matchingDelayReport(trainId, routeId) {
 }
 
 /**
- * Median lag of active pings vs the timetable ghost.
+ * Lag of the ranked driver ping vs the timetable ghost.
  * Soft label from ≥1 ping; rewrite clocks only with ≥2 devices or 1 ping + a matching delay report.
- * Apply only to stations the ghost has not reached yet.
+ * Apply only to stations the ghost has not reached yet (decorateJourneyLive).
  */
 export function computeRideDelta(pings, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id) return null;
-    const live = activePings(pings).filter((p) => pingTracksTrain(p, id));
-    if (!live.length) return null;
+    const ranked = rankVerifiedPings(pings, id, opts);
+    if (!ranked.length) return null;
 
     const ghost = expectedPosition(id, opts.now, opts);
     if (!ghost) return null;
 
-    const lags = live.map((p) => {
-        const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
-        const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
-        if (lat == null || lng == null) return null;
-        return lagMinutesFromFix(lat, lng, ghost, p.speedMps, opts.stationIndex);
-    }).filter(Number.isFinite);
+    const winner = ranked[0].ping;
+    const lat = typeof winner.coarseLat === 'number' ? winner.coarseLat : null;
+    const lng = typeof winner.coarseLng === 'number' ? winner.coarseLng : null;
+    if (lat == null || lng == null) return null;
+    const lagMinRaw = lagMinutesFromFix(lat, lng, ghost, winner.speedMps, opts.stationIndex);
+    if (!Number.isFinite(lagMinRaw)) return null;
 
-    const lagMin = median(lags);
-    if (lagMin == null) return null;
-
-    const devices = new Set(live.map((p) => p.deviceId || p.uid || `${p.coarseLat},${p.coarseLng}`));
+    const devices = new Set(ranked.map((r) => r.ping.deviceId || r.ping.uid || `${r.ping.coarseLat},${r.ping.coarseLng}`));
     const routeId = opts.routeId || $currentRouteId.get();
     const hasDelay = matchingDelayReport(id, routeId);
-    const rounded = Math.round(lagMin);
+    const rounded = Math.round(lagMinRaw);
 
     return {
         trainId: id,
         lagMin: rounded,
-        pingCount: live.length,
+        pingCount: ranked.length,
         deviceCount: devices.size,
         soft: true,
         rewrite: devices.size >= 2 || (devices.size >= 1 && hasDelay),
         ghost,
         liveHint: liveHint(rounded),
+        driver: winner,
     };
 }
 
@@ -266,6 +384,7 @@ export function decorateJourneyLive(trainId, station, rawTime, arrivalTime, rout
 
 function notifyPingsUpdated(routeId) {
     renderRideSeenChip(routeId);
+    paintLiveDirectionHeaders(routeId);
     try {
         window.dispatchEvent(new CustomEvent('nt-ride-pings-updated', { detail: { routeId } }));
     } catch { /* ignore */ }
@@ -642,44 +761,24 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         host.innerHTML = '';
         cta?.classList.add('hidden');
         document.getElementById('ride-nearby-btn')?.classList.add('hidden');
+        paintLiveDirectionHeaders(routeId);
         return;
     }
 
     cta?.classList.add('hidden');
     document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
     const mine = getActiveShare();
+    paintLiveDirectionHeaders(routeId);
 
-    const station = document.getElementById('station-select')?.value || '';
-    const pings = routeCache[routeId] || [];
-    const summary = summarizeRidePings(pings, station);
-
-    if (mine && !summary) {
-        host.classList.remove('hidden');
-        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>You’re visible at ${escapeHTML(stationShort(mine.station))} · ${minutesLeft(mine.expiresAt)} min left</span>`;
-        return;
-    }
-
-    if (!summary) {
-        host.classList.remove('hidden');
-        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"><span class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>Nobody visible yet — be the first</span>`;
-        return;
-    }
-
-    const bits = [];
     if (mine) {
-        bits.push(`<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">You’re visible · ${minutesLeft(mine.expiresAt)} min</span>`);
-    }
-    if (summary.peopleCount) {
-        const places = summary.topStations.map((s) => escapeHTML(stationShort(s))).join(', ');
-        const people = `${summary.peopleCount} commuter${summary.peopleCount === 1 ? '' : 's'} last seen${places ? ` · ${places}` : ''}${summary.age ? ` · ${escapeHTML(summary.age)}` : ''}`;
-        bits.push(`<button type="button" data-focus-map class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none">${people}</button>`);
-    }
-    if (summary.topTrainId) {
-        bits.push(`<button type="button" data-focus-train="${escapeHTML(summary.topTrainId)}" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:underline focus:outline-none"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_0_3px_rgba(59,130,246,0.35)]"></span>${escapeHTML(String(summary.topTrainId))} is live · last seen ${escapeHTML(stationShort(summary.station || ''))}</button>`);
+        host.classList.remove('hidden');
+        const trainBit = mine.trainId ? ` Train ${escapeHTML(String(mine.trainId))}` : ` at ${escapeHTML(stationShort(mine.station))}`;
+        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>You’re sharing${trainBit} · ${minutesLeft(mine.expiresAt)} min left</span>`;
+        return;
     }
 
-    host.classList.remove('hidden');
-    host.innerHTML = `<div class="flex flex-col items-start gap-0.5 min-w-0">${bits.join('')}</div>`;
+    host.classList.add('hidden');
+    host.innerHTML = '';
 }
 
 export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
@@ -695,6 +794,213 @@ export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
         routeCache[routeId] = fetched;
     }
     notifyPingsUpdated(routeId);
+}
+
+function liveLocButtonHtml(count) {
+    const n = Math.max(1, Number(count) || 1);
+    return `<span class="nt-live-loc" aria-hidden="true">
+        <span class="nt-live-loc-ring"></span>
+        <span class="nt-live-loc-ring nt-live-loc-ring-delay"></span>
+        <svg class="nt-live-loc-pin" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
+    </span><span class="nt-live-loc-count">${n}</span>`;
+}
+
+function ensureLiveLocStyles() {
+    if (typeof document === 'undefined' || document.getElementById('nt-live-loc-style')) return;
+    const style = document.createElement('style');
+    style.id = 'nt-live-loc-style';
+    style.textContent = `
+        .nt-live-loc-btn {
+            display: inline-flex; align-items: center; gap: 0.2rem;
+            padding: 0.1rem 0.35rem 0.1rem 0.15rem; margin: 0;
+            border: 0; background: transparent; color: #16a34a;
+            cursor: pointer; vertical-align: middle; border-radius: 9999px;
+        }
+        .nt-live-loc-btn:focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
+        html.dark .nt-live-loc-btn { color: #4ade80; }
+        .nt-live-loc { position: relative; width: 1.55rem; height: 1.55rem; display: inline-block; }
+        .nt-live-loc-ring {
+            position: absolute; inset: 0; border-radius: 9999px;
+            border: 2px solid currentColor; opacity: 0.55;
+            animation: nt-live-pulse 1.8s ease-out infinite;
+        }
+        .nt-live-loc-ring-delay { animation-delay: 0.55s; }
+        .nt-live-loc-pin { position: relative; width: 1.15rem; height: 1.15rem; margin: 0.2rem; display: block; }
+        .nt-live-loc-count { font-size: 10px; font-weight: 800; line-height: 1; min-width: 0.7rem; }
+        @keyframes nt-live-pulse {
+            0% { transform: scale(0.55); opacity: 0.7; }
+            100% { transform: scale(1.85); opacity: 0; }
+        }
+        .nt-tracker-pin {
+            width: 1.1rem; height: 1.1rem; color: #16a34a;
+            filter: drop-shadow(0 0 4px rgba(22,163,74,0.55));
+        }
+        html.dark .nt-tracker-pin { color: #4ade80; }
+        .nt-tracker-pin-wrap { position: relative; width: 1.15rem; height: 1.15rem; }
+        .nt-tracker-pin-wrap .nt-live-loc-ring { inset: -3px; }
+        .nt-tracker-secondary {
+            width: 0.55rem; height: 0.55rem; border-radius: 9999px;
+            background: #86efac; border: 2px solid #fff;
+        }
+        html.dark .nt-tracker-secondary { border-color: #1f2937; }
+    `;
+    document.head.appendChild(style);
+}
+
+export function setDirectionHeaderLabel(headerEl, destUpper) {
+    if (!headerEl) return;
+    headerEl.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
+    let span = headerEl.querySelector('[data-header-dest]');
+    if (!span) {
+        const btn = headerEl.querySelector('[data-live-tracker]');
+        const existing = headerEl.querySelector('.text-blue-500, .text-blue-400');
+        const label = destUpper || existing?.textContent || '…';
+        headerEl.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${escapeHTML(label)}</span>`;
+        if (btn) headerEl.appendChild(btn);
+        span = headerEl.querySelector('[data-header-dest]');
+    } else if (destUpper) {
+        span.textContent = destUpper;
+    }
+}
+
+function paintOneLiveHeader(headerEl, group, side) {
+    if (!headerEl) return;
+    setDirectionHeaderLabel(headerEl);
+    let btn = headerEl.querySelector('[data-live-tracker]');
+    if (!group?.trainId || !isRideCheckInEnabled($currentRouteId.get())) {
+        btn?.remove();
+        return;
+    }
+    ensureLiveLocStyles();
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nt-live-loc-btn';
+        headerEl.appendChild(btn);
+    }
+    btn.setAttribute('data-live-tracker', group.trainId);
+    btn.setAttribute('data-live-side', side);
+    btn.setAttribute('aria-label', `${group.count} live on Train ${group.trainId}`);
+    btn.innerHTML = liveLocButtonHtml(group.count);
+}
+
+export function paintLiveDirectionHeaders(routeId = $currentRouteId.get()) {
+    if (typeof document === 'undefined') return;
+    const route = ROUTES[routeId];
+    const pret = document.getElementById('pretoria-header');
+    const pien = document.getElementById('pienaarspoort-header');
+    if (!route || !isRideCheckInEnabled(routeId)) {
+        pret?.querySelector('[data-live-tracker]')?.remove();
+        pien?.querySelector('[data-live-tracker]')?.remove();
+        return;
+    }
+    const live = liveTrackersByDirection(routeId);
+    paintOneLiveHeader(pret, live.a, 'a');
+    paintOneLiveHeader(pien, live.b, 'b');
+}
+
+function hideLiveTrackerSheet() {
+    document.getElementById('nt-live-tracker-modal')?.classList.add('hidden');
+}
+
+function trackerStopRow(stop, { pin, extras, first, last }) {
+    const name = escapeHTML(String(stop.station || '').replace(/ STATION$/i, ''));
+    const time = escapeHTML(formatTimeDisplay(stop.time) || String(stop.time || '').slice(0, 5));
+    const textClass = last
+        ? 'text-gray-900 dark:text-white font-bold'
+        : first
+            ? 'text-gray-900 dark:text-white font-bold'
+            : 'text-gray-700 dark:text-gray-300 font-medium';
+    const extraDots = extras
+        ? `<span class="absolute -right-3 top-1.5 flex gap-0.5">${Array.from({ length: extras }, () => '<span class="nt-tracker-secondary"></span>').join('')}</span>`
+        : '';
+    const marker = pin
+        ? `<div class="nt-tracker-pin-wrap absolute -left-[9px] top-1">
+                <span class="nt-live-loc-ring"></span>
+                <svg class="nt-tracker-pin relative" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
+           </div>`
+        : `<div class="absolute -left-[5px] top-2 w-3 h-3 rounded-full ${last ? 'bg-red-500' : 'bg-blue-500 border-2 border-white dark:border-gray-800'}"></div>`;
+    return `<div class="flex justify-between text-xs py-1.5 relative pl-5">
+        ${marker}${extraDots}
+        <span class="${textClass}">${name}</span>
+        <span class="font-mono ${textClass}">${time}</span>
+    </div>`;
+}
+
+function liveBetweenRow() {
+    return `<div class="flex items-center gap-2 text-[11px] font-bold text-green-700 dark:text-green-400 py-1 relative pl-5">
+        <div class="nt-tracker-pin-wrap absolute -left-[9px] top-0.5">
+            <span class="nt-live-loc-ring"></span>
+            <svg class="nt-tracker-pin relative" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
+        </div>
+        Live here
+    </div>`;
+}
+
+export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
+    const modal = document.getElementById('nt-live-tracker-modal');
+    const list = document.getElementById('nt-live-tracker-list');
+    const title = document.getElementById('nt-live-tracker-title');
+    const sub = document.getElementById('nt-live-tracker-sub');
+    if (!modal || !list || !trainId) return;
+
+    ensureLiveLocStyles();
+    triggerHaptic();
+    const id = String(trainId);
+    const ranked = rankVerifiedPings(getCachedRidePings(routeId), id);
+    const { stops } = findStopsForTrain(id);
+    const driver = ranked[0]?.ping;
+    const route = ROUTES[routeId];
+    const dest = destinationForTrain(id, route) || '';
+    if (title) title.textContent = trainGoingLabel(id, dest);
+    if (sub) {
+        sub.textContent = ranked.length
+            ? `${ranked.length} sharing · clock follows the closest heading match`
+            : 'No verified live share on this train right now';
+    }
+
+    if (!stops.length) {
+        list.innerHTML = '<p class="text-sm font-semibold text-gray-500 dark:text-gray-400 text-center py-6">No station list for this train.</p>';
+        modal.classList.remove('hidden');
+        return;
+    }
+
+    const index = $globalStationIndex.get() || {};
+    const driverProg = (driver && typeof driver.coarseLat === 'number')
+        ? progressAlongStops(driver.coarseLat, driver.coarseLng, stops, index)
+        : null;
+    const lastIdx = driverProg == null ? -1 : Math.floor(driverProg);
+    const frac = driverProg == null ? 0 : driverProg - lastIdx;
+    const onStation = driverProg != null && (frac < 0.12 || frac > 0.88);
+    const pinStationIdx = !onStation
+        ? -1
+        : (frac > 0.88 ? Math.min(stops.length - 1, lastIdx + 1) : lastIdx);
+
+    const extraAt = {};
+    ranked.slice(1).forEach((r) => {
+        const p = r.ping;
+        if (typeof p.coarseLat !== 'number' || typeof p.coarseLng !== 'number') return;
+        const prog = progressAlongStops(p.coarseLat, p.coarseLng, stops, index);
+        if (prog == null) return;
+        const i = Math.round(prog);
+        extraAt[i] = (extraAt[i] || 0) + 1;
+    });
+
+    let html = '<div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2 space-y-0">';
+    stops.forEach((stop, i) => {
+        html += trackerStopRow(stop, {
+            pin: onStation && i === pinStationIdx,
+            extras: extraAt[i] || 0,
+            first: i === 0,
+            last: i === stops.length - 1,
+        });
+        if (!onStation && driverProg != null && i === lastIdx) {
+            html += liveBetweenRow();
+        }
+    });
+    html += '</div>';
+    list.innerHTML = html;
+    modal.classList.remove('hidden');
 }
 
 export function bindRideCheckInUi() {
@@ -734,6 +1040,14 @@ export function bindRideCheckInUi() {
             }
             return;
         }
+        const liveBtn = e.target.closest?.('[data-live-tracker]');
+        if (liveBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const trainId = liveBtn.getAttribute('data-live-tracker');
+            if (trainId) openLiveTrackerSheet(trainId);
+            return;
+        }
         const onTrain = e.target.closest?.('[data-on-train]');
         if (onTrain) {
             e.preventDefault();
@@ -769,6 +1083,12 @@ export function bindRideCheckInUi() {
         refreshRideSeenSurface($currentRouteId.get());
     });
 
+    document.getElementById('nt-live-tracker-close')?.addEventListener('click', hideLiveTrackerSheet);
+    document.getElementById('nt-live-tracker-dismiss')?.addEventListener('click', hideLiveTrackerSheet);
+    document.getElementById('nt-live-tracker-modal')?.addEventListener('click', (e) => {
+        if (e.target?.id === 'nt-live-tracker-modal') hideLiveTrackerSheet();
+    });
+
     fetchFeatures().then(() => refreshRideSeenSurface($currentRouteId.get())).catch(() => {});
 }
 
@@ -781,4 +1101,8 @@ if (typeof window !== 'undefined') {
     window.computeRideDelta = computeRideDelta;
     window.getRideDelta = getRideDelta;
     window.decorateJourneyLive = decorateJourneyLive;
+    window.rankVerifiedPings = rankVerifiedPings;
+    window.paintLiveDirectionHeaders = paintLiveDirectionHeaders;
+    window.openLiveTrackerSheet = openLiveTrackerSheet;
+    window.setDirectionHeaderLabel = setDirectionHeaderLabel;
 }

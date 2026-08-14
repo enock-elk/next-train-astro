@@ -5,7 +5,7 @@
  * Attaching a train still uses the 30s vet + closest-train confirm.
  */
 import { withBase, APP_VERSION } from './config.js';
-import { showToast, triggerHaptic } from './ui.js';
+import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
 import { $currentRouteId, $globalStationIndex, $userRegion } from '../store.js';
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
@@ -310,6 +310,105 @@ export async function runContributeVet() {
     }
 }
 
+function pause(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const ONBOARD_SAMPLE_MS = 8000;
+
+/**
+ * I’m on it: start GPS immediately and narrate checks in a dismissable toast.
+ * Does not re-check scheduled time — the board already windows reports.
+ */
+export async function runOnboardToastVet(trainId) {
+    const {
+        routeHasStationCoords,
+        scoreTrainForFix,
+        expectedPosition,
+        ghostHeadingDeg,
+        headingAgrees,
+        TRAIN_TRACKER_MAX_M,
+        NO_COORDS_MESSAGE,
+    } = await import('./train-ghosts.js');
+    const routeId = $currentRouteId.get();
+    if (!routeHasStationCoords(routeId)) {
+        showCheckToast(NO_COORDS_MESSAGE);
+        showToast(NO_COORDS_MESSAGE, 'info', 5000);
+        return { ok: false, noCoords: true, message: NO_COORDS_MESSAGE };
+    }
+
+    showCheckToast('Checking your location…');
+    let samples;
+    try {
+        samples = await sampleGpsFor(ONBOARD_SAMPLE_MS, (list) => {
+            const last = list[list.length - 1];
+            if (!last || !trainId) return;
+            const metres = scoreTrainForFix(last.lat, last.lng, trainId);
+            if (Number.isFinite(metres) && metres < 1e7) {
+                showCheckToast(`You’re ${formatDistanceM(metres)} from Train ${trainId}`);
+            }
+        });
+    } catch (e) {
+        const msg = e?.code === 1
+            ? 'Location permission denied'
+            : (e?.message || 'Couldn’t get location');
+        showCheckToast(msg);
+        return { ok: false, message: msg };
+    }
+
+    if (!samples?.length) {
+        const msg = 'Couldn’t get a GPS fix. Try again outdoors.';
+        showCheckToast(msg);
+        return { ok: false, message: msg };
+    }
+
+    const first = samples[0];
+    const last = samples[samples.length - 1];
+    const metres = scoreTrainForFix(last.lat, last.lng, trainId);
+    if (Number.isFinite(metres)) {
+        showCheckToast(`You’re ${formatDistanceM(metres)} from Train ${trainId}`);
+        await pause(450);
+    }
+
+    showCheckToast('Checking velocity…');
+    await pause(350);
+    const displacement = haversineM(first, last);
+    const dt = Math.max(1, (last.t - first.t) / 1000);
+    const speedMps = typeof last.speed === 'number' && last.speed >= 0
+        ? last.speed
+        : displacement / dt;
+    const kmh = Math.max(0, Math.round(speedMps * 3.6));
+    showCheckToast(`You’re moving at about ${kmh} km/h`);
+    await pause(450);
+
+    let heading = last.heading;
+    if ((heading == null || Number.isNaN(heading)) && samples.length >= 2) {
+        heading = (Math.atan2(last.lng - first.lng, last.lat - first.lat) * 180) / Math.PI;
+    }
+    const ghost = expectedPosition(trainId);
+    const agrees = headingAgrees(heading, ghostHeadingDeg(ghost));
+    showCheckToast(agrees
+        ? `Heading matches Train ${trainId}`
+        : `Heading doesn’t match Train ${trainId} yet`);
+    await pause(450);
+    const tooFar = !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
+    const moving = speedMps >= 1.5 || displacement >= MOVE_MIN_M;
+    lastCoords = { lat: last.lat, lng: last.lng, accuracy: last.accuracy };
+
+    return {
+        ok: true,
+        lat: last.lat,
+        lng: last.lng,
+        heading: typeof heading === 'number' && !Number.isNaN(heading) ? heading : null,
+        speedMps,
+        isMoving: moving,
+        metres,
+        headingAgrees: agrees,
+        attach: !tooFar && moving && agrees,
+        tooFar,
+    };
+}
+
 /**
  * Trains on the live board (and the open planner trip) inside the 30-minute
  * window. When we know the rider's position, each candidate is also scored for
@@ -416,6 +515,18 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     list.innerHTML = `<p class="text-[12px] font-semibold text-gray-500 dark:text-gray-400 text-center py-6">Finding trains near you…</p>`;
     empty?.classList.add('hidden');
 
+    const {
+        scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M, timetableWhereLabel,
+        routeHasStationCoords, NO_COORDS_MESSAGE,
+    } = await import('./train-ghosts.js');
+    if (!routeHasStationCoords($currentRouteId.get())) {
+        list.innerHTML = '';
+        empty?.classList.remove('hidden');
+        if (empty) empty.textContent = NO_COORDS_MESSAGE;
+        showToast(NO_COORDS_MESSAGE, 'info', 5000);
+        return;
+    }
+
     let coords = (Number.isFinite(lat) && Number.isFinite(lng))
         ? { lat, lng }
         : lastCoords;
@@ -434,7 +545,6 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         }
     }
 
-    const { scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M, timetableWhereLabel } = await import('./train-ghosts.js');
     const ranked = scoreAllTrainsForFix(coords.lat, coords.lng);
     const board = listContributeCandidates(coords);
     const byId = new Map(board.map((c) => [String(c.trainId), c]));
@@ -732,9 +842,12 @@ export async function startOnTrainShare({
         return { ...result, asPerson: true, waiting: true };
     }
 
-    setStatus('Checking you’re on the railway…');
-    const vet = await runContributeVet();
-    if (!vet.ok) return vet;
+    setStatus('Checking your location…');
+    const vet = await runOnboardToastVet(id);
+    if (!vet.ok) {
+        if (!vet.noCoords) hideCheckToast();
+        return vet;
+    }
 
     const { resolveTrainAttachment, scoreTrainForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
     const decision = resolveTrainAttachment(vet.lat, vet.lng, id);
@@ -748,20 +861,26 @@ export async function startOnTrainShare({
             secondary: `Keep ${trainGoingLabel(id, destination)}`,
             tertiary: 'Cancel',
         });
-        if (pick === 'tertiary') return { ok: false, cancelled: true };
+        if (pick === 'tertiary') {
+            hideCheckToast();
+            return { ok: false, cancelled: true };
+        }
         if (pick === 'primary') {
             finalId = decision.best.trainId;
             confirmedCloser = true;
         }
     }
 
-    const metres = scoreTrainForFix(vet.lat, vet.lng, finalId);
+    const metres = Number.isFinite(vet.metres) && finalId === id
+        ? vet.metres
+        : scoreTrainForFix(vet.lat, vet.lng, finalId);
     const tooFar = Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M;
     const st = station || document.getElementById('station-select')?.value || '';
-
     const moving = !!(vet.isMoving || (typeof vet.speedMps === 'number' && vet.speedMps >= 1.5));
+    const headingOk = vet.headingAgrees !== false;
+    const attach = !tooFar && moving && headingOk;
 
-    if (tooFar || !moving) {
+    if (!attach) {
         const result = await finishRideShare({
             trainId: null,
             waitingFor: finalId,
@@ -774,16 +893,10 @@ export async function startOnTrainShare({
             speedMps: vet.speedMps,
             source: tooFar ? 'presence_too_far' : 'waiting_not_moving',
         });
-        await promptOnTrainSheet({
-            title: tooFar ? 'Not close enough to track the train' : 'We’ll show you as a commuter',
-            body: tooFar
-                ? `You’re about ${formatDistanceM(metres)} from where train ${finalId} should be. Other riders can see a commuter online — not that train, and it won’t change the Next Train board.`
-                : `You’re near the station but we don’t see train movement yet. Other riders can see you as a commuter. We’ll only update train ${finalId} once you’re on it and moving.`,
-            primary: 'Got it',
-            secondary: 'See trains near you',
-        }).then((pick) => {
-            if (pick === 'secondary') openNearbyTrainsModal({ lat: vet.lat, lng: vet.lng });
-        });
+        hideCheckToast();
+        showToast(tooFar
+            ? `You’re about ${formatDistanceM(metres)} from Train ${finalId} — sharing as a commuter`
+            : 'We’ll show you as a commuter until you’re moving with the train', 'info', 5000);
         return { ...result, asPerson: true, tooFar, waiting: !tooFar };
     }
 
@@ -799,6 +912,8 @@ export async function startOnTrainShare({
         source: confirmedCloser ? 'closer_confirm' : source,
     });
     if (shared?.ok) {
+        showCheckToast(`Sharing Train ${finalId} with other riders`);
+        setTimeout(() => hideCheckToast(), 4000);
         scheduleTripWatch({
             trainId: finalId,
             station: st,
@@ -806,6 +921,8 @@ export async function startOnTrainShare({
             routeId,
             destination,
         });
+    } else {
+        hideCheckToast();
     }
     return shared;
 }

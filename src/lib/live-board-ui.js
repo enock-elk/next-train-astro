@@ -201,6 +201,7 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         nextJourney.isLastTrain = (remainingNames.size === 1);
         window.Renderer.renderJourney(element, nextJourney, destination);
         import('./delay-reports.js').then((m) => m.hydrateTrainReportSlots(element)).catch(() => {});
+        import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
     } else if (validJourneys.length === 0) {
         const dayType = (typeof window !== 'undefined' && window.currentDayType) ? window.currentDayType : 'weekday';
         if (dayType === 'saturday' && !routeHasSaturdayService() && typeof window.renderNoWeekendService === 'function') {
@@ -408,11 +409,22 @@ export function updateNextTrainView() {
         const uiB = window.Renderer?._applyUIIntercepts
             ? window.Renderer._applyUIIntercepts(route.destB).toUpperCase()
             : String(route.destB).replace(/ STATION/gi, '').toUpperCase();
-        if (pretH) pretH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiA}</span>`;
-        if (pienH) pienH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiB}</span>`;
+        if (pretH) {
+            pretH.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
+            const span = pretH.querySelector('[data-header-dest]');
+            if (span) span.textContent = uiA;
+            else pretH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiA}</span>`;
+        }
+        if (pienH) {
+            pienH.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
+            const span = pienH.querySelector('[data-header-dest]');
+            if (span) span.textContent = uiB;
+            else pienH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiB}</span>`;
+        }
+        import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
     } else {
-        if (pretH) pretH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
-        if (pienH) pienH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
+        if (pretH) pretH.innerHTML = 'Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span>';
+        if (pienH) pienH.innerHTML = 'Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span>';
     }
 
     // SPA: show/hide the timetable CTA with the route, don't leave a disabled ghost button

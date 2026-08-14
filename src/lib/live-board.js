@@ -50,6 +50,19 @@ function pienaarspoortHeaderEl() { return typeof document !== 'undefined' ? docu
 function lastUpdatedEl() { return typeof document !== 'undefined' ? document.getElementById('last-updated-date') : null; }
 function locateBtnEl() { return typeof document !== 'undefined' ? document.getElementById('locate-btn') : null; }
 
+function setHeaderDest(el, destUpper) {
+    if (!el) return;
+    el.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
+    let span = el.querySelector('[data-header-dest]');
+    if (!span) {
+        const btn = el.querySelector('[data-live-tracker]');
+        el.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${destUpper}</span>`;
+        if (btn) el.appendChild(btn);
+    } else {
+        span.textContent = destUpper;
+    }
+}
+
 function trackAnalyticsEvent(name, params) {
     try {
         if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
@@ -648,8 +661,9 @@ export function findNextTrains() {
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
     if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = ""; if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
-    if (pretoriaHeaderEl()) pretoriaHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
-    if (pienaarspoortHeaderEl()) pienaarspoortHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
+    setHeaderDest(pretoriaHeaderEl(), uiDestA);
+    setHeaderDest(pienaarspoortHeaderEl(), uiDestB);
+    import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
     
     if (!selectedStation) {
         if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
@@ -875,6 +889,7 @@ export function findNextTrains() {
 
         if(typeof window.processAndRenderJourney === 'function') window.processAndRenderJourney(mergedJourneys, pienaarspoortTimeEl(), pienaarspoortHeaderEl(), currentRoute.destB);
     }
+    import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
 }
 
 export function findNextJourneyToDestA(fromStation, timeNow, schedule, routeConfig, targetDayIdx = getCurrentDayIndex()) {
@@ -1329,6 +1344,7 @@ export function attachLiveBoardGlobals() {
     window.getTripDisruptions = getTripDisruptions;
     window.isTrainExcluded = isTrainExcluded;
     window.findNextTrains = findNextTrains;
+    window.currentScheduleData = currentScheduleData;
     window.populateStationList = populateStationList;
     window.findNearestStation = findNearestStation;
     window.calculateTimeDiffString = calculateTimeDiffString;

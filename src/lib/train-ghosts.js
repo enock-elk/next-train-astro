@@ -14,9 +14,11 @@ import {
 export const GHOST_WINDOW_SEC = 30 * 60;
 export const CLOSER_TRAIN_M = 400;
 export const LOCATE_RAIL_M = 50;
-export const LOCATE_GHOST_M = 400;
-/** Max metres from the ghost to count as a train tracker (platform + GPS slop). */
-export const TRAIN_TRACKER_MAX_M = 400;
+export const LOCATE_GHOST_M = 2000;
+/** Max metres from the ghost to count as a train tracker (lab: 2 km for nearby / I’m on it). */
+export const TRAIN_TRACKER_MAX_M = 2000;
+export const HEADING_AGREE_DEG = 90;
+export const NO_COORDS_MESSAGE = 'Live sharing is off on this corridor — we don’t have station locations yet.';
 
 const SKIP_COLS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 
@@ -126,6 +128,64 @@ export function coordsForStation(name, stationIndex = $globalStationIndex.get() 
         }
     }
     return null;
+}
+
+/** True when this corridor has enough station coordinates to place ghosts / live sharing. */
+export function routeHasStationCoords(routeId, opts = {}) {
+    const index = opts.stationIndex || $globalStationIndex.get() || {};
+    const schedules = opts.schedules
+        ? (Array.isArray(opts.schedules) ? opts.schedules : Object.values(opts.schedules).filter(Boolean))
+        : currentDirectionSchedules();
+    const names = new Set();
+    for (const sch of schedules) {
+        const col = stationCol(sch);
+        for (const row of sch.rows || []) {
+            const st = row?.[col] || row?.STATION;
+            if (st) names.add(String(st).trim());
+        }
+    }
+    if (names.size < 2) {
+        let n = 0;
+        for (const coords of Object.values(index)) {
+            if (!coords || typeof coords.lat !== 'number') continue;
+            const routes = coords.routes;
+            const onRoute = !routeId
+                || (routes && typeof routes.has === 'function' && routes.has(routeId))
+                || (Array.isArray(routes) && routes.includes(routeId));
+            if (onRoute) n += 1;
+            if (n >= 2) return true;
+        }
+        return false;
+    }
+    let withCoords = 0;
+    for (const name of names) {
+        if (coordsForStation(name, index)) withCoords += 1;
+        if (withCoords >= 2) return true;
+    }
+    return false;
+}
+
+/** Bearing of the ghost (last stop → next stop), degrees clockwise from north. */
+export function ghostHeadingDeg(ghost, stationIndex) {
+    const stops = ghost?.stops;
+    if (!stops?.length) return null;
+    const lastIdx = Math.max(0, Number.isInteger(ghost.lastIdx) ? ghost.lastIdx : 0);
+    const nextIdx = Number.isInteger(ghost.nextIdx)
+        ? ghost.nextIdx
+        : Math.min(stops.length - 1, lastIdx + 1);
+    const index = stationIndex || $globalStationIndex.get() || {};
+    const a = coordsForStation(stops[lastIdx]?.station, index);
+    const b = coordsForStation(stops[nextIdx]?.station, index);
+    if (!a || !b) return null;
+    if (Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lng - b.lng) < 1e-6) return null;
+    return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
+}
+
+export function headingAgrees(userHeading, ghostHeading, maxDelta = HEADING_AGREE_DEG) {
+    if (!Number.isFinite(userHeading) || !Number.isFinite(ghostHeading)) return true;
+    let d = Math.abs(userHeading - ghostHeading) % 360;
+    if (d > 180) d = 360 - d;
+    return d <= maxDelta;
 }
 
 function trainInWindow(stops, nowSec, windowSec) {

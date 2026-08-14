@@ -6951,10 +6951,8 @@ const Admin = {
                 return;
             }
             
-            // Auto-Signoff Logic
             const adminEmail = Admin.currentUser?.email || '';
             const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
-            text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
             
             const btn = document.getElementById('reply-send');
             btn.textContent = "Sending...";
@@ -6972,7 +6970,9 @@ const Admin = {
                     message: text,
                     timestamp: Date.now(),
                     feedbackId: feedbackId,
-                    read: false
+                    read: false,
+                    from: 'admin',
+                    fromName: adminName,
                 };
 
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });

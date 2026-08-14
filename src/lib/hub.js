@@ -780,6 +780,22 @@ function isCommuterInboxMsg(m) {
     return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
 }
 
+function stripAdminSignoff(html) {
+    return String(html || '')
+        .replace(/(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*[-–—]\s*[^<]*<\/span>\s*$/i, '')
+        .replace(/(?:<br\s*\/?>|\n)*\s*[-–—]\s*[A-Za-z]{2,20}\s*$/i, '')
+        .trim();
+}
+
+function adminBubbleName(m, rawHtml) {
+    const named = String(m?.fromName || '').trim();
+    if (named) return named;
+    const text = String(rawHtml || m?.message || m?.text || '');
+    const match = text.match(/[-–—]\s*([A-Za-z]{2,20})\s*(?:<\/span>)?\s*$/i);
+    if (match) return match[1].trim();
+    return 'Admin';
+}
+
 function inboxClock(ts) {
     const d = new Date(ts || Date.now());
     if (Number.isNaN(d.getTime())) return '--:--';
@@ -814,9 +830,9 @@ function renderMessagesThread(list) {
     host.innerHTML = list.map((m) => {
         const mine = isCommuterInboxMsg(m);
         const raw = m.message || m.text || '';
-        const body = mine ? escapeHTML(raw) : sanitizeHTML(raw);
+        const body = mine ? escapeHTML(raw) : sanitizeHTML(stripAdminSignoff(raw));
         const clock = inboxClock(m.timestamp);
-        const who = mine ? 'You' : 'Next Train';
+        const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
         const avatar = mine
             ? ''
             : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;

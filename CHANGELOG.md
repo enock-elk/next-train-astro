@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.22 — Live tracker, check toasts, named admin chat (14 Aug 2026)
+
+- Admin replies in Messages use `fromName` (Enock / Thandeka / Admin). The grey “- Name” HTML signoff is gone; commuter bubbles read the name field.
+- Nearby / I’m-on-it distance gate is 2 km. Corridors without station coordinates show that live sharing is off.
+- I’m on it starts GPS immediately and uses dismissable check toasts (location, distance, speed, heading). Attach only when within 2 km, moving, and heading agrees with the ghost.
+- The public “N commuters last seen” chip is gone. Verified live sharing is a pulsing location button on **Next train to …**. Tap it for a station-list tracker. Multiple verified pings: rank (heading, proximity, speed, freshness) — one clock driver, count on the badge.
+
 ## V8_08.21 — Locate, reports button, original cards, Messages chat (13 Aug 2026)
 
 - Next Train locate button is back beside the station field.

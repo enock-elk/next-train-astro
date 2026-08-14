@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.22";
+export const APP_VERSION = "V8_08.23";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -883,6 +883,17 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.23",
+        title: "Parked trains, nearby labels, stable chat",
+        date: "14 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>I’m on it</b> asks if the train is moving. If you’re parked, we thank you and watch in the background every 15s until it starts the right way. Closing the app pauses GPS to save battery.",
+            "<b>Trains near you</b> show Train 9106 → Pretoria, plus Real-time last seen and on-time / late / early from reports.",
+            "<b>Messages</b> stay tied to this device after an app update. Map tab drops Locate so Trains near you and Share my location have room."
+        ]
+    },
     {
         id: "V8_08.22",
         title: "Live tracker, check toasts, named chat",

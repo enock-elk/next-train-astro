@@ -193,9 +193,11 @@ export async function fetchRecentRouteReports(routeId, maxAgeMs = SURFACE_WINDOW
     }
 }
 
-export function aggregateTrainReports(reports, keyParts) {
+export function aggregateTrainReports(reports, keyParts, opts = {}) {
     const key = trainReportKey(keyParts);
+    const trainId = String(keyParts?.trainId || '');
     const matched = (reports || []).filter((r) => {
+        if (opts.byTrainId) return String(r.trainId || '') === trainId;
         if (r.trainKey) return r.trainKey === key;
         return trainReportKey({
             routeId: r.routeId,
@@ -247,9 +249,32 @@ export function aggregateTrainReports(reports, keyParts) {
 function statusLabel(agg) {
     if (!agg) return '';
     if (agg.status === 'cancelled') return 'Cancelled / no-show';
-    if (agg.status === 'early') return `~${agg.avgLateMin || 3} min early`;
+    if (agg.status === 'early') return `Came early (~${agg.avgLateMin || 3} min)`;
     if (agg.status === 'on_time') return 'On time';
     return `~${agg.avgLateMin || 10} min late`;
+}
+
+export function reportStatusPhrase(agg) {
+    return statusLabel(agg);
+}
+
+/** All open reports for one train on a corridor (any station). */
+export function reportsForTrain(trainId, routeId = $currentRouteId.get()) {
+    const id = String(trainId || '');
+    if (!id) return [];
+    return peekCachedRouteReports(routeId).filter((r) => String(r.trainId || '') === id);
+}
+
+export function summarizeReportsForTrain(trainId, routeId = $currentRouteId.get()) {
+    const matched = reportsForTrain(trainId, routeId);
+    if (!matched.length) return null;
+    return aggregateTrainReports(matched, {
+        routeId: matched[0].routeId || routeId,
+        trainId,
+        scheduledTime: matched[0].scheduledTime,
+        station: matched[0].station,
+        arrivalTime: matched[0].arrivalTime,
+    }, { byTrainId: true });
 }
 
 function readOwnReports() {

@@ -11,7 +11,7 @@ import {
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity } from './utils.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
@@ -759,7 +759,9 @@ function rememberLocalInbox(msg) {
         return;
     }
     list.push(msg);
-    safeStorage.setItem(LOCAL_INBOX_KEY, JSON.stringify(list.slice(-80)));
+    const packed = JSON.stringify(list.slice(-80));
+    safeStorage.setItem(LOCAL_INBOX_KEY, packed);
+    safeStorage.setResilientItem?.(LOCAL_INBOX_KEY, packed)?.catch?.(() => {});
 }
 
 function mergeInboxThread(remote, local) {
@@ -815,6 +817,10 @@ async function fetchRemoteInbox() {
 }
 
 async function fetchInboxThread() {
+    try {
+        const recovered = await restoreDeviceIdentity();
+        if (recovered && recovered !== $deviceId.get()) $deviceId.set(recovered);
+    } catch { /* keep current id */ }
     let remote = [];
     try { remote = await fetchRemoteInbox(); } catch { remote = []; }
     return mergeInboxThread(remote, readLocalInbox());

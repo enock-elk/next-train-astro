@@ -431,11 +431,29 @@ function shortStation(name) {
     return String(name || '').replace(/ STATION$/i, '').trim();
 }
 
+/** Last timed stop on this timetable column (headboard / terminus). */
+export function trainTerminusName(trainId, fallback) {
+    const fb = shortStation(fallback);
+    if (fb) return fb;
+    const { stops } = findStopsForTrain(trainId);
+    if (stops.length) return shortStation(stops[stops.length - 1].station);
+    return '';
+}
+
 /** "1165 → Pienaarspoort" — never a bare train number. */
 export function trainGoingLabel(trainId, destination) {
     const id = String(trainId || '').trim();
-    const dest = shortStation(destination);
+    const dest = trainTerminusName(trainId, destination);
     if (id && dest) return `${id} → ${dest}`;
+    if (id) return `Train ${id}`;
+    return dest || 'Train';
+}
+
+/** Nearby list: "Train 9106 → Pretoria". */
+export function trainGoingFullLabel(trainId, destination) {
+    const id = String(trainId || '').trim();
+    const dest = trainTerminusName(trainId, destination);
+    if (id && dest) return `Train ${id} → ${dest}`;
     if (id) return `Train ${id}`;
     return dest || 'Train';
 }

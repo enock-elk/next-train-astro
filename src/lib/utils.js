@@ -342,7 +342,8 @@ export const safeStorage = {
             'last_killswitch_timestamp', // Protect killswitch memory
             'analytics_queue', // Protect offline events queue
             'nt_trip_plan_queue_v1', // Protect batched trip-plan telemetry until flush
-            'last_impression_timestamp' // 🛡️ GUARDIAN FIX: Protect ad frequency cap
+            'last_impression_timestamp', // 🛡️ GUARDIAN FIX: Protect ad frequency cap
+            'ntInboxLocalV1', // commuter ↔ admin thread fallback
         ];
         
         const vault = {};
@@ -357,7 +358,8 @@ export const safeStorage = {
                     key.startsWith('cws_') ||
                     key.startsWith('firebase:authUser:') ||
                     key.startsWith('plannerHistory_') ||
-                    key.startsWith('seen_holiday_')
+                    key.startsWith('seen_holiday_') ||
+                    key.startsWith('ntInbox')
                 ) {
                     vault[key] = localStorage.getItem(key);
                 }
@@ -484,16 +486,81 @@ export const safeStorage = {
 // 🛡️ GUARDIAN PHASE 2: Identity ITP Protection Bootstrapper
 // The UUID is generated synchronously in index.html to ensure GA4 fires immediately.
 // We run a deferred sweep here to mirror it into IndexedDB, permanently shielding it from Apple's 7-Day ITP wipe.
+const NT_DID_COOKIE = 'nt_did';
+
+function readDidCookie() {
+    if (typeof document === 'undefined') return '';
+    try {
+        const m = document.cookie.match(/(?:^|; )nt_did=([^;]*)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    } catch {
+        return '';
+    }
+}
+
+function writeDidCookie(id) {
+    if (typeof document === 'undefined' || !id) return;
+    try {
+        document.cookie = `${NT_DID_COOKIE}=${encodeURIComponent(id)}; max-age=31536000; path=/; SameSite=Lax`;
+    } catch { /* ignore */ }
+}
+
+function applyCanonicalDeviceId(id) {
+    if (!id) return;
+    safeStorage.setItem('next_train_device_id', id);
+    writeDidCookie(id);
+    if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = id;
+    safeStorage.setResilientItem('next_train_device_id', id).catch(() => {});
+}
+
+let restoreDevicePromise = null;
+
+/**
+ * Prefer the long-lived device id (IndexedDB / cookie) over an id minted this
+ * boot after an update or localStorage wipe — inbox/{deviceId} must stay stable.
+ */
+export function restoreDeviceIdentity() {
+    if (typeof window === 'undefined') return Promise.resolve('');
+    if (restoreDevicePromise) return restoreDevicePromise;
+    restoreDevicePromise = (async () => {
+        const ls = safeStorage.getItem('next_train_device_id') || window.NEXT_TRAIN_DEVICE_ID || '';
+        const cookie = readDidCookie();
+        let idb = null;
+        try {
+            const db = await safeStorage._initIDB();
+            idb = await new Promise((resolve) => {
+                const tx = db.transaction('IdentityStore', 'readonly');
+                const req = tx.objectStore('IdentityStore').get('next_train_device_id');
+                req.onsuccess = () => resolve(req.result?.value || null);
+                req.onerror = () => resolve(null);
+            });
+        } catch { /* ignore */ }
+
+        const mintedAgo = (() => {
+            const ts = Number(String(ls).split('_').pop());
+            return Number.isFinite(ts) ? Date.now() - ts : Infinity;
+        })();
+        const freshMint = !!ls && mintedAgo < 120000;
+        const stable = (freshMint && idb && idb !== ls) ? idb
+            : (freshMint && cookie && cookie !== ls) ? cookie
+            : (ls || idb || cookie || '');
+        if (stable) applyCanonicalDeviceId(stable);
+        try { await safeStorage.getResilientItem('ntInboxLocalV1'); } catch { /* optional */ }
+        return stable;
+    })();
+    return restoreDevicePromise;
+}
+
 export const _mirrorDeviceId = () => {
     if (typeof window === 'undefined') return;
     const currentId = safeStorage.getItem('next_train_device_id');
     if (currentId) {
-        safeStorage.setResilientItem('next_train_device_id', currentId);
+        applyCanonicalDeviceId(currentId);
     }
 };
 
 if (typeof window !== 'undefined') {
-    setTimeout(_mirrorDeviceId, 2000);
+    restoreDeviceIdentity().then(() => _mirrorDeviceId()).catch(() => _mirrorDeviceId());
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {

@@ -192,9 +192,21 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
         } else {
           deviceId = localStorage.getItem('next_train_device_id');
           if (!deviceId) {
+            try {
+              var ck = document.cookie.match(/(?:^|; )nt_did=([^;]*)/);
+              if (ck) deviceId = decodeURIComponent(ck[1]);
+            } catch (e2) {}
+          }
+          if (!deviceId) {
             deviceId = 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
             localStorage.setItem('next_train_device_id', deviceId);
           }
+        }
+        if (deviceId) {
+          try {
+            document.cookie = 'nt_did=' + encodeURIComponent(deviceId) + '; max-age=31536000; path=/; SameSite=Lax';
+            localStorage.setItem('next_train_device_id', deviceId);
+          } catch (e3) {}
         }
         // Cache-bust (?v=1234567890) only — never strip short share view flags (?v=g / ?v=f)
         var vParam = urlParams.get('v');

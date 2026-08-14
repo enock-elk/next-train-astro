@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23 — Parked trains, nearby labels, stable chat (14 Aug 2026)
+
+- I’m on it asks whether the train is moving. Parked: share location, poll GPS every 15s until heading-consistent movement, then attach. Closing the app aborts GPS; on resume a modal offers Continue or Close.
+- Map tab Locate button removed (Trains near you + Share my location stay).
+- Device id and local inbox survive updates / cache flush so commuter ↔ admin Messages stay linked.
+- Trains near you: “Train 9106 → Pretoria”, plus Real-time: — or last seen Mears - 16:32 with early / on time / late.
+- Options drawer no longer repeats the Account section heading above the Account row.
+
 ## V8_08.22 — Live tracker, check toasts, named admin chat (14 Aug 2026)
 
 - Admin replies in Messages use `fromName` (Enock / Thandeka / Admin). The grey “- Name” HTML signoff is gone; commuter bubbles read the name field.

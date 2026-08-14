@@ -94,6 +94,14 @@ export function hydrateStores() {
     }
     if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = uid;
     $deviceId.set(uid);
+    import('./lib/utils.js').then(({ restoreDeviceIdentity }) => {
+        restoreDeviceIdentity().then((id) => {
+            if (id && id !== $deviceId.get()) {
+                $deviceId.set(id);
+                window.NEXT_TRAIN_DEVICE_ID = id;
+            }
+        }).catch(() => {});
+    }).catch(() => {});
 
     console.log("🛡️ Guardian: Metrorail Next Train state hydrated successfully.");
 }

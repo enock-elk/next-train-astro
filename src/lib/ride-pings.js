@@ -1105,4 +1105,6 @@ if (typeof window !== 'undefined') {
     window.paintLiveDirectionHeaders = paintLiveDirectionHeaders;
     window.openLiveTrackerSheet = openLiveTrackerSheet;
     window.setDirectionHeaderLabel = setDirectionHeaderLabel;
+    window.getCachedRidePings = getCachedRidePings;
+    window.nearestStationOnRoute = nearestStationOnRoute;
 }

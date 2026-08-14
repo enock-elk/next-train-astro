@@ -1,0 +1,19 @@
+# Cache-Control for hosts that honor this file (Cloudflare Pages).
+# GitHub Pages ignores it — nexttrain-edge Worker sets the same headers on
+# nexttrain.co.za/_astro/* and /icons/*. HTML / sw.js / app-version.json stay
+# short-lived so NUKE + deploys can take effect.
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=2592000
+
+/sw.js
+  Cache-Control: no-cache
+
+/app-version.json
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache

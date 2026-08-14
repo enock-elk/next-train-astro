@@ -2,6 +2,22 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.15.1 — Admin feedback & incidents (15 Aug 2026)
+
+- Feedback Options button is pinned to the top-right of the open thread (label is now **Options**).
+- After an admin reply, if the commuter left email or WhatsApp, a modal offers outreach links that open in a new tab. The thread still archives and the current Inbox/Archive tab is unchanged.
+- Thread paperclip chip now covers commuter attachments and admin-inserted media.
+- Transit Incident Manager uses the same rich-text toolbar as alerts; commuter incident modal keeps size/font/title tags.
+- Schedule Data QA lives under System Health Diagnostics as an accordion (home tile removed).
+
+## V8_08.14 — Alert formatting & preview (14 Aug 2026)
+
+- User alert modal keeps admin size/font/title/underline tags (`<font size>`, Verdana, Times New Roman) instead of stripping them.
+- Admin **Preview Alert** opens the exact commuter notice modal with **Edit | Post**.
+- Long URLs wrap; emails and phone numbers autolink in alerts and admin replies.
+- Offline analytics stay queued until GA4 actually loads, then flush on reconnect.
+- Also on this live line: cache-first SW + online NUKE, and Clarity idle-boot / unpin persistence.
+
 ## V8_08.10.1 — Cape Town Public Holidays (10 Aug 2026)
 
 - Western Cape public holidays no longer reuse Saturday timetables automatically.

@@ -12,6 +12,7 @@ import {
     normalizeChangelogId,
 } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
@@ -433,40 +434,7 @@ function ensureLightboxPlusBadges(root) {
 }
 
 function sanitizeHTML(dirtyHtml) {
-    const doc = new DOMParser().parseFromString(repairMojibake(dirtyHtml || ''), 'text/html');
-    const allowedTags = ['B', 'I', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV', 'UL', 'OL', 'LI', 'IMG', 'BUTTON'];
-    const cleanNode = (node) => {
-        Array.from(node.childNodes).forEach((child) => {
-            if (child.nodeType === 1) {
-                if (!allowedTags.includes(child.tagName)) {
-                    child.replaceWith(...Array.from(child.childNodes));
-                    cleanNode(node);
-                } else {
-                    Array.from(child.attributes).forEach((attr) => {
-                        const attrName = attr.name.toLowerCase();
-                        if (attrName === 'href' || attrName === 'src') {
-                            if (!/^(https?|mailto):/i.test(attr.value)) child.removeAttribute(attr.name);
-                        } else if (attrName === 'onclick') {
-                            if (!/^window\.openLightbox\(.*\)$/.test(attr.value)) child.removeAttribute(attr.name);
-                        } else if (attrName === 'target' && child.tagName === 'A') {
-                            // Same-origin links must stay in the PWA (no browser handoff)
-                            try {
-                                const href = child.getAttribute('href');
-                                if (href) {
-                                    const u = new URL(href, location.href);
-                                    if (u.origin === location.origin) child.removeAttribute('target');
-                                }
-                            } catch { /* keep target */ }
-                        } else if (!['target', 'class', 'rel', 'alt', 'type'].includes(attrName)) {
-                            child.removeAttribute(attr.name);
-                        }
-                    });
-                    cleanNode(child);
-                }
-            }
-        });
-    };
-    cleanNode(doc.body);
+    const doc = new DOMParser().parseFromString(prepareRichHtml(dirtyHtml || ''), 'text/html');
     // SVG badges are stripped above — restore a text “+” chip on lightbox buttons
     ensureLightboxPlusBadges(doc.body);
     return doc.body.innerHTML;
@@ -640,12 +608,266 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
     }
 }
 
+/**
+ * Fill #notice-modal with a notice using the same sanitize/CSS/poll path users see.
+ * mode: 'live' | 'preview' | 'archive'
+ */
+export function renderServiceAlertModal(notice, options = {}) {
+    injectRichTextStyles();
+    const modal = document.getElementById('notice-modal');
+    const content = document.getElementById('notice-content');
+    const timestamp = document.getElementById('notice-timestamp');
+    if (!modal || !content || !notice) return false;
+
+    const mode = options.mode || 'live';
+    const severity = notice.severity || 'info';
+    if (mode === 'live') delete modal.dataset.alertPreview;
+    else modal.dataset.alertPreview = '1';
+
+    const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
+    if (modalCard) {
+        modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500', 'border-red-200', 'dark:border-red-900/50');
+        if (severity === 'critical') modalCard.classList.add('border-red-500');
+        else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
+        else modalCard.classList.add('border-blue-500');
+    }
+
+    const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
+    if (modalHeader) {
+        const headerContainer = modalHeader.parentElement;
+        if (headerContainer) {
+            const existingIcon = headerContainer.querySelector('svg');
+            if (existingIcon) existingIcon.remove();
+            headerContainer.className = `flex items-center shrink-0 ${
+                severity === 'critical'
+                    ? 'text-red-600 dark:text-red-400'
+                    : severity === 'warning'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-blue-600 dark:text-blue-400'
+            }`;
+        }
+        modalHeader.textContent = severity === 'critical'
+            ? '🔴 CRITICAL ADVISORY'
+            : severity === 'warning'
+              ? '🟡 SERVICE WARNING'
+              : '🔵 SERVICE INFO';
+    }
+
+    let formattedMsg = sanitizeHTML(notice.message || notice.text || '');
+    if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
+
+    if (notice.sourceName) {
+        const sName = escapeHTML(notice.sourceName);
+        const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
+        const innerCitation = sUrl
+            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
+            : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
+        formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+    }
+
+    content.innerHTML = formattedMsg;
+    ensureLightboxPlusBadges(content);
+
+    if (notice.ctaUrl && notice.ctaText) {
+        content.innerHTML += `
+            <a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
+                ${escapeHTML(notice.ctaText)}
+                <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </a>`;
+    }
+
+    if (notice.poll && notice.poll.active) {
+        const pollId = notice.id || 'preview';
+        const votedOption = mode === 'live' ? safeStorage.getItem('poll_voted_' + pollId) : null;
+        const pollSeverity = severity || 'info';
+        const tone = pollTone(pollSeverity);
+        const pollMeta = {
+            question: notice.poll.question || '',
+            optionA: notice.poll.optionA || '',
+            optionB: notice.poll.optionB || '',
+            optionC: notice.poll.optionC || '',
+            showResults: !!notice.poll.showResults,
+            severity: pollSeverity,
+        };
+        content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
+        const pollEl = document.getElementById(`poll-container-${pollId}`);
+        if (pollEl) {
+            try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
+            if (votedOption && notice.poll.showResults) {
+                renderPollResultsInto(pollEl, pollId, { ...notice.poll, ...pollMeta }, votedOption, pollSeverity);
+            } else if (votedOption) {
+                pollEl.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
+                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
+                    </div>`;
+            } else {
+                const voteBtn = (key, text) =>
+                    `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
+                const optC = notice.poll.optionC
+                    ? voteBtn('C', notice.poll.optionC)
+                    : '';
+                pollEl.innerHTML = `
+                    <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(notice.poll.question || '')}</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        ${voteBtn('A', notice.poll.optionA || 'A')}
+                        ${voteBtn('B', notice.poll.optionB || 'B')}
+                        ${optC}
+                    </div>
+                    <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${notice.poll.showResults ? '' : 'hidden'}"></div>`;
+                if (notice.poll.showResults && mode === 'live') {
+                    const liveBox = document.getElementById(`poll-live-results-${pollId}`);
+                    if (liveBox) {
+                        renderPollResultsInto(liveBox, pollId, { ...notice.poll, ...pollMeta }, null, pollSeverity);
+                    }
+                }
+            }
+        }
+    }
+
+    if (timestamp) {
+        if (options.timestampHtml) {
+            timestamp.innerHTML = options.timestampHtml;
+        } else {
+            const posted = notice.repostedAt || notice.postedAt || notice.timestamp;
+            if (posted) {
+                const date = new Date(posted);
+                const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
+                timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+            } else if (mode === 'preview') {
+                timestamp.textContent = 'Preview — not posted yet';
+            } else {
+                timestamp.textContent = '';
+            }
+        }
+    }
+
+    const skipHashClose = () => {
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal', true);
+        else modal.classList.add('hidden');
+        delete modal.dataset.alertPreview;
+    };
+
+    const closeNotice = () => {
+        if (mode !== 'live') {
+            skipHashClose();
+            return;
+        }
+        if (location.hash === '#notice') history.back();
+        else closeSmoothModal('notice-modal');
+    };
+
+    const oldCloseBtn = document.getElementById('notice-modal-close-btn')
+        || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
+    modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
+
+    let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
+    if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
+    else if (severity === 'warning') baseColorClass = 'bg-yellow-600 hover:bg-yellow-700';
+
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
+
+    const leftBtn = document.createElement('button');
+    leftBtn.type = 'button';
+    leftBtn.id = 'notice-close-btn';
+    leftBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
+    if (mode === 'preview') {
+        leftBtn.textContent = 'Edit';
+        leftBtn.onclick = () => {
+            triggerHaptic();
+            skipHashClose();
+            if (typeof options.onEdit === 'function') options.onEdit();
+        };
+    } else {
+        leftBtn.textContent = 'Close';
+        leftBtn.onclick = () => {
+            closeNotice();
+            if (typeof options.onClose === 'function') options.onClose();
+        };
+    }
+    btnContainer.appendChild(leftBtn);
+
+    const rightBtn = document.createElement('button');
+    rightBtn.type = 'button';
+    if (mode === 'preview') {
+        rightBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none`;
+        rightBtn.textContent = 'Post';
+        rightBtn.onclick = () => {
+            triggerHaptic();
+            skipHashClose();
+            if (typeof options.onPost === 'function') options.onPost();
+        };
+        btnContainer.appendChild(rightBtn);
+    } else if (mode === 'archive') {
+        if (typeof options.onRevive === 'function') {
+            rightBtn.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
+            rightBtn.textContent = 'Revive / Repost';
+            rightBtn.onclick = () => {
+                triggerHaptic();
+                skipHashClose();
+                options.onRevive();
+            };
+            btnContainer.appendChild(rightBtn);
+        }
+    } else {
+        rightBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
+        const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+        rightBtn.innerHTML = `${replySvg} Reply`;
+        rightBtn.onclick = () => {
+            triggerHaptic();
+            const rawHtml = repairMojibake(notice?.message || notice?.text || '');
+            let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
+            truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
+            openFeedbackReplyFromOverlay('notice-modal', {
+                label: 'Replying to Advisory:',
+                snippet: truncatedMsg,
+                rawMsg: truncatedMsg,
+                alertId: notice?.id || '',
+            });
+        };
+        btnContainer.appendChild(rightBtn);
+    }
+
+    if (oldCloseBtn) {
+        oldCloseBtn.style.display = 'none';
+        oldCloseBtn.parentNode?.appendChild(btnContainer);
+    } else {
+        content.parentNode?.appendChild(btnContainer);
+    }
+
+    const topCloseBtn = modal.querySelector('button.text-gray-400');
+    if (topCloseBtn) {
+        topCloseBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (mode === 'preview') {
+                skipHashClose();
+                if (typeof options.onEdit === 'function') options.onEdit();
+            } else if (mode === 'archive') {
+                skipHashClose();
+                if (typeof options.onClose === 'function') options.onClose();
+            } else if (location.hash === '#notice') {
+                history.back();
+            } else {
+                closeSmoothModal('notice-modal');
+            }
+        };
+    }
+
+    return true;
+}
+
+if (typeof window !== 'undefined') {
+    window.renderServiceAlertModal = renderServiceAlertModal;
+    window.prepareRichHtml = prepareRichHtml;
+    window.injectRichTextStyles = injectRichTextStyles;
+}
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
     const modal = document.getElementById('notice-modal');
-    const content = document.getElementById('notice-content');
-    const timestamp = document.getElementById('notice-timestamp');
     if (!bellBtn) return;
 
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
@@ -855,171 +1077,7 @@ export async function checkServiceAlerts() {
             || (activeNotice.forcePopup == null && severity === 'critical');
 
         const bindModalContent = () => {
-            if (!content || !modal) return;
-
-            const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
-            if (modalCard) {
-                modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500', 'border-red-200', 'dark:border-red-900/50');
-                if (severity === 'critical') modalCard.classList.add('border-red-500');
-                else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
-                else modalCard.classList.add('border-blue-500');
-            }
-
-            const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
-            if (modalHeader) {
-                const headerContainer = modalHeader.parentElement;
-                if (headerContainer) {
-                    const existingIcon = headerContainer.querySelector('svg');
-                    if (existingIcon) existingIcon.remove();
-                    headerContainer.className = `flex items-center shrink-0 ${
-                        severity === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : severity === 'warning'
-                              ? 'text-yellow-600 dark:text-yellow-400'
-                              : 'text-blue-600 dark:text-blue-400'
-                    }`;
-                }
-                modalHeader.textContent = severity === 'critical'
-                    ? '🔴 CRITICAL ADVISORY'
-                    : severity === 'warning'
-                      ? '🟡 SERVICE WARNING'
-                      : '🔵 SERVICE INFO';
-            }
-
-            let formattedMsg = sanitizeHTML(activeNotice.message || activeNotice.text || '');
-
-            if (activeNotice.sourceName) {
-                const sName = escapeHTML(activeNotice.sourceName);
-                const sUrl = activeNotice.sourceUrl ? escapeHTML(activeNotice.sourceUrl) : null;
-                const innerCitation = sUrl
-                    ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
-                    : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-                formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
-            }
-
-            content.innerHTML = formattedMsg;
-            ensureLightboxPlusBadges(content);
-
-            if (activeNotice.ctaUrl && activeNotice.ctaText) {
-                content.innerHTML += `
-                    <a href="${escapeHTML(activeNotice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
-                        ${escapeHTML(activeNotice.ctaText)}
-                        <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>`;
-            }
-
-            // Interactive poll — colours follow alert severity (info/warning/critical)
-            if (activeNotice.poll && activeNotice.poll.active) {
-                const pollId = activeNotice.id;
-                const votedOption = safeStorage.getItem('poll_voted_' + pollId);
-                const pollSeverity = severity || 'info';
-                const tone = pollTone(pollSeverity);
-                const pollMeta = {
-                    question: activeNotice.poll.question || '',
-                    optionA: activeNotice.poll.optionA || '',
-                    optionB: activeNotice.poll.optionB || '',
-                    optionC: activeNotice.poll.optionC || '',
-                    showResults: !!activeNotice.poll.showResults,
-                    severity: pollSeverity,
-                };
-                content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
-                const pollEl = document.getElementById(`poll-container-${pollId}`);
-                if (pollEl) {
-                    try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
-                    if (votedOption && activeNotice.poll.showResults) {
-                        renderPollResultsInto(pollEl, pollId, { ...activeNotice.poll, ...pollMeta }, votedOption, pollSeverity);
-                    } else if (votedOption) {
-                        pollEl.innerHTML = `
-                            <div class="text-center">
-                                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                            </div>`;
-                    } else {
-                        const voteBtn = (key, text) =>
-                            `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
-                        const optC = activeNotice.poll.optionC
-                            ? voteBtn('C', activeNotice.poll.optionC)
-                            : '';
-                        pollEl.innerHTML = `
-                            <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                ${voteBtn('A', activeNotice.poll.optionA || 'A')}
-                                ${voteBtn('B', activeNotice.poll.optionB || 'B')}
-                                ${optC}
-                            </div>
-                            <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${activeNotice.poll.showResults ? '' : 'hidden'}"></div>`;
-                        if (activeNotice.poll.showResults) {
-                            const liveBox = document.getElementById(`poll-live-results-${pollId}`);
-                            if (liveBox) {
-                                renderPollResultsInto(liveBox, pollId, { ...activeNotice.poll, ...pollMeta }, null, pollSeverity);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (timestamp) {
-                const posted = activeNotice.repostedAt || activeNotice.postedAt || activeNotice.timestamp;
-                if (posted) {
-                    const date = new Date(posted);
-                    const label = (activeNotice.isRepost || activeNotice.repostedAt) ? 'Reposted' : 'Posted';
-                    timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
-                } else {
-                    timestamp.textContent = '';
-                }
-            }
-
-            // SPA design: Close + Reply footer (severity-coloured Reply)
-            const closeNotice = () => {
-                if (location.hash === '#notice') history.back();
-                else closeSmoothModal('notice-modal');
-            };
-            const oldCloseBtn = document.getElementById('notice-modal-close-btn')
-                || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
-            const oldContainer = modal.querySelector('.nt-notice-actions');
-            if (oldContainer) oldContainer.remove();
-
-            let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
-            if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
-            else if (severity === 'warning') baseColorClass = 'bg-yellow-600 hover:bg-yellow-700';
-
-            const btnContainer = document.createElement('div');
-            btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
-
-            const newCloseBtn = document.createElement('button');
-            newCloseBtn.type = 'button';
-            newCloseBtn.id = 'notice-close-btn';
-            newCloseBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-            newCloseBtn.textContent = 'Close';
-            newCloseBtn.onclick = closeNotice;
-            btnContainer.appendChild(newCloseBtn);
-
-            const newReplyBtn = document.createElement('button');
-            newReplyBtn.type = 'button';
-            newReplyBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
-            const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
-            newReplyBtn.innerHTML = `${replySvg} Reply`;
-            newReplyBtn.onclick = () => {
-                triggerHaptic();
-                const rawHtml = repairMojibake(activeNotice?.message || activeNotice?.text || '');
-                let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
-                truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
-                // Stack feedback over the alert — no close/home flash; cancel/send returns to notice
-                openFeedbackReplyFromOverlay('notice-modal', {
-                    label: 'Replying to Advisory:',
-                    snippet: truncatedMsg,
-                    rawMsg: truncatedMsg,
-                    alertId: activeNotice?.id || '',
-                });
-            };
-            btnContainer.appendChild(newReplyBtn);
-
-            if (oldCloseBtn) {
-                oldCloseBtn.style.display = 'none';
-                oldCloseBtn.parentNode?.appendChild(btnContainer);
-            } else {
-                content.parentNode?.appendChild(btnContainer);
-            }
+            renderServiceAlertModal(activeNotice, { mode: 'live' });
         };
 
         bellBtn.classList.remove('hidden');
@@ -1084,7 +1142,7 @@ export async function checkServiceAlerts() {
         };
 
         const topCloseBtn = modal?.querySelector('button.text-gray-400');
-        if (topCloseBtn) {
+        if (topCloseBtn && modal?.dataset?.alertPreview !== '1') {
             topCloseBtn.onclick = (e) => {
                 e.preventDefault();
                 if (location.hash === '#notice') history.back();
@@ -1108,6 +1166,10 @@ export function initHub() {
     window.showCacheClearWarning = showCacheClearWarning;
     window.checkServiceAlerts = checkServiceAlerts;
     window.submitPollVote = submitPollVote;
+    window.renderServiceAlertModal = renderServiceAlertModal;
+    window.prepareRichHtml = prepareRichHtml;
+    window.injectRichTextStyles = injectRichTextStyles;
+    injectRichTextStyles();
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1115,6 +1177,10 @@ export function initHub() {
             const btn = e.target?.closest?.('.nt-poll-vote');
             if (!btn) return;
             e.preventDefault();
+            if (document.getElementById('notice-modal')?.dataset?.alertPreview === '1') {
+                showToast('Preview only — votes are not recorded.', 'info');
+                return;
+            }
             const wrap = btn.closest('[id^="poll-container-"]');
             let pollMeta = null;
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }

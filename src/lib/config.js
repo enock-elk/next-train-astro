@@ -1,8 +1,18 @@
 // --- CONFIGURATION & CONSTANTS ---
 
 // 0. Version Control
-/** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.14";
+/**
+ * App version scheme: V{major}_{MM.DD}.{n}
+ *
+ * - major: product generation (currently 8)
+ * - MM.DD: calendar date of this development session (use today's date)
+ * - n: deployment counter for that date (1 = first ship that day)
+ *
+ * Future agents: if today's date already matches MM.DD, only increment n.
+ * If the calendar date changed, set MM.DD to today and reset n to 1.
+ * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
+ */
+export const APP_VERSION = "V8_08.15.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -868,6 +878,18 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.15.1",
+        title: "Admin feedback & incidents",
+        date: "15 Aug 2026",
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
+        features: [
+            "<b>Feedback:</b> Options stays pinned top-right. After a reply, admins can open WhatsApp or email without leaving the current tab.",
+            "<b>Attachments:</b> The paperclip chip now shows for commuter files and admin media in the same thread.",
+            "<b>Incidents:</b> Transit Incident Manager uses the same text formatting toolbar as alerts."
+        ]
+    },
     {
         id: "V8_08.14",
         title: "Alert formatting & preview",

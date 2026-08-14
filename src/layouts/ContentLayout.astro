@@ -145,6 +145,11 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         var s = document.createElement('script');
         s.async = true;
         s.src = 'https://www.googletagmanager.com/gtag/js?id=G-JM5DH6ERVX';
+        s.onload = function () {
+          window.__ntGaReady = true;
+          try { window.dispatchEvent(new Event('nt-ga-ready')); } catch (e) {}
+        };
+        s.onerror = function () { window.__ntGaBooted = false; };
         document.head.appendChild(s);
         gtag('js', new Date());
         gtag('config', 'G-JM5DH6ERVX', window.__ntGaConfig || {});

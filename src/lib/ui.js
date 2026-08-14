@@ -1569,6 +1569,11 @@ export function bindPwaInstallPrompt() {
 /** SPA OfflineTracker — queue analytics while offline, flush on reconnect. */
 export const OfflineTracker = {
     queueKey: 'analytics_queue',
+    _flushTimer: null,
+    _flushWaitStarted: 0,
+    gaReady() {
+        return typeof window !== 'undefined' && window.__ntGaReady === true && typeof window.gtag === 'function';
+    },
     enqueue(eventName, params) {
         try {
             const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
@@ -1581,6 +1586,20 @@ export const OfflineTracker = {
     },
     flush() {
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (!OfflineTracker.gaReady()) {
+            if (!OfflineTracker._flushWaitStarted) OfflineTracker._flushWaitStarted = Date.now();
+            if (Date.now() - OfflineTracker._flushWaitStarted > 25000) {
+                OfflineTracker._flushWaitStarted = 0;
+                return;
+            }
+            if (OfflineTracker._flushTimer) return;
+            OfflineTracker._flushTimer = setTimeout(() => {
+                OfflineTracker._flushTimer = null;
+                OfflineTracker.flush();
+            }, 400);
+            return;
+        }
+        OfflineTracker._flushWaitStarted = 0;
         try {
             const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
             if (queue.length === 0) return;
@@ -1590,15 +1609,23 @@ export const OfflineTracker = {
                     else safeStorage.removeItem(OfflineTracker.queueKey);
                     return;
                 }
-                const item = queue.shift();
-                const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
-                if (typeof window.trackAnalyticsEvent === 'function') {
-                    // Call underlying gtag path without re-enqueue
-                    try { window.gtag?.('event', item.event, enriched); } catch { /* ignore */ }
+                if (!OfflineTracker.gaReady()) {
+                    safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    OfflineTracker.flush();
+                    return;
                 }
-                safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                const item = queue[0];
+                const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
+                try {
+                    window.gtag('event', item.event, enriched);
+                    queue.shift();
+                    if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    else safeStorage.removeItem(OfflineTracker.queueKey);
+                } catch {
+                    safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    return;
+                }
                 if (queue.length > 0) setTimeout(processNext, 300);
-                else safeStorage.removeItem(OfflineTracker.queueKey);
             };
             processNext();
         } catch (e) {
@@ -1671,8 +1698,10 @@ function installAnalyticsOfflineBridge() {
     const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
     window.trackAnalyticsEvent = (name, params = {}) => {
         try {
-            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+            if (offline || !OfflineTracker.gaReady()) {
                 OfflineTracker.enqueue(name, params);
+                if (!offline) OfflineTracker.flush();
                 return;
             }
             if (prior) prior(name, params);
@@ -1688,8 +1717,10 @@ function installAnalyticsOfflineBridge() {
     };
 
     window.addEventListener('online', () => OfflineTracker.flush());
+    window.addEventListener('nt-ga-ready', () => OfflineTracker.flush());
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
+        OfflineTracker.flush();
         try {
             const id = window.NEXT_TRAIN_DEVICE_ID || safeStorage.getItem('next_train_device_id');
             if (id && typeof window.clarity === 'function') {
@@ -1761,6 +1792,7 @@ if (typeof window !== 'undefined') {
         // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
         setTimeout(() => {
             try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
+            OfflineTracker.flush();
         }, 400);
     });
     window.addEventListener('offline', () => {

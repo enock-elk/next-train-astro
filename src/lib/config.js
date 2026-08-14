@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.10.1";
+export const APP_VERSION = "V8_08.14";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -868,6 +868,18 @@ export const DEFAULT_EXCLUSIONS = {
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.14",
+        title: "Alert formatting & preview",
+        date: "14 Aug 2026",
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
+        features: [
+            "<b>Service alerts:</b> Small/large text, underline, titles, and Verdana / Times now show the same way for commuters as in admin.",
+            "<b>Preview Alert:</b> Admins see the exact user modal (Edit | Post) before publishing.",
+            "<b>Links:</b> Long URLs wrap; emails and phone numbers are tappable in alerts and admin replies."
+        ]
+    },
     {
         id: "V8_08.10.1",
         title: "Cape Town Public Holidays",

@@ -6717,22 +6717,10 @@ const Admin = {
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
                     <div class="flex flex-col min-h-0 flex-1">
-                    <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5 shrink-0">
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('bold', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Bold">B</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('italic', 'admin-reply-text')" class="px-1.5 py-1 text-xs italic text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Italic">I</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('larger', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Increase Size">A+</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('smaller', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Decrease Size">A-</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyLeft', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Left"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
-                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
-                            <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
-                        </div>
-                        <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                    <div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">
+                            ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
+                    </div>
+                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
                     </div>
 
                     <div class="flex space-x-2 mt-3 shrink-0">
@@ -6751,7 +6739,11 @@ const Admin = {
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
                 editor.classList.remove('min-h-[120px]', 'p-2.5');
-                editor.classList.add('min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                const bar = editor.previousElementSibling;
+                if (bar && !bar.querySelector('[onclick*="fontVerdana"]')) {
+                    bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
+                }
             }
             if (!document.getElementById('admin-reply-recipient')) {
                 const h3 = panel?.querySelector('h3');
@@ -7173,20 +7165,62 @@ const Admin = {
         }
     },
 
+    wysiwygToolbarHtml: (editorId, opts = {}) => {
+        const id = String(editorId || 'alert-msg').replace(/[^a-z0-9_-]/gi, '');
+        const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
+        const fileLabelId = opts.fileLabelId ? String(opts.fileLabelId).replace(/[^a-z0-9_-]/gi, '') : '';
+        const btn = (tag, title, inner, extraClass = '') =>
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1 ${extraClass}" title="${title}">${inner}</button>`;
+        const iconBtn = (tag, title, svg) =>
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="${title}">${svg}</button>`;
+        const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
+        const media = fileInputId
+            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+                            <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
+            : '';
+        const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
+        const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
+        const alignR = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg>';
+        return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
+                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5">
+                            ${btn('bold', 'Bold', 'B')}
+                            ${btn('italic', 'Italic', 'I', 'italic')}
+                            ${btn('underline', 'Underline', 'U', 'underline')}
+                            ${sep}
+                            ${btn('smaller', 'Decrease Size', 'A-')}
+                            ${btn('larger', 'Increase Size', 'A+')}
+                            ${sep}
+                            ${iconBtn('justifyLeft', 'Align Left', alignL)}
+                            ${iconBtn('justifyCenter', 'Align Center', alignC)}
+                            ${iconBtn('justifyRight', 'Align Right', alignR)}
+                            ${sep}
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            ${media}
+                        </div>
+                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5 border-t border-gray-300 dark:border-gray-600">
+                            ${btn('title', 'Title heading', 'Title', 'whitespace-nowrap')}
+                            ${btn('fontVerdana', 'Verdana', 'Verdana', 'whitespace-nowrap font-normal')}
+                            ${btn('fontTimes', 'Times New Roman', 'Times', 'whitespace-nowrap font-normal')}
+                        </div>
+                    </div>`;
+    },
+
 // RICH TEXT FORMATTING HELPER ---
     formatAlertText: (tag, targetId = 'alert-msg') => {
         const editor = document.getElementById(targetId);
         if (!editor) return;
-        
-        // GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
-        // Without these !important rules, Tailwind's text-sm class squashes all larger <font> tags back to "normal"
-        if (!document.getElementById('wysiwyg-extended-sizes')) {
+
+        if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
+        else if (!document.getElementById('wysiwyg-extended-sizes')) {
             const style = document.createElement('style');
             style.id = 'wysiwyg-extended-sizes';
             style.innerHTML = `
                 font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
                 font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
+                font[face="Verdana"], font[face="verdana"] { font-family: Verdana, Geneva, sans-serif !important; }
+                font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times New Roman", Times, serif !important; }
+                #alert-msg, #admin-reply-text { overflow-wrap: anywhere; word-break: break-word; }
             `;
             document.head.appendChild(style);
         }
@@ -7205,6 +7239,26 @@ const Admin = {
             document.execCommand('bold', false, null);
         } else if (tag === 'italic') { 
             document.execCommand('italic', false, null);
+        } else if (tag === 'underline') {
+            document.execCommand('underline', false, null);
+        } else if (tag === 'title') {
+            let block = 'h3';
+            const sel = window.getSelection();
+            if (sel.rangeCount > 0) {
+                let node = sel.anchorNode;
+                while (node && node !== editor) {
+                    if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
+                        block = 'p';
+                        break;
+                    }
+                    node = node.parentNode;
+                }
+            }
+            document.execCommand('formatBlock', false, block);
+        } else if (tag === 'fontVerdana') {
+            document.execCommand('fontName', false, 'Verdana');
+        } else if (tag === 'fontTimes') {
+            document.execCommand('fontName', false, 'Times New Roman');
         } else if (tag === 'larger' || tag === 'smaller') {
             // GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
@@ -7745,22 +7799,8 @@ const Admin = {
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                        <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border-b border-gray-300 dark:border-gray-600 overflow-x-auto custom-scrollbar space-x-0.5">
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('bold')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Bold">B</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('italic')" class="px-1.5 py-1 text-xs italic text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Italic">I</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('larger')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Increase Size">A+</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('smaller')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Decrease Size">A-</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyLeft')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Left"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
-                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
-                            <input type="file" id="alert-upload-file" class="hidden" accept="image/*,.pdf">
-                        </div>
-                        <div contenteditable="true" id="alert-msg" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                        ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
+                        <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
                     </div>
                 </div>
 
@@ -7875,7 +7915,7 @@ const Admin = {
 
                 <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                      <button id="alert-send-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
-                        Post Alert
+                        Preview Alert
                     </button>
                     <button id="alert-clear-btn" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
                         Clear
@@ -8534,7 +8574,7 @@ const Admin = {
                         if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
                     }
 
-                    sendBtn.textContent = "Update Alert"; 
+                    sendBtn.textContent = "Preview Alert"; 
                 } else {
                     existingAlertId = null;
                     alertMsg.innerHTML = "";
@@ -8560,7 +8600,7 @@ const Admin = {
                     pollOptCWrap?.classList.add('hidden');
                     pollAddCBtn?.classList.remove('hidden');
 
-                    sendBtn.textContent = "Post Alert";
+                    sendBtn.textContent = "Preview Alert";
                 }
             } catch (e) { console.log("No active alert."); }
         }
@@ -8700,8 +8740,9 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
             msg = Admin.repairMojibake(msg);
-            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-
+            if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
+                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
+            }
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
 
@@ -8735,24 +8776,45 @@ const Admin = {
                 }
             };
 
-            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
-
-            try {
-                sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
-                sendBtn.disabled = true;
-                // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
-                const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
-                if (res.ok) {
-                    existingAlertId = payload.id;
-                    Admin._alertRepostDraft = false;
-                    if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
-                    if (typeof checkServiceAlerts === 'function') checkServiceAlerts(); 
-                } else {
-                    if (typeof showToast === 'function') showToast("Failed. Check Session.", "error");
+            const publishAssembled = async () => {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
+                try {
+                    sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
+                    sendBtn.disabled = true;
+                    const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
+                    if (res.ok) {
+                        existingAlertId = payload.id;
+                        Admin._alertRepostDraft = false;
+                        if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
+                        if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
+                    } else {
+                        if (typeof showToast === 'function') showToast("Failed. Check Session.", "error");
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast("Error: " + e.message, "error");
+                } finally {
+                    sendBtn.textContent = "Preview Alert";
+                    sendBtn.disabled = false;
                 }
-            } catch (e) { if (typeof showToast === 'function') showToast("Error: " + e.message, "error"); } 
-            finally { sendBtn.textContent = "Update Alert"; sendBtn.disabled = false; }
+            };
+
+            const modal = document.getElementById('notice-modal');
+            if (typeof window.renderServiceAlertModal === 'function' && modal) {
+                const restoreZ = Admin._elevateModalForAdmin(modal);
+                window.renderServiceAlertModal(payload, {
+                    mode: 'preview',
+                    onEdit: () => { try { restoreZ(); } catch { /* ignore */ } },
+                    onPost: async () => {
+                        try { restoreZ(); } catch { /* ignore */ }
+                        await publishAssembled();
+                    },
+                });
+                openSmoothModal('notice-modal', null, { skipHash: true });
+                return;
+            }
+
+            await publishAssembled();
         };
 
         clearBtn.onclick = async () => {
@@ -8794,7 +8856,7 @@ const Admin = {
                 const livePoll = document.getElementById('alert-live-poll-results');
                 if (livePoll) livePoll.classList.add('hidden');
 
-                sendBtn.textContent = "Post Alert";
+                sendBtn.textContent = "Preview Alert";
                 if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
             } catch (e) { if (typeof showToast === 'function') showToast(e.message || "Failed to clear alert.", "error"); }
         };
@@ -9090,87 +9152,34 @@ const Admin = {
 
     _previewArchiveAsNotice: (item) => {
         const modal = document.getElementById('notice-modal');
-        const content = document.getElementById('notice-content');
-        const timestamp = document.getElementById('notice-timestamp');
-        if (!modal || !content) {
-            // Fallback if hub markup missing
+        if (!modal) {
             if (typeof showToast === 'function') showToast('Notice modal unavailable.', 'error');
             return;
         }
         const restoreZ = Admin._elevateModalForAdmin(modal);
-        const severity = (item.severity || 'info').toLowerCase();
-        const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
-        if (modalCard) {
-            modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500');
-            if (severity === 'critical') modalCard.classList.add('border-red-500');
-            else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
-            else modalCard.classList.add('border-blue-500');
+        const finish = () => { try { restoreZ(); } catch { /* ignore */ } };
+        const posted = item.repostedAt || item.postedAt || item.timestamp;
+        const postedStr = posted ? Admin.formatDate(posted) : '-';
+        const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
+        const timestampHtml = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
+        const prefixHtml = item.archivedAt
+            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
+            : '';
+        if (typeof window.renderServiceAlertModal === 'function') {
+            window.renderServiceAlertModal(item, {
+                mode: 'archive',
+                prefixHtml,
+                timestampHtml,
+                onClose: finish,
+                onRevive: (item.archivedAt || item.archiveReason)
+                    ? () => { finish(); Admin.reviveArchivedAlert(item); }
+                    : null,
+            });
+            openSmoothModal('notice-modal', null, { skipHash: true });
+            return;
         }
-        const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
-        if (modalHeader) {
-            const headerContainer = modalHeader.parentElement;
-            if (headerContainer) {
-                headerContainer.className = `flex items-center shrink-0 ${
-                    severity === 'critical' ? 'text-red-600 dark:text-red-400'
-                        : severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400'
-                            : 'text-blue-600 dark:text-blue-400'
-                }`;
-            }
-            // Unicode escapes stay encoding-safe (matches live hub.js titles)
-            modalHeader.textContent = severity === 'critical'
-                ? '\uD83D\uDD34 CRITICAL ADVISORY'
-                : severity === 'warning'
-                    ? '\uD83D\uDFE1 SERVICE WARNING'
-                    : '\uD83D\uDD35 SERVICE INFO';
-        }
-        content.innerHTML = Admin.buildNoticeBodyHtml(item);
-        if (timestamp) {
-            const posted = item.repostedAt || item.postedAt || item.timestamp;
-            const postedStr = posted ? Admin.formatDate(posted) : '-';
-            const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
-            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
-        }
-
-        modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
-        const oldCloseBtn = document.getElementById('notice-modal-close-btn');
-        if (oldCloseBtn) oldCloseBtn.style.display = 'none';
-
-        const closePreview = () => {
-            restoreZ();
-            // Close without history.back() — archive preview never pushed #notice.
-            if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal', true);
-            else modal.classList.add('hidden');
-            if (oldCloseBtn) oldCloseBtn.style.display = '';
-        };
-
-        const btnContainer = document.createElement('div');
-        btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-        closeBtn.textContent = 'Close';
-        closeBtn.onclick = closePreview;
-        btnContainer.appendChild(closeBtn);
-
-        if (item.archivedAt || item.archiveReason) {
-            const reviveBtn = document.createElement('button');
-            reviveBtn.type = 'button';
-            reviveBtn.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-            reviveBtn.textContent = 'Revive / Repost';
-            reviveBtn.onclick = () => {
-                closePreview();
-                Admin.reviveArchivedAlert(item);
-            };
-            btnContainer.appendChild(reviveBtn);
-        }
-
-        const topClose = modal.querySelector('button.text-gray-400');
-        if (topClose) topClose.onclick = (e) => { e.preventDefault(); e.stopPropagation(); closePreview(); };
-
-        if (oldCloseBtn?.parentNode) oldCloseBtn.parentNode.appendChild(btnContainer);
-        else content.parentNode?.appendChild(btnContainer);
-
-        openSmoothModal('notice-modal', null, { skipHash: true });
+        if (typeof showToast === 'function') showToast('Notice preview unavailable.', 'error');
+        finish();
     },
 
     _previewArchiveAsDisruption: (item) => {

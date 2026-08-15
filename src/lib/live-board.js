@@ -1291,7 +1291,8 @@ export function markFromStationHintSeen() {
 
 /**
  * Gentle 10s pulse on the Next Train from-station field for first-time users.
- * Starts only after schedule hydrate (station list non-empty) and no station chosen.
+ * Start AFTER schedule hydrate (station list non-empty) — pulsing "Loading..."
+ * is useless. A tap (or a pre-filled station) persists seen and never pulses again.
  */
 export function maybeStartFromStationHint() {
     if (typeof document === 'undefined') return;

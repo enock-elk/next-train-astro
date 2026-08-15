@@ -119,8 +119,8 @@ const faqLd = {
     <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
     <HubModals />
 
-    <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
-    <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
+    <!-- Kept for error / recovery paths. Hidden on first paint — the app skeleton is the boot UI. -->
+    <div id="loading-overlay" class="hidden fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900" style="display: none;" hidden>
         <img
             src={withBase('icons/loading-logo-splash.webp')}
             alt=""
@@ -139,7 +139,7 @@ const faqLd = {
     </div>
 
     <!-- MAIN APP — fills device height; active tab expands into remaining space -->
-    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">
+    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
         
         <Header />
 
@@ -226,14 +226,8 @@ const faqLd = {
     const loaderImg = document.querySelector('#loading-overlay img');
     if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
 
-    // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
-    // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            revealAppShell();
-        });
-    });
-    setTimeout(revealAppShell, 700);
+    // Chrome is already visible (skeleton boards + header). Keep the overlay down.
+    revealAppShell();
 
     // Early reachability probe — radio up ≠ usable internet
     try { ensureReachabilityProbed(); } catch (e) { /* ignore */ }

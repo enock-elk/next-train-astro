@@ -5,8 +5,8 @@
 <div id="view-next-train" class="view-section active p-4 flex-grow bg-gray-50 dark:bg-gray-900/50">
 
     <!-- ROUTE PIN & TITLE -->
-    <div class="text-center mb-5 flex flex-col justify-center items-center w-full">
-        <div id="route-selector-pill" class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 min-h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 overflow-hidden transition-colors">
+    <div class="nt-board-chrome text-center mb-5 flex flex-col justify-center items-center w-full min-h-[70px]">
+        <div id="route-selector-pill" class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 overflow-hidden transition-colors">
 
             <button id="pin-route-btn" class="relative flex items-center justify-center w-full h-full text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none group cursor-pointer" title="Pin this route" aria-label="Pin Route">
                 <svg id="pin-outline" class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
@@ -28,20 +28,8 @@
         <p id="last-updated-date" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1">Schedule Effective from: --</p>
     </div>
 
-    <!-- Commuter delay reports (parity cutover: UI gated via DELAY_REPORTS_UI_ENABLED) -->
-    <div id="delay-report-banner" class="hidden shrink-0 mb-4 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 text-left relative" hidden aria-hidden="true">
-        <span id="delay-report-badge" class="hidden absolute -top-2 -right-1 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm min-w-[1.25rem] text-center">0</span>
-        <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-                <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-0.5">Commuter reports</p>
-                <p id="delay-report-banner-text" class="text-xs font-bold text-gray-800 dark:text-gray-200 leading-snug"></p>
-            </div>
-            <button type="button" id="delay-report-banner-cta" class="shrink-0 text-[10px] font-bold text-amber-800 dark:text-amber-300 underline underline-offset-2 focus:outline-none">Report</button>
-        </div>
-    </div>
-
-    <!-- STATION SELECTOR & GPS -->
-    <div class="mb-5 relative z-20" id="station-field-hit">
+    <!-- STATION SELECTOR & GPS — keep this slot above delay reports so From does not jump vs Planner -->
+    <div class="nt-from-station-slot mb-5 relative z-20" id="station-field-hit">
         <label for="station-select" class="sr-only">From Station</label>
         <div class="flex items-center gap-2">
             <div class="relative flex-grow shadow-sm rounded-xl cursor-pointer" id="station-field-wrap" role="button" tabindex="0" aria-label="Select station">
@@ -59,23 +47,43 @@
         </div>
     </div>
 
+    <!-- Commuter delay reports (below From so the field stays aligned with Trip Planner) -->
+    <div id="delay-report-banner" class="hidden shrink-0 mb-4 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 text-left relative" hidden aria-hidden="true">
+        <span id="delay-report-badge" class="hidden absolute -top-2 -right-1 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm min-w-[1.25rem] text-center">0</span>
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-0.5">Commuter reports</p>
+                <p id="delay-report-banner-text" class="text-xs font-bold text-gray-800 dark:text-gray-200 leading-snug"></p>
+            </div>
+            <button type="button" id="delay-report-banner-cta" class="shrink-0 text-[10px] font-bold text-amber-800 dark:text-amber-300 underline underline-offset-2 focus:outline-none">Report</button>
+        </div>
+    </div>
+
     <!-- LIVE BOARDS — SSR shell matches the empty “select station” state (avoids pure-white boot) -->
     <div class="space-y-4 mb-6">
         <div class="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
             <h2 id="pretoria-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">Next train to <span class="text-blue-500 dark:text-blue-400">…</span></h2>
             <div id="pretoria-time" class="text-center flex items-center justify-center">
-                <div class="min-h-[96px] h-auto flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 rounded-xl w-full border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50">
-                    <svg class="w-6 h-6 mb-1 opacity-50 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    <span class="text-xs font-bold">Select station above</span>
+                <div class="flex flex-row items-center w-full space-x-3 h-24 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg p-2" aria-hidden="true">
+                    <div class="relative w-1/2 h-full bg-gray-300 dark:bg-gray-700 rounded-lg shadow-sm flex-shrink-0"></div>
+                    <div class="w-1/2 flex flex-col justify-center items-center space-y-2">
+                        <div class="h-3 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
+                        <div class="h-2 bg-gray-300 dark:bg-gray-700 rounded w-1/2"></div>
+                        <div class="h-5 bg-gray-300 dark:bg-gray-700 rounded w-full mt-1"></div>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
             <h2 id="pienaarspoort-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">Next train to <span class="text-blue-500 dark:text-blue-400">…</span></h2>
             <div id="pienaarspoort-time" class="text-center flex items-center justify-center">
-                <div class="min-h-[96px] h-auto flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 rounded-xl w-full border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50">
-                    <svg class="w-6 h-6 mb-1 opacity-50 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    <span class="text-xs font-bold">Select station above</span>
+                <div class="flex flex-row items-center w-full space-x-3 h-24 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg p-2" aria-hidden="true">
+                    <div class="relative w-1/2 h-full bg-gray-300 dark:bg-gray-700 rounded-lg shadow-sm flex-shrink-0"></div>
+                    <div class="w-1/2 flex flex-col justify-center items-center space-y-2">
+                        <div class="h-3 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
+                        <div class="h-2 bg-gray-300 dark:bg-gray-700 rounded w-1/2"></div>
+                        <div class="h-5 bg-gray-300 dark:bg-gray-700 rounded w-full mt-1"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -112,7 +120,7 @@
     </div>
 
     <!-- Footer actions (SPA) -->
-    <div class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+    <div class="nt-board-footer mt-auto border-t border-gray-200 dark:border-gray-700 pt-4">
         <div class="grid grid-cols-2 gap-2.5 mb-3">
             <button type="button" id="share-app-btn" class="group flex items-center justify-center gap-2 w-full bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 font-semibold py-2.5 px-3 rounded-xl shadow-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-200 dark:hover:border-blue-800 hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm focus:outline-none">
                 <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" fill="none"/><circle cx="6" cy="12" r="3" fill="none"/><circle cx="18" cy="19" r="3" fill="none"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>

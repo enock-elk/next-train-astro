@@ -13,6 +13,39 @@ export function escapeHTML(str) {
     });
 }
 
+/** Short months for commuter/admin dates — always "13 Aug 2026", never 8/13/2026. */
+export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function coerceDate(value) {
+    if (value instanceof Date) return value;
+    if (value == null || value === '') return null;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+/** Display date: 13 Aug 2026. */
+export function formatDisplayDate(value) {
+    const d = coerceDate(value);
+    if (!d) return '';
+    return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/** Display date + time: 13 Aug 2026, 3:45 PM. */
+export function formatDisplayDateTime(value) {
+    const d = coerceDate(value);
+    if (!d) return '';
+    let hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${formatDisplayDate(d)}, ${hours}:${minutes} ${ampm}`;
+}
+
+if (typeof window !== 'undefined') {
+    window.formatDisplayDate = formatDisplayDate;
+    window.formatDisplayDateTime = formatDisplayDateTime;
+}
+
 /**
  * Resolve operating day type from calendar DOW + optional holiday schedule type.
  * Calendar Sunday always wins. WC remaps holiday saturday/public_holiday → public_holiday.

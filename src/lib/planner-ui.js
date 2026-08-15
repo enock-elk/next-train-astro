@@ -17,7 +17,7 @@ import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
-    resolveOperatingDayType
+    resolveOperatingDayType, formatDisplayDateTime
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
@@ -1189,9 +1189,7 @@ export function openDisruptionModal(id) {
     if (timeEl) {
         if (targetDisruption.postedAt) {
             const d = new Date(targetDisruption.postedAt);
-            const dateStr = d.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const timeStr = d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-            timeEl.textContent = `Posted: ${timeStr}, ${dateStr}`;
+            timeEl.textContent = `Posted: ${formatDisplayDateTime(d)}`;
         } else {
             timeEl.textContent = "Posted: Recently";
         }
@@ -3393,6 +3391,69 @@ export async function applyPlannerDeepLink() {
     });
 }
 
+/**
+ * Open a trip in the planner (admin telemetry "Open", share restore).
+ * Fills From/To and runs the same search as a commuter tap on Plan Trip.
+ */
+export function openPlannerTrip({ origin, dest, region, dayType } = {}) {
+    if (!origin || !dest) return;
+    if (typeof switchTab === 'function') switchTab('trip-planner');
+    else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
+
+    const targetRegion = (region && ['GP', 'WC', 'KZN', 'EC'].includes(String(region).toUpperCase()))
+        ? String(region).toUpperCase()
+        : ($userRegion.get() || 'GP');
+    ensureRoutePinnedForRegion(targetRegion);
+
+    const resolveStation = (txt, list) => {
+        if (!txt) return '';
+        let clean = String(txt).trim().replace(/\+/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+        const bare = (s) => String(s || '').replace(/ STATION$/i, '').toUpperCase();
+        const exact = list.find((s) => bare(s) === clean || String(s).toUpperCase() === clean);
+        if (exact) return exact;
+        const partial = list.find((s) => bare(s).includes(clean) || clean.includes(bare(s)));
+        return partial || '';
+    };
+
+    const fillAndRun = () => {
+        const list = getMasterStationList() || [];
+        const fromId = resolveStation(origin, list);
+        const toId = resolveStation(dest, list);
+        if (!fromId || !toId) {
+            showToast('Could not resolve those stations on this device.', 'error');
+            return;
+        }
+        const fromSelect = document.getElementById('planner-from');
+        const toSelect = document.getElementById('planner-to');
+        const fromInput = document.getElementById('planner-from-search');
+        const toInput = document.getElementById('planner-to-search');
+        if (fromSelect) fromSelect.value = fromId;
+        if (toSelect) toSelect.value = toId;
+        if (fromInput) {
+            fromInput.value = fromId.replace(/ STATION$/i, '');
+            fromInput.dataset.resolvedValue = fromId;
+        }
+        if (toInput) {
+            toInput.value = toId.replace(/ STATION$/i, '');
+            toInput.dataset.resolvedValue = toId;
+        }
+        if (dayType && ['weekday', 'saturday', 'sunday'].includes(String(dayType).toLowerCase())) {
+            selectedPlannerDay = String(dayType).toLowerCase();
+        }
+        executeTripPlan(fromId, toId);
+    };
+
+    const list = getMasterStationList();
+    if (list && list.length) {
+        fillAndRun();
+        return;
+    }
+    loadAllSchedules(true).then(() => {
+        if (getMasterStationList()?.length) fillAndRun();
+        else showToast('Schedules still loading — try Open again in a moment.', 'info');
+    }).catch(() => showToast('Could not load trip data.', 'error'));
+}
+
 // --- ORCHESTRATION ---
 export function executeTripPlan(origin, dest, preferredTime = null) {
     lastPlannerPreferredTime = preferredTime;
@@ -3778,6 +3839,7 @@ if (typeof window !== 'undefined') {
     window.extractTripCoordinates = extractTripCoordinates;
     window.hidePlannerResults = hidePlannerResults;
     window.openPlannerNetworkMap = openPlannerNetworkMap;
+    window.openPlannerTrip = openPlannerTrip;
     window.restorePlannerResultsView = restorePlannerResultsView;
     window.planFromAlternateOrigin = planFromAlternateOrigin;
     window._toggleCustomTimeDropdown = toggleCustomTimeDropdown;

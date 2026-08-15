@@ -3,7 +3,7 @@
 ---
 
 <div id="view-trip-planner" class="view-section p-4 pb-6 bg-gray-50 dark:bg-gray-900/50 flex flex-col flex-grow min-h-0">
-    <div class="planner-title-block text-center mb-5 flex flex-col justify-center items-center w-full shrink-0">
+    <div class="nt-board-chrome planner-title-block text-center mb-5 flex flex-col justify-center items-center w-full min-h-[70px] shrink-0">
         <button id="planner-info-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-center bg-white dark:bg-gray-800 h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors overflow-hidden group focus:outline-none">
             <div class="w-full h-full"></div>
             <h2 class="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-200 group-hover:opacity-80 transition-colors truncate w-full px-1 text-center">
@@ -18,11 +18,11 @@
     </div>
     
     <div id="planner-input-section" class="space-y-7 shrink-0">
-        <!-- FROM SECTION -->
-        <div class="mb-1">
+        <!-- FROM SECTION — same slot as Next Train #station-field-hit so the field does not jump on tab switch -->
+        <div class="nt-from-station-slot mb-5 relative z-20" id="planner-from-field-hit">
             <label for="planner-from-search" class="sr-only">From Station</label>
             <div class="flex items-center gap-2">
-                <div class="relative flex-grow">
+                <div class="relative flex-grow shadow-sm rounded-xl">
                     <input type="text" id="planner-from-search" name="planner_origin_search_ignore" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Select From Station..." class="block w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl shadow-sm p-3 text-lg font-medium focus:ring-blue-500 focus:border-blue-500 transition-colors h-[54px] appearance-none pr-12 truncate">
                     <select id="planner-from" class="hidden w-full p-4 rounded-xl bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-lg font-medium text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors">
                         <option value="">Loading stations...</option>

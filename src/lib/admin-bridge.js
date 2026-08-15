@@ -9,7 +9,7 @@ import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
     SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, formatDisplayDate, formatDisplayDateTime } from './utils.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll
@@ -61,6 +61,8 @@ export function exposeAdminGlobals() {
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
+    window.formatDisplayDate = formatDisplayDate;
+    window.formatDisplayDateTime = formatDisplayDateTime;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;

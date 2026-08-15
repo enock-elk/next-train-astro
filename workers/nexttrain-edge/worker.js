@@ -25,6 +25,15 @@ export default {
     });
 
     const headers = new Headers(res.headers);
+    // Do not advertise origin stack (PHP-style X-Powered-By / host fingerprints).
+    // Cloudflare still adds `server: cloudflare` at the edge — that has no version.
+    headers.delete('X-Powered-By');
+    headers.delete('x-powered-by');
+    headers.delete('X-GitHub-Request-Id');
+    headers.delete('X-GitHub-Edge-Region');
+    headers.delete('X-Served-By');
+    headers.delete('X-Fastly-Request-Id');
+    headers.delete('Via');
     headers.set(
       'Cache-Control',
       hashed

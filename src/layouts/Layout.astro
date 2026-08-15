@@ -14,7 +14,7 @@ const {
   ogDescription = null,
   twitterTitle = null,
   twitterDescription = null,
-  /** Home shell: skip full-screen boot gate for returning sessions (map→home, etc.). */
+  /** Home shell: kept for callers; chrome is now visible on first paint for everyone. */
   unlockShellEarly = false,
 } = Astro.props;
 
@@ -101,25 +101,19 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         }
       })();
     </script>
-    {unlockShellEarly && (
-      <>
-        <script is:inline>
-          // Returning users / same-session navigations (e.g. map.html → home) must not
-          // sit behind "Loading schedules…". Decide before first paint.
-          (function () {
-            try {
-              var seen = localStorage.getItem('welcomeSeen') === 'true';
-              var warm = sessionStorage.getItem('nt_shell_warm') === '1';
-              if (seen || warm) document.documentElement.classList.add('nt-shell-ready');
-            } catch (e) {}
-          })();
-        </script>
-        <style is:inline>
-          html.nt-shell-ready #loading-overlay { display: none !important; }
-          html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
-        </style>
-      </>
-    )}
+    <script is:inline>
+      // Show the real app chrome on first paint. Schedules hydrate behind the
+      // skeleton — never sit on a blank "Getting schedules…" page.
+      (function () {
+        try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
+        try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
+      })();
+    </script>
+    <style is:inline>
+      html.nt-shell-ready #loading-overlay { display: none !important; }
+      html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
+      #main-content.app-shell { visibility: visible; }
+    </style>
     <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;
@@ -386,8 +380,8 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       .view-section {
         display: none;
         opacity: 0;
-        transform: translateY(10px);
-        transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+        /* No translateY — From station must stay put when switching Next Train ↔ Planner */
+        transition: opacity 0.2s ease-out, padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
       }
       .view-section.active {
         display: block;
@@ -395,7 +389,11 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         flex: 1 1 auto;
         overflow: visible;
         opacity: 1;
-        transform: translateY(0);
+      }
+      /* Pin Share / Feedback / Kazembe to the shell bottom when the board is short */
+      #view-next-train.view-section.active {
+        display: flex;
+        flex-direction: column;
       }
 
       /* Planner: column flex so #planner-spacer can pin Share/Feedback to the shell bottom
@@ -421,17 +419,20 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* Fill the device height (minus body padding) so short planner/error states
-         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
+      /* Mobile: fill the device so no gray strip sits under Kazembe CodeWorks.
+         Desktop keeps the floating card (body padding + rounded shell). */
       #main-content.app-shell {
-        min-height: max(600px, calc(100dvh - 2rem));
+        min-height: 100dvh;
+        min-height: 100svh;
         height: auto;
         max-height: none;
+        border-radius: 0;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
           /* body: pt-12 + pb-4 */
           min-height: max(600px, calc(100dvh - 4rem));
+          border-radius: 0.5rem;
         }
       }
 
@@ -505,34 +506,46 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       }
 
       /* CleverAds containment — never cover welcome / go fullscreen.
-         Reserve bottom slot always so uncloak does not shift layout (CLS). */
+         Empty slot must collapse and never steal taps on Share / Feedback / footer. */
       #clever-core {
         max-height: 100px !important;
-        min-height: 100px;
+        min-height: 0;
+        height: 0;
         overflow: hidden !important;
         transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-        pointer-events: none;
+        pointer-events: none !important;
       }
       #clever-core iframe {
         max-height: 100px !important;
       }
-      #clever-core.ad-cloaked {
+      #clever-core.ad-cloaked,
+      #clever-core:not(.ad-visible) {
         transform: translateY(150%) !important;
         pointer-events: none !important;
         opacity: 0;
+        min-height: 0 !important;
+        height: 0 !important;
       }
-      /* Reserved space lives on the shell — avoid late padding toggle CLS */
-      body.nt-ads-ready .view-section,
+      #clever-core.ad-cloaked *,
+      #clever-core:not(.ad-visible) * {
+        pointer-events: none !important;
+      }
+      #clever-core.ad-visible:not(.ad-cloaked) {
+        min-height: 100px;
+        height: auto;
+        pointer-events: auto !important;
+        opacity: 1;
+        transform: none;
+      }
+      /* Pad the board only while a filled creative is actually showing */
       .ad-active-padding {
         padding-bottom: 108px !important;
       }
-      .view-section {
-        transition: padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-      }
+      /* padding-bottom transition is declared with opacity on .view-section above */
     </style>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-stretch sm:items-start justify-center min-h-[100dvh] min-h-[100svh] p-0 sm:p-4 sm:pt-12 sm:pb-4 transition-colors duration-300">
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 

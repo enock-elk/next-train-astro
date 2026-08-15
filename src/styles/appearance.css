@@ -525,3 +525,19 @@ font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times
 #view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-title-block {
   display: none;
 }
+
+/* First-time Next Train from-station hint — calm pulse, 10s then JS removes the class */
+@keyframes nt-from-hint-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(59 130 246 / 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(59 130 246 / 0);
+  }
+}
+.nt-from-hint-pulse {
+  animation: nt-from-hint-pulse 2.4s ease-in-out infinite;
+}
+.nt-from-hint-pulse #station-search-input {
+  border-color: rgb(96 165 250);
+}

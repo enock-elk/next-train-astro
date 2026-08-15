@@ -2,6 +2,20 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.15.3 — Full-height shell & boot skeleton (15 Aug 2026)
+
+- Mobile shell fills the viewport (no gray strip under Kazembe CodeWorks).
+- Bottom ad host collapses and ignores pointer events until a real creative is filled — Share / Feedback / footer stay tappable.
+- Home paints the real chrome (header, tabs, From, pulsing board cards, footer) while schedules fetch. Region swap no longer covers the app with a full-screen loader.
+
+## V8_08.15.2 — Display dates & first-station hint (15 Aug 2026)
+
+- Dates across notices, boards, and admin lists use **13 Aug 2026** (not 8/13/2026).
+- First-time Next Train: Select Station pulses gently for 10s after schedules load; a tap turns it off for good.
+- Feedback thread menu label is **Options** only.
+- Planner telemetry opens on Trip Plans (left tab).
+- Next Train and Trip Planner from-station fields share the same top position.
+
 ## V8_08.15.1 — Admin feedback & incidents (15 Aug 2026)
 
 - Feedback Options button is pinned to the top-right of the open thread (label is now **Options**).

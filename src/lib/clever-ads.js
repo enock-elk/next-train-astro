@@ -11,8 +11,9 @@
  */
 import { safeStorage } from './utils.js';
 import { isReloadPending, isStableForThirdParty } from './session-stability.js';
+import { AD_LOADER_ID, isAdSlotFilled } from './ad-slot.js';
 
-const LOADER_ID = 'CleverCoreLoader103008';
+const LOADER_ID = AD_LOADER_ID;
 const SCRIPT_SRC = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
 /** Soft wait for schedules / welcome; pending reloads always win until their until. */
 const STABILITY_MAX_WAIT_MS = 15000;
@@ -86,15 +87,31 @@ function setAdPadding(on) {
     document.querySelectorAll('.view-section').forEach((el) => {
         el.classList.toggle('ad-active-padding', !!on);
     });
-    // Reserve the bottom slot before the creative paints (CLS).
+    // Padding only when a filled creative is visible — never reserve an empty strip.
     try {
         document.body.classList.toggle('nt-ads-ready', !!on);
     } catch { /* ignore */ }
 }
 
+/** Empty / cloaked slot must not sit over Share, Feedback, or the footer. */
+function setAdHitTarget(adContainer, enabled) {
+    if (!adContainer) return;
+    adContainer.classList.toggle('ad-visible', !!enabled);
+    adContainer.style.pointerEvents = enabled ? 'auto' : 'none';
+    if (!enabled) {
+        try {
+            adContainer.querySelectorAll('*').forEach((el) => {
+                el.style.pointerEvents = 'none';
+            });
+        } catch { /* ignore */ }
+    }
+}
+
 function cloak(adContainer, fatal = false) {
     if (!adContainer) return;
     adContainer.classList.add('hidden', 'ad-cloaked');
+    adContainer.classList.remove('ad-visible');
+    setAdHitTarget(adContainer, false);
     if (fatal) {
         adContainer.innerHTML = '';
         adContainer.style.setProperty('display', 'none', 'important');
@@ -109,10 +126,7 @@ function uncloak(adContainer) {
 }
 
 function isAdFilled(adContainer) {
-    if (!adContainer || adContainer.childElementCount === 0) return false;
-    const iframe = adContainer.querySelector('iframe');
-    if (iframe) return iframe.getBoundingClientRect().height > 20;
-    return adContainer.offsetHeight > 20;
+    return isAdSlotFilled(adContainer);
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {
@@ -162,8 +176,14 @@ function injectAdScript(adContainer) {
             window._adScriptLoaded = true;
             console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_PAGE_INJECT_CAP}).`);
             if (adContainer.classList.contains('ad-cloaked') && !window._adNetworkDestroyed && isSafeZone()) {
-                uncloak(adContainer);
-                setAdPadding(isAdFilled(adContainer));
+                const filled = isAdFilled(adContainer);
+                if (filled) {
+                    uncloak(adContainer);
+                    setAdHitTarget(adContainer, true);
+                    setAdPadding(true);
+                } else {
+                    cloak(adContainer, false);
+                }
             }
         };
         adContainer.appendChild(c);
@@ -188,10 +208,10 @@ function refreshAdVisibility(adContainer) {
         return;
     }
 
-    uncloak(adContainer);
     const filled = isAdFilled(adContainer);
     if (filled) {
-        adContainer.style.pointerEvents = 'auto';
+        uncloak(adContainer);
+        setAdHitTarget(adContainer, true);
         setAdPadding(true);
         if (!window._adTelemetryFired) {
             window._adTelemetryFired = true;
@@ -200,8 +220,7 @@ function refreshAdVisibility(adContainer) {
             }
         }
     } else {
-        adContainer.style.pointerEvents = 'none';
-        setAdPadding(false);
+        cloak(adContainer, false);
     }
 }
 
@@ -250,6 +269,7 @@ export function initCleverAds() {
                 if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled(adContainer) && isSafeZone()) {
                     window._adTelemetryFired = true;
                     uncloak(adContainer);
+                    setAdHitTarget(adContainer, true);
                     setAdPadding(true);
                     if (typeof window.trackAnalyticsEvent === 'function') {
                         window.trackAnalyticsEvent('view_clever_ad', { location: 'main_dashboard', verified: 'instant_tripwire' });
@@ -341,8 +361,9 @@ export function initCleverAds() {
         if (shouldDeferForSessionStability()) return;
         scheduleStarted = true;
         stabilizedAt = Date.now();
-        // Reserve bottom inset before the creative arrives — avoids layout jump (CLS).
-        setAdPadding(true);
+        // Do not reserve 108px until a creative is actually filled — empty padding
+        // left a dead strip under Kazembe CodeWorks and blocked footer taps.
+        setAdPadding(false);
         console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
         armNextScheduleSlot();
     };

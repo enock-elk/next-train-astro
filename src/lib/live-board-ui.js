@@ -13,6 +13,7 @@ import {
     getRouteFare,
     getDetailedFare,
     populateStationList,
+    markFromStationHintSeen,
     findNextTrains,
     updateLastUpdatedText,
     attachLiveBoardGlobals,
@@ -121,6 +122,7 @@ export function setupNextTrainAutocomplete() {
     const fieldWrap = document.getElementById('station-field-wrap') || input.closest('.relative') || input.parentElement;
     const toggle = (e) => {
         if (e) e.stopPropagation();
+        markFromStationHintSeen();
         if (!list) return;
         if (list.classList.contains('hidden')) _renderNextTrainList();
         else list.classList.add('hidden');
@@ -145,6 +147,9 @@ export function setupNextTrainAutocomplete() {
             if (!fieldWrap?.contains(e.target) && !list.contains(e.target)) {
                 list.classList.add('hidden');
             }
+        });
+        select.addEventListener('change', () => {
+            if (select.value) markFromStationHintSeen();
         });
     }
 }

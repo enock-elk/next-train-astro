@@ -11,7 +11,7 @@ import {
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, formatDisplayDateTime } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
@@ -736,7 +736,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             if (posted) {
                 const date = new Date(posted);
                 const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-                timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+                timestamp.textContent = `${label}: ${formatDisplayDateTime(date)}`;
             } else if (mode === 'preview') {
                 timestamp.textContent = 'Preview — not posted yet';
             } else {

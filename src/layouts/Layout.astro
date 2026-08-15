@@ -390,6 +390,11 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible;
         opacity: 1;
       }
+      /* Pin Share / Feedback / Kazembe to the shell bottom when the board is short */
+      #view-next-train.view-section.active {
+        display: flex;
+        flex-direction: column;
+      }
 
       /* Planner: column flex so #planner-spacer can pin Share/Feedback to the shell bottom
          when error cards are short; tall trips still grow the page and scroll normally. */

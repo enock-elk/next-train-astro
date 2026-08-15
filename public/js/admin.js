@@ -4026,6 +4026,19 @@ const Admin = {
         };
     },
 
+    /** Close admin and open this corridor in the live Trip Planner. */
+    openTripInApp: (origin, dest, region, dayType) => {
+        Admin.closeDevModal({ force: true });
+        const run = () => {
+            if (typeof window.openPlannerTrip === 'function') {
+                window.openPlannerTrip({ origin, dest, region, dayType });
+            } else if (typeof showToast === 'function') {
+                showToast('Planner is still loading.', 'info');
+            }
+        };
+        setTimeout(run, 80);
+    },
+
     // --- GROWTH SPRINT PHASE 5: SILENT ROUTING FAILURES TRACKER (DEAD ENDS) ---
     setupDeadEndsManager: () => {
         const adminContainer = document.getElementById('admin-modules-container');
@@ -4574,8 +4587,8 @@ const Admin = {
                         </div>
                     `).join('');
                     card.innerHTML = `
-                        <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
-                            <div class="min-w-0 flex-1 pr-2">
+                        <div class="p-3 flex items-center justify-between gap-2">
+                            <button type="button" class="de-trip-card-btn min-w-0 flex-1 text-left focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
                                 <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
                                 <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                     <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
@@ -4585,12 +4598,15 @@ const Admin = {
                                 </div>
                                 <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
                                 <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
+                            </button>
+                            <div class="flex flex-col items-center justify-center gap-1.5 shrink-0">
+                                <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm">
+                                    <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
+                                    <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                                </div>
+                                <button type="button" class="de-trip-open-btn text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded focus:outline-none">Open</button>
                             </div>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                        </button>
+                        </div>
                         <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
                             <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
                             ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
@@ -4602,6 +4618,10 @@ const Admin = {
                         if (!panel || !btn) return;
                         const open = panel.classList.toggle('hidden') === false;
                         btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    });
+                    card.querySelector('.de-trip-open-btn')?.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        Admin.openTripInApp(item.origin, item.dest, item.region, item.dayType);
                     });
                     listDiv.appendChild(card);
                 });
@@ -4926,17 +4946,7 @@ const Admin = {
             };
             
             // GUARDIAN UX FIX: Universal CRM Date Formatter
-            const formatNiceDateTime = (ts) => {
-                const d = new Date(ts);
-                const day = d.getDate();
-                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
-                const year = d.getFullYear();
-                let hours = d.getHours();
-                const ampm = hours >= 12 ? 'PM' : 'AM';
-                hours = hours % 12 || 12;
-                const minutes = String(d.getMinutes()).padStart(2, '0');
-                return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
-            };
+            const formatNiceDateTime = (ts) => Admin.formatDate(ts);
 
             displayGroups.forEach(group => {
                 const did = group.did;
@@ -11540,19 +11550,9 @@ const Admin = {
 
         const formatNiceDate = (dateStr) => {
             if (!dateStr || dateStr === 'Unknown') return 'Unknown';
-            try {
-                const d = new Date(dateStr.replace(/^last updated[:\s-]*/i, '').trim());
-                if (isNaN(d.getTime())) return dateStr;
-                const day = d.getDate();
-                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
-                const year = d.getFullYear();
-                let hours = d.getHours();
-                const ampm = hours >= 12 ? 'PM' : 'AM';
-                hours = hours % 12;
-                hours = hours ? hours : 12; 
-                const minutes = d.getMinutes().toString().padStart(2, '0');
-                return `${day} ${month} ${year} - ${hours}:${minutes}${ampm}`;
-            } catch(e) { return dateStr; }
+            const cleaned = String(dateStr).replace(/^last updated[:\s-]*/i, '').trim();
+            const formatted = Admin.formatDate(cleaned);
+            return formatted && formatted !== 'Unknown' ? formatted : dateStr;
         };
 
         if (pingBtn) {

@@ -2,6 +2,9 @@
 # GitHub Pages ignores it — nexttrain-edge Worker sets the same headers on
 # nexttrain.co.za/_astro/* and /icons/*. HTML / sw.js / app-version.json stay
 # short-lived so NUKE + deploys can take effect.
+#
+# Never advertise a stack version (no X-Powered-By: PHP/x.y). Cloudflare still
+# sends `server: cloudflare` with no version — that is added after our origin.
 
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
@@ -17,3 +20,4 @@
 
 /
   Cache-Control: no-cache
+  X-Powered-By:

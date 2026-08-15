@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.15.2";
+export const APP_VERSION = "V8_08.15.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -884,6 +884,17 @@ export const DEFAULT_EXCLUSIONS = {
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.15.3",
+        title: "Fuller screen while times load",
+        date: "15 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Full screen:</b> Next Train now fills your phone, with no empty strip under Kazembe CodeWorks.",
+            "<b>Taps:</b> Share, Feedback, and the footer stay tappable at the bottom of the screen.",
+            "<b>While times load:</b> Header, tabs, station field, and boards stay on screen — no blank waiting page."
+        ]
+    },
     {
         id: "V8_08.15.2",
         title: "Dates and first station",

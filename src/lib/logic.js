@@ -289,14 +289,31 @@ export function ensureMapImageLoaded() {
     }
 }
 
-function showRegionSwapLoader() {
+function paintBoardSkeletons() {
     if (typeof document === 'undefined') return;
-    const overlay = document.getElementById('loading-overlay');
-    if (!overlay) return;
-    const label = overlay.querySelector('p');
-    if (label) label.textContent = 'Loading schedules…';
-    overlay.style.display = '';
-    overlay.classList.remove('hidden');
+    const pret = document.getElementById('pretoria-time');
+    const pien = document.getElementById('pienaarspoort-time');
+    if (typeof window !== 'undefined' && window.Renderer?.renderSkeletonLoader) {
+        if (pret) window.Renderer.renderSkeletonLoader(pret);
+        if (pien) window.Renderer.renderSkeletonLoader(pien);
+        return;
+    }
+    const html = `
+        <div class="flex flex-row items-center w-full space-x-3 h-24 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg p-2">
+            <div class="relative w-1/2 h-full bg-gray-300 dark:bg-gray-700 rounded-lg shadow-sm flex-shrink-0"></div>
+            <div class="w-1/2 flex flex-col justify-center items-center space-y-2">
+                <div class="h-3 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
+                <div class="h-2 bg-gray-300 dark:bg-gray-700 rounded w-1/2"></div>
+                <div class="h-5 bg-gray-300 dark:bg-gray-700 rounded w-full mt-1"></div>
+            </div>
+        </div>`;
+    if (pret) pret.innerHTML = html;
+    if (pien) pien.innerHTML = html;
+}
+
+function showRegionSwapLoader() {
+    // Keep header / tabs / From / footer on screen. Only the train cards pulse.
+    paintBoardSkeletons();
 }
 
 function hideRegionSwapLoader() {
@@ -304,6 +321,8 @@ function hideRegionSwapLoader() {
     const overlay = document.getElementById('loading-overlay');
     if (!overlay) return;
     overlay.style.display = 'none';
+    overlay.classList.add('hidden');
+    overlay.setAttribute('hidden', '');
     const label = overlay.querySelector('p');
     if (label) label.textContent = 'Starting Next Train…';
 }

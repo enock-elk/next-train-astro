@@ -26,6 +26,16 @@ export function summarizeAlertReactions(notice, mineKey = '') {
         .filter((row) => row.count > 0 || row.mine);
 }
 
+/** WhatsApp-style breakdown: rows plus a total for the sheet header. */
+export function buildAlertReactionBreakdown(notice, mineKey = '') {
+    const rows = summarizeAlertReactions(notice, mineKey)
+        .map((row) => ({ ...row, count: row.count > 0 ? row.count : (row.mine ? 1 : 0) }))
+        .filter((row) => row.count > 0)
+        .sort((a, b) => b.count - a.count || ALERT_REACTION_KEYS.indexOf(a.key) - ALERT_REACTION_KEYS.indexOf(b.key));
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    return { total, rows };
+}
+
 const SEVERITY_SCORE = { critical: 3, warning: 2, info: 1 };
 
 export function noticeTimestamp(notice) {

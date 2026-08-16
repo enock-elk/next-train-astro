@@ -16,6 +16,7 @@ import {
     seenStorageKey,
     buildNoticesMeta,
     summarizeAlertReactions,
+    buildAlertReactionBreakdown,
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
 } from '../src/lib/alerts-feed.js';
@@ -121,6 +122,9 @@ const now = 1_700_000_000_000;
     assert(empty.length === 0, 'no chips when nobody has reacted');
     const some = summarizeAlertReactions({ reactions: { like: 2, pray: 1 } }, 'like');
     assert(some.length === 2 && some[0].key === 'like' && some[0].mine && some[0].count === 2, `summary chips ${JSON.stringify(some)}`);
+    const breakdown = buildAlertReactionBreakdown({ reactions: { like: 2, pray: 1, laugh: 5 } });
+    assert(breakdown.total === 8, `breakdown total ${breakdown.total}`);
+    assert(breakdown.rows[0].key === 'laugh' && breakdown.rows[0].count === 5, 'breakdown sorts by count');
 }
 
 {

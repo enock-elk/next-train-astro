@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16.3 — Reaction breakdown & install label (16 Aug 2026)
+
+- Tapping the existing reaction chips on an alert opens a WhatsApp-style bottom sheet with a per-emoji count.
+- Home and Trip Planner install buttons say **Install Next Train (1 MB)**.
+
 ## V8_08.16.2 — Alerts close, hold-to-react, quiet board (16 Aug 2026)
 
 - Alerts header has Back plus a Close (X). Closing parks the home board the same way the sidenav map sheet does — no switchTab remount.

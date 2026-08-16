@@ -10,7 +10,7 @@ import {
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
     ALERT_REACTION_EMOJI,
-    summarizeAlertReactions,
+    buildAlertReactionBreakdown,
     noticeTimestamp,
     noticeScopeKeys as scopeKeysFor,
     parseNoticeBucket,
@@ -184,16 +184,17 @@ function mineReactionKey(notice) {
 
 function renderReactionsHtml(notice) {
     const mine = mineReactionKey(notice);
-    const rows = summarizeAlertReactions(notice, mine);
-    if (!rows.length) {
+    const { total, rows } = buildAlertReactionBreakdown(notice, mine);
+    if (!total) {
         return `<div class="nt-alert-react-summary mt-2 min-h-0" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
     }
-    const chips = rows.map((row) => (
-        `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-600 ${
-            row.mine ? 'ring-1 ring-blue-400 text-blue-700 dark:text-blue-200' : 'text-gray-700 dark:text-gray-200'
-        }">${row.emoji}${row.count > 1 ? ` ${row.count}` : ''}</span>`
+    const faces = rows.map((row) => (
+        `<span class="text-sm leading-none" aria-hidden="true">${row.emoji}</span>`
     )).join('');
-    return `<div class="nt-alert-react-summary mt-2 flex flex-wrap gap-1" data-alert-summary="${escapeHTML(String(notice.id || ''))}">${chips}</div>`;
+    return `<button type="button" class="nt-alert-react-summary mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" aria-label="${total} reactions">
+        <span class="inline-flex items-center gap-0.5">${faces}</span>
+        <span class="text-[11px] font-bold tabular-nums">${total}</span>
+    </button>`;
 }
 
 function hideAlertReactionPicker() {
@@ -202,6 +203,7 @@ function hideAlertReactionPicker() {
 
 function openAlertReactionPicker(notice, anchorEl) {
     if (!notice || !anchorEl) return;
+    hideAlertReactionBreakdown();
     let sheet = document.getElementById('alerts-reaction-picker');
     if (!sheet) {
         sheet = document.createElement('div');
@@ -234,10 +236,53 @@ function openAlertReactionPicker(notice, anchorEl) {
     const rect = anchorEl.getBoundingClientRect();
     sheet.classList.remove('hidden');
     const pillW = Math.min(320, window.innerWidth - 16);
-    const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, rect.left + (rect.width / 2) - (pillW / 2)));
-    const top = Math.max(8, rect.top - 58);
+    const pressX = Number(anchorEl._ntPx);
+    const pressY = Number(anchorEl._ntPy);
+    const midX = Number.isFinite(pressX) ? pressX : (rect.left + rect.width / 2);
+    const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
+    const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
+    let top = anchorY - 58;
+    if (top < 8) top = Math.min(window.innerHeight - 64, anchorY + 16);
     sheet.style.left = `${left}px`;
     sheet.style.top = `${top}px`;
+    triggerHaptic();
+}
+
+function hideAlertReactionBreakdown() {
+    document.getElementById('alerts-reaction-breakdown')?.classList.add('hidden');
+}
+
+function openAlertReactionBreakdown(notice) {
+    if (!notice) return;
+    hideAlertReactionPicker();
+    let sheet = document.getElementById('alerts-reaction-breakdown');
+    if (!sheet) {
+        sheet = document.createElement('div');
+        sheet.id = 'alerts-reaction-breakdown';
+        sheet.className = 'hidden fixed inset-0 z-[132]';
+        sheet.innerHTML = `
+            <div class="absolute inset-0 bg-black/50" data-breakdown-scrim></div>
+            <div class="absolute left-0 right-0 bottom-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl border-t border-gray-200 dark:border-gray-700 px-4 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <div class="flex justify-center mb-3"><span class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span></div>
+                <p class="text-base font-black text-gray-900 dark:text-white mb-3" data-breakdown-title>Reactions</p>
+                <div class="flex flex-wrap gap-2" data-breakdown-chips></div>
+            </div>`;
+        document.body.appendChild(sheet);
+        sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
+    }
+    const mine = mineReactionKey(notice);
+    const { total, rows } = buildAlertReactionBreakdown(notice, mine);
+    const title = sheet.querySelector('[data-breakdown-title]');
+    if (title) title.textContent = total === 1 ? '1 reaction' : `${total} reactions`;
+    const chips = sheet.querySelector('[data-breakdown-chips]');
+    if (chips) {
+        chips.innerHTML = rows.map((row) => (
+            `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ${
+                row.mine ? 'ring-1 ring-blue-400' : ''
+            }">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
+        )).join('');
+    }
+    sheet.classList.remove('hidden');
     triggerHaptic();
 }
 
@@ -365,6 +410,7 @@ function scrollFeedTo(noticeId, toBottom = false) {
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
     hideAlertReactionPicker();
+    hideAlertReactionBreakdown();
     if (!el || el.classList.contains('hidden')) {
         if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
         return;
@@ -535,7 +581,7 @@ function bindAlertsChannelOnce() {
     const ignoreLongPressTarget = (target) => {
         if (!target?.closest) return true;
         return !!(
-            target.closest('a, button, input, textarea, select, [data-alert-lightbox], [data-alert-reply], [data-alert-jump], .nt-poll-vote')
+            target.closest('a, button, input, textarea, select, [data-alert-lightbox], [data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote')
         );
     };
     const startLongPress = (card) => {
@@ -603,6 +649,15 @@ function bindAlertsChannelOnce() {
                 renderAlertsChannel(cachedLiveNotices, { highlightId: id });
             }
             scrollFeedTo(id, false);
+            return;
+        }
+        const summary = e.target.closest?.('[data-alert-summary]');
+        if (summary && summary.getAttribute('data-alert-id')) {
+            e.preventDefault();
+            const id = summary.getAttribute('data-alert-id');
+            const src = summary.getAttribute('data-alert-src');
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            if (notice) openAlertReactionBreakdown(notice);
             return;
         }
         const reactBtn = e.target.closest?.('[data-alert-react]');

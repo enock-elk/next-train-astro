@@ -1,0 +1,31 @@
+---
+/**
+ * Full-page Alerts channel (bell gateway). Not a sixth bottom-nav tab.
+ */
+---
+
+<div id="alerts-channel" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 z-[115] hidden flex flex-col transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="alerts-channel-title">
+    <div id="alerts-channel-card" class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 scale-100">
+        <header class="shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
+            <div class="flex items-center gap-2">
+                <button type="button" id="alerts-channel-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close alerts">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <div class="min-w-0 flex-1">
+                    <h2 id="alerts-channel-title" class="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-none">Alerts</h2>
+                    <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">Service updates for your line</p>
+                </div>
+            </div>
+        </header>
+
+        <div id="alerts-channel-scroll" class="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div id="alerts-pin-strip" class="hidden mb-3"></div>
+            <button type="button" id="alerts-load-earlier" class="hidden w-full mb-3 py-2 text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:outline-none">Show earlier</button>
+            <div id="alerts-empty" class="hidden text-center py-16 px-6">
+                <p class="text-base font-black text-gray-800 dark:text-gray-100">No live alerts</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">When PRASA or Next Train posts a notice for your region or route, it will show up here.</p>
+            </div>
+            <div id="alerts-feed" class="space-y-3"></div>
+        </div>
+    </div>
+</div>

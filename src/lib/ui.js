@@ -55,6 +55,7 @@ const MODAL_HASH = {
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
     'map-modal': '#map',
     'notice-modal': '#notice',
+    'alerts-channel': '#alerts',
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
@@ -353,6 +354,7 @@ export function bindHistoryBackNavigation() {
                 || hashNow === '#lightbox'
                 || hashNow === '#feedback'
                 || hashNow === '#notice'
+                || hashNow === '#alerts'
                 || hashNow.startsWith('#disruption');
             if (keepPlannerResults) {
                 if (hashNow === '#planner-results' && typeof window.restorePlannerResultsView === 'function') {

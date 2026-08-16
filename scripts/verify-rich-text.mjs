@@ -58,6 +58,13 @@ assert(!isSafeHref('data:text/html,x'), 'data href blocked');
     assert(/<u>/i.test(kept), `underline kept: ${kept}`);
 }
 
+{
+    const list = sanitizeRichHtml('<ul><li>Cancelled 0618</li><li>Cancelled 0619</li></ul>');
+    assert(/<ul>/i.test(list) && /<li>/i.test(list), `bullet list kept: ${list}`);
+    const poster = sanitizeRichHtml('<img src="/images/alerts/fare.png" alt="Fare">');
+    assert(/src="\/images\/alerts\/fare.png"/i.test(poster), `alerts poster src kept: ${poster}`);
+}
+
 if (failures.length) {
     console.error('verify-rich-text failed:');
     failures.forEach((f) => console.error(' -', f));

@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.15.1";
+export const APP_VERSION = "V8_08.16.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -884,6 +884,18 @@ export const DEFAULT_EXCLUSIONS = {
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.16.1",
+        title: "Alerts channel",
+        date: "16 Aug 2026",
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
+        features: [
+            "<b>Alerts channel:</b> Tap the bell to open a feed of service notices — newest at the bottom, like a channel.",
+            "<b>Posters:</b> Fare and safety posters sit in the post so you can pinch-zoom them.",
+            "<b>React:</b> Tap 👍 ❤️ 🙏 or 😂 on a notice. Critical alerts stay pinned at the top."
+        ]
+    },
     {
         id: "V8_08.15.1",
         title: "Clearer line notices",

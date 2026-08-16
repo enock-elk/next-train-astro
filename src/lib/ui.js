@@ -88,7 +88,9 @@ function legalHashForType(type) {
 }
 
 function anyFixedModalOpen() {
-    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
+    const alerts = document.getElementById('alerts-channel');
+    const alertsOpen = !!(alerts && !alerts.classList.contains('hidden'));
+    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)') || alertsOpen;
 }
 
 export function closeSmoothModal(modalId, fromPopState = false) {
@@ -270,6 +272,17 @@ export function bindHistoryBackNavigation() {
 
         if (window._isLightboxMode) {
             closeLightbox(true);
+            return;
+        }
+
+        // Alerts channel parks the home board (same as sidenav #sheet). Closing
+        // it must not switchTab / remount Next Train.
+        const alertsEl = document.getElementById('alerts-channel');
+        const alertsOpen = (alertsEl && !alertsEl.classList.contains('hidden')) || window.__ntAlertsOpen || window.__ntAlertsParkHome;
+        if (alertsOpen && hashNow !== '#alerts' && hashNow !== '#lightbox' && hashNow !== '#feedback' && hashNow !== '#map') {
+            closeSmoothModal('alerts-channel', true);
+            window.__ntAlertsOpen = false;
+            window.__ntAlertsParkHome = false;
             return;
         }
 
@@ -1006,6 +1019,9 @@ export function canAutoOpenHomeNotices() {
 
     const sheet = document.getElementById('nt-inapp-sheet');
     if (sheet && !sheet.classList.contains('hidden') && sheet.classList.contains('flex')) return false;
+
+    const alerts = document.getElementById('alerts-channel');
+    if (alerts && !alerts.classList.contains('hidden')) return false;
 
     // Sidenav / any modal already owns the screen — don't stack auto-popups.
     if (document.body.classList.contains('sidenav-open')) return false;

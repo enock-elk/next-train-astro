@@ -3,13 +3,28 @@
  */
 export const ALERTS_PAGE_SIZE = 10;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
-export const ALERT_REACTION_KEYS = ['like', 'love', 'pray', 'laugh'];
+export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {
     like: '👍',
     love: '❤️',
-    pray: '🙏',
     laugh: '😂',
+    wow: '😮',
+    sad: '😢',
+    pray: '🙏',
 };
+
+/** Count chips only — picker emojis stay hidden until long-press. */
+export function summarizeAlertReactions(notice, mineKey = '') {
+    const counts = notice?.reactions && typeof notice.reactions === 'object' ? notice.reactions : {};
+    return ALERT_REACTION_KEYS
+        .map((key) => ({
+            key,
+            emoji: ALERT_REACTION_EMOJI[key],
+            count: Number(counts[key] || 0) || 0,
+            mine: mineKey === key,
+        }))
+        .filter((row) => row.count > 0 || row.mine);
+}
 
 const SEVERITY_SCORE = { critical: 3, warning: 2, info: 1 };
 

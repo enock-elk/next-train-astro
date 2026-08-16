@@ -10,6 +10,7 @@ import {
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
     ALERT_REACTION_EMOJI,
+    summarizeAlertReactions,
     noticeTimestamp,
     noticeScopeKeys as scopeKeysFor,
     parseNoticeBucket,
@@ -177,21 +178,67 @@ function renderPollHtml(notice) {
     </div>`;
 }
 
+function mineReactionKey(notice) {
+    try { return safeStorage.getItem(reactionStorageKey(notice)) || ''; } catch { return ''; }
+}
+
 function renderReactionsHtml(notice) {
-    const mine = (() => {
-        try { return safeStorage.getItem(reactionStorageKey(notice)) || ''; } catch { return ''; }
-    })();
-    const counts = notice.reactions && typeof notice.reactions === 'object' ? notice.reactions : {};
-    const buttons = ALERT_REACTION_KEYS.map((key) => {
-        const n = Number(counts[key] || 0) || 0;
-        const on = mine === key;
-        return `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-react inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border transition-colors ${
-            on
-                ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-        }" ${mine && !on ? 'disabled' : ''}>${ALERT_REACTION_EMOJI[key]} <span data-alert-count="${key}">${n || ''}</span></button>`;
-    }).join('');
-    return `<div class="flex flex-wrap gap-1.5 mt-3">${buttons}</div>`;
+    const mine = mineReactionKey(notice);
+    const rows = summarizeAlertReactions(notice, mine);
+    if (!rows.length) {
+        return `<div class="nt-alert-react-summary mt-2 min-h-0" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
+    }
+    const chips = rows.map((row) => (
+        `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-600 ${
+            row.mine ? 'ring-1 ring-blue-400 text-blue-700 dark:text-blue-200' : 'text-gray-700 dark:text-gray-200'
+        }">${row.emoji}${row.count > 1 ? ` ${row.count}` : ''}</span>`
+    )).join('');
+    return `<div class="nt-alert-react-summary mt-2 flex flex-wrap gap-1" data-alert-summary="${escapeHTML(String(notice.id || ''))}">${chips}</div>`;
+}
+
+function hideAlertReactionPicker() {
+    document.getElementById('alerts-reaction-picker')?.classList.add('hidden');
+}
+
+function openAlertReactionPicker(notice, anchorEl) {
+    if (!notice || !anchorEl) return;
+    let sheet = document.getElementById('alerts-reaction-picker');
+    if (!sheet) {
+        sheet = document.createElement('div');
+        sheet.id = 'alerts-reaction-picker';
+        sheet.className = 'hidden fixed z-[130]';
+        sheet.innerHTML = `<div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row></div>`;
+        document.body.appendChild(sheet);
+        sheet.addEventListener('click', (e) => {
+            const btn = e.target.closest?.('[data-alert-react]');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.getAttribute('data-alert-id');
+            const src = btn.getAttribute('data-alert-src');
+            const emoji = btn.getAttribute('data-alert-react');
+            const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            hideAlertReactionPicker();
+            if (target) submitAlertReaction(target, emoji);
+        });
+    }
+    const mine = mineReactionKey(notice);
+    const row = sheet.querySelector('[data-alert-picker-row]');
+    if (row) {
+        row.innerHTML = ALERT_REACTION_KEYS.map((key) => (
+            `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-xl rounded-full ${
+                mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
+            }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
+        )).join('');
+    }
+    const rect = anchorEl.getBoundingClientRect();
+    sheet.classList.remove('hidden');
+    const pillW = Math.min(320, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, rect.left + (rect.width / 2) - (pillW / 2)));
+    const top = Math.max(8, rect.top - 58);
+    sheet.style.left = `${left}px`;
+    sheet.style.top = `${top}px`;
+    triggerHaptic();
 }
 
 function renderPostCard(notice, opts = {}) {
@@ -214,7 +261,7 @@ function renderPostCard(notice, opts = {}) {
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
     const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
-    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-l-4 ${chrome.bar} border border-gray-100 dark:border-gray-700 p-4 ${highlight ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-900' : ''}">
+    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-l-4 ${chrome.bar} border border-gray-100 dark:border-gray-700 p-4 select-none ${highlight ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-900' : ''}">
         <div class="flex items-center justify-between gap-2 mb-2">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
             <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">${escapeHTML(formatPosted(notice))}</span>
@@ -317,12 +364,18 @@ function scrollFeedTo(noticeId, toBottom = false) {
 
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
-    if (!el || el.classList.contains('hidden')) return;
-    if (location.hash === '#alerts') {
-        try { history.back(); } catch { closeSmoothModal('alerts-channel'); }
-    } else {
-        closeSmoothModal('alerts-channel');
+    hideAlertReactionPicker();
+    if (!el || el.classList.contains('hidden')) {
+        if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
+        return;
     }
+    // Park home underneath (same as sidenav map sheet): hide first, then pop hash.
+    if (typeof window !== 'undefined') window.__ntAlertsParkHome = true;
+    closeSmoothModal('alerts-channel', true);
+    if (location.hash === '#alerts') {
+        try { history.back(); } catch { /* ignore */ }
+    }
+    if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
 }
 
 export function openAlertsChannel(opts = {}) {
@@ -332,6 +385,10 @@ export function openAlertsChannel(opts = {}) {
     renderAlertsChannel(notices, { highlightId: highlightNoticeId });
     markNoticesSeen(notices);
     applyBellFromNotices(notices);
+    if (typeof window !== 'undefined') {
+        window.__ntAlertsOpen = true;
+        window.__ntAlertsParkHome = false;
+    }
     openSmoothModal('alerts-channel', 'top-right');
     setTimeout(() => {
         if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
@@ -429,7 +486,7 @@ export async function submitAlertReaction(notice, emoji) {
         notice.reactions[emoji] = next;
         const card = document.querySelector(`[data-alert-post="${CSS.escape ? CSS.escape(String(notice.id)) : notice.id}"]`);
         if (card) {
-            const wrap = card.querySelector('.nt-alert-react')?.parentElement;
+            const wrap = card.querySelector('[data-alert-summary]');
             if (wrap) wrap.outerHTML = renderReactionsHtml(notice);
         }
         triggerHaptic();
@@ -447,11 +504,13 @@ function bindAlertsChannelOnce() {
     if (!root) return;
     channelBound = true;
 
-    document.getElementById('alerts-channel-back')?.addEventListener('click', (e) => {
+    const closeChannel = (e) => {
         e.preventDefault();
         triggerHaptic();
         closeAlertsChannel();
-    });
+    };
+    document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
+    document.getElementById('alerts-channel-close')?.addEventListener('click', closeChannel);
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {
         triggerHaptic();
@@ -464,7 +523,76 @@ function bindAlertsChannelOnce() {
         });
     });
 
+    let longTimer = null;
+    let longFired = false;
+    let pressCard = null;
+    const clearLong = () => {
+        if (longTimer) clearTimeout(longTimer);
+        longTimer = null;
+        pressCard?.classList.remove('is-pressing');
+        pressCard = null;
+    };
+    const ignoreLongPressTarget = (target) => {
+        if (!target?.closest) return true;
+        return !!(
+            target.closest('a, button, input, textarea, select, [data-alert-lightbox], [data-alert-reply], [data-alert-jump], .nt-poll-vote')
+        );
+    };
+    const startLongPress = (card) => {
+        longFired = false;
+        pressCard = card;
+        card.classList.add('is-pressing');
+        longTimer = setTimeout(() => {
+            longFired = true;
+            const id = card.getAttribute('data-alert-id');
+            const src = card.getAttribute('data-alert-src');
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            if (notice) openAlertReactionPicker(notice, card);
+            card.classList.remove('is-pressing');
+        }, 480);
+    };
+
+    root.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const card = e.target.closest?.('.nt-alert-card');
+        if (!card) return;
+        card._ntPx = e.clientX;
+        card._ntPy = e.clientY;
+        if (ignoreLongPressTarget(e.target)) return;
+        startLongPress(card);
+    });
+    root.addEventListener('pointermove', (e) => {
+        if (!pressCard) return;
+        const dx = Math.abs((e.clientX || 0) - (pressCard._ntPx || e.clientX || 0));
+        const dy = Math.abs((e.clientY || 0) - (pressCard._ntPy || e.clientY || 0));
+        if (dx > 10 || dy > 10) clearLong();
+    });
+    root.addEventListener('pointerup', clearLong);
+    root.addEventListener('pointercancel', clearLong);
+    root.addEventListener('contextmenu', (e) => {
+        const card = e.target.closest?.('.nt-alert-card');
+        if (!card || ignoreLongPressTarget(e.target)) return;
+        e.preventDefault();
+        const id = card.getAttribute('data-alert-id');
+        const src = card.getAttribute('data-alert-src');
+        const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+        if (notice) openAlertReactionPicker(notice, card);
+    });
+    document.getElementById('alerts-channel-scroll')?.addEventListener('scroll', hideAlertReactionPicker, { passive: true });
+    document.addEventListener('pointerdown', (e) => {
+        const picker = document.getElementById('alerts-reaction-picker');
+        if (!picker || picker.classList.contains('hidden')) return;
+        if (picker.contains(e.target)) return;
+        hideAlertReactionPicker();
+    });
+
     root.addEventListener('click', (e) => {
+        if (longFired) {
+            e.preventDefault();
+            e.stopPropagation();
+            longFired = false;
+            return;
+        }
         const jump = e.target.closest?.('[data-alert-jump]');
         if (jump) {
             const id = jump.getAttribute('data-alert-jump');

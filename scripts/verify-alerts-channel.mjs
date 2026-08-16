@@ -15,7 +15,9 @@ import {
     pickAutoOpenNotice,
     seenStorageKey,
     buildNoticesMeta,
+    summarizeAlertReactions,
     ALERTS_PAGE_SIZE,
+    ALERT_REACTION_KEYS,
 } from '../src/lib/alerts-feed.js';
 
 const failures = [];
@@ -111,6 +113,25 @@ const now = 1_700_000_000_000;
     assert(meta.liveCount === 2, `meta liveCount ${meta.liveCount}`);
     assert(meta.latestId === 'b' && meta.latestSeverity === 'critical', 'meta latest is newest live');
     assert(meta.latestCriticalAt === 3, 'meta critical timestamp');
+}
+
+{
+    assert(ALERT_REACTION_KEYS.includes('wow') && ALERT_REACTION_KEYS.includes('sad'), 'picker includes wow/sad');
+    const empty = summarizeAlertReactions({ id: '1' });
+    assert(empty.length === 0, 'no chips when nobody has reacted');
+    const some = summarizeAlertReactions({ reactions: { like: 2, pray: 1 } }, 'like');
+    assert(some.length === 2 && some[0].key === 'like' && some[0].mine && some[0].count === 2, `summary chips ${JSON.stringify(some)}`);
+}
+
+{
+    const { readFileSync } = await import('node:fs');
+    const rules = JSON.parse(readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8')).rules;
+    assert(rules.config?.features?.['.read'] === true, 'live config/features kept');
+    assert(!!rules.push_subscriptions, 'live push_subscriptions kept');
+    assert(!!rules.ride_pings, 'live ride_pings kept');
+    assert(rules.notices_meta?.['.read'] === true, 'notices_meta public read');
+    const emojiWrite = rules.notices?.$target?.$noticeId?.reactions?.$emoji?.['.write'] || '';
+    assert(emojiWrite.includes('wow') && emojiWrite.includes('sad') && emojiWrite.includes('like'), `notice reaction write ${emojiWrite}`);
 }
 
 if (failures.length) {

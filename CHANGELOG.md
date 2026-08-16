@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16.1 — Bans, region pick, weekday sim (16 Aug 2026)
+
+- Live timetable bans come only from Firebase `exclusions`. The hardcoded Kempton Park 0618/0619 “Tue–Thu only” fallback is gone, so an expired admin limit no longer keeps painting NO SVC. Global State Monitor lists the same tree (plus any remaining app-default fallbacks).
+- After a region change, Select Route opens only when no route is active. Picking a route hides the modal and stays on the board (no `#route` bounce during the open animation).
+- Admin Time Simulation “Weekday (Mon)” no longer inherits today’s leftover date from the hidden Specific Date field, so Sunday no longer overrides the weekday timetable.
+
 ## V8_08.15.1 — Admin feedback & incidents (15 Aug 2026)
 
 - Feedback Options button is pinned to the top-right of the open thread (label is now **Options**).

@@ -1,6 +1,11 @@
 // --- METRORAIL NEXT TRAIN UTILITIES (V7 06.17 - Guardian Edition) ---
 // Pure, stateless helper functions shared across the application.
 
+/** True when admin time-sim is pinned to a specific calendar date (not Weekday/Sat/Sun). */
+export function simUsesSpecificDate() {
+    return typeof window !== 'undefined' && window.__ntSimUseSpecificDate === true;
+}
+
 export function pad(num) {
     var s = "00" + num;
     return s.substr(s.length - 2);

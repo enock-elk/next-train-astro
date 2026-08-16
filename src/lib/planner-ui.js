@@ -17,7 +17,7 @@ import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
-    resolveOperatingDayType
+    resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
@@ -469,7 +469,7 @@ function plannerActiveDateKey() {
         return selectedPlannerDate.slice(5);
     }
     try {
-        if ($isSimMode.get()) {
+        if ($isSimMode.get() && simUsesSpecificDate()) {
             const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
             if (dateInput instanceof HTMLInputElement && dateInput.value && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) {
                 return dateInput.value.slice(5);
@@ -3473,7 +3473,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
         isSearching = false;
         if (typeof planUnifiedTrip === 'function') {
             const extContext = {};
-            if ($isSimMode.get()) {
+            if ($isSimMode.get() && simUsesSpecificDate()) {
                 const dateInput = document.getElementById('sim-date');
                 if (dateInput instanceof HTMLInputElement && dateInput.value) {
                     extContext.simBaseDate = dateInput.value;

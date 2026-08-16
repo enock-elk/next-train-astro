@@ -9,8 +9,17 @@
       "killswitch": { ".read": true },
       "special_event": { ".read": true },
       "schedule_override": { ".read": true },
+      "features": { ".read": true },
       "shadow_ban_mode": {
         ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      }
+    },
+
+    "push_subscriptions": {
+      "$deviceId": {
+        ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || (data.exists() && data.child('uid').val() === auth.uid))",
+        ".write": "auth != null && (!data.exists() || !data.hasChild('uid') || data.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['token', 'updatedAt', 'deviceId']) && newData.child('token').isString() && newData.child('token').val().length > 10 && newData.child('token').val().length < 500 && newData.child('updatedAt').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
       }
     },
     "holiday_approvals": {
@@ -34,13 +43,13 @@
       "$target": {
         "reactions": {
           "$emoji": {
-            ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'pray' || $emoji === 'laugh')"
+            ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
           }
         },
         "$noticeId": {
           "reactions": {
             "$emoji": {
-              ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'pray' || $emoji === 'laugh')"
+              ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
             }
           }
         }
@@ -155,6 +164,16 @@
       "$reportId": {
         ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
         ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'routeId', 'timestamp', 'deviceId']) && newData.child('reportId').isString() && newData.child('reportId').val() === $reportId && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
+      }
+    },
+
+    "ride_pings": {
+      "$routeId": {
+        ".read": true,
+        "$deviceId": {
+          ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.child('deviceId').val() === $deviceId && newData.child('deviceId').val() === $deviceId) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['routeId', 'deviceId', 'station', 'at', 'expiresAt']) && newData.child('routeId').val() === $routeId && newData.child('deviceId').val() === $deviceId && newData.child('station').isString() && newData.child('station').val().length > 0 && newData.child('station').val().length < 120 && newData.child('at').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= newData.child('at').val() + 1200000 && (!newData.hasChild('coarseLat') || newData.child('coarseLat').isNumber()) && (!newData.hasChild('coarseLng') || newData.child('coarseLng').isNumber()))"
+        }
       }
     },
 

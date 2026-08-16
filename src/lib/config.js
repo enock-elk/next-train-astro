@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.16.1";
+export const APP_VERSION = "V8_08.16.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -885,6 +885,18 @@ export const DEFAULT_EXCLUSIONS = {
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
+        id: "V8_08.16.2",
+        title: "Alerts & live board",
+        date: "16 Aug 2026",
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
+        features: [
+            "<b>Close Alerts:</b> The Alerts page has a close button again, and going back leaves your Next Train board as you left it.",
+            "<b>Hold to react:</b> Touch and hold a notice to pick an emoji, like WhatsApp. Counts stay visible after someone reacts.",
+            "<b>Live times:</b> Countdown on the Next Train tab updates each minute without the board blinking."
+        ]
+    },
+    {
         id: "V8_08.16.1",
         title: "Alerts channel",
         date: "16 Aug 2026",
@@ -893,7 +905,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Alerts channel:</b> Tap the bell to open a feed of service notices — newest at the bottom, like a channel.",
             "<b>Posters:</b> Fare and safety posters sit in the post so you can pinch-zoom them.",
-            "<b>React:</b> Tap 👍 ❤️ 🙏 or 😂 on a notice. Critical alerts stay pinned at the top."
+            "<b>React:</b> Hold a notice to react. Critical alerts stay pinned at the top."
         ]
     },
     {

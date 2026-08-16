@@ -11339,7 +11339,7 @@ const Admin = {
             const dbPath = paths[targetRegion];
             let fetchUrl = '';
             if (scanSource === 'GITHUB') {
-                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
             } else if (scanSource === 'FIREBASE') {
                 fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
             } else {
@@ -11722,7 +11722,7 @@ const Admin = {
                 };
 
                 // Astro: probe app-version.json (SPA used js/config.js APP_VERSION scrape).
-                // Cloudflare column = production CDN host; GitHub = jsDelivr metrorail-app deploy.
+                // Cloudflare column = production CDN host; GitHub = jsDelivr next-train-astro dump.
                 const pipelines = [
                     {
                         name: 'Cloudflare Edge',
@@ -11732,8 +11732,8 @@ const Admin = {
                     },
                     {
                         name: 'GitHub CDN',
-                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/app-version.json',
-                        dbUrl: `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${getRegionDbPath('GITHUB')}`,
+                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json',
+                        dbUrl: `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${getRegionDbPath('GITHUB')}`,
                         expectApp: true
                     },
                     {
@@ -11900,7 +11900,7 @@ const Admin = {
                     const dbPath = getRegionDbPath(scanSource);
 
                     if (scanSource === 'GITHUB') {
-                        fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                        fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
                         loadingMsg = 'Downloading GitHub CDN payload...';
                     } else if (scanSource === 'FIREBASE') {
                         fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
@@ -12161,7 +12161,7 @@ const Admin = {
             const dbPath = paths[targetRegion];
             let fetchUrl = '';
             if (scanSource === 'GITHUB') {
-                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
             } else if (scanSource === 'FIREBASE') {
                 fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
             } else {

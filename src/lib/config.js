@@ -55,14 +55,17 @@ export const FORCE_UPDATE_REQUIRED = false;
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.
 
+/** GitHub fallback dump — this repo's `public/data/` via jsDelivr (not the old SPA tree). */
+export const GITHUB_SCHEDULE_CDN = "https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/";
+
 export const PIPELINE_SOURCES = {
     'CLOUDFLARE': {
         url: "https://nexttrain-cache.enock.workers.dev/",
         useRootNode: false
     },
     'GITHUB': {
-        url: "https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/",
-        useRootNode: true // GitHub serves the unified export payload directly
+        url: GITHUB_SCHEDULE_CDN,
+        useRootNode: true // Unified export payload (full-database.json)
     },
     'FIREBASE': {
         url: "https://metrorail-next-train-default-rtdb.firebaseio.com/",

@@ -646,7 +646,11 @@ export function findNextTrains() {
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = ""; if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
+    const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
+    if (!quietPaint) {
+        if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
+        if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
+    }
     if (pretoriaHeaderEl()) pretoriaHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
     if (pienaarspoortHeaderEl()) pienaarspoortHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
     

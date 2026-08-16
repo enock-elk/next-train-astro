@@ -1606,7 +1606,12 @@ export function updateTime() {
             
             if (typeof window !== 'undefined') {
                 if (typeof window.findNextTrains === 'function') {
-                    window.findNextTrains();
+                    window.__ntQuietBoardPaint = true;
+                    try {
+                        window.findNextTrains();
+                    } finally {
+                        window.__ntQuietBoardPaint = false;
+                    }
                 }
                 
                 if (typeof window.updateFareDisplay === 'function') {

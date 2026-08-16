@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16.4 — Alerts Close label & photo order (16 Aug 2026)
+
+- Alerts header Close is a short blue **Close** text button (same language as the in-app sheet Back), not a faint X.
+- Empty state copy no longer mentions PRASA: “When Next Train posts a notice for your region or route, it will show up here.”
+- Notice cards render title (if provided or a leading heading) → image(s) → body text.
+
 ## V8_08.16.3 — Reaction breakdown & install label (16 Aug 2026)
 
 - Tapping the existing reaction chips on an alert opens a WhatsApp-style bottom sheet with a per-emoji count.

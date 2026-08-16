@@ -23,7 +23,9 @@ import {
     shouldForceOpen,
     pickAutoOpenNotice as pickAutoOpenFromFeed,
     sanitizeAlertImageUrl,
+    sanitizeInlineAlertImageUrl,
     collectNoticeImageUrls,
+    layoutAlertPost,
     buildNoticesMeta,
     listNoticesInTarget,
 } from './alerts-feed.js';
@@ -36,6 +38,7 @@ export {
     pageAlertsFeed,
     sanitizeAlertImageUrl,
     collectNoticeImageUrls,
+    layoutAlertPost,
     buildNoticesMeta,
     shouldForceOpen,
 };
@@ -76,8 +79,8 @@ export function pickAutoOpenNotice(notices) {
 
 export function resolveAlertImageSrc(path) {
     const clean = sanitizeAlertImageUrl(path);
-    if (!clean) return '';
-    return withBase(clean.replace(/^\//, ''));
+    if (clean) return withBase(clean.replace(/^\//, ''));
+    return sanitizeInlineAlertImageUrl(path) || '';
 }
 
 export function getCachedLiveNotices() {
@@ -142,6 +145,7 @@ function renderPosterHtml(urls) {
     if (!urls.length) return '';
     const cells = urls.map((path) => {
         const src = escapeHTML(resolveAlertImageSrc(path));
+        if (!src) return '';
         const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `<button type="button" data-alert-lightbox="${escapeHTML(src)}" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <img src="${src}" alt="Service poster" class="w-full h-auto max-h-72 object-cover bg-gray-100 dark:bg-gray-900">
@@ -149,7 +153,7 @@ function renderPosterHtml(urls) {
         </button>`;
     }).join('');
     const grid = urls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
-    return `<div class="${grid} mt-3 mb-1">${cells}</div>`;
+    return `<div class="${grid} mt-2 mb-1" data-alert-media>${cells}</div>`;
 }
 
 function renderPollHtml(notice) {
@@ -289,9 +293,16 @@ function openAlertReactionBreakdown(notice) {
 function renderPostCard(notice, opts = {}) {
     const severity = notice.severity || 'info';
     const chrome = severityChrome(severity);
-    const posters = collectNoticeImageUrls(notice);
+    const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(notice.message || notice.text || '');
+    const body = prepareRichHtml(layout.body);
+    const titleHtml = layout.title
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
+        : '';
+    const mediaHtml = renderPosterHtml(layout.imageUrls);
+    const bodyHtml = body
+        ? `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`
+        : '';
     let extra = '';
     if (notice.sourceName) {
         const sName = escapeHTML(notice.sourceName);
@@ -311,8 +322,9 @@ function renderPostCard(notice, opts = {}) {
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
             <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">${escapeHTML(formatPosted(notice))}</span>
         </div>
-        <div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed">${body}</div>
-        ${renderPosterHtml(posters)}
+        ${titleHtml}
+        ${mediaHtml}
+        ${bodyHtml}
         ${extra}
         ${renderPollHtml(notice)}
         ${renderReactionsHtml(notice)}

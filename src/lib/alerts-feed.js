@@ -214,6 +214,99 @@ export function collectNoticeImageUrls(notice) {
     return out;
 }
 
+function stripHtmlToText(html) {
+    return String(html || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+const LEADING_HEADING_RE = /^\s*<(h[1-4])(\s[^>]*)?>([\s\S]*?)<\/\1>\s*/i;
+
+/** Title field wins; otherwise a leading h1–h4 from the WYSIWYG Title control. */
+export function splitAlertTitleAndBody(html, explicitTitle = '') {
+    const explicit = String(explicitTitle || '').trim();
+    let body = String(html || '');
+    const match = body.match(LEADING_HEADING_RE);
+    if (match) {
+        const extracted = stripHtmlToText(match[3]);
+        if (extracted) {
+            return { title: explicit || extracted, body: body.slice(match[0].length) };
+        }
+    }
+    return { title: explicit, body };
+}
+
+/** Allow already-published Firebase Storage attachments; reject everything else. */
+export function sanitizeInlineAlertImageUrl(url) {
+    const s = String(url || '').trim();
+    if (!s || /[\s<>]/.test(s)) return null;
+    const alerts = sanitizeAlertImageUrl(s);
+    if (alerts) return alerts;
+    try {
+        const u = new URL(s);
+        if (u.protocol !== 'https:') return null;
+        const host = u.hostname.toLowerCase();
+        if (
+            host === 'firebasestorage.googleapis.com'
+            || host.endsWith('.firebasestorage.app')
+            || host.endsWith('.googleusercontent.com')
+        ) {
+            return u.href;
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+/** Pull lightbox/img tags out of the body so photos can sit above the text. */
+export function hoistAlertImagesFromHtml(html) {
+    const urls = [];
+    let body = String(html || '');
+    body = body.replace(/<button\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>[\s\S]*?<\/button>/gi, (_, src) => {
+        const s = String(src || '').trim();
+        if (s && !urls.includes(s)) urls.push(s);
+        return '';
+    });
+    body = body.replace(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, (_, src) => {
+        const s = String(src || '').trim();
+        if (s && !urls.includes(s)) urls.push(s);
+        return '';
+    });
+    body = body.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+/gi, '');
+    body = body.replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/gi, '');
+    return { urls, body };
+}
+
+/**
+ * WhatsApp-style card order: title (if any) → images → remaining text.
+ * Channel posters (`imageUrls`) plus any inline <img> in the message.
+ */
+export function layoutAlertPost(notice) {
+    const raw = String(notice?.message || notice?.text || '');
+    const split = splitAlertTitleAndBody(raw, notice?.title);
+    const hoisted = hoistAlertImagesFromHtml(split.body);
+    const images = [];
+    collectNoticeImageUrls(notice).forEach((u) => {
+        if (!images.includes(u)) images.push(u);
+    });
+    hoisted.urls.forEach((u) => {
+        const clean = sanitizeInlineAlertImageUrl(u);
+        if (clean && !images.includes(clean)) images.push(clean);
+    });
+    return {
+        title: split.title,
+        imageUrls: images.slice(0, 4),
+        body: hoisted.body,
+    };
+}
+
 export function buildNoticesMeta(notices) {
     const live = (notices || []).filter((n) => isNoticeLive(n));
     const latest = live.slice().sort((a, b) => noticeTimestamp(b) - noticeTimestamp(a))[0] || null;

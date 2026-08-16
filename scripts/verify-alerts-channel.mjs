@@ -11,6 +11,10 @@ import {
     pageAlertsFeed,
     sanitizeAlertImageUrl,
     collectNoticeImageUrls,
+    splitAlertTitleAndBody,
+    hoistAlertImagesFromHtml,
+    layoutAlertPost,
+    sanitizeInlineAlertImageUrl,
     shouldForceOpen,
     pickAutoOpenNotice,
     seenStorageKey,
@@ -125,6 +129,45 @@ const now = 1_700_000_000_000;
     const breakdown = buildAlertReactionBreakdown({ reactions: { like: 2, pray: 1, laugh: 5 } });
     assert(breakdown.total === 8, `breakdown total ${breakdown.total}`);
     assert(breakdown.rows[0].key === 'laugh' && breakdown.rows[0].count === 5, 'breakdown sorts by count');
+}
+
+{
+    const splitField = splitAlertTitleAndBody('<p>Body only</p>', 'Sinkhole update');
+    assert(splitField.title === 'Sinkhole update' && splitField.body === '<p>Body only</p>', 'explicit title wins');
+    const splitH3 = splitAlertTitleAndBody('<h3>Weekend service</h3><p>Trains resume Monday.</p>');
+    assert(splitH3.title === 'Weekend service' && splitH3.body.includes('Trains resume'), `heading title ${splitH3.title}`);
+    const noTitle = splitAlertTitleAndBody('<p>Just a notice</p>');
+    assert(!noTitle.title && noTitle.body.includes('Just a notice'), 'no title when none provided');
+
+    const hoisted = hoistAlertImagesFromHtml('Hello<br><img src="/images/alerts/fare.png" alt="x"><p>After</p>');
+    assert(hoisted.urls[0] === '/images/alerts/fare.png' && !hoisted.body.includes('<img'), `hoist imgs ${hoisted.body}`);
+
+    assert(sanitizeInlineAlertImageUrl('https://evil.example/x.png') === null, 'foreign inline image blocked');
+    assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
+
+    const laid = layoutAlertPost({
+        title: 'Service recovery',
+        message: '<h3>Ignored heading</h3><p>Trains are back.</p>',
+        imageUrls: ['/images/alerts/train.png'],
+    });
+    assert(laid.title === 'Service recovery', `layout title ${laid.title}`);
+    assert(laid.imageUrls[0] === '/images/alerts/train.png', `layout image ${laid.imageUrls}`);
+    assert(laid.body.includes('Trains are back') && !laid.body.includes('Ignored heading'), `layout body ${laid.body}`);
+
+    const inlineLaid = layoutAlertPost({
+        message: '<h3>Good news</h3><button type="button"><img src="https://firebasestorage.googleapis.com/v0/b/app/o/x.png"></button><p>Resume Monday.</p>',
+    });
+    assert(inlineLaid.title === 'Good news', 'inline heading becomes title');
+    assert(inlineLaid.imageUrls[0].includes('firebasestorage.googleapis.com'), 'inline img hoisted');
+    assert(inlineLaid.body.includes('Resume Monday') && !inlineLaid.body.includes('<img'), 'text stays below image');
+}
+
+{
+    const { readFileSync } = await import('node:fs');
+    const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
+    assert(channel.includes('>Close</button>'), 'header has a labeled Close button');
+    assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
+    assert(!channel.includes('When PRASA or Next Train'), 'empty-state no longer mentions PRASA');
 }
 
 {

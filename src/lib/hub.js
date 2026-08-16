@@ -22,9 +22,9 @@ import {
     openAlertsChannel,
     initAlertsChannel,
     pickAutoOpenNotice,
-    collectNoticeImageUrls,
     resolveAlertImageSrc,
 } from './alerts-channel.js';
+import { layoutAlertPost } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
@@ -665,7 +665,11 @@ export function renderServiceAlertModal(notice, options = {}) {
               : '🔵 SERVICE INFO';
     }
 
-    let formattedMsg = sanitizeHTML(notice.message || notice.text || '');
+    const layout = layoutAlertPost(notice);
+    const titleHtml = layout.title
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
+        : '';
+    let formattedMsg = sanitizeHTML(layout.body);
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
 
     if (notice.sourceName) {
@@ -677,17 +681,19 @@ export function renderServiceAlertModal(notice, options = {}) {
         formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
     }
 
-    content.innerHTML = formattedMsg;
-    const posterUrls = collectNoticeImageUrls(notice);
+    const posterUrls = layout.imageUrls;
+    let mediaHtml = '';
     if (posterUrls.length) {
         const cells = posterUrls.map((path) => {
             const src = escapeHTML(resolveAlertImageSrc(path));
+            if (!src) return '';
             const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
         }).join('');
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
-        content.innerHTML += `<div class="${grid} mt-3 mb-1">${cells}</div>`;
+        mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
+    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
 
     if (notice.ctaUrl && notice.ctaText) {

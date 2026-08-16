@@ -631,14 +631,14 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex items-center justify-between px-4 py-3 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} max-w-[90vw]`; 
+    toastEl.className = `flex items-center justify-between gap-2 px-3 py-2 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
 
     toastEl.innerHTML = `
-        <div class="flex items-center gap-2 overflow-hidden">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
             ${iconHTML}
-            <span class="text-sm font-medium tracking-wide break-words line-clamp-2">${message}</span>
+            <span class="text-xs font-semibold tracking-wide leading-snug truncate">${message}</span>
         </div>
-        ${actionHTML ? `<div class="ml-3 pl-3 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
+        ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
     `;
     
     // Prevent pull-to-refresh ghost triggers

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16.5 — Unified What’s New; grid station column; save toast (16 Aug 2026)
+
+- In-app What’s New is one short **V8_08.16.5** card (alerts, Kempton Park, region). Older 16.x / 15.1 commuter cards were folded in.
+- Timetable station column is slightly darker in the app grid and in downloaded images.
+- “Saved to gallery” toast uses a check SVG and smaller text so it fits the screen.
+
 ## V8_08.16.6 — No ad gap, delayed offline chrome, corridor SVGs (16 Aug 2026)
 
 - Ads overlay from the bottom and no longer reserve 108px under the home footer.

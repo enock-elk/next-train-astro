@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.16.6";
+export const APP_VERSION = "V8_08.16.5";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -882,79 +882,14 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.16.6",
-        title: "Home space & offline",
-        date: "16 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Home:</b> The empty strip under Share and Feedback is gone. Ads no longer push the page down.",
-            "<b>Offline:</b> Working offline only appears if the app is open and there is no internet for a few seconds."
-        ]
-    },
-    {
         id: "V8_08.16.5",
-        title: "Kempton Park & region pick",
+        title: "Alerts & timetable",
         date: "16 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Kempton Park:</b> Weekday trains that are running no longer show a cancelled / no-service tag from an old hidden rule.",
-            "<b>Change region:</b> After you pick a route in a new region, the app stays on that board instead of asking you to choose again."
-        ]
-    },
-    {
-        id: "V8_08.16.4",
-        title: "Alerts close & photos",
-        date: "16 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Close:</b> Alerts now has a labeled Close button in the header.",
-            "<b>Alert photos:</b> A photo sits under the title and above the message, like a channel post."
-        ]
-    },
-    {
-        id: "V8_08.16.3",
-        title: "Reaction counts",
-        date: "16 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Reaction counts:</b> Tap the emojis under an alert to see how many people picked each one.",
-            "<b>Install:</b> The home install button now says Install Next Train (1 MB)."
-        ]
-    },
-    {
-        id: "V8_08.16.2",
-        title: "Alerts & live board",
-        date: "16 Aug 2026",
-        // Keep false unless you intentionally want What's New to auto-open once for this version.
-        forceShow: false,
-        features: [
-            "<b>Close Alerts:</b> The Alerts page has a close button again, and going back leaves your Next Train board as you left it.",
-            "<b>Hold to react:</b> Touch and hold a notice to pick an emoji, like WhatsApp. Counts stay visible after someone reacts.",
-            "<b>Live times:</b> Countdown on the Next Train tab updates each minute without the board blinking."
-        ]
-    },
-    {
-        id: "V8_08.16.1",
-        title: "Alerts channel",
-        date: "16 Aug 2026",
-        // Keep false unless you intentionally want What's New to auto-open once for this version.
-        forceShow: false,
-        features: [
-            "<b>Alerts channel:</b> Tap the bell to open a feed of service notices — newest at the bottom, like a channel.",
-            "<b>Posters:</b> Fare and safety posters sit in the post so you can pinch-zoom them.",
-            "<b>React:</b> Hold a notice to react. Critical alerts stay pinned at the top."
-        ]
-    },
-    {
-        id: "V8_08.15.1",
-        title: "Clearer line notices",
-        date: "15 Aug 2026",
-        // Keep false unless you intentionally want What's New to auto-open once for this version.
-        forceShow: false,
-        features: [
-            "<b>Disruption notices:</b> Delay and line-closed messages now keep titles, larger or smaller text, underline, and clear fonts so they are easier to read.",
-            "<b>Same look as alerts:</b> A stretch of line that is delayed or severed uses the same readable formatting as a service alert.",
-            "<b>On your screen:</b> Open a line notice from the board or planner to see the updated layout."
+            "<b>Alerts:</b> Bell opens a notice channel. Hold to react; tap counts for the split.",
+            "<b>Kempton Park:</b> Running weekday trains no longer show a false no-service tag.",
+            "<b>Region:</b> After you pick a route, the board stays put."
         ]
     },
     {

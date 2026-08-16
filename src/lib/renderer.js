@@ -893,10 +893,10 @@ export const Renderer = {
         
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
-        let stickyHeaderClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700'; 
+        let stickyHeaderClass = isExport ? '' : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'; 
         let borderClass = isExport ? 'border-gray-300' : 'border-gray-300 dark:border-gray-700';
         let tbodyClass = isExport ? '' : 'bg-white dark:bg-gray-900';
-        let stickyCellClass = isExport ? '' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
+        let stickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
 
         let gridNoticeHtml = '';
         const globalExclData = $globalExclusions.get();
@@ -921,7 +921,7 @@ export const Renderer = {
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
                 <thead class="text-[10px] uppercase ${theadClass} sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th class="sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
+                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx);
@@ -972,9 +972,9 @@ export const Renderer = {
             let currentStickyCellClass = stickyCellClass;
             
             if (isSelectedRow) {
-                currentStickyCellClass = isExport ? '' : 'bg-blue-50 dark:bg-blue-900 border-gray-300 dark:border-gray-700 text-blue-900 dark:text-blue-100';
+                currentStickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-blue-100 dark:bg-blue-800 border-gray-300 dark:border-gray-700 text-blue-900 dark:text-blue-100';
             } else if (isZebra && !isExport) {
-                currentStickyCellClass = 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
+                currentStickyCellClass = 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white';
             }
 
             let rowClass = isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : '');
@@ -1056,8 +1056,9 @@ export const Renderer = {
 
         const stationRows = stations.map((name, i) => {
             const zebra = i % 2 === 1 ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+            const stationBg = i % 2 === 1 ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800';
             return `<tr class="${zebra}">
-                <td class="sticky left-0 z-10 bg-white dark:bg-gray-900 ${zebra ? 'dark:bg-gray-800' : ''} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
+                <td class="nt-station-col sticky left-0 z-10 ${stationBg} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
                 ${i === 0 ? `<td rowspan="${Math.max(stations.length, 1)}" class="align-middle border-b border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-white dark:bg-gray-900">
                     <div class="mx-auto max-w-sm rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 px-4 py-5 sm:px-5 sm:py-6 text-center shadow-sm">
                         <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
@@ -1449,6 +1450,14 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontWeight = '800';
             td.style.color = '#1f2937';
         });
+
+        t.querySelectorAll('th.nt-station-col, th:first-child').forEach((th) => {
+            th.style.backgroundColor = '#e2e8f0';
+        });
+        t.querySelectorAll('td.nt-station-col, td:first-child').forEach((td) => {
+            const row = td.parentElement;
+            td.style.backgroundColor = row && row.classList.contains('export-zebra') ? '#e2e8f0' : '#f1f5f9';
+        });
     });
 
     document.body.appendChild(exportContainer);
@@ -1479,11 +1488,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             
             const canShare = navigator.canShare && navigator.canShare({ files: [file] });
             const shareBtnHTML = canShare 
-                ? `<button onclick="triggerNoticeShare()" class="bg-white text-blue-600 px-3 py-1 rounded text-xs font-bold shadow-sm hover:bg-gray-100 transition-colors ml-3 whitespace-nowrap border border-gray-200">SHARE 📤</button>` 
+                ? `<button onclick="triggerNoticeShare()" class="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm hover:bg-gray-100 transition-colors whitespace-nowrap border border-gray-200"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"></path></svg>Share</button>` 
                 : '';
 
             if (typeof showToast === 'function') {
-                showToast("✅ Image saved to gallery!", "success", 8000, shareBtnHTML);
+                showToast("Saved to gallery", "success", 8000, shareBtnHTML);
             }
             
             if (typeof trackAnalyticsEvent === 'function') {

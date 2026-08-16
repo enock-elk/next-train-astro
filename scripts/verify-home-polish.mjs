@@ -4,14 +4,16 @@
  */
 import { readFileSync } from 'node:fs';
 import { warningTriangleSvg } from '../src/lib/utils.js';
-import { APP_VERSION } from '../src/lib/config.js';
+import { APP_VERSION, CHANGELOG_DATA } from '../src/lib/config.js';
 
 const failures = [];
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.16.6', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V8_08.16.5', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.16.5' && CHANGELOG_DATA[0].features.length === 3, 'What’s New is one concise 16.5 card');
+assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');
@@ -29,6 +31,9 @@ assert(!renderer.includes('⚠️'), 'home board has no warning emoji');
 assert(board.includes('warningTriangleSvg()'), 'upcoming modal uses warning SVG');
 assert(renderer.includes('warningTriangleSvg()'), 'home board uses warning SVG');
 assert(warningTriangleSvg().includes('<svg'), 'warningTriangleSvg returns svg');
+assert(renderer.includes('nt-station-col'), 'grid marks the station column');
+assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
+assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
 
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');

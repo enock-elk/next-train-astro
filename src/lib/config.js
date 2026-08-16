@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.16.4";
+export const APP_VERSION = "V8_08.16.5";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -865,15 +865,12 @@ export const FARE_CONFIG = {
 };
 
 // 6. GHOST TRAIN PROTOCOL (Default Exclusions)
-// Fallback rules if Firebase is unreachable.
+// Offline-only fallback if the Firebase exclusions tree cannot be fetched.
+// Live bans belong in RTDB `exclusions/{routeId}/{trainId}` so Global State
+// Monitor can see, expire, and resolve them. Do not hardcode corridor bans
+// here — they stay invisible to admin and outlive any expiry the admin set.
 // Day Index: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-export const DEFAULT_EXCLUSIONS = {
-    'pta-kempton': {
-        // Runs Tue, Wed, Thu only. Exclude Mon (1) and Fri (5).
-        "0618": { days: [1, 5], reason: "Runs Tue-Thu Only" },
-        "0619": { days: [1, 5], reason: "Runs Tue-Thu Only" }
-    }
-};
+export const DEFAULT_EXCLUSIONS = {};
 
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
@@ -884,6 +881,16 @@ export const DEFAULT_EXCLUSIONS = {
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.16.5",
+        title: "Kempton Park & region pick",
+        date: "16 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Kempton Park:</b> Weekday trains that are running no longer show a cancelled / no-service tag from an old hidden rule.",
+            "<b>Change region:</b> After you pick a route in a new region, the app stays on that board instead of asking you to choose again."
+        ]
+    },
     {
         id: "V8_08.16.4",
         title: "Alerts close & photos",

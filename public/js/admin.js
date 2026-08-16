@@ -2527,6 +2527,30 @@ const Admin = {
                 }
             }
 
+            // Surface offline-only DEFAULT_EXCLUSIONS so they are never invisible
+            // to Global State Monitor (hardcoded bans used to paint the grid only).
+            const builtin = (typeof DEFAULT_EXCLUSIONS !== 'undefined' && DEFAULT_EXCLUSIONS) ? DEFAULT_EXCLUSIONS : {};
+            Object.keys(builtin).forEach((rId) => {
+                const routeRules = builtin[rId];
+                if (!routeRules || typeof routeRules !== 'object') return;
+                Object.keys(routeRules).forEach((tNum) => {
+                    const item = routeRules[tNum];
+                    if (!item || typeof item !== 'object') return;
+                    if (item.expiresAt && item.expiresAt <= now) return;
+                    const already = activeItems.some((it) => it.type === 'Exception' && it.routeId === rId && it.id === tNum);
+                    if (already) return;
+                    const typeStr = item.type === 'special' ? 'Marked Special' : 'Banned';
+                    activeItems.push({
+                        type: 'Exception',
+                        label: `Train #${tNum} ${typeStr} (app default)`,
+                        expiresAt: item.expiresAt || null,
+                        id: tNum,
+                        panelId: 'exclusion-panel',
+                        routeId: rId,
+                    });
+                });
+            });
+
             // 4. Scan Maintenance banners
             if (maintRes && maintRes.ok) {
                 try {
@@ -11519,6 +11543,9 @@ const Admin = {
                     dateInput.focus();
                 } else {
                     dateContainer.classList.add('hidden');
+                    // Drop the leftover "today" value initAutoSim pre-fills so
+                    // Weekday/Sat/Sun sim cannot keep reading Sunday's date.
+                    dateInput.value = '';
                 }
             });
         }
@@ -11544,14 +11571,18 @@ const Admin = {
                 if (dayDropdown && dayDropdown.value === 'specific') {
                     if (dateInput && dateInput.value) {
                         const d = new Date(dateInput.value);
-                        window.simDayIndex = d.getDay(); 
+                        window.simDayIndex = d.getDay();
+                        window.__ntSimUseSpecificDate = true;
                     } else {
                         if (typeof showToast === 'function') showToast("Please select a valid date.", "error");
                         return;
                     }
                 } else if (dayDropdown) {
-                    window.simDayIndex = parseInt(dayDropdown.value);
+                    window.__ntSimUseSpecificDate = false;
+                    if (dateInput) dateInput.value = '';
+                    window.simDayIndex = parseInt(dayDropdown.value, 10);
                 } else {
+                    window.__ntSimUseSpecificDate = false;
                     window.simDayIndex = 1;
                 }
 
@@ -11579,6 +11610,7 @@ const Admin = {
                 window.isSimMode = false;
                 window.simTimeStr = null;
                 window.simDayIndex = null;
+                window.__ntSimUseSpecificDate = false;
                 try { window.__ntLastSimKey = null; } catch (e) {}
                 if(simEnabledCheckbox) simEnabledCheckbox.checked = false;
                 

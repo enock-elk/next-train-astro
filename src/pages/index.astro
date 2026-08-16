@@ -9,6 +9,7 @@ import WelcomeModal from '../components/WelcomeModal.astro';
 import PlannerModals from '../components/PlannerModals.astro';
 import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
+import AlertsChannel from '../components/AlertsChannel.astro';
 import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
@@ -118,6 +119,7 @@ const faqLd = {
 
     <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
     <HubModals />
+    <AlertsChannel />
 
     <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
     <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -311,6 +313,9 @@ const faqLd = {
         switchTab('trip-planner');
     } else if (hash === '#community') {
         switchTab('community');
+    } else if (hash === '#alerts') {
+        switchTab('next-train');
+        setTimeout(() => window.openAlertsChannel?.(), 400);
     } else if (hash === '#map') {
         switchTab('next-train');
         setTimeout(() => window.openSmoothModal?.('map-modal'), 300);

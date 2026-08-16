@@ -44,6 +44,20 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
   color: inherit;
   letter-spacing: -0.01em;
 }
+.nt-rich-body ul, #notice-content ul, #alert-msg ul, #alerts-feed ul,
+#developer-reply-content ul, #admin-reply-text ul, #disr-msg ul, #disruption-modal-body ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+.nt-rich-body ol, #notice-content ol, #alert-msg ol, #alerts-feed ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+.nt-rich-body li, #notice-content li, #alert-msg li, #alerts-feed li {
+  margin: 0.15rem 0;
+}
 `;
 
 const ALLOWED_TAGS = new Set([
@@ -194,7 +208,11 @@ function sanitizeHref(el, attrName) {
         return;
     }
     if (attrName === 'href' && !isSafeHref(value)) el.removeAttribute(attrName);
-    if (attrName === 'src' && !/^https?:/i.test(value)) el.removeAttribute(attrName);
+    if (attrName === 'src') {
+        const okRemote = /^https?:/i.test(value);
+        const okPoster = /^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(value);
+        if (!okRemote && !okPoster) el.removeAttribute(attrName);
+    }
 }
 
 function cleanNode(node) {

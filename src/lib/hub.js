@@ -5,7 +5,6 @@ import {
     APP_VERSION,
     CHANGELOG_DATA,
     DYNAMIC_BASE_URL,
-    ROUTES,
     withBase,
     getLatestChangelog,
     getChangelogVersionId,
@@ -16,6 +15,16 @@ import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
+import {
+    fetchUnionNotices,
+    setCachedLiveNotices,
+    applyBellFromNotices,
+    openAlertsChannel,
+    initAlertsChannel,
+    pickAutoOpenNotice,
+    collectNoticeImageUrls,
+    resolveAlertImageSrc,
+} from './alerts-channel.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
@@ -669,6 +678,16 @@ export function renderServiceAlertModal(notice, options = {}) {
     }
 
     content.innerHTML = formattedMsg;
+    const posterUrls = collectNoticeImageUrls(notice);
+    if (posterUrls.length) {
+        const cells = posterUrls.map((path) => {
+            const src = escapeHTML(resolveAlertImageSrc(path));
+            const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
+        }).join('');
+        const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
+        content.innerHTML += `<div class="${grid} mt-3 mb-1">${cells}</div>`;
+    }
     ensureLightboxPlusBadges(content);
 
     if (notice.ctaUrl && notice.ctaText) {
@@ -1014,135 +1033,40 @@ export async function checkServiceAlerts() {
             replyBanner.classList.add('hidden');
         }
 
-        // 2. Notices: global + region-wide + current route (admin targets: all, all_GP, …, routeId)
-        const now = Date.now();
-        const severityScore = { critical: 3, warning: 2, info: 1 };
+        // 2. Notices: union of global + region + current route (not exclusive winner)
         const region = $userRegion.get() || 'GP';
-        const noticeKeys = ['all', `all_${region}`];
-        if (routeId && ROUTES[routeId]) noticeKeys.push(routeId);
-
-        const parseNoticeBucket = (raw, sourceKey) => {
-            if (!raw) return [];
-            const stamp = (n) => (n && typeof n === 'object' ? { ...n, _sourceKey: sourceKey } : null);
-            if (Array.isArray(raw)) {
-                return raw.map((n) => stamp(n)).filter((n) => n && (!n.expiresAt || n.expiresAt > now));
-            }
-            if (typeof raw === 'object') {
-                if (raw.message || raw.text || raw.id || raw.severity) {
-                    return (!raw.expiresAt || raw.expiresAt > now) ? [stamp(raw)] : [];
-                }
-                return Object.values(raw)
-                    .map((n) => stamp(n))
-                    .filter((n) => n && (!n.expiresAt || n.expiresAt > now));
-            }
-            return [];
-        };
-
-        const fetchBucket = async (key) => {
-            try {
-                const res = await fetch(`${DYNAMIC_BASE_URL}notices/${key}.json?t=${Date.now()}`);
-                if (!res.ok) return [];
-                const ct = res.headers.get('content-type') || '';
-                if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
-                return parseNoticeBucket(await res.json(), key);
-            } catch (e) {
-                if (e?.message === 'Captive Portal Detected') throw e;
-                return [];
-            }
-        };
-
-        const buckets = await Promise.all(noticeKeys.map(fetchBucket));
-        const validNotices = buckets.flat();
+        const validNotices = await fetchUnionNotices(region, routeId);
+        setCachedLiveNotices(validNotices);
 
         if (validNotices.length === 0) {
             bellBtn.classList.add('hidden');
             return;
         }
 
-        // Scope wins over severity: Route > Region (all_GP…) > Global (all).
-        // If any route-level alert exists for the pinned route, region/global are ignored.
-        const scopeScore = (key) => {
-            if (!key || key === 'all') return 1;
-            if (String(key).startsWith('all_')) return 2;
-            return 3; // concrete routeId
-        };
-        const routeScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 3);
-        const regionScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 2);
-        const pool = routeScoped.length
-            ? routeScoped
-            : (regionScoped.length ? regionScoped : validNotices);
-        pool.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
-        const activeNotice = pool[0];
-        const severity = activeNotice.severity || 'info';
-        const seenKey = `seen_notice_${activeNotice._sourceKey || 'x'}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
-        const hasSeen = safeStorage.getItem(seenKey) === 'true';
-        const forcePopup = activeNotice.forcePopup === true
-            || (activeNotice.forcePopup == null && severity === 'critical');
+        applyBellFromNotices(validNotices);
 
-        const bindModalContent = () => {
-            renderServiceAlertModal(activeNotice, { mode: 'live' });
-        };
-
-        bellBtn.classList.remove('hidden');
-
-        // Mirror #open-nav-btn exactly: top-2 · p-2 · w-6 icon · shadow-sm (right vs left)
-        let bellClass = 'absolute top-2 right-4 z-[70] p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
-        let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
-        if (severity === 'critical') {
-            bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
-            dotClass += 'bg-red-600';
-        } else if (severity === 'warning') {
-            bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800';
-            dotClass += 'bg-yellow-500';
-        } else {
-            bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800';
-            dotClass += 'bg-blue-600';
+        const autoNotice = pickAutoOpenNotice(validNotices);
+        if (autoNotice && !window._alertsChannelOpening && canAutoOpenHomeNotices()) {
+            window._alertsChannelOpening = true;
+            setTimeout(() => {
+                if (!canAutoOpenHomeNotices()) {
+                    window._alertsChannelOpening = false;
+                    return;
+                }
+                triggerHaptic();
+                trackAlertEvent('auto_open_alert', {
+                    severity: autoNotice.severity || 'critical',
+                    route_id: routeId || 'all',
+                    notice_id: autoNotice.id || '',
+                });
+                openAlertsChannel({
+                    notices: validNotices,
+                    highlightId: autoNotice.id || null,
+                    resetVisible: true,
+                });
+                window._alertsChannelOpening = false;
+            }, 400);
         }
-        bellBtn.className = bellClass;
-        const bellSvg = bellBtn.querySelector('svg');
-        if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
-        if (dot) dot.className = dotClass;
-
-        if (!hasSeen) {
-            if (dot) dot.classList.remove('hidden');
-            if (severity === 'critical') bellBtn.classList.add('animate-shake');
-            else bellBtn.classList.remove('animate-shake');
-
-            // Auto-open only on the home board (stabilized + route selected +
-            // Next Train / Trip Planner). Bell still updates everywhere.
-            if (forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices()) {
-                window._criticalModalShown = true;
-                setTimeout(() => {
-                    // Re-check: user may have opened route modal / map / Community in the delay.
-                    if (!canAutoOpenHomeNotices()) {
-                        window._criticalModalShown = false;
-                        return;
-                    }
-                    triggerHaptic();
-                    trackAlertEvent('auto_open_alert', { severity, route_id: routeId || 'all' });
-                    safeStorage.setItem(seenKey, 'true');
-                    bellBtn.classList.remove('animate-shake');
-                    if (dot) dot.classList.add('hidden');
-                    bindModalContent();
-                    // openSmoothModal pushes #notice once — don't double-push over #planner-results
-                    openSmoothModal('notice-modal');
-                }, 400);
-            }
-        } else {
-            bellBtn.classList.remove('animate-shake');
-            if (dot) dot.classList.add('hidden');
-        }
-
-        bellBtn.onclick = () => {
-            triggerHaptic();
-            trackAlertEvent('view_service_alert', { severity, route_id: routeId || 'all' });
-            safeStorage.setItem(seenKey, 'true');
-            bellBtn.classList.remove('animate-shake');
-            if (dot) dot.classList.add('hidden');
-            bindModalContent();
-            // openSmoothModal owns the #notice history entry
-            openSmoothModal('notice-modal');
-        };
 
         const topCloseBtn = modal?.querySelector('button.text-gray-400');
         if (topCloseBtn && modal?.dataset?.alertPreview !== '1') {
@@ -1172,7 +1096,9 @@ export function initHub() {
     window.renderServiceAlertModal = renderServiceAlertModal;
     window.prepareRichHtml = prepareRichHtml;
     window.injectRichTextStyles = injectRichTextStyles;
+    window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
     injectRichTextStyles();
+    initAlertsChannel();
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1210,6 +1136,11 @@ export function initHub() {
             if (noticeModal && !noticeModal.classList.contains('hidden')
                 && hash !== '#notice' && hash !== '#lightbox' && hash !== '#map') {
                 closeSmoothModal('notice-modal');
+            }
+            const alertsEl = document.getElementById('alerts-channel');
+            if (alertsEl && !alertsEl.classList.contains('hidden')
+                && hash !== '#alerts' && hash !== '#lightbox' && hash !== '#map' && hash !== '#feedback') {
+                closeSmoothModal('alerts-channel');
             }
         });
     }

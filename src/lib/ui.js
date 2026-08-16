@@ -55,6 +55,7 @@ const MODAL_HASH = {
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
     'map-modal': '#map',
     'notice-modal': '#notice',
+    'alerts-channel': '#alerts',
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
@@ -87,7 +88,9 @@ function legalHashForType(type) {
 }
 
 function anyFixedModalOpen() {
-    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
+    const alerts = document.getElementById('alerts-channel');
+    const alertsOpen = !!(alerts && !alerts.classList.contains('hidden'));
+    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)') || alertsOpen;
 }
 
 export function closeSmoothModal(modalId, fromPopState = false) {
@@ -272,6 +275,17 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        // Alerts channel parks the home board (same as sidenav #sheet). Closing
+        // it must not switchTab / remount Next Train.
+        const alertsEl = document.getElementById('alerts-channel');
+        const alertsOpen = (alertsEl && !alertsEl.classList.contains('hidden')) || window.__ntAlertsOpen || window.__ntAlertsParkHome;
+        if (alertsOpen && hashNow !== '#alerts' && hashNow !== '#lightbox' && hashNow !== '#feedback' && hashNow !== '#map') {
+            closeSmoothModal('alerts-channel', true);
+            window.__ntAlertsOpen = false;
+            window.__ntAlertsParkHome = false;
+            return;
+        }
+
         const adminLightbox = document.getElementById('admin-lightbox-modal');
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
             if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
@@ -353,6 +367,7 @@ export function bindHistoryBackNavigation() {
                 || hashNow === '#lightbox'
                 || hashNow === '#feedback'
                 || hashNow === '#notice'
+                || hashNow === '#alerts'
                 || hashNow.startsWith('#disruption');
             if (keepPlannerResults) {
                 if (hashNow === '#planner-results' && typeof window.restorePlannerResultsView === 'function') {
@@ -1004,6 +1019,9 @@ export function canAutoOpenHomeNotices() {
 
     const sheet = document.getElementById('nt-inapp-sheet');
     if (sheet && !sheet.classList.contains('hidden') && sheet.classList.contains('flex')) return false;
+
+    const alerts = document.getElementById('alerts-channel');
+    if (alerts && !alerts.classList.contains('hidden')) return false;
 
     // Sidenav / any modal already owns the screen — don't stack auto-popups.
     if (document.body.classList.contains('sidenav-open')) return false;

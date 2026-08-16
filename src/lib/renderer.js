@@ -27,6 +27,13 @@ import {
 } from './logic.js';
 
 import { showToast, triggerHaptic } from './ui.js';
+import {
+    liveBoardJourneyKey,
+    liveBoardNextAvailKey,
+    normalizeCountdownLabel,
+    tryPatchLiveBoardCountdown,
+    stampLiveBoardCard,
+} from './live-board-paint.js';
 
 // Delay-report UI is off for cutover (DELAY_REPORTS_UI_ENABLED=false). Keep stubs here so
 // renderer does not static-import delay-reports → firebase-vendor on the home critical path.
@@ -448,7 +455,9 @@ export const Renderer = {
             ? window.calculateTimeDiffString(rawTime, dayOffset) 
             : "";
         
-        if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+        if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
+        const nextKey = liveBoardNextAvailKey(destination, rawTime, dayOffset);
+        if (tryPatchLiveBoardCountdown(element, nextKey, timeDiffStr)) return;
         
         const safeDest = escapeHTML(destination);
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
@@ -501,22 +510,21 @@ export const Renderer = {
         }
 
         element.innerHTML = `
-            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
+            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="text-sm font-bold text-gray-600 dark:text-gray-400">No more trains today</div>
                 ${disruptionHtml}
                 <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-1">First train ${dayText} is at:</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     <div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div>
-                    <div class="text-xs text-gray-700 dark:text-gray-300 font-medium">${timeDiffStr}</div>
+                    <div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>
                 </div>
                 <button onclick="window.openScheduleModal('${safeDestForClick}', '${dayType}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${dayName} Schedule</button>
             </div>
         `;
+        stampLiveBoardCard(element, nextKey);
     },
 
     renderJourney: (element, journey, destination) => {
-        element.innerHTML = "";
-        
         let timeClass = "bg-gray-200 dark:bg-gray-900";
         if (journey.isLastTrain) {
             timeClass = "bg-red-100 dark:bg-red-900 border-2 border-red-500";
@@ -532,7 +540,10 @@ export const Renderer = {
             ? window.calculateTimeDiffString(rawTime) 
             : "";
             
-        if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+        if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
+        const boardKey = liveBoardJourneyKey(journey, destination);
+        if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr)) return;
+        element.innerHTML = "";
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
         const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-tight font-bold py-1.5 px-0.5 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors leading-tight focus:outline-none">See Upcoming Trains</button>`;
@@ -680,7 +691,7 @@ export const Renderer = {
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
-                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${sharedTag}
                         ${buttonHtml}
                     </div>
@@ -760,7 +771,7 @@ export const Renderer = {
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
-                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${sharedTag}
                         ${buttonHtml}
                     </div>
@@ -778,6 +789,7 @@ export const Renderer = {
                 </div>
             `;
         }
+        stampLiveBoardCard(element, boardKey);
     },
 
 

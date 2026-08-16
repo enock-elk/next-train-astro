@@ -2467,17 +2467,19 @@ const Admin = {
                     Object.keys(noticesData).forEach(target => {
                         const targetNotices = noticesData[target];
                         if (targetNotices && typeof targetNotices === 'object') {
-                            if (targetNotices.id) {
-                                if (!targetNotices.expiresAt || targetNotices.expiresAt > now) {
-                                    activeItems.push({ type: 'Alert', label: targetNotices.severity === 'critical' ? 'Critical Advisory Active' : 'General Advisory Active', expiresAt: targetNotices.expiresAt, id: targetNotices.id, panelId: 'alert-panel', routeId: target });
+                            Admin.listNoticesInTarget(targetNotices).forEach((item) => {
+                                if (!item.expiresAt || item.expiresAt > now) {
+                                    const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
+                                    activeItems.push({
+                                        type: 'Alert',
+                                        label: `${sev} channel post`,
+                                        expiresAt: item.expiresAt,
+                                        id: item.id || item._key,
+                                        panelId: 'alert-panel',
+                                        routeId: target,
+                                    });
                                 }
-                            } else {
-                                Object.values(targetNotices).forEach(item => {
-                                    if (!item.expiresAt || item.expiresAt > now) {
-                                        activeItems.push({ type: 'Alert', label: item.severity === 'critical' ? 'Critical Advisory Active' : 'General Advisory Active', expiresAt: item.expiresAt, id: item.id, panelId: 'alert-panel', routeId: target });
-                                    }
-                                });
-                            }
+                            });
                         }
                     });
                 }
@@ -3005,7 +3007,7 @@ const Admin = {
                 if (typeof showToast === 'function') showToast("Grid Notice resolved & removed.", "success");
             } else if (type === 'Alert') {
                 try {
-                    const archived = await Admin.archiveActiveNotice(routeId, secret);
+                    const archived = await Admin.archiveActiveNotice(routeId, secret, null, id);
                     if (!archived) {
                         await fetch(`${dynamicEndpoint}notices/${routeId}.json?auth=${secret}`, { method: 'DELETE' });
                     }
@@ -7264,6 +7266,8 @@ const Admin = {
                             ${iconBtn('justifyCenter', 'Align Center', alignC)}
                             ${iconBtn('justifyRight', 'Align Right', alignR)}
                             ${sep}
+                            ${btn('ul', 'Bullet list', '• List', 'whitespace-nowrap')}
+                            ${sep}
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                             ${media}
                         </div>
@@ -7370,6 +7374,8 @@ const Admin = {
             document.execCommand('justifyCenter', false, null);
         } else if (tag === 'justifyRight') {
             document.execCommand('justifyRight', false, null);
+        } else if (tag === 'ul') {
+            document.execCommand('insertUnorderedList', false, null);
         } else if (tag === 'link') { 
             const url = prompt("Enter the full URL (e.g., https://nexttrain.co.za):", "https://");
             if (!url) return;
@@ -7411,18 +7417,157 @@ const Admin = {
         }
     },
 
-    archiveActiveNotice: async (target, secret, noticeData = null) => {
-        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        let alertData = noticeData;
-        if (!alertData) {
-            const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
-            if (!fetchRes.ok) return null;
-            alertData = await fetchRes.json();
+    listNoticesInTarget: (node) => {
+        if (typeof window.listNoticesInTarget === 'function') return window.listNoticesInTarget(node);
+        if (!node || typeof node !== 'object') return [];
+        if (Array.isArray(node)) return node.filter(Boolean).map((n, i) => ({ ...n, _key: n.id || String(i) }));
+        const children = [];
+        Object.entries(node).forEach(([key, val]) => {
+            if (key === 'reactions') return;
+            if (val && typeof val === 'object' && (val.message || val.text || val.severity)) {
+                children.push({ ...val, _key: val.id || key });
+            }
+        });
+        if (children.length) return children;
+        if (node.message || node.text || node.id) return [{ ...node, _key: node.id || 'legacy' }];
+        return [];
+    },
+
+    collectAlertImageUrls: (notice) => {
+        if (typeof window.collectNoticeImageUrls === 'function') return window.collectNoticeImageUrls(notice || {});
+        const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+            ? notice.imageUrls
+            : (notice?.imageUrl ? [notice.imageUrl] : []);
+        return raw.filter((u) => typeof u === 'string' && u.startsWith('/images/alerts/')).slice(0, 2);
+    },
+
+    sanitizeAlertPosterPath: (url) => {
+        if (typeof window.sanitizeAlertImageUrl === 'function') return window.sanitizeAlertImageUrl(url);
+        const s = String(url || '').trim().split('?')[0];
+        return /^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(s) ? s : null;
+    },
+
+    getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 2) : []),
+
+    setSelectedAlertPosters: (paths) => {
+        const next = [];
+        (paths || []).forEach((p) => {
+            const s = Admin.sanitizeAlertPosterPath(p);
+            if (s && !next.includes(s) && next.length < 2) next.push(s);
+        });
+        Admin._alertPosterPaths = next;
+        Admin.renderAlertPosterPicker();
+        return next;
+    },
+
+    renderAlertPosterPicker: () => {
+        const selectedEl = document.getElementById('alert-poster-selected');
+        const grid = document.getElementById('alert-poster-grid');
+        const selected = Admin.getSelectedAlertPosters();
+        if (selectedEl) {
+            selectedEl.innerHTML = selected.length
+                ? selected.map((p) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-[10px] font-bold text-blue-700 dark:text-blue-300">${p.split('/').pop()}<button type="button" data-remove-poster="${p}" class="text-blue-500">×</button></span>`).join('')
+                : '<span class="text-[10px] text-gray-400">No posters attached</span>';
+            selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
+                btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
+            });
         }
-        if (!alertData || !alertData.id) return null;
+        if (grid && Array.isArray(Admin._alertPosterManifest)) {
+            grid.innerHTML = Admin._alertPosterManifest.map((item) => {
+                const path = `/images/alerts/${item.file}`;
+                const on = selected.includes(path);
+                return `<button type="button" data-pick-poster="${path}" class="text-left rounded-lg overflow-hidden border ${on ? 'border-blue-500 ring-2 ring-blue-400' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-900">
+                    <img src="${path}" alt="${item.label || item.file}" class="w-full h-16 object-cover">
+                    <span class="block px-1.5 py-1 text-[9px] font-bold text-gray-600 dark:text-gray-300 truncate">${item.label || item.file}</span>
+                </button>`;
+            }).join('');
+            grid.querySelectorAll('[data-pick-poster]').forEach((btn) => {
+                btn.onclick = () => {
+                    const path = btn.getAttribute('data-pick-poster');
+                    const cur = Admin.getSelectedAlertPosters();
+                    if (cur.includes(path)) Admin.setSelectedAlertPosters(cur.filter((p) => p !== path));
+                    else if (cur.length < 2) Admin.setSelectedAlertPosters(cur.concat(path));
+                    else if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+                };
+            });
+        }
+    },
+
+    loadAlertPosterManifest: async () => {
+        try {
+            const res = await fetch(`/images/alerts/manifest.json?t=${Date.now()}`);
+            const data = res.ok ? await res.json() : null;
+            Admin._alertPosterManifest = Array.isArray(data?.posters) ? data.posters : [];
+        } catch {
+            Admin._alertPosterManifest = [];
+        }
+        Admin.renderAlertPosterPicker();
+    },
+
+    writeNoticesMeta: async (target, secret, notices) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const meta = typeof window.buildNoticesMeta === 'function'
+            ? window.buildNoticesMeta(notices || [])
+            : { latestId: notices?.[0]?.id || null, latestAt: Date.now(), latestCriticalAt: 0, latestSeverity: 'info', liveCount: (notices || []).length };
+        try {
+            await fetch(`${dynamicEndpoint}notices_meta/${encodeURIComponent(target)}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(meta),
+            });
+        } catch (e) {
+            console.warn('notices_meta write failed', e);
+        }
+    },
+
+    publishNoticeToTarget: async (target, payload, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const id = String(payload.id || Date.now());
+        payload.id = id;
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        const existing = fetchRes.ok ? await fetchRes.json() : null;
+        const listed = Admin.listNoticesInTarget(existing);
+        const isLegacy = existing && (existing.message || existing.text)
+            && !Object.entries(existing).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+
+        if (isLegacy && existing.id && String(existing.id) !== id) {
+            const map = {};
+            map[existing.id] = existing;
+            map[id] = payload;
+            const put = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(map),
+            }, 10000);
+            if (!put.ok) throw new Error('Failed to publish alert');
+        } else {
+            const put = await window.guardianFetch(`${dynamicEndpoint}notices/${target}/${id}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            }, 10000);
+            if (!put.ok) throw new Error('Failed to publish alert');
+        }
+        const nextList = listed.filter((n) => String(n.id || n._key) !== id).concat([payload]);
+        await Admin.writeNoticesMeta(target, secret, nextList);
+        return payload;
+    },
+
+    archiveActiveNotice: async (target, secret, noticeData = null, noticeId = null) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) return null;
+        const node = await fetchRes.json();
+        if (!node) return null;
+
+        const listed = Admin.listNoticesInTarget(node);
+        let alertData = noticeData;
+        if (!alertData && noticeId) {
+            alertData = listed.find((n) => String(n.id || n._key) === String(noticeId)) || null;
+        }
+        if (!alertData && listed.length === 1) alertData = listed[0];
+        if (!alertData || !(alertData.id || alertData._key)) return null;
+        const key = alertData._key || alertData.id;
 
         const pollResults = (alertData.poll && alertData.poll.active)
-            ? await Admin.fetchPollResultsSnapshot(alertData.id, secret)
+            ? await Admin.fetchPollResultsSnapshot(alertData.id || key, secret)
             : (alertData.pollResults || null);
 
         const archived = {
@@ -7433,11 +7578,43 @@ const Admin = {
             archiveReason: alertData.archiveReason || 'cleared',
             pollResults: pollResults || alertData.pollResults || null,
         };
-        const archiveUrl = `${dynamicEndpoint}notices_archive/${alertData.id}_${Date.now()}.json?auth=${secret}`;
+        const archKey = `${target}/${alertData.id || key}_${Date.now()}`;
+        const archiveUrl = `${dynamicEndpoint}notices_archive/${archKey}.json?auth=${secret}`;
         const archRes = await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(archived) });
         if (!archRes.ok) throw new Error('Failed to write notices_archive');
-        await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+
+        const isLegacy = node && (node.message || node.text)
+            && !Object.entries(node).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+        if (isLegacy || listed.length <= 1) {
+            await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+            await Admin.writeNoticesMeta(target, secret, []);
+        } else {
+            await fetch(`${dynamicEndpoint}notices/${target}/${key}.json?auth=${secret}`, { method: 'DELETE' });
+            const remain = listed.filter((n) => String(n.id || n._key) !== String(key));
+            await Admin.writeNoticesMeta(target, secret, remain);
+        }
         return archived;
+    },
+
+    archiveAllNoticesForTarget: async (target, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) return 0;
+        const node = await fetchRes.json();
+        const listed = Admin.listNoticesInTarget(node);
+        let count = 0;
+        for (const item of listed) {
+            try {
+                await Admin.archiveActiveNotice(target, secret, item, item.id || item._key);
+                count++;
+            } catch (e) {
+                console.warn('archive one notice failed', e);
+            }
+        }
+        if (!count && node) {
+            await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+        }
+        return count;
     },
 
     sweepExpiredAlertsToArchive: async (secret) => {
@@ -7452,13 +7629,16 @@ const Admin = {
             const nData = nRes.ok ? await nRes.json() : null;
             if (nData && typeof nData === 'object') {
                 for (const [target, node] of Object.entries(nData)) {
-                    if (node && node.message && node.id && node.expiresAt && node.expiresAt < now) {
-                        try {
-                            node.archiveReason = 'expired';
-                            await Admin.archiveActiveNotice(target, secret, node);
-                            notices++;
-                        } catch (e) {
-                            console.warn('Expired notice archive failed', target, e);
+                    const listed = Admin.listNoticesInTarget(node);
+                    for (const item of listed) {
+                        if (item && item.expiresAt && item.expiresAt < now) {
+                            try {
+                                item.archiveReason = 'expired';
+                                await Admin.archiveActiveNotice(target, secret, item, item.id || item._key);
+                                notices++;
+                            } catch (e) {
+                                console.warn('Expired notice archive failed', target, e);
+                            }
                         }
                     }
                 }
@@ -7512,11 +7692,23 @@ const Admin = {
         if (nData && typeof nData === 'object') {
             Object.entries(nData).forEach(([archKey, alert]) => {
                 if (!alert || typeof alert !== 'object') return;
-                items.push({
-                    ...alert,
-                    kind: alert.kind || 'notice',
-                    _archKey: archKey,
-                    _sortAt: Number(alert.archivedAt || alert.postedAt || 0),
+                const pushArch = (row, key) => {
+                    if (!row || typeof row !== 'object') return;
+                    items.push({
+                        ...row,
+                        kind: row.kind || 'notice',
+                        _archKey: key,
+                        _sortAt: Number(row.archivedAt || row.postedAt || 0),
+                    });
+                };
+                if (alert.message || alert.text || alert.kind === 'notice') {
+                    pushArch(alert, archKey);
+                    return;
+                }
+                Object.entries(alert).forEach(([innerKey, inner]) => {
+                    if (inner && typeof inner === 'object' && (inner.message || inner.text || inner.kind)) {
+                        pushArch(inner, `${archKey}/${innerKey}`);
+                    }
                 });
             });
         }
@@ -7623,11 +7815,11 @@ const Admin = {
                         postedAt: Date.now(),
                         expiresAt: Date.now() + expiresInMs,
                     };
-                    const putRes = await fetch(`${dynamicEndpoint}notices/${job.target}.json?auth=${secret}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(payload),
-                    });
-                    if (!putRes.ok) continue;
+                    try {
+                        await Admin.publishNoticeToTarget(job.target, payload, secret);
+                    } catch {
+                        continue;
+                    }
                     published++;
                     const next = Admin.computeNextScheduleRun(job.frequency || 'once', Math.max(nextRun, now));
                     if (next == null || job.frequency === 'once') {
@@ -7858,7 +8050,7 @@ const Admin = {
                 <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-200 dark:border-blue-800">
                     <div>
                         <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force Popup Alert</span>
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens modal on user screen</p>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens the Alerts channel once</p>
                     </div>
                     <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                         <input type="checkbox" id="alert-force-popup" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
@@ -7871,6 +8063,17 @@ const Admin = {
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
                         <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel posters (max 2, from /images/alerts/)</label>
+                    <p id="alert-live-count" class="text-[10px] text-gray-400 mb-2"></p>
+                    <div id="alert-poster-selected" class="flex flex-wrap gap-2 mb-2"></div>
+                    <div id="alert-poster-grid" class="grid grid-cols-3 gap-2 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="alert-poster-path" class="flex-1 h-9 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-[11px] outline-none" placeholder="/images/alerts/your-poster.png">
+                        <button type="button" id="alert-poster-add-path" class="h-9 px-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-200 focus:outline-none">Add path</button>
                     </div>
                 </div>
 
@@ -8284,6 +8487,7 @@ const Admin = {
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
                     severity: severitySelect?.value || 'info',
+                    imageUrls: Admin.getSelectedAlertPosters(),
                     imageUrl: null,
                     ctaUrl: null,
                     ctaText: null,
@@ -8367,6 +8571,8 @@ const Admin = {
             if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
             if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
             if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
+
+            Admin.setSelectedAlertPosters(Admin.collectAlertImageUrls(item));
 
             if (item.poll && item.poll.active) {
                 if (pollToggle) pollToggle.checked = true;
@@ -8530,149 +8736,24 @@ const Admin = {
                 Admin._skipAlertFetchOnce = false;
                 return;
             }
-            Admin._alertRepostDraft = false;
+            existingAlertId = null;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
                 const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
                 const data = await res.json();
-                
-                if (data && data.message) {
-                    existingAlertId = data.id || null;
-                    let cleanedMsg = Admin.repairMojibake(data.message);
-                    cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
-                    cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
-                    
-                    alertMsg.innerHTML = cleanedMsg.trim();
-
-                    
-                    if(data.expiresAt && dateInput) {
-                        const expiryDate = new Date(data.expiresAt);
-                        expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset()); 
-                        dateInput.value = expiryDate.toISOString().slice(0, 16);
-                    }
-                    
-                    if (severitySelect && data.severity) {
-                        severitySelect.value = data.severity;
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) {
-                            display.innerHTML = Admin._severityLabelHtml(data.severity || 'info');
-                        }
-                    } else if (severitySelect) {
-                        severitySelect.value = 'info';
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
-                    }
-
-                    if (data.authorName) signoffInput.value = data.authorName;
-                    else signoffInput.value = "Next Train Ops";
-
-                    if (data.forcePopup !== undefined) forcePopupToggle.checked = data.forcePopup;
-                    else forcePopupToggle.checked = (data.severity === 'critical');
-
-                    if (data.poll && data.poll.active) {
-                        pollToggle.checked = true;
-                        pollContainer.classList.remove('hidden');
-                        pollQuestion.value = data.poll.question || "";
-                        pollOptA.value = data.poll.optionA || "";
-                        pollOptB.value = data.poll.optionB || "";
-                        if (pollShowResults) pollShowResults.checked = !!data.poll.showResults;
-                        if (data.poll.optionC) {
-                            if (pollOptC) pollOptC.value = data.poll.optionC;
-                            pollOptCWrap?.classList.remove('hidden');
-                            pollAddCBtn?.classList.add('hidden');
-                        } else {
-                            if (pollOptC) pollOptC.value = "";
-                            pollOptCWrap?.classList.add('hidden');
-                            pollAddCBtn?.classList.remove('hidden');
-                        }
-
-                        const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                        if (pollResultsPanel && data.id) {
-                            try {
-                                const secret = await Admin.getAuthKey();
-                                const pollRes = await fetch(`${dynamicEndpoint}polls/${data.id}.json?auth=${secret}`);
-                                const pollData = await pollRes.json();
-                                
-                                let countA = 0, countB = 0, countC = 0;
-                                if (pollData) {
-                                    Object.values(pollData).forEach(vote => {
-                                        if (vote.optionKey === 'A') countA++;
-                                        else if (vote.optionKey === 'B') countB++;
-                                        else if (vote.optionKey === 'C') countC++;
-                                    });
-                                }
-                                
-                                const total = countA + countB + countC;
-                                const pctA = total > 0 ? Math.round((countA / total) * 100) : 0;
-                                const pctB = total > 0 ? Math.round((countB / total) * 100) : 0;
-                                const pctC = total > 0 ? Math.round((countC / total) * 100) : 0;
-                                
-                                document.getElementById('poll-result-question').textContent = data.poll.question;
-                                document.getElementById('poll-result-label-a').textContent = data.poll.optionA;
-                                document.getElementById('poll-result-label-b').textContent = data.poll.optionB;
-                                document.getElementById('poll-result-count-a').textContent = `${countA} votes (${pctA}%)`;
-                                document.getElementById('poll-result-count-b').textContent = `${countB} votes (${pctB}%)`;
-                                document.getElementById('poll-result-bar-a').style.width = `${pctA}%`;
-                                document.getElementById('poll-result-bar-b').style.width = `${pctB}%`;
-
-                                const cWrap = document.getElementById('poll-result-c-wrap');
-                                if (data.poll.optionC) {
-                                    cWrap?.classList.remove('hidden');
-                                    document.getElementById('poll-result-label-c').textContent = data.poll.optionC;
-                                    document.getElementById('poll-result-count-c').textContent = `${countC} votes (${pctC}%)`;
-                                    document.getElementById('poll-result-bar-c').style.width = `${pctC}%`;
-                                } else {
-                                    cWrap?.classList.add('hidden');
-                                }
-                                
-                                document.getElementById('poll-result-total').textContent = `Total Votes: ${total}`;
-                                pollResultsPanel.classList.remove('hidden');
-                            } catch(e) { console.warn("Could not fetch poll results", e); }
-                        }
-                    } else {
-                        pollToggle.checked = false;
-                        pollContainer.classList.add('hidden');
-                        pollQuestion.value = "";
-                        pollOptA.value = "";
-                        pollOptB.value = "";
-                        if (pollOptC) pollOptC.value = "";
-                        if (pollShowResults) pollShowResults.checked = false;
-                        pollOptCWrap?.classList.add('hidden');
-                        pollAddCBtn?.classList.remove('hidden');
-                        const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                        if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
-                    }
-
-                    sendBtn.textContent = "Preview Alert"; 
-                } else {
-                    existingAlertId = null;
-                    alertMsg.innerHTML = "";
-                    
-                    const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                    if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
-                    if(severitySelect) {
-                        severitySelect.value = 'info';
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
-                    }
-
-                    signoffInput.value = "Next Train Ops";
-                    forcePopupToggle.checked = false;
-
-                    pollToggle.checked = false;
-                    pollContainer.classList.add('hidden');
-                    pollQuestion.value = "";
-                    pollOptA.value = "";
-                    pollOptB.value = "";
-                    if (pollOptC) pollOptC.value = "";
-                    if (pollShowResults) pollShowResults.checked = false;
-                    pollOptCWrap?.classList.add('hidden');
-                    pollAddCBtn?.classList.remove('hidden');
-
-                    sendBtn.textContent = "Preview Alert";
+                const listed = Admin.listNoticesInTarget(data);
+                const live = listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now());
+                const countEl = document.getElementById('alert-live-count');
+                if (countEl) {
+                    countEl.textContent = live.length
+                        ? `${live.length} live post${live.length === 1 ? '' : 's'} on this target — composer starts a new channel post.`
+                        : 'No live posts on this target — composer starts a new channel post.';
                 }
-            } catch (e) { console.log("No active alert."); }
+                if (sendBtn) sendBtn.textContent = 'Preview Alert';
+            } catch (e) {
+                const countEl = document.getElementById('alert-live-count');
+                if (countEl) countEl.textContent = 'Could not read live posts for this target.';
+            }
         }
 
         Admin.populateAlertTargets = (skipFetch = false) => {
@@ -8790,6 +8871,24 @@ const Admin = {
             alertTarget.addEventListener('change', () => fetchCurrentAlert(alertTarget.value));
         }
         Admin.populateAlertTargets();
+        Admin._alertPosterPaths = Admin._alertPosterPaths || [];
+        Admin.loadAlertPosterManifest();
+        document.getElementById('alert-poster-add-path')?.addEventListener('click', () => {
+            const input = document.getElementById('alert-poster-path');
+            const path = Admin.sanitizeAlertPosterPath(input?.value || '');
+            if (!path) {
+                if (typeof showToast === 'function') showToast('Use a path like /images/alerts/name.png', 'error');
+                return;
+            }
+            const cur = Admin.getSelectedAlertPosters();
+            if (cur.includes(path)) return;
+            if (cur.length >= 2) {
+                if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+                return;
+            }
+            Admin.setSelectedAlertPosters(cur.concat(path));
+            if (input) input.value = '';
+        });
 
         const now = new Date();
         now.setHours(23, 59, 59, 999);
@@ -8829,6 +8928,7 @@ const Admin = {
                 postedAt: nowTs,
                 expiresAt: expiresAtVal,
                 severity: severity,
+                imageUrls: Admin.getSelectedAlertPosters(),
                 imageUrl: null,
                 ctaUrl: null,
                 ctaText: null,
@@ -8847,22 +8947,19 @@ const Admin = {
             };
 
             const publishAssembled = async () => {
-                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
                 try {
                     sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
                     sendBtn.disabled = true;
-                    const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
-                    if (res.ok) {
-                        existingAlertId = payload.id;
-                        Admin._alertRepostDraft = false;
-                        if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
-                        if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
-                    } else {
-                        if (typeof showToast === 'function') showToast("Failed. Check Session.", "error");
-                    }
+                    await Admin.publishNoticeToTarget(target, payload, secret);
+                    existingAlertId = null;
+                    Admin._alertRepostDraft = false;
+                    Admin.setSelectedAlertPosters([]);
+                    if (alertMsg) alertMsg.innerHTML = '';
+                    if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
+                    if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
+                    fetchCurrentAlert(target);
                 } catch (e) {
-                    if (typeof showToast === 'function') showToast("Error: " + e.message, "error");
+                    if (typeof showToast === 'function') showToast(e.message || "Failed. Check Session.", "error");
                 } finally {
                     sendBtn.textContent = "Preview Alert";
                     sendBtn.disabled = false;
@@ -8896,8 +8993,8 @@ const Admin = {
             if (!confirmed) return;
 
             try {
-                const archived = await Admin.archiveActiveNotice(target, secret);
-                if (!archived) {
+                const archivedCount = await Admin.archiveAllNoticesForTarget(target, secret);
+                if (!archivedCount) {
                     if (typeof showToast === 'function') showToast("No active alert to clear for this target.", "info");
                     return;
                 }
@@ -9074,9 +9171,10 @@ const Admin = {
             const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `Admin.openLightbox('${safe}')`;
         };
-        let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-            : '';
+        const posterUrls = Admin.collectAlertImageUrls(data);
+        let imgHtml = posterUrls.map((src) =>
+            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+        ).join('');
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
@@ -9178,9 +9276,10 @@ const Admin = {
             const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `Admin.openLightbox('${safe}')`;
         };
-        let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-            : '';
+        const posterUrls = Admin.collectAlertImageUrls(data);
+        let imgHtml = posterUrls.map((src) =>
+            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+        ).join('');
         let parsedMessage = data.message || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;

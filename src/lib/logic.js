@@ -1482,7 +1482,14 @@ export function updateTime() {
     try {
         let day, timeString;
         let dateToCheck = null; 
-        const simActive = $isSimMode.get();
+        const windowSim = typeof window !== 'undefined' && !!window.isSimMode;
+        const simActive = $isSimMode.get() || windowSim;
+        if (windowSim && !$isSimMode.get()) {
+            try { $isSimMode.set(true); } catch { /* ignore */ }
+        }
+        if (simActive && typeof window !== 'undefined' && window.simTimeStr && !$simTime.get()) {
+            try { $simTime.set(window.simTimeStr); } catch { /* ignore */ }
+        }
         
         if (simActive) {
             timeString = $simTime.get() || (typeof window !== 'undefined' ? window.simTimeStr : null) || '12:00:00';

@@ -814,7 +814,12 @@ export function initLiveBoardUi() {
         // Browsing a route must never re-pin it — the pin is an explicit user
         // action owned by #pin-route-btn (and the first-run welcome choice).
         $currentRouteId.set(id);
-        closeSmoothModal('route-modal');
+        // fromPopState: hide now and skip history.back(). A Back-stack pop
+        // during the open animation used to restore #route and reopen this modal.
+        if (typeof location !== 'undefined' && location.hash === '#route') {
+            try { history.replaceState({ view: 'home' }, '', '#home'); } catch { /* ignore */ }
+        }
+        closeSmoothModal('route-modal', true);
         // Deferred alert / holiday auto-open after new-user or region route pick.
         import('./ui.js').then((m) => m.nudgeHomeAutoNotices?.()).catch(() => {});
     });

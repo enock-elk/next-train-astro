@@ -22,7 +22,7 @@ import {
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
     simUsesSpecificDate
 } from './utils.js';
-import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
+import { showToast, hideOfflineToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
@@ -84,12 +84,11 @@ function bindStruggleVisibilityListener() {
     _struggleVisibilityBound = true;
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            try { hideOfflineToast(); } catch { /* ignore */ }
-            const oi = document.getElementById('offline-indicator');
-            if (oi && oi.dataset.struggleUi === '1') oi.style.display = 'none';
+            try { hideOfflineChrome(); } catch { /* ignore */ }
+            _pendingStruggleReason = null;
             return;
         }
-        if (_pendingStruggleReason) scheduleStruggleUiFlush();
+        scheduleOfflineChrome();
     });
 }
 
@@ -132,14 +131,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
         try { window.clearMaintenanceBanner(); } catch { /* ignore */ }
     }
 
-    const oi = document.getElementById('offline-indicator');
-    if (oi) {
-        oi.dataset.struggleUi = '1';
-        oi.style.display = 'flex';
-        oi.textContent = 'WORKING OFFLINE';
-    }
-
-    showOfflineToast(0, 'offline');
+    scheduleOfflineChrome();
 }
 
 /**

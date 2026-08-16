@@ -19,7 +19,7 @@ import { MANUAL_GRID_ORDER } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay
+    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg
 } from './utils.js';
 
 import { 
@@ -272,7 +272,7 @@ export const Renderer = {
     },
 
     renderRouteError: (element, error) => {
-        const html = `<div class="text-center p-3 bg-red-100 dark:bg-red-900 rounded-md border border-red-400 dark:border-red-700"><div class="text-xl mb-1">⚠️</div><p class="text-red-800 dark:text-red-200 text-sm font-medium">Connection failed. Please check internet.</p></div>`;
+        const html = `<div class="text-center p-3 bg-red-100 dark:bg-red-900 rounded-md border border-red-400 dark:border-red-700"><div class="mb-1 flex justify-center text-red-600 dark:text-red-300">${warningTriangleSvg('w-6 h-6')}</div><p class="text-red-800 dark:text-red-200 text-sm font-medium">Connection failed. Please check internet.</p></div>`;
         if (element) element.innerHTML = html;
     },
 
@@ -554,7 +554,7 @@ export const Renderer = {
 
              if (journey.isDivergent) {
                  const divDest = Renderer._applyUIIntercepts(journey.actualDestName);
-                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">⚠️ To ${divDest}</span>`;
+                 sharedTag = `<span class="inline-flex items-center justify-center text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">${warningTriangleSvg()} To ${divDest}</span>`;
              } else {
                  sharedTag = `<span class="block text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 mt-0.5 bg-purple-100 dark:bg-purple-900 px-1 rounded w-fit mx-auto">From ${routeName}</span>`;
              }

@@ -1277,6 +1277,57 @@ export function hideOfflineToast() {
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
 }
 
+/** Only paint offline chrome after the app is visible and still offline. */
+const OFFLINE_CHROME_HOLD_MS = 4000;
+let _offlineChromeTimer = null;
+let _offlineChromeBound = false;
+
+export function hideOfflineChrome() {
+    if (_offlineChromeTimer) {
+        clearTimeout(_offlineChromeTimer);
+        _offlineChromeTimer = null;
+    }
+    hideOfflineToast();
+    const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
+    if (oi) oi.style.display = 'none';
+}
+
+export function scheduleOfflineChrome() {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return;
+    if (document.visibilityState !== 'visible' || navigator.onLine) {
+        hideOfflineChrome();
+        return;
+    }
+    if (_offlineChromeTimer) return;
+    _offlineChromeTimer = setTimeout(() => {
+        _offlineChromeTimer = null;
+        if (document.visibilityState !== 'visible' || navigator.onLine) return;
+        const oi = document.getElementById('offline-indicator');
+        if (oi) {
+            oi.style.display = 'flex';
+            oi.textContent = 'WORKING OFFLINE';
+        }
+        if (!window._hasShownOfflineToast) {
+            window._hasShownOfflineToast = true;
+            showOfflineToast(0, 'offline');
+        }
+    }, OFFLINE_CHROME_HOLD_MS);
+}
+
+export function bindOfflineChrome() {
+    if (_offlineChromeBound || typeof window === 'undefined') return;
+    _offlineChromeBound = true;
+    window.addEventListener('offline', () => scheduleOfflineChrome());
+    window.addEventListener('online', () => {
+        window._hasShownOfflineToast = false;
+        hideOfflineChrome();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') hideOfflineChrome();
+        else scheduleOfflineChrome();
+    });
+}
+
 /**
  * Yellow hazard strip from Firebase config/maintenance.json.
  *
@@ -1778,6 +1829,8 @@ if (typeof window !== 'undefined') {
     window.showToast = showToast;
     window.showOfflineToast = showOfflineToast;
     window.hideOfflineToast = hideOfflineToast;
+    window.hideOfflineChrome = hideOfflineChrome;
+    window.scheduleOfflineChrome = scheduleOfflineChrome;
     window.openLightbox = openLightbox;
     window.closeLightbox = closeLightbox;
     window.lockBackgroundScroll = lockBackgroundScroll;
@@ -1815,19 +1868,13 @@ if (typeof window !== 'undefined') {
         m.bindDeeplinkHashChange();
     }).catch(() => {});
 
-    // Offline transition toast (once per offline episode; indicator stays via $isOffline)
+    bindOfflineChrome();
     window.addEventListener('online', () => {
         window._hasShownOfflineToast = false;
-        hideOfflineToast();
+        hideOfflineChrome();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.display = 'none';
-            oi.textContent = 'WORKING OFFLINE';
-        }
-        // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
         setTimeout(() => {
             try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
             OfflineTracker.flush();
@@ -1835,18 +1882,6 @@ if (typeof window !== 'undefined') {
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        if (typeof window.engageConnectionStruggleUi === 'function') {
-            window.engageConnectionStruggleUi('offline');
-        } else {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) {
-                oi.style.display = 'flex';
-                oi.textContent = 'WORKING OFFLINE';
-            }
-            if (!window._hasShownOfflineToast) {
-                window._hasShownOfflineToast = true;
-                showOfflineToast(0, 'offline');
-            }
-        }
+        scheduleOfflineChrome();
     });
 }

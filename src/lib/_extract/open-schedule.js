@@ -82,7 +82,7 @@ window.openScheduleModal = function(destination, dayOverride = null) {
 
              if (j.isDivergent) {
                  const divDest = typeof Renderer !== 'undefined' ? Renderer._applyUIIntercepts(j.actualDestName) : j.actualDestName;
-                 sharedTag = `<span class="text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">⚠️ To ${toTitleCase(divDest)}</span>`;
+                 sharedTag = `<span class="inline-flex items-center text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800"><svg class="inline-block w-3 h-3 mr-0.5 align-[-2px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> To ${toTitleCase(divDest)}</span>`;
              } else {
                  sharedTag = `<span class="text-[9px] font-bold text-purple-600 bg-purple-100 dark:text-purple-300 dark:bg-purple-900 px-1.5 py-0.5 rounded uppercase ml-2">From ${toTitleCase(routeName)}</span>`;
              }

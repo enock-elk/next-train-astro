@@ -7473,6 +7473,33 @@ const Admin = {
 
     getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 2) : []),
 
+    alertPosterCatalog: () => {
+        const fallback = [
+            { file: 'service-update.svg', label: 'Service update' },
+            { file: 'safety-notice.svg', label: 'Safety notice' },
+            { file: '2025-fare-adjustment.jpg', label: 'Fare adjustment' },
+            { file: 'be-rail-smart-pea.jpg', label: 'Be rail smart' },
+            { file: 'considerate_seating.jpg', label: 'Considerate seating' },
+            { file: 'have_ticket_reminder.jpg', label: 'Have your ticket' },
+            { file: 'monthly_tickets.jpg', label: 'Monthly tickets' },
+            { file: 'no_eating.jpg', label: 'No eating' },
+            { file: 'off_peak_discounts.jpg', label: 'Off-peak discounts' },
+            { file: 'priority-seating.jpg', label: 'Priority seating' },
+            { file: 'pta-kempton-0618-0619.jpg', label: 'Pretoria–Kempton 0618/0619' },
+            { file: 'smoke_free_stations.jpg', label: 'Smoke-free stations' },
+        ];
+        const fromManifest = Array.isArray(Admin._alertPosterManifest) ? Admin._alertPosterManifest : [];
+        const seen = new Set();
+        const out = [];
+        fromManifest.concat(fallback).forEach((item) => {
+            const file = String(item?.file || '').trim();
+            if (!file || seen.has(file)) return;
+            seen.add(file);
+            out.push({ file, label: item.label || file });
+        });
+        return out;
+    },
+
     setSelectedAlertPosters: (paths) => {
         const next = [];
         (paths || []).forEach((p) => {
@@ -7486,34 +7513,38 @@ const Admin = {
 
     renderAlertPosterPicker: () => {
         const selectedEl = document.getElementById('alert-poster-selected');
-        const grid = document.getElementById('alert-poster-grid');
+        const select = document.getElementById('alert-poster-select');
+        const preview = document.getElementById('alert-poster-preview');
         const selected = Admin.getSelectedAlertPosters();
+        const catalog = Admin.alertPosterCatalog();
+        const labelFor = (path) => {
+            const file = String(path || '').split('/').pop();
+            return catalog.find((item) => item.file === file)?.label || file;
+        };
         if (selectedEl) {
             selectedEl.innerHTML = selected.length
-                ? selected.map((p) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-[10px] font-bold text-blue-700 dark:text-blue-300">${p.split('/').pop()}<button type="button" data-remove-poster="${p}" class="text-blue-500">×</button></span>`).join('')
-                : '<span class="text-[10px] text-gray-400">No posters attached</span>';
+                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${labelFor(p)}<span aria-hidden="true">×</span></button>`).join('')
+                : '<span class="text-xs text-gray-400">No poster yet — pick one below</span>';
             selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
                 btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
             });
         }
-        if (grid && Array.isArray(Admin._alertPosterManifest)) {
-            grid.innerHTML = Admin._alertPosterManifest.map((item) => {
-                const path = `/images/alerts/${item.file}`;
-                const on = selected.includes(path);
-                return `<button type="button" data-pick-poster="${path}" class="text-left rounded-lg overflow-hidden border ${on ? 'border-blue-500 ring-2 ring-blue-400' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-900">
-                    <img src="${path}" alt="${item.label || item.file}" class="w-full h-16 object-cover">
-                    <span class="block px-1.5 py-1 text-[9px] font-bold text-gray-600 dark:text-gray-300 truncate">${item.label || item.file}</span>
-                </button>`;
-            }).join('');
-            grid.querySelectorAll('[data-pick-poster]').forEach((btn) => {
-                btn.onclick = () => {
-                    const path = btn.getAttribute('data-pick-poster');
-                    const cur = Admin.getSelectedAlertPosters();
-                    if (cur.includes(path)) Admin.setSelectedAlertPosters(cur.filter((p) => p !== path));
-                    else if (cur.length < 2) Admin.setSelectedAlertPosters(cur.concat(path));
-                    else if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
-                };
-            });
+        if (select) {
+            const options = ['<option value="">Add a poster…</option>']
+                .concat(catalog.map((item) => {
+                    const path = `/images/alerts/${item.file}`;
+                    const taken = selected.includes(path);
+                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${item.label}</option>`;
+                }));
+            select.innerHTML = options.join('');
+            select.value = '';
+            select.disabled = selected.length >= 2;
+        }
+        if (preview) {
+            const last = selected[selected.length - 1];
+            preview.innerHTML = last
+                ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
+                : '';
         }
     },
 
@@ -8091,14 +8122,13 @@ const Admin = {
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel posters (max 2, from /images/alerts/)</label>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel poster</label>
                     <p id="alert-live-count" class="text-[10px] text-gray-400 mb-2"></p>
                     <div id="alert-poster-selected" class="flex flex-wrap gap-2 mb-2"></div>
-                    <div id="alert-poster-grid" class="grid grid-cols-3 gap-2 mb-2"></div>
-                    <div class="flex gap-2">
-                        <input type="text" id="alert-poster-path" class="flex-1 h-9 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-[11px] outline-none" placeholder="/images/alerts/your-poster.png">
-                        <button type="button" id="alert-poster-add-path" class="h-9 px-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-200 focus:outline-none">Add path</button>
-                    </div>
+                    <select id="alert-poster-select" class="w-full min-h-[48px] px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="">Add a poster…</option>
+                    </select>
+                    <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
 
 
@@ -8897,13 +8927,10 @@ const Admin = {
         Admin.populateAlertTargets();
         Admin._alertPosterPaths = Admin._alertPosterPaths || [];
         Admin.loadAlertPosterManifest();
-        document.getElementById('alert-poster-add-path')?.addEventListener('click', () => {
-            const input = document.getElementById('alert-poster-path');
-            const path = Admin.sanitizeAlertPosterPath(input?.value || '');
-            if (!path) {
-                if (typeof showToast === 'function') showToast('Use a path like /images/alerts/name.png', 'error');
-                return;
-            }
+        document.getElementById('alert-poster-select')?.addEventListener('change', (e) => {
+            const path = Admin.sanitizeAlertPosterPath(e.target?.value || '');
+            e.target.value = '';
+            if (!path) return;
             const cur = Admin.getSelectedAlertPosters();
             if (cur.includes(path)) return;
             if (cur.length >= 2) {
@@ -8911,7 +8938,6 @@ const Admin = {
                 return;
             }
             Admin.setSelectedAlertPosters(cur.concat(path));
-            if (input) input.value = '';
         });
 
         const now = new Date();

@@ -504,11 +504,11 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
 
-      /* CleverAds containment — never cover welcome / go fullscreen.
-         Reserve bottom slot always so uncloak does not shift layout (CLS). */
+      /* CleverAds sits fixed from the bottom. Never reserve page space for it. */
       #clever-core {
         max-height: 100px !important;
-        min-height: 100px;
+        min-height: 0;
+        height: auto;
         overflow: hidden !important;
         transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
         pointer-events: none;
@@ -520,14 +520,12 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         transform: translateY(150%) !important;
         pointer-events: none !important;
         opacity: 0;
+        min-height: 0 !important;
+        height: 0 !important;
       }
-      /* Reserved space lives on the shell — avoid late padding toggle CLS */
-      body.nt-ads-ready .view-section,
-      .ad-active-padding {
-        padding-bottom: 108px !important;
-      }
-      .view-section {
-        transition: padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      #view-next-train.view-section.active {
+        display: flex;
+        flex-direction: column;
       }
     </style>
   </head>
@@ -554,7 +552,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     <!-- Client-Side Bootstrapper -->
     <script>
       // @ts-nocheck
-      import { hydrateStores, $isOffline } from '../store.js';
+      import { hydrateStores } from '../store.js';
       import { registerSW } from 'virtual:pwa-register';
       import { bindPwaInstallPrompt } from '../lib/ui.js';
       import { initCleverAds } from '../lib/clever-ads.js';
@@ -572,10 +570,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       hydrateStores();
 
       // 2. React to Offline State changes visually
-      $isOffline.subscribe((offline) => {
-        const indicator = document.getElementById('offline-indicator');
-        if (indicator) indicator.style.display = offline ? 'flex' : 'none';
-      });
+      // Offline chrome is owned by ui.js (visible + a few seconds without
+      // internet). Do not paint WORKING OFFLINE from the raw navigator event —
+      // Android fires `offline` when the screen locks.
 
       // 3. SW update lifecycle immediately (PROD) — do not wait on legacy cleanup.
       // Head also registers /sw.js statically for PWABuilder discovery; Workbox

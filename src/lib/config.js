@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.16.5";
+export const APP_VERSION = "V8_08.16.6";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -881,6 +881,16 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.16.6",
+        title: "Home space & offline",
+        date: "16 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Home:</b> The empty strip under Share and Feedback is gone. Ads no longer push the page down.",
+            "<b>Offline:</b> Working offline only appears if the app is open and there is no internet for a few seconds."
+        ]
+    },
     {
         id: "V8_08.16.5",
         title: "Kempton Park & region pick",

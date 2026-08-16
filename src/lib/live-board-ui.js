@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -547,7 +547,7 @@ export function openScheduleModal(destination, dayOverride = null) {
 
             if (j.isDivergent) {
                 const divDest = window.Renderer?._applyUIIntercepts(j.actualDestName) || j.actualDestName;
-                sharedTag = `<span class="text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">⚠️ To ${escapeHTML(toTitleCase(divDest))}</span>`;
+                sharedTag = `<span class="inline-flex items-center text-[9px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-1.5 py-0.5 rounded uppercase ml-2 border border-red-200 dark:border-red-800">${warningTriangleSvg()} To ${escapeHTML(toTitleCase(divDest))}</span>`;
             } else {
                 sharedTag = `<span class="text-[9px] font-bold text-purple-600 bg-purple-100 dark:text-purple-300 dark:bg-purple-900 px-1.5 py-0.5 rounded uppercase ml-2">From ${escapeHTML(toTitleCase(routeName))}</span>`;
             }

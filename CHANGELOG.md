@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.16.6 — No ad gap, delayed offline chrome, corridor SVGs (16 Aug 2026)
+
+- Ads overlay from the bottom and no longer reserve 108px under the home footer.
+- WORKING OFFLINE / “You are offline” only after the app is visible and still offline for 4s (screen-lock no longer flashes it).
+- Shared-corridor “To …” pills use the warning SVG on the home board and See Upcoming Trains.
+- Admin alert posters are a walking-friendly dropdown of `/images/alerts/` files (manifest + fallback list).
+
 ## V8_08.16.5 — Live 0619 ban, region picker, weekday sim (16 Aug 2026)
 
 - `DEFAULT_EXCLUSIONS` is empty. Kempton 0618/0619 no-service tags come only from Firebase `exclusions/`.

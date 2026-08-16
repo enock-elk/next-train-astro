@@ -1,14 +1,16 @@
 {
   "posters": [
-    {
-      "id": "service-update",
-      "file": "service-update.svg",
-      "label": "Service update"
-    },
-    {
-      "id": "safety-notice",
-      "file": "safety-notice.svg",
-      "label": "Safety notice"
-    }
+    { "id": "service-update", "file": "service-update.svg", "label": "Service update" },
+    { "id": "safety-notice", "file": "safety-notice.svg", "label": "Safety notice" },
+    { "id": "fare-adjustment", "file": "2025-fare-adjustment.jpg", "label": "Fare adjustment" },
+    { "id": "be-rail-smart", "file": "be-rail-smart-pea.jpg", "label": "Be rail smart" },
+    { "id": "considerate-seating", "file": "considerate_seating.jpg", "label": "Considerate seating" },
+    { "id": "have-ticket", "file": "have_ticket_reminder.jpg", "label": "Have your ticket" },
+    { "id": "monthly-tickets", "file": "monthly_tickets.jpg", "label": "Monthly tickets" },
+    { "id": "no-eating", "file": "no_eating.jpg", "label": "No eating" },
+    { "id": "off-peak", "file": "off_peak_discounts.jpg", "label": "Off-peak discounts" },
+    { "id": "priority-seating", "file": "priority-seating.jpg", "label": "Priority seating" },
+    { "id": "pta-kempton-0618", "file": "pta-kempton-0618-0619.jpg", "label": "Pretoria–Kempton 0618/0619" },
+    { "id": "smoke-free", "file": "smoke_free_stations.jpg", "label": "Smoke-free stations" }
   ]
 }

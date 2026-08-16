@@ -82,13 +82,13 @@ function shouldDeferForSessionStability() {
     return true;
 }
 
-function setAdPadding(on) {
+function setAdPadding(_on) {
+    // Ads overlay from the bottom. Never push the board or footer down.
     document.querySelectorAll('.view-section').forEach((el) => {
-        el.classList.toggle('ad-active-padding', !!on);
+        el.classList.remove('ad-active-padding');
     });
-    // Reserve the bottom slot before the creative paints (CLS).
     try {
-        document.body.classList.toggle('nt-ads-ready', !!on);
+        document.body.classList.remove('nt-ads-ready');
     } catch { /* ignore */ }
 }
 
@@ -192,7 +192,7 @@ function refreshAdVisibility(adContainer) {
     const filled = isAdFilled(adContainer);
     if (filled) {
         adContainer.style.pointerEvents = 'auto';
-        setAdPadding(true);
+        setAdPadding(false);
         if (!window._adTelemetryFired) {
             window._adTelemetryFired = true;
             if (typeof window.trackAnalyticsEvent === 'function') {
@@ -250,7 +250,7 @@ export function initCleverAds() {
                 if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled(adContainer) && isSafeZone()) {
                     window._adTelemetryFired = true;
                     uncloak(adContainer);
-                    setAdPadding(true);
+                    setAdPadding(false);
                     if (typeof window.trackAnalyticsEvent === 'function') {
                         window.trackAnalyticsEvent('view_clever_ad', { location: 'main_dashboard', verified: 'instant_tripwire' });
                     }
@@ -341,8 +341,7 @@ export function initCleverAds() {
         if (shouldDeferForSessionStability()) return;
         scheduleStarted = true;
         stabilizedAt = Date.now();
-        // Reserve bottom inset before the creative arrives — avoids layout jump (CLS).
-        setAdPadding(true);
+        setAdPadding(false);
         console.log('🛡️ Guardian: Ad inject schedule armed (1/4 now, 2/4 +30s, 3/4 +1m, 4/4 +2m).');
         armNextScheduleSlot();
     };

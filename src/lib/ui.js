@@ -90,6 +90,22 @@ function anyFixedModalOpen() {
     return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
 }
 
+/** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
+function hideFixedModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    const inner = modal.firstElementChild;
+    if (inner && inner.classList.contains('scale-100')) {
+        inner.classList.remove('scale-100');
+        inner.classList.add('scale-95');
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('opacity-0');
+    if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+        unlockBackgroundScroll();
+    }
+}
+
 export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
     if (window._adminDrillBackLock && modalId === 'dev-modal') return;
@@ -109,6 +125,9 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
         const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
         if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
+            // Hide first. history.back() is async; if popstate is ignored while
+            // _isModalAnimating, returning here used to leave Select Route up.
+            hideFixedModal(modalId);
             try {
                 history.back();
                 return;
@@ -281,7 +300,8 @@ export function bindHistoryBackNavigation() {
 
         if (window._isModalAnimating) {
             unlockBackgroundScroll();
-            try { history.pushState(null, '', location.href || '#home'); } catch { /* ignore */ }
+            // Do not pushState the current href back — that restored #route
+            // after a route pick and dumped the commuter onto Select Route again.
             return;
         }
 

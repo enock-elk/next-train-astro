@@ -8,13 +8,14 @@ import {
     $isSimMode, $simTime
 } from '../store.js';
 import {
-    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, FARE_CONFIG, DEFAULT_EXCLUSIONS, REFRESH_CONFIG, DYNAMIC_BASE_URL,
+    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, FARE_CONFIG, REFRESH_CONFIG, DYNAMIC_BASE_URL,
     MAX_RADIUS_KM
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
-    usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay
+    usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
+    simUsesSpecificDate
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -81,8 +82,9 @@ export function routeHasSaturdayService(schedules = getSchedules()) {
 export function getLookaheadDayInfo(daysAhead = 1) {
     let baseDate = new Date();
     
-    // Respect Developer Sim Mode Base Date
-    if ($isSimMode.get()) {
+    // Respect Developer Sim Mode only when the admin pinned a specific date.
+    // Weekday/Sat/Sun sim must not inherit a leftover #sim-date (often "today").
+    if ($isSimMode.get() && simUsesSpecificDate()) {
         const dateInput = document.getElementById('sim-date');
         if (dateInput && dateInput.value) {
             const parts = dateInput.value.split('-');
@@ -264,10 +266,11 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
 export function isTrainExcluded(trainNumber, routeId, dayIdx) {
     if (!trainNumber) return false;
-    
-    const rules = (getGlobalExclusions() && getGlobalExclusions()[routeId]) 
-                  ? getGlobalExclusions()[routeId] 
-                  : (typeof DEFAULT_EXCLUSIONS !== 'undefined' ? DEFAULT_EXCLUSIONS[routeId] : null);
+
+    // Source of truth is `$globalExclusions` (Firebase tree, or DEFAULT only
+    // when the exclusions fetch failed). Never silently fall back to hardcoded
+    // corridor bans — those never appear in Global State Monitor.
+    const rules = getGlobalExclusions()?.[routeId] || null;
     
     if (rules && rules[trainNumber]) {
         const rule = rules[trainNumber];

@@ -2,7 +2,7 @@
 
 // 0. Version Control
 /** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.23";
+export const APP_VERSION = "V8_08.24";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -870,19 +870,27 @@ export const FARE_CONFIG = {
 };
 
 // 6. GHOST TRAIN PROTOCOL (Default Exclusions)
-// Fallback rules if Firebase is unreachable.
+// Offline-only fallback if the Firebase exclusions tree cannot be fetched.
+// Live bans belong in RTDB `exclusions/{routeId}/{trainId}` so Global State
+// Monitor can see, expire, and resolve them. Do not hardcode corridor bans
+// here — they stay invisible to admin and outlive any expiry the admin set.
 // Day Index: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-export const DEFAULT_EXCLUSIONS = {
-    'pta-kempton': {
-        // Runs Tue, Wed, Thu only. Exclude Mon (1) and Fri (5).
-        "0618": { days: [1, 5], reason: "Runs Tue-Thu Only" },
-        "0619": { days: [1, 5], reason: "Runs Tue-Thu Only" }
-    }
-};
+export const DEFAULT_EXCLUSIONS = {};
 
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.24",
+        title: "Bans, region pick, weekday sim",
+        date: "16 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Train bans</b> come only from live Firebase. Expired or deleted admin bans (like Kempton Park 0619) no longer linger from a hidden app default, and Global State Monitor matches the timetable.",
+            "<b>Region change</b> lets you pick a route once. The Select Route modal no longer reopens after you choose.",
+            "<b>Time simulation</b> Weekday (Mon) now runs the weekday timetable, even when today is Sunday."
+        ]
+    },
     {
         id: "V8_08.23",
         title: "Parked trains, nearby labels, stable chat",

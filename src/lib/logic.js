@@ -19,7 +19,8 @@ import {
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
-    getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay
+    getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
+    simUsesSpecificDate
 } from './utils.js';
 import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
@@ -985,6 +986,11 @@ export async function loadAllSchedules(force = false) {
             }
         } catch (e) {
             console.warn('Exclusions fetch failed, using defaults.');
+            try {
+                if (!Object.keys($globalExclusions.get() || {}).length && DEFAULT_EXCLUSIONS) {
+                    $globalExclusions.set({ ...DEFAULT_EXCLUSIONS });
+                }
+            } catch { /* ignore */ }
         }
 
         try {
@@ -1306,9 +1312,13 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
         nextRouteId = savedDefault;
     }
 
+    const swapGen = regionSwapGeneration;
     const openRoutePickerAfterSwap = () => {
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
         setTimeout(() => {
+            if (swapGen !== regionSwapGeneration) return;
+            // Pinned restore or the commuter already picked — stay on the board.
+            if ($currentRouteId.get()) return;
             if (window.Renderer?.renderRouteMenu) {
                 window.Renderer.renderRouteMenu(
                     'route-list',
@@ -1375,7 +1385,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             }
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';
-            openRoutePickerAfterSwap();
+            // Route already restored from the pin — do not bounce back to Select Route.
         }).catch(() => {
             hideRegionSwapLoader();
             // Still unlock the board with correct region headers if download fails.
@@ -1384,7 +1394,6 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             }
             const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
             if (mainContent) mainContent.style.display = '';
-            openRoutePickerAfterSwap();
         });
     } else {
         hideRegionSwapLoader();
@@ -1450,6 +1459,7 @@ export async function handleRegionChange(newRegion, selectElement = null) {
     const confirmAction = () => {
         safeStorage.setItem('userRegion', newRegion);
         closeSmoothModal('region-confirm-modal');
+        closeSmoothModal('route-modal');
         if (typeof location !== 'undefined' && location.hash === '#regionconfirm') {
             try { history.replaceState({ view: 'home' }, '', '#home'); } catch (e) {}
         }
@@ -1476,13 +1486,17 @@ export function updateTime() {
         
         if (simActive) {
             timeString = $simTime.get() || (typeof window !== 'undefined' ? window.simTimeStr : null) || '12:00:00';
-            // Prefer explicit sim date (SPECIAL_DATES), else admin day index
-            const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
-            if (dateInput instanceof HTMLInputElement && dateInput.value) {
-                const parts = dateInput.value.split('-').map(Number);
-                if (parts.length === 3) {
-                    dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
-                    day = dateToCheck.getDay();
+            // Only honour #sim-date when the admin chose "Specific Date".
+            // initAutoSim pre-fills today; switching Day Type to Weekday used to
+            // leave that Sunday/Saturday value in the hidden input and win here.
+            if (simUsesSpecificDate()) {
+                const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
+                if (dateInput instanceof HTMLInputElement && dateInput.value) {
+                    const parts = dateInput.value.split('-').map(Number);
+                    if (parts.length === 3) {
+                        dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
+                        day = dateToCheck.getDay();
+                    }
                 }
             }
             if (day === undefined || day === null) {

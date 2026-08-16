@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.24 — Bans, region pick, weekday sim (16 Aug 2026)
+
+- Live timetable bans come only from Firebase `exclusions`. The hardcoded Kempton Park 0618/0619 “Tue–Thu only” fallback is gone, so an expired admin limit no longer keeps painting NO SVC. Global State Monitor lists the same tree (plus any remaining app-default fallbacks).
+- After a region change, Select Route opens only when no route is active. Picking a route no longer reopens the modal.
+- Admin Time Simulation “Weekday (Mon)” no longer inherits today’s leftover date from the hidden Specific Date field, so Sunday no longer overrides the weekday timetable.
+
 ## V8_08.23 — Parked trains, nearby labels, stable chat (14 Aug 2026)
 
 - I’m on it asks whether the train is moving. Parked: share location, poll GPS every 15s until heading-consistent movement, then attach. Closing the app aborts GPS; on resume a modal offers Continue or Close.

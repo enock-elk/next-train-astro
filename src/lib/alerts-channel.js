@@ -26,6 +26,7 @@ import {
     sanitizeInlineAlertImageUrl,
     collectNoticeImageUrls,
     layoutAlertPost,
+    shouldIgnoreAlertLongPress,
     buildNoticesMeta,
     listNoticesInTarget,
 } from './alerts-feed.js';
@@ -144,11 +145,11 @@ function severityChrome(severity) {
 function renderPosterHtml(urls) {
     if (!urls.length) return '';
     const cells = urls.map((path) => {
-        const src = escapeHTML(resolveAlertImageSrc(path));
-        if (!src) return '';
-        const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<button type="button" data-alert-lightbox="${escapeHTML(src)}" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
-            <img src="${src}" alt="Service poster" class="w-full h-auto max-h-72 object-cover bg-gray-100 dark:bg-gray-900">
+        const href = resolveAlertImageSrc(path);
+        if (!href) return '';
+        const src = escapeHTML(href);
+        return `<button type="button" data-alert-lightbox="${src}" class="relative block w-full focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+            <img src="${src}" alt="Service poster" draggable="false" class="w-full h-auto max-h-72 object-cover bg-gray-100 dark:bg-gray-900 pointer-events-none">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
@@ -590,12 +591,7 @@ function bindAlertsChannelOnce() {
         pressCard?.classList.remove('is-pressing');
         pressCard = null;
     };
-    const ignoreLongPressTarget = (target) => {
-        if (!target?.closest) return true;
-        return !!(
-            target.closest('a, button, input, textarea, select, [data-alert-lightbox], [data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote')
-        );
-    };
+    const ignoreLongPressTarget = (target) => shouldIgnoreAlertLongPress(target);
     const startLongPress = (card) => {
         longFired = false;
         pressCard = card;
@@ -645,10 +641,25 @@ function bindAlertsChannelOnce() {
     });
 
     root.addEventListener('click', (e) => {
+        if (!longFired) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        longFired = false;
+    }, true);
+
+    root.addEventListener('click', (e) => {
         if (longFired) {
             e.preventDefault();
             e.stopPropagation();
             longFired = false;
+            return;
+        }
+        const lightbox = e.target.closest?.('[data-alert-lightbox]');
+        if (lightbox) {
+            e.preventDefault();
+            const src = lightbox.getAttribute('data-alert-lightbox');
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
             return;
         }
         const jump = e.target.closest?.('[data-alert-jump]');

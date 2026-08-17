@@ -214,6 +214,21 @@ export function collectNoticeImageUrls(notice) {
     return out;
 }
 
+/**
+ * Hold-to-react should work on catalog posters and hoisted photos.
+ * Reply / poll / count chips / real links stay excluded.
+ */
+export function shouldIgnoreAlertLongPress(target) {
+    if (!target || typeof target.closest !== 'function') return true;
+    if (target.closest('[data-alert-lightbox]')) return false;
+    if (target.closest('[data-alert-media]')) return false;
+    if (target.closest('button[onclick*="openLightbox"]')) return false;
+    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote')) return true;
+    if (target.closest('a, input, textarea, select')) return true;
+    if (target.closest('button')) return true;
+    return false;
+}
+
 function stripHtmlToText(html) {
     return String(html || '')
         .replace(/<[^>]+>/g, ' ')

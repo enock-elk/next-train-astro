@@ -46,8 +46,10 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
     <meta name="app-version" content={APP_VERSION} />
-    <link rel="icon" href={withBase('favicon.ico')} sizes="any" />
+    <!-- SERP uses the first square PNG; sizes=any is for SVG, not this ICO. -->
+    <link rel="icon" type="image/png" sizes="48x48" href={withBase('icons/icon-48.png')} />
     <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
+    <link rel="icon" href={withBase('favicon.ico')} sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
     
     <meta property="og:type" content="website" />

@@ -218,7 +218,7 @@ function run() {
  * Date: ${today}
  */
 
-const MANUAL_GRID_ORDER = ${JSON.stringify(masterExtractedData, null, 4)};
+export const MANUAL_GRID_ORDER = ${JSON.stringify(masterExtractedData, null, 4)};
 `;
 
     // --- SMART PATH DETECTION ---

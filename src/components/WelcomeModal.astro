@@ -43,7 +43,7 @@ import { withBase } from '../lib/config.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
     import { safeStorage, formatRouteLabelHtml } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
-    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
+    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
 
     prepareDeeplinkIntents();
 
@@ -177,12 +177,7 @@ import { withBase } from '../lib/config.js';
         const params = new URLSearchParams(window.location.search);
         // SPA parity: bare ?route=, short ?rt=, legacy action=route / action=planner / plan= / action=map
         // Plus Web Share Target (?title=&text=&url=) and bare ?action=planner shortcut.
-        const hasRouteDeepLink = !!params.get('rt') || !!params.get('route');
-        const hasPlannerDeepLink = (params.get('action') === 'planner' && params.get('from') && params.get('to')) || !!params.get('plan');
-        const hasPlannerShortcut = params.get('action') === 'planner' && !params.get('from') && !params.get('to') && !params.get('plan');
-        const hasMapDeepLink = String(params.get('action') || '').toLowerCase() === 'map';
-        const hasShareTarget = !!(params.get('title') || params.get('text') || params.get('url'));
-        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget;
+        const hasInboundShare = hasInboundShareIntent(params);
         // Soft SEO hint for first-time only — never override a returning user's region
         const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
         if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
@@ -236,6 +231,12 @@ import { withBase } from '../lib/config.js';
                 });
             });
         }
+
+        // Late PWA launchQueue / Facebook IAB hop — hide Welcome so the share can paint.
+        window.addEventListener('nt-launch-url', () => {
+            if (!hasInboundShareIntent()) return;
+            modal.classList.add('hidden');
+        });
     };
 
     initWelcomeScreen();

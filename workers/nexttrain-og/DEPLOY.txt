@@ -16,7 +16,10 @@ Then check:
    → PNG is 3000×1575 for sharper WhatsApp rich previews (keep under ~600KB)
 
    https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
-   → HTML with og:title like "Pretoria → Pienaarspoort · Weekday"
+   → facebookexternalhit / WhatsApp crawlers: HTML with og:title like
+     "Pretoria → Pienaarspoort · Weekday"
+   → humans (Facebook IAB / Chrome): HTTP 302 to /?rt=pta-pien&v=g&d=wd
+     (JS location.replace in IAB was opening the PWA without query params)
    → og:image URL includes &v=wa6 (cache bust)
    → og:image:width/height = 3000 / 1575
    → twitter:card = summary_large_image

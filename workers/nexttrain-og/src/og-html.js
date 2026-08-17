@@ -149,9 +149,14 @@ export function renderOgHtml({
 <script>
 (function () {
   var bots = /facebookexternalhit|Facebot|FacebookBot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot/i;
-  if (!bots.test(navigator.userAgent || '')) {
-    location.replace(${JSON.stringify(openUrl)});
-  }
+  if (bots.test(navigator.userAgent || '')) return;
+  var url = ${JSON.stringify(openUrl)};
+  try { location.replace(url); } catch (e) {}
+  setTimeout(function () {
+    try {
+      if (location.href.indexOf('rt=') < 0 && location.href.indexOf('plan=') < 0) location.href = url;
+    } catch (e) {}
+  }, 300);
 })();
 </script>
 </body>

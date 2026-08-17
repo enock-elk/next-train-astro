@@ -41,6 +41,9 @@ jobs:
       - name: Verify URL parity with the live SPA
         run: npm run verify:urls
 
+      - name: Verify GitHub schedule fallback
+        run: npm run verify:schedule
+
       - name: Summarise the built URL surface
         run: |
           {

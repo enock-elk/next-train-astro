@@ -1,0 +1,2 @@
+GitHub fallback dump for PIPELINE_SOURCES.GITHUB.
+Replace full-database.json and push main. Live boards still prefer Firebase.

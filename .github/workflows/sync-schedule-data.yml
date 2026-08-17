@@ -1,0 +1,106 @@
+# Push schedule dumps from this repo (public/data/*.json) onto the live
+# Pages host (metrorail-app/data/) without a full site deploy.
+#
+# Live boards still prefer Firebase → Cloudflare. This only refreshes the
+# GitHub / nexttrain.co.za/data/ fallback snapshot.
+#
+# Requires the same METRORAIL_APP_DEPLOY_TOKEN as deploy-production.yml.
+name: Sync schedule data → metrorail-app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/data/**'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-schedule-data-metrorail-app
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TARGET_REPO: enock-elk/metrorail-app
+  TARGET_BRANCH: main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Astro source
+        uses: actions/checkout@v4
+
+      - name: Require dump + deploy token
+        env:
+          TOKEN: ${{ secrets.METRORAIL_APP_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -f public/data/full-database.json ]; then
+            echo "::error::public/data/full-database.json is missing"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("public/data/full-database.json").read_text())
+          need = ["gauteng", "westerncape", "kzn", "easterncape"]
+          missing = [k for k in need if not isinstance(data.get(k), dict)]
+          if missing:
+              raise SystemExit(f"dump missing region objects: {missing}")
+          print("dump ok")
+          PY
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Missing secret METRORAIL_APP_DEPLOY_TOKEN"
+            exit 1
+          fi
+
+      - name: Checkout live host (metrorail-app)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TARGET_REPO }}
+          ref: ${{ env.TARGET_BRANCH }}
+          token: ${{ secrets.METRORAIL_APP_DEPLOY_TOKEN }}
+          path: site
+          persist-credentials: true
+
+      - name: Overlay JSON dumps
+        run: |
+          set -euo pipefail
+          test -d site/data
+          BEFORE=$(find site/data -type f | wc -l)
+          find public/data -maxdepth 1 -type f -name '*.json' -exec cp -a {} site/data/ \;
+          AFTER=$(find site/data -type f | wc -l)
+          if [ "$AFTER" -lt "$BEFORE" ]; then
+            echo "::error::data/ lost files ($BEFORE → $AFTER)"
+            exit 1
+          fi
+          test -f site/data/full-database.json
+          echo "data/ files: $BEFORE → $AFTER"
+
+      - name: Commit and push
+        working-directory: site
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.json
+          if git diff --staged --quiet; then
+            echo "Schedule dump already matches live data/."
+            exit 0
+          fi
+          if git diff --staged --name-only | grep -vE '^data/[^/]+\.json$' >/dev/null; then
+            echo "::error::Refusing to push non-JSON or nested data/ paths"
+            git diff --staged --name-only
+            exit 1
+          fi
+          SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)
+          git commit -m "$(cat <<EOF
+          data: schedule dump from next-train-astro@${SHORT_SHA}
+
+          Overlaid public/data/*.json only. App shell left untouched.
+          EOF
+          )"
+          git push origin "HEAD:${{ env.TARGET_BRANCH }}"
+          echo "Pushed schedule dump to ${{ env.TARGET_REPO }}@${{ env.TARGET_BRANCH }}"

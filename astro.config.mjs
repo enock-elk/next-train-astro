@@ -94,6 +94,12 @@ export default defineConfig({
         // in the background. help.html is the offline lifeboat only.
         runtimeCaching: [
           {
+            // Worker owns /og/share (OG HTML for crawlers, 302 for humans).
+            // Never cache the stub in the PWA or Facebook IAB gets a dead hop.
+            urlPattern: ({ url }) => url.pathname === '/og/share' || url.pathname.endsWith('/og/share'),
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: 'StaleWhileRevalidate',
             options: {

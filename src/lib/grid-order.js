@@ -6,7 +6,7 @@
  * Date: 2026-08-17
  */
 
-const MANUAL_GRID_ORDER = {
+export const MANUAL_GRID_ORDER = {
     "berln-to-eastl_weekday": [
         "0001",
         "0003",

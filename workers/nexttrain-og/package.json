@@ -6,9 +6,9 @@
   "description": "WhatsApp / social OG interception + timetable preview images for nexttrain.co.za",
   "scripts": {
     "gen-catalog": "node ./scripts/gen-catalog.mjs",
-    "dev": "npm run gen-catalog && wrangler dev",
-    "deploy": "npm run gen-catalog && wrangler deploy",
-    "dry-run": "npm run gen-catalog && wrangler deploy --dry-run"
+    "dev": "npm run gen-catalog && npx wrangler dev",
+    "deploy": "npm run gen-catalog && npx wrangler deploy",
+    "dry-run": "npm run gen-catalog && npx wrangler deploy --dry-run"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2"

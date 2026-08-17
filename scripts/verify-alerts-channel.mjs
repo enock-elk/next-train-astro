@@ -15,6 +15,7 @@ import {
     hoistAlertImagesFromHtml,
     layoutAlertPost,
     sanitizeInlineAlertImageUrl,
+    shouldIgnoreAlertLongPress,
     shouldForceOpen,
     pickAutoOpenNotice,
     seenStorageKey,
@@ -129,6 +130,21 @@ const now = 1_700_000_000_000;
     const breakdown = buildAlertReactionBreakdown({ reactions: { like: 2, pray: 1, laugh: 5 } });
     assert(breakdown.total === 8, `breakdown total ${breakdown.total}`);
     assert(breakdown.rows[0].key === 'laugh' && breakdown.rows[0].count === 5, 'breakdown sorts by count');
+}
+
+{
+    const fake = (hits) => ({
+        closest: (sel) => sel.split(',').map((s) => s.trim()).some((p) => hits.includes(p)) ? {} : null,
+    });
+    assert(!shouldIgnoreAlertLongPress(fake(['[data-alert-lightbox]', 'button'])), 'catalog poster is hold-to-react');
+    assert(!shouldIgnoreAlertLongPress(fake(['[data-alert-media]'])), 'poster grid is hold-to-react');
+    assert(!shouldIgnoreAlertLongPress(fake(['button[onclick*="openLightbox"]', 'button'])), 'inline lightbox photo is hold-to-react');
+    assert(!shouldIgnoreAlertLongPress(fake(['[data-alert-title]'])), 'title text is hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-alert-reply]', 'button'])), 'reply button is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-alert-summary]', 'button'])), 'count chip is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['.nt-poll-vote', 'button'])), 'poll vote is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['a'])), 'links are not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(null), 'missing target ignored');
 }
 
 {

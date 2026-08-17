@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.17.1 — Hold-to-react on photo notices (17 Aug 2026)
+
+- Holding a catalog / GitHub poster on an Alerts card opens the reaction picker (tap still zooms). Photo buttons were previously treated as non-reactable, so image-only posts could not be reacted to.
+
 ## V8_08.16.5 — Unified What’s New; grid station column; save toast (16 Aug 2026)
 
 - In-app What’s New is one short **V8_08.16.5** card (alerts, Kempton Park, region). Older 16.x / 15.1 commuter cards were folded in.

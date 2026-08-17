@@ -2,11 +2,11 @@
  * METRORAIL NEXT TRAIN - GRID ORDER CONFIG
  * ---------------------------------------------------
  * This file defines the explicit column order for the Full Schedule Grid.
- * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-28 July.xlsx, NextTrain KZN-Schedules - 12 May.xlsx, NextTrain WC-Schedules - 03 July.xlsx
- * Date: 2026-07-27
+ * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-16 Aug.xlsx, NextTrain KZN-Schedules - 12 May.xlsx, NextTrain WC-Schedules - 03 July.xlsx
+ * Date: 2026-08-17
  */
 
-export const MANUAL_GRID_ORDER = {
+const MANUAL_GRID_ORDER = {
     "berln-to-eastl_weekday": [
         "0001",
         "0003",
@@ -435,16 +435,12 @@ export const MANUAL_GRID_ORDER = {
         "0507",
         "0509",
         "0511",
+        "0513",
         "0515",
         "0517",
         "0519",
         "0521",
-        "0523",
-        "0527",
-        "0529",
-        "0531",
-        "0533",
-        "0535"
+        "0523"
     ],
     "lerl_to_germ_weekday": [
         "0500",
@@ -455,36 +451,32 @@ export const MANUAL_GRID_ORDER = {
         "0510",
         "0512",
         "0514",
+        "0516",
         "0518",
-        "0520",
-        "0522",
-        "0524",
-        "0526",
-        "0528",
-        "0532",
-        "0534",
-        "0536"
+        "0520"
     ],
     "germ_to_lerl_sat": [
+        "0501",
+        "0503",
         "0505",
         "0507",
         "0509",
         "0511",
-        "0517",
-        "0519",
-        "0521",
-        "0523"
+        "0513",
+        "0515",
+        "0517"
     ],
     "lerl_to_germ_sat": [
+        "0500",
         "0502",
         "0504",
         "0506",
         "0508",
+        "0510",
         "0512",
         "0514",
-        "0518",
-        "0522",
-        "0524"
+        "0516",
+        "0518"
     ],
     "germ_to_kwesi_weekday": [
         "7601",
@@ -690,29 +682,27 @@ export const MANUAL_GRID_ORDER = {
     ],
     "pta_to_kemp_weekday": [
         "0624",
-        "0606",
         "0604",
         "0626",
         "0628",
         "0616",
         "0630",
         "0632",
-        "0634",
         "0618",
+        "0634",
         "0636",
         "0638",
-        "0640",
         "0620",
+        "0640",
         "0642",
-        "0644",
         "0622",
+        "0644",
         "0646",
-        "0654"
+        "0648"
     ],
     "kemp_to_pta_weekday": [
         "0603",
         "0625",
-        "0607",
         "0627",
         "0615",
         "0629",
@@ -745,44 +735,30 @@ export const MANUAL_GRID_ORDER = {
     ],
     "pta_to_irene_weekday": [
         "0624",
-        "0606",
-        "0604",
         "0626",
         "0628",
-        "0616",
         "0630",
         "0632",
         "0634",
-        "0618",
         "0636",
         "0638",
         "0640",
-        "0620",
         "0642",
         "0644",
-        "0622",
-        "0646",
-        "0654"
+        "0646"
     ],
     "irene_to_pta_weekday": [
-        "0603",
         "0625",
-        "0607",
         "0627",
-        "0615",
         "0629",
         "0631",
-        "0617",
         "0633",
         "0635",
-        "0619",
         "0637",
         "0639",
         "0641",
-        "0621",
         "0643",
         "0645",
-        "0623",
         "0647"
     ],
     "pta_to_irene_sat": [

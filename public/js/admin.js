@@ -7384,20 +7384,31 @@ const Admin = {
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
         const fileLabelId = opts.fileLabelId ? String(opts.fileLabelId).replace(/[^a-z0-9_-]/gi, '') : '';
         const btn = (tag, title, inner, extraClass = '') =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none shrink-0 ${extraClass}" title="${title}">${inner}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none ${extraClass}" title="${title}">${inner}</button>`;
         const iconBtn = (tag, title, svg) =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none shrink-0" title="${title}">${svg}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="ml-auto px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer shrink-0 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
         const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
         const alignR = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg>';
-        const fontSelect = `<select data-nt-font-select onfocus="Admin.saveCursorRange()" onmousedown="Admin.saveCursorRange()" onchange="Admin.saveCursorRange(); Admin.formatAlertText(this.value, '${id}')" class="h-7 max-w-[7.5rem] px-1.5 text-[11px] font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none shrink-0" title="Font"><option value="fontDefault">Font</option><option value="fontVerdana">Verdana</option><option value="fontTimes">Times</option></select>`;
+        const fontSelect = `<div class="relative shrink-0" data-nt-font-select>
+                            <button type="button" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.toggleWysiwygFontMenu(this)" class="h-7 min-w-[4.75rem] px-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded flex items-center justify-between gap-1 focus:outline-none" title="Font">
+                                <span data-nt-font-label>Font</span>
+                                <svg class="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <ul class="hidden absolute left-0 z-[210] mt-1 min-w-[8.5rem] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden text-left">
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontDefault" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700">Default</li>
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontVerdana" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700" style="font-family:Verdana,Geneva,sans-serif">Verdana</li>
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontTimes" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer" style="font-family:'Times New Roman',Times,serif">Times</li>
+                            </ul>
+                        </div>`;
         return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
-                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5">
+                        <div class="flex items-center w-full p-0.5 gap-1">
+                            <div class="flex flex-1 items-center justify-evenly min-w-0">
                             ${btn('bold', 'Bold', 'B')}
                             ${btn('italic', 'Italic', 'I', 'italic')}
                             ${btn('underline', 'Underline', 'U', 'underline')}
@@ -7407,16 +7418,40 @@ const Admin = {
                             ${iconBtn('justifyRight', 'Align Right', alignR)}
                             ${sep}
                             ${btn('ul', 'Bullet list', '• List', 'whitespace-nowrap')}
+                            </div>
                             ${media}
                         </div>
-                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5 border-t border-gray-300 dark:border-gray-600">
+                        <div class="flex items-center w-full p-0.5 gap-1 border-t border-gray-300 dark:border-gray-600">
+                            <div class="flex flex-1 items-center justify-evenly min-w-0">
                             ${btn('title', 'Title heading', 'Title', 'whitespace-nowrap')}
                             ${fontSelect}
                             ${btn('smaller', 'Decrease Size', 'A-')}
                             ${btn('larger', 'Increase Size', 'A+')}
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="ml-auto px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none shrink-0" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            </div>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
+    },
+
+    toggleWysiwygFontMenu: (btn) => {
+        Admin.saveCursorRange();
+        const wrap = btn?.closest?.('[data-nt-font-select]');
+        const list = wrap?.querySelector('ul');
+        if (!list) return;
+        document.querySelectorAll('[data-nt-font-select] ul').forEach((ul) => {
+            if (ul !== list) ul.classList.add('hidden');
+        });
+        list.classList.toggle('hidden');
+    },
+
+    pickWysiwygFont: (li, editorId) => {
+        Admin.saveCursorRange();
+        const tag = li?.getAttribute?.('data-font') || 'fontDefault';
+        Admin.formatAlertText(tag, editorId);
+        const wrap = li?.closest?.('[data-nt-font-select]');
+        const label = wrap?.querySelector('[data-nt-font-label]');
+        if (label) label.textContent = (li.textContent || 'Font').trim();
+        wrap?.querySelector('ul')?.classList.add('hidden');
     },
 
 // RICH TEXT FORMATTING HELPER ---
@@ -7837,31 +7872,60 @@ const Admin = {
     renderAlertPosterPicker: () => {
         const selectedEl = document.getElementById('alert-poster-selected');
         const select = document.getElementById('alert-poster-select');
+        const list = document.getElementById('alert-poster-list');
+        const display = document.getElementById('alert-poster-display');
+        const trigger = document.getElementById('alert-poster-toggle');
         const preview = document.getElementById('alert-poster-preview');
         const selected = Admin.getSelectedAlertPosters();
         const catalog = Admin.alertPosterCatalog();
+        const esc = (typeof escapeHTML === 'function')
+            ? escapeHTML
+            : (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const labelFor = (path) => {
             const file = String(path || '').split('/').pop();
             return catalog.find((item) => item.file === file)?.label || file;
         };
         if (selectedEl) {
             selectedEl.innerHTML = selected.length
-                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${labelFor(p)}<span aria-hidden="true">×</span></button>`).join('')
+                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${esc(labelFor(p))}<span aria-hidden="true">×</span></button>`).join('')
                 : '<span class="text-xs text-gray-400">No poster yet — pick one below</span>';
             selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
                 btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
             });
+        }
+        const atLimit = selected.length >= 2;
+        if (display) display.textContent = atLimit ? 'Poster limit reached' : 'Add a poster…';
+        if (trigger) {
+            trigger.classList.toggle('opacity-50', atLimit);
+            trigger.classList.toggle('pointer-events-none', atLimit);
         }
         if (select) {
             const options = ['<option value="">Add a poster…</option>']
                 .concat(catalog.map((item) => {
                     const path = `/images/alerts/${item.file}`;
                     const taken = selected.includes(path);
-                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${item.label}</option>`;
+                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${esc(item.label)}</option>`;
                 }));
             select.innerHTML = options.join('');
             select.value = '';
-            select.disabled = selected.length >= 2;
+            select.disabled = atLimit;
+        }
+        if (list) {
+            list.innerHTML = catalog.map((item) => {
+                const path = `/images/alerts/${item.file}`;
+                const taken = selected.includes(path);
+                const cls = taken
+                    ? 'px-3 py-2.5 text-xs font-bold text-gray-400 dark:text-gray-500 opacity-50 pointer-events-none border-b border-gray-100 dark:border-gray-700'
+                    : 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer w-full text-left';
+                return `<li data-poster="${esc(path)}" class="${cls}">${esc(item.label)}</li>`;
+            }).join('');
+            list.querySelectorAll('li[data-poster]').forEach((li) => {
+                li.onclick = () => {
+                    list.classList.add('hidden');
+                    document.getElementById('alert-poster-chevron')?.classList.remove('rotate-180');
+                    Admin.addAlertPoster(li.getAttribute('data-poster') || '');
+                };
+            });
         }
         if (preview) {
             const last = selected[selected.length - 1];
@@ -7869,6 +7933,18 @@ const Admin = {
                 ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
                 : '';
         }
+    },
+
+    addAlertPoster: (rawPath) => {
+        const path = Admin.sanitizeAlertPosterPath(rawPath);
+        if (!path) return;
+        const cur = Admin.getSelectedAlertPosters();
+        if (cur.includes(path)) return;
+        if (cur.length >= 2) {
+            if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+            return;
+        }
+        Admin.setSelectedAlertPosters(cur.concat(path));
     },
 
     loadAlertPosterManifest: async () => {
@@ -8361,6 +8437,10 @@ const Admin = {
                 };
                 checkClose('alert-target-container', 'alert-target-panel', 'alert-target-chevron');
                 checkClose('alert-severity-container', 'alert-severity-list', 'alert-severity-chevron');
+                checkClose('alert-poster-container', 'alert-poster-list', 'alert-poster-chevron');
+                document.querySelectorAll('[data-nt-font-select]').forEach((wrap) => {
+                    if (!wrap.contains(e.target)) wrap.querySelector('ul')?.classList.add('hidden');
+                });
                 checkClose('disr-route-container', 'disr-route-list', 'disr-route-chevron');
                 checkClose('disr-tier-container', 'disr-tier-list', 'disr-tier-chevron');
                 checkClose('disr-station-a-container', 'disr-station-a-list', 'disr-station-a-chevron');
@@ -8375,6 +8455,12 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
+        if (
+            alertPanel.dataset.adminLoaded === "true"
+            && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]'))
+        ) {
+            delete alertPanel.dataset.adminLoaded;
+        }
         if (alertPanel.dataset.adminLoaded === "true" && !alertShellEmpty) {
             return;
         }
@@ -8461,9 +8547,16 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel poster</label>
                     <p id="alert-live-count" class="text-[10px] text-gray-400 mb-2"></p>
                     <div id="alert-poster-selected" class="flex flex-wrap gap-2 mb-2"></div>
-                    <select id="alert-poster-select" class="w-full min-h-[48px] px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="">Add a poster…</option>
-                    </select>
+                    <div class="relative" id="alert-poster-container">
+                        <select id="alert-poster-select" class="hidden">
+                            <option value="">Add a poster…</option>
+                        </select>
+                        <button type="button" id="alert-poster-toggle" class="w-full min-h-[48px] px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                            <span id="alert-poster-display" class="truncate text-left">Add a poster…</span>
+                            <svg id="alert-poster-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
+                    </div>
                     <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
 
@@ -9227,17 +9320,21 @@ const Admin = {
         Admin.populateAlertTargets();
         Admin._alertPosterPaths = Admin._alertPosterPaths || [];
         Admin.loadAlertPosterManifest();
+        const posterToggle = document.getElementById('alert-poster-toggle');
+        const posterList = document.getElementById('alert-poster-list');
+        const posterChevron = document.getElementById('alert-poster-chevron');
+        if (posterToggle && posterToggle.dataset.bound !== '1') {
+            posterToggle.dataset.bound = '1';
+            posterToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = posterList && posterList.classList.toggle('hidden') === false;
+                posterChevron?.classList.toggle('rotate-180', !!open);
+            });
+        }
         document.getElementById('alert-poster-select')?.addEventListener('change', (e) => {
-            const path = Admin.sanitizeAlertPosterPath(e.target?.value || '');
+            const path = e.target?.value || '';
             e.target.value = '';
-            if (!path) return;
-            const cur = Admin.getSelectedAlertPosters();
-            if (cur.includes(path)) return;
-            if (cur.length >= 2) {
-                if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
-                return;
-            }
-            Admin.setSelectedAlertPosters(cur.concat(path));
+            Admin.addAlertPoster(path);
         });
 
         const now = new Date();

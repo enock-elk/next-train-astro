@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.19.3";
+export const APP_VERSION = "V8_08.19.4";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -892,7 +892,7 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.19.3",
+        id: "V8_08.19.4",
         title: "What's new",
         date: "19 Aug 2026",
         forceShow: false,

@@ -31,8 +31,13 @@ let userSawEmptyBoard = false;
 let prevOverlayH = 0;
 let prevInFlowH = 0;
 let adShellSyncRaf = 0;
+/** True while we hide the unit, ease the shell, then reveal (entrance only). */
+let adEntering = false;
+let shellMotionLock = false;
+let shellMotionUnlockTimer = 0;
 const observedOverlayNodes = new Set();
 let overlayResizeObserver = null;
+const AD_SHELL_EASE_MS = 420;
 
 function bumpPageInjectCount() {
     pageInjectCount += 1;
@@ -129,6 +134,31 @@ function ntShell() {
     return document.getElementById('nt-shell');
 }
 
+function afterPaint(fn) {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(fn);
+    });
+}
+
+function lockShellMotion(ms = AD_SHELL_EASE_MS + 80) {
+    shellMotionLock = true;
+    if (shellMotionUnlockTimer) clearTimeout(shellMotionUnlockTimer);
+    shellMotionUnlockTimer = setTimeout(() => {
+        shellMotionLock = false;
+        adEntering = false;
+        document.documentElement.classList.remove('nt-ads-entering');
+        shellMotionUnlockTimer = 0;
+    }, ms);
+}
+
+function currentShellShift() {
+    const shell = ntShell();
+    if (!shell) return 0;
+    const raw = getComputedStyle(shell).getPropertyValue('--nt-ad-shift');
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+}
+
 function setShellVar(name, px, animate) {
     const shell = ntShell();
     if (!shell) return;
@@ -144,11 +174,66 @@ function setShellVar(name, px, animate) {
 function playInFlowFlip(invertPx) {
     const shell = ntShell();
     if (!shell || !invertPx) return;
+    lockShellMotion();
     shell.classList.add('nt-ad-no-motion');
     shell.style.setProperty('--nt-ad-flip', `${Math.round(invertPx)}px`);
     void shell.offsetHeight;
-    shell.classList.remove('nt-ad-no-motion');
-    shell.style.setProperty('--nt-ad-flip', '0px');
+    afterPaint(() => {
+        shell.classList.remove('nt-ad-no-motion');
+        shell.style.setProperty('--nt-ad-flip', '0px');
+    });
+}
+
+/** Hide the unit, paint shift 0, ease the board down, then reveal the unit. */
+function beginOverlayEntrance(toH) {
+    const shell = ntShell();
+    if (!shell) return;
+    if (prefersReducedMotion()) {
+        setShellVar('--nt-ad-shift', toH, false);
+        return;
+    }
+    adEntering = true;
+    lockShellMotion();
+    document.documentElement.classList.add('nt-ads-entering');
+    setShellVar('--nt-ad-shift', 0, false);
+    afterPaint(() => {
+        setShellVar('--nt-ad-shift', toH, true);
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            document.documentElement.classList.remove('nt-ads-entering');
+            adEntering = false;
+            shellMotionLock = false;
+            if (shellMotionUnlockTimer) {
+                clearTimeout(shellMotionUnlockTimer);
+                shellMotionUnlockTimer = 0;
+            }
+            shell.removeEventListener('transitionend', onEnd);
+        };
+        const onEnd = (e) => {
+            if (e.target !== shell) return;
+            if (e.propertyName && e.propertyName !== 'transform') return;
+            finish();
+        };
+        shell.addEventListener('transitionend', onEnd);
+        setTimeout(finish, AD_SHELL_EASE_MS + 80);
+    });
+}
+
+function animateOverlayTo(toH) {
+    if (prefersReducedMotion()) {
+        setShellVar('--nt-ad-shift', toH, false);
+        return;
+    }
+    const fromH = currentShellShift();
+    if (Math.abs(fromH - toH) < 1) {
+        setShellVar('--nt-ad-shift', toH, false);
+        return;
+    }
+    lockShellMotion();
+    setShellVar('--nt-ad-shift', fromH, false);
+    afterPaint(() => setShellVar('--nt-ad-shift', toH, true));
 }
 
 /** Out-of-flow (fixed/absolute) vs in-flow (static/relative/sticky occupying space). */
@@ -158,7 +243,7 @@ function measureAdLayout() {
     cleverOverlayNodes().forEach((el) => {
         const r = el.getBoundingClientRect();
         const cs = getComputedStyle(el);
-        if (cs.visibility === 'hidden' || cs.display === 'none') return;
+        if (cs.display === 'none') return;
         if (r.height <= 20 || r.width <= 20) return;
         if (cs.position === 'fixed' || cs.position === 'absolute') {
             overlayH = Math.max(overlayH, r.height);
@@ -174,6 +259,9 @@ function syncAdShellMotion() {
     if (!shell) return;
 
     if (window._adNetworkDestroyed) {
+        document.documentElement.classList.remove('nt-ads-entering');
+        adEntering = false;
+        shellMotionLock = false;
         setShellVar('--nt-ad-shift', 0, false);
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
@@ -181,12 +269,13 @@ function syncAdShellMotion() {
         return;
     }
 
+    if (adEntering || shellMotionLock) return;
+
     const { overlayH, inFlowH } = measureAdLayout();
     const filled = overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
-        prevOverlayH = overlayH;
-        prevInFlowH = inFlowH;
+        if (inFlowH > 0) prevInFlowH = inFlowH;
         return;
     }
 
@@ -194,11 +283,35 @@ function syncAdShellMotion() {
 
     const animate = !prefersReducedMotion() && userSawEmptyBoard;
     const targetShift = inFlowH > 0 ? 0 : overlayH;
-    setShellVar('--nt-ad-shift', targetShift, animate);
 
-    const delta = inFlowH - prevInFlowH;
-    if (delta && animate) playInFlowFlip(-delta);
-    else setShellVar('--nt-ad-flip', 0, false);
+    const overlayGrew = overlayH > 20 && prevOverlayH < 8 && inFlowH === 0;
+    const overlayShrunk = prevOverlayH > 20 && overlayH < 8 && inFlowH === 0;
+    const inFlowDelta = inFlowH - prevInFlowH;
+
+    if (animate && overlayGrew) {
+        beginOverlayEntrance(overlayH);
+        prevOverlayH = overlayH;
+        prevInFlowH = inFlowH;
+        return;
+    }
+
+    if (animate && overlayShrunk) {
+        animateOverlayTo(0);
+        prevOverlayH = overlayH;
+        prevInFlowH = inFlowH;
+        return;
+    }
+
+    if (animate && Math.abs(inFlowDelta) > 16) {
+        setShellVar('--nt-ad-shift', 0, false);
+        playInFlowFlip(-inFlowDelta);
+        prevOverlayH = overlayH;
+        prevInFlowH = inFlowH;
+        return;
+    }
+
+    setShellVar('--nt-ad-shift', targetShift, animate);
+    if (!(inFlowDelta && animate)) setShellVar('--nt-ad-flip', 0, false);
 
     prevOverlayH = overlayH;
     prevInFlowH = inFlowH;
@@ -241,6 +354,7 @@ function cloak(_adContainer, fatal = false) {
 
 function uncloak() {
     if (window._adNetworkDestroyed) return;
+    if (adEntering) return;
     const wasCloaked = isAdsCloaked();
     const animateIn = wasCloaked && userSawEmptyBoard && !prefersReducedMotion();
     if (animateIn) {
@@ -253,11 +367,9 @@ function uncloak() {
 }
 
 function isAdFilled() {
-    return cleverOverlayNodes().some((el) => {
-        const r = el.getBoundingClientRect();
-        const vis = getComputedStyle(el).visibility !== 'hidden';
-        return vis && r.height > 20 && r.width > 20 && getComputedStyle(el).display !== 'none';
-    });
+    if (adEntering) return true;
+    const { overlayH, inFlowH } = measureAdLayout();
+    return overlayH > 0 || inFlowH > 0;
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {
@@ -362,6 +474,13 @@ export function initCleverAds() {
     userSawEmptyBoard = false;
     prevOverlayH = 0;
     prevInFlowH = 0;
+    adEntering = false;
+    shellMotionLock = false;
+    if (shellMotionUnlockTimer) {
+        clearTimeout(shellMotionUnlockTimer);
+        shellMotionUnlockTimer = 0;
+    }
+    document.documentElement.classList.remove('nt-ads-entering');
 
     let stabilizedAt = 0;
     let nextScheduleIndex = 0;

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.4 — Ad entrance ease, composer toolbar, poster picker (19 Aug 2026)
+
+- CleverAds entrance: hide the unit (`html.nt-ads-entering`), paint `#nt-shell` at 0, ease it down, then reveal. Exit still eases back. Double-rAF FLIP for in-flow units. Duration 420ms.
+- Alert composer toolbar rows use `justify-evenly` so controls are not clustered left; Font is a compact premium menu (not a native `<select>`).
+- Channel poster uses the same premium trigger + list as Severity (hidden native `<select>` kept for value).
+
 ## V8_08.19.3 — Ad motion, Dev Hub split, composer, posters (19 Aug 2026)
 
 - CleverAds: ease `#nt-shell` when a unit fills or the commuter dismisses it (`--nt-ad-shift` for out-of-flow overlays, FLIP `--nt-ad-flip` for in-flow). No reserved gap, no vendor `left`/`top`/`transform`, cloak still `visibility` only.

@@ -369,6 +369,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       /* Admin custom dropdowns: grow to widest option, never narrower than the trigger */
       #alert-target-list,
       #alert-target-panel,
+      #alert-poster-list,
       #alert-severity-list,
       #disr-route-list,
       #disr-tier-list,
@@ -540,7 +541,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         --nt-ad-shift: 0px;
         --nt-ad-flip: 0px;
         transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)));
-        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       #nt-shell.nt-ad-no-motion {
         transition: none !important;
@@ -559,7 +560,13 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       html.nt-ads-cloaked [id*="Clever"]:not(#clever-core):not(#CleverCoreLoader103008),
       html.nt-ads-cloaked [class*="Clever"],
       html.nt-ads-cloaked [id*="clever"]:not(#clever-core):not(#CleverCoreLoader103008),
-      html.nt-ads-cloaked [class*="clever"] {
+      html.nt-ads-cloaked [class*="clever"],
+      html.nt-ads-entering iframe[src*="cleverwebserver"],
+      html.nt-ads-entering iframe[src*="clever"],
+      html.nt-ads-entering [id*="Clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-entering [class*="Clever"],
+      html.nt-ads-entering [id*="clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-entering [class*="clever"] {
         visibility: hidden !important;
         pointer-events: none !important;
       }

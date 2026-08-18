@@ -35,12 +35,15 @@ if (!layout.includes('html.nt-ads-cloaked #nt-shell')) fail('cloaked shell must 
 
 if (!ads.includes('__ntCleverVendorInject')) fail('clever-ads.js must call the vendor IIFE, not a restyled host DIV');
 if (!ads.includes('--nt-ad-shift')) fail('clever-ads.js must drive --nt-ad-shift on #nt-shell');
-if (!ads.includes('playInFlowFlip')) fail('clever-ads.js must FLIP in-flow height changes');
+if (!ads.includes('beginOverlayEntrance')) fail('overlay fill must hide the unit, ease the shell, then reveal');
+if (!ads.includes('nt-ads-entering')) fail('entrance cloak class missing from clever-ads.js');
+if (!layout.includes('html.nt-ads-entering')) fail('Layout must hide the unit during shell entrance');
+if (!ads.includes('afterPaint')) fail('ad motion must paint the from-state before easing');
 if (!ads.includes('userSawEmptyBoard')) fail('do not animate until the commuter has seen the empty board');
 if (!ads.includes('const targetShift = inFlowH > 0 ? 0 : overlayH')) {
   fail('in-flow ads must not double-push with a lasting overlay shift');
 }
-if (!ads.includes('playInFlowFlip(-delta)')) fail('in-flow fill/dismiss must invert with FLIP');
+if (!ads.includes('playInFlowFlip(-inFlowDelta)')) fail('in-flow fill/dismiss must invert with FLIP');
 if (!ads.includes('ResizeObserver')) fail('must watch overlay size so dismiss eases the board back');
 if (ads.includes('setAdPadding(true)')) fail('must not reserve an empty ad gap via padding');
 if (!layout.includes('transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)))')) {

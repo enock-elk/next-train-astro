@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.3 — Ad motion, Dev Hub split, composer, posters (19 Aug 2026)
+
+- CleverAds: ease `#nt-shell` when a unit fills or the commuter dismisses it (`--nt-ad-shift` for out-of-flow overlays, FLIP `--nt-ad-flip` for in-flow). No reserved gap, no vendor `left`/`top`/`transform`, cloak still `visibility` only.
+- System Controls: **Publish live site**, **Cloudflare Purge**, then **Nuclear Cache Wipe** as three separate accordions (purge no longer nested in nuke).
+- Service alert / reply composer: Media stays far right on row 1; Font dropdown + A-/A+ on row 2 with the hyperlink at far right.
+- Alert catalog: ten new poster files wired in `manifest.json` + admin fallback. Drop the JPGs into `public/images/alerts/` if they are not on this machine yet.
+- Commuter What’s New: ads bullet mentions ease in/out. Admin / catalog / purge stay out of that card.
+
 ## V8_08.19.2 — Dev Hub live publish (19 Aug 2026)
 
 - System Controls → **Publish live site** dispatches `deploy-production.yml` via the telemetry Worker (Firebase admin Bearer). Status polls GitHub jobs; after success, use the existing **Purge Cloudflare Cache** control.

@@ -5,7 +5,8 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays — their sticky-top format owns placement.
+ * overlays — their sticky-top format owns placement. When a unit fills or the
+ * commuter dismisses it, ease #nt-shell via --nt-ad-shift / --nt-ad-flip only.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
@@ -25,6 +26,13 @@ const AD_LEGACY_SESSION_INJECT_KEY = 'nt_ad_session_injects';
 let stabilityWaitStartedAt = 0;
 /** Resets automatically on full page load (module re-eval). Not persisted. */
 let pageInjectCount = 0;
+/** True after the commuter has seen the board with no filled ad (uncloaked). */
+let userSawEmptyBoard = false;
+let prevOverlayH = 0;
+let prevInFlowH = 0;
+let adShellSyncRaf = 0;
+const observedOverlayNodes = new Set();
+let overlayResizeObserver = null;
 
 function bumpPageInjectCount() {
     pageInjectCount += 1;
@@ -105,6 +113,122 @@ function cleverOverlayNodes() {
     return out;
 }
 
+function prefersReducedMotion() {
+    try {
+        return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch {
+        return false;
+    }
+}
+
+function isAdsCloaked() {
+    return document.documentElement.classList.contains('nt-ads-cloaked');
+}
+
+function ntShell() {
+    return document.getElementById('nt-shell');
+}
+
+function setShellVar(name, px, animate) {
+    const shell = ntShell();
+    if (!shell) return;
+    const next = `${Math.round(Number(px) || 0)}px`;
+    if (!animate) shell.classList.add('nt-ad-no-motion');
+    shell.style.setProperty(name, next);
+    if (!animate) {
+        void shell.offsetHeight;
+        shell.classList.remove('nt-ad-no-motion');
+    }
+}
+
+function playInFlowFlip(invertPx) {
+    const shell = ntShell();
+    if (!shell || !invertPx) return;
+    shell.classList.add('nt-ad-no-motion');
+    shell.style.setProperty('--nt-ad-flip', `${Math.round(invertPx)}px`);
+    void shell.offsetHeight;
+    shell.classList.remove('nt-ad-no-motion');
+    shell.style.setProperty('--nt-ad-flip', '0px');
+}
+
+/** Out-of-flow (fixed/absolute) vs in-flow (static/relative/sticky occupying space). */
+function measureAdLayout() {
+    let overlayH = 0;
+    let inFlowH = 0;
+    cleverOverlayNodes().forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden' || cs.display === 'none') return;
+        if (r.height <= 20 || r.width <= 20) return;
+        if (cs.position === 'fixed' || cs.position === 'absolute') {
+            overlayH = Math.max(overlayH, r.height);
+        } else {
+            inFlowH = Math.max(inFlowH, r.height);
+        }
+    });
+    return { overlayH, inFlowH };
+}
+
+function syncAdShellMotion() {
+    const shell = ntShell();
+    if (!shell) return;
+
+    if (window._adNetworkDestroyed) {
+        setShellVar('--nt-ad-shift', 0, false);
+        setShellVar('--nt-ad-flip', 0, false);
+        prevOverlayH = 0;
+        prevInFlowH = 0;
+        return;
+    }
+
+    const { overlayH, inFlowH } = measureAdLayout();
+    const filled = overlayH > 0 || inFlowH > 0;
+
+    if (isAdsCloaked()) {
+        prevOverlayH = overlayH;
+        prevInFlowH = inFlowH;
+        return;
+    }
+
+    if (!filled) userSawEmptyBoard = true;
+
+    const animate = !prefersReducedMotion() && userSawEmptyBoard;
+    const targetShift = inFlowH > 0 ? 0 : overlayH;
+    setShellVar('--nt-ad-shift', targetShift, animate);
+
+    const delta = inFlowH - prevInFlowH;
+    if (delta && animate) playInFlowFlip(-delta);
+    else setShellVar('--nt-ad-flip', 0, false);
+
+    prevOverlayH = overlayH;
+    prevInFlowH = inFlowH;
+}
+
+function requestAdShellSync() {
+    if (adShellSyncRaf) return;
+    adShellSyncRaf = requestAnimationFrame(() => {
+        adShellSyncRaf = 0;
+        syncAdShellMotion();
+    });
+}
+
+function refreshOverlayObservations() {
+    if (!overlayResizeObserver) return;
+    const nodes = cleverOverlayNodes();
+    const next = new Set(nodes);
+    observedOverlayNodes.forEach((el) => {
+        if (!next.has(el)) {
+            try { overlayResizeObserver.unobserve(el); } catch { /* ignore */ }
+            observedOverlayNodes.delete(el);
+        }
+    });
+    nodes.forEach((el) => {
+        if (observedOverlayNodes.has(el)) return;
+        try { overlayResizeObserver.observe(el); } catch { /* ignore */ }
+        observedOverlayNodes.add(el);
+    });
+}
+
 function cloak(_adContainer, fatal = false) {
     document.documentElement.classList.add('nt-ads-cloaked');
     if (fatal) {
@@ -112,11 +236,20 @@ function cloak(_adContainer, fatal = false) {
         document.documentElement.classList.add('nt-ads-cloaked');
     }
     setAdPadding(false);
+    syncAdShellMotion();
 }
 
 function uncloak() {
     if (window._adNetworkDestroyed) return;
+    const wasCloaked = isAdsCloaked();
+    const animateIn = wasCloaked && userSawEmptyBoard && !prefersReducedMotion();
+    if (animateIn) {
+        setShellVar('--nt-ad-shift', 0, false);
+        setShellVar('--nt-ad-flip', 0, false);
+    }
     document.documentElement.classList.remove('nt-ads-cloaked');
+    if (animateIn) requestAdShellSync();
+    else syncAdShellMotion();
 }
 
 function isAdFilled() {
@@ -185,7 +318,10 @@ function injectAdScript(adContainer) {
 }
 
 function refreshAdVisibility(adContainer) {
-    if (window._adNetworkDestroyed) return;
+    if (window._adNetworkDestroyed) {
+        syncAdShellMotion();
+        return;
+    }
 
     if (!isSafeZone() || shouldDeferForSessionStability()) {
         cloak(adContainer, false);
@@ -193,6 +329,7 @@ function refreshAdVisibility(adContainer) {
     }
 
     uncloak();
+    refreshOverlayObservations();
     const filled = isAdFilled();
     if (filled) {
         setAdPadding(false);
@@ -205,6 +342,7 @@ function refreshAdVisibility(adContainer) {
     } else {
         setAdPadding(false);
     }
+    requestAdShellSync();
 }
 
 export function initCleverAds() {
@@ -221,6 +359,9 @@ export function initCleverAds() {
     window._adScriptInjected = false;
     window._adScriptLoaded = false;
     window._adTelemetryFired = false;
+    userSawEmptyBoard = false;
+    prevOverlayH = 0;
+    prevInFlowH = 0;
 
     let stabilizedAt = 0;
     let nextScheduleIndex = 0;
@@ -228,8 +369,17 @@ export function initCleverAds() {
     let scheduleStarted = false;
     let scheduleExhausted = false;
 
+    if (typeof ResizeObserver === 'function') {
+        overlayResizeObserver = new ResizeObserver(() => {
+            refreshOverlayObservations();
+            requestAdShellSync();
+        });
+        refreshOverlayObservations();
+    }
+
     if (window.MutationObserver && document.body) {
         const adObserver = new MutationObserver((mutations) => {
+            let sawChildList = false;
             for (const m of mutations) {
                 if (m.type === 'attributes' && m.attributeName === 'style') {
                     const el = m.target;
@@ -249,7 +399,11 @@ export function initCleverAds() {
                         }
                         break;
                     }
+                    if (/lever/i.test(`${el.id} ${el.className}`) || el.tagName === 'IFRAME') {
+                        requestAdShellSync();
+                    }
                 }
+                if (m.type === 'childList') sawChildList = true;
                 if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled() && isSafeZone()) {
                     window._adTelemetryFired = true;
                     uncloak();
@@ -258,6 +412,10 @@ export function initCleverAds() {
                         window.trackAnalyticsEvent('view_clever_ad', { location: 'main_dashboard', verified: 'instant_tripwire' });
                     }
                 }
+            }
+            if (sawChildList) {
+                refreshOverlayObservations();
+                requestAdShellSync();
             }
         });
         adObserver.observe(document.documentElement, { attributes: true, childList: true, subtree: true });

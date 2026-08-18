@@ -29,6 +29,9 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 .nt-rich-body font[face="Times New Roman"], .nt-rich-body font[face="times new roman"] {
   font-family: "Times New Roman", Times, serif !important;
 }
+font[face="sans-serif"], .nt-rich-body font[face="sans-serif"] {
+  font-family: ui-sans-serif, system-ui, sans-serif !important;
+}
 .nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u, #disr-msg u, #disruption-modal-body u {
   text-decoration: underline;
 }

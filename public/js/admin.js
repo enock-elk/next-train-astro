@@ -7044,7 +7044,7 @@ const Admin = {
                 editor.classList.remove('min-h-[120px]', 'p-2.5');
                 editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
                 const bar = editor.previousElementSibling;
-                if (bar && !bar.querySelector('[onclick*="fontVerdana"]')) {
+                if (bar && !bar.querySelector('[data-nt-font-select]')) {
                     bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
                 }
             }
@@ -7384,39 +7384,37 @@ const Admin = {
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
         const fileLabelId = opts.fileLabelId ? String(opts.fileLabelId).replace(/[^a-z0-9_-]/gi, '') : '';
         const btn = (tag, title, inner, extraClass = '') =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1 ${extraClass}" title="${title}">${inner}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none shrink-0 ${extraClass}" title="${title}">${inner}</button>`;
         const iconBtn = (tag, title, svg) =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="${title}">${svg}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none shrink-0" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="ml-auto px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer shrink-0 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
         const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
         const alignR = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg>';
+        const fontSelect = `<select data-nt-font-select onfocus="Admin.saveCursorRange()" onmousedown="Admin.saveCursorRange()" onchange="Admin.saveCursorRange(); Admin.formatAlertText(this.value, '${id}')" class="h-7 max-w-[7.5rem] px-1.5 text-[11px] font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none shrink-0" title="Font"><option value="fontDefault">Font</option><option value="fontVerdana">Verdana</option><option value="fontTimes">Times</option></select>`;
         return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
                         <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5">
                             ${btn('bold', 'Bold', 'B')}
                             ${btn('italic', 'Italic', 'I', 'italic')}
                             ${btn('underline', 'Underline', 'U', 'underline')}
                             ${sep}
-                            ${btn('smaller', 'Decrease Size', 'A-')}
-                            ${btn('larger', 'Increase Size', 'A+')}
-                            ${sep}
                             ${iconBtn('justifyLeft', 'Align Left', alignL)}
                             ${iconBtn('justifyCenter', 'Align Center', alignC)}
                             ${iconBtn('justifyRight', 'Align Right', alignR)}
                             ${sep}
                             ${btn('ul', 'Bullet list', '• List', 'whitespace-nowrap')}
-                            ${sep}
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                             ${media}
                         </div>
                         <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5 border-t border-gray-300 dark:border-gray-600">
                             ${btn('title', 'Title heading', 'Title', 'whitespace-nowrap')}
-                            ${btn('fontVerdana', 'Verdana', 'Verdana', 'whitespace-nowrap font-normal')}
-                            ${btn('fontTimes', 'Times New Roman', 'Times', 'whitespace-nowrap font-normal')}
+                            ${fontSelect}
+                            ${btn('smaller', 'Decrease Size', 'A-')}
+                            ${btn('larger', 'Increase Size', 'A+')}
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="ml-auto px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none shrink-0" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
     },
@@ -7436,6 +7434,7 @@ const Admin = {
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
                 font[face="Verdana"], font[face="verdana"] { font-family: Verdana, Geneva, sans-serif !important; }
                 font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times New Roman", Times, serif !important; }
+                font[face="sans-serif"] { font-family: ui-sans-serif, system-ui, sans-serif !important; }
                 #alert-msg, #admin-reply-text, #disr-msg { overflow-wrap: anywhere; word-break: break-word; }
             `;
             document.head.appendChild(style);
@@ -7471,6 +7470,8 @@ const Admin = {
                 }
             }
             document.execCommand('formatBlock', false, block);
+        } else if (tag === 'fontDefault') {
+            document.execCommand('fontName', false, 'sans-serif');
         } else if (tag === 'fontVerdana') {
             document.execCommand('fontName', false, 'Verdana');
         } else if (tag === 'fontTimes') {
@@ -7790,15 +7791,25 @@ const Admin = {
             { file: 'service-update.svg', label: 'Service update' },
             { file: 'safety-notice.svg', label: 'Safety notice' },
             { file: '2025-fare-adjustment.jpg', label: 'Fare adjustment' },
+            { file: 'avoid_trouble_travel_ticket.jpg', label: 'Avoid trouble — travel with a ticket' },
             { file: 'be-rail-smart-pea.jpg', label: 'Be rail smart' },
             { file: 'considerate_seating.jpg', label: 'Considerate seating' },
+            { file: 'ger_leralla_ballast.jpg', label: 'Germiston–Leralla ballast' },
             { file: 'have_ticket_reminder.jpg', label: 'Have your ticket' },
+            { file: 'inflation_rising_train_isnt.jpg', label: 'Inflation is rising, the train isn’t' },
+            { file: 'level_crossing_warning.jpg', label: 'Level crossing warning' },
+            { file: 'mind_the_gap.jpg', label: 'Mind the gap' },
             { file: 'monthly_tickets.jpg', label: 'Monthly tickets' },
             { file: 'no_eating.jpg', label: 'No eating' },
             { file: 'off_peak_discounts.jpg', label: 'Off-peak discounts' },
+            { file: 'phelophepa_health_train.jpg', label: 'Phelophepa health train' },
             { file: 'priority-seating.jpg', label: 'Priority seating' },
             { file: 'pta-kempton-0618-0619.jpg', label: 'Pretoria–Kempton 0618/0619' },
             { file: 'smoke_free_stations.jpg', label: 'Smoke-free stations' },
+            { file: 'stand_behind_yellow.jpg', label: 'Stand behind the yellow line' },
+            { file: 'stay_away_from_tracks.jpg', label: 'Stay away from the tracks' },
+            { file: 'stoning_train_crime.jpg', label: 'Stoning trains is a crime' },
+            { file: 'train_rules.jpg', label: 'Train rules' },
         ];
         const fromManifest = Array.isArray(Admin._alertPosterManifest) ? Admin._alertPosterManifest : [];
         const seen = new Set();
@@ -12928,7 +12939,7 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
@@ -13093,6 +13104,23 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Cloudflare edge cache (separate from killswitch) -->
+                <div class="bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="cf-purge-header-btn" class="w-full px-3 py-3 bg-orange-100/50 dark:bg-orange-900/40 text-left text-[10px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-orange-200/50 dark:hover:bg-orange-900/60">
+                        <span class="flex items-center">
+                            <span class="text-orange-600 dark:text-orange-400 mr-2 inline-flex">${Admin.icon('globe', 'w-4 h-4')}</span> Cloudflare Purge
+                        </span>
+                        <svg id="cf-purge-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="cf-purge-body" class="p-3 hidden space-y-3">
+                        <p class="text-[11px] text-orange-800 dark:text-orange-200 font-bold leading-snug">Cloudflare edge cache</p>
+                        <p class="text-[10px] text-orange-700/90 dark:text-orange-400/90 leading-snug">Same as Dashboard → Caching → Configuration → <span class="font-bold">Purge Everything</span>. Clears CDN-cached HTML / SW / assets for nexttrain.co.za (does not wipe user devices or fire the killswitch).</p>
+                        <button type="button" id="cf-purge-everything-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
+                            Purge Cloudflare Cache
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Transplanted Nuclear Cache Wipe -->
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 overflow-hidden shadow-sm transition-all">
                     <button id="nuke-header-btn" class="w-full px-3 py-3 bg-red-100/50 dark:bg-red-900/40 text-left text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-red-200/50 dark:hover:bg-red-900/60">
@@ -13108,14 +13136,6 @@ const Admin = {
                         <button id="nuke-fire-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
                             Fire Killswitch
                         </button>
-
-                        <div class="border-t border-red-200 dark:border-red-800 pt-3 space-y-2">
-                            <p class="text-[11px] text-orange-700 dark:text-orange-300 font-bold leading-snug">Cloudflare edge cache</p>
-                            <p class="text-[10px] text-orange-600/90 dark:text-orange-400/90 leading-snug">Same as Dashboard → Caching → Configuration → <span class="font-bold">Purge Everything</span>. Clears CDN-cached HTML / SW / assets for nexttrain.co.za (does not wipe user devices or fire the killswitch).</p>
-                            <button id="cf-purge-everything-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
-                                Purge Cloudflare Cache
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -13392,6 +13412,9 @@ const Admin = {
         const nukeBody = document.getElementById('nuke-body');
         const nukeChevron = document.getElementById('nuke-chevron');
         const nukeFireBtn = document.getElementById('nuke-fire-btn');
+        const cfPurgeHeader = document.getElementById('cf-purge-header-btn');
+        const cfPurgeBody = document.getElementById('cf-purge-body');
+        const cfPurgeChevron = document.getElementById('cf-purge-chevron');
         const cfPurgeBtn = document.getElementById('cf-purge-everything-btn');
         const deployLiveHeader = document.getElementById('deploy-live-header-btn');
         const deployLiveBody = document.getElementById('deploy-live-body');
@@ -13447,6 +13470,14 @@ const Admin = {
                 nukeBody.classList.toggle('hidden');
                 if (nukeBody.classList.contains('hidden')) nukeChevron.classList.add('-rotate-90');
                 else nukeChevron.classList.remove('-rotate-90');
+            };
+        }
+
+        if (cfPurgeHeader && cfPurgeBody) {
+            cfPurgeHeader.onclick = () => {
+                cfPurgeBody.classList.toggle('hidden');
+                if (cfPurgeBody.classList.contains('hidden')) cfPurgeChevron?.classList.add('-rotate-90');
+                else cfPurgeChevron?.classList.remove('-rotate-90');
             };
         }
 

@@ -91,6 +91,17 @@ ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance acco
 ok(!adminJs.includes('if (countLiveMaint() > 0)'), 'live banners no longer auto-expand Maintenance Mode');
 
 ok(adminJs.includes('id="deploy-production-btn"'), 'Dev Hub has Publish live');
+ok(adminJs.includes('id="cf-purge-header-btn"'), 'Cloudflare Purge is its own accordion');
+ok(adminJs.includes('id="nuke-header-btn"'), 'Nuclear Cache Wipe accordion remains');
+{
+    const pub = adminJs.indexOf('id="deploy-live-header-btn"');
+    const cf = adminJs.indexOf('id="cf-purge-header-btn"');
+    const nuke = adminJs.indexOf('id="nuke-header-btn"');
+    ok(pub > -1 && cf > pub && nuke > cf, 'Publish live, then Cloudflare Purge, then Nuclear wipe');
+    const nukeBody = adminJs.indexOf('id="nuke-body"');
+    const cfBtn = adminJs.indexOf('id="cf-purge-everything-btn"');
+    ok(cfBtn > -1 && nukeBody > -1 && cfBtn < nukeBody, 'CF purge button is not inside nuke-body');
+}
 ok(adminJs.includes('/admin/deploy-production'), 'admin posts deploy to telemetry Worker');
 ok(adminJs.includes('/admin/deploy-status'), 'admin polls deploy status');
 ok(adminJs.includes("confirm: 'DEPLOY'"), 'Publish live still types DEPLOY');

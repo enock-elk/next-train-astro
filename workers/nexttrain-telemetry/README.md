@@ -5,7 +5,7 @@ Worker URL: `https://nexttrain-telemetry.enock.workers.dev/`
 ## Routes
 
 - `GET /region` — first-visit province → product region guess
-- `GET /` (Bearer admin) — GA / Sentry / Clever telemetry payload
+- GET `/` (Bearer admin) — GA / Sentry / Clever telemetry payload (V1.11: INTRADAY through latest GA4 bucket; ALL-time months from Jan 2026; regional `sessions` alongside unique users)
 - `POST /admin/purge-cloudflare-cache` (Bearer Firebase admin) — Cloudflare zone **Purge Everything** (dashboard equivalent)
 - `POST /admin/purge` (Bearer Firebase admin) — clears this Worker’s short telemetry cache only (legacy admin path; does **not** purge the zone CDN)
 

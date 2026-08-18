@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.10 - App-region telemetry)
+ * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.11 - Latest-available charts)
  * --------------------------------------------------------------------------
  * Path B: Secure Telemetry Bridge
  *
@@ -7,7 +7,12 @@
  *       GA4 activeUsers (rush-hour shape). Sets intradayMode: 'perBucket'.
  * V1.10: Regional breakdown reads GA customUser:crm_region = selected app region
  *        (IP /region is only a first-visit guess for the client; defaults to GP).
+ * V1.11: INTRADAY plots through the latest GA4 bucket (no 3h hide). ALL-time
+ *        fills months from Jan 2026. Regional payload includes sessions + note
+ *        that unique users by region are not a partition of TODAY.
  */
+
+import { classifyCrmRegion, clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -254,6 +259,7 @@ export default {
             active5m: '--',
             active30m: '--',
             todayUsers: '--',
+            todaySessions: '--',
             wauUsers: '--',
             mauUsers: '--',
             allTimeUsers: '--',
@@ -263,8 +269,13 @@ export default {
             sevenDayTrend: [0, 0, 0, 0, 0, 0, 0],
             chartData: [],
             chartLabels: [],
-            regionalBreakdown: { GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0 },
+            regionalBreakdown: {
+                GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0,
+                sessions: { GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0 },
+                metric: 'users',
+            },
             intradayMode: null,
+            intradayAsOf: null,
         };
 
         const cache = caches.default;
@@ -332,7 +343,8 @@ export default {
                         }),
                         fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
                             method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "today", endDate: "today" }], metrics: [{ name: "activeUsers" }]
+                                dateRanges: [{ startDate: "today", endDate: "today" }],
+                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
                             })
                         }),
                         fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
@@ -362,7 +374,7 @@ export default {
                             method: 'POST', headers: gaHeaders, body: JSON.stringify({
                                 dateRanges: [{ startDate: "today", endDate: "today" }],
                                 dimensions: [{ name: "customUser:crm_region" }],
-                                metrics: [{ name: "activeUsers" }]
+                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
                             })
                         })
                     ]);
@@ -380,21 +392,23 @@ export default {
                     telemetryData.active30m = String(parseInt(realtime30Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.active5m = String(parseInt(realtime5Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.todayUsers = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
+                    telemetryData.todaySessions = String(parseInt(dailyData?.rows?.[0]?.metricValues?.[1]?.value) || 0);
                     telemetryData.wauUsers = String(parseInt(wauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.mauUsers = String(parseInt(mauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.allTimeUsers = String(parseInt(allTimeData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
 
                     if (regionalData?.rows) {
                         regionalData.rows.forEach(row => {
-                            const region = row.dimensionValues?.[0]?.value;
+                            const bucket = classifyCrmRegion(row.dimensionValues?.[0]?.value);
                             const users = parseInt(row.metricValues?.[0]?.value) || 0;
-                            if (region === 'GP') telemetryData.regionalBreakdown.GP += users;
-                            else if (region === 'WC') telemetryData.regionalBreakdown.WC += users;
-                            else if (region === 'KZN') telemetryData.regionalBreakdown.KZN += users;
-                            else if (region === 'EC') telemetryData.regionalBreakdown.EC += users;
-                            else telemetryData.regionalBreakdown.OTHER += users;
+                            const sessions = parseInt(row.metricValues?.[1]?.value) || 0;
+                            const key = (bucket === 'UNSET' || bucket === 'OTHER') ? 'OTHER' : bucket;
+                            telemetryData.regionalBreakdown[key] += users;
+                            telemetryData.regionalBreakdown.sessions[key] += sessions;
                         });
                     }
+                    telemetryData.regionalBreakdown.todayUsers = parseInt(telemetryData.todayUsers, 10) || 0;
+                    telemetryData.regionalBreakdown.todaySessions = parseInt(telemetryData.todaySessions, 10) || 0;
 
                     let activeCountsArray = [];
                     let labelsArray = [];
@@ -412,6 +426,7 @@ export default {
                         const todayStr = `${dateTodaySAST.getUTCFullYear()}${pad(dateTodaySAST.getUTCMonth() + 1)}${pad(dateTodaySAST.getUTCDate())}`;
                         const yesterdayStr = `${dateYestSAST.getUTCFullYear()}${pad(dateYestSAST.getUTCMonth() + 1)}${pad(dateYestSAST.getUTCDate())}`;
 
+                        let lastSeenToday = -1;
                         if (trendData?.rows) {
                             trendData.rows.forEach(row => {
                                 const dStr = row.dimensionValues?.[0]?.value;
@@ -424,6 +439,7 @@ export default {
 
                                 if (dStr === todayStr) {
                                     bucketIndex += 48;
+                                    lastSeenToday = Math.max(lastSeenToday, bucketIndex);
                                 } else if (dStr !== yesterdayStr) {
                                     return;
                                 }
@@ -443,26 +459,32 @@ export default {
                             }
                         }
 
-                        // Clip GA4 processing lag (~3h) so the SVG does not invent a live tip
                         const nowHourSAST = dateTodaySAST.getUTCHours();
-                        const lagBuffer = 3;
-                        let cutoffHour = nowHourSAST - lagBuffer;
-
-                        let isYesterdayCutoff = false;
-                        if (cutoffHour < 0) {
-                            cutoffHour = 24 + cutoffHour;
-                            isYesterdayCutoff = true;
-                        }
-
-                        let cutoffBucket = (cutoffHour * 2);
-                        if (!isYesterdayCutoff) {
-                            cutoffBucket += 48;
-                        }
+                        const nowMinSAST = dateTodaySAST.getUTCMinutes();
+                        const cutoffBucket = clipIntradayCutoff(lastSeenToday, nowHourSAST, nowMinSAST);
 
                         activeCountsArray = activeCountsArray.slice(0, cutoffBucket + 1);
                         labelsArray = labelsArray.slice(0, cutoffBucket + 1);
                         telemetryData.intradayMode = 'perBucket';
+                        const todayIdx = Math.max(0, cutoffBucket - 48);
+                        const asH = Math.floor(todayIdx / 2);
+                        const asM = (todayIdx % 2) * 30;
+                        telemetryData.intradayAsOf = `${pad(asH)}:${pad(asM)}`;
 
+                    } else if (range === 'ALL') {
+                        const rowMap = new Map();
+                        if (trendData?.rows) {
+                            trendData.rows.forEach((row) => {
+                                const key = String(row.dimensionValues?.[0]?.value || '');
+                                const users = parseInt(row.metricValues?.[0]?.value, 10) || 0;
+                                if (key) rowMap.set(key, (rowMap.get(key) || 0) + users);
+                            });
+                        }
+                        const sastNow = new Date(Date.now() + (2 * 60 * 60 * 1000));
+                        const endKey = `${sastNow.getUTCFullYear()}${String(sastNow.getUTCMonth() + 1).padStart(2, '0')}`;
+                        const filled = fillYearMonthSeries(rowMap, '202601', endKey);
+                        activeCountsArray = filled.counts;
+                        labelsArray = filled.labels;
                     } else {
                         if (trendData?.rows) {
                             activeCountsArray = trendData.rows.map(row => parseInt(row.metricValues?.[0]?.value) || 0);

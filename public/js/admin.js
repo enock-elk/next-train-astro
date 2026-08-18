@@ -609,6 +609,21 @@ const Admin = {
         });
     },
 
+    /** Two-step Clear DB: first yes/no popup, then type CLEAR. */
+    confirmClearDb: async function(what) {
+        const label = String(what || 'this database');
+        const first = await Admin.secureConfirm(
+            'Clear DB',
+            `This will permanently delete ${label}. Continue?`
+        );
+        if (!first) return false;
+        return Admin.secureConfirm(
+            'Confirm Clear DB',
+            `Type 'CLEAR' to permanently delete ${label}:`,
+            'CLEAR'
+        );
+    },
+
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
     openLightbox: function(url) {
         window._adminLightboxOpen = true;
@@ -1155,29 +1170,39 @@ const Admin = {
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Unique Active Users (Today)</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unique users by last selected region</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">Today unique: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Today sessions: --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
                                     <span id="region-stat-gp" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
                                     <span id="region-stat-wc" class="text-2xl font-black text-green-700 dark:text-green-300">--</span>
+                                    <span id="region-sess-wc" class="text-[9px] font-bold text-green-500/80 dark:text-green-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
                                     <span id="region-stat-kzn" class="text-2xl font-black text-orange-700 dark:text-orange-300">--</span>
+                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-orange-500/80 dark:text-orange-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
                                     <span id="region-stat-ec" class="text-2xl font-black text-purple-700 dark:text-purple-300">--</span>
+                                    <span id="region-sess-ec" class="text-[9px] font-bold text-purple-500/80 dark:text-purple-300/70 mt-0.5">-- sessions</span>
                                 </div>
                             </div>
-                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-4">
-                                <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">Uncategorized / Global</span>
-                                <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
+                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-3">
+                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region set</span>
+                                <div class="text-right">
+                                    <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
+                                    <span id="region-sess-other" class="block text-[9px] font-bold text-slate-500">-- sessions</span>
+                                </div>
                             </div>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">TODAY is unique people. Region cards are unique users by last selected region — they are not sessions, and they will not add up to TODAY if someone switched region or sent hits before a region was set.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
                             <button id="region-view-graph-btn" class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center border border-slate-700 dark:border-slate-600">
@@ -1506,6 +1531,8 @@ const Admin = {
                 if(statMonthly) statMonthly.textContent = data.mauUsers !== undefined ? Admin.formatNumber(data.mauUsers) : '--';
                 if(statAllTime) statAllTime.textContent = data.allTimeUsers !== undefined ? Admin.formatNumber(data.allTimeUsers) : '--';
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
+                Admin.currentTodayUsers = data.todayUsers;
+                Admin.currentTodaySessions = data.todaySessions;
                 
                 // GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
@@ -1556,6 +1583,7 @@ const Admin = {
                 // GUARDIAN PHASE 2: RAM Array Slicer Engine
                 // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
                 // "last 48" for Today - that straddles midnight and draws a fake cliff.
+                // ALL plots every month from Jan 2026 - do not slice like MAU/DAU (7 points).
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
@@ -1573,6 +1601,9 @@ const Admin = {
                         startIndex = 0;
                         endIndex = 0;
                     }
+                } else if (Admin.telemetryRange === 'ALL') {
+                    startIndex = 0;
+                    endIndex = masterLen;
                 } else {
                     endIndex = masterLen - (offset * pointsPerView);
                     startIndex = endIndex - pointsPerView;
@@ -1594,6 +1625,8 @@ const Admin = {
                         activeCountsArray = activeCountsArray.slice(0, 48);
                         labelsArray = labelsArray.slice(0, 48);
                     }
+                } else if (Admin.telemetryRange === 'ALL') {
+                    // Full Jan 2026 → now series. Do not left-pad to a 7-point MAU window.
                 } else if (activeCountsArray.length < pointsPerView && masterLen > 0) {
                     const padLen = pointsPerView - activeCountsArray.length;
                     activeCountsArray = [...Array(padLen).fill(0), ...activeCountsArray];
@@ -1602,7 +1635,7 @@ const Admin = {
 
                 // GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
-                if (Admin.isComparing) {
+                if (Admin.isComparing && Admin.telemetryRange !== 'ALL') {
                     if (Admin.telemetryRange === 'INTRADAY' && offset === 0 && masterLen > 48) {
                         compareCountsArray = rawCountsArray.slice(0, 48);
                         if (compareCountsArray.length < 48) {
@@ -1660,6 +1693,14 @@ const Admin = {
                         }
                         return lbl ? 'W' + lbl.substring(4) : '';
                     });
+                } else if (Admin.telemetryRange === 'ALL') {
+                    displayLabels = labelsArray.map(lbl => {
+                        if (lbl && lbl.length === 6) {
+                            const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4, 6), 10) - 1];
+                            return `${mon} ${lbl.substring(2, 4)}`;
+                        }
+                        return lbl;
+                    });
                 } else {
                     displayLabels = labelsArray.map(lbl => {
                         if (lbl && lbl.length === 6) {
@@ -1706,7 +1747,7 @@ const Admin = {
                         const d = new Date(y, 0, 1 + (w - 1) * 7);
                         d.setDate(d.getDate() + (1 - d.getDay()));
                         return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
-                    } else if (raw.length === 6 && Admin.telemetryRange === 'MAU') { // YYYYMM
+                    } else if (raw.length === 6 && (Admin.telemetryRange === 'MAU' || Admin.telemetryRange === 'ALL')) { // YYYYMM
                         return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(raw.substring(4,6))-1]} ${raw.substring(0,4)}`;
                     }
                     return raw;
@@ -1734,7 +1775,7 @@ const Admin = {
                 } else if (Admin.telemetryRange === 'MAU') {
                     titleStr = `Monthly Active Users${rangeStr}`;
                 } else {
-                    titleStr = `All-Time Active Users`;
+                    titleStr = `All-Time Active Users${rangeStr || ' (from Jan 2026)'}`;
                 }
                 
                 const modalTitleEl = document.getElementById('modal-trend-title');
@@ -1774,7 +1815,7 @@ const Admin = {
                     }
                 }
 
-                // Orange marker = last known INTRADAY bucket (worker clips ~3h of lag)
+                // Orange marker = last known INTRADAY bucket (worker clips to latest GA4 row, not a 3h buffer)
                 let isTodayIdx = -1;
                 if (Admin.telemetryRange === 'INTRADAY' && Admin.telemetryWeeksAgo === 0) {
                     for (let i = activeCountsArray.length - 1; i >= 0; i--) {
@@ -1969,12 +2010,42 @@ const Admin = {
         const kznEl = document.getElementById('region-stat-kzn');
         const ecEl = document.getElementById('region-stat-ec');
         const otherEl = document.getElementById('region-stat-other');
+        const n = (v) => (v !== undefined && v !== null ? Admin.formatNumber(v) : '--');
+        const sess = data.sessions || {};
         
-        if (gpEl) gpEl.textContent = data.GP !== undefined ? Admin.formatNumber(data.GP) : '--';
-        if (wcEl) wcEl.textContent = data.WC !== undefined ? Admin.formatNumber(data.WC) : '--';
-        if (kznEl) kznEl.textContent = data.KZN !== undefined ? Admin.formatNumber(data.KZN) : '--';
-        if (ecEl) ecEl.textContent = data.EC !== undefined ? Admin.formatNumber(data.EC) : '--';
-        if (otherEl) otherEl.textContent = data.OTHER !== undefined ? Admin.formatNumber(data.OTHER) : '--';
+        if (gpEl) gpEl.textContent = n(data.GP);
+        if (wcEl) wcEl.textContent = n(data.WC);
+        if (kznEl) kznEl.textContent = n(data.KZN);
+        if (ecEl) ecEl.textContent = n(data.EC);
+        if (otherEl) otherEl.textContent = n(data.OTHER);
+
+        const setSess = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = `${n(value)} sessions`;
+        };
+        setSess('region-sess-gp', sess.GP);
+        setSess('region-sess-wc', sess.WC);
+        setSess('region-sess-kzn', sess.KZN);
+        setSess('region-sess-ec', sess.EC);
+        setSess('region-sess-other', sess.OTHER);
+
+        const todayUsers = data.todayUsers ?? Admin.currentTodayUsers;
+        const todaySessions = data.todaySessions ?? Admin.currentTodaySessions;
+        const todayEl = document.getElementById('region-today-total');
+        if (todayEl) todayEl.textContent = `Today unique: ${n(todayUsers)}`;
+        const sessEl = document.getElementById('region-today-sessions');
+        if (sessEl) sessEl.textContent = `Today sessions: ${n(todaySessions)}`;
+
+        const assigned = (Number(data.GP) || 0) + (Number(data.WC) || 0) + (Number(data.KZN) || 0) + (Number(data.EC) || 0);
+        const other = Number(data.OTHER) || 0;
+        const uniqueToday = Number(todayUsers) || 0;
+        const note = document.getElementById('region-note');
+        if (note) {
+            const overlap = Math.max(0, (assigned + other) - uniqueToday);
+            note.textContent = overlap > 0
+                ? `These cards are unique users (not sessions). Region + no-region (${Admin.formatNumber(assigned + other)}) is about ${Admin.formatNumber(overlap)} above TODAY because the same commuter can appear in more than one bucket if they switched region or sent hits before a region was set.`
+                : `These cards are unique users by last selected region, not sessions. TODAY (${n(todayUsers)}) is unique people.`;
+        }
     },
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
@@ -2451,6 +2522,150 @@ const Admin = {
         return actionBanner;
     },
 
+    _GSM_TABS: [
+        { id: 'all', label: 'All', types: null },
+        { id: 'alerts', label: 'Alerts', types: ['Alert'] },
+        { id: 'incidents', label: 'Incidents', types: ['Disruption'] },
+        { id: 'grid', label: 'Grid', types: ['Grid Notice'] },
+        { id: 'exclusions', label: 'Exclusions', types: ['Exception'] },
+        { id: 'maint', label: 'Maint', types: ['Maintenance'] },
+    ],
+
+    gsmTabCounts: (items) => {
+        const counts = { all: (items || []).length };
+        (Admin._GSM_TABS || []).forEach((tab) => {
+            if (!tab.types) return;
+            counts[tab.id] = (items || []).filter((it) => tab.types.includes(it.type)).length;
+        });
+        return counts;
+    },
+
+    gsmFilteredItems: (items, tabId) => {
+        const tab = (Admin._GSM_TABS || []).find((t) => t.id === tabId) || Admin._GSM_TABS[0];
+        if (!tab || !tab.types) return items || [];
+        return (items || []).filter((it) => tab.types.includes(it.type));
+    },
+
+    gsmRegionBadge: (rId) => {
+        if (!rId) return '';
+        const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
+        const textClass = "text-xs font-bold text-gray-700 dark:text-gray-300";
+        if (rId.includes('_GP')) return `<span class="${badgeClass}">GP</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_WC')) return `<span class="${badgeClass}">WC</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_KZN')) return `<span class="${badgeClass}">KZN</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_EC')) return `<span class="${badgeClass}">EC</span> <span class="${textClass}">Global Network</span>`;
+        if (rId === 'all') return `<span class="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5">ALL</span> <span class="${textClass}">Entire Network</span>`;
+        if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass} inline-flex items-center flex-wrap">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span>`;
+        return '';
+    },
+
+    gsmItemCardHtml: (item, now) => {
+        const isPermanent = !item.expiresAt;
+        const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
+        const timeBadge = isPermanent ? 'Permanent' : `Expires: in ${hrsLeft} hrs`;
+        const extendBtnHtml = isPermanent
+            ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`
+            : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`;
+        return `
+            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
+                <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
+                    <div class="min-w-0 shrink">${Admin.gsmRegionBadge(item.routeId)}</div>
+                    <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                        <span class="uppercase tracking-widest text-slate-500">${item.type}</span>
+                        <span class="mx-1.5 text-gray-300 dark:text-gray-600">|</span>
+                        <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
+                    </div>
+                </div>
+                <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
+                    ${item.label}
+                </span>
+                <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
+                    <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
+                    </button>
+                    ${extendBtnHtml}
+                    <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                        Review &rarr;
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    gsmTabBarHtml: (items) => {
+        const counts = Admin.gsmTabCounts(items);
+        const active = Admin._gsmTab || 'all';
+        return `<div id="gsm-tabs" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto custom-scrollbar">
+            ${(Admin._GSM_TABS || []).map((tab) => {
+                const on = active === tab.id;
+                const n = counts[tab.id] || 0;
+                const cls = on
+                    ? 'shrink-0 px-2 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'shrink-0 px-2 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400';
+                return `<button type="button" data-gsm-tab="${tab.id}" class="${cls}">${tab.label}${n ? ` ${n}` : ''}</button>`;
+            }).join('')}
+        </div>`;
+    },
+
+    bindGsmTabs: () => {
+        document.querySelectorAll('[data-gsm-tab]').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Admin._gsmTab = btn.getAttribute('data-gsm-tab') || 'all';
+                Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
+            };
+        });
+    },
+
+    renderGlobalStateMonitor: (actionBanner, activeItems, opts = {}) => {
+        if (!actionBanner) return;
+        Admin._gsmItems = Array.isArray(activeItems) ? activeItems : [];
+        if (!Admin._gsmTab) Admin._gsmTab = 'all';
+        const wasOpen = opts.keepOpen || (document.getElementById('action-body') && !document.getElementById('action-body').classList.contains('hidden'));
+        const adminContainer = document.getElementById('admin-modules-container');
+        const total = Admin._gsmItems.length;
+        const filtered = Admin.gsmFilteredItems(Admin._gsmItems, Admin._gsmTab);
+        const now = Date.now();
+        let listHtml;
+        if (opts.error) {
+            listHtml = `<div class="text-xs text-center text-red-500 py-4">Could not refresh active entities. Tap Refresh from another panel or reopen Dev Mode.</div>`;
+        } else if (!total) {
+            listHtml = `<div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
+                All clear - no active alerts, incidents, grid notices, schedule exceptions, or maintenance banners.
+            </div>`;
+        } else if (!filtered.length) {
+            const tab = (Admin._GSM_TABS || []).find((t) => t.id === Admin._gsmTab);
+            listHtml = `<div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">No active ${(tab && tab.label) || 'items'}.</div>`;
+        } else {
+            listHtml = filtered.map((item) => Admin.gsmItemCardHtml(item, now)).join('');
+        }
+
+        actionBanner.classList.remove('hidden');
+        actionBanner.innerHTML = `
+            <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${total})</span>
+                </span>
+                <span class="admin-unread-badge ${total ? '' : 'hidden'}" aria-label="Active items">${total || ''}</span>
+                <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="action-body" class="${wasOpen ? 'mt-4 space-y-2' : 'hidden mt-4 space-y-2'}">
+                ${Admin.gsmTabBarHtml(Admin._gsmItems)}
+                <div id="gsm-list">${listHtml}</div>
+            </div>
+        `;
+        Admin.bindGsmTabs();
+        if (wasOpen && !Admin.isGridMode) {
+            actionBanner.querySelector('#action-header-btn')?.style.setProperty('display', 'none', 'important');
+            document.getElementById('action-body')?.classList.remove('hidden');
+        }
+        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
+            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+        }
+    },
+
     fetchActionRequired: async () => {
         const actionBanner = Admin.ensureGlobalStateMonitorTile();
         if (!actionBanner) return;
@@ -2644,29 +2859,10 @@ const Admin = {
                 if (typeof Admin.populateAlertTargets === 'function') Admin.populateAlertTargets(true);
                 if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
                 if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
-
-                actionBanner.classList.remove('hidden');
-                actionBanner.innerHTML = `
-                    <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                        <span class="flex flex-col items-center">
-                            ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                            <span class="text-blue-600 dark:text-blue-400">Global State Monitor (0)</span>
-                        </span>
-                        <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="action-body" class="hidden mt-4 space-y-2">
-                        <div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
-                            All clear - no active alerts, incidents, grid notices, schedule exceptions, or maintenance banners.
-                        </div>
-                    </div>
-                `;
-                if (adminContainer.firstElementChild !== actionBanner) {
-                    adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-                }
+                Admin.renderGlobalStateMonitor(actionBanner, []);
                 return;
             }
 
-            actionBanner.classList.remove('hidden');
             activeItems.sort((a, b) => {
                 if (!a.expiresAt && !b.expiresAt) return 0;
                 if (!a.expiresAt) return 1; // Push permanent items to the bottom
@@ -2691,99 +2887,11 @@ const Admin = {
             if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
             if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-            // GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
-            const getRegionBadge = (rId) => {
-                if (!rId) return '';
-                const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
-                const textClass = "text-xs font-bold text-gray-700 dark:text-gray-300";
-                
-                if (rId.includes('_GP')) return `<span class="${badgeClass}">GP</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_WC')) return `<span class="${badgeClass}">WC</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_KZN')) return `<span class="${badgeClass}">KZN</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_EC')) return `<span class="${badgeClass}">EC</span> <span class="${textClass}">Global Network</span>`;
-                if (rId === 'all') return `<span class="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5">ALL</span> <span class="${textClass}">Entire Network</span>`;
-                if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass} inline-flex items-center flex-wrap">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span>`;
-                return '';
-            };
-
-            let listHtml = '';
-            activeItems.forEach(item => {
-                const isPermanent = !item.expiresAt;
-                const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
-                
-                const timeBadge = isPermanent ? 'Permanent' : `Expires: in ${hrsLeft} hrs`;
-                
-                // Disable +24h button if permanent
-                const extendBtnHtml = isPermanent 
-                    ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`
-                    : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`;
-
-                listHtml += `
-                    <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
-                        
-                        <!-- Row 1: region + type/expiry -->
-                        <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
-                            <div class="min-w-0 shrink">${getRegionBadge(item.routeId)}</div>
-                            <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
-                                <span class="uppercase tracking-widest text-slate-500">${item.type}</span>
-                                <span class="mx-1.5 text-gray-300 dark:text-gray-600">|</span>
-                                <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
-                            </div>
-                        </div>
-
-                        <!-- Row 2: Bold Payload -->
-                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
-                            ${item.label}
-                        </span>
-
-                        <!-- Row 3: Actions -->
-                        <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
-                            <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
-                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
-                            </button>
-                            ${extendBtnHtml}
-                            <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
-                                Review &rarr;
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            actionBanner.innerHTML = `
-                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                    <span class="flex flex-col items-center">
-                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${activeItems.length})</span>
-                    </span>
-                    <span class="admin-unread-badge ${activeItems.length ? '' : 'hidden'}" aria-label="Active items">${activeItems.length || ''}</span>
-                    <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
-                <div id="action-body" class="hidden mt-4 space-y-2">
-                    ${listHtml}
-                </div>
-            `;
-            if (adminContainer.firstElementChild !== actionBanner) {
-                adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-            }
+            Admin.renderGlobalStateMonitor(actionBanner, activeItems);
 
         } catch(e) {
             // Stay visible - never delete the tile on fetch failure
-            actionBanner.classList.remove('hidden');
-            actionBanner.innerHTML = `
-                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                    <span class="flex flex-col items-center">
-                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
-                    </span>
-                </button>
-                <div id="action-body" class="hidden mt-4 space-y-2">
-                    <div class="text-xs text-center text-red-500 py-4">Could not refresh active entities. Tap Refresh from another panel or reopen Dev Mode.</div>
-                </div>
-            `;
-            if (adminContainer?.firstElementChild !== actionBanner) {
-                adminContainer?.insertBefore(actionBanner, adminContainer.firstChild);
-            }
+            Admin.renderGlobalStateMonitor(actionBanner, Admin._gsmItems || [], { error: true });
         }
     },
 
@@ -3726,7 +3834,7 @@ const Admin = {
         };
 
         Admin.clearCrashes = async () => {
-            const confirmed = await Admin.secureConfirm("Clear Crash DB", "Type 'CLEAR' to permanently delete all crash reports from the server:", "CLEAR");
+            const confirmed = await Admin.confirmClearDb('all crash reports from the server');
             if (!confirmed) return;
             
             const secret = await Admin.getAuthKey();
@@ -4003,6 +4111,10 @@ const Admin = {
                 if (card.id === 'crashes-panel') Admin.fetchCrashes(); // GUARDIAN PHASE 7
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
                 if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+                if (card.id === 'maint-panel') {
+                    document.getElementById('maint-mode-body')?.classList.add('hidden');
+                    document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+                }
                 if (card.id === 'alert-panel') {
                     if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
                         Admin.setAlertManagerTab('compose');
@@ -4131,10 +4243,10 @@ const Admin = {
                     </div>
                 </div>
                 <div id="de-tabs-swipe" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y">
-                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
-                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
+                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Trip Plans</button>
+                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Fails</button>
                 </div>
-                <div id="de-trip-filters" class="hidden space-y-2">
+                <div id="de-trip-filters" class="space-y-2">
                     <button type="button" id="de-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
                         <span>Filters</span>
                         <svg id="de-filters-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -4186,7 +4298,7 @@ const Admin = {
         const sortBtn = document.getElementById('de-sort-btn');
         const countModeBtn = document.getElementById('de-count-mode-btn');
         const listDiv = document.getElementById('de-list');
-        Admin._deActiveTab = 'fails';
+        Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
 
@@ -4232,8 +4344,8 @@ const Admin = {
                 const endX = e.changedTouches?.[0]?.screenX || 0;
                 const diffX = endX - touchStartX;
                 if (Math.abs(diffX) < 48) return;
-                if (diffX > 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
-                else if (diffX < 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+                if (diffX < 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
+                else if (diffX > 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
@@ -4755,7 +4867,7 @@ const Admin = {
         clearBtn.onclick = async () => {
             const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
             const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'routing fail logs';
-            const confirmed = await Admin.secureConfirm('Clear Telemetry DB', `Type 'CLEAR' to permanently delete all ${label} from the server:`, 'CLEAR');
+            const confirmed = await Admin.confirmClearDb(`all ${label} from the server`);
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -12663,7 +12775,13 @@ const Admin = {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
         }
-        if (maintPanel.dataset.loaded === "true") return;
+        if (maintPanel.dataset.loaded === "true") {
+            const persistBody = document.getElementById('maint-mode-body');
+            const persistChev = document.getElementById('maint-mode-chevron');
+            persistBody?.classList.add('hidden');
+            persistChev?.classList.add('-rotate-90');
+            return;
+        }
         maintPanel.dataset.loaded = "true";
 
         maintPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
@@ -13175,6 +13293,8 @@ const Admin = {
                     chevron?.classList.remove('-rotate-90');
                     header.classList.add('mb-4');
                 }
+                maintModeBody?.classList.add('hidden');
+                maintModeChevron?.classList.add('-rotate-90');
             };
         }
         
@@ -13233,10 +13353,8 @@ const Admin = {
                 }
                 resetMaintComposer();
                 renderMaintActiveList();
-                if (countLiveMaint() > 0) {
-                    maintModeBody?.classList.remove('hidden');
-                    maintModeChevron?.classList.remove('-rotate-90');
-                }
+                maintModeBody?.classList.add('hidden');
+                maintModeChevron?.classList.add('-rotate-90');
 
                 try {
                     const banSecret = await Admin.getAuthKey();

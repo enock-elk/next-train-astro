@@ -16,6 +16,7 @@
     "verify:board-paint": "node scripts/verify-live-board-paint.mjs",
     "verify:deeplink": "node scripts/verify-deeplink-launch.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
+    "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
     "verify:overlay-return": "node scripts/verify-overlay-return.mjs",
     "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",

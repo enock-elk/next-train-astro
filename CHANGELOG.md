@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## Admin telemetry, GSM tabs, Clear DB (18 Aug 2026)
+
+- TODAY regional breakdown is **unique users** (GA4 `activeUsers` by last selected `crm_region`), not sessions. Modal now shows TODAY unique + TODAY sessions, per-region sessions, and a note that region cards will not add up to TODAY.
+- ALL-time trend plots every month from **Jan 2026** (no 7-point MAU slice). INTRADAY plots through the latest GA4 30-min bucket instead of hiding a fixed 3 hours.
+- Planner telemetry opens on **Trip Plans**. Clear DB is two pop-ups (continue, then type CLEAR).
+- Global State Monitor splits Alerts / Incidents / Grid / Exclusions / Maint. System Controls → Maintenance Mode starts collapsed like the other inner accordions.
+
 ## CleverAds vendor snippet + no flex squeeze (18 Aug 2026)
 
 - `#clever-core` is again Clever’s `SCRIPT` tag (Pedro: last thing in `<head>`). Guardian only delays the original `insertBefore` loader IIFE.

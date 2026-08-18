@@ -2,7 +2,7 @@
  * Build-time weekday/Saturday grids for SEO route landings.
  * Reads public/data/full-database.json — never Firebase — so crawlers see durable times.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { orderGridTrainIds } from './grid-order.js';
@@ -14,10 +14,23 @@ const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
 
 let _dump = null;
 
+function dumpCandidates() {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return [
+        // astro build cwd is the repo root; compiled modules live under dist/
+        join(process.cwd(), 'public/data/full-database.json'),
+        join(here, '../../public/data/full-database.json'),
+        join(here, '../../../public/data/full-database.json'),
+    ];
+}
+
 export function loadScheduleDump() {
     if (_dump) return _dump;
-    const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
-    _dump = JSON.parse(readFileSync(join(root, 'public/data/full-database.json'), 'utf8'));
+    const path = dumpCandidates().find((p) => existsSync(p));
+    if (!path) {
+        throw new Error('public/data/full-database.json not found (SEO timetable SSG)');
+    }
+    _dump = JSON.parse(readFileSync(path, 'utf8'));
     return _dump;
 }
 

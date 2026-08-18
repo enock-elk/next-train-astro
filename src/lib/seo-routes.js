@@ -10,10 +10,17 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string }} SeoRouteSeed */
 
 export function stationLabel(raw) {
-    return String(raw || '')
+    const cleaned = String(raw || '')
         .replace(/\s+STATION$/i, '')
         .replace(/\s+YARD$/i, '')
+        .replace(/\s+/g, ' ')
         .trim();
+    if (cleaned && cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
+        return cleaned
+            .toLowerCase()
+            .replace(/\b([a-z])/g, (m) => m.toUpperCase());
+    }
+    return cleaned;
 }
 
 export function displayRouteName(route) {

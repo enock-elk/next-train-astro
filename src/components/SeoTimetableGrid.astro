@@ -18,16 +18,16 @@ const cells = grid?.cells || [];
         <thead>
           <tr>
             <th scope="col">Station</th>
-            {trainIds.map((id) => (
+            {trainIds.map((id: string) => (
               <th scope="col">{id}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {stations.map((station, r) => (
+          {stations.map((station: string, r: number) => (
             <tr>
               <th scope="row">{station}</th>
-              {trainIds.map((_, c) => (
+              {trainIds.map((_id: string, c: number) => (
                 <td>{cells[r]?.[c] || ''}</td>
               ))}
             </tr>

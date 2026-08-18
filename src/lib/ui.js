@@ -110,22 +110,6 @@ function hideFixedModal(modalId) {
     }
 }
 
-/** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
-function hideFixedModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
-    const inner = modal.firstElementChild;
-    if (inner && inner.classList.contains('scale-100')) {
-        inner.classList.remove('scale-100');
-        inner.classList.add('scale-95');
-    }
-    modal.classList.add('hidden');
-    modal.classList.remove('opacity-0');
-    if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
-        unlockBackgroundScroll();
-    }
-}
-
 export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
     if (window._adminDrillBackLock && modalId === 'dev-modal') return;

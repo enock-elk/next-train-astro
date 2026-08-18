@@ -2,7 +2,7 @@
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
 import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, formatAppDate } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { $currentRouteId } from '../store.js';
@@ -117,7 +117,7 @@ function formatPosted(notice) {
     if (!ts) return '';
     const date = new Date(ts);
     const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-    return `${label} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+    return `${label} ${formatAppDate(date, { withTime: true })}`;
 }
 
 function severityChrome(severity) {
@@ -705,6 +705,7 @@ function bindAlertsChannelOnce() {
                     snippet,
                     rawMsg: snippet,
                     alertId: id || '',
+                    alertKind: 'notice',
                 });
             }
         }

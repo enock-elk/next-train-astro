@@ -3,27 +3,9 @@ import { withBase } from '../lib/config.js';
 import { listFeaturedSeoRoutes, stationLabel } from '../lib/seo-routes.js';
 
 const featured = listFeaturedSeoRoutes();
-const compact = Astro.props.compact === true;
 ---
 
 {featured.length > 0 && (
-  compact ? (
-    <nav class="mt-3 text-center text-[10px] leading-relaxed text-gray-500 dark:text-gray-400" aria-label="Route timetables">
-      <a href={withBase('routes.html')} class="font-semibold text-blue-600 dark:text-blue-400 hover:underline">Route timetables</a>
-      <span class="text-gray-300 dark:text-gray-600"> · </span>
-      {featured.map(({ seed, route }, i) => (
-        <>
-          {i > 0 && <span class="text-gray-300 dark:text-gray-600"> · </span>}
-          <a
-            href={withBase(`routes/${seed.slug}.html`)}
-            class="hover:underline hover:text-blue-600 dark:hover:text-blue-400"
-          >
-            {stationLabel(route.destB)}
-          </a>
-        </>
-      ))}
-    </nav>
-  ) : (
     <section class="mt-8">
       <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">Route timetables</h2>
       <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
@@ -52,5 +34,4 @@ const compact = Astro.props.compact === true;
         </a>
       </p>
     </section>
-  )
 )}

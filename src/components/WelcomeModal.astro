@@ -50,7 +50,7 @@ import { withBase } from '../lib/config.js';
     // Haptic feedback falls back gracefully
     const triggerHapticFeedback = () => {
         try {
-            if (localStorage.getItem('hapticsEnabled') !== 'false' && navigator.vibrate) {
+            if (localStorage.getItem('hapticsEnabled') === 'true' && navigator.vibrate) {
                 navigator.vibrate(50);
             }
         } catch (e) {}

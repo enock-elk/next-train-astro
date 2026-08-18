@@ -20,10 +20,19 @@ import {
 } from './recovery.js';
 
 
+/** Vibrations are opt-in. Missing key (new users) means off. */
+export function hapticsAreEnabled() {
+    try {
+        return safeStorage.getItem('hapticsEnabled') === 'true';
+    } catch {
+        return false;
+    }
+}
+
 // --- GLOBAL HAPTIC ENGINE ---
 export function triggerHaptic() {
     try {
-        if (safeStorage.getItem('hapticsEnabled') !== 'false' && navigator.vibrate) {
+        if (hapticsAreEnabled() && navigator.vibrate) {
             navigator.vibrate(50);
         }
     } catch(e) {}

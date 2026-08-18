@@ -18,6 +18,26 @@ export function escapeHTML(str) {
     });
 }
 
+const APP_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * App-wide calendar date: `18 Aug 2026` (never locale 18/8/2026).
+ * Pass `{ withTime: true }` for `18 Aug 2026, 9:28 PM`.
+ */
+export function formatAppDate(ts, opts = {}) {
+    const withTime = opts === true || !!(opts && opts.withTime);
+    if (ts == null || ts === '') return '';
+    const d = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    const date = `${d.getDate()} ${APP_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+    if (!withTime) return date;
+    let hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${date}, ${hours}:${minutes} ${ampm}`;
+}
+
 /**
  * Resolve operating day type from calendar DOW + optional holiday schedule type.
  * Calendar Sunday always wins. WC remaps holiday saturday/public_holiday → public_holiday.

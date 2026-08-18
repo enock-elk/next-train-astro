@@ -24,6 +24,15 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - nexttrain-og `extractGridPreview` uses the same column order; cache bust `wa7`.
 - `robots.txt` disallows `/index.html` so it cannot cannibalize `/`. Lab hostname sets `noindex` in the layout script.
 
+## V8_08.18.2 — Ads to the top (18 Aug 2026)
+
+- Commuter What’s New: ads moved to the top to make way for future bottom navigation.
+- Home board footer no longer dumps the compact “Route timetables · Naledi · …” SEO row. Guide + noscript still keep the real timetable cards. Route / corridor / region landings keep their related-route lists.
+- Service Alerts Manager posts the same notice to multiple routes and/or regions in one go.
+- Feedback quotes of a service alert or transit incident open a rebuilt preview (live, archive, or reconstructed from the quote) instead of “original message not in this thread view”.
+- Posted dates use `18 Aug 2026` (with time where needed), not `18/8/2026`.
+- Vibrations default off for new users (opt-in in Settings).
+
 ## V8_08.18.1 — Overlay back-stack (18 Aug 2026)
 
 - Closing What's New now reopens the sidenav (`#sidenav`) instead of dumping the commuter on home.

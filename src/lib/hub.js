@@ -10,7 +10,8 @@ import {
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, formatAppDate } from './utils.js';
+import { encodeFeedbackAlertQuote } from './feedback-quote.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
@@ -101,6 +102,7 @@ export function clearFeedbackReplyMode() {
         contextBox.innerHTML = '';
         delete contextBox.dataset.rawMsg;
         delete contextBox.dataset.alertId;
+        delete contextBox.dataset.alertKind;
     }
     const typeWrap = document.getElementById('feedback-type-wrap');
     if (typeWrap) typeWrap.classList.remove('hidden');
@@ -112,7 +114,7 @@ export function clearFeedbackReplyMode() {
 }
 
 /** Show reply context chip and lock type to Thread Reply. */
-export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '' } = {}) {
+export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice' } = {}) {
     const fText = document.getElementById('feedback-text');
     const fType = document.getElementById('feedback-type');
     const typeWrap = document.getElementById('feedback-type-wrap');
@@ -130,6 +132,7 @@ export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippe
         contextBox.dataset.rawMsg = rawMsg || snippet;
         if (alertId) contextBox.dataset.alertId = alertId;
         else delete contextBox.dataset.alertId;
+        contextBox.dataset.alertKind = alertKind === 'disruption' ? 'disruption' : 'notice';
         contextBox.classList.remove('hidden');
     }
     if (fText) fText.value = '';
@@ -280,7 +283,7 @@ function syncProfileDisplay() {
 
 function syncHapticsToggle() {
     const cb = document.getElementById('settings-haptics-checkbox');
-    if (cb) cb.checked = safeStorage.getItem('hapticsEnabled') !== 'false';
+    if (cb) cb.checked = safeStorage.getItem('hapticsEnabled') === 'true';
 }
 
 // What's New is a commuter surface. CHANGELOG_DATA copy must stay commuter-visible
@@ -331,13 +334,27 @@ async function submitFeedback() {
         return;
     }
 
-    // Prefix thread-reply context so admin can render a single quote chip
+    let quotedAlertId = '';
+    let quotedAlertKind = '';
     try {
         const contextBox = document.getElementById('feedback-reply-context');
         const prefix = contextBox && !contextBox.classList.contains('hidden')
             ? String(contextBox.dataset.rawMsg || '').trim()
             : '';
-        if (prefix) {
+        quotedAlertId = contextBox && !contextBox.classList.contains('hidden')
+            ? String(contextBox.dataset.alertId || '').trim()
+            : '';
+        quotedAlertKind = contextBox && !contextBox.classList.contains('hidden')
+            ? String(contextBox.dataset.alertKind || 'notice')
+            : '';
+        if (quotedAlertId || quotedAlertKind === 'disruption') {
+            const header = encodeFeedbackAlertQuote({
+                alertId: quotedAlertId,
+                kind: quotedAlertKind || 'notice',
+                snippet: prefix,
+            });
+            text = `${header}\n${text}`;
+        } else if (prefix) {
             text = prefix.startsWith('[') ? `${prefix}\n${text}` : `[${prefix}]\n${text}`;
         }
     } catch { /* ignore */ }
@@ -397,7 +414,9 @@ async function submitFeedback() {
             timestamp: Date.now(),
             userAgent: navigator.userAgent,
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
-            isPWA: isStandalone
+            isPWA: isStandalone,
+            quotedAlertId: quotedAlertId || null,
+            quotedAlertKind: quotedAlertKind || null,
         };
 
         const authParam = authToken ? `?auth=${authToken}` : '';
@@ -758,9 +777,8 @@ export function renderServiceAlertModal(notice, options = {}) {
         } else {
             const posted = notice.repostedAt || notice.postedAt || notice.timestamp;
             if (posted) {
-                const date = new Date(posted);
                 const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-                timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+                timestamp.textContent = `${label}: ${formatAppDate(posted, { withTime: true })}`;
             } else if (mode === 'preview') {
                 timestamp.textContent = 'Preview — not posted yet';
             } else {
@@ -851,6 +869,7 @@ export function renderServiceAlertModal(notice, options = {}) {
                 snippet: truncatedMsg,
                 rawMsg: truncatedMsg,
                 alertId: notice?.id || '',
+                alertKind: 'notice',
             });
         };
         btnContainer.appendChild(rightBtn);
@@ -1224,7 +1243,7 @@ export function initHub() {
     hapticsToggle?.addEventListener('click', (e) => {
         const t = e.target;
         if (t.tagName !== 'INPUT' && t.tagName !== 'LABEL') {
-            applyHaptics(!(safeStorage.getItem('hapticsEnabled') !== 'false'));
+            applyHaptics(!(safeStorage.getItem('hapticsEnabled') === 'true'));
         }
     });
     hapticsCb?.addEventListener('change', (e) => applyHaptics(e.target.checked));

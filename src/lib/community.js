@@ -11,7 +11,7 @@
  * own post in a session overlay so they appear silenced without schema rewrites.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
 import { showToast, triggerHaptic, openSmoothModal } from './ui.js';
@@ -139,7 +139,7 @@ function formatDayDivider(ts) {
     const msg = date.toDateString();
     if (msg === today.toDateString()) return 'Today';
     if (msg === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatAppDate(date);
 }
 
 const NAME_COLORS = ['#02a698', '#53bdeb', '#06cf9c', '#e742a4', '#a281f7', '#ff7b72', '#25d366', '#d97706'];

@@ -20,7 +20,7 @@ Work from **`main`**. The owner ships by pushing `main` and running the producti
 - **Do not remove Thandeka** from admin allowlists. Operator emails in rules/admin are `enockelk@gmail.com` and `thandeka05nxumalo@gmail.com`.
 - **`DEFAULT_EXCLUSIONS` stays `{}`.** Corridor bans live in RTDB `exclusions/`. Do not hardcode Kempton 0618/0619 (or any train) in the client.
 - **Do not drop** alert expiry, union scoping (route ∪ region ∪ `all`), park-home on Alerts Close (`history.back()` after hide), quiet board paint, hold-to-react, reaction breakdown sheet, or photo hold-to-react.
-- **Do not reserve a blank ad gap.** Clever overlays append to `document.body`. Keep the commuter UI in `#nt-shell` so vendor nodes cannot sit as a second flex item beside the app. Do not restyle vendor `left`/`top`/`transform`. Footer stays `nt-board-footer mt-auto`.
+- **Do not reserve a blank ad gap.** Clever overlays append to `document.body` (sticky-top). Keep the commuter UI in `#nt-shell` so vendor nodes cannot sit as a second flex item beside the app. Do not restyle vendor `left`/`top`/`transform`. Footer stays `nt-board-footer mt-auto`.
 - **Do not flash WORKING OFFLINE** on screen-lock. Offline chrome only if the app is **visible** and still offline for **4s**.
 - **Do not point `PIPELINE_SOURCES.GITHUB` back at `metrorail-app`.** The dump is this repo: `public/data/full-database.json` via jsDelivr `@main/public/data/`.
 - **Do not empty `metrorail-app/data/`.** Deploy overlays `public/data/*.json` only. Never `--delete` host-only files (e.g. `sanitize.py`).

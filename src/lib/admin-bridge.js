@@ -10,7 +10,8 @@ import {
     ADMIN_EMAILS, isAdminEmail,
     SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate } from './utils.js';
+import { parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll
@@ -64,6 +65,8 @@ export function exposeAdminGlobals() {
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
+    window.formatAppDate = formatAppDate;
+    window.parseFeedbackAlertQuote = parseFeedbackAlertQuote;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;

@@ -86,6 +86,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       />
     )}
     <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
+    <script is:inline data-cfasync="false" type="text/javascript" id="clever-core">
+      /* CleverAds bootstrap id. Loader is injected after the app is in the safe zone. */
+    </script>
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
       (function () {
@@ -521,32 +524,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
 
-      /* CleverAds overlays from the top. Never reserve page space for it. */
-      #clever-core {
-        top: 0 !important;
-        bottom: auto !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        max-height: min(280px, 45vh) !important;
-        min-height: 0;
-        height: auto;
-        overflow: visible !important;
-        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-        pointer-events: none;
-      }
-      #clever-core iframe {
-        max-height: min(280px, 45vh) !important;
-        max-width: 100%;
-      }
-      #clever-core.ad-cloaked {
-        transform: translateY(-150%) !important;
-        pointer-events: none !important;
-        opacity: 0;
-        min-height: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-      }
+      /* CleverAds is a vendor overlay. Never reserve page space for it. */
       #view-next-train.view-section.active {
         display: flex;
         flex-direction: column;
@@ -569,9 +547,6 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
 
     <!-- Page Content Injected Here -->
     <slot />
-
-    <!-- CleverAds host slot (cloaked until safe zone; contained max-height) -->
-    <div id="clever-core" class="ad-cloaked fixed top-0 left-0 w-full z-[80] flex justify-center items-start" aria-hidden="true"></div>
 
     <!-- Client-Side Bootstrapper -->
     <script>

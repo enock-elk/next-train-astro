@@ -1,9 +1,9 @@
 /**
- * CleverAds — contained top slot (SPA Guardian armor, Astro-safe).
+ * CleverAds — vendor snippet (SPA Guardian timing, Astro-safe).
  *
- * Why SPA ads look "tall then shrink": Clever's sticky creative ships its own
- * expand/collapse chrome (chevron). That is not Next Train UI. We contain the
- * host slot so it cannot cover onboarding or go fullscreen.
+ * Clever’s tag is a SCRIPT#clever-core that insertBefore()s their loader next
+ * to the first page script. Do not steal that id for a positioned DIV: their
+ * top/bottom format is applied to overlays they create, not our host CSS.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
@@ -83,7 +83,7 @@ function shouldDeferForSessionStability() {
 }
 
 function setAdPadding(_on) {
-    // Ads overlay from the top. Never push the board or footer down.
+    // Ads overlay. Never push the board or footer down.
     document.querySelectorAll('.view-section').forEach((el) => {
         el.classList.remove('ad-active-padding');
     });
@@ -92,99 +92,78 @@ function setAdPadding(_on) {
     } catch { /* ignore */ }
 }
 
-const APP_CHROME_IDS = new Set([
-    'clever-core', 'offline-toast', 'sidenav', 'sidenav-overlay', 'welcome-modal',
-    'global-dropdown-scrim', 'toast', 'settings-modal', 'map-modal', 'legal-modal',
-    'help-modal', 'disruption-modal', 'route-modal', 'schedule-modal', 'profile-modal',
-    'feedback-modal', 'delay-report-modal', 'about-modal', 'blackbox-modal',
-    'account-modal', 'login-modal', 'dev-modal', 'developer-reply-modal',
-    'network-struggle-modal', 'redirect-modal', 'region-confirm-modal', 'exit-modal',
-    'schedule-override-modal', 'notice-modal', 'alerts-channel', 'loading-overlay',
-    'main-content', LOADER_ID,
-]);
-
-function looksLikeStickyAd(el) {
-    if (!(el instanceof Element)) return false;
-    if (APP_CHROME_IDS.has(el.id) || el.id === LOADER_ID) return false;
-    if (el.tagName === 'SCRIPT') return false;
-    const blob = `${el.id} ${el.className}`;
-    if (/clever/i.test(blob) && el.id !== 'clever-core') return true;
-    if (el.tagName === 'IFRAME') return true;
-    if (el.querySelector?.('iframe')) return true;
-    if (el.closest?.('#clever-core')) {
-        const s = getComputedStyle(el);
-        return s.position === 'fixed' || s.position === 'absolute';
-    }
-    try {
-        const s = getComputedStyle(el);
-        if (s.position !== 'fixed') return false;
-        const r = el.getBoundingClientRect();
-        const atTop = r.y <= 16;
-        const notFullscreen = r.width < window.innerWidth * 0.95 && r.height < window.innerHeight * 0.65;
-        const hasSize = r.width >= 120 && r.height >= 50;
-        return atTop && notFullscreen && hasSize && el.parentElement === document.body;
-    } catch {
-        return false;
-    }
-}
-
-function centerStickyNode(el) {
-    if (!el || el.getAttribute('data-nt-centered') === '1') return false;
-    const s = getComputedStyle(el);
-    if (s.position !== 'fixed' && s.position !== 'absolute') return false;
-    const r = el.getBoundingClientRect();
-    if (r.width < 20 || r.height < 20) return false;
-    el.style.setProperty('left', '50%', 'important');
-    el.style.setProperty('right', 'auto', 'important');
-    el.style.setProperty('top', '0px', 'important');
-    el.style.setProperty('bottom', 'auto', 'important');
-    el.style.setProperty('transform', 'translateX(-50%)', 'important');
-    el.setAttribute('data-nt-centered', '1');
-    return true;
-}
-
-function forceCenterStickyAds(adContainer) {
-    if (adContainer) {
-        adContainer.style.setProperty('top', '0px', 'important');
-        adContainer.style.setProperty('bottom', 'auto', 'important');
-        adContainer.classList.add('top-0', 'items-start');
-        adContainer.classList.remove('bottom-0', 'items-end');
-    }
-    const centered = [];
-    const consider = (el) => {
-        if (!looksLikeStickyAd(el)) return;
-        if (centerStickyNode(el)) centered.push(`${el.tagName}#${el.id || ''}`);
+function cleverOverlayNodes() {
+    const out = [];
+    const seen = new Set();
+    const add = (el) => {
+        if (!el || seen.has(el) || el.id === 'clever-core' || el.id === LOADER_ID || el.tagName === 'SCRIPT') return;
+        seen.add(el);
+        out.push(el);
     };
-    adContainer?.querySelectorAll('*').forEach(consider);
-    document.querySelectorAll('iframe').forEach(consider);
-    [...(document.body ? document.body.children : [])].forEach(consider);
-    return centered;
+    document.querySelectorAll('[id*="lever" i], [class*="lever" i]').forEach(add);
+    document.querySelectorAll('iframe').forEach((el) => {
+        const src = el.getAttribute('src') || '';
+        if (/clever/i.test(src) || el.closest('[id*="lever" i], [class*="lever" i]')) add(el);
+    });
+    return out;
 }
 
-function cloak(adContainer, fatal = false) {
-    if (!adContainer) return;
-    adContainer.classList.add('hidden', 'ad-cloaked');
+function cloakOverlays(hide) {
+    cleverOverlayNodes().forEach((el) => {
+        if (hide) el.style.setProperty('display', 'none', 'important');
+        else el.style.removeProperty('display');
+    });
+}
+
+// #region agent log
+function dumpCleverInject(reason, hypothesisId, extra = {}) {
+    try {
+        const core = document.getElementById('clever-core');
+        const loader = document.getElementById(LOADER_ID);
+        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c79135' },
+            body: JSON.stringify({
+                sessionId: 'c79135',
+                runId: 'vendor-snippet',
+                hypothesisId,
+                location: 'clever-ads.js:dumpCleverInject',
+                message: reason,
+                data: {
+                    href: location.href,
+                    coreTag: core ? core.tagName : null,
+                    coreParent: core && core.parentElement ? core.parentElement.tagName : null,
+                    loaderParent: loader && loader.parentElement ? loader.parentElement.tagName : null,
+                    loaderPrev: loader && loader.previousElementSibling ? `${loader.previousElementSibling.tagName}#${loader.previousElementSibling.id || ''}` : null,
+                    overlayCount: cleverOverlayNodes().length,
+                    ...extra,
+                },
+                timestamp: Date.now(),
+            }),
+        }).catch(() => {});
+    } catch { /* ignore */ }
+}
+// #endregion
+
+function cloak(_adContainer, fatal = false) {
+    cloakOverlays(true);
     if (fatal) {
-        adContainer.innerHTML = '';
-        adContainer.style.setProperty('display', 'none', 'important');
+        document.getElementById(LOADER_ID)?.remove();
+        cloakOverlays(true);
     }
     setAdPadding(false);
 }
 
-function uncloak(adContainer) {
-    if (!adContainer || window._adNetworkDestroyed) return;
-    adContainer.style.display = '';
-    adContainer.classList.remove('hidden', 'ad-cloaked');
+function uncloak() {
+    if (window._adNetworkDestroyed) return;
+    cloakOverlays(false);
 }
 
-function isAdFilled(adContainer) {
-    if (adContainer && adContainer.childElementCount > 0) {
-        const iframe = adContainer.querySelector('iframe');
-        if (iframe) return iframe.getBoundingClientRect().height > 20;
-        if (adContainer.offsetHeight > 20) return true;
-    }
-    const escaped = document.querySelector('[data-nt-centered="1"]');
-    return !!(escaped && escaped.getBoundingClientRect().height > 20);
+function isAdFilled() {
+    return cleverOverlayNodes().some((el) => {
+        const r = el.getBoundingClientRect();
+        return r.height > 20 && r.width > 20 && getComputedStyle(el).display !== 'none';
+    });
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {
@@ -215,12 +194,13 @@ function injectAdScript(adContainer) {
 
     try {
         const c = document.createElement('script');
+        const f = window.frameElement;
         c.id = LOADER_ID;
         c.src = SCRIPT_SRC;
         c.async = true;
         c.type = 'text/javascript';
+        c.setAttribute('data-cfasync', 'false');
         try {
-            const f = window.frameElement;
             c.setAttribute('data-target', window.name || (f && f.getAttribute('id')) || '');
         } catch {
             c.setAttribute('data-target', window.name || '');
@@ -233,13 +213,26 @@ function injectAdScript(adContainer) {
             clearTimeout(adTimeout);
             window._adScriptLoaded = true;
             console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_PAGE_INJECT_CAP}).`);
-            if (adContainer.classList.contains('ad-cloaked') && !window._adNetworkDestroyed && isSafeZone()) {
-                uncloak(adContainer);
-                setAdPadding(isAdFilled(adContainer));
-            }
-            forceCenterStickyAds(adContainer);
+            if (!window._adNetworkDestroyed && isSafeZone()) uncloak();
+            // #region agent log
+            dumpCleverInject('script-onload', 'B', { attempt });
+            // #endregion
         };
-        adContainer.appendChild(c);
+        let a;
+        try {
+            a = parent.document.getElementsByTagName('script')[0] || document.getElementsByTagName('script')[0];
+        } catch {
+            a = false;
+        }
+        a || (a = document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]);
+        a.parentNode.insertBefore(c, a);
+        // #region agent log
+        dumpCleverInject('loader-inserted', 'A', {
+            attempt,
+            insertParent: a.parentNode && a.parentNode.tagName,
+            insertBefore: a.id || a.tagName,
+        });
+        // #endregion
         return true;
     } catch (e) {
         console.warn('🛡️ Guardian: Ad inject suppressed', e);
@@ -261,12 +254,13 @@ function refreshAdVisibility(adContainer) {
         return;
     }
 
-    uncloak(adContainer);
-    forceCenterStickyAds(adContainer);
-    const filled = isAdFilled(adContainer);
+    uncloak();
+    const filled = isAdFilled();
     if (filled) {
-        adContainer.style.pointerEvents = 'auto';
         setAdPadding(false);
+        // #region agent log
+        dumpCleverInject('slot-filled', 'C');
+        // #endregion
         if (!window._adTelemetryFired) {
             window._adTelemetryFired = true;
             if (typeof window.trackAnalyticsEvent === 'function') {
@@ -274,7 +268,6 @@ function refreshAdVisibility(adContainer) {
             }
         }
     } else {
-        adContainer.style.pointerEvents = 'none';
         setAdPadding(false);
     }
 }
@@ -286,21 +279,9 @@ export function initCleverAds() {
     const adContainer = document.getElementById('clever-core');
     if (!adContainer) return;
 
-    forceCenterStickyAds(adContainer);
-    if (window.MutationObserver) {
-        const escapedObserver = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                for (const node of m.addedNodes) {
-                    if (!(node instanceof Element)) continue;
-                    if (node.id === 'clever-core' || APP_CHROME_IDS.has(node.id)) continue;
-                    if (!looksLikeStickyAd(node) && node.tagName !== 'IFRAME' && !node.querySelector?.('iframe')) continue;
-                    forceCenterStickyAds(adContainer);
-                    return;
-                }
-            }
-        });
-        escapedObserver.observe(document.documentElement, { childList: true, subtree: true });
-    }
+    // #region agent log
+    dumpCleverInject('init-bootstrap', 'A', { coreTag: adContainer.tagName });
+    // #endregion
 
     // Drop sticky tab budget from older builds so refresh always gets a clean 4/4
     clearLegacySessionInjectCap();
@@ -317,17 +298,19 @@ export function initCleverAds() {
     let scheduleStarted = false;
     let scheduleExhausted = false;
 
-    if (window.MutationObserver) {
+    if (window.MutationObserver && document.body) {
         const adObserver = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 if (m.type === 'attributes' && m.attributeName === 'style') {
-                    const style = adContainer.getAttribute('style') || '';
-                    if (style.includes('height: 100vh')) {
+                    const el = m.target;
+                    if (!(el instanceof Element)) continue;
+                    const style = el.getAttribute('style') || '';
+                    if (style.includes('height: 100vh') && /clever/i.test(`${el.id} ${el.className}`)) {
                         if (!window._rogueAdCheckPending) {
                             window._rogueAdCheckPending = true;
                             setTimeout(() => {
                                 window._rogueAdCheckPending = false;
-                                const cur = adContainer.getAttribute('style') || '';
+                                const cur = el.getAttribute('style') || '';
                                 if (cur.includes('height: 100vh')) {
                                     adObserver.disconnect();
                                     handleAdFailure(adContainer, 'ROGUE_FULLSCREEN_TAKEOVER', true);
@@ -337,20 +320,20 @@ export function initCleverAds() {
                         break;
                     }
                 }
-                if (m.type === 'childList') {
-                    forceCenterStickyAds(adContainer);
-                }
-                if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled(adContainer) && isSafeZone()) {
+                if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled() && isSafeZone()) {
                     window._adTelemetryFired = true;
-                    uncloak(adContainer);
+                    uncloak();
                     setAdPadding(false);
+                    // #region agent log
+                    dumpCleverInject('overlay-appeared', 'C');
+                    // #endregion
                     if (typeof window.trackAnalyticsEvent === 'function') {
                         window.trackAnalyticsEvent('view_clever_ad', { location: 'main_dashboard', verified: 'instant_tripwire' });
                     }
                 }
             }
         });
-        adObserver.observe(adContainer, { attributes: true, childList: true, subtree: true });
+        adObserver.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
     }
 
     const stopSchedule = (reason) => {

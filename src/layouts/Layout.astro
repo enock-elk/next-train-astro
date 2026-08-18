@@ -359,7 +359,22 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       .hidden { display: none !important; }
 
       body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
-      body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
+      /* Lock the board only. Do not set touch-action:none on body — that value
+         intersects with every descendant and blocks pan inside Dev Hub / modals. */
+      body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
+      #dev-modal,
+      #alerts-channel,
+      [id$="-modal"].fixed {
+        touch-action: pan-y;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+      body.modal-active #dev-modal {
+        inset: 0;
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow-y: auto;
+      }
       
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -536,19 +551,27 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         display: flex;
         flex-direction: column;
       }
-      /* Ease the app shell when a unit fills or dismisses. Never transform vendor nodes. */
+      /* Ease the app shell when a unit fills or dismisses. Never transform vendor nodes.
+         transform is only applied while shifted — even translateY(0) creates a
+         containing block and traps position:fixed overlays (Dev Hub, alerts, nested
+         admin dialogs) so they cannot scroll against a locked body. */
       #nt-shell {
         --nt-ad-shift: 0px;
         --nt-ad-flip: 0px;
-        transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)));
         transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #nt-shell.nt-ad-shifted,
+      html.nt-ads-entering #nt-shell {
+        transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)));
       }
       #nt-shell.nt-ad-no-motion {
         transition: none !important;
       }
-      html.nt-ads-cloaked #nt-shell {
+      html.nt-ads-cloaked #nt-shell,
+      body.modal-active #nt-shell {
         --nt-ad-shift: 0px !important;
         --nt-ad-flip: 0px !important;
+        transform: none !important;
         transition: none !important;
       }
       @media (prefers-reduced-motion: reduce) {

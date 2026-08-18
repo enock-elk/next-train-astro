@@ -1,5 +1,5 @@
 /**
- * V8_08.19.4 polish: merged What’s New, version lock, keep 18.2/18.3 regressions.
+ * V8_08.19.5 polish: merged What’s New, version lock, keep 18.2/18.3 regressions.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -10,9 +10,9 @@ import { encodeFeedbackAlertQuote, parseFeedbackAlertQuote } from '../src/lib/fe
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.19.4') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.19.5') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.19.4') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.19.5') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 4) {
     fail(`What's New must fold the 18/17 commuter cards, got ${latest?.features?.length}`);
 }
@@ -30,15 +30,22 @@ if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity/i.tes
 }
 
 const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
-for (const id of ['V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
-    if (folded.has(id)) fail(`${id} must be folded into V8_08.19.4, not kept as its own card`);
+for (const id of ['V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.19.5, not kept as its own card`);
 }
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.19.4') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.19.5') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.19.4') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.19.5') fail(`app-version.json is ${appVer.version}`);
+
+const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
+if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
+    fail('body.modal-active must not set touch-action:none');
+}
+if (!layout.includes('body.modal-active #nt-shell')) fail('modal-active must drop #nt-shell transform');
+if (!layout.includes('touch-action: pan-y')) fail('fixed overlays must allow pan-y');
 
 const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
 if (liveBoard.includes('SeoFeaturedRoutes')) fail('LiveBoard footer must not include SeoFeaturedRoutes');
@@ -145,4 +152,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.19.4 polish (merged What’s New, version, 18.2/18.3 regressions)');
+console.log('✓ V8_08.19.5 polish (merged What’s New, version, 18.2/18.3 regressions)');

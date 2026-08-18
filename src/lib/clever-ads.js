@@ -159,28 +159,56 @@ function currentShellShift() {
     return Number.isFinite(n) ? n : 0;
 }
 
+function readShellShiftVars(shell) {
+    const shift = parseFloat(shell.style.getPropertyValue('--nt-ad-shift')) || 0;
+    const flip = parseFloat(shell.style.getPropertyValue('--nt-ad-flip')) || 0;
+    return { shift, flip };
+}
+
+/** Drop the transform containing-block once both shift vars are 0. */
+function syncNtAdShiftedClass(shell = ntShell()) {
+    if (!shell) return;
+    const { shift, flip } = readShellShiftVars(shell);
+    shell.classList.toggle('nt-ad-shifted', Math.abs(shift) > 0.5 || Math.abs(flip) > 0.5);
+}
+
+let ntAdShiftedClearTimer = 0;
+function scheduleNtAdShiftedSync(shell) {
+    if (ntAdShiftedClearTimer) clearTimeout(ntAdShiftedClearTimer);
+    ntAdShiftedClearTimer = window.setTimeout(() => {
+        ntAdShiftedClearTimer = 0;
+        syncNtAdShiftedClass(shell);
+    }, AD_SHELL_EASE_MS + 40);
+}
+
 function setShellVar(name, px, animate) {
     const shell = ntShell();
     if (!shell) return;
-    const next = `${Math.round(Number(px) || 0)}px`;
+    const numeric = Math.round(Number(px) || 0);
+    const next = `${numeric}px`;
+    if (numeric !== 0) shell.classList.add('nt-ad-shifted');
     if (!animate) shell.classList.add('nt-ad-no-motion');
     shell.style.setProperty(name, next);
     if (!animate) {
         void shell.offsetHeight;
         shell.classList.remove('nt-ad-no-motion');
+        syncNtAdShiftedClass(shell);
+        return;
     }
+    scheduleNtAdShiftedSync(shell);
 }
 
 function playInFlowFlip(invertPx) {
     const shell = ntShell();
     if (!shell || !invertPx) return;
     lockShellMotion();
-    shell.classList.add('nt-ad-no-motion');
+    shell.classList.add('nt-ad-shifted', 'nt-ad-no-motion');
     shell.style.setProperty('--nt-ad-flip', `${Math.round(invertPx)}px`);
     void shell.offsetHeight;
     afterPaint(() => {
         shell.classList.remove('nt-ad-no-motion');
         shell.style.setProperty('--nt-ad-flip', '0px');
+        scheduleNtAdShiftedSync(shell);
     });
 }
 

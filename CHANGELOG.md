@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.5 — Admin / modal scroll unlock (19 Aug 2026)
+
+- `body.modal-active` no longer sets `touch-action: none` (that value intersects with every descendant and blocked pan inside Dev Hub and nested admin dialogs). Overlays use `touch-action: pan-y`.
+- `#nt-shell` applies `transform` only while `.nt-ad-shifted` / `html.nt-ads-entering`. Cloak and `modal-active` force `transform: none` so `position: fixed` overlays are viewport-sized again and can scroll against the locked board.
+- Commuter What’s New is unchanged (still the folded 19.4 ads / overlay / links / photo / grid bullets).
+
 ## V8_08.19.4 — Ad entrance ease, composer toolbar, poster picker (19 Aug 2026)
 
 - CleverAds entrance: hide the unit (`html.nt-ads-entering`), paint `#nt-shell` at 0, ease it down, then reveal. Exit still eases back. Double-rAF FLIP for in-flow units. Duration 420ms.

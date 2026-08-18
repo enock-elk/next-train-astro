@@ -32,6 +32,16 @@ if (!layout.includes('html.nt-ads-cloaked')) fail('safe-zone cloak CSS missing (
 if (!layout.includes('--nt-ad-shift')) fail('Layout must ease #nt-shell via --nt-ad-shift');
 if (!layout.includes('--nt-ad-flip')) fail('Layout must FLIP in-flow ads via --nt-ad-flip');
 if (!layout.includes('html.nt-ads-cloaked #nt-shell')) fail('cloaked shell must not keep an ad shift');
+if (!layout.includes('body.modal-active #nt-shell')) fail('open modals must drop the #nt-shell transform containing-block');
+if (!/html\.nt-ads-cloaked #nt-shell[\s\S]*transform:\s*none\s*!important/.test(layout)) {
+  fail('cloaked/modal #nt-shell must set transform:none (translateY(0) still traps position:fixed)');
+}
+if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
+  fail('body.modal-active must not set touch-action:none (blocks pan inside Dev Hub / nested modals)');
+}
+if (!layout.includes('#dev-modal') || !layout.includes('touch-action: pan-y')) {
+  fail('Dev Hub / fixed modals must allow touch-action: pan-y');
+}
 
 if (!ads.includes('__ntCleverVendorInject')) fail('clever-ads.js must call the vendor IIFE, not a restyled host DIV');
 if (!ads.includes('--nt-ad-shift')) fail('clever-ads.js must drive --nt-ad-shift on #nt-shell');
@@ -49,6 +59,11 @@ if (ads.includes('setAdPadding(true)')) fail('must not reserve an empty ad gap v
 if (!layout.includes('transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)))')) {
   fail('Layout must ease #nt-shell only (shift + flip)');
 }
+if (!layout.includes('#nt-shell.nt-ad-shifted')) {
+  fail('Layout must apply the shell transform only while .nt-ad-shifted (or entering)');
+}
+if (!ads.includes('nt-ad-shifted')) fail('clever-ads.js must toggle .nt-ad-shifted so rest state has transform:none');
+if (!ads.includes('syncNtAdShiftedClass')) fail('clever-ads.js must drop .nt-ad-shifted when shift+flip are 0');
 if (/setProperty\(\s*['"]left['"]/.test(ads) || /setProperty\(\s*['"]top['"]/.test(ads) || /translateX\(-50%\)/.test(ads)) {
   fail('clever-ads.js must not force left/top/transform on vendor overlays');
 }

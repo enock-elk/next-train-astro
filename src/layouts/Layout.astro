@@ -484,6 +484,10 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         border-radius: 0 !important;
         max-height: none !important;
       }
+      #map-modal.full-screen > div {
+        height: 100%;
+        max-height: 100% !important;
+      }
 
       /* SPA custom.css motion primitives */
       @keyframes shake {
@@ -551,31 +555,48 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         display: flex;
         flex-direction: column;
       }
-      /* Ease the app shell when a unit fills or dismisses. Never transform vendor nodes.
-         transform is only applied while shifted — even translateY(0) creates a
-         containing block and traps position:fixed overlays (Dev Hub, alerts, nested
-         admin dialogs) so they cannot scroll against a locked body. */
+      /* Ease the live board when a unit fills or dismisses. Never transform
+         vendor nodes, and never transform #nt-shell — it wraps every
+         position:fixed overlay (map, feedback, about, privacy, Dev Hub).
+         A transform there sizes those overlays to the page box, so Close Map
+         falls off-screen and cards stick to the top. */
       #nt-shell {
         --nt-ad-shift: 0px;
         --nt-ad-flip: 0px;
+      }
+      #main-content.app-shell {
         transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      #nt-shell.nt-ad-shifted,
-      html.nt-ads-entering #nt-shell {
+      #nt-shell.nt-ad-shifted #main-content.app-shell,
+      html.nt-ads-entering #main-content.app-shell {
         transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)));
       }
-      #nt-shell.nt-ad-no-motion {
+      #nt-shell.nt-ad-no-motion #main-content.app-shell {
         transition: none !important;
       }
       html.nt-ads-cloaked #nt-shell,
       body.modal-active #nt-shell {
         --nt-ad-shift: 0px !important;
         --nt-ad-flip: 0px !important;
+      }
+      html.nt-ads-cloaked #main-content.app-shell,
+      body.modal-active #main-content.app-shell {
         transform: none !important;
         transition: none !important;
       }
       @media (prefers-reduced-motion: reduce) {
-        #nt-shell { transition: none !important; }
+        #main-content.app-shell { transition: none !important; }
+      }
+      /* Size overlays to the screen, not a tall transformed ancestor. */
+      #nt-shell [id$="-modal"].fixed,
+      #nt-shell #alerts-channel {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: auto;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],

@@ -16,7 +16,7 @@ import { withBase } from '../lib/config.js';
 <!-- NETWORK MAP IMAGE LIGHTBOX -->
 <div id="map-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[115] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0">
             <div class="flex items-center space-x-3">
                 <h3 id="map-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Network Map</h3>
             </div>
@@ -33,7 +33,7 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
 
-        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative">
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative shrink-0">
             <button id="close-map-btn-2" onclick="if(location.hash === '#map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close Map</button>
         </div>
     </div>
@@ -48,7 +48,7 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="legal-modal-content" class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed"></div>
+        <div id="legal-modal-content" class="p-6 overflow-y-auto min-h-0 flex-1 text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed"></div>
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
             <button id="close-legal-btn-2" class="w-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg shadow-sm transition-colors focus:outline-none">
                 Close

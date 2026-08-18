@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.6 — Stop ad ease from trapping commuter overlays (19 Aug 2026)
+
+- Root cause of distorted Feedback / About / Privacy / Map: `#nt-shell { transform }` from the CleverAds ease created a containing block for every `position: fixed` overlay inside the shell. Overlays grew to the page height, so Close Map sat below the fold, cards stuck to the top, and inner text could not scroll against `body.modal-active`.
+- Ad motion now translates `#main-content` only. `#nt-shell` keeps the shift CSS variables and never gets a transform. Overlays inside the shell are pinned to `100dvh`.
+- Legal body is `flex-1 min-h-0` so Privacy/Terms scroll above Close. Map header/footer are `shrink-0`.
+- Commuter What’s New adds a menus bullet. Admin-only 19.5 notes stay in this file.
+
 ## V8_08.19.5 — Admin / modal scroll unlock (19 Aug 2026)
 
 - `body.modal-active` no longer sets `touch-action: none` (that value intersects with every descendant and blocked pan inside Dev Hub and nested admin dialogs). Overlays use `touch-action: pan-y`.

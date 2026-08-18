@@ -29,12 +29,22 @@ if (/<body[^>]*flex items-start justify-center/.test(layout)) {
   fail('body must not be the flex centering container (that squeezed the board beside the ad)');
 }
 if (!layout.includes('html.nt-ads-cloaked')) fail('safe-zone cloak CSS missing (visibility only)');
-if (!layout.includes('--nt-ad-shift')) fail('Layout must ease #nt-shell via --nt-ad-shift');
+if (!layout.includes('--nt-ad-shift')) fail('Layout must ease the board via --nt-ad-shift');
 if (!layout.includes('--nt-ad-flip')) fail('Layout must FLIP in-flow ads via --nt-ad-flip');
 if (!layout.includes('html.nt-ads-cloaked #nt-shell')) fail('cloaked shell must not keep an ad shift');
-if (!layout.includes('body.modal-active #nt-shell')) fail('open modals must drop the #nt-shell transform containing-block');
-if (!/html\.nt-ads-cloaked #nt-shell[\s\S]*transform:\s*none\s*!important/.test(layout)) {
-  fail('cloaked/modal #nt-shell must set transform:none (translateY(0) still traps position:fixed)');
+if (!layout.includes('body.modal-active #nt-shell')) fail('open modals must zero #nt-shell ad-shift vars');
+if (!layout.includes('#nt-shell.nt-ad-shifted #main-content.app-shell')) {
+  fail('ad ease must transform #main-content, not #nt-shell (overlays live inside the shell)');
+}
+if (/#nt-shell\.nt-ad-shifted\s*,\s*html\.nt-ads-entering #nt-shell\s*\{/.test(layout)) {
+  fail('do not transform #nt-shell — it traps map/feedback/about/privacy');
+}
+if (!/html\.nt-ads-cloaked #main-content\.app-shell[\s\S]*transform:\s*none\s*!important/.test(layout)
+  && !/body\.modal-active #main-content\.app-shell[\s\S]*transform:\s*none\s*!important/.test(layout)) {
+  fail('cloaked/modal board must set transform:none');
+}
+if (!layout.includes('height: 100dvh') || !layout.includes('#nt-shell [id$="-modal"].fixed')) {
+  fail('fixed overlays inside #nt-shell must be viewport-sized (100dvh)');
 }
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
   fail('body.modal-active must not set touch-action:none (blocks pan inside Dev Hub / nested modals)');
@@ -57,10 +67,10 @@ if (!ads.includes('playInFlowFlip(-inFlowDelta)')) fail('in-flow fill/dismiss mu
 if (!ads.includes('ResizeObserver')) fail('must watch overlay size so dismiss eases the board back');
 if (ads.includes('setAdPadding(true)')) fail('must not reserve an empty ad gap via padding');
 if (!layout.includes('transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)))')) {
-  fail('Layout must ease #nt-shell only (shift + flip)');
+  fail('Layout must ease #main-content only (shift + flip)');
 }
-if (!layout.includes('#nt-shell.nt-ad-shifted')) {
-  fail('Layout must apply the shell transform only while .nt-ad-shifted (or entering)');
+if (!layout.includes('#nt-shell.nt-ad-shifted #main-content.app-shell')) {
+  fail('Layout must apply the board transform only while .nt-ad-shifted (or entering)');
 }
 if (!ads.includes('nt-ad-shifted')) fail('clever-ads.js must toggle .nt-ad-shifted so rest state has transform:none');
 if (!ads.includes('syncNtAdShiftedClass')) fail('clever-ads.js must drop .nt-ad-shifted when shift+flip are 0');

@@ -6,7 +6,8 @@
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
  * overlays — their sticky-top format owns placement. When a unit fills or the
- * commuter dismisses it, ease #nt-shell via --nt-ad-shift / --nt-ad-flip only.
+ * commuter dismisses it, ease #main-content via --nt-ad-shift / --nt-ad-flip
+ * on #nt-shell. Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.

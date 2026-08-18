@@ -32,8 +32,8 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 
 - Schedules on RTDB are region files (`schedules/gauteng.json`, etc.), not `full-database.json`.
 - Dynamic data (bans, alerts, maintenance, killswitch) **always** uses `DYNAMIC_BASE_URL` (Firebase).
-- Updating `public/data/full-database.json` refreshes the **fallback**, not the live board while Firebase is up. Push `main`; workflow **Sync schedule data → metrorail-app** overlays JSON onto the host. A full site publish still needs **Deploy production → metrorail-app** (`confirm=DEPLOY`).
-- After a real production deploy, purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker).
+- Updating `public/data/full-database.json` refreshes the **fallback**, not the live board while Firebase is up. Push `main`; workflow **Sync schedule data → metrorail-app** overlays JSON onto the host. A full site publish still needs **Deploy production → metrorail-app** (`confirm=DEPLOY`), which Dev Hub can start once the telemetry Worker has `GH_ACTIONS_TOKEN` (Actions read/write on this repo only — do not reuse `METRORAIL_APP_DEPLOY_TOKEN`).
+- After a real production deploy, purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker). Dev Hub already has **Purge Cloudflare Cache**.
 
 ## Alerts
 

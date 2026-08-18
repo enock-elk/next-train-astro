@@ -13,6 +13,11 @@ import {
     sliceChartWindow,
     enumerateYearMonths,
 } from '../workers/nexttrain-telemetry/chart-math.js';
+import {
+    computeDeployPhase,
+    dispatchProductionDeploy,
+    shaMatches,
+} from '../workers/nexttrain-telemetry/deploy-github.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -84,6 +89,38 @@ ok(adminJs.includes('data-gsm-tab'), 'Global State Monitor has feature tabs');
 ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM tabs include grid notices and exclusions');
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
 ok(!adminJs.includes('if (countLiveMaint() > 0)'), 'live banners no longer auto-expand Maintenance Mode');
+
+ok(adminJs.includes('id="deploy-production-btn"'), 'Dev Hub has Publish live');
+ok(adminJs.includes('/admin/deploy-production'), 'admin posts deploy to telemetry Worker');
+ok(adminJs.includes('/admin/deploy-status'), 'admin polls deploy status');
+ok(adminJs.includes("confirm: 'DEPLOY'"), 'Publish live still types DEPLOY');
+ok(!adminJs.includes('GH_ACTIONS_TOKEN'), 'GitHub token must not ship in admin.js');
+ok(!adminJs.includes('METRORAIL_APP_DEPLOY_TOKEN'), 'live-host PAT must not ship in admin.js');
+
+ok(workerJs.includes('/admin/deploy-production'), 'worker serves deploy-production');
+ok(workerJs.includes('/admin/deploy-status'), 'worker serves deploy-status');
+ok(workerJs.includes("from './deploy-github.js'"), 'worker uses deploy-github helpers');
+
+const deployGh = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/deploy-github.js'), 'utf8');
+ok(deployGh.includes('GH_ACTIONS_TOKEN'), 'deploy helper reads GH_ACTIONS_TOKEN');
+ok(deployGh.includes('deploy-production.yml'), 'dispatch targets deploy-production.yml');
+ok(!deployGh.includes('METRORAIL_APP_DEPLOY_TOKEN'), 'deploy helper must not use the live-host PAT');
+
+ok(shaMatches('abc1234', 'abc1234ffff'), 'short SHA matches full SHA');
+ok(computeDeployPhase({ run: { status: 'in_progress' } }) === 'in_progress', 'phase in_progress');
+ok(computeDeployPhase({
+    run: { status: 'completed', conclusion: 'success', runId: 9, headSha: 'deadbeef' },
+    host: { workflowRun: '9' },
+    runId: 9,
+}) === 'published', 'phase published when host provenance matches run id');
+ok(computeDeployPhase({
+    run: { status: 'completed', conclusion: 'success', runId: 9, headSha: 'deadbeef' },
+    host: { sourceSha: 'ffff' },
+    runId: 9,
+}) === 'waiting_host', 'phase waiting_host until metrorail-app provenance matches');
+
+const missingToken = await dispatchProductionDeploy({}, { dryRun: true });
+ok(missingToken.ok === false && /GH_ACTIONS_TOKEN/.test(missingToken.error || ''), 'dispatch without token is a config error');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

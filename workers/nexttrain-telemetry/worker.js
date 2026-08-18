@@ -13,6 +13,7 @@
  */
 
 import { classifyCrmRegion, clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
+import { dispatchProductionDeploy, getDeployStatus } from './deploy-github.js';
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -196,6 +197,48 @@ export default {
             return new Response(JSON.stringify({ region, source: prov ? 'cf' : 'default' }), {
                 status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Admin: start production publish (GitHub workflow_dispatch). Token never
+        // leaves this Worker. Live host push still uses repo secret METRORAIL_APP_DEPLOY_TOKEN.
+        if (request.method === 'POST' && url.pathname === '/admin/deploy-production') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            let body = {};
+            try { body = await request.json(); } catch { body = {}; }
+            if (String(body.confirm || '') !== 'DEPLOY') {
+                return json(400, { error: 'Refusing to deploy. Body confirm must be exactly DEPLOY' });
+            }
+            const result = await dispatchProductionDeploy(env, {
+                dryRun: body.dryRun === true || body.dry_run === true || body.dryRun === 'true',
+                triggeredBy: auth.email,
+            });
+            return json(result.status || (result.ok ? 200 : 502), {
+                ...result,
+                triggeredBy: auth.email,
+                at: Date.now(),
+            });
+        }
+
+        if (request.method === 'GET' && url.pathname === '/admin/deploy-status') {
+            const auth = await requireAdmin(request, env, { requireConfiguredKey: true });
+            if (!auth.ok) {
+                return json(auth.status, { error: auth.error, details: auth.details || null });
+            }
+            const runId = url.searchParams.get('run_id') || url.searchParams.get('runId');
+            const sinceRaw = url.searchParams.get('since');
+            const sinceMs = sinceRaw ? Number(sinceRaw) : null;
+            const result = await getDeployStatus(env, {
+                runId: runId || null,
+                sinceMs: Number.isFinite(sinceMs) ? sinceMs : null,
+            });
+            return json(result.status || (result.ok ? 200 : 502), {
+                ...result,
+                triggeredBy: auth.email,
+                at: Date.now(),
             });
         }
 

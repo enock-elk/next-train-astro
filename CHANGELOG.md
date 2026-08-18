@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.2 — Dev Hub live publish (19 Aug 2026)
+
+- System Controls → **Publish live site** dispatches `deploy-production.yml` via the telemetry Worker (Firebase admin Bearer). Status polls GitHub jobs; after success, use the existing **Purge Cloudflare Cache** control.
+- Worker secret `GH_ACTIONS_TOKEN` is Actions read/write on `next-train-astro` only. Do not put `METRORAIL_APP_DEPLOY_TOKEN` on the Worker (that PAT can rewrite the live host).
+- Commuter What’s New copy is unchanged (still the folded 19.1 bullets).
+
 ## V8_08.19.1 — Analytics restore + unified What’s New (19 Aug 2026)
 
 - One commuter What’s New card (`V8_08.19.1`) folds Ads, overlay return, shared links, photo hold-to-react, and route timetable grids. Engineering notes for those ships stay in the 18.x / 17.x headings below.

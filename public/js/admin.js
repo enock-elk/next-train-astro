@@ -12928,7 +12928,7 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-everything-btn'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
@@ -13063,6 +13063,32 @@ const Admin = {
                         </div>
                         <div class="text-center mt-4 mb-1">
                             <span class="text-xs font-bold text-indigo-900 dark:text-indigo-100 bg-white/60 dark:bg-black/20 px-4 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-sm">nexttrain.co.za</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Publish live (GitHub Actions → metrorail-app) -->
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="deploy-live-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
+                        <span class="flex items-center">
+                            <span class="text-emerald-600 dark:text-emerald-400 mr-2 inline-flex">${Admin.icon('rocket', 'w-4 h-4')}</span> Publish live site
+                        </span>
+                        <svg id="deploy-live-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="deploy-live-body" class="p-3 hidden space-y-3">
+                        <p class="text-[11px] text-emerald-800 dark:text-emerald-200 font-bold leading-snug">Publishes current <span class="font-mono">main</span> to <span class="font-mono">nexttrain.co.za</span> (same as GitHub → Actions → Deploy production → metrorail-app).</p>
+                        <p class="text-[10px] text-emerald-700/90 dark:text-emerald-400/90 leading-snug">github.io preview already updates when you push <span class="font-mono">main</span>. This button is the live cutover. After GitHub finishes, purge Cloudflare so phones pick up the new HTML and service worker.</p>
+                        <label class="flex items-start gap-2 text-[11px] text-emerald-900 dark:text-emerald-100 font-bold cursor-pointer">
+                            <input type="checkbox" id="deploy-production-dry-run" class="mt-0.5 rounded border-emerald-400">
+                            <span>Dry run — build on GitHub but do not push to the live host</span>
+                        </label>
+                        <button type="button" id="deploy-production-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
+                            Publish live
+                        </button>
+                        <div id="deploy-production-status" class="text-[11px] text-emerald-900 dark:text-emerald-100 bg-white/70 dark:bg-gray-900/40 rounded-lg border border-emerald-100 dark:border-emerald-900/50 p-2 leading-snug hidden"></div>
+                        <div class="flex gap-2">
+                            <button type="button" id="deploy-status-refresh-btn" class="flex-1 bg-white dark:bg-gray-800 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Refresh status</button>
+                            <a id="deploy-github-run-link" href="https://github.com/enock-elk/next-train-astro/actions/workflows/deploy-production.yml" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-white dark:bg-gray-800 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide">Open GitHub</a>
                         </div>
                     </div>
                 </div>
@@ -13367,6 +13393,14 @@ const Admin = {
         const nukeChevron = document.getElementById('nuke-chevron');
         const nukeFireBtn = document.getElementById('nuke-fire-btn');
         const cfPurgeBtn = document.getElementById('cf-purge-everything-btn');
+        const deployLiveHeader = document.getElementById('deploy-live-header-btn');
+        const deployLiveBody = document.getElementById('deploy-live-body');
+        const deployLiveChevron = document.getElementById('deploy-live-chevron');
+        const deployBtn = document.getElementById('deploy-production-btn');
+        const deployDry = document.getElementById('deploy-production-dry-run');
+        const deployStatusEl = document.getElementById('deploy-production-status');
+        const deployRefreshBtn = document.getElementById('deploy-status-refresh-btn');
+        const deployRunLink = document.getElementById('deploy-github-run-link');
 
         const promoHeader = document.getElementById('promo-header-btn');
         const promoBody = document.getElementById('promo-body');
@@ -13413,6 +13447,14 @@ const Admin = {
                 nukeBody.classList.toggle('hidden');
                 if (nukeBody.classList.contains('hidden')) nukeChevron.classList.add('-rotate-90');
                 else nukeChevron.classList.remove('-rotate-90');
+            };
+        }
+
+        if (deployLiveHeader && deployLiveBody) {
+            deployLiveHeader.onclick = () => {
+                deployLiveBody.classList.toggle('hidden');
+                if (deployLiveBody.classList.contains('hidden')) deployLiveChevron?.classList.add('-rotate-90');
+                else deployLiveChevron?.classList.remove('-rotate-90');
             };
         }
 
@@ -13755,6 +13797,166 @@ const Admin = {
             maintModeBody?.classList.remove('hidden');
             maintModeChevron?.classList.remove('-rotate-90');
         };
+
+        const TELEMETRY_ORIGIN = 'https://nexttrain-telemetry.enock.workers.dev';
+        const deployEsc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const deployPhaseLabel = {
+            idle: 'No production deploy in progress.',
+            queued: 'Queued on GitHub…',
+            in_progress: 'GitHub is building and publishing…',
+            waiting_host: 'Workflow succeeded. Waiting for metrorail-app to show the new commit…',
+            published: 'Live host updated. Purge Cloudflare so commuters get the new HTML and service worker. GitHub Pages can take another 1–2 minutes.',
+            dry_success: 'Dry run finished. Nothing was pushed to nexttrain.co.za. Untick Dry run and publish when you want to go live.',
+            failure: 'Workflow failed — open GitHub for the log.',
+            cancelled: 'Workflow cancelled.',
+            startup_failure: 'Workflow failed to start.',
+            timed_out: 'Workflow timed out.',
+            unknown: 'Status unknown.',
+        };
+        const stopDeployPoll = () => {
+            if (Admin._deployPollTimer) {
+                clearInterval(Admin._deployPollTimer);
+                Admin._deployPollTimer = null;
+            }
+        };
+        const paintDeployStatus = (payload) => {
+            if (!deployStatusEl) return;
+            deployStatusEl.classList.remove('hidden');
+            if (payload?.error && !payload?.run) {
+                deployStatusEl.innerHTML = `<p class="font-bold text-red-700 dark:text-red-300">${deployEsc(payload.error)}</p>${payload.message ? `<p class="mt-1 text-[10px]">${deployEsc(payload.message)}</p>` : ''}`;
+                return;
+            }
+            const run = payload?.run;
+            const phase = payload?.phase || (run ? (run.status === 'completed' ? (run.conclusion || 'unknown') : run.status) : 'idle');
+            const jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
+            if (run?.htmlUrl && deployRunLink) deployRunLink.href = run.htmlUrl;
+            const sha = run?.headSha ? String(run.headSha).slice(0, 7) : '';
+            const jobHtml = jobs.length
+                ? `<ul class="mt-2 space-y-0.5 font-mono text-[10px]">${jobs.map((j) => {
+                    const state = j.conclusion || j.status || '';
+                    let color = 'text-gray-500 dark:text-gray-400';
+                    if (j.conclusion === 'success') color = 'text-emerald-700 dark:text-emerald-300';
+                    else if (j.conclusion === 'failure' || j.conclusion === 'cancelled') color = 'text-red-600 dark:text-red-400';
+                    else if (j.status === 'in_progress') color = 'text-amber-700 dark:text-amber-300';
+                    return `<li class="${color}">${deployEsc(j.name)}: ${deployEsc(state)}</li>`;
+                }).join('')}</ul>`
+                : '';
+            const hostSha = payload?.hostDeploy?.sourceSha ? String(payload.hostDeploy.sourceSha).slice(0, 7) : '';
+            deployStatusEl.innerHTML = `
+                <p class="font-bold">${deployEsc(deployPhaseLabel[phase] || phase)}</p>
+                ${run ? `<p class="mt-1 font-mono text-[10px] opacity-80">#${deployEsc(run.runId)}${sha ? ` · ${deployEsc(sha)}` : ''}${run.conclusion ? ` · ${deployEsc(run.conclusion)}` : ''}</p>` : ''}
+                ${hostSha ? `<p class="mt-1 text-[10px] opacity-80">Host astro-deploy.json: ${deployEsc(hostSha)}</p>` : ''}
+                ${jobHtml}
+            `;
+        };
+        const fetchDeployStatus = async ({ runId, since } = {}) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return null;
+            const qs = new URLSearchParams();
+            if (runId) qs.set('run_id', String(runId));
+            if (since) qs.set('since', String(since));
+            const res = await fetch(`${TELEMETRY_ORIGIN}/admin/deploy-status?${qs.toString()}`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            });
+            let data = null;
+            try { data = await res.json(); } catch { data = {}; }
+            if (!res.ok) {
+                paintDeployStatus({ error: data.error || `HTTP ${res.status}`, message: data.message || data.details?.message });
+                return data;
+            }
+            const dryDone = Admin._deployPoll?.dryRun && data.run?.conclusion === 'success';
+            if (dryDone) {
+                paintDeployStatus({ ...data, phase: 'dry_success' });
+                stopDeployPoll();
+                return data;
+            }
+            paintDeployStatus(data);
+            const done = data.phase && !['queued', 'in_progress', 'waiting_host'].includes(data.phase);
+            if (done) stopDeployPoll();
+            return data;
+        };
+        const startDeployPoll = ({ runId, since, dryRun }) => {
+            stopDeployPoll();
+            Admin._deployPoll = { runId, since, dryRun: !!dryRun, startedAt: Date.now() };
+            Admin._deployPollTimer = setInterval(() => {
+                if (Date.now() - Admin._deployPoll.startedAt > 25 * 60 * 1000) {
+                    stopDeployPoll();
+                    paintDeployStatus({ error: 'Stopped polling after 25 minutes. Use Refresh status or Open GitHub.' });
+                    return;
+                }
+                fetchDeployStatus(Admin._deployPoll).catch(() => {});
+            }, 4000);
+        };
+
+        if (deployRefreshBtn) {
+            deployRefreshBtn.onclick = async () => {
+                const state = Admin._deployPoll || {};
+                await fetchDeployStatus({ runId: state.runId, since: state.since });
+            };
+        }
+
+        if (deployBtn) {
+            deployBtn.onclick = async () => {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                    return;
+                }
+                const dryRun = !!deployDry?.checked;
+                const confirmed = await Admin.secureConfirm(
+                    dryRun ? 'Dry-run production build' : 'Publish live site',
+                    dryRun
+                        ? "Type 'DEPLOY' to start a GitHub dry run (build only, no push to nexttrain.co.za):"
+                        : "Type 'DEPLOY' to publish current main to nexttrain.co.za:",
+                    'DEPLOY'
+                );
+                if (!confirmed) return;
+
+                const label = deployBtn.textContent;
+                deployBtn.textContent = dryRun ? 'Starting dry run…' : 'Starting publish…';
+                deployBtn.disabled = true;
+                try {
+                    const res = await fetch(`${TELEMETRY_ORIGIN}/admin/deploy-production`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${secret}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ confirm: 'DEPLOY', dryRun }),
+                    });
+                    let data = null;
+                    try { data = await res.json(); } catch { data = {}; }
+                    if (!res.ok || data.ok === false) {
+                        paintDeployStatus({
+                            error: data.error || `HTTP ${res.status}`,
+                            message: data.message || (typeof data.details === 'string' ? data.details : ''),
+                        });
+                        if (typeof showToast === 'function') {
+                            showToast(data.error || 'Could not start production deploy', 'error', 6000);
+                        }
+                        return;
+                    }
+                    const runId = data.run?.runId || null;
+                    const since = data.dispatchedAt || Date.now();
+                    paintDeployStatus({
+                        ...data,
+                        phase: data.run ? (data.run.status === 'queued' ? 'queued' : 'in_progress') : 'queued',
+                        jobs: data.jobs || [],
+                    });
+                    startDeployPoll({ runId, since, dryRun });
+                    fetchDeployStatus({ runId, since }).catch(() => {});
+                    if (typeof showToast === 'function') {
+                        showToast(dryRun ? 'Dry run started on GitHub' : 'Production deploy started on GitHub', 'success', 4000);
+                    }
+                } catch (e) {
+                    paintDeployStatus({ error: 'Network error contacting deploy endpoint' });
+                    if (typeof showToast === 'function') showToast('Network error contacting deploy endpoint', 'error');
+                } finally {
+                    deployBtn.textContent = label || 'Publish live';
+                    deployBtn.disabled = false;
+                }
+            };
+        }
 
         if (nukeFireBtn) {
             nukeFireBtn.onclick = async () => {

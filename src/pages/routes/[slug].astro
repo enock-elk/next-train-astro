@@ -19,6 +19,7 @@ import {
   bothDirectionTitle,
   firstLastSummaryLine,
   ogTimetableImageUrl,
+  buildRouteGridAppPath,
 } from '../../lib/seo-timetable.js';
 
 export function getStaticPaths() {
@@ -58,6 +59,10 @@ const description = firstLastBlurb
 const canonicalPath = `/routes/${seed.slug}.html`;
 const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const appHref = withBase(`/?rt=${encodeURIComponent(route.id)}`);
+const liveGridWeekdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'weekday'));
+const liveGridWeekdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'weekday'));
+const liveGridSaturdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'saturday'));
+const liveGridSaturdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'saturday'));
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
@@ -100,7 +105,7 @@ const related = [
   <SeoThemeToggle />
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
-    <div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
+    <div class="max-w-2xl mx-auto px-4 pt-10 sm:pt-14">
       <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
         <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
         <span class="text-slate-400 dark:text-slate-500"> / </span>
@@ -136,15 +141,26 @@ const related = [
           {firstA && <p>{firstA}</p>}
         </div>
       )}
+    </div>
 
+    <div class="max-w-6xl mx-auto px-4 py-8">
       {timetable.hasWeekday && (
-        <section class="mt-8">
+        <section>
           <h2 class="text-lg font-bold text-slate-900 dark:text-white">Weekday timetable</h2>
           {timetable.weekday.a && (
             <div class="mt-4">
-              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
-                {timetable.weekday.a.heading}
-              </h3>
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.weekday.a.heading}
+                </h3>
+                <a
+                  href={liveGridWeekdayA}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
               <SeoTimetableGrid
                 grid={timetable.weekday.a}
                 caption={`Weekday trains to ${origin}`}
@@ -152,10 +168,19 @@ const related = [
             </div>
           )}
           {timetable.weekday.b && (
-            <div class="mt-6">
-              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
-                {timetable.weekday.b.heading}
-              </h3>
+            <div class="mt-8">
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.weekday.b.heading}
+                </h3>
+                <a
+                  href={liveGridWeekdayB}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
               <SeoTimetableGrid
                 grid={timetable.weekday.b}
                 caption={`Weekday trains to ${dest}`}
@@ -172,9 +197,18 @@ const related = [
           </summary>
           {timetable.saturday.a && (
             <div class="mt-4">
-              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
-                {timetable.saturday.a.heading}
-              </h3>
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.saturday.a.heading}
+                </h3>
+                <a
+                  href={liveGridSaturdayA}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
               <SeoTimetableGrid
                 grid={timetable.saturday.a}
                 caption={`Saturday trains to ${origin}`}
@@ -183,9 +217,18 @@ const related = [
           )}
           {timetable.saturday.b && (
             <div class="mt-4">
-              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
-                {timetable.saturday.b.heading}
-              </h3>
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.saturday.b.heading}
+                </h3>
+                <a
+                  href={liveGridSaturdayB}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
               <SeoTimetableGrid
                 grid={timetable.saturday.b}
                 caption={`Saturday trains to ${dest}`}
@@ -194,8 +237,10 @@ const related = [
           )}
         </details>
       )}
+    </div>
 
-      <div class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
+    <div class="max-w-2xl mx-auto px-4 pb-10 sm:pb-14">
+      <div class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Origin</dt>
@@ -216,13 +261,15 @@ const related = [
         </dl>
 
         <a
-          href={appHref}
+          href={liveGridWeekdayB}
           class="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-4 transition-colors shadow-lg shadow-blue-900/20 dark:shadow-blue-900/40"
         >
-          Open live board for {name}
+          Open live timetable in Next Train
         </a>
         <p class="mt-2 text-center text-[11px] text-slate-500">
-          First visit can open this route. Returning visitors keep their saved region &amp; route.
+          Download and Share are on the live sheet.
+          <a href={appHref} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Open the live board</a>
+          if you only need upcoming trains.
         </p>
       </div>
 

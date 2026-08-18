@@ -34,12 +34,17 @@ export function loadScheduleDump() {
     return _dump;
 }
 
-function getSheet(db, key) {
+/**
+ * Same overlay idea as live `unwrapDatabase`: region nest wins over a stale
+ * top-level copy of the same sheet key (e.g. June root vs August `gauteng`).
+ */
+export function getSheet(db, key) {
     if (!key || !db) return null;
-    if (Array.isArray(db[key])) return db[key];
     for (const nest of REGION_NESTS) {
-        if (Array.isArray(db[nest]?.[key])) return db[nest][key];
+        const nested = db[nest]?.[key];
+        if (Array.isArray(nested) && nested.length) return nested;
     }
+    if (Array.isArray(db[key]) && db[key].length) return db[key];
     return null;
 }
 
@@ -66,6 +71,31 @@ function dataRowsFromSheet(rows) {
 function trainIdsFromRow(row) {
     if (!row || typeof row !== 'object') return [];
     return Object.keys(row).filter((k) => !IGNORE_KEYS.has(k));
+}
+
+function unionTrainIds(dataRows) {
+    const ids = new Set();
+    for (const row of dataRows) {
+        for (const id of trainIdsFromRow(row)) ids.add(id);
+    }
+    return [...ids];
+}
+
+function rowHasClockInColumns(row, trainIds) {
+    return (trainIds || []).some((id) => !!formatClock(row?.[id]));
+}
+
+function stationNameFromRow(row) {
+    return stationLabel(String(row?.STATION || '').replace(/\s+/g, ' ').trim());
+}
+
+function findOriginRow(dataRows, trainIds, originName) {
+    const want = String(originName || '').trim().toLowerCase();
+    if (want) {
+        const named = dataRows.find((r) => stationNameFromRow(r).toLowerCase() === want);
+        if (named && rowHasClockInColumns(named, trainIds)) return named;
+    }
+    return dataRows.find((r) => rowHasClockInColumns(r, trainIds)) || dataRows[0];
 }
 
 function firstLastFromRow(row, trainIds) {
@@ -101,6 +131,7 @@ function departuresFromRow(row, trainIds) {
 /**
  * @param {object} db
  * @param {string} sheetKey
+ * @param {string} [originName]  Terminus we depart from (label, e.g. "Pretoria")
  * @returns {{
  *   sheetKey: string,
  *   stations: string[],
@@ -112,25 +143,29 @@ function departuresFromRow(row, trainIds) {
  *   departures: string[],
  * } | null}
  */
-export function extractSeoGrid(db, sheetKey) {
+export function extractSeoGrid(db, sheetKey, originName) {
     const rows = getSheet(db, sheetKey);
     const dataRows = dataRowsFromSheet(rows);
     if (!dataRows.length) return null;
 
-    const trainIds = orderGridTrainIds(sheetKey, trainIdsFromRow(dataRows[0]));
+    const trainIds = orderGridTrainIds(sheetKey, unionTrainIds(dataRows));
     if (!trainIds.length) return null;
 
     const stations = [];
     const cells = [];
+    const keptRows = [];
     for (const row of dataRows) {
-        const name = stationLabel(String(row.STATION || '').replace(/\s+/g, ' ').trim());
+        if (!rowHasClockInColumns(row, trainIds)) continue;
+        const name = stationNameFromRow(row);
         if (!name) continue;
         stations.push(name);
-        cells.push(trainIds.map((id) => formatClock(row[id])));
+        cells.push(trainIds.map((id) => formatClock(row[id]) || '-'));
+        keptRows.push(row);
     }
     if (!stations.length) return null;
 
-    const originRow = dataRows[0];
+    const originRow = findOriginRow(keptRows, trainIds, originName);
+    const originStation = stationNameFromRow(originRow) || stations[0];
     const { first, last } = firstLastFromRow(originRow, trainIds);
     return {
         sheetKey,
@@ -139,7 +174,7 @@ export function extractSeoGrid(db, sheetKey) {
         cells,
         first,
         last,
-        originStation: stations[0],
+        originStation,
         departures: departuresFromRow(originRow, trainIds),
     };
 }
@@ -154,16 +189,16 @@ export function buildRouteSeoTimetable(route) {
     const origin = stationLabel(route.destA);
     const dest = stationLabel(route.destB);
 
-    const weekdayA = extractSeoGrid(db, keys.weekday_to_a);
-    const weekdayB = extractSeoGrid(db, keys.weekday_to_b);
-    const saturdayA = extractSeoGrid(db, keys.saturday_to_a);
-    const saturdayB = extractSeoGrid(db, keys.saturday_to_b);
+    const weekdayA = extractSeoGrid(db, keys.weekday_to_a, dest);
+    const weekdayB = extractSeoGrid(db, keys.weekday_to_b, origin);
+    const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest);
+    const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin);
 
     const labelGrid = (grid, toward) => {
         if (!grid) return null;
         return {
             ...grid,
-            heading: `To ${toward}`,
+            heading: `Showing trains to ${toward}`,
             destName: toward,
         };
     };
@@ -312,4 +347,17 @@ export function firstLastSummaryLine(grid) {
 export function ogTimetableImageUrl(routeId, dir = 'A') {
     const id = encodeURIComponent(routeId || '');
     return `https://nexttrain.co.za/og/timetable.png?rt=${id}&dir=${dir === 'B' ? 'B' : 'A'}&d=wd`;
+}
+
+/**
+ * Same-origin path into the in-app grid (Download / Share live there).
+ * Pass through `withBase()` on GitHub Pages preview.
+ */
+export function buildRouteGridAppPath(routeId, dir = 'A', day = 'weekday') {
+    const params = new URLSearchParams();
+    params.set('rt', routeId || '');
+    params.set('v', 'g');
+    if (dir === 'B') params.set('dir', 'B');
+    params.set('d', day === 'saturday' ? 'sa' : 'wd');
+    return `/?${params.toString()}`;
 }

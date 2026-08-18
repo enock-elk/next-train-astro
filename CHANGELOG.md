@@ -24,6 +24,14 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - nexttrain-og `extractGridPreview` uses the same column order; cache bust `wa7`.
 - `robots.txt` disallows `/index.html` so it cannot cannibalize `/`. Lab hostname sets `noindex` in the layout script.
 
+## V8_08.18.3 — Route timetable grids (18 Aug 2026)
+
+- SEO / corridor landings union train columns from every station row (not the first row only) and prefer the region nest sheet over a stale top-level dump.
+- Ghost / coordinate-only stations (Fonteine, Kloofsig, …) are dropped; skip-stops on trains that do run stay as `-`.
+- Landing tables follow the in-app grid (sticky Station column, ~70px train columns, zebra, wider `max-w-6xl` block). CTA opens `/?rt=&v=g` so Download / Share / live NO SVC stay in-app.
+- nexttrain-og `extractGridPreview` uses the same nest overlay, column union, and ghost drop; cache bust `wa8`.
+- Commuter What’s New: route pages show the full grid; tap through for the live sheet.
+
 ## V8_08.18.2 — Ads to the top (18 Aug 2026)
 
 - Commuter What’s New: ads moved to the top to make way for future bottom navigation.

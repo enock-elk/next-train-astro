@@ -1,8 +1,8 @@
 ---
 /**
- * Compact crawlable timetable grid. All rows stay in the DOM; humans scroll
- * inside max-height ~22rem. Sticky station column; train columns follow
- * MANUAL_GRID_ORDER (same as the in-app sheet).
+ * Crawlable timetable grid styled like the in-app sheet (light first-paint).
+ * Ghost stations are already dropped by extractSeoGrid. Skip-stops stay as "-".
+ * Sticky Station column; train columns ~70px so phones show a few + scroll.
  */
 const { grid, caption } = Astro.props;
 const trainIds = grid?.trainIds || [];
@@ -28,7 +28,7 @@ const cells = grid?.cells || [];
             <tr>
               <th scope="row">{station}</th>
               {trainIds.map((_id: string, c: number) => (
-                <td>{cells[r]?.[c] || ''}</td>
+                <td>{cells[r]?.[c] || '-'}</td>
               ))}
             </tr>
           ))}
@@ -39,24 +39,24 @@ const cells = grid?.cells || [];
 )}
 
 <style is:global>
-  .seo-tt { margin-top: 0.75rem; }
+  .seo-tt { margin-top: 0.5rem; }
   .seo-tt-wrap {
-    max-height: 22rem;
+    max-height: min(80vh, 56rem);
     overflow: auto;
     -webkit-overflow-scrolling: touch;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
     background: #fff;
   }
   .dark .seo-tt-wrap {
     border-color: #1e293b;
-    background: #0f172a;
+    background: #111827;
   }
   .seo-tt table {
     border-collapse: separate;
     border-spacing: 0;
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.25;
     min-width: 100%;
   }
@@ -64,26 +64,34 @@ const cells = grid?.cells || [];
   .seo-tt th,
   .seo-tt td {
     white-space: nowrap;
-    padding: 0.35rem 0.5rem;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #d1d5db;
+    border-right: 1px solid #e5e7eb;
     text-align: center;
   }
   .dark .seo-tt th,
-  .dark .seo-tt td { border-bottom-color: #1e293b; }
+  .dark .seo-tt td {
+    border-bottom-color: #374151;
+    border-right-color: #1f2937;
+  }
   .seo-tt thead th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background: #f8fafc;
+    background: #f3f4f6;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #64748b;
+    color: #111827;
+  }
+  .seo-tt thead th:not(:first-child),
+  .seo-tt td {
+    min-width: 70px;
   }
   .dark .seo-tt thead th {
-    background: #1e293b;
-    color: #94a3b8;
+    background: #1f2937;
+    color: #e5e7eb;
   }
   .seo-tt tbody th,
   .seo-tt thead th:first-child {
@@ -92,23 +100,37 @@ const cells = grid?.cells || [];
     z-index: 1;
     text-align: left;
     font-weight: 700;
-    color: #0f172a;
-    background: #fff;
-    box-shadow: 1px 0 0 #e2e8f0;
+    color: #111827;
+    background: #f3f4f6;
+    min-width: 140px;
+    max-width: 140px;
+    box-shadow: 1px 0 0 #d1d5db;
   }
   .seo-tt thead th:first-child {
     z-index: 3;
-    background: #f8fafc;
+    background: #e5e7eb;
   }
   .dark .seo-tt tbody th,
   .dark .seo-tt thead th:first-child {
-    color: #f8fafc;
-    background: #0f172a;
-    box-shadow: 1px 0 0 #1e293b;
+    color: #f9fafb;
+    background: #1f2937;
+    box-shadow: 1px 0 0 #374151;
   }
-  .dark .seo-tt thead th:first-child { background: #1e293b; }
-  .seo-tt td { color: #334155; }
-  .dark .seo-tt td { color: #cbd5e1; }
+  .dark .seo-tt thead th:first-child { background: #111827; }
+  .seo-tt tbody tr:nth-child(even) td {
+    background: #f9fafb;
+  }
+  .seo-tt tbody tr:nth-child(even) th {
+    background: #e5e7eb;
+  }
+  .dark .seo-tt tbody tr:nth-child(even) td {
+    background: #1f2937;
+  }
+  .dark .seo-tt tbody tr:nth-child(even) th {
+    background: #111827;
+  }
+  .seo-tt td { color: #1f2937; }
+  .dark .seo-tt td { color: #d1d5db; }
   .sr-only {
     position: absolute;
     width: 1px;

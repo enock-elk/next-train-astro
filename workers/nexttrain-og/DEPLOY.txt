@@ -11,7 +11,7 @@ Code + routes are ready. Two fixes remain on YOUR side after redeploy:
    npm run deploy
 
 Then check:
-   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa7
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa8
    → full sheet (all trains × stations) as a dense grid
    → PNG is 3000×1575 for sharper WhatsApp rich previews (keep under ~600KB)
 
@@ -20,7 +20,7 @@ Then check:
      "Pretoria → Pienaarspoort · Weekday"
    → humans (Facebook IAB / Chrome): HTTP 302 to /?rt=pta-pien&v=g&d=wd
      (JS location.replace in IAB was opening the PWA without query params)
-   → og:image URL includes &v=wa7 (cache bust)
+   → og:image URL includes &v=wa8 (cache bust)
    → og:image:width/height = 3000 / 1575
    → twitter:card = summary_large_image
    → View Page Source (not the live app) to confirm

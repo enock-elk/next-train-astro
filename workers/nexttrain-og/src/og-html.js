@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa7';
+const OG_IMAGE_CACHE_BUST = 'wa8';
 
 function esc(s) {
   return String(s ?? '')

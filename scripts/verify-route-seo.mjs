@@ -13,7 +13,14 @@ import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
 import { listFeaturedSeoRoutes, getSeoRouteBySlug } from '../src/lib/seo-routes.js';
-import { buildRouteSeoTimetable, bothDirectionTitle, ogTimetableImageUrl } from '../src/lib/seo-timetable.js';
+import {
+  buildRouteSeoTimetable,
+  bothDirectionTitle,
+  ogTimetableImageUrl,
+  getSheet,
+  loadScheduleDump,
+  buildRouteGridAppPath,
+} from '../src/lib/seo-timetable.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
 const DIST = process.argv[2] || 'dist';
@@ -25,6 +32,20 @@ const FLAGSHIP = [
   { id: 'pta-mabopane', slug: 'pretoria-to-mabopane' },
   { id: 'pta-pien', slug: 'pretoria-to-pienaarspoort' },
   { id: 'pta-saul', slug: 'pretoria-to-saulsville' },
+  { id: 'pta-kempton', slug: 'pretoria-to-kempton-park' },
+];
+
+const GHOST_STATIONS = [
+  'Fonteine',
+  'Kloofsig',
+  'Pinedene',
+  'Leralla',
+  'Limindlela',
+  'Tembisa',
+  'Kaalfontein',
+  'Birchleigh',
+  'Van Riebeeckpark',
+  'Isando',
 ];
 
 for (const { id, slug } of FLAGSHIP) {
@@ -45,8 +66,11 @@ for (const { id, slug } of FLAGSHIP) {
   if (!towardB?.cells?.length || towardB.cells.length !== towardB.stations.length) {
     fail(`${id} weekday-B grid rows/stations mismatch`);
   }
-  // Every station row stays in the data (crawler DOM); no truncation.
+  // Ghost / coordinate-only rows are dropped; remaining stop list must still be real.
   if (towardB && towardB.stations.length < 5) fail(`${id} weekday-B unexpectedly short (${towardB.stations.length} stations)`);
+  if (towardB?.heading && !/^Showing trains to /.test(towardB.heading)) {
+    fail(`${id} weekday-B heading should match in-app ("Showing trains to …"), got "${towardB.heading}"`);
+  }
 
   const sheetB = route.sheetKeys.weekday_to_b;
   const manual = MANUAL_GRID_ORDER[sheetB];
@@ -74,6 +98,71 @@ if (!title.includes('Johannesburg to Naledi') || !title.includes('Naledi to Joha
 const og = ogTimetableImageUrl('jhb-soweto', 'A');
 if (!og.includes('/og/timetable.png') || !og.includes('rt=jhb-soweto') || !og.includes('d=wd')) {
   fail(`og timetable url looks wrong: ${og}`);
+}
+
+const gridPathB = buildRouteGridAppPath('pta-kempton', 'B', 'weekday');
+if (!gridPathB.includes('rt=pta-kempton') || !gridPathB.includes('v=g') || !gridPathB.includes('dir=B') || !gridPathB.includes('d=wd')) {
+  fail(`live grid path looks wrong: ${gridPathB}`);
+}
+const gridPathSa = buildRouteGridAppPath('pta-kempton', 'A', 'saturday');
+if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
+  fail(`Saturday dir-A grid path looks wrong: ${gridPathSa}`);
+}
+
+{
+  const id = 'pta-kempton';
+  const route = ROUTES[id];
+  const tt = buildRouteSeoTimetable(route);
+  const towardA = tt.weekday.a;
+  const towardB = tt.weekday.b;
+  if (!towardA) fail('pta-kempton weekday-A is null (first-row-only / ghost origin)');
+  if (!towardB) fail('pta-kempton weekday-B is null');
+
+  const dump = loadScheduleDump();
+  const IGNORE = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+  const sheetA = getSheet(dump, route.sheetKeys.weekday_to_a) || [];
+  const dataA = sheetA.filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)) && String(r.STATION).toUpperCase() !== 'STATION');
+  const firstRowIds = Object.keys(dataA[0] || {}).filter((k) => !IGNORE.has(k));
+  if (!towardA || towardA.trainIds.length <= firstRowIds.length) {
+    fail(
+      `pta-kempton weekday-A must union train IDs (got ${towardA?.trainIds.length || 0} cols vs first-row ${firstRowIds.length})`
+    );
+  }
+  if (dataA.length && towardA && towardA.stations.length >= dataA.length) {
+    fail(`pta-kempton weekday-A should drop ghost rows (${towardA.stations.length} kept of ${dataA.length} dump rows)`);
+  }
+
+  const sheetB = getSheet(dump, route.sheetKeys.weekday_to_b) || [];
+  const dataB = sheetB.filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)) && String(r.STATION).toUpperCase() !== 'STATION');
+  if (dataB.length && towardB && towardB.stations.length >= dataB.length) {
+    fail(`pta-kempton weekday-B should drop ghost rows (${towardB.stations.length} kept of ${dataB.length} dump rows)`);
+  }
+
+  for (const grid of [towardA, towardB]) {
+    if (!grid) continue;
+    for (const ghost of GHOST_STATIONS) {
+      if (grid.stations.some((s) => s.toLowerCase() === ghost.toLowerCase())) {
+        fail(`pta-kempton still lists ghost station ${ghost}`);
+      }
+    }
+  }
+
+  const ireneIdx = towardB.stations.findIndex((s) => /irene/i.test(s));
+  const kempIdx = towardB.stations.findIndex((s) => /kempton/i.test(s));
+  if (ireneIdx < 0) fail('pta-kempton weekday-B missing Irene');
+  if (kempIdx < 0) fail('pta-kempton weekday-B missing Kempton Park');
+  const hasClock = (row) => (row || []).some((c) => /\d{1,2}:\d{2}/.test(String(c || '')));
+  if (ireneIdx >= 0 && !hasClock(towardB.cells[ireneIdx])) {
+    fail('pta-kempton weekday-B Irene row has no clock times (columns not unioned / stale sheet)');
+  }
+  if (kempIdx >= 0 && !hasClock(towardB.cells[kempIdx])) {
+    fail('pta-kempton weekday-B Kempton Park row has no clock times');
+  }
+
+  const originA = (towardA.originStation || '').toLowerCase();
+  if (towardA && !/kempton/.test(originA)) {
+    fail(`pta-kempton weekday-A origin should be Kempton Park, got "${towardA.originStation}"`);
+  }
 }
 
 // OG worker extractGridPreview must use the same column order (cap after sort).
@@ -136,6 +225,22 @@ if (existsSync(DIST)) {
     const html = readFileSync(mab, 'utf8');
     if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Mabopane route page has html.dark');
     if (!html.includes('<table')) fail('Mabopane route HTML has no <table>');
+  }
+
+  const kemp = join(DIST, 'routes/pretoria-to-kempton-park.html');
+  if (existsSync(kemp)) {
+    const html = readFileSync(kemp, 'utf8');
+    if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Kempton route page has html.dark');
+    if (!html.includes('<table')) fail('Kempton route HTML has no <table>');
+    if (!html.includes('Showing trains to')) fail('Kempton route HTML missing in-app direction heading');
+    if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-grid CTA');
+    if (!html.includes('v=g') || !html.includes('rt=pta-kempton')) {
+      fail('Kempton route HTML missing in-app grid deep link (?rt=&v=g)');
+    }
+    if (!/\d{1,2}:\d{2}/.test(html)) fail('Kempton route HTML has no clock times');
+    if (/Fonteine|Kloofsig|Pinedene/.test(html)) fail('Kempton route HTML still lists ghost stations');
+    if (!/Irene/.test(html)) fail('Kempton route HTML missing Irene');
+    if (!/Kempton Park/.test(html)) fail('Kempton route HTML missing Kempton Park');
   }
 
   const region = join(DIST, 'regions/gauteng.html');

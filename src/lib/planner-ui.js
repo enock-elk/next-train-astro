@@ -25,8 +25,9 @@ import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deepl
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
-import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
+import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
+import { trackAnalyticsEvent } from './analytics.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -1217,9 +1218,7 @@ export function openDisruptionModal(id) {
 
                 if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
                 setTimeout(() => {
-                    if (typeof trackAnalyticsEvent === 'function') trackAnalyticsEvent('open_feedback_modal', { location: 'planner_disruption_reply' });
-                    history.pushState({ modal: 'feedback' }, '', '#feedback');
-                    if (typeof openSmoothModal === 'function') openSmoothModal('feedback-modal');
+                    openFeedbackModal({ location: 'planner_disruption_reply', skipClear: true });
                 }, 350);
             };
         }
@@ -3724,10 +3723,43 @@ export function planFromAlternateOrigin(newOrigin, dest) {
     executeTripPlan(fullFrom, fullTo);
 }
 
+/** Last complex-trip ping so the 30s pulse does not spam Clarity/GA. */
+let lastComplexRouteTrackedKey = '';
+
+function plannerTransferCount(step) {
+    if (!step) return 0;
+    if (step.type === 'MULTI_TRANSFER') {
+        let n = step.legs ? step.legs.length - 1 : (step.transferCount || 3);
+        if (step.legs) {
+            step.legs.forEach((leg) => { if (leg.isRelayComposite) n += 1; });
+        }
+        return n;
+    }
+    let n = step.type === 'DOUBLE_TRANSFER' ? 2 : (step.type === 'TRANSFER' ? 1 : 0);
+    if (step.leg1 && step.leg1.isRelayComposite) n += 1;
+    if (step.leg2 && step.leg2.isRelayComposite) n += 1;
+    if (step.leg3 && step.leg3.isRelayComposite) n += 1;
+    return n;
+}
+
 export function renderSelectedTrip(container, index) {
     window._plannerCurrentTripIndex = index; // GUARDIAN: Synchronize global state for Custom Dropdowns
     const selectedTrip = currentTripOptions[index];
-    if (!selectedTrip) return; 
+    if (!selectedTrip) return;
+
+    const transfers = plannerTransferCount(selectedTrip);
+    if (transfers >= 1) {
+        const key = `${selectedTrip.train || ''}|${selectedTrip.depTime || ''}|${selectedTrip.type || ''}|${index}`;
+        if (lastComplexRouteTrackedKey !== key) {
+            lastComplexRouteTrackedKey = key;
+            trackAnalyticsEvent('complex_route_rendered', {
+                transfers,
+                type: selectedTrip.type || '',
+                origin: String(selectedTrip.from || '').replace(/ STATION/gi, ''),
+                destination: String(selectedTrip.to || '').replace(/ STATION/gi, ''),
+            });
+        }
+    }
 
     const isTomorrow = selectedTrip.dayLabel !== undefined;
     const midnightRollover = PlannerRenderer.isMidnightRollover();
@@ -3850,11 +3882,14 @@ export async function shareCurrentGrid() {
     const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };
     
     try {
-        if (navigator.share) await navigator.share(data);
-        else {
+        if (navigator.share) {
+            await navigator.share(data);
+            trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
+        } else {
             try {
                 await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
                 handleCopySuccess();
+                trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
             } catch {
                 const textArea = document.createElement('textarea');
                 textArea.value = `${shareText}\n${shareUrl}`;
@@ -3863,9 +3898,11 @@ export async function shareCurrentGrid() {
                 document.execCommand('copy');
                 document.body.removeChild(textArea);
                 handleCopySuccess();
+                trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
             }
         }
     } catch (e) {
+        if (e?.name === 'AbortError') return;
         if (typeof window.showToast === 'function') {
             window.showToast('Could not share link.', 'error');
         }
@@ -3904,14 +3941,7 @@ export function executeManualRollover(origin, dest) {
 
 export function openFeedbackForMissingRoute(origin, dest) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
-    clearFeedbackReplyMode();
-    
-    if (typeof openSmoothModal === 'function') {
-        openSmoothModal('feedback-modal');
-    } else {
-        const modal = document.getElementById('feedback-modal');
-        if (modal) modal.classList.remove('hidden');
-    }
+    openFeedbackModal({ location: 'planner_missing_route' });
 
     setTimeout(() => {
         const msgBox = document.getElementById('feedback-text') || document.querySelector('#feedback-modal textarea');

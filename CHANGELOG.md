@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.1 — Analytics restore + unified What’s New (19 Aug 2026)
+
+- One commuter What’s New card (`V8_08.19.1`) folds Ads, overlay return, shared links, photo hold-to-react, and route timetable grids. Engineering notes for those ships stay in the 18.x / 17.x headings below.
+- Custom events go through `src/lib/analytics.js`: `queueMicrotask`, offline queue, gtag, and Clarity `event` (Clarity is not skipped when region is empty). Live-board local gtag-only wrappers are gone.
+- Restored lost pings: station/route/share/maps/about/guide/legal/feedback/coming-soon form, plus `open_feedback_modal` on every feedback open with a `location` param.
+- PWA: `install_app_accepted` is `appinstalled` only (not prompt-yes). WebView “Open in Browser to Install” is `install_app_webview_click`.
+
 ## Admin telemetry, GSM tabs, Clear DB (18 Aug 2026)
 
 - TODAY regional breakdown is **unique users** (GA4 `activeUsers` by last selected `crm_region`), not sessions. Modal now shows TODAY unique + TODAY sessions, per-region sessions, and a note that region cards will not add up to TODAY.

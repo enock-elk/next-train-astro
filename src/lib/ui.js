@@ -7,6 +7,7 @@
  */
 
 import { safeStorage } from './utils.js';
+import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload, isReloadPending } from './session-stability.js';
@@ -1253,6 +1254,7 @@ export function openLegal(type, opts = {}) {
     } catch { /* ignore */ }
 
     openSmoothModal('legal-modal');
+    trackAnalyticsEvent('view_legal_doc', { doc: resolved });
 }
 
 export function bindPlannerShellModals() {
@@ -1598,11 +1600,24 @@ export function bindPwaInstallPrompt() {
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
     const isAndroid = /android/i.test(ua);
 
+    const hideInstallButtons = () => {
+        if (installBtn) installBtn.classList.add('hidden');
+        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+    };
+
+    // Successful install = browser `appinstalled`, not prompt-yes. Bind before
+    // the standalone early-return so a same-session install still pings.
+    window.addEventListener('appinstalled', () => {
+        window.deferredInstallPrompt = null;
+        window.__ntDeferredInstallPrompt = null;
+        hideInstallButtons();
+        trackAnalyticsEvent('install_app_accepted', { location: 'main_view' });
+    });
+
     const showInstallButton = () => {
         // SPA: hide entirely for iOS WebViews
         if (isWebView && isIOS) {
-            if (installBtn) installBtn.classList.add('hidden');
-            if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+            hideInstallButtons();
             return;
         }
 
@@ -1629,8 +1644,7 @@ export function bindPwaInstallPrompt() {
         window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;
     if (isStandalone) {
-        if (installBtn) installBtn.classList.add('hidden');
-        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+        hideInstallButtons();
         return;
     }
 
@@ -1648,20 +1662,11 @@ export function bindPwaInstallPrompt() {
         showInstallButton();
     });
 
-    window.addEventListener('appinstalled', () => {
-        window.deferredInstallPrompt = null;
-        window.__ntDeferredInstallPrompt = null;
-        if (installBtn) installBtn.classList.add('hidden');
-        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
-    });
-
     const handleInstallClick = () => {
         triggerHaptic();
-        if (typeof window.gtag === 'function') {
-            window.gtag('event', 'install_app_click', { location: 'main_view', is_webview: isWebView });
-        }
 
         if (isWebView) {
+            trackAnalyticsEvent('install_app_webview_click', { location: 'main_view' });
             if (isAndroid) {
                 const deviceId = (() => {
                     try { return localStorage.getItem('next_train_device_id') || ''; } catch { return ''; }
@@ -1672,23 +1677,23 @@ export function bindPwaInstallPrompt() {
             return;
         }
 
-        if (installBtn) installBtn.classList.add('hidden');
-        if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
-
         const promptEvent = window.deferredInstallPrompt || window.__ntDeferredInstallPrompt;
-        if (promptEvent) {
-            promptEvent.prompt();
-            Promise.resolve(promptEvent.userChoice).then((choiceResult) => {
-                if (typeof window.gtag === 'function') {
-                    window.gtag('event', choiceResult?.outcome === 'accepted' ? 'install_app_accepted' : 'install_app_dismissed');
-                }
-                window.deferredInstallPrompt = null;
-                window.__ntDeferredInstallPrompt = null;
-            }).catch(() => {
-                window.deferredInstallPrompt = null;
-                window.__ntDeferredInstallPrompt = null;
-            });
-        }
+        if (!promptEvent) return;
+
+        trackAnalyticsEvent('install_app_click', { location: 'main_view', is_webview: false });
+        hideInstallButtons();
+
+        promptEvent.prompt();
+        Promise.resolve(promptEvent.userChoice).then((choiceResult) => {
+            if (choiceResult?.outcome === 'dismissed') {
+                trackAnalyticsEvent('install_app_dismissed', { location: 'main_view' });
+            }
+            window.deferredInstallPrompt = null;
+            window.__ntDeferredInstallPrompt = null;
+        }).catch(() => {
+            window.deferredInstallPrompt = null;
+            window.__ntDeferredInstallPrompt = null;
+        });
     };
 
     if (installBtn) installBtn.addEventListener('click', handleInstallClick);
@@ -1746,7 +1751,7 @@ export const OfflineTracker = {
                 const item = queue[0];
                 const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
                 try {
-                    window.gtag('event', item.event, enriched);
+                    sendAnalyticsNow(item.event, enriched);
                     queue.shift();
                     if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
                     else safeStorage.removeItem(OfflineTracker.queueKey);
@@ -1823,27 +1828,7 @@ function installAnalyticsOfflineBridge() {
     if (typeof window === 'undefined' || window.__ntAnalyticsOfflineBound) return;
     window.__ntAnalyticsOfflineBound = true;
     window.OfflineTracker = OfflineTracker;
-
-    const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
-    window.trackAnalyticsEvent = (name, params = {}) => {
-        try {
-            const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-            if (offline || !OfflineTracker.gaReady()) {
-                OfflineTracker.enqueue(name, params);
-                if (!offline) OfflineTracker.flush();
-                return;
-            }
-            if (prior) prior(name, params);
-            else window.gtag?.('event', name, params || {});
-            try {
-                const region = params.region || safeStorage.getItem('userRegion') || '';
-                if (region && typeof window.clarity === 'function') {
-                    window.clarity('set', 'crm_region', region);
-                    window.clarity('event', name);
-                }
-            } catch { /* ignore */ }
-        } catch { /* ignore */ }
-    };
+    window.trackAnalyticsEvent = trackAnalyticsEvent;
 
     window.addEventListener('online', () => OfflineTracker.flush());
     window.addEventListener('nt-ga-ready', () => OfflineTracker.flush());

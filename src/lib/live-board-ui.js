@@ -7,6 +7,7 @@ import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTim
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import {
     simulateNextActiveService,
     getAllStations,
@@ -32,14 +33,6 @@ import {
 export { renderFullScheduleGrid, applyRouteDeepLink, parseRouteDeepLink };
 
 const getCurrentTime = () => (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : currentTime;
-
-function trackAnalyticsEvent(name, params) {
-    try {
-        if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
-            window.gtag('event', name, params || {});
-        }
-    } catch (e) {}
-}
 
 export function getRoutesForCurrentRegion() {
     const regionalRoutes = {};
@@ -746,6 +739,12 @@ export function initLiveBoardUi() {
                 searchInput.dataset.resolvedValue = stationSelect.value;
             }
             syncPlannerFromMain(stationSelect.value);
+            if (stationSelect.value && stationSelect.value !== 'FIND_NEAREST') {
+                trackAnalyticsEvent('select_station', {
+                    station: stationSelect.value.replace(/ STATION/g, ''),
+                    route_id: $currentRouteId.get() || '',
+                });
+            }
             findNextTrains();
             updateNextTrainView();
         });
@@ -755,12 +754,17 @@ export function initLiveBoardUi() {
     if (locateBtn && !locateBtn.dataset.bound) {
         locateBtn.dataset.bound = '1';
         locateBtn.addEventListener('click', () => {
+            trackAnalyticsEvent('click_auto_locate', {
+                source: 'locate_btn',
+                route_id: $currentRouteId.get() || '',
+            });
             if (typeof window.findNearestStation === 'function') window.findNearestStation(false);
         });
     }
 
-    const shareApp = async () => {
+    const shareApp = async (sourceId) => {
         triggerHaptic();
+        trackAnalyticsEvent('click_share', { location: sourceId === 'share-app-btn-planner' ? 'planner' : 'board' });
         const shareText = 'Say Goodbye to Waiting\nUse Next Train to check when your train is due to arrive.';
         const shareData = { title: 'Metrorail Next Train', text: shareText, url: location.origin + location.pathname };
         try {
@@ -782,7 +786,7 @@ export function initLiveBoardUi() {
         const shareBtn = document.getElementById(id);
         if (shareBtn && !shareBtn.dataset.bound) {
             shareBtn.dataset.bound = '1';
-            shareBtn.addEventListener('click', shareApp);
+            shareBtn.addEventListener('click', () => shareApp(id));
         }
     });
 
@@ -808,6 +812,10 @@ export function initLiveBoardUi() {
         const id = item.getAttribute('data-route-id');
         if (!id || !ROUTES[id]) return;
         triggerHaptic();
+        trackAnalyticsEvent(ROUTES[id].isActive ? 'select_route' : 'select_inactive_route', {
+            route_id: id,
+            region: $userRegion.get() || 'GP',
+        });
         // Browsing a route must never re-pin it — the pin is an explicit user
         // action owned by #pin-route-btn (and the first-run welcome choice).
         $currentRouteId.set(id);

@@ -28,6 +28,7 @@ import {
 import { layoutAlertPost } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
@@ -88,10 +89,10 @@ export function openFeedbackReplyFromOverlay(returnModalId, replyOpts = {}) {
             parked.classList.add('hidden');
         }
     }
-    trackAlertEvent('open_feedback_modal', {
+    openFeedbackModal({
         location: returnModalId === 'developer-reply-modal' ? 'admin_inbox_reply' : 'alert_reply',
+        skipClear: true,
     });
-    openSmoothModal('feedback-modal');
 }
 
 /** Reset reply chrome so a fresh Feedback open is a normal form. */
@@ -111,6 +112,16 @@ export function clearFeedbackReplyMode() {
         fType.querySelector('option[value="thread_reply"]')?.remove();
         if (fType.value === 'thread_reply') fType.value = 'general';
     }
+}
+
+/** Open the feedback modal and always ping `open_feedback_modal` with a location. */
+export function openFeedbackModal({ location = 'unknown', skipClear = false } = {}) {
+    if (!skipClear) {
+        clearFeedbackReplyMode();
+        restoreFeedbackReturnOverlay();
+    }
+    trackAnalyticsEvent('open_feedback_modal', { location });
+    openSmoothModal('feedback-modal');
 }
 
 /** Show reply context chip and lock type to Thread Reply. */
@@ -200,6 +211,7 @@ export function resetProfile() {
 }
 
 export async function performHardCacheClear(source = 'modal_confirm') {
+    trackAnalyticsEvent('execute_hard_cache_clear', { source });
     triggerHaptic();
     if (source === 'modal_confirm') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
@@ -334,6 +346,12 @@ async function submitFeedback() {
         return;
     }
 
+    trackAnalyticsEvent('click_submit_feedback_btn', {
+        type: type || 'general',
+        has_file: !!(fileInput?.files?.length),
+        location: 'feedback_modal',
+    });
+
     let quotedAlertId = '';
     let quotedAlertKind = '';
     try {
@@ -426,6 +444,7 @@ async function submitFeedback() {
         });
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
 
+        trackAnalyticsEvent('submit_feedback_success', { type: type || 'general' });
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
@@ -439,6 +458,7 @@ async function submitFeedback() {
         document.getElementById('feedback-file-preview')?.classList.add('hidden');
     } catch (e) {
         console.error(e);
+        trackAnalyticsEvent('submit_feedback_error', { message: String(e?.message || e || 'error').slice(0, 80) });
         showToast(e.message || 'Could not send feedback.', 'error');
     } finally {
         if (submitBtn) submitBtn.disabled = false;
@@ -1121,6 +1141,7 @@ export function initHub() {
     window.prepareRichHtml = prepareRichHtml;
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
+    window.openFeedbackModal = openFeedbackModal;
     injectRichTextStyles();
     initAlertsChannel();
 
@@ -1405,12 +1426,20 @@ export function initHub() {
 
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
+        trackAnalyticsEvent('click_interactive_map', { location: 'sidenav' });
+        trackAnalyticsEvent('click_network_map', { location: 'sidenav' });
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/map.html'), 'Network Map'), 120);
+        setTimeout(() => {
+            openInAppSheet(withBase('/map.html'), 'Network Map');
+            trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
+        }, 120);
     });
 
     // Updates
-    document.getElementById('check-updates-btn')?.addEventListener('click', showCacheClearWarning);
+    document.getElementById('check-updates-btn')?.addEventListener('click', () => {
+        trackAnalyticsEvent('check_updates_click', { location: 'sidenav' });
+        showCacheClearWarning();
+    });
 
     // About / Help / Changelog
     document.getElementById('settings-about-btn')?.addEventListener('click', () => {
@@ -1421,13 +1450,19 @@ export function initHub() {
             const edition = (getLatestChangelog()?.title) || 'Next Train';
             ver.textContent = `Version ${APP_VERSION} (${edition})`;
         }
-        setTimeout(() => openSmoothModal('about-modal'), 50);
+        setTimeout(() => {
+            openSmoothModal('about-modal');
+            trackAnalyticsEvent('view_about_page', { location: 'sidenav' });
+        }, 50);
     });
     document.getElementById('close-about-btn')?.addEventListener('click', () => closeSmoothModal('about-modal'));
     document.getElementById('settings-help-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/guide.html'), 'Commuter Guide'), 120);
+        setTimeout(() => {
+            openInAppSheet(withBase('/guide.html'), 'Commuter Guide');
+            trackAnalyticsEvent('view_user_guide', { location: 'sidenav' });
+        }, 120);
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
@@ -1436,10 +1471,12 @@ export function initHub() {
         e?.preventDefault?.();
         e?.stopPropagation?.();
         triggerHaptic();
-        clearFeedbackReplyMode();
-        restoreFeedbackReturnOverlay(); // drop any parked alert/inbox overlay from a prior reply
         closeAppHub(true);
-        setTimeout(() => openSmoothModal('feedback-modal'), 50);
+        const id = e?.currentTarget?.id || '';
+        const location = id === 'feedback-btn-planner'
+            ? 'planner'
+            : (id === 'settings-feedback-btn' ? 'settings' : 'board');
+        setTimeout(() => openFeedbackModal({ location }), 50);
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
@@ -1458,7 +1495,7 @@ export function initHub() {
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
         // Stack feedback on top of About so Cancel / Back returns to About
-        openSmoothModal('feedback-modal');
+        openFeedbackModal({ location: 'about' });
     });
     document.getElementById('about-email-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_email', { location: 'about_modal' });

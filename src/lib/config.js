@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.18.3";
+export const APP_VERSION = "V8_08.19.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -892,48 +892,16 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.18.3",
-        title: "Route timetables",
-        date: "18 Aug 2026",
+        id: "V8_08.19.1",
+        title: "What's new",
+        date: "19 Aug 2026",
         forceShow: false,
         features: [
+            "<b>Ads:</b> Moved to the top to make way for future bottom navigation.",
+            "<b>Back where you were:</b> Closing What's New or an alert reply returns you to the menu or notice you were viewing.",
+            "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap.",
+            "<b>Alerts:</b> Hold a photo notice to react, same as text.",
             "<b>Route timetables:</b> Corridor pages now show the full grid with real stop times — empty stations are gone. Open the live sheet in Next Train for Download and Share."
-        ]
-    },
-    {
-        id: "V8_08.18.2",
-        title: "Ads",
-        date: "18 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Ads:</b> Moved to the top to make way for future bottom navigation."
-        ]
-    },
-    {
-        id: "V8_08.18.1",
-        title: "Back where you were",
-        date: "18 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Back where you were:</b> Closing What's New or an alert reply returns you to the menu or notice you were viewing."
-        ]
-    },
-    {
-        id: "V8_08.17.3",
-        title: "Shared links",
-        date: "17 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap."
-        ]
-    },
-    {
-        id: "V8_08.17.1",
-        title: "Alerts",
-        date: "17 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Alerts:</b> Hold a photo notice to react, same as text."
         ]
     },
     {

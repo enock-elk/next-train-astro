@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## CleverAds vendor snippet + no flex squeeze (18 Aug 2026)
+
+- `#clever-core` is again Clever’s `SCRIPT` tag (Pedro: last thing in `<head>`). Guardian only delays the original `insertBefore` loader IIFE.
+- Body is no longer a flex row. The app lives in `#nt-shell`, so a sticky/in-flow Hollywoodbets unit cannot sit as a second column and squeeze the board.
+- Do not force `left`/`top`/`transform` on vendor overlays. Safe-zone hide uses `html.nt-ads-cloaked` visibility only.
+
 ## Route SEO landings + OG grid order (18 Aug 2026)
 
 - Route / region / corridor pages first-paint light (`forceLight`) so Googlebot screenshots are not dark.

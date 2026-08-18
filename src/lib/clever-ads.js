@@ -1,19 +1,19 @@
 /**
  * CleverAds — vendor snippet (SPA Guardian timing, Astro-safe).
  *
- * Clever’s tag is a SCRIPT#clever-core that insertBefore()s their loader next
- * to the first page script. Do not steal that id for a positioned DIV: their
- * top/bottom format is applied to overlays they create, not our host CSS.
+ * Clever’s tag is SCRIPT#clever-core. The original IIFE insertBefore()s
+ * CleverCoreLoader103008 next to the first page script. Guardian only decides
+ * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
+ * #clever-core for a positioned DIV and do not set left/top/transform on their
+ * overlays — their sticky-top format owns placement.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
- * A refresh / new navigation starts a fresh 4-slot budget (in-memory only).
  */
 import { safeStorage } from './utils.js';
 import { isReloadPending, isStableForThirdParty } from './session-stability.js';
 
 const LOADER_ID = 'CleverCoreLoader103008';
-const SCRIPT_SRC = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
 /** Soft wait for schedules / welcome; pending reloads always win until their until. */
 const STABILITY_MAX_WAIT_MS = 15000;
 /** Four timed inject attempts after stabilize, then stop until the next page load. */
@@ -25,10 +25,6 @@ const AD_LEGACY_SESSION_INJECT_KEY = 'nt_ad_session_injects';
 let stabilityWaitStartedAt = 0;
 /** Resets automatically on full page load (module re-eval). Not persisted. */
 let pageInjectCount = 0;
-
-function getPageInjectCount() {
-    return pageInjectCount;
-}
 
 function bumpPageInjectCount() {
     pageInjectCount += 1;
@@ -97,6 +93,7 @@ function cleverOverlayNodes() {
     const seen = new Set();
     const add = (el) => {
         if (!el || seen.has(el) || el.id === 'clever-core' || el.id === LOADER_ID || el.tagName === 'SCRIPT') return;
+        if (el.id === 'nt-shell' || el.id === 'offline-toast' || el.id === 'main-content') return;
         seen.add(el);
         out.push(el);
     };
@@ -108,61 +105,25 @@ function cleverOverlayNodes() {
     return out;
 }
 
-function cloakOverlays(hide) {
-    cleverOverlayNodes().forEach((el) => {
-        if (hide) el.style.setProperty('display', 'none', 'important');
-        else el.style.removeProperty('display');
-    });
-}
-
-// #region agent log
-function dumpCleverInject(reason, hypothesisId, extra = {}) {
-    try {
-        const core = document.getElementById('clever-core');
-        const loader = document.getElementById(LOADER_ID);
-        fetch('http://127.0.0.1:7713/ingest/2652028d-2428-4eac-9dd8-39d86580b530', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c79135' },
-            body: JSON.stringify({
-                sessionId: 'c79135',
-                runId: 'vendor-snippet',
-                hypothesisId,
-                location: 'clever-ads.js:dumpCleverInject',
-                message: reason,
-                data: {
-                    href: location.href,
-                    coreTag: core ? core.tagName : null,
-                    coreParent: core && core.parentElement ? core.parentElement.tagName : null,
-                    loaderParent: loader && loader.parentElement ? loader.parentElement.tagName : null,
-                    loaderPrev: loader && loader.previousElementSibling ? `${loader.previousElementSibling.tagName}#${loader.previousElementSibling.id || ''}` : null,
-                    overlayCount: cleverOverlayNodes().length,
-                    ...extra,
-                },
-                timestamp: Date.now(),
-            }),
-        }).catch(() => {});
-    } catch { /* ignore */ }
-}
-// #endregion
-
 function cloak(_adContainer, fatal = false) {
-    cloakOverlays(true);
+    document.documentElement.classList.add('nt-ads-cloaked');
     if (fatal) {
         document.getElementById(LOADER_ID)?.remove();
-        cloakOverlays(true);
+        document.documentElement.classList.add('nt-ads-cloaked');
     }
     setAdPadding(false);
 }
 
 function uncloak() {
     if (window._adNetworkDestroyed) return;
-    cloakOverlays(false);
+    document.documentElement.classList.remove('nt-ads-cloaked');
 }
 
 function isAdFilled() {
     return cleverOverlayNodes().some((el) => {
         const r = el.getBoundingClientRect();
-        return r.height > 20 && r.width > 20 && getComputedStyle(el).display !== 'none';
+        const vis = getComputedStyle(el).visibility !== 'hidden';
+        return vis && r.height > 20 && r.width > 20 && getComputedStyle(el).display !== 'none';
     });
 }
 
@@ -179,7 +140,7 @@ function handleAdFailure(adContainer, reason, isFatal = false) {
 }
 
 function injectAdScript(adContainer) {
-    if (window._adNetworkDestroyed || window._adScriptInjected || !adContainer) return false;
+    if (window._adNetworkDestroyed || window._adScriptInjected) return false;
     if (pageInjectCapReached()) {
         console.log('🛡️ Guardian: Ad page inject cap reached — skipping further injects until next load.');
         cloak(adContainer, true);
@@ -193,46 +154,28 @@ function injectAdScript(adContainer) {
     }, 15000);
 
     try {
-        const c = document.createElement('script');
-        const f = window.frameElement;
-        c.id = LOADER_ID;
-        c.src = SCRIPT_SRC;
-        c.async = true;
-        c.type = 'text/javascript';
-        c.setAttribute('data-cfasync', 'false');
-        try {
-            c.setAttribute('data-target', window.name || (f && f.getAttribute('id')) || '');
-        } catch {
-            c.setAttribute('data-target', window.name || '');
+        if (typeof window.__ntCleverVendorInject !== 'function') {
+            clearTimeout(adTimeout);
+            handleAdFailure(adContainer, 'VENDOR_SNIPPET_MISSING', false);
+            return false;
         }
-        c.onerror = () => {
+        window.__ntCleverVendorInject();
+        const c = document.getElementById(LOADER_ID);
+        if (!c) {
+            clearTimeout(adTimeout);
+            handleAdFailure(adContainer, 'LOADER_NOT_INSERTED', false);
+            return false;
+        }
+        c.addEventListener('error', () => {
             clearTimeout(adTimeout);
             handleAdFailure(adContainer, 'SCRIPT_LOAD_ERROR', false);
-        };
-        c.onload = () => {
+        });
+        c.addEventListener('load', () => {
             clearTimeout(adTimeout);
             window._adScriptLoaded = true;
             console.log(`🛡️ Guardian: Ad script initialized (${attempt}/${AD_PAGE_INJECT_CAP}).`);
             if (!window._adNetworkDestroyed && isSafeZone()) uncloak();
-            // #region agent log
-            dumpCleverInject('script-onload', 'B', { attempt });
-            // #endregion
-        };
-        let a;
-        try {
-            a = parent.document.getElementsByTagName('script')[0] || document.getElementsByTagName('script')[0];
-        } catch {
-            a = false;
-        }
-        a || (a = document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]);
-        a.parentNode.insertBefore(c, a);
-        // #region agent log
-        dumpCleverInject('loader-inserted', 'A', {
-            attempt,
-            insertParent: a.parentNode && a.parentNode.tagName,
-            insertBefore: a.id || a.tagName,
         });
-        // #endregion
         return true;
     } catch (e) {
         console.warn('🛡️ Guardian: Ad inject suppressed', e);
@@ -242,14 +185,9 @@ function injectAdScript(adContainer) {
 }
 
 function refreshAdVisibility(adContainer) {
-    if (window._adNetworkDestroyed || !adContainer) return;
+    if (window._adNetworkDestroyed) return;
 
-    if (!isSafeZone()) {
-        cloak(adContainer, false);
-        return;
-    }
-
-    if (shouldDeferForSessionStability()) {
+    if (!isSafeZone() || shouldDeferForSessionStability()) {
         cloak(adContainer, false);
         return;
     }
@@ -258,9 +196,6 @@ function refreshAdVisibility(adContainer) {
     const filled = isAdFilled();
     if (filled) {
         setAdPadding(false);
-        // #region agent log
-        dumpCleverInject('slot-filled', 'C');
-        // #endregion
         if (!window._adTelemetryFired) {
             window._adTelemetryFired = true;
             if (typeof window.trackAnalyticsEvent === 'function') {
@@ -279,11 +214,6 @@ export function initCleverAds() {
     const adContainer = document.getElementById('clever-core');
     if (!adContainer) return;
 
-    // #region agent log
-    dumpCleverInject('init-bootstrap', 'A', { coreTag: adContainer.tagName });
-    // #endregion
-
-    // Drop sticky tab budget from older builds so refresh always gets a clean 4/4
     clearLegacySessionInjectCap();
     pageInjectCount = 0;
 
@@ -324,9 +254,6 @@ export function initCleverAds() {
                     window._adTelemetryFired = true;
                     uncloak();
                     setAdPadding(false);
-                    // #region agent log
-                    dumpCleverInject('overlay-appeared', 'C');
-                    // #endregion
                     if (typeof window.trackAnalyticsEvent === 'function') {
                         window.trackAnalyticsEvent('view_clever_ad', { location: 'main_dashboard', verified: 'instant_tripwire' });
                     }
@@ -357,7 +284,7 @@ export function initCleverAds() {
             onComplete();
             return;
         }
-        if (window._adTelemetryFired || isAdFilled(adContainer)) {
+        if (window._adTelemetryFired || isAdFilled()) {
             refreshAdVisibility(adContainer);
             stopSchedule(`filled after ${Math.max(0, attemptNo - 1)}/${AD_PAGE_INJECT_CAP}`);
             onComplete();
@@ -380,11 +307,10 @@ export function initCleverAds() {
 
     const armNextScheduleSlot = () => {
         if (window._adNetworkDestroyed || scheduleExhausted) return;
-        if (window._adTelemetryFired || isAdFilled(adContainer)) {
+        if (window._adTelemetryFired || isAdFilled()) {
             stopSchedule('already filled');
             return;
         }
-        // Prefer "4/4 complete" over "page cap" — cap after the last slot is expected, not a 5th try
         if (nextScheduleIndex >= AD_INJECT_SCHEDULE_MS.length || pageInjectCapReached()) {
             stopSchedule(pageInjectCapReached() && nextScheduleIndex < AD_INJECT_SCHEDULE_MS.length
                 ? 'page cap'
@@ -401,8 +327,6 @@ export function initCleverAds() {
             scheduleTimer = null;
             runScheduledInject(attemptNo, () => {
                 if (scheduleExhausted || window._adNetworkDestroyed) return;
-                // Last slot: stop here. Do not arm a 5th slot (async SCRIPT_LOAD_ERROR
-                // from this attempt may still log after "stopped" — that is not a new inject).
                 if (attemptNo >= AD_PAGE_INJECT_CAP) {
                     stopSchedule('4/4 complete');
                     return;
@@ -427,7 +351,6 @@ export function initCleverAds() {
         startInjectSchedule();
     };
 
-    // Poll until stabilized, then the schedule owns further injects.
     let ticks = 0;
     const waitForStabilize = () => {
         ticks += 1;

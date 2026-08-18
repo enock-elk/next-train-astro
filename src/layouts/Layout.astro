@@ -94,9 +94,6 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       />
     )}
     <!-- Legacy WebView shields (SPA: globalThis + Array/String.at for CleverAds on Chrome 88) -->
-    <script is:inline data-cfasync="false" type="text/javascript" id="clever-core">
-      /* CleverAds bootstrap id. Loader is injected after the app is in the safe zone. */
-    </script>
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
       (function () {
@@ -537,10 +534,50 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         display: flex;
         flex-direction: column;
       }
+      /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
+      html.nt-ads-cloaked iframe[src*="cleverwebserver"],
+      html.nt-ads-cloaked iframe[src*="clever"],
+      html.nt-ads-cloaked [id*="Clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-cloaked [class*="Clever"],
+      html.nt-ads-cloaked [id*="clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-cloaked [class*="clever"] {
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
     </style>
+    <!--
+      CleverAds vendor tag (Pedro: last thing in <head>).
+      Original IIFE is wrapped so Guardian can delay it until welcome/safe-zone.
+      Do not restyle their overlay coordinates — they own top/sticky placement.
+    -->
+    <script is:inline data-cfasync="false" type="text/javascript" id="clever-core">
+      /* <![CDATA[ */
+      window.__ntCleverVendorInject = function () {
+        if (document.getElementById('CleverCoreLoader103008')) return;
+        (function (document, window) {
+          var a, c = document.createElement('script'), f = window.frameElement;
+          c.id = 'CleverCoreLoader103008';
+          c.src = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
+          c.async = !0;
+          c.type = 'text/javascript';
+          c.setAttribute('data-target', window.name || (f && f.getAttribute('id')));
+          c.setAttribute('data-callback', 'put-your-callback-function-here');
+          c.setAttribute('data-callback-url-click', 'put-your-click-macro-here');
+          c.setAttribute('data-callback-url-view', 'put-your-view-macro-here');
+          try {
+            a = parent.document.getElementsByTagName('script')[0] || document.getElementsByTagName('script')[0];
+          } catch (e) {
+            a = !1;
+          }
+          a || (a = document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]);
+          a.parentNode.insertBefore(c, a);
+        })(document, window);
+      };
+      /* ]]> */
+    </script>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4 transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 
@@ -553,8 +590,10 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       </div>
     </div>
 
-    <!-- Page Content Injected Here -->
-    <slot />
+    <!-- App chrome only. Vendor ad nodes append to body and must not be flex siblings of the board. -->
+    <div id="nt-shell" class="flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4">
+      <slot />
+    </div>
 
     <!-- Client-Side Bootstrapper -->
     <script>

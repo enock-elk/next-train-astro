@@ -41,6 +41,9 @@ jobs:
       - name: Verify URL parity with the live SPA
         run: npm run verify:urls
 
+      - name: Verify GitHub schedule fallback
+        run: npm run verify:schedule
+
       - name: Summarise the built URL surface
         run: |
           {
@@ -62,4 +65,6 @@ jobs:
         with:
           name: nexttrain-production-dist
           path: dist
+          # Required so /.well-known/assetlinks.json survives the artifact hop.
+          include-hidden-files: true
           retention-days: 14

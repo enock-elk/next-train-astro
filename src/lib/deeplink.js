@@ -315,7 +315,7 @@ export function bindPwaSameOriginLinks() {
         const sameDoc = norm(url.pathname) === norm(location.pathname) && url.search === location.search;
         const hash = url.hash || '';
 
-        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map' || hash === '#prasa-map')) {
+        if (sameDoc && (isLegalHash(hash) || hash === '#fare' || hash === '#planner' || hash === '#planner-results' || hash === '#community' || hash === '#map' || hash === '#prasa-map' || hash === '#alerts')) {
             if (isLegalHash(hash) || hash === '#fare') {
                 if (location.hash !== hash) {
                     history.pushState({ deeplink: hash }, '', hash);
@@ -341,6 +341,10 @@ export function bindPwaSameOriginLinks() {
             if (hash === '#prasa-map') {
                 if (location.hash !== '#prasa-map') history.pushState({ modal: 'map' }, '', '#prasa-map');
                 if (typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal');
+                return;
+            }
+            if (hash === '#alerts') {
+                if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
                 return;
             }
         }

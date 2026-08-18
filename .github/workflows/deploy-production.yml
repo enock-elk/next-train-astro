@@ -1,11 +1,13 @@
 # PRODUCTION cutover / release → https://nexttrain.co.za
 #
 # Dual-repo strategy:
-#   next-train-astro  = Astro source + github.io preview
-#   metrorail-app     = live GitHub Pages host (CNAME nexttrain.co.za) + schedule data/
+#   next-train-astro  = Astro source + github.io preview + schedule dump (public/data/)
+#   metrorail-app     = live GitHub Pages host (CNAME nexttrain.co.za)
 #
-# This workflow builds with base=/ , verifies URL parity, then publishes ONLY the
-# Astro dist/ into metrorail-app/main while protecting data/ and host metadata.
+# This workflow builds with base=/ , verifies URL parity, then publishes the
+# Astro dist/ into metrorail-app/main. Host metadata (CNAME, LICENSE, tools/)
+# stays protected. Schedule JSON in public/data/ is overlaid onto site/data/
+# (other data/ files such as sanitize.py are never deleted).
 #
 # ONE-TIME SETUP (repo secrets on next-train-astro):
 #   METRORAIL_APP_DEPLOY_TOKEN
@@ -86,6 +88,9 @@ jobs:
       - name: Verify URL parity
         run: npm run verify:urls
 
+      - name: Verify GitHub schedule fallback
+        run: npm run verify:schedule
+
       - name: Assert production base (not preview /next-train-astro/)
         run: |
           set -euo pipefail
@@ -101,13 +106,18 @@ jobs:
           test -f dist/sw.js
           test -f dist/sitemap.xml
           test -d dist/routes
-          echo "Production build surface looks correct."
+          test -f dist/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' dist/.well-known/assetlinks.json
+          echo "Production build surface looks correct (incl. Digital Asset Links)."
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: nexttrain-production-dist
           path: dist
+          # Required: upload-artifact v4.4+ drops dotfolders by default, which
+          # strips public/.well-known/assetlinks.json (Digital Asset Links / TWA).
+          include-hidden-files: true
           retention-days: 14
 
   publish:
@@ -119,6 +129,13 @@ jobs:
         with:
           name: nexttrain-production-dist
           path: dist
+
+      - name: Assert Digital Asset Links survived artifact hop
+        run: |
+          set -euo pipefail
+          test -f dist/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' dist/.well-known/assetlinks.json
+          echo "Downloaded dist/.well-known/assetlinks.json OK"
 
       - name: Checkout live host (metrorail-app)
         uses: actions/checkout@v4
@@ -166,11 +183,19 @@ jobs:
             --exclude '.gitignore' \
             dist/ site/
 
-          # OSM rail tracks live under /tracks/ (not /data/) so schedule CDN stays protected
+          # OSM rail tracks live under /tracks/ (not /data/)
           if [ -d dist/tracks ]; then
             mkdir -p site/tracks
             rsync -a dist/tracks/ site/tracks/
             echo "Synced tracks/ ($(find site/tracks -type f | wc -l) files)."
+          fi
+
+          # Overlay schedule dumps authored in this repo (public/data → dist/data).
+          # Never --delete data/: keep host-only files (e.g. sanitize.py).
+          if [ -d dist/data ]; then
+            mkdir -p site/data
+            find dist/data -maxdepth 1 -type f -name '*.json' -exec cp -a {} site/data/ \;
+            echo "Overlaid schedule JSON from dist/data/ ($(find dist/data -maxdepth 1 -type f -name '*.json' | wc -l) files)."
           fi
 
           # Always pin the production hostname (do not trust whatever was in dist)
@@ -198,8 +223,12 @@ jobs:
           test -d site/data
           AFTER=$(find site/data -type f | wc -l)
           BEFORE=${{ steps.protect.outputs.data_files }}
-          if [ "$AFTER" -ne "$BEFORE" ]; then
-            echo "::error::data/ file count changed ($BEFORE → $AFTER). Aborting."
+          if [ "$AFTER" -lt 1 ]; then
+            echo "::error::data/ is empty after sync — aborting to protect CDN fallback"
+            exit 1
+          fi
+          if [ "$AFTER" -lt "$BEFORE" ]; then
+            echo "::error::data/ lost files ($BEFORE → $AFTER). Aborting."
             exit 1
           fi
           # Critical schedule payloads used by PIPELINE_SOURCES.GITHUB
@@ -209,13 +238,15 @@ jobs:
           test -f site/CNAME
           test -f site/.nojekyll
           test -d site/_astro
+          test -f site/.well-known/assetlinks.json
+          grep -q 'za.co.nexttrain.app' site/.well-known/assetlinks.json
           grep -qx 'nexttrain.co.za' site/CNAME
           # Must not leave Astro source tree on the live host
           if [ -d site/src ] || [ -f site/package.json ] || [ -f site/astro.config.mjs ]; then
             echo "::error::Astro source leaked into metrorail-app — aborting"
             exit 1
           fi
-          echo "Safety checks passed (data/ untouched: $AFTER files)."
+          echo "Safety checks passed (data/ files: $BEFORE → $AFTER)."
 
       - name: Summarise publish delta
         run: |
@@ -225,7 +256,7 @@ jobs:
             echo "- Source: \`${{ github.repository }}@${{ github.sha }}\`"
             echo "- Target: \`${{ env.TARGET_REPO }}@${{ env.TARGET_BRANCH }}\`"
             echo "- Dry run: \`${{ inputs.dry_run }}\`"
-            echo "- Protected \`data/\` files: ${{ steps.protect.outputs.data_files }}"
+            echo "- Host \`data/\` files before overlay: ${{ steps.protect.outputs.data_files }}"
             echo
             echo '#### Top-level after sync'
             echo '```'
@@ -250,11 +281,18 @@ jobs:
             exit 0
           fi
 
-          # Hard refuse if staged diff touches data/
+          # data/ JSON overlays are allowed only when this build shipped public/data/*.json
           if git diff --staged --name-only | grep -E '^data(/|$)' >/dev/null; then
-            echo "::error::Staged changes touch data/ — refusing push"
-            git diff --staged --name-only | grep -E '^data(/|$)' || true
-            exit 1
+            if [ ! -d ../dist/data ] || ! find ../dist/data -maxdepth 1 -type f -name '*.json' | grep -q .; then
+              echo "::error::Staged changes touch data/ but this build has no public/data JSON — refusing push"
+              git diff --staged --name-only | grep -E '^data(/|$)' || true
+              exit 1
+            fi
+            if git diff --staged --name-only | grep -E '^data(/|$)' | grep -vE '^data/[^/]+\.json$' >/dev/null; then
+              echo "::error::Staged data/ changes include non-JSON or nested paths — refusing push"
+              git diff --staged --name-only | grep -E '^data(/|$)' || true
+              exit 1
+            fi
           fi
 
           SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)
@@ -262,7 +300,7 @@ jobs:
           deploy: Astro production cutover from next-train-astro@${SHORT_SHA}
 
           Built with PUBLIC_BASE_PATH=/ for nexttrain.co.za.
-          data/ left untouched (schedule CDN allowlist).
+          Schedule JSON overlaid from public/data/ when present.
           EOF
           )"
 

@@ -10,6 +10,7 @@ import WelcomeModal from '../components/WelcomeModal.astro';
 import PlannerModals from '../components/PlannerModals.astro';
 import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
+import AlertsChannel from '../components/AlertsChannel.astro';
 import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
@@ -119,10 +120,19 @@ const faqLd = {
 
     <!-- Hub + admin modals (feedback, about, notices, login, dev panel) -->
     <HubModals />
+    <AlertsChannel />
 
     <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
     <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <img src="/icons/loading-logo.png" alt="" class="w-16 h-16 mb-4 animate-pulse" width="64" height="64" />
+        <img
+            src={withBase('icons/loading-logo-splash.webp')}
+            alt=""
+            class="w-16 h-16 mb-4 animate-pulse"
+            width="64"
+            height="64"
+            fetchpriority="high"
+            decoding="async"
+        />
         <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
         <a
             href={withBase('help.html') + '?reason=boot'}
@@ -224,7 +234,7 @@ const faqLd = {
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage } from '../lib/utils.js';
@@ -237,9 +247,9 @@ const faqLd = {
         try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
     };
-    // Fix loader image base path for GitHub Pages preview
+    // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
     const loaderImg = document.querySelector('#loading-overlay img');
-    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo.png'));
+    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
 
     // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
     // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
@@ -255,9 +265,8 @@ const faqLd = {
 
     import { initPlanner, applyPlannerDeepLink } from '../lib/planner-ui.js';
     import '../lib/renderer.js';
-    import { initLiveBoardUi, applyRouteDeepLink } from '../lib/live-board-ui.js';
+    import { initLiveBoardUi, applyRouteDeepLink, openRegionRoutePicker } from '../lib/live-board-ui.js';
     import { initHub, checkServiceAlerts } from '../lib/hub.js';
-    import { initAdminBridge } from '../lib/admin-bridge.js';
     import {
         switchTab,
         initTabIndicator,
@@ -359,6 +368,9 @@ const faqLd = {
         switchTab('trip-planner');
     } else if (hash === '#community') {
         switchTab('community');
+    } else if (hash === '#alerts') {
+        switchTab('next-train');
+        setTimeout(() => window.openAlertsChannel?.(), 400);
     } else if (hash === '#map') {
         switchTab('map');
     } else {
@@ -374,7 +386,10 @@ const faqLd = {
     initLiveBoardUi();
     initPlanner();
     initHub();
-    initAdminBridge();
+    // Admin + Firebase SDK stay off the critical home chunk (CWV / SW precache).
+    import('../lib/admin-bridge.js')
+        .then(({ initAdminBridge }) => initAdminBridge())
+        .catch((e) => console.warn('🛡️ Guardian: Admin bridge deferred load failed', e));
     setupBlackBoxLogger();
 
     // Legal docs don't need schedules — open as soon as the shell is ready
@@ -392,6 +407,7 @@ const faqLd = {
         // Shell is already visible — schedules hydrate in the background.
         revealAppShell();
         try {
+            bindKillswitchWatch();
             if (await applyRouteDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();
@@ -438,18 +454,18 @@ const faqLd = {
                 if (legacyDefault && ROUTES[legacyDefault] && ROUTES[legacyDefault].region === region) {
                     savedDefault = legacyDefault;
                     safeStorage.setItem('defaultRoute_' + region, legacyDefault);
+                    safeStorage.removeItem('defaultRoute');
                 }
             }
 
-            if (!savedDefault || !ROUTES[savedDefault] || ROUTES[savedDefault].region !== region) {
-                const regionRoutes = Object.values(ROUTES).filter(r => r.region === region && r.isActive && r.id !== 'special_event');
-                if (regionRoutes.length > 0) {
-                    savedDefault = regionRoutes[0].id;
-                    safeStorage.setItem('defaultRoute_' + region, savedDefault);
-                }
-            }
+            const pinnedOk = !!(
+                savedDefault &&
+                ROUTES[savedDefault] &&
+                ROUTES[savedDefault].region === region &&
+                ROUTES[savedDefault].isActive
+            );
 
-            if (savedDefault) {
+            if (pinnedOk) {
                 $currentRouteId.set(savedDefault);
                 console.log("🛡️ Guardian: Igniting Data Engine (background)…");
                 // Do not await — poor networks must not block chrome / map→home return.
@@ -460,6 +476,10 @@ const faqLd = {
                         if (location.hash === '#fare') await consumeHashDeeplinks();
                     })
                     .catch((e) => console.warn('🛡️ Guardian: Background schedule load failed', e));
+            } else {
+                // Unpin / no default: never invent first-in-list as pinned.
+                // Open this region's route picker so the user chooses.
+                openRegionRoutePicker();
             }
         } finally {
             revealAppShell();

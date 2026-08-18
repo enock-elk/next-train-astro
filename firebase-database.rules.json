@@ -39,6 +39,25 @@
     },
     "notices": {
       ".read": true,
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$target": {
+        "reactions": {
+          "$emoji": {
+            ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
+          }
+        },
+        "$noticeId": {
+          "reactions": {
+            "$emoji": {
+              ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
+            }
+          }
+        }
+      }
+    },
+
+    "notices_meta": {
+      ".read": true,
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
     },
 

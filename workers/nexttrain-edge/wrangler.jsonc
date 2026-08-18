@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexttrain-edge",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-12",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    { "pattern": "nexttrain.co.za/_astro/*", "zone_name": "nexttrain.co.za" },
+    { "pattern": "nexttrain.co.za/icons/*", "zone_name": "nexttrain.co.za" }
+  ]
+}

@@ -33,8 +33,7 @@
  * 6. Exceptions Manager (God-Mode + Banned/Special Types + EXPIRY + Grid Notice Engine)
  * 7. Special Event Route Manager
  * 8. System Health / Diagnostics Scanner
- *    (includes Zone Distance Audit accordion for fare-zone / km review)
- * 8b. Schedule Data QA (timetable content - standalone from diagnostics)
+ *    (Cache Matrix, Deep Scan, Zone Distance Audit, Schedule Data QA accordions)
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
@@ -2468,17 +2467,19 @@ const Admin = {
                     Object.keys(noticesData).forEach(target => {
                         const targetNotices = noticesData[target];
                         if (targetNotices && typeof targetNotices === 'object') {
-                            if (targetNotices.id) {
-                                if (!targetNotices.expiresAt || targetNotices.expiresAt > now) {
-                                    activeItems.push({ type: 'Alert', label: targetNotices.severity === 'critical' ? 'Critical Advisory Active' : 'General Advisory Active', expiresAt: targetNotices.expiresAt, id: targetNotices.id, panelId: 'alert-panel', routeId: target });
+                            Admin.listNoticesInTarget(targetNotices).forEach((item) => {
+                                if (!item.expiresAt || item.expiresAt > now) {
+                                    const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
+                                    activeItems.push({
+                                        type: 'Alert',
+                                        label: `${sev} channel post`,
+                                        expiresAt: item.expiresAt,
+                                        id: item.id || item._key,
+                                        panelId: 'alert-panel',
+                                        routeId: target,
+                                    });
                                 }
-                            } else {
-                                Object.values(targetNotices).forEach(item => {
-                                    if (!item.expiresAt || item.expiresAt > now) {
-                                        activeItems.push({ type: 'Alert', label: item.severity === 'critical' ? 'Critical Advisory Active' : 'General Advisory Active', expiresAt: item.expiresAt, id: item.id, panelId: 'alert-panel', routeId: target });
-                                    }
-                                });
-                            }
+                            });
                         }
                     });
                 }
@@ -3030,7 +3031,7 @@ const Admin = {
                 if (typeof showToast === 'function') showToast("Grid Notice resolved & removed.", "success");
             } else if (type === 'Alert') {
                 try {
-                    const archived = await Admin.archiveActiveNotice(routeId, secret);
+                    const archived = await Admin.archiveActiveNotice(routeId, secret, null, id);
                     if (!archived) {
                         await fetch(`${dynamicEndpoint}notices/${routeId}.json?auth=${secret}`, { method: 'DELETE' });
                     }
@@ -4978,7 +4979,7 @@ const Admin = {
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
-                const hasAttachments = groupItems.some(i => i.attachmentUrl || (i.attachmentUrls && i.attachmentUrls.length > 0));
+                const hasAttachments = groupItems.some((i) => Admin.feedbackItemHasAttachments(i));
 
                 // GUARDIAN PHASE 2: The "Rolodex" Contact Aggregator
                 const allEmails = new Set();
@@ -5065,21 +5066,21 @@ const Admin = {
                             </button>
                         </div>
                     </div>
-                    <div class="feedback-thread-body hidden bg-white dark:bg-gray-900 p-2 sm:p-3">
-                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                    <div class="feedback-thread-body hidden relative bg-white dark:bg-gray-900 p-2 sm:p-3">
+                        <div class="absolute top-2 right-2 z-20" data-fb-more-wrap>
+                            <button type="button" data-fb-more-toggle class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
+                                ${Admin.icon('more', 'w-3.5 h-3.5')} Options
+                                <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                                <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
+                                ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 mb-3 pr-24 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
-                            </div>
-                            <div class="relative shrink-0" data-fb-more-wrap>
-                                <button type="button" data-fb-more-toggle class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="More options">
-                                    ${Admin.icon('more', 'w-3.5 h-3.5')} More Options
-                                    <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </button>
-                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
-                                    <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
-                                    <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
-                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
-                                </div>
                             </div>
                         </div>
                         <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
@@ -5429,7 +5430,7 @@ const Admin = {
                             </div>
                         `;
                 } });
-                // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in More Options)
+                // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in Options)
                 const actionHtml = isInbox 
                     ? `<div class="flex space-x-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                          <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
@@ -5454,7 +5455,7 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
-                // More Options dropdown
+                // Options dropdown
                 const moreToggle = e.target.closest('[data-fb-more-toggle]');
                 if (moreToggle && listContainer.contains(moreToggle)) {
                     e.preventDefault();
@@ -6798,6 +6799,70 @@ const Admin = {
     },
 
     // --- GROWTH SPRINT PHASE 8: ADMIN REPLY INBOX PROTOCOL ---
+    feedbackItemHasAttachments: (item) => {
+        if (!item) return false;
+        if (item.attachmentUrl) return true;
+        if (Array.isArray(item.attachmentUrls) && item.attachmentUrls.length) return true;
+        const html = String(item.text || item.message || '');
+        return /admin_attachments|View Attached PDF|<img[\s>/]|openLightbox/i.test(html);
+    },
+
+    collectFeedbackContacts: (deviceId) => {
+        const items = (Admin.cachedFeedbackData || []).filter((i) => {
+            const did = i.deviceId || i.device_id;
+            return did === deviceId;
+        });
+        const emails = new Set();
+        const phones = new Set();
+        items.forEach((msg) => {
+            if (!msg.email || !String(msg.email).trim()) return;
+            const em = String(msg.email).trim();
+            if (em.includes('@')) {
+                emails.add(em);
+                return;
+            }
+            const digitCount = (em.match(/\d/g) || []).length;
+            if (digitCount >= 9) {
+                let cleanNum = em.replace(/\D/g, '');
+                if (cleanNum.startsWith('0')) cleanNum = '27' + cleanNum.substring(1);
+                else if (!cleanNum.startsWith('27') && cleanNum.length === 9) cleanNum = '27' + cleanNum;
+                phones.add(cleanNum);
+            }
+        });
+        return { emails: [...emails], phones: [...phones] };
+    },
+
+    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter' } = {}) => {
+        if (!emails.length && !phones.length) return;
+        document.getElementById('admin-outreach-modal')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'admin-outreach-modal';
+        modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
+        const safeName = String(commuterName).replace(/</g, '&lt;');
+        const waButtons = phones.map((ph) => {
+            const safe = String(ph).replace(/[^0-9]/g, '');
+            if (!safe) return '';
+            return `<a href="https://wa.me/${safe}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}</a>`;
+        }).join('');
+        const mailButtons = emails.map((em) => {
+            const safeHref = String(em).replace(/"/g, '').replace(/</g, '');
+            const label = String(em).replace(/</g, '&lt;');
+            return `<a href="mailto:${safeHref}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}</a>`;
+        }).join('');
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="outreach-title">
+                <h3 id="outreach-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">Also reach ${safeName}?</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent and the thread is archived. WhatsApp and email open in a new tab so this admin screen stays on the current list.</p>
+                <div class="space-y-2 mb-3">${waButtons}${mailButtons}</div>
+                <button type="button" id="outreach-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const close = () => modal.remove();
+        document.getElementById('outreach-dismiss').onclick = close;
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    },
+
     openReplyModal: (feedbackId, deviceId) => {
         if (!deviceId) {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
@@ -6821,22 +6886,10 @@ const Admin = {
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
                     <div class="flex flex-col min-h-0 flex-1">
-                    <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border border-gray-300 dark:border-gray-600 rounded-t-lg overflow-x-auto custom-scrollbar space-x-0.5 shrink-0">
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('bold', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Bold">B</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('italic', 'admin-reply-text')" class="px-1.5 py-1 text-xs italic text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Italic">I</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('larger', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Increase Size">A+</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('smaller', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Decrease Size">A-</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyLeft', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Left"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight', 'admin-reply-text')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', 'admin-reply-text')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
-                            <label for="admin-reply-upload-file" id="admin-reply-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
-                            <input type="file" id="admin-reply-upload-file" class="hidden" accept="image/*,.pdf">
-                        </div>
-                        <div contenteditable="true" id="admin-reply-text" class="w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                    <div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">
+                            ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
+                    </div>
+                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
                     </div>
 
                     <div class="flex space-x-2 mt-3 shrink-0">
@@ -6855,7 +6908,11 @@ const Admin = {
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
                 editor.classList.remove('min-h-[120px]', 'p-2.5');
-                editor.classList.add('min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                const bar = editor.previousElementSibling;
+                if (bar && !bar.querySelector('[onclick*="fontVerdana"]')) {
+                    bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
+                }
             }
             if (!document.getElementById('admin-reply-recipient')) {
                 const h3 = panel?.querySelector('h3');
@@ -7008,11 +7065,18 @@ const Admin = {
                     body: JSON.stringify({ hasAdminReply: true })
                 });
 
-                // Auto-resolve the feedback item
+                // Collect contacts before archive refresh replaces the cache
+                const contacts = Admin.collectFeedbackContacts(deviceId);
+                const commuterName = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || 'this commuter';
+
+                // Auto-resolve the feedback item (stays on the current Inbox/Archive tab)
                 await Admin.resolveFeedback(feedbackId, true); 
                 
                 if (typeof showToast === 'function') showToast("Reply sent & archived!", "success");
                 cleanup();
+                if (contacts.emails.length || contacts.phones.length) {
+                    Admin.showOutreachModal({ ...contacts, commuterName });
+                }
             } catch (e) {
                 if (typeof showToast === 'function') showToast("Failed to send reply.", "error");
             } finally {
@@ -7277,20 +7341,64 @@ const Admin = {
         }
     },
 
+    wysiwygToolbarHtml: (editorId, opts = {}) => {
+        const id = String(editorId || 'alert-msg').replace(/[^a-z0-9_-]/gi, '');
+        const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
+        const fileLabelId = opts.fileLabelId ? String(opts.fileLabelId).replace(/[^a-z0-9_-]/gi, '') : '';
+        const btn = (tag, title, inner, extraClass = '') =>
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1 ${extraClass}" title="${title}">${inner}</button>`;
+        const iconBtn = (tag, title, svg) =>
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="${title}">${svg}</button>`;
+        const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
+        const media = fileInputId
+            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+                            <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
+            : '';
+        const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
+        const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
+        const alignR = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg>';
+        return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
+                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5">
+                            ${btn('bold', 'Bold', 'B')}
+                            ${btn('italic', 'Italic', 'I', 'italic')}
+                            ${btn('underline', 'Underline', 'U', 'underline')}
+                            ${sep}
+                            ${btn('smaller', 'Decrease Size', 'A-')}
+                            ${btn('larger', 'Increase Size', 'A+')}
+                            ${sep}
+                            ${iconBtn('justifyLeft', 'Align Left', alignL)}
+                            ${iconBtn('justifyCenter', 'Align Center', alignC)}
+                            ${iconBtn('justifyRight', 'Align Right', alignR)}
+                            ${sep}
+                            ${btn('ul', 'Bullet list', '• List', 'whitespace-nowrap')}
+                            ${sep}
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            ${media}
+                        </div>
+                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5 border-t border-gray-300 dark:border-gray-600">
+                            ${btn('title', 'Title heading', 'Title', 'whitespace-nowrap')}
+                            ${btn('fontVerdana', 'Verdana', 'Verdana', 'whitespace-nowrap font-normal')}
+                            ${btn('fontTimes', 'Times New Roman', 'Times', 'whitespace-nowrap font-normal')}
+                        </div>
+                    </div>`;
+    },
+
 // RICH TEXT FORMATTING HELPER ---
     formatAlertText: (tag, targetId = 'alert-msg') => {
         const editor = document.getElementById(targetId);
         if (!editor) return;
-        
-        // GUARDIAN FIX: Inject CSS overrides for the strict 3-Tier sizing logic (Small, Normal, Large)
-        // Without these !important rules, Tailwind's text-sm class squashes all larger <font> tags back to "normal"
-        if (!document.getElementById('wysiwyg-extended-sizes')) {
+
+        if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
+        else if (!document.getElementById('wysiwyg-extended-sizes')) {
             const style = document.createElement('style');
             style.id = 'wysiwyg-extended-sizes';
             style.innerHTML = `
                 font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
                 font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
+                font[face="Verdana"], font[face="verdana"] { font-family: Verdana, Geneva, sans-serif !important; }
+                font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times New Roman", Times, serif !important; }
+                #alert-msg, #admin-reply-text, #disr-msg { overflow-wrap: anywhere; word-break: break-word; }
             `;
             document.head.appendChild(style);
         }
@@ -7309,6 +7417,26 @@ const Admin = {
             document.execCommand('bold', false, null);
         } else if (tag === 'italic') { 
             document.execCommand('italic', false, null);
+        } else if (tag === 'underline') {
+            document.execCommand('underline', false, null);
+        } else if (tag === 'title') {
+            let block = 'h3';
+            const sel = window.getSelection();
+            if (sel.rangeCount > 0) {
+                let node = sel.anchorNode;
+                while (node && node !== editor) {
+                    if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
+                        block = 'p';
+                        break;
+                    }
+                    node = node.parentNode;
+                }
+            }
+            document.execCommand('formatBlock', false, block);
+        } else if (tag === 'fontVerdana') {
+            document.execCommand('fontName', false, 'Verdana');
+        } else if (tag === 'fontTimes') {
+            document.execCommand('fontName', false, 'Times New Roman');
         } else if (tag === 'larger' || tag === 'smaller') {
             // GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
@@ -7350,6 +7478,8 @@ const Admin = {
             document.execCommand('justifyCenter', false, null);
         } else if (tag === 'justifyRight') {
             document.execCommand('justifyRight', false, null);
+        } else if (tag === 'ul') {
+            document.execCommand('insertUnorderedList', false, null);
         } else if (tag === 'link') { 
             const url = prompt("Enter the full URL (e.g., https://nexttrain.co.za):", "https://");
             if (!url) return;
@@ -7391,18 +7521,188 @@ const Admin = {
         }
     },
 
-    archiveActiveNotice: async (target, secret, noticeData = null) => {
-        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        let alertData = noticeData;
-        if (!alertData) {
-            const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
-            if (!fetchRes.ok) return null;
-            alertData = await fetchRes.json();
+    listNoticesInTarget: (node) => {
+        if (typeof window.listNoticesInTarget === 'function') return window.listNoticesInTarget(node);
+        if (!node || typeof node !== 'object') return [];
+        if (Array.isArray(node)) return node.filter(Boolean).map((n, i) => ({ ...n, _key: n.id || String(i) }));
+        const children = [];
+        Object.entries(node).forEach(([key, val]) => {
+            if (key === 'reactions') return;
+            if (val && typeof val === 'object' && (val.message || val.text || val.severity)) {
+                children.push({ ...val, _key: val.id || key });
+            }
+        });
+        if (children.length) return children;
+        if (node.message || node.text || node.id) return [{ ...node, _key: node.id || 'legacy' }];
+        return [];
+    },
+
+    collectAlertImageUrls: (notice) => {
+        if (typeof window.collectNoticeImageUrls === 'function') return window.collectNoticeImageUrls(notice || {});
+        const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+            ? notice.imageUrls
+            : (notice?.imageUrl ? [notice.imageUrl] : []);
+        return raw.filter((u) => typeof u === 'string' && u.startsWith('/images/alerts/')).slice(0, 2);
+    },
+
+    sanitizeAlertPosterPath: (url) => {
+        if (typeof window.sanitizeAlertImageUrl === 'function') return window.sanitizeAlertImageUrl(url);
+        const s = String(url || '').trim().split('?')[0];
+        return /^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(s) ? s : null;
+    },
+
+    getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 2) : []),
+
+    alertPosterCatalog: () => {
+        const fallback = [
+            { file: 'service-update.svg', label: 'Service update' },
+            { file: 'safety-notice.svg', label: 'Safety notice' },
+            { file: '2025-fare-adjustment.jpg', label: 'Fare adjustment' },
+            { file: 'be-rail-smart-pea.jpg', label: 'Be rail smart' },
+            { file: 'considerate_seating.jpg', label: 'Considerate seating' },
+            { file: 'have_ticket_reminder.jpg', label: 'Have your ticket' },
+            { file: 'monthly_tickets.jpg', label: 'Monthly tickets' },
+            { file: 'no_eating.jpg', label: 'No eating' },
+            { file: 'off_peak_discounts.jpg', label: 'Off-peak discounts' },
+            { file: 'priority-seating.jpg', label: 'Priority seating' },
+            { file: 'pta-kempton-0618-0619.jpg', label: 'Pretoria–Kempton 0618/0619' },
+            { file: 'smoke_free_stations.jpg', label: 'Smoke-free stations' },
+        ];
+        const fromManifest = Array.isArray(Admin._alertPosterManifest) ? Admin._alertPosterManifest : [];
+        const seen = new Set();
+        const out = [];
+        fromManifest.concat(fallback).forEach((item) => {
+            const file = String(item?.file || '').trim();
+            if (!file || seen.has(file)) return;
+            seen.add(file);
+            out.push({ file, label: item.label || file });
+        });
+        return out;
+    },
+
+    setSelectedAlertPosters: (paths) => {
+        const next = [];
+        (paths || []).forEach((p) => {
+            const s = Admin.sanitizeAlertPosterPath(p);
+            if (s && !next.includes(s) && next.length < 2) next.push(s);
+        });
+        Admin._alertPosterPaths = next;
+        Admin.renderAlertPosterPicker();
+        return next;
+    },
+
+    renderAlertPosterPicker: () => {
+        const selectedEl = document.getElementById('alert-poster-selected');
+        const select = document.getElementById('alert-poster-select');
+        const preview = document.getElementById('alert-poster-preview');
+        const selected = Admin.getSelectedAlertPosters();
+        const catalog = Admin.alertPosterCatalog();
+        const labelFor = (path) => {
+            const file = String(path || '').split('/').pop();
+            return catalog.find((item) => item.file === file)?.label || file;
+        };
+        if (selectedEl) {
+            selectedEl.innerHTML = selected.length
+                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${labelFor(p)}<span aria-hidden="true">×</span></button>`).join('')
+                : '<span class="text-xs text-gray-400">No poster yet — pick one below</span>';
+            selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
+                btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
+            });
         }
-        if (!alertData || !alertData.id) return null;
+        if (select) {
+            const options = ['<option value="">Add a poster…</option>']
+                .concat(catalog.map((item) => {
+                    const path = `/images/alerts/${item.file}`;
+                    const taken = selected.includes(path);
+                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${item.label}</option>`;
+                }));
+            select.innerHTML = options.join('');
+            select.value = '';
+            select.disabled = selected.length >= 2;
+        }
+        if (preview) {
+            const last = selected[selected.length - 1];
+            preview.innerHTML = last
+                ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
+                : '';
+        }
+    },
+
+    loadAlertPosterManifest: async () => {
+        try {
+            const res = await fetch(`/images/alerts/manifest.json?t=${Date.now()}`);
+            const data = res.ok ? await res.json() : null;
+            Admin._alertPosterManifest = Array.isArray(data?.posters) ? data.posters : [];
+        } catch {
+            Admin._alertPosterManifest = [];
+        }
+        Admin.renderAlertPosterPicker();
+    },
+
+    writeNoticesMeta: async (target, secret, notices) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const meta = typeof window.buildNoticesMeta === 'function'
+            ? window.buildNoticesMeta(notices || [])
+            : { latestId: notices?.[0]?.id || null, latestAt: Date.now(), latestCriticalAt: 0, latestSeverity: 'info', liveCount: (notices || []).length };
+        try {
+            await fetch(`${dynamicEndpoint}notices_meta/${encodeURIComponent(target)}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(meta),
+            });
+        } catch (e) {
+            console.warn('notices_meta write failed', e);
+        }
+    },
+
+    publishNoticeToTarget: async (target, payload, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const id = String(payload.id || Date.now());
+        payload.id = id;
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        const existing = fetchRes.ok ? await fetchRes.json() : null;
+        const listed = Admin.listNoticesInTarget(existing);
+        const isLegacy = existing && (existing.message || existing.text)
+            && !Object.entries(existing).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+
+        if (isLegacy && existing.id && String(existing.id) !== id) {
+            const map = {};
+            map[existing.id] = existing;
+            map[id] = payload;
+            const put = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(map),
+            }, 10000);
+            if (!put.ok) throw new Error('Failed to publish alert');
+        } else {
+            const put = await window.guardianFetch(`${dynamicEndpoint}notices/${target}/${id}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            }, 10000);
+            if (!put.ok) throw new Error('Failed to publish alert');
+        }
+        const nextList = listed.filter((n) => String(n.id || n._key) !== id).concat([payload]);
+        await Admin.writeNoticesMeta(target, secret, nextList);
+        return payload;
+    },
+
+    archiveActiveNotice: async (target, secret, noticeData = null, noticeId = null) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) return null;
+        const node = await fetchRes.json();
+        if (!node) return null;
+
+        const listed = Admin.listNoticesInTarget(node);
+        let alertData = noticeData;
+        if (!alertData && noticeId) {
+            alertData = listed.find((n) => String(n.id || n._key) === String(noticeId)) || null;
+        }
+        if (!alertData && listed.length === 1) alertData = listed[0];
+        if (!alertData || !(alertData.id || alertData._key)) return null;
+        const key = alertData._key || alertData.id;
 
         const pollResults = (alertData.poll && alertData.poll.active)
-            ? await Admin.fetchPollResultsSnapshot(alertData.id, secret)
+            ? await Admin.fetchPollResultsSnapshot(alertData.id || key, secret)
             : (alertData.pollResults || null);
 
         const archived = {
@@ -7413,11 +7713,43 @@ const Admin = {
             archiveReason: alertData.archiveReason || 'cleared',
             pollResults: pollResults || alertData.pollResults || null,
         };
-        const archiveUrl = `${dynamicEndpoint}notices_archive/${alertData.id}_${Date.now()}.json?auth=${secret}`;
+        const archKey = `${target}/${alertData.id || key}_${Date.now()}`;
+        const archiveUrl = `${dynamicEndpoint}notices_archive/${archKey}.json?auth=${secret}`;
         const archRes = await fetch(archiveUrl, { method: 'PUT', body: JSON.stringify(archived) });
         if (!archRes.ok) throw new Error('Failed to write notices_archive');
-        await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+
+        const isLegacy = node && (node.message || node.text)
+            && !Object.entries(node).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+        if (isLegacy || listed.length <= 1) {
+            await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+            await Admin.writeNoticesMeta(target, secret, []);
+        } else {
+            await fetch(`${dynamicEndpoint}notices/${target}/${key}.json?auth=${secret}`, { method: 'DELETE' });
+            const remain = listed.filter((n) => String(n.id || n._key) !== String(key));
+            await Admin.writeNoticesMeta(target, secret, remain);
+        }
         return archived;
+    },
+
+    archiveAllNoticesForTarget: async (target, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) return 0;
+        const node = await fetchRes.json();
+        const listed = Admin.listNoticesInTarget(node);
+        let count = 0;
+        for (const item of listed) {
+            try {
+                await Admin.archiveActiveNotice(target, secret, item, item.id || item._key);
+                count++;
+            } catch (e) {
+                console.warn('archive one notice failed', e);
+            }
+        }
+        if (!count && node) {
+            await fetch(`${dynamicEndpoint}notices/${target}.json?auth=${secret}`, { method: 'DELETE' });
+        }
+        return count;
     },
 
     sweepExpiredAlertsToArchive: async (secret) => {
@@ -7432,13 +7764,16 @@ const Admin = {
             const nData = nRes.ok ? await nRes.json() : null;
             if (nData && typeof nData === 'object') {
                 for (const [target, node] of Object.entries(nData)) {
-                    if (node && node.message && node.id && node.expiresAt && node.expiresAt < now) {
-                        try {
-                            node.archiveReason = 'expired';
-                            await Admin.archiveActiveNotice(target, secret, node);
-                            notices++;
-                        } catch (e) {
-                            console.warn('Expired notice archive failed', target, e);
+                    const listed = Admin.listNoticesInTarget(node);
+                    for (const item of listed) {
+                        if (item && item.expiresAt && item.expiresAt < now) {
+                            try {
+                                item.archiveReason = 'expired';
+                                await Admin.archiveActiveNotice(target, secret, item, item.id || item._key);
+                                notices++;
+                            } catch (e) {
+                                console.warn('Expired notice archive failed', target, e);
+                            }
                         }
                     }
                 }
@@ -7492,11 +7827,23 @@ const Admin = {
         if (nData && typeof nData === 'object') {
             Object.entries(nData).forEach(([archKey, alert]) => {
                 if (!alert || typeof alert !== 'object') return;
-                items.push({
-                    ...alert,
-                    kind: alert.kind || 'notice',
-                    _archKey: archKey,
-                    _sortAt: Number(alert.archivedAt || alert.postedAt || 0),
+                const pushArch = (row, key) => {
+                    if (!row || typeof row !== 'object') return;
+                    items.push({
+                        ...row,
+                        kind: row.kind || 'notice',
+                        _archKey: key,
+                        _sortAt: Number(row.archivedAt || row.postedAt || 0),
+                    });
+                };
+                if (alert.message || alert.text || alert.kind === 'notice') {
+                    pushArch(alert, archKey);
+                    return;
+                }
+                Object.entries(alert).forEach(([innerKey, inner]) => {
+                    if (inner && typeof inner === 'object' && (inner.message || inner.text || inner.kind)) {
+                        pushArch(inner, `${archKey}/${innerKey}`);
+                    }
                 });
             });
         }
@@ -7603,11 +7950,11 @@ const Admin = {
                         postedAt: Date.now(),
                         expiresAt: Date.now() + expiresInMs,
                     };
-                    const putRes = await fetch(`${dynamicEndpoint}notices/${job.target}.json?auth=${secret}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(payload),
-                    });
-                    if (!putRes.ok) continue;
+                    try {
+                        await Admin.publishNoticeToTarget(job.target, payload, secret);
+                    } catch {
+                        continue;
+                    }
                     published++;
                     const next = Admin.computeNextScheduleRun(job.frequency || 'once', Math.max(nextRun, now));
                     if (next == null || job.frequency === 'once') {
@@ -7838,7 +8185,7 @@ const Admin = {
                 <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-200 dark:border-blue-800">
                     <div>
                         <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force Popup Alert</span>
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens modal on user screen</p>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens the Alerts channel once</p>
                     </div>
                     <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                         <input type="checkbox" id="alert-force-popup" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
@@ -7849,23 +8196,19 @@ const Admin = {
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                        <div class="flex items-center w-full bg-gray-100 dark:bg-gray-700 p-0.5 border-b border-gray-300 dark:border-gray-600 overflow-x-auto custom-scrollbar space-x-0.5">
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('bold')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Bold">B</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('italic')" class="px-1.5 py-1 text-xs italic text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Italic">I</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('larger')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Increase Size">A+</button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('smaller')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1" title="Decrease Size">A-</button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyLeft')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Left"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyCenter')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg></button>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('justifyRight')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="Align Right"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg></button>
-                            <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
-                            <label for="alert-upload-file" id="alert-upload-label" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
-                            <input type="file" id="alert-upload-file" class="hidden" accept="image/*,.pdf">
-                        </div>
-                        <div contenteditable="true" id="alert-msg" class="w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                        ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
+                        <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
                     </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel poster</label>
+                    <p id="alert-live-count" class="text-[10px] text-gray-400 mb-2"></p>
+                    <div id="alert-poster-selected" class="flex flex-wrap gap-2 mb-2"></div>
+                    <select id="alert-poster-select" class="w-full min-h-[48px] px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="">Add a poster…</option>
+                    </select>
+                    <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
 
 
@@ -7979,7 +8322,7 @@ const Admin = {
 
                 <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                      <button id="alert-send-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
-                        Post Alert
+                        Preview Alert
                     </button>
                     <button id="alert-clear-btn" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
                         Clear
@@ -8278,6 +8621,7 @@ const Admin = {
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
                     severity: severitySelect?.value || 'info',
+                    imageUrls: Admin.getSelectedAlertPosters(),
                     imageUrl: null,
                     ctaUrl: null,
                     ctaText: null,
@@ -8361,6 +8705,8 @@ const Admin = {
             if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
             if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
             if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
+
+            Admin.setSelectedAlertPosters(Admin.collectAlertImageUrls(item));
 
             if (item.poll && item.poll.active) {
                 if (pollToggle) pollToggle.checked = true;
@@ -8524,149 +8870,24 @@ const Admin = {
                 Admin._skipAlertFetchOnce = false;
                 return;
             }
-            Admin._alertRepostDraft = false;
+            existingAlertId = null;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
                 const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
                 const data = await res.json();
-                
-                if (data && data.message) {
-                    existingAlertId = data.id || null;
-                    let cleanedMsg = Admin.repairMojibake(data.message);
-                    cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
-                    cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
-                    
-                    alertMsg.innerHTML = cleanedMsg.trim();
-
-                    
-                    if(data.expiresAt && dateInput) {
-                        const expiryDate = new Date(data.expiresAt);
-                        expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset()); 
-                        dateInput.value = expiryDate.toISOString().slice(0, 16);
-                    }
-                    
-                    if (severitySelect && data.severity) {
-                        severitySelect.value = data.severity;
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) {
-                            display.innerHTML = Admin._severityLabelHtml(data.severity || 'info');
-                        }
-                    } else if (severitySelect) {
-                        severitySelect.value = 'info';
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
-                    }
-
-                    if (data.authorName) signoffInput.value = data.authorName;
-                    else signoffInput.value = "Next Train Ops";
-
-                    if (data.forcePopup !== undefined) forcePopupToggle.checked = data.forcePopup;
-                    else forcePopupToggle.checked = (data.severity === 'critical');
-
-                    if (data.poll && data.poll.active) {
-                        pollToggle.checked = true;
-                        pollContainer.classList.remove('hidden');
-                        pollQuestion.value = data.poll.question || "";
-                        pollOptA.value = data.poll.optionA || "";
-                        pollOptB.value = data.poll.optionB || "";
-                        if (pollShowResults) pollShowResults.checked = !!data.poll.showResults;
-                        if (data.poll.optionC) {
-                            if (pollOptC) pollOptC.value = data.poll.optionC;
-                            pollOptCWrap?.classList.remove('hidden');
-                            pollAddCBtn?.classList.add('hidden');
-                        } else {
-                            if (pollOptC) pollOptC.value = "";
-                            pollOptCWrap?.classList.add('hidden');
-                            pollAddCBtn?.classList.remove('hidden');
-                        }
-
-                        const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                        if (pollResultsPanel && data.id) {
-                            try {
-                                const secret = await Admin.getAuthKey();
-                                const pollRes = await fetch(`${dynamicEndpoint}polls/${data.id}.json?auth=${secret}`);
-                                const pollData = await pollRes.json();
-                                
-                                let countA = 0, countB = 0, countC = 0;
-                                if (pollData) {
-                                    Object.values(pollData).forEach(vote => {
-                                        if (vote.optionKey === 'A') countA++;
-                                        else if (vote.optionKey === 'B') countB++;
-                                        else if (vote.optionKey === 'C') countC++;
-                                    });
-                                }
-                                
-                                const total = countA + countB + countC;
-                                const pctA = total > 0 ? Math.round((countA / total) * 100) : 0;
-                                const pctB = total > 0 ? Math.round((countB / total) * 100) : 0;
-                                const pctC = total > 0 ? Math.round((countC / total) * 100) : 0;
-                                
-                                document.getElementById('poll-result-question').textContent = data.poll.question;
-                                document.getElementById('poll-result-label-a').textContent = data.poll.optionA;
-                                document.getElementById('poll-result-label-b').textContent = data.poll.optionB;
-                                document.getElementById('poll-result-count-a').textContent = `${countA} votes (${pctA}%)`;
-                                document.getElementById('poll-result-count-b').textContent = `${countB} votes (${pctB}%)`;
-                                document.getElementById('poll-result-bar-a').style.width = `${pctA}%`;
-                                document.getElementById('poll-result-bar-b').style.width = `${pctB}%`;
-
-                                const cWrap = document.getElementById('poll-result-c-wrap');
-                                if (data.poll.optionC) {
-                                    cWrap?.classList.remove('hidden');
-                                    document.getElementById('poll-result-label-c').textContent = data.poll.optionC;
-                                    document.getElementById('poll-result-count-c').textContent = `${countC} votes (${pctC}%)`;
-                                    document.getElementById('poll-result-bar-c').style.width = `${pctC}%`;
-                                } else {
-                                    cWrap?.classList.add('hidden');
-                                }
-                                
-                                document.getElementById('poll-result-total').textContent = `Total Votes: ${total}`;
-                                pollResultsPanel.classList.remove('hidden');
-                            } catch(e) { console.warn("Could not fetch poll results", e); }
-                        }
-                    } else {
-                        pollToggle.checked = false;
-                        pollContainer.classList.add('hidden');
-                        pollQuestion.value = "";
-                        pollOptA.value = "";
-                        pollOptB.value = "";
-                        if (pollOptC) pollOptC.value = "";
-                        if (pollShowResults) pollShowResults.checked = false;
-                        pollOptCWrap?.classList.add('hidden');
-                        pollAddCBtn?.classList.remove('hidden');
-                        const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                        if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
-                    }
-
-                    sendBtn.textContent = "Update Alert"; 
-                } else {
-                    existingAlertId = null;
-                    alertMsg.innerHTML = "";
-                    
-                    const pollResultsPanel = document.getElementById('alert-live-poll-results');
-                    if (pollResultsPanel) pollResultsPanel.classList.add('hidden');
-                    if(severitySelect) {
-                        severitySelect.value = 'info';
-                        const display = document.getElementById('alert-severity-display');
-                        if (display) display.innerHTML = Admin._severityLabelHtml('info');
-                    }
-
-                    signoffInput.value = "Next Train Ops";
-                    forcePopupToggle.checked = false;
-
-                    pollToggle.checked = false;
-                    pollContainer.classList.add('hidden');
-                    pollQuestion.value = "";
-                    pollOptA.value = "";
-                    pollOptB.value = "";
-                    if (pollOptC) pollOptC.value = "";
-                    if (pollShowResults) pollShowResults.checked = false;
-                    pollOptCWrap?.classList.add('hidden');
-                    pollAddCBtn?.classList.remove('hidden');
-
-                    sendBtn.textContent = "Post Alert";
+                const listed = Admin.listNoticesInTarget(data);
+                const live = listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now());
+                const countEl = document.getElementById('alert-live-count');
+                if (countEl) {
+                    countEl.textContent = live.length
+                        ? `${live.length} live post${live.length === 1 ? '' : 's'} on this target — composer starts a new channel post.`
+                        : 'No live posts on this target — composer starts a new channel post.';
                 }
-            } catch (e) { console.log("No active alert."); }
+                if (sendBtn) sendBtn.textContent = 'Preview Alert';
+            } catch (e) {
+                const countEl = document.getElementById('alert-live-count');
+                if (countEl) countEl.textContent = 'Could not read live posts for this target.';
+            }
         }
 
         Admin.populateAlertTargets = (skipFetch = false) => {
@@ -8784,6 +9005,20 @@ const Admin = {
             alertTarget.addEventListener('change', () => fetchCurrentAlert(alertTarget.value));
         }
         Admin.populateAlertTargets();
+        Admin._alertPosterPaths = Admin._alertPosterPaths || [];
+        Admin.loadAlertPosterManifest();
+        document.getElementById('alert-poster-select')?.addEventListener('change', (e) => {
+            const path = Admin.sanitizeAlertPosterPath(e.target?.value || '');
+            e.target.value = '';
+            if (!path) return;
+            const cur = Admin.getSelectedAlertPosters();
+            if (cur.includes(path)) return;
+            if (cur.length >= 2) {
+                if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+                return;
+            }
+            Admin.setSelectedAlertPosters(cur.concat(path));
+        });
 
         const now = new Date();
         now.setHours(23, 59, 59, 999);
@@ -8804,8 +9039,9 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
             msg = Admin.repairMojibake(msg);
-            msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-
+            if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
+                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
+            }
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
 
@@ -8822,6 +9058,7 @@ const Admin = {
                 postedAt: nowTs,
                 expiresAt: expiresAtVal,
                 severity: severity,
+                imageUrls: Admin.getSelectedAlertPosters(),
                 imageUrl: null,
                 ctaUrl: null,
                 ctaText: null,
@@ -8839,24 +9076,42 @@ const Admin = {
                 }
             };
 
-            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            const url = `${dynamicEndpoint}notices/${target}.json?auth=${secret}`;
-
-            try {
-                sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
-                sendBtn.disabled = true;
-                // GUARDIAN PHASE 4: Admin Shield - Wraps raw fetch in guardianFetch to prevent deadlocks
-                const res = await window.guardianFetch(url, { method: 'PUT', body: JSON.stringify(payload) }, 10000);
-                if (res.ok) {
-                    existingAlertId = payload.id;
+            const publishAssembled = async () => {
+                try {
+                    sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
+                    sendBtn.disabled = true;
+                    await Admin.publishNoticeToTarget(target, payload, secret);
+                    existingAlertId = null;
                     Admin._alertRepostDraft = false;
+                    Admin.setSelectedAlertPosters([]);
+                    if (alertMsg) alertMsg.innerHTML = '';
                     if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
-                    if (typeof checkServiceAlerts === 'function') checkServiceAlerts(); 
-                } else {
-                    if (typeof showToast === 'function') showToast("Failed. Check Session.", "error");
+                    if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
+                    fetchCurrentAlert(target);
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast(e.message || "Failed. Check Session.", "error");
+                } finally {
+                    sendBtn.textContent = "Preview Alert";
+                    sendBtn.disabled = false;
                 }
-            } catch (e) { if (typeof showToast === 'function') showToast("Error: " + e.message, "error"); } 
-            finally { sendBtn.textContent = "Update Alert"; sendBtn.disabled = false; }
+            };
+
+            const modal = document.getElementById('notice-modal');
+            if (typeof window.renderServiceAlertModal === 'function' && modal) {
+                const restoreZ = Admin._elevateModalForAdmin(modal);
+                window.renderServiceAlertModal(payload, {
+                    mode: 'preview',
+                    onEdit: () => { try { restoreZ(); } catch { /* ignore */ } },
+                    onPost: async () => {
+                        try { restoreZ(); } catch { /* ignore */ }
+                        await publishAssembled();
+                    },
+                });
+                openSmoothModal('notice-modal', null, { skipHash: true });
+                return;
+            }
+
+            await publishAssembled();
         };
 
         clearBtn.onclick = async () => {
@@ -8868,8 +9123,8 @@ const Admin = {
             if (!confirmed) return;
 
             try {
-                const archived = await Admin.archiveActiveNotice(target, secret);
-                if (!archived) {
+                const archivedCount = await Admin.archiveAllNoticesForTarget(target, secret);
+                if (!archivedCount) {
                     if (typeof showToast === 'function') showToast("No active alert to clear for this target.", "info");
                     return;
                 }
@@ -8898,7 +9153,7 @@ const Admin = {
                 const livePoll = document.getElementById('alert-live-poll-results');
                 if (livePoll) livePoll.classList.add('hidden');
 
-                sendBtn.textContent = "Post Alert";
+                sendBtn.textContent = "Preview Alert";
                 if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
             } catch (e) { if (typeof showToast === 'function') showToast(e.message || "Failed to clear alert.", "error"); }
         };
@@ -9046,9 +9301,10 @@ const Admin = {
             const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `Admin.openLightbox('${safe}')`;
         };
-        let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-            : '';
+        const posterUrls = Admin.collectAlertImageUrls(data);
+        let imgHtml = posterUrls.map((src) =>
+            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+        ).join('');
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
@@ -9150,9 +9406,10 @@ const Admin = {
             const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `Admin.openLightbox('${safe}')`;
         };
-        let imgHtml = data.imageUrl
-            ? `<button type="button" onclick="event.stopPropagation(); ${lb(data.imageUrl)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(data.imageUrl)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-            : '';
+        const posterUrls = Admin.collectAlertImageUrls(data);
+        let imgHtml = posterUrls.map((src) =>
+            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
+        ).join('');
         let parsedMessage = data.message || data.text || 'No details provided.';
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
             if (btnStart || btnEnd) return match;
@@ -9194,87 +9451,34 @@ const Admin = {
 
     _previewArchiveAsNotice: (item) => {
         const modal = document.getElementById('notice-modal');
-        const content = document.getElementById('notice-content');
-        const timestamp = document.getElementById('notice-timestamp');
-        if (!modal || !content) {
-            // Fallback if hub markup missing
+        if (!modal) {
             if (typeof showToast === 'function') showToast('Notice modal unavailable.', 'error');
             return;
         }
         const restoreZ = Admin._elevateModalForAdmin(modal);
-        const severity = (item.severity || 'info').toLowerCase();
-        const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
-        if (modalCard) {
-            modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500');
-            if (severity === 'critical') modalCard.classList.add('border-red-500');
-            else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
-            else modalCard.classList.add('border-blue-500');
+        const finish = () => { try { restoreZ(); } catch { /* ignore */ } };
+        const posted = item.repostedAt || item.postedAt || item.timestamp;
+        const postedStr = posted ? Admin.formatDate(posted) : '-';
+        const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
+        const timestampHtml = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
+        const prefixHtml = item.archivedAt
+            ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
+            : '';
+        if (typeof window.renderServiceAlertModal === 'function') {
+            window.renderServiceAlertModal(item, {
+                mode: 'archive',
+                prefixHtml,
+                timestampHtml,
+                onClose: finish,
+                onRevive: (item.archivedAt || item.archiveReason)
+                    ? () => { finish(); Admin.reviveArchivedAlert(item); }
+                    : null,
+            });
+            openSmoothModal('notice-modal', null, { skipHash: true });
+            return;
         }
-        const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
-        if (modalHeader) {
-            const headerContainer = modalHeader.parentElement;
-            if (headerContainer) {
-                headerContainer.className = `flex items-center shrink-0 ${
-                    severity === 'critical' ? 'text-red-600 dark:text-red-400'
-                        : severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400'
-                            : 'text-blue-600 dark:text-blue-400'
-                }`;
-            }
-            // Unicode escapes stay encoding-safe (matches live hub.js titles)
-            modalHeader.textContent = severity === 'critical'
-                ? '\uD83D\uDD34 CRITICAL ADVISORY'
-                : severity === 'warning'
-                    ? '\uD83D\uDFE1 SERVICE WARNING'
-                    : '\uD83D\uDD35 SERVICE INFO';
-        }
-        content.innerHTML = Admin.buildNoticeBodyHtml(item);
-        if (timestamp) {
-            const posted = item.repostedAt || item.postedAt || item.timestamp;
-            const postedStr = posted ? Admin.formatDate(posted) : '-';
-            const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
-            timestamp.innerHTML = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
-        }
-
-        modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
-        const oldCloseBtn = document.getElementById('notice-modal-close-btn');
-        if (oldCloseBtn) oldCloseBtn.style.display = 'none';
-
-        const closePreview = () => {
-            restoreZ();
-            // Close without history.back() — archive preview never pushed #notice.
-            if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal', true);
-            else modal.classList.add('hidden');
-            if (oldCloseBtn) oldCloseBtn.style.display = '';
-        };
-
-        const btnContainer = document.createElement('div');
-        btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-        closeBtn.textContent = 'Close';
-        closeBtn.onclick = closePreview;
-        btnContainer.appendChild(closeBtn);
-
-        if (item.archivedAt || item.archiveReason) {
-            const reviveBtn = document.createElement('button');
-            reviveBtn.type = 'button';
-            reviveBtn.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-            reviveBtn.textContent = 'Revive / Repost';
-            reviveBtn.onclick = () => {
-                closePreview();
-                Admin.reviveArchivedAlert(item);
-            };
-            btnContainer.appendChild(reviveBtn);
-        }
-
-        const topClose = modal.querySelector('button.text-gray-400');
-        if (topClose) topClose.onclick = (e) => { e.preventDefault(); e.stopPropagation(); closePreview(); };
-
-        if (oldCloseBtn?.parentNode) oldCloseBtn.parentNode.appendChild(btnContainer);
-        else content.parentNode?.appendChild(btnContainer);
-
-        openSmoothModal('notice-modal', null, { skipHash: true });
+        if (typeof showToast === 'function') showToast('Notice preview unavailable.', 'error');
+        finish();
     },
 
     _previewArchiveAsDisruption: (item) => {
@@ -9302,7 +9506,9 @@ const Admin = {
             const statusChip = item.archivedAt
                 ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
                 : '';
-            bodyEl.innerHTML = `${statusChip}${item.message || item.longExplanation || item.buttonText || 'No additional details provided.'}`;
+            const rawMsg = item.message || item.longExplanation || item.buttonText || 'No additional details provided.';
+            const prepared = typeof window.prepareRichHtml === 'function' ? window.prepareRichHtml(rawMsg) : rawMsg;
+            bodyEl.innerHTML = `${statusChip}${prepared}`;
         }
         if (badgeEl) {
             if (item.tier === 'CRITICAL' || item.severity === 'critical') {
@@ -9453,7 +9659,10 @@ const Admin = {
 
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Commuter Explanation (PRASA Notice)</label>
-                    <textarea id="disr-msg" rows="6" class="w-full min-h-[150px] p-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-y" placeholder="The line between Centurion and Irene is suspended due to a sinkhole..."></textarea>
+                    <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                        ${Admin.wysiwygToolbarHtml('disr-msg', { fileInputId: 'disr-upload-file', fileLabelId: 'disr-upload-label' })}
+                        <div contenteditable="true" id="disr-msg" class="nt-rich-body w-full min-h-[150px] p-3 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="The line between Centurion and Irene is suspended due to a sinkhole..."></div>
+                    </div>
                 </div>
 
                 <div>
@@ -9485,13 +9694,83 @@ const Admin = {
         const saveBtn = document.getElementById('disr-save-btn');
         const listDiv = document.getElementById('disr-list');
 
-        // GUARDIAN PHASE 1: Auto-Expanding Textarea Engine
-        if (msgInput) {
-            msgInput.addEventListener('input', function() {
-                this.style.height = 'auto'; // Reset to recalculate true scrollHeight
-                const newHeight = Math.min(this.scrollHeight, 300); // 300px max height
-                this.style.height = newHeight + 'px';
-                this.style.overflowY = this.scrollHeight > 300 ? 'auto' : 'hidden';
+        const disrUploadFile = document.getElementById('disr-upload-file');
+        if (disrUploadFile) {
+            disrUploadFile.addEventListener('change', async function() {
+                const editor = document.getElementById('disr-msg');
+                const savedRange = Admin._savedRange;
+                if (editor) editor.focus();
+
+                if (this.files && this.files.length > 0) {
+                    const file = this.files[0];
+                    if (file.size > 5242880) {
+                        if (typeof showToast === 'function') showToast("File is too large. Max 5MB.", "error");
+                        this.value = '';
+                        return;
+                    }
+
+                    if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
+                        if (typeof showToast === 'function') showToast("Storage SDK not ready. Check connection.", "error");
+                        this.value = '';
+                        return;
+                    }
+
+                    if (typeof showToast === 'function') showToast("Uploading Attachment...", "info", 30000);
+
+                    try {
+                        const fileExt = file.name.split('.').pop().toLowerCase();
+                        const isPdf = fileExt === 'pdf';
+                        const fileName = `inline_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
+                        const storageReference = window.firebaseStorageRef(window.firebaseStorage, `admin_attachments/${fileName}`);
+                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
+                        const labelEl = document.getElementById('disr-upload-label');
+                        const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media`;
+
+                        uploadTask.on('state_changed',
+                            (snapshot) => {
+                                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                                if (labelEl) labelEl.innerHTML = `${progress}%`;
+                            },
+                            (error) => {
+                                if (typeof showToast === 'function') showToast("Upload failed", "error");
+                                console.error("Incident upload error:", error);
+                                if (labelEl) labelEl.innerHTML = originalLabel;
+                                this.value = '';
+                            },
+                            async () => {
+                                if (labelEl) labelEl.innerHTML = originalLabel;
+                                try {
+                                    const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
+                                    let htmlToInsert = '';
+                                    if (isPdf) {
+                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">View Attached PDF</a>&nbsp;`;
+                                    } else {
+                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+                                    }
+                                    if (editor) {
+                                        editor.focus();
+                                        if (savedRange) {
+                                            const sel = window.getSelection();
+                                            sel.removeAllRanges();
+                                            sel.addRange(savedRange);
+                                        }
+                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
+                                            editor.innerHTML += htmlToInsert;
+                                        }
+                                        Admin._savedRange = null;
+                                    }
+                                    if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
+                                } catch (e) {
+                                    if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
+                                }
+                                this.value = '';
+                            }
+                        );
+                    } catch (e) {
+                        if (typeof showToast === 'function') showToast("Upload system error.", "error");
+                        this.value = '';
+                    }
+                }
             });
         }
 
@@ -9757,11 +10036,11 @@ const Admin = {
             const statA = statASelect.value;
             const statB = statBSelect.value;
             const btnText = btnTextInput.value.trim() || (tier === 'CRITICAL' ? 'Severance Advisory' : 'Delay Advisory');
-            const msg = msgInput.value.trim();
+            const msg = (msgInput?.innerHTML || '').trim();
             const expiryTs = expiryInput.value ? new Date(expiryInput.value).getTime() : Date.now() + (48 * 3600 * 1000);
 
             if (!rId) { if (typeof showToast === 'function') showToast("Select a route.", "error"); return; }
-            if (!msg) { if (typeof showToast === 'function') showToast("Explanation required.", "error"); return; }
+            if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast("Explanation required.", "error"); return; }
             
             const secret = await Admin.getAuthKey(); 
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required.", "error"); return; }
@@ -9774,7 +10053,7 @@ const Admin = {
                 tier: tier,
                 stations: stations,
                 buttonText: btnText,
-                message: msg.replace(/\n/g, "<br>"),
+                message: /<[a-z][\s\S]*>/i.test(msg) ? msg : msg.replace(/\n/g, "<br>"),
                 postedAt: Date.now(),
                 expiresAt: expiryTs
             };
@@ -9790,7 +10069,7 @@ const Admin = {
 
                 if (res.ok) {
                     if (typeof showToast === 'function') showToast(`Incident Deployed!`, "success");
-                    msgInput.value = '';
+                    if (msgInput) msgInput.innerHTML = '';
                     btnTextInput.value = '';
                     statASelect.value = '';
                     statBSelect.value = '';
@@ -9836,7 +10115,8 @@ const Admin = {
                                 if (dispB) dispB.textContent = data.stations[1].replace(' STATION', '');
                             }
                             document.getElementById('disr-btn-text').value = data.buttonText || '';
-                            document.getElementById('disr-msg').value = (data.message || data.longExplanation || '').replace(/<br>/g, '\n');
+                            const reviveEditor = document.getElementById('disr-msg');
+                            if (reviveEditor) reviveEditor.innerHTML = data.message || data.longExplanation || '';
                             
                             const now = new Date();
                             now.setHours(now.getHours() + 48);
@@ -10921,6 +11201,74 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Schedule Data QA (moved from admin home tile) -->
+                <div id="sched-qa-accordion" class="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 overflow-visible shadow-sm transition-all relative">
+                    <button id="sched-qa-header-btn" class="w-full px-3 py-3 bg-violet-100/50 dark:bg-violet-900/40 text-left text-[10px] font-black text-violet-800 dark:text-violet-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-violet-200/50 dark:hover:bg-violet-900/60">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            Schedule Data QA
+                        </span>
+                        <svg id="sched-qa-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+
+                    <div id="sched-qa-body" class="p-3 hidden space-y-3 overflow-visible">
+                        <p class="text-[9px] text-violet-800 dark:text-violet-400 font-medium leading-snug">
+                            Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
+                            delta variance, missing coordinates, day mismatches, and more.
+                        </p>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Region</label>
+                                <select id="sched-qa-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                                    <option value="CURRENT">Active region</option>
+                                    <option value="GP">Gauteng</option>
+                                    <option value="WC">Western Cape</option>
+                                    <option value="KZN">KwaZulu-Natal</option>
+                                    <option value="EC">Eastern Cape</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Source</label>
+                                <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                                    <option value="FIREBASE" selected>Firebase</option>
+                                    <option value="CLOUDFLARE">Cloudflare</option>
+                                    <option value="GITHUB">GitHub CDN</option>
+                                    <option value="RAM">RAM cache</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="relative z-30" id="sched-qa-filter-wrap">
+                            <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Issue types to show</label>
+                            <button type="button" id="sched-qa-filter-btn" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none flex items-center justify-between">
+                                <span id="sched-qa-filter-label">All default issue types</span>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="sched-qa-filter-menu" class="hidden absolute left-0 right-0 z-[80] mt-1 w-full max-h-56 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-2 space-y-0.5">
+                                <div class="flex gap-2 px-1 pb-2 mb-1 border-b border-gray-100 dark:border-gray-800">
+                                    <button type="button" id="sched-qa-filter-all" class="text-[9px] font-bold uppercase text-violet-600 hover:underline">All</button>
+                                    <button type="button" id="sched-qa-filter-defaults" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">Defaults</button>
+                                    <button type="button" id="sched-qa-filter-none" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">None</button>
+                                </div>
+                                <div id="sched-qa-filter-list" class="space-y-0.5"></div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button id="sched-qa-run-btn" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center gap-1.5">
+                                ${Admin.icon('search', 'w-3.5 h-3.5')} Run QA report
+                            </button>
+                            <button id="sched-qa-export-btn" class="px-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-bold py-2.5 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none inline-flex items-center gap-1" title="Download last report as JSON">
+                                ${Admin.icon('download', 'w-3.5 h-3.5')} Export
+                            </button>
+                        </div>
+
+                        <div id="sched-qa-summary" class="hidden"></div>
+                        <div id="sched-qa-results" class="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar"></div>
+                    </div>
+                </div>
+
                 <!-- GUARDIAN PHASE 6.3: Transplated Time Simulation Engine -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
                     <button id="sim-header-btn" class="w-full px-3 py-3 bg-gray-100/50 dark:bg-gray-800/40 text-left text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-gray-200/50 dark:hover:bg-gray-700/60">
@@ -11071,7 +11419,7 @@ const Admin = {
             const dbPath = paths[targetRegion];
             let fetchUrl = '';
             if (scanSource === 'GITHUB') {
-                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
             } else if (scanSource === 'FIREBASE') {
                 fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
             } else {
@@ -11454,7 +11802,7 @@ const Admin = {
                 };
 
                 // Astro: probe app-version.json (SPA used js/config.js APP_VERSION scrape).
-                // Cloudflare column = production CDN host; GitHub = jsDelivr metrorail-app deploy.
+                // Cloudflare column = production CDN host; GitHub = jsDelivr next-train-astro dump.
                 const pipelines = [
                     {
                         name: 'Cloudflare Edge',
@@ -11464,8 +11812,8 @@ const Admin = {
                     },
                     {
                         name: 'GitHub CDN',
-                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/app-version.json',
-                        dbUrl: `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${getRegionDbPath('GITHUB')}`,
+                        configUrl: 'https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json',
+                        dbUrl: `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${getRegionDbPath('GITHUB')}`,
                         expectApp: true
                     },
                     {
@@ -11632,7 +11980,7 @@ const Admin = {
                     const dbPath = getRegionDbPath(scanSource);
 
                     if (scanSource === 'GITHUB') {
-                        fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                        fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
                         loadingMsg = 'Downloading GitHub CDN payload...';
                     } else if (scanSource === 'FIREBASE') {
                         fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
@@ -11777,96 +12125,17 @@ const Admin = {
     },
 
     /**
-     * Standalone Schedule QA - data quality (duplicate adjacent times, regressions,
-     * delta variance). Kept separate from System Health Diagnostics (cache/network).
+     * Schedule QA bindings. Markup lives as a System Health accordion
+     * (`#sched-qa-accordion` inside `#diag-body`) — do not recreate a home tile.
      */
     setupScheduleQaManager: () => {
-        const diagPanel = document.getElementById('diag-panel');
-        const alertPanel = document.getElementById('alert-panel');
-        const parent = diagPanel?.parentNode || alertPanel?.parentNode;
-        if (!parent) return;
+        const leftoverTile = document.getElementById('sched-qa-panel');
+        if (leftoverTile && leftoverTile.id === 'sched-qa-panel') leftoverTile.remove();
 
-        let qaPanel = document.getElementById('sched-qa-panel');
-        if (!qaPanel) {
-            qaPanel = document.createElement('div');
-            qaPanel.id = 'sched-qa-panel';
-            if (diagPanel?.nextSibling) parent.insertBefore(qaPanel, diagPanel.nextSibling);
-            else parent.appendChild(qaPanel);
-        }
-
+        const qaPanel = document.getElementById('sched-qa-accordion');
+        if (!qaPanel) return;
         if (qaPanel.dataset.loaded === 'true') return;
         qaPanel.dataset.loaded = 'true';
-
-        // overflow-visible so the issue-type menu is not clipped by the white card
-        qaPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300';
-
-        qaPanel.innerHTML = `
-            <button id="sched-qa-header-btn" class="w-full text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center">
-                    ${Admin.tileIcon('search', 'text-violet-500 dark:text-violet-400')}
-                    <span>Schedule Data QA</span>
-                </span>
-                <svg id="sched-qa-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-
-            <div id="sched-qa-body" class="hidden mt-4 space-y-4 overflow-visible">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
-                    delta variance, missing coordinates, day mismatches, and more.
-                    Diagnostics (above) covers cache/network - this panel is schedule content only.
-                </p>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Region</label>
-                        <select id="sched-qa-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                            <option value="CURRENT">Active region</option>
-                            <option value="GP">Gauteng</option>
-                            <option value="WC">Western Cape</option>
-                            <option value="KZN">KwaZulu-Natal</option>
-                            <option value="EC">Eastern Cape</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Source</label>
-                        <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                            <option value="FIREBASE" selected>Firebase</option>
-                            <option value="CLOUDFLARE">Cloudflare</option>
-                            <option value="GITHUB">GitHub CDN</option>
-                            <option value="RAM">RAM cache</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="relative z-30" id="sched-qa-filter-wrap">
-                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Issue types to show</label>
-                    <button type="button" id="sched-qa-filter-btn" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none flex items-center justify-between">
-                        <span id="sched-qa-filter-label">All default issue types</span>
-                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="sched-qa-filter-menu" class="hidden absolute left-0 right-0 z-[80] mt-1 w-full max-h-56 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-2 space-y-0.5">
-                        <div class="flex gap-2 px-1 pb-2 mb-1 border-b border-gray-100 dark:border-gray-800">
-                            <button type="button" id="sched-qa-filter-all" class="text-[9px] font-bold uppercase text-violet-600 hover:underline">All</button>
-                            <button type="button" id="sched-qa-filter-defaults" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">Defaults</button>
-                            <button type="button" id="sched-qa-filter-none" class="text-[9px] font-bold uppercase text-gray-500 hover:underline">None</button>
-                        </div>
-                        <div id="sched-qa-filter-list" class="space-y-0.5"></div>
-                    </div>
-                </div>
-
-                <div class="flex gap-2">
-                    <button id="sched-qa-run-btn" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center gap-1.5">
-                        ${Admin.icon('search', 'w-3.5 h-3.5')} Run QA report
-                    </button>
-                    <button id="sched-qa-export-btn" class="px-3 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-bold py-2.5 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none inline-flex items-center gap-1" title="Download last report as JSON">
-                        ${Admin.icon('download', 'w-3.5 h-3.5')} Export
-                    </button>
-                </div>
-
-                <div id="sched-qa-summary" class="hidden"></div>
-                <div id="sched-qa-results" class="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar"></div>
-            </div>
-        `;
 
         const header = document.getElementById('sched-qa-header-btn');
         const body = document.getElementById('sched-qa-body');
@@ -11972,7 +12241,7 @@ const Admin = {
             const dbPath = paths[targetRegion];
             let fetchUrl = '';
             if (scanSource === 'GITHUB') {
-                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/${dbPath}?t=${Date.now()}`;
+                fetchUrl = `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/${dbPath}?t=${Date.now()}`;
             } else if (scanSource === 'FIREBASE') {
                 fetchUrl = `https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`;
             } else {

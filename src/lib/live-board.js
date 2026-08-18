@@ -280,6 +280,7 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
 export function isTrainExcluded(trainNumber, routeId, dayIdx) {
     if (!trainNumber) return false;
+    
 
     // Source of truth is `$globalExclusions` (Firebase tree, or DEFAULT only
     // when the exclusions fetch failed). Never silently fall back to hardcoded
@@ -663,7 +664,11 @@ export function findNextTrains() {
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = ""; if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
+    const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
+    if (!quietPaint) {
+        if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
+        if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
+    }
     setHeaderDest(pretoriaHeaderEl(), uiDestA);
     setHeaderDest(pienaarspoortHeaderEl(), uiDestB);
     import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});

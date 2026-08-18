@@ -30,7 +30,9 @@ export default defineConfig({
   integrations: [
     tailwind(),
     AstroPWA({
-      registerType: 'autoUpdate',
+      // prompt + skipWaiting:false: new SW stays waiting so the open session
+      // keeps its hashed assets. Idle / next launch activates it (app-update.js).
+      registerType: 'prompt',
       injectRegister: 'auto',
       // Align SW + manifest inject with Astro base (must include trailing slash)
       base: baseWithSlash,
@@ -47,6 +49,8 @@ export default defineConfig({
         // Legacy SPA buckets (`metrorail-next-train-*`) are purged client-side in
         // cleanupLegacySpaShell() on first Astro boot.
         cleanupOutdatedCaches: true,
+        skipWaiting: false,
+        clientsClaim: true,
         // Shell only. Including png/svg pulled every network map and icon into the
         // precache — a 5.2 MB atomic install on first visit, which is punishing on
         // the 3G connections most of these commuters use, and one 404 fails the
@@ -58,8 +62,7 @@ export default defineConfig({
         // Private ops/marketing docs are noindex and never needed offline; keeping
         // them out shrinks the atomic install that every 3G user pays for up front.
         // admin.js: lazy unlock only. routes/**: SEO landings are crawlable but
-        // must not inflate the atomic offline install for every commuter (NetworkFirst
-        // navigate handler still caches them on first visit).
+        // must not inflate the atomic offline install for every commuter.
         globIgnores: [
           '**/node_modules/**',
           'marketing.html',
@@ -88,29 +91,48 @@ export default defineConfig({
             return { manifest, warnings: [] };
           },
         ],
-        // navigateFallback is NOT "show when offline" — Workbox serves it for ANY
-        // navigation URL missing from the precache (even while online). Use
-        // NetworkFirst + precacheFallback so the lifeboat only appears when the
-        // network truly fails (or the navigate can't be satisfied from cache).
-        // help.html is a self-contained recovery page (reset + contact) in public/.
+        // Precached shell (index.html) is served instantly. Runtime navigations
+        // use StaleWhileRevalidate so repeat visits start from cache and refresh
+        // in the background. help.html is the offline lifeboat only.
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'pages',
-              networkTimeoutSeconds: 3,
               precacheFallback: {
                 fallbackURL: `${baseWithSlash}help.html`,
               },
             },
           },
           {
+            // Content-hashed Astro chunks — safe to keep for a year (NUKE drops them).
+            urlPattern: ({ url }) => url.pathname.includes('/_astro/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'astro-hashed',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+              plugins: [{
+                cacheWillUpdate: async ({ response }) => {
+                  if (!response || response.status !== 200) return null;
+                  const ct = response.headers.get('content-type') || '';
+                  if (ct.includes('text/html')) return null;
+                  return response;
+                },
+              }],
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith('/app-version.json'),
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: ({ request }) => request.destination === 'image',
             handler: 'CacheFirst',
             options: {
               cacheName: 'images',
-              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] },
               // Captive portals return HTTP 200 HTML for any URL — never cache that
               // over a real image/map asset (SPA service-worker.js PHASE 4A).
@@ -130,7 +152,7 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'static-runtime',
-              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] },
               plugins: [{
                 cacheWillUpdate: async ({ response }) => {

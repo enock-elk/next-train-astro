@@ -56,6 +56,7 @@ const MODAL_HASH = {
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
     'map-modal': '#prasa-map',
     'notice-modal': '#notice',
+    'alerts-channel': '#alerts',
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
@@ -88,7 +89,25 @@ function legalHashForType(type) {
 }
 
 function anyFixedModalOpen() {
-    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)');
+    const alerts = document.getElementById('alerts-channel');
+    const alertsOpen = !!(alerts && !alerts.classList.contains('hidden'));
+    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)') || alertsOpen;
+}
+
+/** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
+function hideFixedModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    const inner = modal.firstElementChild;
+    if (inner && inner.classList.contains('scale-100')) {
+        inner.classList.remove('scale-100');
+        inner.classList.add('scale-95');
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('opacity-0');
+    if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+        unlockBackgroundScroll();
+    }
 }
 
 /** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
@@ -292,6 +311,17 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        // Alerts channel parks the home board (same as sidenav #sheet). Closing
+        // it must not switchTab / remount Next Train.
+        const alertsEl = document.getElementById('alerts-channel');
+        const alertsOpen = (alertsEl && !alertsEl.classList.contains('hidden')) || window.__ntAlertsOpen || window.__ntAlertsParkHome;
+        if (alertsOpen && hashNow !== '#alerts' && hashNow !== '#lightbox' && hashNow !== '#feedback' && hashNow !== '#map') {
+            closeSmoothModal('alerts-channel', true);
+            window.__ntAlertsOpen = false;
+            window.__ntAlertsParkHome = false;
+            return;
+        }
+
         const adminLightbox = document.getElementById('admin-lightbox-modal');
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
             if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
@@ -375,6 +405,7 @@ export function bindHistoryBackNavigation() {
                 || hashNow === '#lightbox'
                 || hashNow === '#feedback'
                 || hashNow === '#notice'
+                || hashNow === '#alerts'
                 || hashNow.startsWith('#disruption');
             if (keepPlannerResults) {
                 if (hashNow === '#planner-results' && typeof window.restorePlannerResultsView === 'function') {
@@ -620,14 +651,14 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex items-center justify-between px-4 py-3 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} max-w-[90vw]`; 
+    toastEl.className = `flex items-center justify-between gap-2 px-3 py-2 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
 
     toastEl.innerHTML = `
-        <div class="flex items-center gap-2 overflow-hidden">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
             ${iconHTML}
-            <span class="text-sm font-medium tracking-wide break-words line-clamp-2">${message}</span>
+            <span class="text-xs font-semibold tracking-wide leading-snug truncate">${message}</span>
         </div>
-        ${actionHTML ? `<div class="ml-3 pl-3 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
+        ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
     `;
     
     // Prevent pull-to-refresh ghost triggers
@@ -1097,6 +1128,9 @@ export function canAutoOpenHomeNotices() {
     const sheet = document.getElementById('nt-inapp-sheet');
     if (sheet && !sheet.classList.contains('hidden') && sheet.classList.contains('flex')) return false;
 
+    const alerts = document.getElementById('alerts-channel');
+    if (alerts && !alerts.classList.contains('hidden')) return false;
+
     // Sidenav / any modal already owns the screen — don't stack auto-popups.
     if (document.body.classList.contains('sidenav-open')) return false;
     if (document.body.classList.contains('modal-active')) return false;
@@ -1186,9 +1220,13 @@ export function switchTab(tab) {
     safeStorage.setItem('activeTab', tab);
     syncBottomNavActive(tab);
 
-    // Presence only while Community is visible
+    // Presence only while Community is visible. Bind first so a cold Community
+    // tab (before hub idle-import) still has click handlers.
     if (tab === 'community') {
-        import('./community.js').then((m) => m.openRouteCommunity?.()).catch(() => {});
+        import('./community.js').then((m) => {
+            m.bindCommunityUi?.();
+            m.openRouteCommunity?.();
+        }).catch(() => {});
     } else if (prev === 'community') {
         import('./community.js').then((m) => m.leaveCommunityRoom?.()).catch(() => {});
     }
@@ -1364,6 +1402,57 @@ export function hideOfflineToast() {
     if (typeof document === 'undefined') return;
     const offlineToast = document.getElementById('offline-toast');
     if (offlineToast) offlineToast.classList.add('translate-y-[150%]', 'opacity-0');
+}
+
+/** Only paint offline chrome after the app is visible and still offline. */
+const OFFLINE_CHROME_HOLD_MS = 4000;
+let _offlineChromeTimer = null;
+let _offlineChromeBound = false;
+
+export function hideOfflineChrome() {
+    if (_offlineChromeTimer) {
+        clearTimeout(_offlineChromeTimer);
+        _offlineChromeTimer = null;
+    }
+    hideOfflineToast();
+    const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
+    if (oi) oi.style.display = 'none';
+}
+
+export function scheduleOfflineChrome() {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return;
+    if (document.visibilityState !== 'visible' || navigator.onLine) {
+        hideOfflineChrome();
+        return;
+    }
+    if (_offlineChromeTimer) return;
+    _offlineChromeTimer = setTimeout(() => {
+        _offlineChromeTimer = null;
+        if (document.visibilityState !== 'visible' || navigator.onLine) return;
+        const oi = document.getElementById('offline-indicator');
+        if (oi) {
+            oi.style.display = 'flex';
+            oi.textContent = 'WORKING OFFLINE';
+        }
+        if (!window._hasShownOfflineToast) {
+            window._hasShownOfflineToast = true;
+            showOfflineToast(0, 'offline');
+        }
+    }, OFFLINE_CHROME_HOLD_MS);
+}
+
+export function bindOfflineChrome() {
+    if (_offlineChromeBound || typeof window === 'undefined') return;
+    _offlineChromeBound = true;
+    window.addEventListener('offline', () => scheduleOfflineChrome());
+    window.addEventListener('online', () => {
+        window._hasShownOfflineToast = false;
+        hideOfflineChrome();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') hideOfflineChrome();
+        else scheduleOfflineChrome();
+    });
 }
 
 /**
@@ -1696,6 +1785,11 @@ export function bindPwaInstallPrompt() {
 /** SPA OfflineTracker — queue analytics while offline, flush on reconnect. */
 export const OfflineTracker = {
     queueKey: 'analytics_queue',
+    _flushTimer: null,
+    _flushWaitStarted: 0,
+    gaReady() {
+        return typeof window !== 'undefined' && window.__ntGaReady === true && typeof window.gtag === 'function';
+    },
     enqueue(eventName, params) {
         try {
             const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
@@ -1708,6 +1802,20 @@ export const OfflineTracker = {
     },
     flush() {
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (!OfflineTracker.gaReady()) {
+            if (!OfflineTracker._flushWaitStarted) OfflineTracker._flushWaitStarted = Date.now();
+            if (Date.now() - OfflineTracker._flushWaitStarted > 25000) {
+                OfflineTracker._flushWaitStarted = 0;
+                return;
+            }
+            if (OfflineTracker._flushTimer) return;
+            OfflineTracker._flushTimer = setTimeout(() => {
+                OfflineTracker._flushTimer = null;
+                OfflineTracker.flush();
+            }, 400);
+            return;
+        }
+        OfflineTracker._flushWaitStarted = 0;
         try {
             const queue = JSON.parse(safeStorage.getItem(OfflineTracker.queueKey) || '[]');
             if (queue.length === 0) return;
@@ -1717,15 +1825,23 @@ export const OfflineTracker = {
                     else safeStorage.removeItem(OfflineTracker.queueKey);
                     return;
                 }
-                const item = queue.shift();
-                const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
-                if (typeof window.trackAnalyticsEvent === 'function') {
-                    // Call underlying gtag path without re-enqueue
-                    try { window.gtag?.('event', item.event, enriched); } catch { /* ignore */ }
+                if (!OfflineTracker.gaReady()) {
+                    safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    OfflineTracker.flush();
+                    return;
                 }
-                safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                const item = queue[0];
+                const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
+                try {
+                    window.gtag('event', item.event, enriched);
+                    queue.shift();
+                    if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    else safeStorage.removeItem(OfflineTracker.queueKey);
+                } catch {
+                    safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
+                    return;
+                }
                 if (queue.length > 0) setTimeout(processNext, 300);
-                else safeStorage.removeItem(OfflineTracker.queueKey);
             };
             processNext();
         } catch (e) {
@@ -1798,8 +1914,10 @@ function installAnalyticsOfflineBridge() {
     const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
     window.trackAnalyticsEvent = (name, params = {}) => {
         try {
-            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+            if (offline || !OfflineTracker.gaReady()) {
                 OfflineTracker.enqueue(name, params);
+                if (!offline) OfflineTracker.flush();
                 return;
             }
             if (prior) prior(name, params);
@@ -1815,8 +1933,10 @@ function installAnalyticsOfflineBridge() {
     };
 
     window.addEventListener('online', () => OfflineTracker.flush());
+    window.addEventListener('nt-ga-ready', () => OfflineTracker.flush());
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
+        OfflineTracker.flush();
         try {
             const id = window.NEXT_TRAIN_DEVICE_ID || safeStorage.getItem('next_train_device_id');
             if (id && typeof window.clarity === 'function') {
@@ -1838,6 +1958,8 @@ if (typeof window !== 'undefined') {
     window.hideCheckToast = hideCheckToast;
     window.showOfflineToast = showOfflineToast;
     window.hideOfflineToast = hideOfflineToast;
+    window.hideOfflineChrome = hideOfflineChrome;
+    window.scheduleOfflineChrome = scheduleOfflineChrome;
     window.openLightbox = openLightbox;
     window.closeLightbox = closeLightbox;
     window.lockBackgroundScroll = lockBackgroundScroll;
@@ -1876,37 +1998,20 @@ if (typeof window !== 'undefined') {
         m.bindDeeplinkHashChange();
     }).catch(() => {});
 
-    // Offline transition toast (once per offline episode; indicator stays via $isOffline)
+    bindOfflineChrome();
     window.addEventListener('online', () => {
         window._hasShownOfflineToast = false;
-        hideOfflineToast();
+        hideOfflineChrome();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.display = 'none';
-            oi.textContent = 'WORKING OFFLINE';
-        }
-        // Re-probe — radio up ≠ usable internet (no mobile data / blackhole)
         setTimeout(() => {
             try { window.ensureReachabilityProbed?.(); } catch { /* ignore */ }
+            OfflineTracker.flush();
         }, 400);
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        if (typeof window.engageConnectionStruggleUi === 'function') {
-            window.engageConnectionStruggleUi('offline');
-        } else {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) {
-                oi.style.display = 'flex';
-                oi.textContent = 'WORKING OFFLINE';
-            }
-            if (!window._hasShownOfflineToast) {
-                window._hasShownOfflineToast = true;
-                showOfflineToast(0, 'offline');
-            }
-        }
+        scheduleOfflineChrome();
     });
 }

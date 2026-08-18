@@ -2,7 +2,7 @@
 // Next Train view shell — SPA-parity layout matching spa-reference / nexttrain.co.za
 ---
 
-<div id="view-next-train" class="view-section active p-4 flex-grow bg-gray-50 dark:bg-gray-900/50">
+<div id="view-next-train" class="view-section active p-4 flex-grow flex flex-col bg-gray-50 dark:bg-gray-900/50">
 
     <!-- ROUTE PIN & TITLE -->
     <div class="text-center mb-5 flex flex-col justify-center items-center w-full">
@@ -115,7 +115,7 @@
     </div>
 
     <!-- Footer actions (SPA) -->
-    <div class="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+    <div class="nt-board-footer mt-auto border-t border-gray-200 dark:border-gray-700 pt-4">
         <div class="grid grid-cols-2 gap-2.5 mb-3">
             <button type="button" id="share-app-btn" class="group flex items-center justify-center gap-2 w-full bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 font-semibold py-2.5 px-3 rounded-xl shadow-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-200 dark:hover:border-blue-800 hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm focus:outline-none">
                 <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" fill="none"/><circle cx="6" cy="12" r="3" fill="none"/><circle cx="18" cy="19" r="3" fill="none"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
@@ -128,7 +128,7 @@
         </div>
         <div class="mt-3 mb-3">
             <button type="button" id="install-app-btn" class="hidden flex items-center justify-center w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors text-sm">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg> Install App In Background (&lt; 1 MB)
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg> Install Next Train (1 MB)
             </button>
         </div>
         <div id="copied-message" class="hidden text-center text-green-500 font-medium mt-2 text-xs">Link copied to clipboard!</div>

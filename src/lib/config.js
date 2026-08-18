@@ -1,8 +1,18 @@
 // --- CONFIGURATION & CONSTANTS ---
 
 // 0. Version Control
-/** In-app / badge version — keep in sync with CHANGELOG_DATA[0].id, package.json, and public/app-version.json. */
-export const APP_VERSION = "V8_08.24";
+/**
+ * App version scheme: V{major}_{MM.DD}.{n}
+ *
+ * - major: product generation (currently 8)
+ * - MM.DD: calendar date of this development session (use today's date)
+ * - n: deployment counter for that date (1 = first ship that day)
+ *
+ * Future agents: if today's date already matches MM.DD, only increment n.
+ * If the calendar date changed, set MM.DD to today and reset n to 1.
+ * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
+ */
+export const APP_VERSION = "V8_08.18.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -37,13 +47,16 @@ export function withBase(path = '/') {
     return `${base}${p}`;
 }
 
-// GUARDIAN: Set to 'true' to force an immediate hard reload on startup. 
+// GUARDIAN: Set to 'true' to force an immediate hard reload on startup.
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
-// V6.00.10: Set to false to prevent infinite reload loops if SW caching fails.
-export const FORCE_UPDATE_REQUIRED = true;
+// Admin NUKE (killswitch.json) still wipes caches for online clients.
+export const FORCE_UPDATE_REQUIRED = false;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.
+
+/** GitHub fallback dump — this repo's `public/data/` via jsDelivr (not the old SPA tree). */
+export const GITHUB_SCHEDULE_CDN = "https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/";
 
 export const PIPELINE_SOURCES = {
     'CLOUDFLARE': {
@@ -51,8 +64,8 @@ export const PIPELINE_SOURCES = {
         useRootNode: false
     },
     'GITHUB': {
-        url: "https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/",
-        useRootNode: true // GitHub serves the unified export payload directly
+        url: GITHUB_SCHEDULE_CDN,
+        useRootNode: true // Unified export payload (full-database.json)
     },
     'FIREBASE': {
         url: "https://metrorail-next-train-default-rtdb.firebaseio.com/",
@@ -878,8 +891,25 @@ export const FARE_CONFIG = {
 export const DEFAULT_EXCLUSIONS = {};
 
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
-// Longer release notes live in /CHANGELOG.md. Badge / seen key use `id` (=== APP_VERSION for latest).
+// Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
+// Badge / seen key use `id` (=== APP_VERSION for latest).
+//
+// COMMUTER-ONLY COPY (strict) — every entry is rendered in the public What's New panel:
+// - Never mention admin mode, Dev Hub, operator tools, or how staff publish content.
+// - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
+// - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.18.1",
+        title: "Alerts channel",
+        date: "18 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Alerts:</b> The bell opens a notice channel. Hold to react — including on photos. Tap a count to see the split.",
+            "<b>Alert text:</b> Titles, larger or smaller type, underline, and tappable emails or phone numbers show correctly.",
+            "<b>Board:</b> The Next Train clocks no longer flicker every minute."
+        ]
+    },
     {
         id: "V8_08.24",
         title: "Bans, region pick, weekday sim",
@@ -1036,7 +1066,8 @@ export const CHANGELOG_DATA = [
         id: "V8_08.10.1",
         title: "Cape Town Public Holidays",
         date: "10 Aug 2026",
-        forceShow: true,
+        // Keep false unless you intentionally want What's New to auto-open once for this version.
+        forceShow: false,
         features: [
             "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays — they use dedicated holiday timetables.",
             "<b>Timetable grid:</b> Western Cape day picker is now Mon–Fri, Saturday, or Public Holiday (separate from Sat).",

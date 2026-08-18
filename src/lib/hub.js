@@ -5,20 +5,29 @@ import {
     APP_VERSION,
     CHANGELOG_DATA,
     DYNAMIC_BASE_URL,
-    ROUTES,
     withBase,
     getLatestChangelog,
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity } from './utils.js';
+import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
+import {
+    fetchUnionNotices,
+    setCachedLiveNotices,
+    applyBellFromNotices,
+    openAlertsChannel,
+    initAlertsChannel,
+    pickAutoOpenNotice,
+    resolveAlertImageSrc,
+} from './alerts-channel.js';
+import { layoutAlertPost } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
-import { bindAccountUi, initAccount } from './account.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
@@ -191,6 +200,14 @@ export function closeAppHub(skipHistory = false) {
 
 export function openAppHub() {
     triggerHaptic();
+    // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
+    // the hub is actually opened so first tap is not a no-op.
+    import('./account.js')
+        .then(({ bindAccountUi, initAccount }) => {
+            bindAccountUi();
+            initAccount();
+        })
+        .catch(() => {});
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
     sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
@@ -300,6 +317,8 @@ function syncHapticsToggle() {
     if (cb) cb.checked = safeStorage.getItem('hapticsEnabled') !== 'false';
 }
 
+// What's New is a commuter surface. CHANGELOG_DATA copy must stay commuter-visible
+// only — no admin mode, no internal / IP work. See the CHANGELOG_DATA comment in config.js.
 function syncChangelogBadge() {
     const badge = document.getElementById('whats-new-badge');
     const verLabel = document.querySelector('#settings-app-version .font-mono');
@@ -310,6 +329,7 @@ function syncChangelogBadge() {
     if (badge) badge.classList.toggle('hidden', seenNorm === normalizeChangelogId(ver));
 }
 
+/** Opens the public What's New modal. Copy comes from CHANGELOG_DATA (commuter-only). */
 function openChangelog() {
     triggerHaptic();
     closeAppHub(true);
@@ -505,40 +525,7 @@ function ensureLightboxPlusBadges(root) {
 }
 
 function sanitizeHTML(dirtyHtml) {
-    const doc = new DOMParser().parseFromString(repairMojibake(dirtyHtml || ''), 'text/html');
-    const allowedTags = ['B', 'I', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV', 'UL', 'OL', 'LI', 'IMG', 'BUTTON'];
-    const cleanNode = (node) => {
-        Array.from(node.childNodes).forEach((child) => {
-            if (child.nodeType === 1) {
-                if (!allowedTags.includes(child.tagName)) {
-                    child.replaceWith(...Array.from(child.childNodes));
-                    cleanNode(node);
-                } else {
-                    Array.from(child.attributes).forEach((attr) => {
-                        const attrName = attr.name.toLowerCase();
-                        if (attrName === 'href' || attrName === 'src') {
-                            if (!/^(https?|mailto):/i.test(attr.value)) child.removeAttribute(attr.name);
-                        } else if (attrName === 'onclick') {
-                            if (!/^window\.openLightbox\(.*\)$/.test(attr.value)) child.removeAttribute(attr.name);
-                        } else if (attrName === 'target' && child.tagName === 'A') {
-                            // Same-origin links must stay in the PWA (no browser handoff)
-                            try {
-                                const href = child.getAttribute('href');
-                                if (href) {
-                                    const u = new URL(href, location.href);
-                                    if (u.origin === location.origin) child.removeAttribute('target');
-                                }
-                            } catch { /* keep target */ }
-                        } else if (!['target', 'class', 'rel', 'alt', 'type'].includes(attrName)) {
-                            child.removeAttribute(attr.name);
-                        }
-                    });
-                    cleanNode(child);
-                }
-            }
-        });
-    };
-    cleanNode(doc.body);
+    const doc = new DOMParser().parseFromString(prepareRichHtml(dirtyHtml || ''), 'text/html');
     // SVG badges are stripped above — restore a text “+” chip on lightbox buttons
     ensureLightboxPlusBadges(doc.body);
     return doc.body.innerHTML;
@@ -919,12 +906,282 @@ export async function openMessagesThread() {
     }
 }
 
+/**
+ * Fill #notice-modal with a notice using the same sanitize/CSS/poll path users see.
+ * mode: 'live' | 'preview' | 'archive'
+ */
+export function renderServiceAlertModal(notice, options = {}) {
+    injectRichTextStyles();
+    const modal = document.getElementById('notice-modal');
+    const content = document.getElementById('notice-content');
+    const timestamp = document.getElementById('notice-timestamp');
+    if (!modal || !content || !notice) return false;
+
+    const mode = options.mode || 'live';
+    const severity = notice.severity || 'info';
+    if (mode === 'live') delete modal.dataset.alertPreview;
+    else modal.dataset.alertPreview = '1';
+
+    const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
+    if (modalCard) {
+        modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500', 'border-red-200', 'dark:border-red-900/50');
+        if (severity === 'critical') modalCard.classList.add('border-red-500');
+        else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
+        else modalCard.classList.add('border-blue-500');
+    }
+
+    const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
+    if (modalHeader) {
+        const headerContainer = modalHeader.parentElement;
+        if (headerContainer) {
+            const existingIcon = headerContainer.querySelector('svg');
+            if (existingIcon) existingIcon.remove();
+            headerContainer.className = `flex items-center shrink-0 ${
+                severity === 'critical'
+                    ? 'text-red-600 dark:text-red-400'
+                    : severity === 'warning'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-blue-600 dark:text-blue-400'
+            }`;
+        }
+        modalHeader.textContent = severity === 'critical'
+            ? '🔴 CRITICAL ADVISORY'
+            : severity === 'warning'
+              ? '🟡 SERVICE WARNING'
+              : '🔵 SERVICE INFO';
+    }
+
+    const layout = layoutAlertPost(notice);
+    const titleHtml = layout.title
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
+        : '';
+    let formattedMsg = sanitizeHTML(layout.body);
+    if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
+
+    if (notice.sourceName) {
+        const sName = escapeHTML(notice.sourceName);
+        const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
+        const innerCitation = sUrl
+            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
+            : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
+        formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+    }
+
+    const posterUrls = layout.imageUrls;
+    let mediaHtml = '';
+    if (posterUrls.length) {
+        const cells = posterUrls.map((path) => {
+            const src = escapeHTML(resolveAlertImageSrc(path));
+            if (!src) return '';
+            const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
+        }).join('');
+        const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
+        mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
+    }
+    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}`;
+    ensureLightboxPlusBadges(content);
+
+    if (notice.ctaUrl && notice.ctaText) {
+        content.innerHTML += `
+            <a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
+                ${escapeHTML(notice.ctaText)}
+                <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </a>`;
+    }
+
+    if (notice.poll && notice.poll.active) {
+        const pollId = notice.id || 'preview';
+        const votedOption = mode === 'live' ? safeStorage.getItem('poll_voted_' + pollId) : null;
+        const pollSeverity = severity || 'info';
+        const tone = pollTone(pollSeverity);
+        const pollMeta = {
+            question: notice.poll.question || '',
+            optionA: notice.poll.optionA || '',
+            optionB: notice.poll.optionB || '',
+            optionC: notice.poll.optionC || '',
+            showResults: !!notice.poll.showResults,
+            severity: pollSeverity,
+        };
+        content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
+        const pollEl = document.getElementById(`poll-container-${pollId}`);
+        if (pollEl) {
+            try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
+            if (votedOption && notice.poll.showResults) {
+                renderPollResultsInto(pollEl, pollId, { ...notice.poll, ...pollMeta }, votedOption, pollSeverity);
+            } else if (votedOption) {
+                pollEl.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
+                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
+                    </div>`;
+            } else {
+                const voteBtn = (key, text) =>
+                    `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
+                const optC = notice.poll.optionC
+                    ? voteBtn('C', notice.poll.optionC)
+                    : '';
+                pollEl.innerHTML = `
+                    <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(notice.poll.question || '')}</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        ${voteBtn('A', notice.poll.optionA || 'A')}
+                        ${voteBtn('B', notice.poll.optionB || 'B')}
+                        ${optC}
+                    </div>
+                    <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${notice.poll.showResults ? '' : 'hidden'}"></div>`;
+                if (notice.poll.showResults && mode === 'live') {
+                    const liveBox = document.getElementById(`poll-live-results-${pollId}`);
+                    if (liveBox) {
+                        renderPollResultsInto(liveBox, pollId, { ...notice.poll, ...pollMeta }, null, pollSeverity);
+                    }
+                }
+            }
+        }
+    }
+
+    if (timestamp) {
+        if (options.timestampHtml) {
+            timestamp.innerHTML = options.timestampHtml;
+        } else {
+            const posted = notice.repostedAt || notice.postedAt || notice.timestamp;
+            if (posted) {
+                const date = new Date(posted);
+                const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
+                timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+            } else if (mode === 'preview') {
+                timestamp.textContent = 'Preview — not posted yet';
+            } else {
+                timestamp.textContent = '';
+            }
+        }
+    }
+
+    const skipHashClose = () => {
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('notice-modal', true);
+        else modal.classList.add('hidden');
+        delete modal.dataset.alertPreview;
+    };
+
+    const closeNotice = () => {
+        if (mode !== 'live') {
+            skipHashClose();
+            return;
+        }
+        if (location.hash === '#notice') history.back();
+        else closeSmoothModal('notice-modal');
+    };
+
+    const oldCloseBtn = document.getElementById('notice-modal-close-btn')
+        || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
+    modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
+
+    let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
+    if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
+    else if (severity === 'warning') baseColorClass = 'bg-yellow-600 hover:bg-yellow-700';
+
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
+
+    const leftBtn = document.createElement('button');
+    leftBtn.type = 'button';
+    leftBtn.id = 'notice-close-btn';
+    leftBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
+    if (mode === 'preview') {
+        leftBtn.textContent = 'Edit';
+        leftBtn.onclick = () => {
+            triggerHaptic();
+            skipHashClose();
+            if (typeof options.onEdit === 'function') options.onEdit();
+        };
+    } else {
+        leftBtn.textContent = 'Close';
+        leftBtn.onclick = () => {
+            closeNotice();
+            if (typeof options.onClose === 'function') options.onClose();
+        };
+    }
+    btnContainer.appendChild(leftBtn);
+
+    const rightBtn = document.createElement('button');
+    rightBtn.type = 'button';
+    if (mode === 'preview') {
+        rightBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none`;
+        rightBtn.textContent = 'Post';
+        rightBtn.onclick = () => {
+            triggerHaptic();
+            skipHashClose();
+            if (typeof options.onPost === 'function') options.onPost();
+        };
+        btnContainer.appendChild(rightBtn);
+    } else if (mode === 'archive') {
+        if (typeof options.onRevive === 'function') {
+            rightBtn.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
+            rightBtn.textContent = 'Revive / Repost';
+            rightBtn.onclick = () => {
+                triggerHaptic();
+                skipHashClose();
+                options.onRevive();
+            };
+            btnContainer.appendChild(rightBtn);
+        }
+    } else {
+        rightBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
+        const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+        rightBtn.innerHTML = `${replySvg} Reply`;
+        rightBtn.onclick = () => {
+            triggerHaptic();
+            const rawHtml = repairMojibake(notice?.message || notice?.text || '');
+            let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
+            truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
+            openFeedbackReplyFromOverlay('notice-modal', {
+                label: 'Replying to Advisory:',
+                snippet: truncatedMsg,
+                rawMsg: truncatedMsg,
+                alertId: notice?.id || '',
+            });
+        };
+        btnContainer.appendChild(rightBtn);
+    }
+
+    if (oldCloseBtn) {
+        oldCloseBtn.style.display = 'none';
+        oldCloseBtn.parentNode?.appendChild(btnContainer);
+    } else {
+        content.parentNode?.appendChild(btnContainer);
+    }
+
+    const topCloseBtn = modal.querySelector('button.text-gray-400');
+    if (topCloseBtn) {
+        topCloseBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (mode === 'preview') {
+                skipHashClose();
+                if (typeof options.onEdit === 'function') options.onEdit();
+            } else if (mode === 'archive') {
+                skipHashClose();
+                if (typeof options.onClose === 'function') options.onClose();
+            } else if (location.hash === '#notice') {
+                history.back();
+            } else {
+                closeSmoothModal('notice-modal');
+            }
+        };
+    }
+
+    return true;
+}
+
+if (typeof window !== 'undefined') {
+    window.renderServiceAlertModal = renderServiceAlertModal;
+    window.prepareRichHtml = prepareRichHtml;
+    window.injectRichTextStyles = injectRichTextStyles;
+}
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
     const modal = document.getElementById('notice-modal');
-    const content = document.getElementById('notice-content');
-    const timestamp = document.getElementById('notice-timestamp');
     if (!bellBtn) return;
 
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
@@ -990,306 +1247,49 @@ export async function checkServiceAlerts() {
             replyBanner.classList.add('hidden');
         }
 
-        // 2. Notices: global + region-wide + current route (admin targets: all, all_GP, …, routeId)
-        const now = Date.now();
-        const severityScore = { critical: 3, warning: 2, info: 1 };
+        // 2. Notices: union of global + region + current route (not exclusive winner)
         const region = $userRegion.get() || 'GP';
-        const noticeKeys = ['all', `all_${region}`];
-        if (routeId && ROUTES[routeId]) noticeKeys.push(routeId);
-
-        const parseNoticeBucket = (raw, sourceKey) => {
-            if (!raw) return [];
-            const stamp = (n) => (n && typeof n === 'object' ? { ...n, _sourceKey: sourceKey } : null);
-            if (Array.isArray(raw)) {
-                return raw.map((n) => stamp(n)).filter((n) => n && (!n.expiresAt || n.expiresAt > now));
-            }
-            if (typeof raw === 'object') {
-                if (raw.message || raw.text || raw.id || raw.severity) {
-                    return (!raw.expiresAt || raw.expiresAt > now) ? [stamp(raw)] : [];
-                }
-                return Object.values(raw)
-                    .map((n) => stamp(n))
-                    .filter((n) => n && (!n.expiresAt || n.expiresAt > now));
-            }
-            return [];
-        };
-
-        const fetchBucket = async (key) => {
-            try {
-                const res = await fetch(`${DYNAMIC_BASE_URL}notices/${key}.json?t=${Date.now()}`);
-                if (!res.ok) return [];
-                const ct = res.headers.get('content-type') || '';
-                if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
-                return parseNoticeBucket(await res.json(), key);
-            } catch (e) {
-                if (e?.message === 'Captive Portal Detected') throw e;
-                return [];
-            }
-        };
-
-        const buckets = await Promise.all(noticeKeys.map(fetchBucket));
-        const validNotices = buckets.flat();
+        const validNotices = await fetchUnionNotices(region, routeId);
+        setCachedLiveNotices(validNotices);
 
         if (validNotices.length === 0) {
             bellBtn.classList.add('hidden');
             return;
         }
 
-        // Scope wins over severity: Route > Region (all_GP…) > Global (all).
-        // If any route-level alert exists for the pinned route, region/global are ignored.
-        const scopeScore = (key) => {
-            if (!key || key === 'all') return 1;
-            if (String(key).startsWith('all_')) return 2;
-            return 3; // concrete routeId
-        };
-        const routeScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 3);
-        const regionScoped = validNotices.filter((n) => scopeScore(n._sourceKey) === 2);
-        const pool = routeScoped.length
-            ? routeScoped
-            : (regionScoped.length ? regionScoped : validNotices);
-        pool.sort((a, b) => (severityScore[b.severity] || 1) - (severityScore[a.severity] || 1));
-        const activeNotice = pool[0];
-        const severity = activeNotice.severity || 'info';
-        const seenKey = `seen_notice_${activeNotice._sourceKey || 'x'}_${activeNotice.id || activeNotice.timestamp || 'x'}`;
-        const hasSeen = safeStorage.getItem(seenKey) === 'true';
-        const forcePopup = activeNotice.forcePopup === true
-            || (activeNotice.forcePopup == null && severity === 'critical');
+        applyBellFromNotices(validNotices);
 
-        const bindModalContent = () => {
-            if (!content || !modal) return;
-
-            const modalCard = document.getElementById('notice-modal-card') || modal.firstElementChild;
-            if (modalCard) {
-                modalCard.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500', 'border-red-200', 'dark:border-red-900/50');
-                if (severity === 'critical') modalCard.classList.add('border-red-500');
-                else if (severity === 'warning') modalCard.classList.add('border-yellow-500');
-                else modalCard.classList.add('border-blue-500');
-            }
-
-            const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
-            if (modalHeader) {
-                const headerContainer = modalHeader.parentElement;
-                if (headerContainer) {
-                    const existingIcon = headerContainer.querySelector('svg');
-                    if (existingIcon) existingIcon.remove();
-                    headerContainer.className = `flex items-center shrink-0 ${
-                        severity === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : severity === 'warning'
-                              ? 'text-yellow-600 dark:text-yellow-400'
-                              : 'text-blue-600 dark:text-blue-400'
-                    }`;
+        const autoNotice = pickAutoOpenNotice(validNotices);
+        if (autoNotice && !window._alertsChannelOpening && canAutoOpenHomeNotices()) {
+            window._alertsChannelOpening = true;
+            setTimeout(() => {
+                if (!canAutoOpenHomeNotices()) {
+                    window._alertsChannelOpening = false;
+                    return;
                 }
-                modalHeader.textContent = severity === 'critical'
-                    ? '🔴 CRITICAL ADVISORY'
-                    : severity === 'warning'
-                      ? '🟡 SERVICE WARNING'
-                      : '🔵 SERVICE INFO';
-            }
-
-            let formattedMsg = sanitizeHTML(activeNotice.message || activeNotice.text || '');
-
-            if (activeNotice.sourceName) {
-                const sName = escapeHTML(activeNotice.sourceName);
-                const sUrl = activeNotice.sourceUrl ? escapeHTML(activeNotice.sourceUrl) : null;
-                const innerCitation = sUrl
-                    ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
-                    : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-                formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
-            }
-
-            content.innerHTML = formattedMsg;
-            ensureLightboxPlusBadges(content);
-
-            if (activeNotice.ctaUrl && activeNotice.ctaText) {
-                content.innerHTML += `
-                    <a href="${escapeHTML(activeNotice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
-                        ${escapeHTML(activeNotice.ctaText)}
-                        <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>`;
-            }
-
-            // Interactive poll — colours follow alert severity (info/warning/critical)
-            if (activeNotice.poll && activeNotice.poll.active) {
-                const pollId = activeNotice.id;
-                const votedOption = safeStorage.getItem('poll_voted_' + pollId);
-                const pollSeverity = severity || 'info';
-                const tone = pollTone(pollSeverity);
-                const pollMeta = {
-                    question: activeNotice.poll.question || '',
-                    optionA: activeNotice.poll.optionA || '',
-                    optionB: activeNotice.poll.optionB || '',
-                    optionC: activeNotice.poll.optionC || '',
-                    showResults: !!activeNotice.poll.showResults,
-                    severity: pollSeverity,
-                };
-                content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
-                const pollEl = document.getElementById(`poll-container-${pollId}`);
-                if (pollEl) {
-                    try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
-                    if (votedOption && activeNotice.poll.showResults) {
-                        renderPollResultsInto(pollEl, pollId, { ...activeNotice.poll, ...pollMeta }, votedOption, pollSeverity);
-                    } else if (votedOption) {
-                        pollEl.innerHTML = `
-                            <div class="text-center">
-                                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                            </div>`;
-                    } else {
-                        const voteBtn = (key, text) =>
-                            `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
-                        const optC = activeNotice.poll.optionC
-                            ? voteBtn('C', activeNotice.poll.optionC)
-                            : '';
-                        pollEl.innerHTML = `
-                            <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(activeNotice.poll.question || '')}</p>
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                ${voteBtn('A', activeNotice.poll.optionA || 'A')}
-                                ${voteBtn('B', activeNotice.poll.optionB || 'B')}
-                                ${optC}
-                            </div>
-                            <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${activeNotice.poll.showResults ? '' : 'hidden'}"></div>`;
-                        if (activeNotice.poll.showResults) {
-                            const liveBox = document.getElementById(`poll-live-results-${pollId}`);
-                            if (liveBox) {
-                                renderPollResultsInto(liveBox, pollId, { ...activeNotice.poll, ...pollMeta }, null, pollSeverity);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (timestamp) {
-                const posted = activeNotice.repostedAt || activeNotice.postedAt || activeNotice.timestamp;
-                if (posted) {
-                    const date = new Date(posted);
-                    const label = (activeNotice.isRepost || activeNotice.repostedAt) ? 'Reposted' : 'Posted';
-                    timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
-                } else {
-                    timestamp.textContent = '';
-                }
-            }
-
-            // SPA design: Close + Reply footer (severity-coloured Reply)
-            const closeNotice = () => {
-                if (location.hash === '#notice') history.back();
-                else closeSmoothModal('notice-modal');
-            };
-            const oldCloseBtn = document.getElementById('notice-modal-close-btn')
-                || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
-            const oldContainer = modal.querySelector('.nt-notice-actions');
-            if (oldContainer) oldContainer.remove();
-
-            let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
-            if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
-            else if (severity === 'warning') baseColorClass = 'bg-yellow-600 hover:bg-yellow-700';
-
-            const btnContainer = document.createElement('div');
-            btnContainer.className = 'nt-notice-actions flex space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full';
-
-            const newCloseBtn = document.createElement('button');
-            newCloseBtn.type = 'button';
-            newCloseBtn.id = 'notice-close-btn';
-            newCloseBtn.className = 'flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none';
-            newCloseBtn.textContent = 'Close';
-            newCloseBtn.onclick = closeNotice;
-            btnContainer.appendChild(newCloseBtn);
-
-            const newReplyBtn = document.createElement('button');
-            newReplyBtn.type = 'button';
-            newReplyBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
-            const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
-            newReplyBtn.innerHTML = `${replySvg} Reply`;
-            newReplyBtn.onclick = () => {
                 triggerHaptic();
-                const rawHtml = repairMojibake(activeNotice?.message || activeNotice?.text || '');
-                let truncatedMsg = htmlToPlainSnippet(rawHtml, 6);
-                truncatedMsg = truncatedMsg.replace(/[—–].*/, '').trim();
-                // Stack feedback over the alert — no close/home flash; cancel/send returns to notice
-                openFeedbackReplyFromOverlay('notice-modal', {
-                    label: 'Replying to Advisory:',
-                    snippet: truncatedMsg,
-                    rawMsg: truncatedMsg,
-                    alertId: activeNotice?.id || '',
+                trackAlertEvent('auto_open_alert', {
+                    severity: autoNotice.severity || 'critical',
+                    route_id: routeId || 'all',
+                    notice_id: autoNotice.id || '',
                 });
-            };
-            btnContainer.appendChild(newReplyBtn);
-
-            if (oldCloseBtn) {
-                oldCloseBtn.style.display = 'none';
-                oldCloseBtn.parentNode?.appendChild(btnContainer);
-            } else {
-                content.parentNode?.appendChild(btnContainer);
-            }
-        };
-
-        bellBtn.classList.remove('hidden');
-
-        // Brand-left header: inline bell next to ⋮ (not absolute SPA chrome)
-        let bellClass = 'relative p-2 rounded-full focus:outline-none transition-colors ';
-        let dotClass = 'absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 ';
-        if (severity === 'critical') {
-            bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
-            dotClass += 'bg-red-600';
-        } else if (severity === 'warning') {
-            bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800';
-            dotClass += 'bg-yellow-500';
-        } else {
-            bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800';
-            dotClass += 'bg-blue-600';
+                openAlertsChannel({
+                    notices: validNotices,
+                    highlightId: autoNotice.id || null,
+                    resetVisible: true,
+                });
+                window._alertsChannelOpening = false;
+            }, 400);
         }
-        bellBtn.className = bellClass;
-        const bellSvg = bellBtn.querySelector('svg');
-        if (bellSvg) bellSvg.setAttribute('class', 'w-5 h-5');
-        if (dot) dot.className = dotClass;
-
-        if (!hasSeen) {
-            if (dot) dot.classList.remove('hidden');
-            if (severity === 'critical') bellBtn.classList.add('animate-shake');
-            else bellBtn.classList.remove('animate-shake');
-            const willAutoOpen = forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices();
+        const pushNotice = autoNotice || validNotices[0];
+        if (pushNotice) {
             import('./push-notify.js').then((m) => {
-                m.maybeNotifyOfficialNotice?.(activeNotice, { toast: !willAutoOpen });
+                m.maybeNotifyOfficialNotice?.(pushNotice, { toast: !autoNotice });
             }).catch(() => {});
-
-            // Auto-open only on the home board (stabilized + route selected +
-            // Next Train / Trip Planner). Bell still updates everywhere.
-            if (forcePopup && !window._criticalModalShown && canAutoOpenHomeNotices()) {
-                window._criticalModalShown = true;
-                setTimeout(() => {
-                    // Re-check: user may have opened route modal / map / Community in the delay.
-                    if (!canAutoOpenHomeNotices()) {
-                        window._criticalModalShown = false;
-                        return;
-                    }
-                    triggerHaptic();
-                    trackAlertEvent('auto_open_alert', { severity, route_id: routeId || 'all' });
-                    safeStorage.setItem(seenKey, 'true');
-                    bellBtn.classList.remove('animate-shake');
-                    if (dot) dot.classList.add('hidden');
-                    bindModalContent();
-                    // openSmoothModal pushes #notice once — don't double-push over #planner-results
-                    openSmoothModal('notice-modal');
-                }, 400);
-            }
-        } else {
-            bellBtn.classList.remove('animate-shake');
-            if (dot) dot.classList.add('hidden');
         }
-
-        bellBtn.onclick = () => {
-            triggerHaptic();
-            trackAlertEvent('view_service_alert', { severity, route_id: routeId || 'all' });
-            safeStorage.setItem(seenKey, 'true');
-            bellBtn.classList.remove('animate-shake');
-            if (dot) dot.classList.add('hidden');
-            bindModalContent();
-            // openSmoothModal owns the #notice history entry
-            openSmoothModal('notice-modal');
-        };
 
         const topCloseBtn = modal?.querySelector('button.text-gray-400');
-        if (topCloseBtn) {
+        if (topCloseBtn && modal?.dataset?.alertPreview !== '1') {
             topCloseBtn.onclick = (e) => {
                 e.preventDefault();
                 if (location.hash === '#notice') history.back();
@@ -1314,6 +1314,12 @@ export function initHub() {
     window.checkServiceAlerts = checkServiceAlerts;
     window.submitPollVote = submitPollVote;
     window.openMessagesThread = openMessagesThread;
+    window.renderServiceAlertModal = renderServiceAlertModal;
+    window.prepareRichHtml = prepareRichHtml;
+    window.injectRichTextStyles = injectRichTextStyles;
+    window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
+    injectRichTextStyles();
+    initAlertsChannel();
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1321,6 +1327,10 @@ export function initHub() {
             const btn = e.target?.closest?.('.nt-poll-vote');
             if (!btn) return;
             e.preventDefault();
+            if (document.getElementById('notice-modal')?.dataset?.alertPreview === '1') {
+                showToast('Preview only — votes are not recorded.', 'info');
+                return;
+            }
             const wrap = btn.closest('[id^="poll-container-"]');
             let pollMeta = null;
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
@@ -1348,6 +1358,11 @@ export function initHub() {
                 && hash !== '#notice' && hash !== '#lightbox' && hash !== '#prasa-map') {
                 closeSmoothModal('notice-modal');
             }
+            const alertsEl = document.getElementById('alerts-channel');
+            if (alertsEl && !alertsEl.classList.contains('hidden')
+                && hash !== '#alerts' && hash !== '#lightbox' && hash !== '#map' && hash !== '#feedback') {
+                closeSmoothModal('alerts-channel');
+            }
         });
     }
 
@@ -1361,22 +1376,40 @@ export function initHub() {
     setColourPack(getColourPack());
     bindColourPackControls();
 
-    // Account (Phase 4)
-    bindAccountUi();
-    initAccount();
+    // Account / community / delay-reports pull firebase-vendor. Idle-defer so
+    // home LCP is not competing with Auth+RTDB. First user intent still boots
+    // them immediately (openAppHub, Community tab, live-board hydrate).
+    const idleImport = (loader) => {
+        const run = () => { try { loader(); } catch { /* ignore */ } };
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4500 });
+        else setTimeout(run, 2500);
+    };
+
+    idleImport(() => {
+        import('./account.js')
+            .then(({ bindAccountUi, initAccount }) => {
+                bindAccountUi();
+                initAccount();
+            })
+            .catch(() => {});
+    });
 
     // Cloaked shadow-ban UX (looks like bad connectivity — never disclose ban)
-    applyShadowBanCloak().catch(() => {});
+    const runShadowBanCloak = () =>
+        import('./trust.js').then((m) => m.applyShadowBanCloak()).catch(() => {});
+    idleImport(runShadowBanCloak);
     // Re-check periodically so bans applied mid-session still take effect
-    setInterval(() => {
-        applyShadowBanCloak().catch(() => {});
-    }, 90_000);
+    setInterval(runShadowBanCloak, 90_000);
 
     // Delay reports (Phase 5)
-    import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
+    idleImport(() => {
+        import('./delay-reports.js').then((m) => m.bindDelayReportUi()).catch(() => {});
+    });
 
     // Route community (Phase 6)
-    import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
+    idleImport(() => {
+        import('./community.js').then((m) => m.bindCommunityUi()).catch(() => {});
+    });
 
     // Live ride sharing / last-seen (Wave 3)
     import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});

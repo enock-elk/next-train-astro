@@ -738,7 +738,7 @@
         async function fetchNetworkDB(region) {
             const pipelines = (typeof PIPELINE_SOURCES !== 'undefined' && PIPELINE_SOURCES) ? PIPELINE_SOURCES : {
                 CLOUDFLARE: { url: "https://nexttrain-cache.enock.workers.dev/", useRootNode: false },
-                GITHUB: { url: "https://cdn.jsdelivr.net/gh/enock-elk/metrorail-app@main/data/", useRootNode: true },
+                GITHUB: { url: "https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/", useRootNode: true },
                 FIREBASE: { url: "https://metrorail-next-train-default-rtdb.firebaseio.com/", useRootNode: false }
             };
             const regions = (typeof REGIONS !== 'undefined' && REGIONS) ? REGIONS : {

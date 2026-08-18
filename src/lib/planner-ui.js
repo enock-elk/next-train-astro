@@ -26,6 +26,7 @@ import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
 import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
+import { prepareRichHtml } from './rich-text.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -1167,7 +1168,10 @@ export function openDisruptionModal(id) {
     }
     if (titleEl) titleEl.innerHTML = locationText;
     
-    if (bodyEl) bodyEl.innerHTML = targetDisruption.message || targetDisruption.longExplanation || "No additional details provided.";
+    if (bodyEl) {
+        const raw = targetDisruption.message || targetDisruption.longExplanation || "No additional details provided.";
+        bodyEl.innerHTML = prepareRichHtml(raw);
+    }
     
     if (badgeEl) {
         if (targetDisruption.tier === 'CRITICAL') {
@@ -3282,9 +3286,9 @@ export async function applyPlannerDeepLink() {
         return false;
     }
 
-    try {
-        await loadAllSchedules(true);
-    } catch (e) { /* continue; poll may still resolve */ }
+    // Paint-first: start schedule load but open planner immediately; poll for stations
+    // instead of awaiting the full Firebase → CF → GitHub waterfall (~15s on 3G).
+    const loadPromise = loadAllSchedules(true).catch(() => {});
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -3300,7 +3304,11 @@ export async function applyPlannerDeepLink() {
             if (attempts === 1 || attempts % 4 === 0) {
                 ensureRoutePinnedForRegion(targetRegion);
                 if (!getMasterStationList()?.length) {
-                    loadAllSchedules(true).catch(() => {});
+                    loadPromise.then(() => {
+                        if (!getMasterStationList()?.length) {
+                            loadAllSchedules(true).catch(() => {});
+                        }
+                    });
                 }
             }
             const list = getMasterStationList();

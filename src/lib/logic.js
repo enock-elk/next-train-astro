@@ -22,7 +22,7 @@ import {
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
     simUsesSpecificDate
 } from './utils.js';
-import { showToast, showOfflineToast, hideOfflineToast, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
+import { showToast, hideOfflineToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
@@ -84,12 +84,11 @@ function bindStruggleVisibilityListener() {
     _struggleVisibilityBound = true;
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            try { hideOfflineToast(); } catch { /* ignore */ }
-            const oi = document.getElementById('offline-indicator');
-            if (oi && oi.dataset.struggleUi === '1') oi.style.display = 'none';
+            try { hideOfflineChrome(); } catch { /* ignore */ }
+            _pendingStruggleReason = null;
             return;
         }
-        if (_pendingStruggleReason) scheduleStruggleUiFlush();
+        scheduleOfflineChrome();
     });
 }
 
@@ -132,14 +131,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
         try { window.clearMaintenanceBanner(); } catch { /* ignore */ }
     }
 
-    const oi = document.getElementById('offline-indicator');
-    if (oi) {
-        oi.dataset.struggleUi = '1';
-        oi.style.display = 'flex';
-        oi.textContent = 'WORKING OFFLINE';
-    }
-
-    showOfflineToast(0, 'offline');
+    scheduleOfflineChrome();
 }
 
 /**
@@ -446,8 +438,11 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
 export async function checkKillswitch(force = false) {
     if (typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) return false;
     try {
-        const timeBucket = Math.floor(Date.now() / 300000);
-        const res = await guardianFetch(`${DYNAMIC_BASE_URL}config/killswitch.json?t=${timeBucket}`, {}, 3000);
+        const res = await guardianFetch(
+            `${DYNAMIC_BASE_URL}config/killswitch.json?t=${Date.now()}`,
+            { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } },
+            3000
+        );
         if (!res.ok) return false;
         const data = await res.json();
         if (!data || !data.timestamp) return false;
@@ -488,6 +483,24 @@ export async function checkKillswitch(force = false) {
         console.warn("Killswitch check failed:", e);
         return false;
     }
+}
+
+/** Re-check NUKE when the app is online — including Hub-open sessions that skip schedule load. */
+export function bindKillswitchWatch() {
+    if (typeof window === 'undefined' || window.__ntKillswitchWatch) return;
+    window.__ntKillswitchWatch = true;
+    let lastPoke = 0;
+    const poke = () => {
+        const now = Date.now();
+        if (now - lastPoke < 15_000) return;
+        lastPoke = now;
+        checkKillswitch().catch(() => {});
+    };
+    window.addEventListener('online', poke);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') poke();
+    });
+    poke();
 }
 
 /** Remote special-event route activation without a deploy. */
@@ -1614,7 +1627,12 @@ export function updateTime() {
             
             if (typeof window !== 'undefined') {
                 if (typeof window.findNextTrains === 'function') {
-                    window.findNextTrains();
+                    window.__ntQuietBoardPaint = true;
+                    try {
+                        window.findNextTrains();
+                    } finally {
+                        window.__ntQuietBoardPaint = false;
+                    }
                 }
                 
                 if (typeof window.updateFareDisplay === 'function') {
@@ -1653,6 +1671,7 @@ if (typeof window !== 'undefined') {
     window.syncRegionDisplayDom = syncRegionDisplayDom;
     window.ensureMapImageLoaded = ensureMapImageLoaded;
     window.checkKillswitch = checkKillswitch;
+    window.bindKillswitchWatch = bindKillswitchWatch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     window.fetchScheduleOverride = fetchScheduleOverride;
     window.updateTime = updateTime;

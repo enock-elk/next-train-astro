@@ -1,10 +1,34 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import { normalizeBase, withBase } from '../lib/config.js';
+import { FARE_CONFIG, normalizeBase, withBase } from '../lib/config.js';
 
 const title = "User Guide & FAQ | Metrorail Next Train (Updated for 2026)";
 const description = "Updated for 2026. Learn how to use Metrorail Next Train to find train times near me. Check live timetables, ticket prices, and routes for Pretoria, Johannesburg, Cape Town, Durban, and East London.";
 const base = normalizeBase(import.meta.env.BASE_URL);
+
+function zar(n) {
+    return `R${Number(n).toFixed(2)}`;
+}
+
+const fareRows = [
+    { code: 'Z1', label: 'Zone 1' },
+    { code: 'Z2', label: 'Zone 2' },
+    { code: 'Z3', label: 'Zone 3' },
+    { code: 'Z4', label: 'Zone 4' },
+].map(({ code, label }) => {
+    const prices = FARE_CONFIG.zones_detailed[code];
+    return {
+        label,
+        single: zar(prices.single),
+        returnFare: zar(prices.return),
+        weeklyMonFri: zar(prices.weekly_mon_fri),
+        weeklyMonSat: zar(prices.weekly_mon_sat),
+        monthly: zar(prices.monthly),
+    };
+});
+
+const holidayFaqText =
+    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape runs on its own structure: public holidays typically use a dedicated Public Holiday timetable, which you can still open in the app. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
 
 const faqJsonLd = {
   "@context": "https://schema.org",
@@ -23,7 +47,7 @@ const faqJsonLd = {
       "name": "Do Metrorail trains run on Public Holidays and Sundays?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Metrorail generally does not operate train services on Sundays. Public holidays vary: some follow a Saturday/holiday timetable, while others (for example Christmas Day) have no service. A few routes also have no Saturday service at all. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically."
+        "text": holidayFaqText
       }
     },
     {
@@ -406,19 +430,26 @@ const faqJsonLd = {
                                             <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Zone</th>
                                             <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Single</th>
                                             <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Return</th>
-                                            <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Weekly</th>
+                                            <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Weekly<br /><span class="font-normal opacity-70">(Mon–Fri)</span></th>
+                                            <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Weekly<br /><span class="font-normal opacity-70">(Mon–Sat)</span></th>
                                             <th class="py-2 px-3 border-b dark:border-gray-700 font-bold">Monthly</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
-                                        <tr><td class="py-2 px-3 font-medium">Zone 1</td><td class="py-2 px-3">R10.00</td><td class="py-2 px-3">R20.00</td><td class="py-2 px-3">R60.00</td><td class="py-2 px-3">R180.00</td></tr>
-                                        <tr><td class="py-2 px-3 font-medium">Zone 2</td><td class="py-2 px-3">R12.00</td><td class="py-2 px-3">R24.00</td><td class="py-2 px-3">R70.00</td><td class="py-2 px-3">R220.00</td></tr>
-                                        <tr><td class="py-2 px-3 font-medium">Zone 3</td><td class="py-2 px-3">R14.00</td><td class="py-2 px-3">R28.00</td><td class="py-2 px-3">R80.00</td><td class="py-2 px-3">R250.00</td></tr>
-                                        <tr><td class="py-2 px-3 font-medium">Zone 4</td><td class="py-2 px-3">R15.00</td><td class="py-2 px-3">R30.00</td><td class="py-2 px-3">R90.00</td><td class="py-2 px-3">R280.00</td></tr>
+                                        {fareRows.map((row) => (
+                                            <tr>
+                                                <td class="py-2 px-3 font-medium">{row.label}</td>
+                                                <td class="py-2 px-3">{row.single}</td>
+                                                <td class="py-2 px-3">{row.returnFare}</td>
+                                                <td class="py-2 px-3">{row.weeklyMonFri}</td>
+                                                <td class="py-2 px-3">{row.weeklyMonSat}</td>
+                                                <td class="py-2 px-3">{row.monthly}</td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2"><em>Note: The estimated fare shown in the app is typically the maximum route cost (terminus-to-terminus). If you are traveling a shorter distance along the line, your actual ticket price at the station may be slightly cheaper. Tickets must be bought at the station.</em></p>
+                            <p class="text-xs text-gray-500 mt-2"><em>Note: These are the same adult fares the app uses in Ticket Prices. The estimated fare shown for a trip is typically the maximum route cost (terminus-to-terminus). If you are traveling a shorter distance along the line, your actual ticket price at the station may be slightly cheaper. Tickets must be bought at the station.</em></p>
                         </div>
                     </details>
 
@@ -429,7 +460,9 @@ const faqJsonLd = {
                         </summary>
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                             <p>Metrorail generally <strong>does not operate train services on Sundays</strong>.</p>
-                            <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> Some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
+                            <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>.</p>
+                            <p class="mt-2"><strong>Western Cape runs on its own structure.</strong> Public holidays there typically follow a dedicated <strong>Public Holiday</strong> timetable (not Saturday). You can still open that Public Holiday schedule in the app to see the trains that run.</p>
+                            <p class="mt-2">A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
                             <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
                         </div>
                     </details>

@@ -1,5 +1,5 @@
 /**
- * Runtime checks for V8_08.24: leftover 0619 default, sim weekday date, region picker guard.
+ * Runtime checks for leftover 0619 default, sim weekday date, region picker guard.
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V8_08.24', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V8_08.18.1', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,

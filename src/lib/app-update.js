@@ -92,26 +92,13 @@ export function enforceAppVersion() {
         console.log(`[Guardian] Version Upgrade Available: ${storedVersion} -> ${currentVersion}`);
 
         if (FORCE_UPDATE_REQUIRED) {
-            // New shell already loaded — APP_VERSION *is* the incoming build.
-            // Previously this path reloaded silently (no toast); restore SPA toast first.
             showCrucialUpdateToast(currentVersion);
             setTimeout(() => handleUpdateClick(currentVersion), 1600);
             return;
         }
 
-        const toast = document.createElement('div');
-        toast.id = 'update-toast';
-        toast.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center space-x-4 z-[100] cursor-pointer hover:scale-105 transition-transform w-[90%] max-w-sm';
-        toast.innerHTML = `
-            <div class="bg-white/20 rounded-full p-2 animate-pulse">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-base font-bold">New Features Ready</span>
-                <span class="text-xs text-blue-100">Tap here to finish updating to ${currentVersion}.</span>
-            </div>`;
-        toast.addEventListener('click', () => handleUpdateClick(currentVersion));
-        document.body.appendChild(toast);
+        // New shell is already running — record it. Do not prompt or reload.
+        safeStorage.setItem('app_installed_version', currentVersion);
         return;
     }
 
@@ -131,8 +118,11 @@ export function bindAppUpdateLifecycle(registerSW) {
     api.updateSW = registerSW({
         immediate: true,
         async onNeedRefresh() {
-            // Still on the *old* shell — peek CDN version (incoming), not APP_VERSION (current).
+            // New SW is waiting. Do not toast or skipWaiting while the user is
+            // in the app — hashed chunks from the old precache must stay valid.
+            // Idle (>5 min background) or the next cold start activates it.
             const incomingVersion = await peekIncomingVersion();
+            console.log('GUARDIAN: Silent update waiting →', incomingVersion);
 
             if (FORCE_UPDATE_REQUIRED) {
                 console.log('GUARDIAN: Force Update Triggered →', incomingVersion);
@@ -140,7 +130,6 @@ export function bindAppUpdateLifecycle(registerSW) {
                 markPendingReload('sw_force_update', 3500);
                 const token = Date.now();
                 window.__ntPendingUpdateToken = token;
-                // Let the toast paint before skipWaiting → controllerchange reload.
                 await new Promise((r) => setTimeout(r, 1600));
                 try {
                     await api.updateSW(false);
@@ -148,29 +137,25 @@ export function bindAppUpdateLifecycle(registerSW) {
                     hardReloadWithCacheBust('sw_force_fallback');
                     return;
                 }
-                // Fallback if controllerchange never fires
                 setTimeout(() => {
                     if (window.__ntPendingUpdateToken === token) {
                         hardReloadWithCacheBust('sw_force_timeout');
                     }
                 }, 2800);
-                return;
             }
-
-            console.log('GUARDIAN: Silent Update Available →', incomingVersion);
-            const actionHTML = `
-                <button type="button" id="nt-trigger-app-update" class="bg-white/20 hover:bg-white/40 text-white px-3 py-1 rounded text-xs font-bold transition-colors">
-                    UPDATE
-                </button>`;
-            showToast(`New version (${incomingVersion}) available.`, 'info', 10000, actionHTML);
-            setTimeout(() => {
-                document.getElementById('nt-trigger-app-update')?.addEventListener('click', () => {
-                    window.triggerAppUpdate?.();
-                });
-            }, 0);
         },
-        onRegisteredSW(swUrl) {
+        onRegisteredSW(swUrl, registration) {
             console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
+            if (!registration) return;
+            const checkForWaitingSw = () => {
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    registration.update().catch(() => {});
+                }
+            };
+            setInterval(checkForWaitingSw, 60 * 60 * 1000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') checkForWaitingSw();
+            });
         },
         onRegisterError(error) {
             console.error('🛡️ Guardian PWA: Registration failed', error);
@@ -222,6 +207,14 @@ export function bindAppUpdateLifecycle(registerSW) {
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
+
+        // Only reload when the tab is hidden (idle skipWaiting) or a NUKE/force
+        // path asked for it. Never hijack a visible session.
+        const forceReload = !!window.__ntPendingUpdateToken;
+        if (!forceReload && typeof document !== 'undefined' && !document.hidden) {
+            console.log('🛡️ Guardian: New SW active — applying on next launch (session kept).');
+            return;
+        }
 
         let lastReload = null;
         try { lastReload = sessionStorage.getItem('sw_last_reload'); } catch (e) {}

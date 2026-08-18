@@ -62,9 +62,9 @@ function hasForwardOverlap(trainName, otherSchedule, fromStation, targetStations
 function isTrainExcluded(trainNumber, routeId, dayIdx) {
     if (!trainNumber) return false;
     
-    const rules = (globalExclusions && globalExclusions[routeId]) 
-                  ? globalExclusions[routeId] 
-                  : (typeof DEFAULT_EXCLUSIONS !== 'undefined' ? DEFAULT_EXCLUSIONS[routeId] : null);
+    const rules = (globalExclusions && globalExclusions[routeId])
+                  ? globalExclusions[routeId]
+                  : null;
     
     if (rules && rules[trainNumber]) {
         const rule = rules[trainNumber];

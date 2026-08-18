@@ -19,7 +19,7 @@ import { MANUAL_GRID_ORDER } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay
+    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg
 } from './utils.js';
 
 import { 
@@ -29,6 +29,13 @@ import {
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
+import {
+    liveBoardJourneyKey,
+    liveBoardNextAvailKey,
+    normalizeCountdownLabel,
+    tryPatchLiveBoardCountdown,
+    stampLiveBoardCard,
+} from './live-board-paint.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -258,7 +265,7 @@ export const Renderer = {
     },
 
     renderRouteError: (element, error) => {
-        const html = `<div class="text-center p-3 bg-red-100 dark:bg-red-900 rounded-md border border-red-400 dark:border-red-700"><div class="text-xl mb-1">⚠️</div><p class="text-red-800 dark:text-red-200 text-sm font-medium">Connection failed. Please check internet.</p></div>`;
+        const html = `<div class="text-center p-3 bg-red-100 dark:bg-red-900 rounded-md border border-red-400 dark:border-red-700"><div class="mb-1 flex justify-center text-red-600 dark:text-red-300">${warningTriangleSvg('w-6 h-6')}</div><p class="text-red-800 dark:text-red-200 text-sm font-medium">Connection failed. Please check internet.</p></div>`;
         if (element) element.innerHTML = html;
     },
 
@@ -441,7 +448,9 @@ export const Renderer = {
             ? window.calculateTimeDiffString(rawTime, dayOffset) 
             : "";
         
-        if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+        if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
+        const nextKey = liveBoardNextAvailKey(destination, rawTime, dayOffset);
+        if (tryPatchLiveBoardCountdown(element, nextKey, timeDiffStr)) return;
         
         const safeDest = escapeHTML(destination);
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
@@ -494,22 +503,21 @@ export const Renderer = {
         }
 
         element.innerHTML = `
-            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
+            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="text-sm font-bold text-gray-600 dark:text-gray-400">No more trains today</div>
                 ${disruptionHtml}
                 <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-1">First train ${dayText} is at:</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     <div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div>
-                    <div class="text-xs text-gray-700 dark:text-gray-300 font-medium">${timeDiffStr}</div>
+                    <div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>
                 </div>
                 <button onclick="window.openScheduleModal('${safeDestForClick}', '${dayType}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${dayName} Schedule</button>
             </div>
         `;
+        stampLiveBoardCard(element, nextKey);
     },
 
     renderJourney: (element, journey, destination) => {
-        element.innerHTML = "";
-        
         let timeClass = "bg-gray-200 dark:bg-gray-900";
         if (journey.isLastTrain) {
             timeClass = "bg-red-100 dark:bg-red-900 border-2 border-red-500";
@@ -530,7 +538,7 @@ export const Renderer = {
             ? window.calculateTimeDiffString(clockTime) 
             : "";
             
-        if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+        if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
         const schedNote = liveDeco.schedNote
             ? `<div class="text-[9px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(liveDeco.schedNote)}</div>`
             : '';
@@ -541,6 +549,9 @@ export const Renderer = {
             ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live — open map"><span class="block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.35)] animate-pulse"></span></button>`
             : '';
         const onTrainHtml = '';
+        const boardKey = liveBoardJourneyKey(journey, destination);
+        if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr)) return;
+        element.innerHTML = "";
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
         const buttonHtml = `<button onclick="window.openScheduleModal('${safeDestForClick}')" class="absolute bottom-0 left-0 w-full text-[9px] uppercase tracking-tight font-bold py-1.5 px-0.5 bg-black bg-opacity-10 hover:bg-opacity-20 dark:bg-white dark:bg-opacity-10 dark:hover:bg-opacity-20 rounded-b-lg transition-colors leading-tight focus:outline-none">See Upcoming Trains</button>`;
@@ -551,7 +562,7 @@ export const Renderer = {
 
              if (journey.isDivergent) {
                  const divDest = Renderer._applyUIIntercepts(journey.actualDestName);
-                 sharedTag = `<span class="block text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">⚠️ To ${divDest}</span>`;
+                 sharedTag = `<span class="inline-flex items-center justify-center text-[9px] uppercase font-bold text-red-600 dark:text-red-400 mt-0.5 bg-red-100 dark:bg-red-900 px-1 rounded w-fit mx-auto border border-red-200 dark:border-red-700">${warningTriangleSvg()} To ${divDest}</span>`;
              } else {
                  sharedTag = `<span class="block text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 mt-0.5 bg-purple-100 dark:bg-purple-900 px-1 rounded w-fit mx-auto">From ${routeName}</span>`;
              }
@@ -689,7 +700,7 @@ export const Renderer = {
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
-                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${liveHintHtml}
                         ${schedNote}
                         ${sharedTag}
@@ -772,7 +783,7 @@ export const Renderer = {
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
-                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold">${timeDiffStr}</div>
+                        <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${liveHintHtml}
                         ${schedNote}
                         ${sharedTag}
@@ -793,6 +804,7 @@ export const Renderer = {
                 </div>
             `;
         }
+        stampLiveBoardCard(element, boardKey);
     },
 
 
@@ -896,10 +908,10 @@ export const Renderer = {
         
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
-        let stickyHeaderClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700'; 
+        let stickyHeaderClass = isExport ? '' : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'; 
         let borderClass = isExport ? 'border-gray-300' : 'border-gray-300 dark:border-gray-700';
         let tbodyClass = isExport ? '' : 'bg-white dark:bg-gray-900';
-        let stickyCellClass = isExport ? '' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
+        let stickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
 
         let gridNoticeHtml = '';
         const globalExclData = $globalExclusions.get();
@@ -924,7 +936,7 @@ export const Renderer = {
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
                 <thead class="text-[10px] uppercase ${theadClass} sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th class="sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
+                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx);
@@ -975,9 +987,9 @@ export const Renderer = {
             let currentStickyCellClass = stickyCellClass;
             
             if (isSelectedRow) {
-                currentStickyCellClass = isExport ? '' : 'bg-blue-50 dark:bg-blue-900 border-gray-300 dark:border-gray-700 text-blue-900 dark:text-blue-100';
+                currentStickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-blue-100 dark:bg-blue-800 border-gray-300 dark:border-gray-700 text-blue-900 dark:text-blue-100';
             } else if (isZebra && !isExport) {
-                currentStickyCellClass = 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
+                currentStickyCellClass = 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white';
             }
 
             let rowClass = isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : '');
@@ -1059,8 +1071,9 @@ export const Renderer = {
 
         const stationRows = stations.map((name, i) => {
             const zebra = i % 2 === 1 ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+            const stationBg = i % 2 === 1 ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800';
             return `<tr class="${zebra}">
-                <td class="sticky left-0 z-10 bg-white dark:bg-gray-900 ${zebra ? 'dark:bg-gray-800' : ''} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
+                <td class="nt-station-col sticky left-0 z-10 ${stationBg} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
                 ${i === 0 ? `<td rowspan="${Math.max(stations.length, 1)}" class="align-middle border-b border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-white dark:bg-gray-900">
                     <div class="mx-auto max-w-sm rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 px-4 py-5 sm:px-5 sm:py-6 text-center shadow-sm">
                         <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
@@ -1121,6 +1134,8 @@ export const Renderer = {
         return Renderer._toTitleCase(name);
     },
 
+    // Public What's New list. Renders every CHANGELOG_DATA entry — commuter-visible
+    // benefits only. Never inject admin, Dev Hub, or internal / IP notes here.
     renderChangelogModal: (changelogData) => {
         if (typeof document === 'undefined') return;
         const sidenav = document.getElementById('sidenav');
@@ -1450,6 +1465,14 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontWeight = '800';
             td.style.color = '#1f2937';
         });
+
+        t.querySelectorAll('th.nt-station-col, th:first-child').forEach((th) => {
+            th.style.backgroundColor = '#e2e8f0';
+        });
+        t.querySelectorAll('td.nt-station-col, td:first-child').forEach((td) => {
+            const row = td.parentElement;
+            td.style.backgroundColor = row && row.classList.contains('export-zebra') ? '#e2e8f0' : '#f1f5f9';
+        });
     });
 
     document.body.appendChild(exportContainer);
@@ -1480,11 +1503,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             
             const canShare = navigator.canShare && navigator.canShare({ files: [file] });
             const shareBtnHTML = canShare 
-                ? `<button onclick="triggerNoticeShare()" class="bg-white text-blue-600 px-3 py-1 rounded text-xs font-bold shadow-sm hover:bg-gray-100 transition-colors ml-3 whitespace-nowrap border border-gray-200">SHARE 📤</button>` 
+                ? `<button onclick="triggerNoticeShare()" class="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm hover:bg-gray-100 transition-colors whitespace-nowrap border border-gray-200"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"></path></svg>Share</button>` 
                 : '';
 
             if (typeof showToast === 'function') {
-                showToast("✅ Image saved to gallery!", "success", 8000, shareBtnHTML);
+                showToast("Saved to gallery", "success", 8000, shareBtnHTML);
             }
             
             if (typeof trackAnalyticsEvent === 'function') {

@@ -1,6 +1,79 @@
 # Changelog
 
-Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
+Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
+
+## V8_08.18.1 — Merge main into lab (18 Aug 2026)
+
+- Lab now includes this week’s live-site work from `main`: Alerts channel (hold-to-react, photo posters, Close, reaction breakdown), quiet board paint, schedule dump / grid-extractor, Digital Asset Links, CWV / guide fares, and agent instructions.
+- Lab-only work is kept: Map tab, Community chat, live tracker / ride pings, colour packs, brand-left header, Messages thread, and the pinned bottom nav.
+- Bell chrome stays inline on the lab header (not the production hamburger layout).
+
+## V8_08.17.1 — Hold-to-react on photo notices (17 Aug 2026)
+
+- Holding a catalog / GitHub poster on an Alerts card opens the reaction picker (tap still zooms). Photo buttons were previously treated as non-reactable, so image-only posts could not be reacted to.
+
+## V8_08.16.5 — Unified What’s New; grid station column; save toast (16 Aug 2026)
+
+- In-app What’s New is one short **V8_08.16.5** card (alerts, Kempton Park, region). Older 16.x / 15.1 commuter cards were folded in.
+- Timetable station column is slightly darker in the app grid and in downloaded images.
+- “Saved to gallery” toast uses a check SVG and smaller text so it fits the screen.
+
+## V8_08.16.6 — No ad gap, delayed offline chrome, corridor SVGs (16 Aug 2026)
+
+- Ads overlay from the bottom and no longer reserve 108px under the home footer.
+- WORKING OFFLINE / “You are offline” only after the app is visible and still offline for 4s (screen-lock no longer flashes it).
+- Shared-corridor “To …” pills use the warning SVG on the home board and See Upcoming Trains.
+- Admin alert posters are a walking-friendly dropdown of `/images/alerts/` files (manifest + fallback list).
+
+## V8_08.16.5 — Live 0619 ban, region picker, weekday sim (16 Aug 2026)
+
+- `DEFAULT_EXCLUSIONS` is empty. Kempton 0618/0619 no-service tags come only from Firebase `exclusions/`.
+- Region swap no longer reopens Select Route when a pinned route was restored.
+- Weekday/Sat/Sun time-sim ignores leftover `#sim-date` (often “today” on Sunday).
+
+## V8_08.16.4 — Alerts Close label & photo order (16 Aug 2026)
+
+- Alerts header Close is a short blue **Close** text button (same language as the in-app sheet Back), not a faint X.
+- Empty state copy no longer mentions PRASA: “When Next Train posts a notice for your region or route, it will show up here.”
+- Notice cards render title (if provided or a leading heading) → image(s) → body text.
+
+## V8_08.16.3 — Reaction breakdown & install label (16 Aug 2026)
+
+- Tapping the existing reaction chips on an alert opens a WhatsApp-style bottom sheet with a per-emoji count.
+- Home and Trip Planner install buttons say **Install Next Train (1 MB)**.
+
+## V8_08.16.2 — Alerts close, hold-to-react, quiet board (16 Aug 2026)
+
+- Alerts header has Back plus a Close (X). Closing parks the home board the same way the sidenav map sheet does — no switchTab remount.
+- Reaction emojis stay hidden until touch-and-hold (WhatsApp-style picker). Count chips still show after a reaction.
+- Next Train minute tick patches countdown text instead of wiping and rebuilding the cards.
+- Firebase rules file is a merge of live RTDB (`features`, `push_subscriptions`, `ride_pings`) plus `notices/*/reactions` (like/love/laugh/wow/sad/pray, increment-only) and public-read `notices_meta`.
+
+## V8_08.16.1 — Alerts channel (16 Aug 2026)
+
+- Bell opens a full-page Alerts channel (`#alerts`), not the old single-notice modal. No sixth bottom-nav tab.
+- Feed is a WhatsApp-style column (newest at the bottom). Last 10 live posts load first; Show earlier reveals more.
+- Reader scoping is a union: current route ∪ `all_{region}` ∪ `all`. Route posts no longer hide region/global.
+- Critical posts pin at the top and can auto-open the channel once per notice id. Warning = amber bell; info = bell only.
+- Admin composer attaches up to 2 posters from `public/images/alerts/` (`imageUrls`) and has a bullet-list toolbar control.
+- New posts write to `notices/{target}/{id}` so a target can hold a channel, not one overwritten notice. Expired/resolved posts archive under `notices_archive/{target}/…`.
+- Reactions (👍❤️🙏😂) store counts on the notice; “already tapped” stays in localStorage. Deploy updated Firebase rules for `notices/*/reactions` and `notices_meta`.
+
+## V8_08.15.1 — Admin feedback & incidents (15 Aug 2026)
+
+- Feedback Options button is pinned to the top-right of the open thread (label is now **Options**).
+- After an admin reply, if the commuter left email or WhatsApp, a modal offers outreach links that open in a new tab. The thread still archives and the current Inbox/Archive tab is unchanged.
+- Thread paperclip chip now covers commuter attachments and admin-inserted media.
+- Transit Incident Manager uses the same rich-text toolbar as alerts; commuter incident modal keeps size/font/title tags.
+- Schedule Data QA lives under System Health Diagnostics as an accordion (home tile removed).
+
+## V8_08.14 — Alert formatting & preview (14 Aug 2026)
+
+- User alert modal keeps admin size/font/title/underline tags (`<font size>`, Verdana, Times New Roman) instead of stripping them.
+- Admin **Preview Alert** opens the exact commuter notice modal with **Edit | Post**.
+- Long URLs wrap; emails and phone numbers autolink in alerts and admin replies.
+- Offline analytics stay queued until GA4 actually loads, then flush on reconnect.
+- Also on this live line: cache-first SW + online NUKE, and Clarity idle-boot / unpin persistence.
 
 ## V8_08.24 — Bans, region pick, weekday sim (16 Aug 2026)
 

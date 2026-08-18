@@ -27,6 +27,8 @@ const STABLE_ROUTE_SLUGS = [
   'routes/pretoria-to-mabopane.html',
   'routes/cape-town-to-bellville.html',
   'routes/durban-to-umlazi.html',
+  'routes/johannesburg-to-naledi.html',
+  'routes/pretoria-to-saulsville.html',
 ];
 
 const failures = [];

@@ -9,6 +9,7 @@
     "preview": "astro preview",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "verify:urls": "node scripts/verify-url-parity.mjs",
+    "verify:route-seo": "node scripts/verify-route-seo.mjs",
     "verify:imports": "node scripts/verify-module-imports.mjs",
     "verify:alerts": "node scripts/verify-alerts-channel.mjs",
     "verify:schedule": "node scripts/verify-schedule-source.mjs",

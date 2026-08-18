@@ -1,5 +1,6 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
+import SeoFeaturedRoutes from '../components/SeoFeaturedRoutes.astro';
 import { FARE_CONFIG, normalizeBase, withBase } from '../lib/config.js';
 
 const title = "User Guide & FAQ | Metrorail Next Train (Updated for 2026)";
@@ -290,6 +291,7 @@ const faqJsonLd = {
                     </ul>
                     <p>The app tells you where the train <em>should</em> be based on the schedule. Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors!</p>
                 </div>
+                <SeoFeaturedRoutes />
             </section>
 
             <!-- Section 2: How Routing Works & GPS Map -->

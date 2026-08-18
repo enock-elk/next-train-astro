@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## Route SEO landings + OG grid order (18 Aug 2026)
+
+- Route / region / corridor pages first-paint light (`forceLight`) so Googlebot screenshots are not dark.
+- Route titles and H1 include both directions (e.g. Johannesburg to Naledi & Naledi to Johannesburg).
+- SSG weekday grids + first/last times from `public/data/full-database.json` (column order = `MANUAL_GRID_ORDER`). Saturday sheets sit in `<details>`. All rows stay in the DOM inside a 22rem scroller.
+- FAQPage + terminus departure ItemList JSON-LD. Home footer / noscript and the guide link the high-impression OD landings.
+- nexttrain-og `extractGridPreview` uses the same column order; cache bust `wa7`.
+- `robots.txt` disallows `/index.html` so it cannot cannibalize `/`. Lab hostname sets `noindex` in the layout script.
+
 ## V8_08.18.1 — Overlay back-stack (18 Aug 2026)
 
 - Closing What's New now reopens the sidenav (`#sidenav`) instead of dumping the commuter on home.

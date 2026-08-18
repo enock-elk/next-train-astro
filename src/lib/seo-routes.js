@@ -195,4 +195,24 @@ export function getSeoRegionBySlug(slug) {
     return listSeoRegions().find((r) => r.slug === slug) || null;
 }
 
+/**
+ * High-impression origin–destination landings (Search Console long-tail).
+ * Used for crawlable internal links from home / guide.
+ */
+export const FEATURED_SEO_ROUTE_IDS = [
+    'jhb-soweto',
+    'pta-mabopane',
+    'pta-pien',
+    'pta-saul',
+    'ct-strnd',
+    'ct-bellv',
+    'ct-simon',
+    'kzn-umlazi',
+];
+
+export function listFeaturedSeoRoutes() {
+    const byId = new Map(listSeoRoutes().map((entry) => [entry.route.id, entry]));
+    return FEATURED_SEO_ROUTE_IDS.map((id) => byId.get(id)).filter(Boolean);
+}
+
 export { getCorridorLabel };

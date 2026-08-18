@@ -10,6 +10,7 @@ import PlannerModals from '../components/PlannerModals.astro';
 import LiveBoardModals from '../components/LiveBoardModals.astro';
 import HubModals from '../components/HubModals.astro';
 import AlertsChannel from '../components/AlertsChannel.astro';
+import SeoFeaturedRoutes from '../components/SeoFeaturedRoutes.astro';
 import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
@@ -104,6 +105,18 @@ const faqLd = {
   <script slot="head" type="application/ld+json" set:html={JSON.stringify(softwareAppLd)} />
   <script slot="head" type="application/ld+json" set:html={JSON.stringify(webSiteLd)} />
   <script slot="head" type="application/ld+json" set:html={JSON.stringify(faqLd)} />
+
+    <noscript>
+      <div class="max-w-md mx-auto px-4 py-6 bg-white text-slate-800">
+        <p class="text-sm font-bold mb-2">Metrorail route timetables</p>
+        <SeoFeaturedRoutes />
+        <p class="mt-3 text-sm">
+          <a href={withBase('routes.html')}>All corridors</a>
+          ·
+          <a href={withBase('guide.html')}>User guide</a>
+        </p>
+      </div>
+    </noscript>
     
     <!-- SIDENAV / SETTINGS HUB -->
     <Sidenav />

@@ -1886,3 +1886,36 @@ export const MANUAL_GRID_ORDER = {
         "2632"
     ]
 };
+
+/** Train-number columns as used by `_buildGridHTML` (4 digits, optional letter suffix). */
+const TRAIN_COL_RE = /^\d{4}[a-zA-Z]*$/;
+
+/**
+ * Column order for a sheet: `MANUAL_GRID_ORDER[sheetName]` first, leftover numeric
+ * ids after (localeCompare). Matches `Renderer._buildGridHTML`.
+ * @param {string} sheetName
+ * @param {string[]} trainIds
+ * @returns {string[]}
+ */
+export function orderGridTrainIds(sheetName, trainIds) {
+    const trainCols = (trainIds || [])
+        .map((id) => String(id).trim())
+        .filter((id) => TRAIN_COL_RE.test(id));
+    const unique = [];
+    const seen = new Set();
+    for (const id of trainCols) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        unique.push(id);
+    }
+    const manualOrder = MANUAL_GRID_ORDER[sheetName];
+    if (!manualOrder) return unique;
+    const sorted = [];
+    const manualSet = new Set(manualOrder);
+    for (const tNum of manualOrder) {
+        if (unique.includes(tNum)) sorted.push(tNum);
+    }
+    const remaining = unique.filter((t) => !manualSet.has(t));
+    remaining.sort((a, b) => a.localeCompare(b));
+    return [...sorted, ...remaining];
+}

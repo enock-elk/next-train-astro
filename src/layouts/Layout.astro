@@ -41,6 +41,14 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
+    <script is:inline>
+      try {
+        if (location.hostname === 'lab.nexttrain.co.za') {
+          var labRobots = document.querySelector('meta[name="robots"]');
+          if (labRobots) labRobots.setAttribute('content', 'noindex, nofollow');
+        }
+      } catch (e) {}
+    </script>
     <meta name="application-name" content="Metrorail Next Train" />
     <meta name="apple-mobile-web-app-title" content="Next Train" />
     <link rel="canonical" href={canonical} />

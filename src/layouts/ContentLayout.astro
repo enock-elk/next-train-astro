@@ -94,6 +94,10 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
 
     <script is:inline define:vars={{ forceDark, forceLight }}>
       try {
+        if (location.hostname === 'lab.nexttrain.co.za') {
+          var labRobots = document.querySelector('meta[name="robots"]');
+          if (labRobots) labRobots.setAttribute('content', 'noindex, nofollow');
+        }
         if (forceLight) {
           document.documentElement.classList.remove('dark');
         } else if (forceDark) {

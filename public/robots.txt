@@ -17,6 +17,10 @@ Disallow: /marketing.html
 Disallow: /marketing
 Disallow: /cdn-cgi/
 
+# GitHub Pages also serves the homepage as /index.html; keep that URL out of the
+# index so it cannot cannibalize the canonical https://nexttrain.co.za/.
+Disallow: /index.html
+
 # Block parameterised route/region deep links. These are functional URLs the
 # app generates for sharing, but indexing them duplicates the canonical pages
 # and bloats the index. Path-based route pages are the ones meant to rank.

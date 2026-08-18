@@ -1,6 +1,7 @@
 ---
 import ContentLayout from '../../layouts/ContentLayout.astro';
 import SeoThemeToggle from '../../components/SeoThemeToggle.astro';
+import SeoTimetableGrid from '../../components/SeoTimetableGrid.astro';
 import { withBase } from '../../lib/config.js';
 import {
   listSeoRoutes,
@@ -12,6 +13,13 @@ import {
   listSeoRegions,
   listSeoCorridors,
 } from '../../lib/seo-routes.js';
+import {
+  buildRouteSeoTimetable,
+  buildRouteJsonLd,
+  bothDirectionTitle,
+  firstLastSummaryLine,
+  ogTimetableImageUrl,
+} from '../../lib/seo-timetable.js';
 
 export function getStaticPaths() {
   return listSeoRoutes().map(({ seed }) => ({
@@ -35,27 +43,37 @@ const regionEntry = listSeoRegions().find((r) => r.region === route.region);
 const corridorEntry = listSeoCorridors().find(
   (c) => route.corridorId && c.corridorIds.includes(route.corridorId)
 );
-const title = `${origin} to ${dest} Train Times | Metrorail Next Train`;
-const description = `${seed.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
+const heading = bothDirectionTitle(origin, dest);
+const timetable = buildRouteSeoTimetable(route);
+const firstB = firstLastSummaryLine(timetable.weekday.b);
+const firstA = firstLastSummaryLine(timetable.weekday.a);
+const satNote = timetable.hasSaturday
+  ? ' Saturday trains are listed further down this page.'
+  : ' This corridor has no Saturday sheet in the published dump.';
+const firstLastBlurb = [firstB, firstA].filter(Boolean).join('. ');
+const title = `${heading} | Metrorail Next Train`;
+const description = firstLastBlurb
+  ? `${heading} (${province}). ${firstLastBlurb}. ${seed.operatingNote}`
+  : `${seed.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
 const canonicalPath = `/routes/${seed.slug}.html`;
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const appHref = withBase(`/?rt=${encodeURIComponent(route.id)}`);
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
 const corridorHref = corridorEntry ? withBase(`corridors/${corridorEntry.slug}.html`) : null;
+const ogImage = ogTimetableImageUrl(route.id, 'A');
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebPage',
-  name: title,
+const jsonLd = buildRouteJsonLd({
+  title,
   description,
-  about: name,
-  isPartOf: {
-    '@type': 'WebSite',
-    name: 'Metrorail Next Train',
-    url: 'https://nexttrain.co.za/',
-  },
-};
+  pageUrl,
+  name,
+  origin,
+  dest,
+  operatingNote: seed.operatingNote,
+  timetable,
+});
 
 const related = [
   ...listSeoRoutes().filter(
@@ -72,6 +90,11 @@ const related = [
   description={description}
   canonicalPath={canonicalPath}
   themeColor="#1d4ed8"
+  forceLight={true}
+  ogImage={ogImage}
+  ogImageWidth="3000"
+  ogImageHeight="1575"
+  twitterCard="summary_large_image"
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoThemeToggle />
@@ -91,11 +114,86 @@ const related = [
       </p>
 
       <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-        {origin} to {dest} train times
+        {heading}
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {seed.blurb}
+        {firstLastBlurb && (
+          <>
+            {' '}
+            {firstLastBlurb}.
+          </>
+        )}
+        {satNote} {seed.operatingNote}
       </p>
+
+      {(firstB || firstA) && (
+        <div class="mt-6 rounded-2xl border border-blue-100 bg-blue-50/80 dark:border-blue-900/40 dark:bg-blue-950/30 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+          <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">
+            Weekday first &amp; last
+          </p>
+          {firstB && <p>{firstB}</p>}
+          {firstA && <p>{firstA}</p>}
+        </div>
+      )}
+
+      {timetable.hasWeekday && (
+        <section class="mt-8">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">Weekday timetable</h2>
+          {timetable.weekday.a && (
+            <div class="mt-4">
+              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                {timetable.weekday.a.heading}
+              </h3>
+              <SeoTimetableGrid
+                grid={timetable.weekday.a}
+                caption={`Weekday trains to ${origin}`}
+              />
+            </div>
+          )}
+          {timetable.weekday.b && (
+            <div class="mt-6">
+              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                {timetable.weekday.b.heading}
+              </h3>
+              <SeoTimetableGrid
+                grid={timetable.weekday.b}
+                caption={`Weekday trains to ${dest}`}
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {timetable.hasSaturday && (
+        <details class="mt-6 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4">
+          <summary class="cursor-pointer text-sm font-bold text-slate-900 dark:text-white">
+            Saturday timetable
+          </summary>
+          {timetable.saturday.a && (
+            <div class="mt-4">
+              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                {timetable.saturday.a.heading}
+              </h3>
+              <SeoTimetableGrid
+                grid={timetable.saturday.a}
+                caption={`Saturday trains to ${origin}`}
+              />
+            </div>
+          )}
+          {timetable.saturday.b && (
+            <div class="mt-4">
+              <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                {timetable.saturday.b.heading}
+              </h3>
+              <SeoTimetableGrid
+                grid={timetable.saturday.b}
+                caption={`Saturday trains to ${dest}`}
+              />
+            </div>
+          )}
+        </details>
+      )}
 
       <div class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -116,10 +214,6 @@ const related = [
             <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{corridorLabel || 'Metrorail'}</dd>
           </div>
         </dl>
-
-        <p class="mt-5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-800 pt-4">
-          {seed.operatingNote}
-        </p>
 
         <a
           href={appHref}

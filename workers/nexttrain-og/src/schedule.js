@@ -2,6 +2,8 @@
  * Fetch regional schedule sheets and extract a compact grid preview.
  */
 
+import { orderGridTrainIds } from '../../../src/lib/grid-order.js';
+
 const REGION_NODE = {
   GP: 'schedules/gauteng.json',
   WC: 'schedules/westerncape.json',
@@ -55,8 +57,10 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStatio
   if (!dataRows.length) return null;
 
   const ignore = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
-  let trainIds = Object.keys(dataRows[0]).filter((k) => !ignore.has(k));
-  // Soft safety for pathological sheets (Worker CPU / SVG size).
+  const rawIds = Object.keys(dataRows[0]).filter((k) => !ignore.has(k));
+  // Same column order as the in-app grid (MANUAL_GRID_ORDER, leftover numeric ids after).
+  let trainIds = orderGridTrainIds(key, rawIds);
+  // Soft safety for pathological sheets (Worker CPU / SVG size). Cap AFTER ordering.
   const trainCap = maxTrains > 0 ? maxTrains : 48;
   const stationCap = maxStations > 0 ? maxStations : 40;
   trainIds = trainIds.slice(0, trainCap);

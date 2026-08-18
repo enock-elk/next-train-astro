@@ -506,24 +506,31 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
 
-      /* CleverAds sits fixed from the bottom. Never reserve page space for it. */
+      /* CleverAds overlays from the top. Never reserve page space for it. */
       #clever-core {
-        max-height: 100px !important;
+        top: 0 !important;
+        bottom: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-height: min(280px, 45vh) !important;
         min-height: 0;
         height: auto;
-        overflow: hidden !important;
+        overflow: visible !important;
         transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
         pointer-events: none;
       }
       #clever-core iframe {
-        max-height: 100px !important;
+        max-height: min(280px, 45vh) !important;
+        max-width: 100%;
       }
       #clever-core.ad-cloaked {
-        transform: translateY(150%) !important;
+        transform: translateY(-150%) !important;
         pointer-events: none !important;
         opacity: 0;
         min-height: 0 !important;
         height: 0 !important;
+        overflow: hidden !important;
       }
       #view-next-train.view-section.active {
         display: flex;
@@ -549,7 +556,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     <slot />
 
     <!-- CleverAds host slot (cloaked until safe zone; contained max-height) -->
-    <div id="clever-core" class="ad-cloaked fixed bottom-0 left-0 w-full z-[80] flex justify-center items-end" aria-hidden="true"></div>
+    <div id="clever-core" class="ad-cloaked fixed top-0 left-0 w-full z-[80] flex justify-center items-start" aria-hidden="true"></div>
 
     <!-- Client-Side Bootstrapper -->
     <script>

@@ -1,5 +1,5 @@
 /**
- * CleverAds — contained bottom slot (SPA Guardian armor, Astro-safe).
+ * CleverAds — contained top slot (SPA Guardian armor, Astro-safe).
  *
  * Why SPA ads look "tall then shrink": Clever's sticky creative ships its own
  * expand/collapse chrome (chevron). That is not Next Train UI. We contain the
@@ -83,13 +83,82 @@ function shouldDeferForSessionStability() {
 }
 
 function setAdPadding(_on) {
-    // Ads overlay from the bottom. Never push the board or footer down.
+    // Ads overlay from the top. Never push the board or footer down.
     document.querySelectorAll('.view-section').forEach((el) => {
         el.classList.remove('ad-active-padding');
     });
     try {
         document.body.classList.remove('nt-ads-ready');
     } catch { /* ignore */ }
+}
+
+const APP_CHROME_IDS = new Set([
+    'clever-core', 'offline-toast', 'sidenav', 'sidenav-overlay', 'welcome-modal',
+    'global-dropdown-scrim', 'toast', 'settings-modal', 'map-modal', 'legal-modal',
+    'help-modal', 'disruption-modal', 'route-modal', 'schedule-modal', 'profile-modal',
+    'feedback-modal', 'delay-report-modal', 'about-modal', 'blackbox-modal',
+    'account-modal', 'login-modal', 'dev-modal', 'developer-reply-modal',
+    'network-struggle-modal', 'redirect-modal', 'region-confirm-modal', 'exit-modal',
+    'schedule-override-modal', 'notice-modal', 'alerts-channel', 'loading-overlay',
+    'main-content', LOADER_ID,
+]);
+
+function looksLikeStickyAd(el) {
+    if (!(el instanceof Element)) return false;
+    if (APP_CHROME_IDS.has(el.id) || el.id === LOADER_ID) return false;
+    if (el.tagName === 'SCRIPT') return false;
+    const blob = `${el.id} ${el.className}`;
+    if (/clever/i.test(blob) && el.id !== 'clever-core') return true;
+    if (el.tagName === 'IFRAME') return true;
+    if (el.querySelector?.('iframe')) return true;
+    if (el.closest?.('#clever-core')) {
+        const s = getComputedStyle(el);
+        return s.position === 'fixed' || s.position === 'absolute';
+    }
+    try {
+        const s = getComputedStyle(el);
+        if (s.position !== 'fixed') return false;
+        const r = el.getBoundingClientRect();
+        const atTop = r.y <= 16;
+        const notFullscreen = r.width < window.innerWidth * 0.95 && r.height < window.innerHeight * 0.65;
+        const hasSize = r.width >= 120 && r.height >= 50;
+        return atTop && notFullscreen && hasSize && el.parentElement === document.body;
+    } catch {
+        return false;
+    }
+}
+
+function centerStickyNode(el) {
+    if (!el || el.getAttribute('data-nt-centered') === '1') return false;
+    const s = getComputedStyle(el);
+    if (s.position !== 'fixed' && s.position !== 'absolute') return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 20 || r.height < 20) return false;
+    el.style.setProperty('left', '50%', 'important');
+    el.style.setProperty('right', 'auto', 'important');
+    el.style.setProperty('top', '0px', 'important');
+    el.style.setProperty('bottom', 'auto', 'important');
+    el.style.setProperty('transform', 'translateX(-50%)', 'important');
+    el.setAttribute('data-nt-centered', '1');
+    return true;
+}
+
+function forceCenterStickyAds(adContainer) {
+    if (adContainer) {
+        adContainer.style.setProperty('top', '0px', 'important');
+        adContainer.style.setProperty('bottom', 'auto', 'important');
+        adContainer.classList.add('top-0', 'items-start');
+        adContainer.classList.remove('bottom-0', 'items-end');
+    }
+    const centered = [];
+    const consider = (el) => {
+        if (!looksLikeStickyAd(el)) return;
+        if (centerStickyNode(el)) centered.push(`${el.tagName}#${el.id || ''}`);
+    };
+    adContainer?.querySelectorAll('*').forEach(consider);
+    document.querySelectorAll('iframe').forEach(consider);
+    [...(document.body ? document.body.children : [])].forEach(consider);
+    return centered;
 }
 
 function cloak(adContainer, fatal = false) {
@@ -109,10 +178,13 @@ function uncloak(adContainer) {
 }
 
 function isAdFilled(adContainer) {
-    if (!adContainer || adContainer.childElementCount === 0) return false;
-    const iframe = adContainer.querySelector('iframe');
-    if (iframe) return iframe.getBoundingClientRect().height > 20;
-    return adContainer.offsetHeight > 20;
+    if (adContainer && adContainer.childElementCount > 0) {
+        const iframe = adContainer.querySelector('iframe');
+        if (iframe) return iframe.getBoundingClientRect().height > 20;
+        if (adContainer.offsetHeight > 20) return true;
+    }
+    const escaped = document.querySelector('[data-nt-centered="1"]');
+    return !!(escaped && escaped.getBoundingClientRect().height > 20);
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {
@@ -165,6 +237,7 @@ function injectAdScript(adContainer) {
                 uncloak(adContainer);
                 setAdPadding(isAdFilled(adContainer));
             }
+            forceCenterStickyAds(adContainer);
         };
         adContainer.appendChild(c);
         return true;
@@ -189,6 +262,7 @@ function refreshAdVisibility(adContainer) {
     }
 
     uncloak(adContainer);
+    forceCenterStickyAds(adContainer);
     const filled = isAdFilled(adContainer);
     if (filled) {
         adContainer.style.pointerEvents = 'auto';
@@ -212,6 +286,22 @@ export function initCleverAds() {
     const adContainer = document.getElementById('clever-core');
     if (!adContainer) return;
 
+    forceCenterStickyAds(adContainer);
+    if (window.MutationObserver) {
+        const escapedObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    if (node.id === 'clever-core' || APP_CHROME_IDS.has(node.id)) continue;
+                    if (!looksLikeStickyAd(node) && node.tagName !== 'IFRAME' && !node.querySelector?.('iframe')) continue;
+                    forceCenterStickyAds(adContainer);
+                    return;
+                }
+            }
+        });
+        escapedObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
     // Drop sticky tab budget from older builds so refresh always gets a clean 4/4
     clearLegacySessionInjectCap();
     pageInjectCount = 0;
@@ -232,13 +322,13 @@ export function initCleverAds() {
             for (const m of mutations) {
                 if (m.type === 'attributes' && m.attributeName === 'style') {
                     const style = adContainer.getAttribute('style') || '';
-                    if (style.includes('height: 100vh') || style.includes('height: 100%') || style.includes('position: fixed; top: 0')) {
+                    if (style.includes('height: 100vh')) {
                         if (!window._rogueAdCheckPending) {
                             window._rogueAdCheckPending = true;
                             setTimeout(() => {
                                 window._rogueAdCheckPending = false;
                                 const cur = adContainer.getAttribute('style') || '';
-                                if (cur.includes('height: 100vh') || cur.includes('height: 100%') || cur.includes('position: fixed; top: 0')) {
+                                if (cur.includes('height: 100vh')) {
                                     adObserver.disconnect();
                                     handleAdFailure(adContainer, 'ROGUE_FULLSCREEN_TAKEOVER', true);
                                 }
@@ -246,6 +336,9 @@ export function initCleverAds() {
                         }
                         break;
                     }
+                }
+                if (m.type === 'childList') {
+                    forceCenterStickyAds(adContainer);
                 }
                 if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled(adContainer) && isSafeZone()) {
                     window._adTelemetryFired = true;

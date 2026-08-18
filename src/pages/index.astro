@@ -259,7 +259,10 @@ const faqLd = {
         applyPlannerShortcutDeepLink,
         applyShareTargetDeepLink,
         flushPendingDeeplinkIntents,
-        applyMapDeepLink
+        applyMapDeepLink,
+        bindLaunchQueueDeeplinks,
+        bindWebViewDeeplinkResume,
+        hasInboundShareIntent
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
     import { initRecoveryWatchdog } from '../lib/recovery.js';
@@ -348,88 +351,101 @@ const faqLd = {
 
     window.revealAppShell = revealAppShell;
 
+    let igniteRunning = false;
+    let igniteAgain = false;
     const igniteDataEngine = async () => {
+        if (igniteRunning) {
+            igniteAgain = true;
+            return;
+        }
+        igniteRunning = true;
         // Shell is already visible — schedules hydrate in the background.
         revealAppShell();
         try {
-            bindKillswitchWatch();
-            if (await applyRouteDeepLink()) {
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                if (location.hash === '#fare') await consumeHashDeeplinks();
-                return;
-            }
-
-            if (await applyPlannerDeepLink()) {
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                return;
-            }
-
-            if (await applyMapDeepLink()) {
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                return;
-            }
-
-            if (await applyPlannerShortcutDeepLink()) {
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                return;
-            }
-
-            if (await applyShareTargetDeepLink()) {
-                checkServiceAlerts();
-                await flushPendingDeeplinkIntents();
-                return;
-            }
-
-            const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
-            if (!welcomeSeen) {
-                console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
-                return;
-            }
-
-            const region = $userRegion.get() || 'GP';
-            let savedDefault = safeStorage.getItem('defaultRoute_' + region);
-
-            // Pre-region SPA installs stored a single unsuffixed key; adopt it once.
-            if (!savedDefault) {
-                const legacyDefault = safeStorage.getItem('defaultRoute');
-                if (legacyDefault && ROUTES[legacyDefault] && ROUTES[legacyDefault].region === region) {
-                    savedDefault = legacyDefault;
-                    safeStorage.setItem('defaultRoute_' + region, legacyDefault);
-                    safeStorage.removeItem('defaultRoute');
+            do {
+                igniteAgain = false;
+                bindKillswitchWatch();
+                if (await applyRouteDeepLink()) {
+                    checkServiceAlerts();
+                    await flushPendingDeeplinkIntents();
+                    if (location.hash === '#fare') await consumeHashDeeplinks();
+                    continue;
                 }
-            }
 
-            const pinnedOk = !!(
-                savedDefault &&
-                ROUTES[savedDefault] &&
-                ROUTES[savedDefault].region === region &&
-                ROUTES[savedDefault].isActive
-            );
+                if (await applyPlannerDeepLink()) {
+                    checkServiceAlerts();
+                    await flushPendingDeeplinkIntents();
+                    continue;
+                }
 
-            if (pinnedOk) {
-                $currentRouteId.set(savedDefault);
-                console.log("🛡️ Guardian: Igniting Data Engine (background)…");
-                // Do not await — poor networks must not block chrome / map→home return.
-                loadAllSchedules(false)
-                    .then(async () => {
-                        checkServiceAlerts();
-                        await flushPendingDeeplinkIntents();
-                        if (location.hash === '#fare') await consumeHashDeeplinks();
-                    })
-                    .catch((e) => console.warn('🛡️ Guardian: Background schedule load failed', e));
-            } else {
-                // Unpin / no default: never invent first-in-list as pinned.
-                // Open this region's route picker so the user chooses.
-                openRegionRoutePicker();
-            }
+                if (await applyMapDeepLink()) {
+                    checkServiceAlerts();
+                    await flushPendingDeeplinkIntents();
+                    continue;
+                }
+
+                if (await applyPlannerShortcutDeepLink()) {
+                    checkServiceAlerts();
+                    await flushPendingDeeplinkIntents();
+                    continue;
+                }
+
+                if (await applyShareTargetDeepLink()) {
+                    checkServiceAlerts();
+                    await flushPendingDeeplinkIntents();
+                    continue;
+                }
+
+                const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
+                if (!welcomeSeen) {
+                    console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
+                    continue;
+                }
+
+                const region = $userRegion.get() || 'GP';
+                let savedDefault = safeStorage.getItem('defaultRoute_' + region);
+
+                // Pre-region SPA installs stored a single unsuffixed key; adopt it once.
+                if (!savedDefault) {
+                    const legacyDefault = safeStorage.getItem('defaultRoute');
+                    if (legacyDefault && ROUTES[legacyDefault] && ROUTES[legacyDefault].region === region) {
+                        savedDefault = legacyDefault;
+                        safeStorage.setItem('defaultRoute_' + region, legacyDefault);
+                        safeStorage.removeItem('defaultRoute');
+                    }
+                }
+
+                const pinnedOk = !!(
+                    savedDefault &&
+                    ROUTES[savedDefault] &&
+                    ROUTES[savedDefault].region === region &&
+                    ROUTES[savedDefault].isActive
+                );
+
+                if (pinnedOk) {
+                    $currentRouteId.set(savedDefault);
+                    console.log("🛡️ Guardian: Igniting Data Engine (background)…");
+                    // Do not await — poor networks must not block chrome / map→home return.
+                    loadAllSchedules(false)
+                        .then(async () => {
+                            checkServiceAlerts();
+                            await flushPendingDeeplinkIntents();
+                            if (location.hash === '#fare') await consumeHashDeeplinks();
+                        })
+                        .catch((e) => console.warn('🛡️ Guardian: Background schedule load failed', e));
+                } else {
+                    // Unpin / no default: never invent first-in-list as pinned.
+                    // Open this region's route picker so the user chooses.
+                    openRegionRoutePicker();
+                }
+            } while (igniteAgain);
         } finally {
+            igniteRunning = false;
             revealAppShell();
         }
     };
 
+    bindLaunchQueueDeeplinks(() => { igniteDataEngine(); });
+    bindWebViewDeeplinkResume(() => { igniteDataEngine(); });
     igniteDataEngine();
 </script>

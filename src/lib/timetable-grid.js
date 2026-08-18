@@ -75,6 +75,7 @@ export async function applyRouteDeepLink() {
     if (!returning) {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
     // Cold start / no defaults: pin the shared route as theirs
     if (!hasUsableDefault) {
         safeStorage.setItem(defaultKey, link.routeId);

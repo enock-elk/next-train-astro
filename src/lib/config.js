@@ -12,13 +12,20 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.17.1";
+export const APP_VERSION = "V8_08.18.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
 /** WhatsApp digits for wa.me (no + or spaces). */
 export const SUPPORT_WHATSAPP = '27696473764';
 export const SUPPORT_WHATSAPP_DISPLAY = '+27 69 647 3764';
+
+/** Operator emails — keep in sync with firebase-database.rules.json and nexttrain-telemetry. */
+export const ADMIN_EMAILS = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
+
+export function isAdminEmail(email) {
+    return ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -884,6 +891,24 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.18.1",
+        title: "Back where you were",
+        date: "18 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Back where you were:</b> Closing What's New or an alert reply returns you to the menu or notice you were viewing."
+        ]
+    },
+    {
+        id: "V8_08.17.3",
+        title: "Shared links",
+        date: "17 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap."
+        ]
+    },
     {
         id: "V8_08.17.1",
         title: "Alerts",

@@ -1123,19 +1123,8 @@ export const Renderer = {
     // benefits only. Never inject admin, Dev Hub, or internal / IP notes here.
     renderChangelogModal: (changelogData) => {
         if (typeof document === 'undefined') return;
-        const sidenav = document.getElementById('sidenav');
-        const overlay = document.getElementById('sidenav-overlay');
-        if (sidenav && sidenav.classList.contains('open')) {
-            sidenav.classList.remove('open', 'translate-x-0');
-            sidenav.classList.add('translate-x-full');
-            if (overlay) {
-                overlay.classList.add('opacity-0');
-                overlay.classList.add('hidden');
-            }
-            document.body.classList.remove('sidenav-open', 'modal-active');
-        }
-
-        try { history.pushState({ modal: 'changelog' }, '', '#changelog'); } catch (e) {}
+        // Leave the sidenav on the history stack and visually intact.
+        // What's New sits above it; close pops back to #sidenav.
 
         let modal = document.getElementById('changelog-modal');
         if (!modal) {

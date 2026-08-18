@@ -122,6 +122,15 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     }
 
     const hash = hashForModal(modalId);
+    // Restore parked overlays before history.back() — that path returns early
+    // and used to drop Alerts (or admin inbox) when cancelling a reply.
+    if (modalId === 'feedback-modal') {
+        try {
+            if (typeof window.restoreFeedbackReturnOverlay === 'function') {
+                window.restoreFeedbackReturnOverlay();
+            }
+        } catch { /* ignore */ }
+    }
     // Prefer popping history so Back stack stays consistent (popstate closes with fromPopState)
     // Dev Mode: skip history.back() when hash is #dev-* (panel) — that overshot to home
     if (!fromPopState) {
@@ -321,8 +330,30 @@ export function bindHistoryBackNavigation() {
 
         if (window._isSidenavClosing) return;
 
+        if (hashNow === '#sidenav' || hashNow === '#menu') {
+            if (!document.body.classList.contains('sidenav-open') && typeof window.openAppHub === 'function') {
+                window.openAppHub();
+            }
+            return;
+        }
+
         if (document.body.classList.contains('sidenav-open')) {
             if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
+            return;
+        }
+
+        if (hashNow === '#alerts') {
+            const ch = document.getElementById('alerts-channel');
+            if (ch && ch.classList.contains('hidden')) {
+                ch.classList.remove('hidden', 'opacity-0');
+                const inner = ch.firstElementChild;
+                if (inner) {
+                    inner.classList.remove('scale-95');
+                    inner.classList.add('scale-100');
+                }
+                window.__ntAlertsOpen = true;
+                window.__ntAlertsParkHome = false;
+            }
             return;
         }
 

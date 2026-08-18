@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.17.3 — Admin session must be an operator email (17 Aug 2026)
+
+- iPhone feedback / community / alerts persist an **anonymous** Firebase user. Dev Hub treated any `currentUser` as admin, then polled telemetry every 10s with a token that has no email → Worker **403** forever, and `feedback.json` failed rules.
+- Dev Hub and telemetry now require `enockelk@gmail.com` or `thandeka05nxumalo@gmail.com`. 401/403 stops the poll. CleverAds “Tracker ID not found” is their SDK, not ours.
+
 ## V8_08.17.2 — Facebook / first-open share links (17 Aug 2026)
 
 - Installed PWA uses `launch_handler: focus-existing` but never read `launchQueue.targetURL`, so the first Facebook tap opened the app at `/` with no `?rt=` / `?plan=`. Second tap worked after the webview closed.

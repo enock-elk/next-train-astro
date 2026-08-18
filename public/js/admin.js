@@ -188,6 +188,27 @@ const Admin = {
     },
 
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
+    isAllowlistedAdmin: (user) => {
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (!email) return false;
+        if (typeof window.isAdminEmail === 'function') return window.isAdminEmail(email);
+        const list = Array.isArray(window.ADMIN_EMAILS)
+            ? window.ADMIN_EMAILS
+            : ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
+        return list.map((e) => String(e).toLowerCase()).includes(email);
+    },
+
+    stopTelemetryPolling: (reason) => {
+        if (Admin.telemetryInterval) {
+            clearInterval(Admin.telemetryInterval);
+            Admin.telemetryInterval = null;
+        }
+        if (reason && !Admin._telemetryAuthWarned) {
+            Admin._telemetryAuthWarned = true;
+            console.warn('Guardian: Telemetry polling stopped —', reason);
+        }
+    },
+
     getAuthKey: async () => {
         if (window.firebaseAuth && window.firebaseAuth.currentUser) {
             try {
@@ -1204,7 +1225,7 @@ const Admin = {
         }
 
         if (telPanel.dataset.adminLoaded === "true") {
-            if (!Admin.telemetryInterval) {
+            if (Admin.isAllowlistedAdmin(Admin.currentUser) && !Admin.telemetryInterval) {
                 Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
             }
             Admin.refreshTelemetry();
@@ -1220,7 +1241,9 @@ const Admin = {
 
         Admin.refreshTelemetry();
         if (Admin.telemetryInterval) clearInterval(Admin.telemetryInterval);
-        Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+        if (Admin.isAllowlistedAdmin(Admin.currentUser)) {
+            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+        }
     },
 
     /**
@@ -1443,6 +1466,11 @@ const Admin = {
                 Admin.telemetryInterval = null;
                 console.log("Guardian: Dev Modal closed. Telemetry polling suspended.");
             }
+            return;
+        }
+
+        if (!Admin.isAllowlistedAdmin(Admin.currentUser)) {
+            Admin.stopTelemetryPolling('no operator session');
             return;
         }
 
@@ -1771,6 +1799,10 @@ const Admin = {
                     if (el) el.classList.remove('animate-pulse');
                 });
             } else {
+                if (res.status === 401 || res.status === 403) {
+                    Admin.stopTelemetryPolling('Worker returned status: ' + res.status);
+                    return;
+                }
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
@@ -2056,6 +2088,17 @@ const Admin = {
             const sessionChanged = nextUid !== prevUid;
 
             if (user) {
+                // Feedback / community / alerts sign in anonymously on iPhone.
+                // That persisted session is not an operator — do not open Dev Hub
+                // or poll telemetry with a token that has no admin email (403 loop).
+                if (!Admin.isAllowlistedAdmin(user)) {
+                    if (Admin.currentUser) {
+                        console.log("Guardian: Non-admin Firebase session ignored (anonymous or commuter).");
+                        Admin.currentUser = null;
+                    }
+                    return;
+                }
+
                 Admin.currentUser = user;
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
@@ -2132,7 +2175,7 @@ const Admin = {
             if (clickCount >= 5) {
                 clickCount = 0;
                 
-                if (Admin.currentUser || window.isSimMode) {
+                if (Admin.isAllowlistedAdmin(Admin.currentUser) || window.isSimMode) {
                     if (devModal) {
                         // GUARDIAN FIX: Route-aware modal opening prevents router bleed on back-button
                         if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
@@ -5544,6 +5587,10 @@ const Admin = {
         };
 
         Admin.fetchFeedback = async () => {
+            if (!Admin.isAllowlistedAdmin(Admin.currentUser)) {
+                if (typeof showToast === 'function') showToast('Sign in as an operator to load feedback.', 'error', 3500);
+                return;
+            }
             const secret = await Admin.getAuthKey();
             if (!secret) return;
 
@@ -5570,7 +5617,7 @@ const Admin = {
                     window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000)
                 ]);
                 
-                if (!res.ok) throw new Error("Failed to fetch feedback");
+                if (!res.ok) throw new Error("Failed to fetch feedback (" + res.status + ")");
                 const data = await res.json();
                 const inboxData = inboxRes.ok ? await inboxRes.json() : {};
                 Admin.cachedAliases = aliasesRes.ok ? (await aliasesRes.json()) || {} : {};
@@ -5613,6 +5660,7 @@ const Admin = {
                 listContainer.innerHTML = '<div class="text-xs text-red-500 text-center py-4">Failed to load feedback.</div>';
                 if (tabInbox) tabInbox.innerHTML = "Error";
                 if (tabArchive) tabArchive.innerHTML = "Error";
+                if (typeof showToast === 'function') showToast(e.message || 'Failed to load feedback.', 'error', 3500);
             }
         };
 

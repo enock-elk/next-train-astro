@@ -275,21 +275,20 @@ function ensurePinModal() {
         if (pinInput.value === PIN) {
             triggerHaptic();
             setSessionAuthed();
-            closeSmoothModal('bb-pin-modal');
-            closeSmoothModal('about-modal');
+            closeSmoothModal('bb-pin-modal', true);
             pinInput.value = '';
-            setTimeout(openBlackBox, 350);
+            openBlackBox();
         } else {
             showToast('Access Denied', 'error');
             pinInput.value = '';
-            closeSmoothModal('bb-pin-modal');
+            closeSmoothModal('bb-pin-modal', true);
         }
     };
 
     document.getElementById('bb-pin-submit')?.addEventListener('click', processPin);
     document.getElementById('bb-pin-cancel')?.addEventListener('click', () => {
         pinInput.value = '';
-        closeSmoothModal('bb-pin-modal');
+        closeSmoothModal('bb-pin-modal', true);
     });
     pinInput?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') processPin();
@@ -299,43 +298,36 @@ function ensurePinModal() {
 }
 
 function openBlackBox() {
-    try { history.pushState({ modal: 'blackbox' }, '', '#blackbox'); } catch { /* ignore */ }
-    openSmoothModal('blackbox-modal');
+    // Stay on #about so Close returns to About, not the PIN sheet.
+    openSmoothModal('blackbox-modal', null, { skipHash: true });
     renderBlackBoxLogs();
 }
 
 /** Close terminal and restore About — PIN stays valid for this browser session. */
 function closeBlackBoxToAbout() {
-    const reopenAbout = () => {
-        try { openSmoothModal('about-modal'); } catch { /* ignore */ }
-    };
-    if (location.hash === '#blackbox') {
-        const onPop = () => {
-            window.removeEventListener('popstate', onPop);
-            setTimeout(reopenAbout, 40);
-        };
-        window.addEventListener('popstate', onPop);
-        try { history.back(); } catch {
-            window.removeEventListener('popstate', onPop);
-            closeSmoothModal('blackbox-modal');
-            setTimeout(reopenAbout, 320);
-        }
-        return;
+    closeSmoothModal('blackbox-modal', true);
+    const pin = document.getElementById('bb-pin-modal');
+    if (pin && !pin.classList.contains('hidden')) {
+        closeSmoothModal('bb-pin-modal', true);
     }
-    closeSmoothModal('blackbox-modal');
-    setTimeout(reopenAbout, 320);
+    const hash = location.hash || '';
+    if (hash === '#blackbox' || hash === '#bb-pin') {
+        try { history.replaceState({ modal: 'about-modal' }, '', '#about'); } catch { /* ignore */ }
+    }
+    const about = document.getElementById('about-modal');
+    if (!about || about.classList.contains('hidden')) {
+        openSmoothModal('about-modal');
+    }
 }
 
 function promptPinOrOpen() {
     triggerHaptic();
     if (isSessionAuthed()) {
-        closeSmoothModal('about-modal');
-        setTimeout(openBlackBox, 200);
+        openBlackBox();
         return;
     }
     ensurePinModal();
-    try { history.pushState({ modal: 'bb-pin-modal' }, '', '#bb-pin'); } catch { /* ignore */ }
-    openSmoothModal('bb-pin-modal');
+    openSmoothModal('bb-pin-modal', null, { skipHash: true });
     setTimeout(() => document.getElementById('bb-pin-input')?.focus(), 300);
 }
 

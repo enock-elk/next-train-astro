@@ -80,7 +80,7 @@ export function restoreFeedbackReturnOverlay() {
 export function openFeedbackReplyFromOverlay(returnModalId, replyOpts = {}) {
     enterFeedbackReplyMode(replyOpts);
     feedbackReturnModalId = returnModalId || null;
-    if (returnModalId && returnModalId !== 'notice-modal') {
+    if (returnModalId && returnModalId !== 'notice-modal' && returnModalId !== 'alerts-channel') {
         const parked = document.getElementById(returnModalId);
         if (parked) {
             parked.setAttribute('data-feedback-parked', '1');
@@ -298,7 +298,6 @@ function syncChangelogBadge() {
 /** Opens the public What's New modal. Copy comes from CHANGELOG_DATA (commuter-only). */
 function openChangelog() {
     triggerHaptic();
-    closeAppHub(true);
     const latest = getLatestChangelog();
     const ver = getChangelogVersionId(latest) || APP_VERSION;
     safeStorage.setItem('seen_changelog_version', ver);

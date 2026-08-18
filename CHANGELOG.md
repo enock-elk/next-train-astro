@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.18.1 — Overlay back-stack (18 Aug 2026)
+
+- Closing What's New now reopens the sidenav (`#sidenav`) instead of dumping the commuter on home.
+- Alert Reply → Feedback Cancel restores the alerts feed (no park + restore before `history.back()`).
+- Black Box PIN is once per session; Close returns to About, not the PIN sheet. PIN / terminal stay off the hash stack.
+
 ## V8_08.17.3 — Admin session must be an operator email (17 Aug 2026)
 
 - iPhone feedback / community / alerts persist an **anonymous** Firebase user. Dev Hub treated any `currentUser` as admin, then polled telemetry every 10s with a token that has no email → Worker **403** forever, and `feedback.json` failed rules.

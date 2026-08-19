@@ -55,6 +55,9 @@ if (/#nt-shell\.nt-ad-shifted\s*,\s*html\.nt-ads-entering #nt-shell\s*\{/.test(l
 }
 if (!layout.includes('touch-action: pan-y')) fail('fixed overlays must allow pan-y');
 if (!layout.includes('#nt-shell [id$="-modal"].fixed')) fail('overlays inside #nt-shell must be viewport-pinned');
+if (!layout.includes('#about-modal.full-screen > *') || !layout.includes('flex-shrink: 0')) {
+    fail('About children must not shrink (that clips Built & Maintained)');
+}
 
 const plannerModals = readFileSync('src/components/PlannerModals.astro', 'utf8');
 if (!plannerModals.includes('id="close-map-btn-2"')) fail('map modal must keep the bottom Close Map button');

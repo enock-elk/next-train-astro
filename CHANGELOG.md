@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.19.7 — Clear leftover ad gap on return (19 Aug 2026)
+
+- If a top unit expires or is discarded while the app is in the background, coming back no longer leaves a blank strip. Occupancy ignores `visibility:hidden` / empty wrappers (not just box height), idle leftovers collapse without `display:none` or vendor `left`/`top`/`transform`, and resume (`visibilitychange` / `pageshow`) remeasures, including delayed passes after iframe teardown.
+- Commuter What’s New ads bullet mentions the leftover gap. 19.6 overlay-containing-block notes stay in this file.
+
 ## V8_08.19.6 — Stop ad ease from trapping commuter overlays (19 Aug 2026)
 
 - Root cause of distorted Feedback / About / Privacy / Map: `#nt-shell { transform }` from the CleverAds ease created a containing block for every `position: fixed` overlay inside the shell. Overlays grew to the page height, so Close Map sat below the fold, cards stuck to the top, and inner text could not scroll against `body.modal-active`.

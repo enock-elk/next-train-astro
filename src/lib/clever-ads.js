@@ -9,6 +9,10 @@
  * commuter dismisses it, ease #main-content via --nt-ad-shift / --nt-ad-flip
  * on #nt-shell. Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
+ * A leftover top gap after the creative is gone is a bug: measure occupancy
+ * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
+ * resume. Cloak visibility must not count as “filled” for board shift.
+ *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
  */
@@ -36,6 +40,9 @@ let adShellSyncRaf = 0;
 let adEntering = false;
 let shellMotionLock = false;
 let shellMotionUnlockTimer = 0;
+/** Collapse leftover gap instantly after background/resume (no second ease). */
+let adResumeInstant = false;
+let adResumePassTimer = 0;
 const observedOverlayNodes = new Set();
 let overlayResizeObserver = null;
 const AD_SHELL_EASE_MS = 420;
@@ -131,6 +138,102 @@ function isAdsCloaked() {
     return document.documentElement.classList.contains('nt-ads-cloaked');
 }
 
+function isOurAdHideActive() {
+    const html = document.documentElement;
+    return html.classList.contains('nt-ads-cloaked') || html.classList.contains('nt-ads-entering');
+}
+
+function markResumeInstant() {
+    adResumeInstant = true;
+}
+
+function consumeResumeInstant() {
+    const next = adResumeInstant;
+    adResumeInstant = false;
+    return next;
+}
+
+/**
+ * True when the box is actually showing. Skip visibility/opacity/off-screen
+ * unless `ignoreOurHide` — our cloak uses visibility:hidden and must still
+ * count as an injected unit so we do not fire another schedule slot.
+ */
+function isPaintedBox(el, { ignoreOurHide = false } = {}) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none') return false;
+    const skipHideChecks = ignoreOurHide && isOurAdHideActive();
+    if (!skipHideChecks) {
+        if (cs.visibility === 'hidden' || cs.visibility === 'collapse') return false;
+        if (parseFloat(cs.opacity) < 0.05) return false;
+    }
+    const r = el.getBoundingClientRect();
+    if (r.height <= 20 || r.width <= 20) return false;
+    if (!skipHideChecks) {
+        if (r.bottom <= 1 || r.top >= window.innerHeight - 1) return false;
+        if (r.right <= 1 || r.left >= window.innerWidth - 1) return false;
+    }
+    return true;
+}
+
+function iframeLooksAlive(iframe, paintedOpts) {
+    if (!iframe || iframe.tagName !== 'IFRAME') return false;
+    const src = String(iframe.getAttribute('src') || iframe.src || '').trim();
+    if (!src || /^about:(blank|srcdoc)$/i.test(src)) return false;
+    if (!iframe.isConnected) return false;
+    try {
+        if (iframe.contentWindow == null) return false;
+    } catch { /* cross-origin is fine; discarded frames are null */ }
+    return isPaintedBox(iframe, paintedOpts);
+}
+
+/** Wrapper with no creative (expired/discarded) must not keep a top gap. */
+function unitOccupiesSpace(el, paintedOpts = {}) {
+    if (!isPaintedBox(el, paintedOpts)) return false;
+    if (el.tagName === 'IFRAME') return iframeLooksAlive(el, paintedOpts);
+    if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'CANVAS'
+        || el.tagName === 'OBJECT' || el.tagName === 'EMBED') {
+        return true;
+    }
+    const roots = [el];
+    if (el.shadowRoot) roots.push(el.shadowRoot);
+    for (const root of roots) {
+        const iframes = root.querySelectorAll ? root.querySelectorAll('iframe') : [];
+        for (const frame of iframes) {
+            if (iframeLooksAlive(frame, paintedOpts)) return true;
+        }
+        const media = root.querySelectorAll ? root.querySelectorAll('img, video, canvas, object, embed') : [];
+        for (const node of media) {
+            if (isPaintedBox(node, paintedOpts)) return true;
+        }
+    }
+    for (const child of el.children) {
+        if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE'
+            || child.tagName === 'LINK' || child.tagName === 'NOSCRIPT') continue;
+        if (unitOccupiesSpace(child, paintedOpts)) return true;
+    }
+    const cs = getComputedStyle(el);
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
+    if ((el.textContent || '').trim().length > 8) return true;
+    return false;
+}
+
+/** Reclaim leftover in-flow/fixed boxes without display:none or left/top/transform. */
+function syncIdleAdNodes() {
+    const hideActive = isOurAdHideActive();
+    cleverOverlayNodes().forEach((el) => {
+        if (hideActive || unitOccupiesSpace(el)) {
+            el.removeAttribute('data-nt-ad-idle');
+            return;
+        }
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none') {
+            el.removeAttribute('data-nt-ad-idle');
+            return;
+        }
+        el.setAttribute('data-nt-ad-idle', '1');
+    });
+}
+
 function ntShell() {
     return document.getElementById('nt-shell');
 }
@@ -149,6 +252,7 @@ function lockShellMotion(ms = AD_SHELL_EASE_MS + 80) {
         adEntering = false;
         document.documentElement.classList.remove('nt-ads-entering');
         shellMotionUnlockTimer = 0;
+        requestAdShellSync();
     }, ms);
 }
 
@@ -239,6 +343,7 @@ function beginOverlayEntrance(toH) {
                 shellMotionUnlockTimer = 0;
             }
             shell.removeEventListener('transitionend', onEnd);
+            requestAdShellSync();
         };
         const onEnd = (e) => {
             if (e.target !== shell) return;
@@ -266,14 +371,15 @@ function animateOverlayTo(toH) {
 }
 
 /** Out-of-flow (fixed/absolute) vs in-flow (static/relative/sticky occupying space). */
-function measureAdLayout() {
+function measureAdLayout(paintedOpts = {}) {
     let overlayH = 0;
     let inFlowH = 0;
     cleverOverlayNodes().forEach((el) => {
-        const r = el.getBoundingClientRect();
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return;
-        if (r.height <= 20 || r.width <= 20) return;
+        if (el.getAttribute('data-nt-ad-idle') === '1') return;
+        if (!unitOccupiesSpace(el, paintedOpts)) return;
+        const r = el.getBoundingClientRect();
         if (cs.position === 'fixed' || cs.position === 'absolute') {
             overlayH = Math.max(overlayH, r.height);
         } else {
@@ -291,6 +397,7 @@ function syncAdShellMotion() {
         document.documentElement.classList.remove('nt-ads-entering');
         adEntering = false;
         shellMotionLock = false;
+        cleverOverlayNodes().forEach((el) => el.removeAttribute('data-nt-ad-idle'));
         setShellVar('--nt-ad-shift', 0, false);
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
@@ -308,10 +415,23 @@ function syncAdShellMotion() {
         return;
     }
 
+    const instant = consumeResumeInstant() || prefersReducedMotion();
+
+    syncIdleAdNodes();
+
     if (!filled) userSawEmptyBoard = true;
 
-    const animate = !prefersReducedMotion() && userSawEmptyBoard;
+    const animate = !instant && userSawEmptyBoard;
     const targetShift = inFlowH > 0 ? 0 : overlayH;
+
+    if (!filled) {
+        if (animate && prevOverlayH > 20) animateOverlayTo(0);
+        else setShellVar('--nt-ad-shift', 0, animate);
+        setShellVar('--nt-ad-flip', 0, false);
+        prevOverlayH = 0;
+        prevInFlowH = 0;
+        return;
+    }
 
     const overlayGrew = overlayH > 20 && prevOverlayH < 8 && inFlowH === 0;
     const overlayShrunk = prevOverlayH > 20 && overlayH < 8 && inFlowH === 0;
@@ -397,7 +517,7 @@ function uncloak() {
 
 function isAdFilled() {
     if (adEntering) return true;
-    const { overlayH, inFlowH } = measureAdLayout();
+    const { overlayH, inFlowH } = measureAdLayout({ ignoreOurHide: true });
     return overlayH > 0 || inFlowH > 0;
 }
 
@@ -508,6 +628,11 @@ export function initCleverAds() {
     if (shellMotionUnlockTimer) {
         clearTimeout(shellMotionUnlockTimer);
         shellMotionUnlockTimer = 0;
+    }
+    adResumeInstant = false;
+    if (adResumePassTimer) {
+        clearTimeout(adResumePassTimer);
+        adResumePassTimer = 0;
     }
     document.documentElement.classList.remove('nt-ads-entering');
 
@@ -667,9 +792,32 @@ export function initCleverAds() {
     };
     setTimeout(waitForStabilize, 1500);
 
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState !== 'visible') return;
+    const onAppResume = (e) => {
+        const initialPageshow = !!(e && e.type === 'pageshow' && !e.persisted);
+        if (initialPageshow) {
+            refreshAdVisibility(adContainer);
+            if (!scheduleStarted) startInjectSchedule();
+            return;
+        }
+        markResumeInstant();
         refreshAdVisibility(adContainer);
         if (!scheduleStarted) startInjectSchedule();
+        if (adResumePassTimer) clearTimeout(adResumePassTimer);
+        adResumePassTimer = setTimeout(() => {
+            markResumeInstant();
+            refreshAdVisibility(adContainer);
+            adResumePassTimer = setTimeout(() => {
+                markResumeInstant();
+                refreshAdVisibility(adContainer);
+                adResumePassTimer = 0;
+            }, 750);
+        }, 250);
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        onAppResume();
     });
+    window.addEventListener('pageshow', onAppResume);
+    document.addEventListener('resume', onAppResume);
 }

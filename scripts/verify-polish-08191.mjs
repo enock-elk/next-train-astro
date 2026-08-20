@@ -1,34 +1,27 @@
 /**
- * V8_08.19.6 polish: merged What’s New, version lock, keep 18.2/18.3 regressions.
+ * V8_08.20.1 polish: version lock, keep 19.6 history, overlay / ads regressions.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
 import { APP_VERSION, CHANGELOG_DATA } from '../src/lib/config.js';
 import { formatAppDate } from '../src/lib/utils.js';
 import { encodeFeedbackAlertQuote, parseFeedbackAlertQuote } from '../src/lib/feedback-quote.js';
+import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/inbox-replies.js';
 
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.19.6') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.20.1') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.19.6') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
-if (!Array.isArray(latest?.features) || latest.features.length < 4) {
-    fail(`What's New must fold the 18/17 commuter cards, got ${latest?.features?.length}`);
+if (latest?.id !== 'V8_08.20.1') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (!Array.isArray(latest?.features) || latest.features.length < 3) {
+    fail(`What's New must have commuter bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/ads/i.test(wn)) fail(`What's New must mention ads: ${wn}`);
-if (!/ease/i.test(wn)) fail(`What's New ads bullet must mention ease in/out: ${wn}`);
-if (!/map/i.test(wn) || !/feedback/i.test(wn)) {
-    fail(`What's New must mention restored menus (feedback + map): ${wn}`);
-}
-if (!/back where you were/i.test(wn)) fail(`What's New must mention overlay return: ${wn}`);
-if (!/shared links/i.test(wn)) fail(`What's New must mention shared links: ${wn}`);
-if (!/hold a photo/i.test(wn)) fail(`What's New must mention photo hold-to-react: ${wn}`);
-if (!/route timetable/i.test(wn) || !/grid/i.test(wn)) {
-    fail(`What's New bullet must mention route timetable grids: ${wn}`);
-}
-if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity/i.test(wn)) {
+if (!/offline/i.test(wn)) fail(`What's New must mention offline: ${wn}`);
+if (!/back/i.test(wn)) fail(`What's New must mention Back: ${wn}`);
+if (!/verdana/i.test(wn) || !/times/i.test(wn)) fail(`What's New must mention Verdana/Times: ${wn}`);
+if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|3 days|viewed/i.test(wn)) {
     fail('Whats New must stay commuter-only');
 }
 
@@ -36,12 +29,13 @@ const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
+if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.19.6') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.20.1') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.19.6') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.20.1') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -165,9 +159,53 @@ const alerts = readFileSync('src/lib/alerts-channel.js', 'utf8');
 if (!alerts.includes('formatAppDate')) fail('alerts-channel must use formatAppDate');
 if (alerts.includes('toLocaleDateString()')) fail('alerts-channel still uses slash dates');
 
+if (!admin.includes('applyWysiwygFont')) fail('composer must apply font face + class, not only execCommand');
+if (!admin.includes('limitToLast=')) fail('planner telemetry must window the RTDB fetch');
+if (!admin.includes('expandTripCorridorHits')) fail('planner telemetry must lazy-load hit history');
+if (!admin.includes('_deTripPageSize')) fail('planner telemetry must paginate corridor cards');
+if (admin.includes('hitsHtml')) fail('planner telemetry must not dump every hit into card HTML');
+
+const rich = readFileSync('src/lib/rich-text.js', 'utf8');
+if (!rich.includes('nt-font-verdana') || !rich.includes('nt-font-times')) {
+    fail('rich-text CSS must include nt-font-verdana / nt-font-times');
+}
+
+const astro = readFileSync('astro.config.mjs', 'utf8');
+if (!astro.includes("navigateFallback: 'index.html'")) fail('SW must fall back to the cached index.html shell');
+if (/urlPattern: \(\{ request \}\) => request\.mode === 'navigate'/.test(astro)) {
+    fail('do not intercept navigations with a runtime pages cache (captive wifi hang)');
+}
+
+const now = 1_700_000_000_000;
+if (!inboxReplyStillVisible({ message: 'hi', timestamp: 1 }, now)) fail('unopened admin reply must stay visible');
+if (inboxReplyStillVisible({ read: true, message: 'hi', timestamp: 1 }, now)) fail('acknowledged reply must hide');
+if (!inboxReplyStillVisible({ viewedAt: now - 1000, message: 'hi', timestamp: 1 }, now)) {
+    fail('just-opened reply must stay visible');
+}
+if (inboxReplyStillVisible({ viewedAt: now - ADMIN_REPLY_HIDE_AFTER_MS, message: 'hi', timestamp: 1 }, now)) {
+    fail('reply viewed 3 days ago must hide');
+}
+if (!hub.includes('inboxReplyStillVisible')) fail('checkServiceAlerts must filter inbox with inboxReplyStillVisible');
+if (!hub.includes('viewedAt')) fail('opening Read must stamp viewedAt');
+if (!hub.includes("closeSmoothModal('developer-reply-modal', true)")) {
+    fail('hub popstate must close inbox with fromPopState');
+}
+
+if (!ui.includes('__ntModalPopLockUntil')) fail('on-screen Close must arm a modal pop lock');
+const popFn = ui.slice(ui.indexOf('export function bindHistoryBackNavigation'), ui.indexOf('// --- CINEMATIC SCRIM ENGINE'));
+if (/if \(window\._isModalAnimating\)/.test(popFn)) {
+    fail('popstate must not swallow native Back while a modal is animating');
+}
+
+const logic = readFileSync('src/lib/logic.js', 'utf8');
+const loadFn = logic.slice(logic.indexOf('export async function loadAllSchedules'), logic.indexOf('BACKGROUND NETWORK SYNC'));
+if (loadFn.includes('await regionCheckPromise')) {
+    fail('loadAllSchedules must not wait on IP region guess before IndexedDB paint');
+}
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.19.6 polish (merged What’s New, version, overlay containing-block)');
+console.log('✓ V8_08.20.1 polish (offline shell, Back, fonts, telemetry display)');

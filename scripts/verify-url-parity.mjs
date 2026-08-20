@@ -233,9 +233,14 @@ if (!existsSync(swPath)) {
       fail('sw.js must not precache private status.html');
     }
   }
-  // Navigate precacheFallback is the self-contained lifeboat (public/help.html)
+  // help.html stays precached as the stuck-boot page (checked in the page loop).
+  // App navigations must bind to the cached index.html shell — not wait on the
+  // network when the empty `pages` runtime cache misses (captive wifi / iOS PWA).
   if (!sw.includes('help.html')) {
-    fail('sw.js must reference help.html as navigate fallback / lifeboat');
+    fail('sw.js must keep help.html in the precache as the stuck-boot lifeboat');
+  }
+  if (!/createHandlerBoundToURL|NavigationRoute/.test(sw)) {
+    fail('sw.js must register a navigation fallback to the cached app shell');
   }
   if (/\{url:\\?"js\/admin\.js\\?"/.test(sw) || sw.includes('url:"js/admin.js"') || sw.includes('url:"/js/admin.js"')) {
     fail('sw.js must not precache js/admin.js — admin is lazy-loaded on unlock only');

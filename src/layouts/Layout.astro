@@ -623,6 +623,19 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         visibility: hidden !important;
         pointer-events: none !important;
       }
+      /* Empty leftover wrappers (creative gone, box still in the tree).
+         Do not use display:none (Clever measures from layout). Do not touch left/top/transform. */
+      [data-nt-ad-idle="1"] {
+        max-height: 0 !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
     </style>
     <!--
       CleverAds vendor tag (Pedro: last thing in <head>).

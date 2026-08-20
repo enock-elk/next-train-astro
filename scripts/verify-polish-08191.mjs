@@ -1,5 +1,5 @@
 /**
- * V8_08.19.6 polish: merged What’s New, version lock, keep 18.2/18.3 regressions.
+ * V8_08.19.7 polish: merged What’s New, version lock, keep 18.2/18.3 regressions.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -10,15 +10,18 @@ import { encodeFeedbackAlertQuote, parseFeedbackAlertQuote } from '../src/lib/fe
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.19.6') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.19.7') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.19.6') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.19.7') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 4) {
     fail(`What's New must fold the 18/17 commuter cards, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
 if (!/ads/i.test(wn)) fail(`What's New must mention ads: ${wn}`);
 if (!/ease/i.test(wn)) fail(`What's New ads bullet must mention ease in/out: ${wn}`);
+if (!/blank strip|come back|leftover/i.test(wn)) {
+    fail(`What's New ads bullet must mention no leftover gap on return: ${wn}`);
+}
 if (!/map/i.test(wn) || !/feedback/i.test(wn)) {
     fail(`What's New must mention restored menus (feedback + map): ${wn}`);
 }
@@ -33,15 +36,15 @@ if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity/i.tes
 }
 
 const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
-for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
-    if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
+for (const id of ['V8_08.19.6', 'V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.19.7, not kept as its own card`);
 }
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.19.6') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.19.7') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.19.6') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.19.7') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -170,4 +173,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.19.6 polish (merged What’s New, version, overlay containing-block)');
+console.log('✓ V8_08.19.7 polish (merged What’s New, version, leftover ad gap)');

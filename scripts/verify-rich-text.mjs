@@ -2,7 +2,7 @@
  * Node checks for alert rich-text: contact autolink tokens and style/href guards.
  * Run: node scripts/verify-rich-text.mjs
  */
-import { splitContactTokens, isSafeHref, sanitizeStyleAttr, sanitizeRichHtml } from '../src/lib/rich-text.js';
+import { splitContactTokens, isSafeHref, sanitizeStyleAttr, sanitizeRichHtml, RICH_TEXT_CSS } from '../src/lib/rich-text.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -57,6 +57,17 @@ assert(!isSafeHref('data:text/html,x'), 'data href blocked');
     assert(/face="Verdana"/i.test(kept), `FONT face kept: ${kept}`);
     assert(/<u>/i.test(kept), `underline kept: ${kept}`);
 }
+
+{
+    const verdana = sanitizeRichHtml('<font class="nt-font-verdana" face="Verdana">Hello</font>');
+    assert(/nt-font-verdana/.test(verdana), `Verdana class kept: ${verdana}`);
+    const times = sanitizeRichHtml('<font face="Times New Roman" class="nt-font-times">Hello</font>');
+    assert(/nt-font-times/.test(times) && /Times New Roman/.test(times), `Times face+class kept: ${times}`);
+}
+
+assert(/nt-font-verdana/.test(RICH_TEXT_CSS), 'RICH_TEXT_CSS includes nt-font-verdana');
+assert(/nt-font-times/.test(RICH_TEXT_CSS), 'RICH_TEXT_CSS includes nt-font-times');
+assert(/Times New Roman/.test(RICH_TEXT_CSS), 'RICH_TEXT_CSS includes Times New Roman family');
 
 {
     const list = sanitizeRichHtml('<ul><li>Cancelled 0618</li><li>Cancelled 0619</li></ul>');

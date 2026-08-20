@@ -148,9 +148,12 @@ export function bindAppUpdateLifecycle(registerSW) {
             console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
             if (!registration) return;
             const checkForWaitingSw = () => {
-                if (typeof navigator !== 'undefined' && navigator.onLine) {
-                    registration.update().catch(() => {});
-                }
+                if (typeof navigator === 'undefined' || !navigator.onLine) return;
+                const update = registration.update();
+                const timeout = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('sw_update_timeout')), 4000);
+                });
+                Promise.race([update, timeout]).catch(() => {});
             };
             setInterval(checkForWaitingSw, 60 * 60 * 1000);
             document.addEventListener('visibilitychange', () => {

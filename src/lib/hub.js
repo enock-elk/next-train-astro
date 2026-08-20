@@ -13,6 +13,7 @@ import {
 import { safeStorage, escapeHTML, repairMojibake, formatAppDate } from './utils.js';
 import { encodeFeedbackAlertQuote } from './feedback-quote.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
+import { inboxReplyStillVisible } from './inbox-replies.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
 } from './ui.js';
@@ -950,7 +951,7 @@ export async function checkServiceAlerts() {
                     if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
-                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxData[k] && !inboxData[k].read);
+                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k]));
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
@@ -987,6 +988,15 @@ export async function checkServiceAlerts() {
 
                     const replyContent = document.getElementById('developer-reply-content');
                     const markReadBtn = document.getElementById('mark-reply-read-btn');
+
+                    if (!adminReply.viewedAt) {
+                        const viewedAt = Date.now();
+                        adminReply.viewedAt = viewedAt;
+                        fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}/${adminReply._key}.json`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ viewedAt }),
+                        }).catch(() => {});
+                    }
 
                     if (replyContent) {
                         const replyModalCard = document.querySelector('#developer-reply-modal > div');
@@ -1174,18 +1184,21 @@ export function initHub() {
             const hash = location.hash;
             const replyModal = document.getElementById('developer-reply-modal');
             const noticeModal = document.getElementById('notice-modal');
+            if (typeof window.__ntModalPopLockUntil === 'number' && Date.now() < window.__ntModalPopLockUntil) {
+                return;
+            }
             if (replyModal && !replyModal.classList.contains('hidden') && hash !== '#devreply') {
-                closeSmoothModal('developer-reply-modal');
+                closeSmoothModal('developer-reply-modal', true);
             }
             // Keep notice open while lightbox (#lightbox) or legacy #map preview is on top
             if (noticeModal && !noticeModal.classList.contains('hidden')
                 && hash !== '#notice' && hash !== '#lightbox' && hash !== '#map') {
-                closeSmoothModal('notice-modal');
+                closeSmoothModal('notice-modal', true);
             }
             const alertsEl = document.getElementById('alerts-channel');
             if (alertsEl && !alertsEl.classList.contains('hidden')
                 && hash !== '#alerts' && hash !== '#lightbox' && hash !== '#map' && hash !== '#feedback') {
-                closeSmoothModal('alerts-channel');
+                closeSmoothModal('alerts-channel', true);
             }
         });
     }

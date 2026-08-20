@@ -3,7 +3,7 @@
  * ---------------------------------------------------
  * This file defines the explicit column order for the Full Schedule Grid.
  * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-16 Aug.xlsx, NextTrain KZN-Schedules - 12 May.xlsx, NextTrain WC-Schedules - 03 July.xlsx
- * Date: 2026-08-17
+ * Date: 2026-08-20
  */
 
 export const MANUAL_GRID_ORDER = {
@@ -508,8 +508,7 @@ export const MANUAL_GRID_ORDER = {
         "7620",
         "7632",
         "7622",
-        "7626",
-        "7628"
+        "7626"
     ],
     "germ_to_kwesi_sat": [
         "7603",

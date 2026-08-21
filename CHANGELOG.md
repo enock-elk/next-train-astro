@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.21.1 — Drop leftover top-ad gap on return (21 Aug 2026)
+
+- Port of the #27 occupancy fix onto current `main` (after #28). Do not merge conflicted #27 as-is — it still pins `V8_08.19.7`.
+- Measure whether a Clever unit actually occupies space (live iframe / media), not the leftover wrapper box. `visibility: hidden` does not keep `--nt-ad-shift`.
+- Empty leftovers get `data-nt-ad-idle` and collapse with max-height 0 (not `display:none`, not vendor `left`/`top`/`transform`).
+- Re-measure on `visibilitychange`, `pageshow`, and Capacitor `resume` so a vanished sticky unit drops the gap without a second ease.
+
 ## V8_08.20.1 — Offline shell, Back, fonts, telemetry display (20 Aug 2026)
 
 - Planner telemetry **display** only: fetch `limitToLast=400` batches, paginate corridor cards, lazy-load hit history. Collection and `sys_logs/trip_plans` storage are unchanged.

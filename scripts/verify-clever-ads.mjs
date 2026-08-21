@@ -64,7 +64,18 @@ if (!ads.includes('const targetShift = inFlowH > 0 ? 0 : overlayH')) {
   fail('in-flow ads must not double-push with a lasting overlay shift');
 }
 if (!ads.includes('playInFlowFlip(-inFlowDelta)')) fail('in-flow fill/dismiss must invert with FLIP');
-if (!ads.includes('ResizeObserver')) fail('must watch overlay size so dismiss eases the board back');
+if (!ads.includes('unitOccupiesSpace')) fail('must ignore empty leftover wrappers, not just box height');
+if (!ads.includes('visibility === \'hidden\'')) fail('shift measure must skip vendor visibility:hidden');
+if (!ads.includes('ignoreOurHide')) fail('inject filled-check must ignore our cloak visibility');
+if (!ads.includes('data-nt-ad-idle')) fail('empty leftovers must be reclaimed via data-nt-ad-idle');
+if (!layout.includes('[data-nt-ad-idle="1"]')) fail('Layout must collapse idle leftover ad boxes');
+if (layout.includes('[data-nt-ad-idle="1"]') && /\[data-nt-ad-idle="1"\][\s\S]{0,400}display:\s*none/.test(layout)) {
+  fail('do not reclaim leftover ads with display:none');
+}
+if (!ads.includes('markResumeInstant')) fail('resume must collapse leftover gap without a second ease');
+if (!ads.includes("addEventListener('pageshow'")) fail('must remeasure ads on pageshow (bfcache)');
+if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app becomes visible');
+if (!ads.includes('iframeLooksAlive')) fail('discarded/blank iframes must not keep a top gap');
 if (ads.includes('setAdPadding(true)')) fail('must not reserve an empty ad gap via padding');
 if (!layout.includes('transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)))')) {
   fail('Layout must ease #main-content only (shift + flip)');
@@ -86,6 +97,21 @@ if (ads.includes("setProperty('display', 'none'")) {
 }
 
 {
+  const leftoverOccupies = ({ painted, iframeAlive, childOccupies, bgImage, text }) => {
+    if (!painted) return false;
+    if (iframeAlive || childOccupies) return true;
+    if (bgImage) return true;
+    if (String(text || '').trim().length > 8) return true;
+    return false;
+  };
+  if (leftoverOccupies({ painted: true, iframeAlive: false, childOccupies: false, bgImage: false, text: '' })) {
+    fail('empty leftover wrapper must not occupy space');
+  }
+  if (leftoverOccupies({ painted: false, iframeAlive: true })) {
+    fail('hidden/discarded box must not occupy space');
+  }
+  if (!leftoverOccupies({ painted: true, iframeAlive: true })) fail('live iframe must occupy space');
+
   const targetShift = (overlayH, inFlowH) => (inFlowH > 0 ? 0 : overlayH);
   const flipInvert = (delta) => -delta;
   if (targetShift(96, 0) !== 96) fail('fixed overlay must shift the shell by H');

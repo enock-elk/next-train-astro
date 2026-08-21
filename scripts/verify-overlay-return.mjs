@@ -40,6 +40,14 @@ ok(
 );
 ok(ui.includes("hashNow === '#sidenav'"), 'popstate reopens the hub on #sidenav');
 ok(ui.includes("hashNow === '#alerts'"), 'popstate unhides the alerts feed on #alerts');
+ok(ui.includes('__ntModalPopLockUntil'), 'on-screen Close arms a pop lock for history.back()');
+{
+    const popFn = ui.slice(ui.indexOf('export function bindHistoryBackNavigation'), ui.indexOf('// --- CINEMATIC SCRIM ENGINE'));
+    ok(!/if \(window\._isModalAnimating\)/.test(popFn), 'popstate must not swallow native Back during modal animation');
+}
+ok(hub.includes("closeSmoothModal('developer-reply-modal', true)"), 'hub popstate closes inbox with fromPopState');
+ok(hub.includes("closeSmoothModal('notice-modal', true)"), 'hub popstate closes notice with fromPopState');
+ok(hub.includes("closeSmoothModal('alerts-channel', true)"), 'hub popstate closes alerts with fromPopState');
 
 if (failures.length) {
     console.error('verify-overlay-return FAILED:\n - ' + failures.join('\n - '));

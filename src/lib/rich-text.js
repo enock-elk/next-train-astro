@@ -21,15 +21,49 @@ export const RICH_TEXT_CSS = `
 font[size="5"], .nt-rich-body font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
 font[size="3"], .nt-rich-body font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
 font[size="2"], .nt-rich-body font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
-font[face="Verdana"], font[face="verdana"],
-.nt-rich-body font[face="Verdana"], .nt-rich-body font[face="verdana"] {
-  font-family: Verdana, Geneva, sans-serif !important;
+.nt-font-verdana,
+font.nt-font-verdana,
+span.nt-font-verdana,
+font[face="Verdana" i],
+font[face="verdana"],
+.nt-rich-body font[face="Verdana" i],
+#notice-content font[face="Verdana" i],
+#developer-reply-content font[face="Verdana" i],
+#alert-msg font[face="Verdana" i],
+#admin-reply-text font[face="Verdana" i],
+#disr-msg font[face="Verdana" i],
+#alerts-feed font[face="Verdana" i],
+.nt-rich-body span[style*="Verdana" i],
+#notice-content span[style*="Verdana" i],
+#alert-msg span[style*="Verdana" i],
+#alerts-feed span[style*="Verdana" i],
+#developer-reply-content span[style*="Verdana" i] {
+  font-family: Verdana, Geneva, Tahoma, sans-serif !important;
 }
-font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new roman"],
-.nt-rich-body font[face="Times New Roman"], .nt-rich-body font[face="times new roman"] {
-  font-family: "Times New Roman", Times, serif !important;
+.nt-font-times,
+font.nt-font-times,
+span.nt-font-times,
+font[face="Times New Roman" i],
+font[face="Times" i],
+font[face="times new roman"],
+.nt-rich-body font[face="Times New Roman" i],
+#notice-content font[face="Times New Roman" i],
+#developer-reply-content font[face="Times New Roman" i],
+#alert-msg font[face="Times New Roman" i],
+#admin-reply-text font[face="Times New Roman" i],
+#disr-msg font[face="Times New Roman" i],
+#alerts-feed font[face="Times New Roman" i],
+.nt-rich-body span[style*="Times" i],
+#notice-content span[style*="Times" i],
+#alert-msg span[style*="Times" i],
+#alerts-feed span[style*="Times" i],
+#developer-reply-content span[style*="Times" i] {
+  font-family: "Times New Roman", Times, Georgia, serif !important;
 }
-font[face="sans-serif"], .nt-rich-body font[face="sans-serif"] {
+.nt-font-default,
+font.nt-font-default,
+font[face="sans-serif" i],
+.nt-rich-body font[face="sans-serif"] {
   font-family: ui-sans-serif, system-ui, sans-serif !important;
 }
 .nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u, #disr-msg u, #disruption-modal-body u {
@@ -105,7 +139,7 @@ export function sanitizeStyleAttr(raw) {
         const val = part.slice(idx + 1).trim();
         if (!STYLE_ALLOW.has(prop) || !val) return;
         if (/url\s*\(|expression|javascript/i.test(val)) return;
-        if (prop === 'font-family' && !/verdana|times new roman|\btimes\b/i.test(val.replace(/['"]/g, ''))) return;
+        if (prop === 'font-family' && !/verdana|times new roman|\btimes\b|georgia|sans-serif|ui-sans-serif|system-ui/i.test(val.replace(/['"]/g, ''))) return;
         kept.push(`${prop}: ${val}`);
     });
     return kept.join('; ');

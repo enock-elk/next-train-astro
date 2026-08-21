@@ -82,6 +82,10 @@ ok(workerJs.includes("{ name: \"sessions\" }"), 'worker fetches sessions alongsi
 
 ok(adminJs.includes("Admin._deActiveTab = 'trips'"), 'planner telemetry defaults to trip plans');
 ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-trips"') < adminJs.indexOf('id="de-tab-fails"'), 'Trip Plans tab is listed before Fails');
+ok(adminJs.includes('limitToLast='), 'trip plans fetch is windowed with limitToLast');
+ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');
+ok(adminJs.includes('_deTripPageSize'), 'corridor list is paginated');
+ok(!adminJs.includes('hitsHtml'), 'do not dump every hit into corridor card HTML');
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
 ok(adminJs.includes('Unique users by last selected region'), 'regional modal says unique users, not a partition of TODAY');

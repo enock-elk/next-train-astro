@@ -4298,7 +4298,10 @@ const Admin = {
                                 <span id="de-filter-userid-display" class="truncate font-mono text-[11px]">All users</span>
                                 <svg id="de-filter-userid-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
-                            <ul id="de-filter-userid-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-48 custom-scrollbar text-left"></ul>
+                            <div id="de-filter-userid-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
+                                <input id="de-filter-userid-search" type="search" autocomplete="off" placeholder="Search user…" class="w-full h-9 px-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[11px] font-mono text-gray-900 dark:text-white outline-none">
+                                <ul id="de-filter-userid-options" class="flex flex-col overflow-y-auto max-h-40 custom-scrollbar"></ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4318,6 +4321,10 @@ const Admin = {
         Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
+        Admin._deTripPage = 0;
+        Admin._deTripPageSize = 40;
+        Admin._deHitPreviewCap = 25;
+        Admin._deUserListCap = 40;
 
         const syncDeFiltersVisibility = () => {
             const wrap = document.getElementById('de-trip-filters');
@@ -4373,6 +4380,7 @@ const Admin = {
             if (!el) return;
             const apply = () => {
                 Admin._deTripFilters[key] = (el.value || '').trim();
+                Admin._deTripPage = 0;
                 if (Admin._deActiveTab === 'trips') Admin.renderTripPlanBatches(listDiv, null, true);
             };
             el.addEventListener('change', apply);
@@ -4386,13 +4394,20 @@ const Admin = {
         const uidTrigger = document.getElementById('de-filter-userid-trigger');
         const uidList = document.getElementById('de-filter-userid-list');
         const uidChevron = document.getElementById('de-filter-userid-chevron');
+        const uidSearch = document.getElementById('de-filter-userid-search');
         if (uidTrigger && uidList && uidTrigger.dataset.bound !== '1') {
             uidTrigger.dataset.bound = '1';
             uidTrigger.addEventListener('click', (e) => {
                 e.stopPropagation();
                 uidList.classList.toggle('hidden');
                 uidChevron?.classList.toggle('rotate-180');
+                if (!uidList.classList.contains('hidden')) uidSearch?.focus();
             });
+            uidSearch?.addEventListener('input', () => {
+                Admin._deUserQuery = String(uidSearch.value || '').trim().toLowerCase();
+                Admin.paintTripUserOptions();
+            });
+            uidSearch?.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('click', (e) => {
                 const wrap = document.getElementById('de-filter-userid-container');
                 if (wrap && !wrap.contains(e.target)) {
@@ -4607,6 +4622,9 @@ const Admin = {
             return rows;
         };
 
+        Admin.tripCorridorKey = (entry) =>
+            `${entry.origin}|${entry.destination}|${entry.dayType || 'unknown'}|${entry.region || ''}`;
+
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
             const region = (f.region || '').toUpperCase();
@@ -4623,16 +4641,176 @@ const Admin = {
             });
         };
 
+        Admin.secureDeEscape = (str) => {
+            if (!str) return '';
+            if (typeof escapeHTML === 'function') return escapeHTML(str);
+            return String(str).replace(/[&<>"']/g, (m) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[m]));
+        };
+
+        Admin.paintTripUserOptions = () => {
+            const userSel = document.getElementById('de-filter-userid');
+            const uidOptions = document.getElementById('de-filter-userid-options');
+            const uidDisplay = document.getElementById('de-filter-userid-display');
+            const uidList = document.getElementById('de-filter-userid-list');
+            if (!userSel || !uidOptions) return;
+            const cap = Admin._deUserListCap || 40;
+            const q = String(Admin._deUserQuery || '').toLowerCase();
+            const prev = Admin._deTripFilters?.userId || userSel.value || '';
+            const users = Admin._deTripUserIds || [];
+            const matched = q ? users.filter((u) => u.toLowerCase().includes(q)) : users;
+            const shown = matched.slice(0, cap);
+            userSel.innerHTML = `<option value="">All users</option>` + shown.map((u) =>
+                `<option value="${String(u).replace(/"/g, '&quot;')}">${Admin.secureDeEscape(u)}</option>`
+            ).join('');
+            if (prev && users.includes(prev)) userSel.value = prev;
+            else if (prev && !users.includes(prev)) {
+                userSel.value = '';
+                Admin._deTripFilters.userId = '';
+            }
+            uidOptions.innerHTML = '';
+            const addLi = (value, label) => {
+                const li = document.createElement('li');
+                li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer font-mono';
+                li.textContent = label;
+                li.onclick = () => {
+                    userSel.value = value;
+                    if (uidDisplay) uidDisplay.textContent = label;
+                    uidList?.classList.add('hidden');
+                    document.getElementById('de-filter-userid-chevron')?.classList.remove('rotate-180');
+                    userSel.dispatchEvent(new Event('change'));
+                };
+                uidOptions.appendChild(li);
+            };
+            addLi('', 'All users');
+            shown.forEach((u) => addLi(u, u));
+            if (matched.length > shown.length) {
+                const more = document.createElement('li');
+                more.className = 'px-3 py-2 text-[10px] text-gray-400 italic';
+                more.textContent = `Showing ${shown.length} of ${matched.length} — type to narrow`;
+                uidOptions.appendChild(more);
+            }
+            if (uidDisplay) uidDisplay.textContent = userSel.value || 'All users';
+        };
+
+        Admin.expandTripCorridorHits = (panel, corridorKey) => {
+            if (!panel) return;
+            const cap = Admin._deHitPreviewCap || 25;
+            const hits = Admin.getFilteredTripPlanRows()
+                .filter((r) => Admin.tripCorridorKey(r) === corridorKey)
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const slice = hits.slice(0, cap);
+            const esc = Admin.secureDeEscape;
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
+                ${slice.map((h) => `
+                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="font-mono text-gray-500 truncate">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${esc(h.depTime || '-')}</span>
+                    </div>
+                `).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+            `;
+        };
+
+        Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+            const pageSize = Admin._deTripPageSize || 40;
+            const page = Math.max(0, Admin._deTripPage || 0);
+            const start = page * pageSize;
+            const slice = sorted.slice(start, start + pageSize);
+            const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
+            const esc = Admin.secureDeEscape;
+            const summary = document.createElement('div');
+            summary.className = 'text-[9px] text-gray-400 px-1 mb-1';
+            summary.textContent = `Window: ${meta.windowNote}. Showing ${meta.filteredCount} logged trips / ${sorted.length} corridors / ${meta.userBatchCount} user-batches. List ${start + 1}–${start + slice.length} (export uses current filters).`;
+            listDiv.appendChild(summary);
+
+            slice.forEach((item) => {
+                const dateStr = Admin.formatDate(item.lastSeen);
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
+                const corridorKey = Admin.tripCorridorKey({
+                    origin: item.origin,
+                    destination: item.dest,
+                    dayType: item.dayType,
+                    region: item.region,
+                });
+                const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                card.innerHTML = `
+                    <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-corridor-key="${esc(corridorKey)}" aria-expanded="false">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${esc(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${esc(item.dest)}</div>
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${esc(item.dayType || 'unknown')}</span>
+                                <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${esc(item.region || '-')}</span>
+                                <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${esc(item.depSample || '-')}</span>
+                            </div>
+                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}</div>
+                            <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
+                            <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
+                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                        </div>
+                    </button>
+                    <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
+                `;
+                card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
+                    const panel = card.querySelector('.de-trip-hits');
+                    const btn = card.querySelector('.de-trip-card-btn');
+                    if (!panel || !btn) return;
+                    const open = panel.classList.toggle('hidden') === false;
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    if (open && !panel.dataset.loaded) {
+                        panel.dataset.loaded = '1';
+                        Admin.expandTripCorridorHits(panel, corridorKey);
+                    }
+                });
+                listDiv.appendChild(card);
+            });
+
+            if (sorted.length > pageSize) {
+                const nav = document.createElement('div');
+                nav.className = 'flex items-center justify-between gap-2 pt-1';
+                const prevBtn = document.createElement('button');
+                prevBtn.type = 'button';
+                prevBtn.className = 'px-2 py-1 text-[10px] font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 disabled:opacity-40';
+                prevBtn.textContent = 'Newer';
+                prevBtn.disabled = page <= 0;
+                prevBtn.onclick = () => {
+                    Admin._deTripPage = Math.max(0, page - 1);
+                    Admin.renderTripPlanBatches(listDiv, null, true);
+                };
+                const nextBtn = document.createElement('button');
+                nextBtn.type = 'button';
+                nextBtn.className = 'px-2 py-1 text-[10px] font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 disabled:opacity-40';
+                nextBtn.textContent = 'Older';
+                nextBtn.disabled = start + slice.length >= sorted.length;
+                nextBtn.onclick = () => {
+                    Admin._deTripPage = page + 1;
+                    Admin.renderTripPlanBatches(listDiv, null, true);
+                };
+                nav.appendChild(prevBtn);
+                nav.appendChild(nextBtn);
+                listDiv.appendChild(nav);
+            }
+        };
+
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
             if (!useCacheOnly) {
-                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans...</div>';
+                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
+                Admin._deTripPage = 0;
             }
             try {
                 if (!useCacheOnly) {
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
+                    const windowSize = 400;
+                    const qs = `auth=${secret}&orderBy="$key"&limitToLast=${windowSize}`;
+                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?${qs}`, {}, 20000);
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     Admin._cachedTripPlans = await res.json();
+                    Admin._deTripWindowSize = windowSize;
                 }
                 const data = Admin._cachedTripPlans;
                 if (!data) {
@@ -4641,50 +4819,13 @@ const Admin = {
                 }
 
                 const allRows = Admin.flattenTripPlanRows();
-                // Populate premium user dropdown from full (unfiltered) set
-                const userSel = document.getElementById('de-filter-userid');
-                const uidList = document.getElementById('de-filter-userid-list');
-                const uidDisplay = document.getElementById('de-filter-userid-display');
-                if (userSel) {
-                    const prev = Admin._deTripFilters?.userId || userSel.value || '';
-                    const users = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
-                    userSel.innerHTML = `<option value="">All users</option>` + users.map((u) =>
-                        `<option value="${String(u).replace(/"/g, '&quot;')}">${String(u).replace(/</g, '&lt;')}</option>`
-                    ).join('');
-                    if (prev && users.includes(prev)) userSel.value = prev;
-                    else {
-                        userSel.value = '';
-                        Admin._deTripFilters.userId = '';
-                    }
-                    if (uidList) {
-                        const esc = (s) => String(s).replace(/</g, '&lt;');
-                        uidList.innerHTML = '';
-                        const addLi = (value, label) => {
-                            const li = document.createElement('li');
-                            li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer font-mono';
-                            li.textContent = label;
-                            li.onclick = () => {
-                                userSel.value = value;
-                                if (uidDisplay) uidDisplay.textContent = label;
-                                uidList.classList.add('hidden');
-                                document.getElementById('de-filter-userid-chevron')?.classList.remove('rotate-180');
-                                userSel.dispatchEvent(new Event('change'));
-                            };
-                            uidList.appendChild(li);
-                        };
-                        addLi('', 'All users');
-                        users.forEach((u) => addLi(u, esc(u)));
-                    }
-                    if (uidDisplay) {
-                        uidDisplay.textContent = userSel.value || 'All users';
-                    }
-                }
+                Admin._deTripUserIds = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
+                Admin.paintTripUserOptions();
 
                 const filtered = Admin.getFilteredTripPlanRows();
-                // Group by trip corridor - uniqueUsers = unique userId/batchId (same user, new batch counts again)
                 const heatMap = {};
                 filtered.forEach((entry) => {
-                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}`;
+                    const key = Admin.tripCorridorKey(entry);
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -4694,15 +4835,15 @@ const Admin = {
                             userId: entry.userId,
                             uniqueKeys: new Set(),
                             count: 0,
+                            hitCount: 0,
                             lastSeen: 0,
                             depSample: entry.depTime || null,
-                            hits: [],
                         };
                     }
                     const uniq = `${entry.userId || 'anon'}::${entry.batchId || entry.timestamp || 0}`;
                     heatMap[key].uniqueKeys.add(uniq);
                     heatMap[key].count = heatMap[key].uniqueKeys.size;
-                    heatMap[key].hits.push(entry);
+                    heatMap[key].hitCount += 1;
                     if (entry.timestamp > heatMap[key].lastSeen) {
                         heatMap[key].lastSeen = entry.timestamp;
                         heatMap[key].userId = entry.userId;
@@ -4713,8 +4854,7 @@ const Admin = {
                 const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
                 const sorted = Object.values(heatMap).map((item) => ({
                     ...item,
-                    hitCount: (item.hits || []).length,
-                    displayCount: countMode === 'hits' ? (item.hits || []).length : item.count,
+                    displayCount: countMode === 'hits' ? item.hitCount : item.count,
                 })).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
                     return b.displayCount - a.displayCount;
@@ -4727,69 +4867,11 @@ const Admin = {
                     return;
                 }
 
-                const secureEscape = (str) => {
-                    if (!str) return '';
-                    if (typeof escapeHTML === 'function') return escapeHTML(str);
-                    return String(str).replace(/[&<>"']/g, (m) => ({
-                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-                    }[m]));
-                };
-
-                listDiv.innerHTML = `
-                    <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} logged trips / ${sorted.length} unique corridors / ${userCount} unique user-batches (export uses current filters)
-                    </div>
-                `;
-
-                sorted.forEach((item, idx) => {
-                    const dateStr = Admin.formatDate(item.lastSeen);
-                    const card = document.createElement('div');
-                    card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
-                    const safeOrigin = secureEscape(item.origin);
-                    const safeDest = secureEscape(item.dest);
-                    const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const depLabel = secureEscape(item.depSample || '-');
-                    const regionLabel = secureEscape(item.region || '-');
-                    const uidLabel = secureEscape(item.userId || '-');
-                    const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
-                    const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                    const hitsHtml = hitsSorted.map((h) => `
-                        <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} / ${secureEscape((h.userId || '').slice(0, 14))}</span>
-                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
-                        </div>
-                    `).join('');
-                    card.innerHTML = `
-                        <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
-                            <div class="min-w-0 flex-1 pr-2">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
-                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
-                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                    <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
-                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
-                                </div>
-                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
-                                <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
-                            </div>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                        </button>
-                        <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
-                            ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
-                        </div>
-                    `;
-                    card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
-                        const panel = card.querySelector('.de-trip-hits');
-                        const btn = card.querySelector('.de-trip-card-btn');
-                        if (!panel || !btn) return;
-                        const open = panel.classList.toggle('hidden') === false;
-                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                    });
-                    listDiv.appendChild(card);
+                listDiv.innerHTML = '';
+                Admin.paintTripCorridorPage(listDiv, sorted, {
+                    filteredCount: filtered.length,
+                    userBatchCount: userCount,
+                    windowNote: `latest ${Admin._deTripWindowSize || 400} batches`,
                 });
             } catch (e) {
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load trip plans.</div>`;
@@ -7450,8 +7532,85 @@ const Admin = {
         Admin.formatAlertText(tag, editorId);
         const wrap = li?.closest?.('[data-nt-font-select]');
         const label = wrap?.querySelector('[data-nt-font-label]');
-        if (label) label.textContent = (li.textContent || 'Font').trim();
+        if (label) {
+            label.textContent = (li.textContent || 'Font').trim();
+            const fam = tag === 'fontVerdana'
+                ? 'Verdana, Geneva, Tahoma, sans-serif'
+                : tag === 'fontTimes'
+                    ? '"Times New Roman", Times, serif'
+                    : '';
+            if (fam) label.style.fontFamily = fam;
+            else label.style.fontFamily = '';
+        }
         wrap?.querySelector('ul')?.classList.add('hidden');
+    },
+
+    applyWysiwygFont: (editor, fontKey) => {
+        const map = {
+            fontDefault: { face: 'sans-serif', family: 'ui-sans-serif, system-ui, sans-serif', cls: 'nt-font-default' },
+            fontVerdana: { face: 'Verdana', family: 'Verdana, Geneva, Tahoma, sans-serif', cls: 'nt-font-verdana' },
+            fontTimes: { face: 'Times New Roman', family: '"Times New Roman", Times, Georgia, serif', cls: 'nt-font-times' },
+        };
+        const spec = map[fontKey] || map.fontDefault;
+        const paint = (el) => {
+            if (!el || el.nodeType !== 1) return;
+            el.setAttribute('face', spec.face);
+            el.style.setProperty('font-family', spec.family, 'important');
+            el.classList.remove('nt-font-default', 'nt-font-verdana', 'nt-font-times');
+            el.classList.add(spec.cls);
+        };
+        editor.focus();
+        if (Admin._savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(Admin._savedRange);
+            Admin._savedRange = null;
+        }
+        try { document.execCommand('styleWithCSS', false, false); } catch { /* ignore */ }
+        try { document.execCommand('fontName', false, spec.face); } catch { /* ignore */ }
+
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+
+        const wrapCollapsed = () => {
+            let node = sel.anchorNode;
+            if (node && node.nodeType === 3) node = node.parentElement;
+            let fontEl = node;
+            while (fontEl && fontEl !== editor && fontEl.tagName !== 'FONT') fontEl = fontEl.parentElement;
+            if (fontEl && fontEl !== editor) {
+                paint(fontEl);
+                return;
+            }
+            const font = document.createElement('font');
+            paint(font);
+            font.appendChild(document.createTextNode('\u200b'));
+            range.insertNode(font);
+            const caret = document.createRange();
+            caret.setStart(font.firstChild, 1);
+            caret.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(caret);
+        };
+
+        if (range.collapsed) {
+            wrapCollapsed();
+        } else {
+            try {
+                const font = document.createElement('font');
+                paint(font);
+                range.surroundContents(font);
+            } catch {
+                /* execCommand already wrapped; paint those faces next */
+            }
+        }
+        editor.querySelectorAll('font, span[style*="font-family"]').forEach((el) => {
+            const face = (el.getAttribute('face') || el.style.fontFamily || '').replace(/['"]/g, '');
+            if (new RegExp(spec.face.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(face)
+                || el.classList.contains(spec.cls)) {
+                paint(el);
+            }
+        });
     },
 
 // RICH TEXT FORMATTING HELPER ---
@@ -7467,9 +7626,20 @@ const Admin = {
                 font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
                 font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
-                font[face="Verdana"], font[face="verdana"] { font-family: Verdana, Geneva, sans-serif !important; }
-                font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times New Roman", Times, serif !important; }
-                font[face="sans-serif"] { font-family: ui-sans-serif, system-ui, sans-serif !important; }
+                .nt-font-verdana, font.nt-font-verdana, span.nt-font-verdana,
+                font[face="Verdana" i], #alert-msg font[face="Verdana" i],
+                #admin-reply-text font[face="Verdana" i], #disr-msg font[face="Verdana" i] {
+                    font-family: Verdana, Geneva, Tahoma, sans-serif !important;
+                }
+                .nt-font-times, font.nt-font-times, span.nt-font-times,
+                font[face="Times New Roman" i], font[face="Times" i],
+                #alert-msg font[face="Times New Roman" i],
+                #admin-reply-text font[face="Times New Roman" i], #disr-msg font[face="Times New Roman" i] {
+                    font-family: "Times New Roman", Times, Georgia, serif !important;
+                }
+                .nt-font-default, font.nt-font-default, font[face="sans-serif" i] {
+                    font-family: ui-sans-serif, system-ui, sans-serif !important;
+                }
                 #alert-msg, #admin-reply-text, #disr-msg { overflow-wrap: anywhere; word-break: break-word; }
             `;
             document.head.appendChild(style);
@@ -7505,12 +7675,8 @@ const Admin = {
                 }
             }
             document.execCommand('formatBlock', false, block);
-        } else if (tag === 'fontDefault') {
-            document.execCommand('fontName', false, 'sans-serif');
-        } else if (tag === 'fontVerdana') {
-            document.execCommand('fontName', false, 'Verdana');
-        } else if (tag === 'fontTimes') {
-            document.execCommand('fontName', false, 'Times New Roman');
+        } else if (tag === 'fontDefault' || tag === 'fontVerdana' || tag === 'fontTimes') {
+            Admin.applyWysiwygFont(editor, tag);
         } else if (tag === 'larger' || tag === 'smaller') {
             // GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.

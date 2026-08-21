@@ -70,6 +70,25 @@ export default defineConfig({
           'regions/**',
           'corridors/**',
         ],
+        // App shell: serve the precached index.html immediately when a navigation
+        // has no usable network (captive wifi, iOS home-screen PWA, Lie-Fi).
+        // A runtime StaleWhileRevalidate on `pages` used to wait forever on a
+        // cache miss — precache lives in a different bucket, so the document
+        // never arrived. Updates still come from a new SW + app-version.json.
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [
+          /^\/_/,
+          /\/og\//,
+          /help\.html/,
+          /offline\.html/,
+          /\/routes(\.html|\/)/,
+          /\/corridors\//,
+          /\/regions\//,
+          /guide\.html/,
+          /map\.html/,
+          /status\.html/,
+          /marketing\.html/,
+        ],
         // @vite-pwa/astro strips `.html` from page entries, but build.format is
         // 'file' so the emitted files — and every internal link and canonical URL —
         // keep the extension. Left alone, the precache caches `/guide` (never
@@ -89,25 +108,17 @@ export default defineConfig({
             return { manifest, warnings: [] };
           },
         ],
-        // Precached shell (index.html) is served instantly. Runtime navigations
-        // use StaleWhileRevalidate so repeat visits start from cache and refresh
-        // in the background. help.html is the offline lifeboat only.
+        // Precached shell is served by navigateFallback (index.html). Do not
+        // intercept navigations with StaleWhileRevalidate — that waits on the
+        // network when the empty `pages` runtime cache misses, which locks
+        // iOS home-screen users on captive wifi. help.html stays the dedicated
+        // stuck-boot page (linked from the overlay), not the app-shell fallback.
         runtimeCaching: [
           {
             // Worker owns /og/share (OG HTML for crawlers, 302 for humans).
             // Never cache the stub in the PWA or Facebook IAB gets a dead hop.
             urlPattern: ({ url }) => url.pathname === '/og/share' || url.pathname.endsWith('/og/share'),
             handler: 'NetworkOnly',
-          },
-          {
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'pages',
-              precacheFallback: {
-                fallbackURL: `${baseWithSlash}help.html`,
-              },
-            },
           },
           {
             // Content-hashed Astro chunks — safe to keep for a year (NUKE drops them).

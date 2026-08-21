@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.20.1 — Offline shell, Back, fonts, telemetry display (20 Aug 2026)
+
+- Planner telemetry **display** only: fetch `limitToLast=400` batches, paginate corridor cards, lazy-load hit history. Collection and `sys_logs/trip_plans` storage are unchanged.
+- Alert Verdana / Times: composer writes `<font face>` plus `nt-font-*` with `font-family !important`. Commuter CSS (alerts feed, notice modal, admin replies) actually applies those faces; Inter no longer swallows them as a tiny size change.
+- Admin inbox replies stay on the banner until Got it, or until 3 days after the commuter opens Read (`viewedAt`). No user-facing copy for this rule.
+- PWA: drop navigation `StaleWhileRevalidate` on the empty `pages` cache (that waited on captive wifi forever). `navigateFallback` is the precached `index.html`. IndexedDB schedules still paint before the network waterfall.
+- Native Back: stop swallowing `popstate` while `_isModalAnimating`. On-screen Close arms a short pop-lock so `history.back()` does not close the next overlay. Hub overlay listeners pass `fromPopState`.
+
 ## V8_08.19.6 — Stop ad ease from trapping commuter overlays (19 Aug 2026)
 
 - Root cause of distorted Feedback / About / Privacy / Map: `#nt-shell { transform }` from the CleverAds ease created a containing block for every `position: fixed` overlay inside the shell. Overlays grew to the page height, so Close Map sat below the fold, cards stuck to the top, and inner text could not scroll against `body.modal-active`.

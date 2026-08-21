@@ -1,5 +1,5 @@
 /**
- * V8_08.20.1 polish: version lock, keep 19.6 history, overlay / ads regressions.
+ * V8_08.21.1 polish: leftover ad gap on return, keep 20.1 history.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,31 +11,38 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.20.1') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.21.1') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.20.1') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
-if (!Array.isArray(latest?.features) || latest.features.length < 3) {
+if (latest?.id !== 'V8_08.21.1') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (!Array.isArray(latest?.features) || latest.features.length < 1) {
     fail(`What's New must have commuter bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/offline/i.test(wn)) fail(`What's New must mention offline: ${wn}`);
-if (!/back/i.test(wn)) fail(`What's New must mention Back: ${wn}`);
-if (!/verdana/i.test(wn) || !/times/i.test(wn)) fail(`What's New must mention Verdana/Times: ${wn}`);
-if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|3 days|viewed/i.test(wn)) {
+if (!/ads/i.test(wn) || !/blank strip|gap/i.test(wn)) {
+    fail(`What's New must mention leftover ad space: ${wn}`);
+}
+if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|clever/i.test(wn)) {
     fail('Whats New must stay commuter-only');
 }
+
+const card201 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.20.1');
+const wn201 = (card201?.features || []).join(' ');
+if (!/offline/i.test(wn201)) fail('V8_08.20.1 card must keep the offline bullet');
+if (!/back/i.test(wn201)) fail('V8_08.20.1 card must keep the Back bullet');
+if (!/verdana/i.test(wn201) || !/times/i.test(wn201)) fail('V8_08.20.1 card must keep Verdana/Times');
 
 const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
+if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
 if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.20.1') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.21.1') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.20.1') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.21.1') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -203,9 +210,16 @@ if (loadFn.includes('await regionCheckPromise')) {
     fail('loadAllSchedules must not wait on IP region guess before IndexedDB paint');
 }
 
+const ads = readFileSync('src/lib/clever-ads.js', 'utf8');
+if (!ads.includes('unitOccupiesSpace')) fail('clever-ads must measure occupancy, not leftover wrapper height');
+if (!ads.includes('data-nt-ad-idle')) fail('empty leftovers must be marked data-nt-ad-idle');
+if (!ads.includes('markResumeInstant')) fail('resume must collapse leftover gap without a second ease');
+if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app becomes visible');
+if (!layout.includes('[data-nt-ad-idle="1"]')) fail('Layout must collapse idle leftover ad boxes');
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.20.1 polish (offline shell, Back, fonts, telemetry display)');
+console.log('✓ V8_08.21.1 polish (leftover ad gap on return; 20.1 history kept)');

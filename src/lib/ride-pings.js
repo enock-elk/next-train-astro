@@ -18,7 +18,7 @@ import { $currentRouteId, $deviceId, $globalStationIndex } from '../store.js';
 import { $account } from './account.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
-import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, relaxLiveShareGuards } from './features.js';
 import {
     expectedPosition,
     isStationAheadOfGhost,
@@ -159,6 +159,7 @@ export function getCachedRidePings(routeId = $currentRouteId.get()) {
 function pingTracksTrain(p, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id || String(p?.trainId || '') !== id) return false;
+    if (relaxLiveShareGuards()) return true;
     const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
     const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
     if (lat == null || lng == null) return false;
@@ -291,6 +292,7 @@ export function liveTrackersByDirection(routeId = $currentRouteId.get(), opts = 
 
 /** Train id others should see — only on-path and moving. Waiting / far = commuter. */
 export function pingPublicTrainId(p) {
+    if (p?.trainId && relaxLiveShareGuards()) return String(p.trainId);
     return pingTracksTrain(p, p?.trainId) ? String(p.trainId) : null;
 }
 
@@ -528,6 +530,7 @@ export async function submitRideCheckIn({
         st = nearestStationOnRoute(coarseLat, coarseLng, routeId)?.stationName || '';
     }
     if (!routeId) return { ok: false, message: 'Pick a corridor first.' };
+    if (!st && relaxLiveShareGuards()) st = 'here';
     if (!st) return { ok: false, message: 'Pick a station or allow location.' };
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
 

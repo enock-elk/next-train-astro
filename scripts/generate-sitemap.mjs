@@ -10,6 +10,13 @@ import { listSeoRoutes, listSeoRegions, listSeoCorridors } from '../src/lib/seo-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://nexttrain.co.za';
 const today = new Date().toISOString().slice(0, 10);
+const labBuild = process.env.PUBLIC_LAB_MODE === 'true'
+  || String(process.env.PUBLIC_SITE_URL || '').includes('lab.nexttrain');
+
+if (labBuild) {
+  console.log('sitemap.xml: skipped (lab host is noindex and must not publish a sitemap)');
+  process.exit(0);
+}
 
 const core = [
   { loc: `${ORIGIN}/`, changefreq: 'daily', priority: '1.0' },

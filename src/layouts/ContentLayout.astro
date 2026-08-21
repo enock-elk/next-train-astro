@@ -44,6 +44,10 @@ const {
   robots = 'index, follow',
 } = Astro.props;
 
+const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
+  || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
+const robotsContent = labNoIndex ? 'noindex, nofollow' : robots;
+
 const pathForCanonical = canonicalPath === '/'
   ? base
   : withBase(canonicalPath);
@@ -59,7 +63,8 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <meta name="robots" content={robots} />
+    <meta name="robots" content={robotsContent} />
+    {labNoIndex && <meta name="nt-channel" content="lab" />}
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content={themeColor} />
 

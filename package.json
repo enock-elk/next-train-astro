@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
     "build": "astro check && astro build",
+    "postbuild": "node scripts/apply-lab-seo.mjs",
     "preview": "astro preview",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "verify:urls": "node scripts/verify-url-parity.mjs",

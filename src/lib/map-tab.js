@@ -2,7 +2,8 @@
  * Map tab — embed Leaflet /map + trip-tied location contribution.
  *
  * Presence = coarse GPS for ~10 minutes so others can see you (train optional).
- * Attaching a train still uses the 30s vet + closest-train confirm.
+ * Attaching a train still uses the 30s vet + closest-train confirm, except on
+ * lab where GPS / path guards are off for testing (`relaxLiveShareGuards`).
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
@@ -14,6 +15,7 @@ import {
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel } from './train-ghosts.js';
+import { relaxLiveShareGuards } from './features.js';
 
 /**
  * A train stays linkable for 30 minutes either side of its scheduled time —
@@ -428,7 +430,7 @@ export function listContributeCandidates(coords = lastCoords) {
         const dep = timeToSeconds(c.scheduledTime);
         if (dep == null || Number.isNaN(dep)) return;
         const drift = now - dep;
-        if (Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
+        if (!relaxLiveShareGuards() && Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
         const key = `${c.routeId}|${c.trainId}|${c.scheduledTime}|${c.station}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -439,7 +441,7 @@ export function listContributeCandidates(coords = lastCoords) {
             driftMin: Math.round(drift / 60),
             distanceKm,
             // Unknown distance stays linkable — we only block a clear mismatch.
-            plausible: distanceKm == null || distanceKm <= CONTRIBUTE_MATCH_KM,
+            plausible: relaxLiveShareGuards() || distanceKm == null || distanceKm <= CONTRIBUTE_MATCH_KM,
         });
     };
 
@@ -562,7 +564,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M, timetableWhereLabel,
         routeHasStationCoords, NO_COORDS_MESSAGE, trainGoingFullLabel: goingLabel,
     } = await import('./train-ghosts.js');
-    if (!routeHasStationCoords($currentRouteId.get())) {
+    if (!routeHasStationCoords($currentRouteId.get()) && !relaxLiveShareGuards()) {
         list.innerHTML = '';
         empty?.classList.remove('hidden');
         if (empty) empty.textContent = NO_COORDS_MESSAGE;
@@ -598,7 +600,9 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         pingMod = await import('./ride-pings.js');
     } catch { /* optional */ }
 
-    const ranked = scoreAllTrainsForFix(coords.lat, coords.lng);
+    const ranked = relaxLiveShareGuards() && !routeHasStationCoords($currentRouteId.get())
+        ? []
+        : scoreAllTrainsForFix(coords.lat, coords.lng);
     const board = listContributeCandidates(coords);
     const byId = new Map(board.map((c) => [String(c.trainId), c]));
     const rows = ranked.map((r) => {
@@ -608,7 +612,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             trainId: r.trainId,
             metres: r.metres,
             ghost: r.ghost,
-            plausible: r.metres <= TRAIN_TRACKER_MAX_M,
+            plausible: relaxLiveShareGuards() || r.metres <= TRAIN_TRACKER_MAX_M,
             scheduledTime: extra.scheduledTime || '',
             destination: extra.destination || '',
             station: extra.station || document.getElementById('station-select')?.value || '',
@@ -621,7 +625,8 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         rows.push({
             ...c,
             metres: c.distanceKm != null ? c.distanceKm * 1000 : Infinity,
-            plausible: !!c.plausible && (c.distanceKm == null || c.distanceKm * 1000 <= TRAIN_TRACKER_MAX_M),
+            plausible: relaxLiveShareGuards()
+                || (!!c.plausible && (c.distanceKm == null || c.distanceKm * 1000 <= TRAIN_TRACKER_MAX_M)),
         });
     });
     rows.sort((a, b) => (a.metres || Infinity) - (b.metres || Infinity));
@@ -1055,6 +1060,45 @@ export async function startOnTrainShare({
             source: 'waiting',
         });
         return { ...result, asPerson: true, waiting: true };
+    }
+
+    // Lab: claim the train immediately so testers can see each other without
+    // GPS path / speed / heading checks. Restore the vet below before main.
+    if (relaxLiveShareGuards()) {
+        let lat = lastCoords?.lat ?? null;
+        let lng = lastCoords?.lng ?? null;
+        let heading = null;
+        let speedMps = null;
+        try {
+            const pos = await getPosition();
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+            heading = typeof pos.coords.heading === 'number' ? pos.coords.heading : null;
+            speedMps = typeof pos.coords.speed === 'number' ? pos.coords.speed : null;
+            lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
+        } catch { /* still attach so the share is visible */ }
+        const st = station || document.getElementById('station-select')?.value || 'here';
+        const shared = await finishRideShare({
+            trainId: id,
+            station: st,
+            destination,
+            routeId,
+            lat,
+            lng,
+            heading,
+            speedMps,
+            source,
+        });
+        if (shared?.ok) {
+            scheduleTripWatch({
+                trainId: id,
+                station: st,
+                scheduledTime: scheduledTime || '',
+                routeId,
+                destination,
+            });
+        }
+        return shared;
     }
 
     setStatus('Checking your location…');
@@ -1509,7 +1553,7 @@ export function maybeOfferPlannerContribute() {
     }
 
     const from = stationCoords(c.station);
-    if (lastCoords && from) {
+    if (!relaxLiveShareGuards() && lastCoords && from) {
         const d = haversineM(lastCoords, { lat: from.lat, lng: from.lon ?? from.lng });
         if (d > 800) {
             banner?.remove();
@@ -1563,9 +1607,9 @@ async function sharePlannerTrip(c) {
     }
     lastCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     const from = stationCoords(c.station);
-    const nearStation = from
+    const nearStation = relaxLiveShareGuards() || (from
         ? haversineM(lastCoords, { lat: from.lat, lng: from.lon ?? from.lng }) <= 400
-        : false;
+        : false);
 
     if (nearStation) {
         const { switchTab } = await import('./ui.js');

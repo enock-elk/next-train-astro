@@ -29,7 +29,9 @@ const resolvedOgTitle = ogTitle || title;
 const resolvedOgDescription = ogDescription || description;
 const resolvedTwitterTitle = twitterTitle || resolvedOgTitle;
 const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
-const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
+const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true'
+  || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
+const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
 ---
 
 <!DOCTYPE html>
@@ -41,7 +43,8 @@ const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true';
     <!-- SEO & Identity — SEO entity = Metrorail Next Train; short name for iOS home screen -->
     <title>{title}</title>
     <meta name="description" content={description} />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content={robots} />
+    {labModeBoot && <meta name="nt-channel" content="lab" />}
     <meta name="application-name" content="Metrorail Next Train" />
     <meta name="apple-mobile-web-app-title" content="Next Train" />
     <link rel="canonical" href={canonical} />

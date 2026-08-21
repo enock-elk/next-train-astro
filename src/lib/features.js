@@ -69,6 +69,14 @@ export function isLabEnvironment() {
     return false;
 }
 
+/**
+ * Lab-only: skip GPS / path / speed checks so live share can be tested.
+ * Turn this back off (or delete the call sites) before merging to main.
+ */
+export function relaxLiveShareGuards() {
+    return isLabEnvironment();
+}
+
 function defaultsForEnv() {
     return isLabEnvironment() ? LAB_DEFAULTS : PROD_DEFAULTS;
 }
@@ -145,6 +153,9 @@ export async function fetchFeatures(force = false) {
  * @returns {boolean}
  */
 export function isFeatureEnabled(name, routeId = '') {
+    // Lab testers need ride sharing on every corridor, even if RTDB still
+    // has the production allow-list.
+    if (name === FEATURE_KEYS.RIDE_CHECKIN && isLabEnvironment()) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(name, bag?.[name]);
     if (!entry.enabled) return false;
@@ -165,4 +176,5 @@ if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
     window.isLabEnvironment = isLabEnvironment;
+    window.relaxLiveShareGuards = relaxLiveShareGuards;
 }

@@ -16,6 +16,12 @@ import { join, relative } from 'node:path';
 const DIST = process.argv[2] || 'dist';
 const ORIGIN = 'https://nexttrain.co.za';
 
+if (process.env.PUBLIC_LAB_MODE === 'true'
+  || String(process.env.PUBLIC_SITE_URL || '').includes('lab.nexttrain')) {
+  console.log('verify-url-parity: skipped on lab (noindex, no sitemap)');
+  process.exit(0);
+}
+
 /** Public indexable pages (must match public/sitemap.xml core set). */
 const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'routes.html'];
 /** Must exist but must never be indexed (private / system). */

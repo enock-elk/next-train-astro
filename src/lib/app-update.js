@@ -18,11 +18,10 @@ function hardReloadWithCacheBust(reason = 'force_update') {
 }
 
 /**
- * Incoming = version + optional force flag on the CDN (`app-version.json`).
+ * Incoming = version on the CDN (`app-version.json`), not the shell currently running.
  * SPA legacy parity: toast must name the build users are about to receive.
- * Owner default: `forceUpdate` stays true in app-version.json unless they flip it.
  */
-async function peekIncomingUpdate() {
+async function peekIncomingVersion() {
     try {
         const res = await fetch(withBase('app-version.json') + '?v=' + Date.now(), {
             cache: 'no-store',
@@ -30,24 +29,13 @@ async function peekIncomingUpdate() {
         });
         if (res.ok) {
             const data = await res.json();
-            const version = data?.version ? String(data.version).split(' - ')[0] : '';
-            return {
-                version: version || String(APP_VERSION || 'Latest').split(' - ')[0],
-                forceUpdate: data?.forceUpdate === true,
-            };
+            if (data && data.version) return String(data.version).split(' - ')[0];
         }
     } catch (e) {
         console.warn('🛡️ Guardian: Failed to peek at incoming update version.', e);
     }
     // Last resort only — prefer blank over lying that "incoming" equals this shell.
-    return {
-        version: String(APP_VERSION || 'Latest').split(' - ')[0],
-        forceUpdate: false,
-    };
-}
-
-async function peekIncomingVersion() {
-    return (await peekIncomingUpdate()).version;
+    return String(APP_VERSION || 'Latest').split(' - ')[0];
 }
 
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
@@ -136,10 +124,8 @@ export function bindAppUpdateLifecycle(registerSW) {
             // New SW is waiting (precached). Toast the incoming version, then
             // skipWaiting. Do not wipe caches. If it does not take over in 30s,
             // keep the cached shell — never hard-reload a half-downloaded build.
-            const incoming = await peekIncomingUpdate();
-            const incomingVersion = incoming.version;
-            window.__ntIncomingForceUpdate = incoming.forceUpdate === true || FORCE_UPDATE_REQUIRED;
-            console.log('GUARDIAN: Incoming update waiting →', incomingVersion, window.__ntIncomingForceUpdate ? '(force)' : '');
+            const incomingVersion = await peekIncomingVersion();
+            console.log('GUARDIAN: Incoming update waiting →', incomingVersion);
             showCrucialUpdateToast(incomingVersion);
 
             const token = Date.now();

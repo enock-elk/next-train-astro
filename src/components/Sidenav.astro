@@ -1,6 +1,6 @@
 ---
 /**
- * SPA-parity App Hub — flat right drawer (lab / thumb-friendly).
+ * SPA-parity App Hub — flat left drawer matching metrorail-app / spa-reference.
  * Sections: Preferences · Network Maps · Data & Sync · About & Updates
  */
 import { APP_VERSION } from '../lib/config.js';
@@ -9,10 +9,10 @@ const versionBadge = String(APP_VERSION);
 
 <div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-300"></div>
 
-<!-- APP HUB SIDENAV — slides in from the right -->
+<!-- APP HUB SIDENAV (Flat Native UI Edition — slides from left like live SPA) -->
 <div
   id="sidenav"
-  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-300"
+  class="fixed inset-y-0 left-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col h-full z-[100] -translate-x-full transition-transform duration-300"
   role="dialog"
   aria-label="App Hub"
   style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
@@ -23,20 +23,6 @@ const versionBadge = String(APP_VERSION);
     <div>
       <h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-5 mb-2 mt-4">Preferences</h3>
       <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
-
-        <button type="button" id="settings-account-btn" data-admin-authed-only hidden inert aria-hidden="true" class="hidden w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
-          <div class="flex items-center space-x-4 min-w-0">
-            <span id="settings-account-avatar" class="relative w-9 h-9 shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center overflow-hidden" data-signed-in="false">
-              <img id="settings-account-avatar-img" class="hidden w-full h-full object-cover" alt="" />
-              <span id="settings-account-avatar-ph" class="text-sm font-black text-blue-700 dark:text-blue-300 select-none">?</span>
-            </span>
-            <div class="text-left min-w-0">
-              <p id="settings-account-name" class="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">Account</p>
-              <p id="settings-account-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">Guest · Sign in optional</p>
-            </div>
-          </div>
-          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-        </button>
 
         <div class="relative" id="sidenav-region-wrapper">
           <button
@@ -80,117 +66,31 @@ const versionBadge = String(APP_VERSION);
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
 
-        <button type="button" id="settings-feedback-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+        <button type="button" id="settings-theme-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">
-            <span class="relative inline-flex">
-              <svg class="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-              <span id="sidenav-inbox-badge" class="hidden absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
-            </span>
+            <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             <div class="text-left">
-              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Messages &amp; Feedback</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="sidenav-inbox-sub">Contact the team</p>
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Dark Mode</p>
             </div>
           </div>
-          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+            <input type="checkbox" id="settings-theme-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+            <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+          </div>
         </button>
 
-      </div>
-    </div>
-
-    <!-- THEME & PREFERENCES (accordion) — colour packs + dark / haptic / notify -->
-    <div class="pt-5">
-      <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
-        <button
-          type="button"
-          id="prefs-accordion-toggle"
-          class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group"
-          aria-expanded="false"
-          aria-controls="prefs-accordion-panel"
-        >
+        <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">
-            <svg class="w-5 h-5 text-violet-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+            <svg class="w-5 h-5 text-pink-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
             <div class="text-left">
-              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Theme &amp; Preferences</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="prefs-accordion-sub">Classic · Light</p>
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Vibrations</p>
             </div>
           </div>
-          <svg id="prefs-accordion-chevron" class="w-4 h-4 text-gray-300 dark:text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+            <input type="checkbox" id="settings-haptics-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+            <label for="settings-haptics-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+          </div>
         </button>
-
-        <div id="prefs-accordion-panel" class="hidden flex-col border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30">
-
-          <div class="py-3 px-4 border-b border-gray-100 dark:border-gray-800">
-            <p class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Colour Pack · <span id="settings-colour-pack-display" class="normal-case tracking-normal">Classic</span></p>
-            <div id="colour-pack-picker" class="grid grid-cols-3 gap-2 relative z-10" role="group" aria-label="Colour pack">
-              <button type="button" data-colour-pack-option="classic" class="colour-pack-option cursor-pointer" aria-pressed="true" style="--pack-accent:#2563eb">
-                <span class="colour-pack-swatch" style="--swatch-a:#eff6ff;--swatch-b:#2563eb;--swatch-c:#1e40af"></span>
-                <span class="pack-label">Classic</span>
-              </button>
-              <button type="button" data-colour-pack-option="earthy" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#6B705C">
-                <span class="colour-pack-swatch" style="--swatch-a:#FAF8F3;--swatch-b:#6B705C;--swatch-c:#A58E74"></span>
-                <span class="pack-label">Earthy</span>
-              </button>
-              <button type="button" data-colour-pack-option="ember" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#d97706">
-                <span class="colour-pack-swatch" style="--swatch-a:#fffbeb;--swatch-b:#d97706;--swatch-c:#92400e"></span>
-                <span class="pack-label">Ember</span>
-              </button>
-              <button type="button" data-colour-pack-option="midnight" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#0284c7">
-                <span class="colour-pack-swatch" style="--swatch-a:#f0f9ff;--swatch-b:#0284c7;--swatch-c:#0c4a6e"></span>
-                <span class="pack-label">Midnight</span>
-              </button>
-              <button type="button" data-colour-pack-option="contrast" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#1d4ed8">
-                <span class="colour-pack-swatch" style="--swatch-a:#eff6ff;--swatch-b:#1d4ed8;--swatch-c:#0a0a0a"></span>
-                <span class="pack-label">Contrast</span>
-              </button>
-              <button type="button" data-colour-pack-option="signal" class="colour-pack-option cursor-pointer" aria-pressed="false" style="--pack-accent:#059669">
-                <span class="colour-pack-swatch" style="--swatch-a:#ecfdf5;--swatch-b:#059669;--swatch-c:#064e3b"></span>
-                <span class="pack-label">Signal</span>
-              </button>
-            </div>
-            <p class="mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">Earthy is cream paper, muted sage, and terracotta. Packs tint chrome and CTAs; alerts keep their colours.</p>
-          </div>
-
-          <button type="button" id="settings-theme-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
-            <div class="flex items-center space-x-4">
-              <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-              <div class="text-left">
-                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Dark Mode</p>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light / dark</p>
-              </div>
-            </div>
-            <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-              <input type="checkbox" id="settings-theme-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-              <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-            </div>
-          </button>
-
-          <button type="button" id="settings-notify-toggle" data-admin-authed-only hidden inert aria-hidden="true" class="hidden w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
-            <div class="flex items-center space-x-4 min-w-0">
-              <svg class="w-5 h-5 text-amber-500 group-hover:scale-110 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-              <div class="text-left min-w-0">
-                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Notifications</p>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="settings-notify-hint">Official notices and confirmed delays</p>
-              </div>
-            </div>
-            <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in shrink-0">
-              <input type="checkbox" id="settings-notify-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-              <label for="settings-notify-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-            </div>
-          </button>
-
-          <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
-            <div class="flex items-center space-x-4">
-              <svg class="w-5 h-5 text-pink-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-              <div class="text-left">
-                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Vibrations</p>
-              </div>
-            </div>
-            <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-              <input type="checkbox" id="settings-haptics-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-              <label for="settings-haptics-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-            </div>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -272,7 +172,7 @@ const versionBadge = String(APP_VERSION);
 
   document.getElementById('sidenav-overlay')?.addEventListener('click', closeNav);
 
-  // Swipe left→right inside the open right-hand drawer to dismiss
+  // Swipe right→left inside the open drawer to dismiss (does not touch home tab swipes)
   const sidenavEl = document.getElementById('sidenav');
   if (sidenavEl && sidenavEl.dataset.swipeCloseBound !== '1') {
     sidenavEl.dataset.swipeCloseBound = '1';
@@ -294,8 +194,8 @@ const versionBadge = String(APP_VERSION);
       if (!t) return;
       const dx = t.clientX - startX;
       const dy = t.clientY - startY;
-      // Horizontal swipe toward the right edge, not a vertical scroll
-      if (dx > 56 && Math.abs(dx) > Math.abs(dy) * 1.25) closeNav();
+      // Horizontal swipe left, not a vertical scroll
+      if (dx < -56 && Math.abs(dx) > Math.abs(dy) * 1.25) closeNav();
     }, { passive: true });
   }
 
@@ -345,45 +245,14 @@ const versionBadge = String(APP_VERSION);
     });
   });
 
-  const prefsToggle = document.getElementById('prefs-accordion-toggle');
-  const prefsPanel = document.getElementById('prefs-accordion-panel');
-  const prefsChevron = document.getElementById('prefs-accordion-chevron');
-
-  const setPrefsOpen = (open) => {
-    if (!prefsPanel) return;
-    prefsPanel.classList.toggle('hidden', !open);
-    prefsPanel.classList.toggle('flex', open);
-    prefsToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
-    prefsChevron?.classList.toggle('rotate-180', open);
-  };
-
-  setPrefsOpen(false);
-  window.__ntSetPrefsOpen = setPrefsOpen;
-
-  prefsToggle?.addEventListener('click', () => {
-    const open = prefsToggle.getAttribute('aria-expanded') !== 'true';
-    setPrefsOpen(open);
-    if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
-  });
-
   const themeToggle = document.getElementById('settings-theme-toggle');
   const themeCheckbox = document.getElementById('settings-theme-checkbox');
-
-  const syncPrefsSummary = () => {
-    const sub = document.getElementById('prefs-accordion-sub');
-    if (!sub) return;
-    const pack = document.getElementById('settings-colour-pack-display')?.textContent || 'Classic';
-    const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
-    sub.textContent = `${pack} · ${mode}`;
-  };
-
   const applyTheme = (isDark) => {
     document.documentElement.classList.toggle('dark', isDark);
     try {
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     } catch (err) { /* Safari private / WebView Access Denied */ }
     if (themeCheckbox) themeCheckbox.checked = isDark;
-    syncPrefsSummary();
   };
   if (themeCheckbox) themeCheckbox.checked = document.documentElement.classList.contains('dark');
   themeToggle?.addEventListener('click', (e) => {
@@ -392,24 +261,19 @@ const versionBadge = String(APP_VERSION);
     }
   });
   themeCheckbox?.addEventListener('change', (e) => applyTheme(e.target.checked));
-
-  document.getElementById('colour-pack-picker')?.addEventListener('click', () => {
-    setTimeout(syncPrefsSummary, 0);
-  });
-  syncPrefsSummary();
 </script>
 
 <style>
   /* Mirror SPA JIT bypass so open class wins over Tailwind translate utilities */
   #sidenav {
-    transform: translateX(100%);
+    transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   #sidenav.open {
     transform: translateX(0) !important;
   }
 
-  .toggle-checkbox:checked { right: 0; border-color: var(--nt-primary); }
-  .toggle-checkbox:checked + .toggle-label { background-color: var(--nt-primary); }
+  .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+  .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
   .toggle-checkbox { right: 20px; transition: all 0.3s; }
 </style>

@@ -32,7 +32,7 @@ import { withBase } from '../lib/config.js';
             <!-- Rendered dynamically on the client-side -->
         </div>
         
-        <p class="text-xs text-gray-400 dark:text-gray-600 mt-5 text-center">You can change this later in Options.</p>
+        <p class="text-xs text-gray-400 dark:text-gray-600 mt-5 text-center">You can change this later in the side menu.</p>
         <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2 text-center">Unofficial · Independent of PRASA</p>
     </div>
 </div>
@@ -121,14 +121,14 @@ import { withBase } from '../lib/config.js';
                     $userRegion.set(region);
                     try { window.syncCrmRegionAnalytics?.(region); } catch (e) {}
 
+                    try {
+                        const { applyReturningUserChrome } = await import('../lib/prefs.js');
+                        applyReturningUserChrome();
+                    } catch (e) {}
+                    
                     // 3. Dismount the Welcome overlay
                     const modal = document.getElementById('welcome-modal');
                     if (modal) modal.classList.add('hidden');
-
-                    try {
-                        const { syncInAppChrome } = await import('../lib/prefs.js');
-                        syncInAppChrome();
-                    } catch (e) {}
                     
                     // 4. Trigger base schedule fetch
                     console.log(`🛡️ Guardian: Welcome route selected: ${route.id}. Hydrating...`);
@@ -209,7 +209,6 @@ import { withBase } from '../lib/config.js';
             }
 
             modal.classList.remove('hidden');
-            import('../lib/prefs.js').then(({ applyNavChrome }) => applyNavChrome()).catch(() => {});
             
             updateRegionButtons(activeRegion);
             renderWelcomeRoutes(activeRegion);

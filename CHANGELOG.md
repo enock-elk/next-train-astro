@@ -2,47 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
-## V8_08.24.01 — Fold 23 Aug What’s New; scrub public cards (24 Aug 2026)
+## V8_08.24.02 — What’s New only on the live legacy tree (24 Aug 2026)
 
-- In-app What’s New is one `V8_08.24.01` card for everything shipped on 23 Aug. Older `V8_08.23.*` cards are folded out of `CHANGELOG_DATA`.
-- Commuter bullets: bottom bar + toasts + offline chip; theme chrome matching the timetable button + unread outside the bell; Recent Trips + Max. Single Fare; Theme & Preferences + Messages.
-- Scrub remaining What’s New cards: no Account/password, no disruption-scope internals, no “data engine” / “under-the-hood” / alert ranking / legal-unaffiliated / future-nav strategy / Kempton corridor name.
-
-## V8_08.23.15 — Toasts above nav; header offline; shared chrome tokens (23 Aug 2026)
-
-- `#toast` and `#offline-toast` sit just above `#bottom-nav` (`4.5rem + safe-area`).
-- Offline chrome is the header chip `offline` between the title and the alert bell (`#offline-indicator`). Still waits 4s while visible — do not flash on screen-lock.
-- Theme & Preferences always opens collapsed (`setPrefsOpen(false)` on load and on `openAppHub`).
-- Every pack sets `--nt-chrome-from` / `--nt-chrome-to` / `--nt-chrome-ink`. Header + bottom nav use `linear-gradient(to bottom right, from, from, to)`. CTAs keep `--nt-primary`, which matches `--nt-chrome-from`.
-- Classic chrome is the old Midnight sheet (`#2563eb` → `#4338ca`). Midnight uses its own sky (`#0284c7` → `#0c4a6e`) in light and dark so the timetable button matches the bar.
-- Drop `V8_08.23.10` from in-app What’s New (`CHANGELOG_DATA`). Admin/Account password eye stays in this file only.
-
-## V8_08.23.14 — Trip Planner label; Midnight/Earthy sheet chrome (23 Aug 2026)
-
-- Bottom-nav middle tab label is **Trip Planner** (route icon stays).
-- Midnight + Earthy: header and bottom nav use the Full Train Sheet hero (`to bottom right` blue→indigo / sage→terracotta), white title, day chip (`#current-day` as a white/15 pill), white active tab. Other packs unchanged. Alerts keep their colours.
-
-## V8_08.23.13 — Plan/Options icons, main-style alert badge, Theme & Preferences (23 Aug 2026)
-
-- Plan tab uses the Lucide route icon. Options uses the Lucide menu icon (unread badge stays).
-- Alert bell matches legacy `main`: circular wash, `w-6` icon, unread dot outside the circle (`top-0 right-0` + translate). Raised slightly (`-mt-0.5`). `applyBellFromNotices` keeps in-flow classes (does not slam `absolute top-2 right-4`).
-- Theme & Preferences accordion (lab): Classic / Earthy / Ember plus Midnight / Contrast / Signal, Dark Mode, Vibrations. Notifications stay admin-gated.
-- `app-version.json` `forceUpdate` is `true` unless the owner flips it.
-
-## V8_08.23.12 — Pin chrome: welcome hides nav, right hub, tighter frame (23 Aug 2026)
-
-- Bottom nav is in-app only: hidden on Welcome (`html.nt-onboarding` + `#welcome-modal` visible) and not painted over the welcome overlay (`z-40`).
-- Pin the bar to the screen edge: `#nt-shell` is `p-0 sm:p-4`; mobile `#main-content` is `100dvh` with no radius. Do not restyle vendor `left`/`top`/`transform`.
-- App Hub opens from the right (lab swipe-to-close). Alert bell matches lab (`w-5`, dot `top-1.5 right-1.5`).
-- Planner footer no longer repeats Terms / Privacy / Kazembe. Those stay on About; legal modal also ends with Kazembe CodeWorks.
-
-## V8_08.23.11 — Lab chrome on main: bottom nav, Messages, force-update reader (23 Aug 2026)
-
-- Cherry-pick lab bottom nav / Next Train header / timetable CTA onto current `main`. Do not merge `origin/lab`.
-- Commuters see Home · Plan · Options (`grid-cols-3`). Map + Community exist in markup but stay `hidden` + `inert` until `Admin.isAllowlistedAdmin`. Same gate for sidenav Account and the notifications toggle. No hide-after-paint flash.
-- Admin Map tab opens the existing map sheet (not lab MapView). `#community` / `#map` deep links stay no-ops for commuters.
-- Commuter Messages thread (`#messages-thread-modal`) + sidenav Messages row. Banner Read opens the thread. Do not port ride-nearby or delay-report flags.
-- `app-version.json` now includes `forceUpdate: false`. The running shell peeks that flag on `onNeedRefresh`. Do not flip it true in this ship. Incoming toast is still always shown; 30s half-download guard stays.
+- App code is the live `V8_08.23.10` tree again. Lab chrome / bottom nav is not in this ship.
+- In-app What’s New is one `V8_08.24.02` card. `V8_08.23.*` cards (including Account/password) are folded out of `CHANGELOG_DATA`.
+- Older public cards stay scrubbed: no Account/password, no disruption-scope internals, no data-engine / under-the-hood / alert ranking / legal-unaffiliated / future-nav strategy / Kempton corridor name.
 
 ## V8_08.23.10 — Admin password eye + device password fill (23 Aug 2026)
 

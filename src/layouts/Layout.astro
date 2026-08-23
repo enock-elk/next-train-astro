@@ -146,18 +146,6 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       </>
     )}
     <script is:inline>
-      // Hide the bottom bar until Welcome is done (before first paint).
-      (function () {
-        try {
-          var seen = localStorage.getItem('welcomeSeen') === 'true';
-          document.documentElement.classList.toggle('nt-onboarding', !seen);
-          document.documentElement.classList.toggle('nt-in-app', seen);
-        } catch (e) {
-          document.documentElement.classList.add('nt-onboarding');
-        }
-      })();
-    </script>
-    <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;
       window.addEventListener('beforeinstallprompt', function (e) {
@@ -356,7 +344,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         else document.documentElement.classList.remove('dark');
 
         const pack = localStorage.getItem('colourPack');
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
 
         if (!localStorage.getItem('next_train_device_id')) {
@@ -475,44 +463,18 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* Viewport-locked frame: only #app-scroll moves. Bottom nav sits on the screen edge. */
+      /* Fill the device height (minus body padding) so short planner/error states
+         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
       #main-content.app-shell {
-        height: 100dvh;
-        max-height: 100dvh;
-        min-height: 0;
+        min-height: max(600px, calc(100dvh - 2rem));
+        height: auto;
+        max-height: none;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
-          height: calc(100dvh - 2rem);
-          max-height: calc(100dvh - 2rem);
+          /* body: pt-12 + pb-4 */
+          min-height: max(600px, calc(100dvh - 4rem));
         }
-      }
-      @media (max-width: 639px) {
-        #main-content.app-shell {
-          border-radius: 0;
-          max-width: none;
-          box-shadow: none;
-        }
-      }
-      html.nt-onboarding #bottom-nav,
-      body:has(#welcome-modal:not(.hidden)) #bottom-nav {
-        display: none !important;
-      }
-      #app-scroll.app-scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-x: hidden;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        display: flex;
-        flex-direction: column;
-      }
-      #app-scroll:has(#view-community.active) {
-        overflow: hidden;
-      }
-      #main-content.app-shell.dropdown-escape #app-scroll {
-        overflow: visible !important;
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
@@ -593,8 +555,6 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
       #bottom-nav .bottom-nav-item:active {
         transform: scale(0.96);
       }
-      #toast,
-      #offline-toast,
       body.nav-bottom #offline-toast {
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
@@ -709,9 +669,9 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     </script>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 h-[100dvh] max-h-[100dvh] overflow-hidden transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
 
-    <!-- Offline strip docks above the bottom nav. Toast stays page-level. -->
+    <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 
     <!-- GUARDIAN: Lie-Fi / offline transition toast (auto-dismiss) -->
     <div id="offline-toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900/95 dark:bg-gray-800/95 border border-gray-700 dark:border-gray-600 text-white px-4 py-3 rounded-xl shadow-2xl z-[150] transition-all duration-500 translate-y-[150%] opacity-0 flex items-center space-x-3 w-max max-w-[90%] pointer-events-none backdrop-blur-md">
@@ -723,7 +683,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
     </div>
 
     <!-- App chrome only. Vendor ad nodes append to body and must not be flex siblings of the board. -->
-    <div id="nt-shell" class="flex items-stretch sm:items-center justify-center h-full min-h-0 p-0 sm:p-4">
+    <div id="nt-shell" class="flex items-start justify-center min-h-screen p-2 sm:p-4 pt-4 sm:pt-12 pb-4">
       <slot />
     </div>
 

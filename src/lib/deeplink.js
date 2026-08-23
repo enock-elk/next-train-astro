@@ -290,7 +290,6 @@ export async function applyPlannerShortcutDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
     return true;
@@ -315,7 +314,6 @@ export async function applyShareTargetDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -337,7 +335,6 @@ export async function applyMapDeepLink() {
         ? snap
         : parseMapDeepLink(location.search);
     if (!link || link.kind !== 'map') return false;
-    if (typeof window !== 'undefined' && window.__ntAdminAuthed !== true) return false;
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
     if (typeof window.showToast === 'function') {
@@ -347,7 +344,6 @@ export async function applyMapDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
-    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
 
@@ -440,14 +436,11 @@ export function bindPwaSameOriginLinks() {
                 return;
             }
             if (hash === '#community') {
-                if (window.__ntAdminAuthed === true && typeof window.switchTab === 'function') {
-                    window.switchTab('community');
-                    if (location.hash !== hash) history.pushState({ tab: 'community' }, '', hash);
-                }
+                if (typeof window.switchTab === 'function') window.switchTab('community');
+                if (location.hash !== hash) history.pushState({ tab: 'community' }, '', hash);
                 return;
             }
             if (hash === '#map') {
-                if (window.__ntAdminAuthed !== true) return;
                 if (location.hash !== '#map') history.pushState({ modal: 'map' }, '', '#map');
                 if (typeof window.openSmoothModal === 'function') window.openSmoothModal('map-modal');
                 return;

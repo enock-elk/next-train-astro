@@ -12,15 +12,12 @@
  *   --nt-text-muted       Secondary copy
  *   --nt-border           Hairlines / chrome edges
  *   --nt-theme-meta       <meta name="theme-color">
- *   --nt-chrome-from      Header + bottom-nav gradient start (same as --nt-primary)
- *   --nt-chrome-to        Header + bottom-nav gradient end
- *   --nt-chrome-ink       Title / active tab / offline chip on that chrome
  *
  * Tailwind blue-* is remapped via --nt-blue-{50…900} (RGB channels) so existing
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic · earthy · midnight · contrast · signal · ember
+ * Packs: classic · midnight · contrast · signal · ember
  * ---------------------------------------------------------------------------
  */
 
@@ -36,9 +33,6 @@
   --nt-text-muted: #6b7280;
   --nt-border: #e5e7eb;
   --nt-theme-meta: #1d4ed8;
-  --nt-chrome-from: #2563eb;
-  --nt-chrome-to: #4338ca;
-  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -67,9 +61,6 @@ html[data-colour-pack="classic"].dark {
   --nt-text-muted: #9ca3af;
   --nt-border: #374151;
   --nt-theme-meta: #1e3a8a;
-  --nt-chrome-from: #2563eb;
-  --nt-chrome-to: #4338ca;
-  --nt-chrome-ink: #ffffff;
 }
 
 /* Explicit classic light (optional clarity) */
@@ -84,9 +75,6 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-text-muted: #6b7280;
   --nt-border: #e5e7eb;
   --nt-theme-meta: #1d4ed8;
-  --nt-chrome-from: #2563eb;
-  --nt-chrome-to: #4338ca;
-  --nt-chrome-ink: #ffffff;
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
   --nt-blue-200: 191 219 254;
@@ -111,9 +99,6 @@ html[data-colour-pack="midnight"] {
   --nt-text-muted: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #0369a1;
-  --nt-chrome-from: #0284c7;
-  --nt-chrome-to: #0c4a6e;
-  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 240 249 255;
   --nt-blue-100: 224 242 254;
@@ -129,9 +114,9 @@ html[data-colour-pack="midnight"] {
 
 html.dark[data-colour-pack="midnight"],
 html[data-colour-pack="midnight"].dark {
-  --nt-primary: #0284c7;
-  --nt-primary-hover: #0369a1;
-  --nt-primary-fg: #ffffff;
+  --nt-primary: #38bdf8;
+  --nt-primary-hover: #7dd3fc;
+  --nt-primary-fg: #0c4a6e;
   --nt-primary-soft: rgba(12, 74, 110, 0.45);
   --nt-surface: #0b1220;
   --nt-surface-muted: #111827;
@@ -139,9 +124,6 @@ html[data-colour-pack="midnight"].dark {
   --nt-text-muted: #94a3b8;
   --nt-border: #1e293b;
   --nt-theme-meta: #0c4a6e;
-  --nt-chrome-from: #0284c7;
-  --nt-chrome-to: #0c4a6e;
-  --nt-chrome-ink: #ffffff;
 }
 
 /* High contrast — crisp neutrals + strong brand blue (WCAG-friendly, not cartoon) */
@@ -156,9 +138,6 @@ html[data-colour-pack="contrast"] {
   --nt-text-muted: #262626;
   --nt-border: #171717;
   --nt-theme-meta: #1d4ed8;
-  --nt-chrome-from: #1d4ed8;
-  --nt-chrome-to: #1e3a8a;
-  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -184,9 +163,6 @@ html[data-colour-pack="contrast"].dark {
   --nt-text-muted: #e5e5e5;
   --nt-border: #e5e5e5;
   --nt-theme-meta: #0a0a0a;
-  --nt-chrome-from: #93c5fd;
-  --nt-chrome-to: #1d4ed8;
-  --nt-chrome-ink: #0a0a0a;
 
   --nt-blue-50: 23 37 84;
   --nt-blue-100: 30 58 138;
@@ -212,9 +188,6 @@ html[data-colour-pack="signal"] {
   --nt-text-muted: #4b5563;
   --nt-border: #d1fae5;
   --nt-theme-meta: #047857;
-  --nt-chrome-from: #059669;
-  --nt-chrome-to: #064e3b;
-  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 236 253 245;
   --nt-blue-100: 209 250 229;
@@ -240,9 +213,6 @@ html[data-colour-pack="signal"].dark {
   --nt-text-muted: #a7f3d0;
   --nt-border: #064e3b;
   --nt-theme-meta: #064e3b;
-  --nt-chrome-from: #34d399;
-  --nt-chrome-to: #064e3b;
-  --nt-chrome-ink: #022c22;
 }
 
 /* Ember — amber / copper accent */
@@ -257,9 +227,6 @@ html[data-colour-pack="ember"] {
   --nt-text-muted: #78716c;
   --nt-border: #fde68a;
   --nt-theme-meta: #b45309;
-  --nt-chrome-from: #d97706;
-  --nt-chrome-to: #78350f;
-  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 255 251 235;
   --nt-blue-100: 254 243 199;
@@ -285,70 +252,6 @@ html[data-colour-pack="ember"].dark {
   --nt-text-muted: #fde68a;
   --nt-border: #78350f;
   --nt-theme-meta: #78350f;
-  --nt-chrome-from: #fbbf24;
-  --nt-chrome-to: #78350f;
-  --nt-chrome-ink: #451a03;
-}
-
-/*
- * Earthy — editorial cream + sage (lab).
- * Eggshell paper, muted sage, dusty terracotta, soft charcoal.
- */
-html[data-colour-pack="earthy"] {
-  --nt-primary: #6B705C;
-  --nt-primary-hover: #5C6150;
-  --nt-primary-fg: #FAF8F3;
-  --nt-primary-soft: #F3F0E8;
-  --nt-surface: #FAF8F3;
-  --nt-surface-muted: #F5F2EA;
-  --nt-text: #353535;
-  --nt-text-muted: #8A8278;
-  --nt-border: #E8E2D6;
-  --nt-theme-meta: #FAF8F3;
-  --nt-accent: #A58E74;
-  --nt-chrome-from: #6B705C;
-  --nt-chrome-to: #8B6F4E;
-  --nt-chrome-ink: #FAF8F3;
-
-  --nt-blue-50: 250 248 243;
-  --nt-blue-100: 243 240 232;
-  --nt-blue-200: 232 226 214;
-  --nt-blue-300: 201 193 181;
-  --nt-blue-400: 154 150 132;
-  --nt-blue-500: 125 128 110;
-  --nt-blue-600: 107 112 92;
-  --nt-blue-700: 92 97 80;
-  --nt-blue-800: 74 78 65;
-  --nt-blue-900: 53 56 48;
-}
-
-html.dark[data-colour-pack="earthy"],
-html[data-colour-pack="earthy"].dark {
-  --nt-primary: #A3A792;
-  --nt-primary-hover: #C4C6B8;
-  --nt-primary-fg: #2C2A26;
-  --nt-primary-soft: rgba(107, 112, 92, 0.28);
-  --nt-surface: #2C2A26;
-  --nt-surface-muted: #24221F;
-  --nt-text: #F5F1E9;
-  --nt-text-muted: #C9C1B5;
-  --nt-border: #3F3C37;
-  --nt-theme-meta: #2C2A26;
-  --nt-accent: #C4A990;
-  --nt-chrome-from: #A3A792;
-  --nt-chrome-to: #6B705C;
-  --nt-chrome-ink: #2C2A26;
-
-  --nt-blue-50: 44 42 38;
-  --nt-blue-100: 55 53 47;
-  --nt-blue-200: 63 60 55;
-  --nt-blue-300: 92 97 80;
-  --nt-blue-400: 125 128 110;
-  --nt-blue-500: 154 150 132;
-  --nt-blue-600: 163 167 146;
-  --nt-blue-700: 196 198 184;
-  --nt-blue-800: 221 214 203;
-  --nt-blue-900: 245 241 233;
 }
 
 /* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
@@ -363,28 +266,10 @@ html[data-colour-pack="earthy"].dark {
   border-color: color-mix(in srgb, var(--nt-border) 50%, transparent);
 }
 
-#app-top-tabs {
+#app-top-tabs,
+#bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 95%, transparent);
   border-color: var(--nt-border);
-}
-
-/*
- * Sheet chrome — every pack. Header + bottom nav share --nt-chrome-from/to.
- * CTAs (#locate-btn, #view-full-timetable-btn) use --nt-primary, which is
- * the same start colour so the bar and the timetable button match.
- */
-.app-header,
-#bottom-nav.bottom-nav-bar {
-  background-color: var(--nt-chrome-from) !important;
-  background-image: linear-gradient(
-    to bottom right,
-    var(--nt-chrome-from),
-    var(--nt-chrome-from),
-    var(--nt-chrome-to)
-  ) !important;
-  border-color: transparent !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* Classic / SPA: keep Tailwind blue-600 / blue-400 on the indicator.
@@ -392,17 +277,30 @@ html[data-colour-pack="earthy"].dark {
 html[data-colour-pack="midnight"] #tab-sliding-indicator,
 html[data-colour-pack="contrast"] #tab-sliding-indicator,
 html[data-colour-pack="signal"] #tab-sliding-indicator,
-html[data-colour-pack="ember"] #tab-sliding-indicator,
-html[data-colour-pack="earthy"] #tab-sliding-indicator {
+html[data-colour-pack="ember"] #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
 
-#app-title,
-#app-title.header-title {
-  background-image: none !important;
-  -webkit-background-clip: border-box !important;
-  background-clip: border-box !important;
-  color: var(--nt-chrome-ink) !important;
+/* Never flatten the SPA title gradient to a solid pack fill */
+#app-title {
+  background-image: linear-gradient(to right, #2563eb, #4f46e5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+html.dark #app-title {
+  background-image: linear-gradient(to right, #60a5fa, #818cf8);
+}
+
+html[data-colour-pack="midnight"] #app-title,
+html[data-colour-pack="contrast"] #app-title,
+html[data-colour-pack="signal"] #app-title,
+html[data-colour-pack="ember"] #app-title {
+  background-image: linear-gradient(
+    to right,
+    var(--nt-primary),
+    color-mix(in srgb, var(--nt-primary) 55%, #4f46e5)
+  );
 }
 
 .view-section {
@@ -413,51 +311,31 @@ html[data-colour-pack="earthy"] #tab-sliding-indicator {
 html[data-colour-pack="midnight"] #main-content,
 html[data-colour-pack="contrast"] #main-content,
 html[data-colour-pack="signal"] #main-content,
-html[data-colour-pack="ember"] #main-content,
-html[data-colour-pack="earthy"] #main-content {
+html[data-colour-pack="ember"] #main-content {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
 }
 
+html[data-colour-pack="midnight"] .app-header,
+html[data-colour-pack="contrast"] .app-header,
+html[data-colour-pack="signal"] .app-header,
+html[data-colour-pack="ember"] .app-header,
 html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
-html[data-colour-pack="earthy"] #app-top-tabs {
+html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
-}
-
-#current-day {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--nt-chrome-ink) 15%, transparent);
-  color: var(--nt-chrome-ink) !important;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-#current-day span {
-  color: var(--nt-chrome-ink) !important;
-}
-
-#bottom-nav .bottom-nav-item {
-  color: color-mix(in srgb, var(--nt-chrome-ink) 62%, transparent) !important;
-}
-#bottom-nav .bottom-nav-item.is-active {
-  color: var(--nt-chrome-ink) !important;
-}
-#bottom-nav .bottom-nav-item:focus-visible {
-  --tw-ring-color: color-mix(in srgb, var(--nt-chrome-ink) 70%, transparent);
 }
 
 html[data-colour-pack="midnight"] .view-section,
 html[data-colour-pack="contrast"] .view-section,
 html[data-colour-pack="signal"] .view-section,
-html[data-colour-pack="ember"] .view-section,
-html[data-colour-pack="earthy"] .view-section {
+html[data-colour-pack="ember"] .view-section {
   background-color: var(--nt-surface-muted) !important;
 }
 
@@ -470,67 +348,29 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-#tab-sliding-indicator {
-  background-color: var(--nt-primary) !important;
-}
-
-/* Pack-tinted CTAs (GPS + full timetable) — same start colour as chrome */
-#locate-btn,
-#view-full-timetable-btn {
+/* Pack-tinted CTAs only for non-classic packs.
+   Classic must keep SPA Tailwind: bg-blue-600 / text-white (also in dark). */
+html[data-colour-pack="midnight"] #locate-btn,
+html[data-colour-pack="contrast"] #locate-btn,
+html[data-colour-pack="signal"] #locate-btn,
+html[data-colour-pack="ember"] #locate-btn,
+html[data-colour-pack="midnight"] #view-full-timetable-btn,
+html[data-colour-pack="contrast"] #view-full-timetable-btn,
+html[data-colour-pack="signal"] #view-full-timetable-btn,
+html[data-colour-pack="ember"] #view-full-timetable-btn {
   background-color: var(--nt-primary) !important;
   border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
 }
-#locate-btn:hover,
-#view-full-timetable-btn:hover {
+html[data-colour-pack="midnight"] #locate-btn:hover,
+html[data-colour-pack="contrast"] #locate-btn:hover,
+html[data-colour-pack="signal"] #locate-btn:hover,
+html[data-colour-pack="ember"] #locate-btn:hover,
+html[data-colour-pack="midnight"] #view-full-timetable-btn:hover,
+html[data-colour-pack="contrast"] #view-full-timetable-btn:hover,
+html[data-colour-pack="signal"] #view-full-timetable-btn:hover,
+html[data-colour-pack="ember"] #view-full-timetable-btn:hover {
   background-color: var(--nt-primary-hover) !important;
-}
-#view-full-timetable-btn #last-updated-date {
-  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
-  font-weight: 700;
-  text-align: center;
-}
-#view-full-timetable-btn {
-  text-align: center;
-}
-
-/* Header chip between the title and the alert bell. */
-.nt-offline-header-slot {
-  display: flex;
-  align-items: center;
-}
-.nt-offline-chip {
-  display: none;
-  align-items: center;
-  font-size: 0.625rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
-  color: var(--nt-chrome-ink);
-  background: color-mix(in srgb, var(--nt-chrome-ink) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--nt-chrome-ink) 32%, transparent);
-  border-radius: 999px;
-  padding: 0.2rem 0.55rem;
-  white-space: nowrap;
-  line-height: 1.1;
-}
-
-/* Toasts sit just above the bottom nav (nav ≈ 3.75rem + safe-area). */
-#toast,
-#offline-toast {
-  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-}
-
-#bottom-nav-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  max-width: 28rem;
-  margin: 0 auto;
-}
-html[data-admin-authed="1"] #bottom-nav-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  max-width: 32rem;
 }
 
 /* Colour pack picker (Settings) */
@@ -614,29 +454,13 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 
 /* Maintenance strip pinned to top of header; hamburger stays above it (z-[70]) */
 #app-header.nt-maint-active {
-  /* Kill chrome gradient so the hazard strip doesn't glow through */
+  /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
   background-color: var(--nt-surface) !important;
-  background-image: none !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 html.dark #app-header.nt-maint-active {
   background-color: rgb(31 41 55) !important; /* gray-800 */
-  background-image: none !important;
-}
-#app-header.nt-maint-active #app-title,
-#app-header.nt-maint-active #app-title.header-title,
-#app-header.nt-maint-active #current-day,
-#app-header.nt-maint-active #current-day span,
-#app-header.nt-maint-active .nt-offline-chip {
-  color: var(--nt-text) !important;
-}
-#app-header.nt-maint-active #current-day {
-  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
-}
-#app-header.nt-maint-active .nt-offline-chip {
-  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
-  border-color: color-mix(in srgb, var(--nt-text) 22%, transparent);
 }
 #app-header.nt-maint-active #open-nav-btn,
 #app-header.nt-maint-active #notice-bell {
@@ -737,40 +561,4 @@ font[face="sans-serif" i] {
 /* Results view: hide Advanced Multi-Transfer chrome entirely */
 #view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-title-block {
   display: none;
-}
-
-html[data-colour-pack="earthy"] #main-content {
-  box-shadow: 0 1px 2px rgba(53, 53, 53, 0.04), 0 16px 40px rgba(53, 53, 53, 0.05);
-}
-html[data-colour-pack="earthy"] .colour-pack-swatch {
-  border: 1px solid var(--nt-border);
-}
-html[data-colour-pack="earthy"] .text-gray-400,
-html[data-colour-pack="earthy"] .text-gray-500,
-html[data-colour-pack="earthy"] .text-gray-600 {
-  color: var(--nt-text-muted) !important;
-}
-html[data-colour-pack="earthy"] .text-gray-700,
-html[data-colour-pack="earthy"] .text-gray-800,
-html[data-colour-pack="earthy"] .text-gray-900,
-html[data-colour-pack="earthy"] .text-black {
-  color: var(--nt-text) !important;
-}
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-300,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-400,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-500 {
-  color: var(--nt-text-muted) !important;
-}
-html.dark[data-colour-pack="earthy"] .dark\:text-white,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-100,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-200 {
-  color: var(--nt-text) !important;
-}
-html[data-colour-pack="earthy"] #sidenav,
-html[data-colour-pack="ember"] #sidenav,
-html[data-colour-pack="midnight"] #sidenav,
-html[data-colour-pack="contrast"] #sidenav,
-html[data-colour-pack="signal"] #sidenav {
-  background-color: var(--nt-surface) !important;
-  color: var(--nt-text);
 }

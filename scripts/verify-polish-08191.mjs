@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.24.01 folded 23 Aug What’s New).
+ * Current polish gate (V8_08.24.02 What’s New on the live legacy tree).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.24.01') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.24.02') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.24.01') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.24.02') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
 if (!/bottom/i.test(wn) || !/trip planner/i.test(wn) || !/options/i.test(wn)) {
-    fail(`What's New must mention the bottom bar tabs: ${wn}`);
+    fail(`What's New must keep the 24.01 home bullets: ${wn}`);
 }
 if (!/toast/i.test(wn) || !/offline/i.test(wn)) {
-    fail(`What's New must mention toasts and offline: ${wn}`);
+    fail(`What's New must keep toasts and offline: ${wn}`);
 }
 if (!/theme/i.test(wn) && !/look/i.test(wn)) {
-    fail(`What's New must mention theme/looks chrome: ${wn}`);
+    fail(`What's New must keep looks: ${wn}`);
 }
 if (!/recent trips/i.test(wn) || !/max\.?\s*single fare/i.test(wn)) {
     fail(`What's New must keep Recent Trips + Max. Single Fare: ${wn}`);
@@ -42,10 +42,10 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
-    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.01, not kept as its own card`);
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.02, not kept as its own card`);
 }
 for (const id of ['V8_08.23.15', 'V8_08.23.14', 'V8_08.23.13', 'V8_08.23.12', 'V8_08.23.11', 'V8_08.23.10', 'V8_08.23.9', 'V8_08.23.8', 'V8_08.23.7', 'V8_08.23.6', 'V8_08.23.5']) {
-    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.01, not kept as its own card`);
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.02, not kept as its own card`);
 }
 const allWhatsNew = CHANGELOG_DATA.flatMap((e) => e.features || []).join(' ');
 if (/account|password|face\s*id|sign-?in|admin|dev hub|telemetry|firebase|dump|\bseo\b|google|analytics|clever|deploy|worker|nuke|force.update|allowlist|rtdb|token|secret|under-the-hood|data engine|alert ranking|unaffiliated|kempton|danger zone/i.test(allWhatsNew)) {
@@ -58,10 +58,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.24.1') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.24.2') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.24.01') fail(`app-version.json is ${appVer.version}`);
-if (appVer.forceUpdate !== true) fail('app-version.json forceUpdate must stay true unless the owner flips it');
+if (appVer.version !== 'V8_08.24.02') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -436,12 +435,6 @@ if (!appUpdate.includes('INCOMING_UPDATE_FALLBACK_MS = 30000')) {
     if (/if\s*\(\s*FORCE_UPDATE_REQUIRED\s*\)/.test(onNeed)) {
         fail('incoming-version toast must not be gated on FORCE_UPDATE_REQUIRED');
     }
-    if (!onNeed.includes('peekIncomingUpdate') && !appUpdate.includes('forceUpdate')) {
-        fail('onNeedRefresh must peek forceUpdate from app-version.json');
-    }
-    if (!appUpdate.includes('peekIncomingUpdate')) {
-        fail('must peek incoming version + forceUpdate together');
-    }
     if (!onNeed.includes('keeping cached version')) {
         fail('onNeedRefresh must keep the cached shell if the incoming worker is not ready');
     }
@@ -483,163 +476,9 @@ if (!guidePage.includes('NO CONCESSION') || !guidePage.includes('40% Off Peak'))
     fail('ticket FAQ must mention peak NO CONCESSION and off-peak 40%');
 }
 
-const prefsJs = readFileSync('src/lib/prefs.js', 'utf8');
-if (!prefsJs.includes('return NAV_STYLES.BOTTOM')) {
-    fail('getNavStyle must force the bottom bar');
-}
-const indexHtml = readFileSync('src/pages/index.astro', 'utf8');
-if (!indexHtml.includes('id="bottom-nav-options"')) fail('bottom nav must use Options');
-if (!indexHtml.includes('id="bottom-nav-map"')) fail('Map tab markup must exist for admin reveal');
-if (!indexHtml.includes('data-admin-authed-only')) fail('Map/Community must be hidden until allowlisted auth');
-if (indexHtml.includes('ride-nearby')) fail('must not port Trains near you');
-if (!indexHtml.includes('id="app-scroll"')) fail('shell must use #app-scroll so the bottom nav stays put');
-const sidenav = readFileSync('src/components/Sidenav.astro', 'utf8');
-if (!sidenav.includes('id="settings-feedback-btn"')) fail('sidenav must show Messages & Feedback');
-if (!sidenav.includes('id="settings-account-btn"') || !sidenav.includes('data-admin-authed-only')) {
-    fail('Account must exist but stay hidden until admin auth');
-}
-if (!sidenav.includes('id="settings-notify-toggle"')) fail('Notifications toggle markup must exist for admin reveal');
-const hubJs = readFileSync('src/lib/hub.js', 'utf8');
-if (!hubJs.includes('export async function openMessagesThread')) fail('must port the commuter messages thread');
-if (!hubJs.includes('viewReplyBtn.onclick = () => openMessagesThread()')) {
-    fail('banner Read must open the messages thread');
-}
-if (!hubModals.includes('id="messages-thread-modal"')) fail('HubModals must include the messages thread');
-const delayJs = readFileSync('src/lib/delay-reports.js', 'utf8');
-if (!delayJs.includes('DELAY_REPORTS_UI_ENABLED = false')) {
-    fail('Direct Train flags / delay-report UI must stay off');
-}
-if (liveBoard.includes('ride-nearby')) fail('LiveBoard must not include Trains near you');
-if (!liveBoard.includes('id="last-updated-date"') || !liveBoard.includes('view-full-timetable-btn')) {
-    fail('effective date must live inside the timetable CTA');
-}
-const adminJs = readFileSync('public/js/admin.js', 'utf8');
-if (!adminJs.includes('applyAdminAuthedChrome(true)')) {
-    fail('allowlisted sign-in must reveal operator chrome');
-}
-if (!adminJs.includes('isAllowlistedAdmin(user)')) {
-    fail('admin chrome must still require isAllowlistedAdmin');
-}
-const adminChrome = readFileSync('src/lib/admin-chrome.js', 'utf8');
-if (adminChrome.includes('window.__ntAdminReady') || adminChrome.includes('window.__ntAdminSessionActive')) {
-    fail('operator chrome must not use 5-tap / session-active flags');
-}
-
-if (!prefsJs.includes('welcomeSeen') || !prefsJs.includes('nt-onboarding')) {
-    fail('applyNavChrome must hide the bottom bar during Welcome');
-}
-if (!prefsJs.includes('export function syncInAppChrome')) {
-    fail('prefs must export syncInAppChrome after Welcome');
-}
-if (!layout.includes('html.nt-onboarding #bottom-nav')) {
-    fail('layout must hide #bottom-nav while onboarding');
-}
-if (!layout.includes('p-0 sm:p-4')) fail('app frame must use lab-tight p-0 sm:p-4');
-if (layout.includes('pt-4 sm:pt-12')) fail('do not keep the tall top margin outside the frame');
-if (!layout.includes('height: 100dvh')) fail('mobile frame must be 100dvh so the bar sits on the screen');
-if (!/id="sidenav"\s[\s\S]{0,400}right-0/.test(sidenav) || !sidenav.includes('translate-x-full')) {
-    fail('sidenav must open from the right');
-}
-if (/id="sidenav"\s[\s\S]{0,400}left-0/.test(sidenav)) {
-    fail('sidenav drawer must not be left-0');
-}
-if (!sidenav.includes('transform: translateX(100%)')) {
-    fail('closed sidenav must sit off the right edge');
-}
-if (!sidenav.includes('dx > 56')) fail('sidenav swipe-close must be toward the right');
-if (!hubJs.includes('translate-x-full') || hubJs.includes('Left drawer')) {
-    fail('closeAppHub must treat the hub as a right drawer');
-}
-const planner = readFileSync('src/components/TripPlanner.astro', 'utf8');
-if (planner.includes('hub-legal-link') || /Kazembe CodeWorks/.test(planner)) {
-    fail('planner footer must not repeat Terms / Privacy / Kazembe');
-}
-if (!hubModals.includes('hub-legal-link') || !hubModals.includes('Kazembe CodeWorks')) {
-    fail('About must keep Legal links and Kazembe CodeWorks at the bottom');
-}
-if (!plannerModals.includes('Kazembe CodeWorks')) {
-    fail('legal modal must end with Kazembe CodeWorks');
-}
-const appHeader = readFileSync('src/components/Header.astro', 'utf8');
-if (!appHeader.includes('aria-label="Service alerts"')) fail('alert bell must use Service alerts label');
-if (!appHeader.includes('bg-red-100') || !appHeader.includes('w-6 h-6')) {
-    fail('alert bell must use the main circular wash + w-6 icon');
-}
-if (!appHeader.includes('translate-x-1/4') || !appHeader.includes('top-0 right-0')) {
-    fail('unread badge must sit outside the circle, top-right');
-}
-if (!appHeader.includes('-mt-0.5')) fail('alert cluster must sit slightly higher');
-if (indexHtml.includes('z-[110]')) fail('bottom nav must not paint over Welcome (drop z-110)');
-if (!indexHtml.includes('lucide-route') || !indexHtml.includes('cx="6"')) {
-    fail('Plan tab must use the Lucide route icon');
-}
-if (!indexHtml.includes('>Trip Planner<')) fail('middle tab label must be Trip Planner');
-if (/>Plan</.test(indexHtml)) fail('bottom nav must not say Plan');
-if (!indexHtml.includes('lucide-menu') || !indexHtml.includes('M4 12h16')) {
-    fail('Options tab must use the Lucide menu icon');
-}
-if (indexHtml.includes('icons/icon-192.png') && /bottom-nav-options[\s\S]{0,400}icon-192/.test(indexHtml)) {
-    fail('Options must not use the app icon');
-}
-if (!sidenav.includes('id="prefs-accordion-toggle"') || !sidenav.includes('Theme &amp; Preferences')) {
-    fail('hub must package looks inside Theme & Preferences');
-}
-if (!sidenav.includes('data-colour-pack-option="earthy"') || !sidenav.includes('data-colour-pack-option="ember"')) {
-    fail('Theme & Preferences must include lab Earthy + Ember');
-}
-if (!sidenav.includes('id="settings-theme-toggle"') || !sidenav.includes('id="settings-haptics-toggle"')) {
-    fail('Dark Mode and Vibrations must live inside Theme & Preferences');
-}
-const prefsPacks = readFileSync('src/lib/prefs.js', 'utf8');
-if (!prefsPacks.includes("EARTHY: 'earthy'")) fail('prefs must register the Earthy pack');
-const appearanceCss = readFileSync('src/styles/appearance.css', 'utf8');
-if (!appearanceCss.includes('data-colour-pack="earthy"')) fail('appearance.css must define Earthy');
-if (!appearanceCss.includes('--nt-chrome-from') || !appearanceCss.includes('--nt-chrome-to')) {
-    fail('appearance.css must define shared chrome tokens');
-}
-if (!appearanceCss.includes('--nt-chrome-from: #2563eb') || !appearanceCss.includes('--nt-chrome-to: #4338ca')) {
-    fail('Classic chrome must use the train-sheet blue→indigo tokens');
-}
-if (!appearanceCss.includes('--nt-chrome-from: #0284c7') || !appearanceCss.includes('--nt-chrome-to: #0c4a6e')) {
-    fail('Midnight chrome must use sky tokens, not Classic blue→indigo');
-}
-if (!appearanceCss.includes('--nt-chrome-from: #6B705C') || !appearanceCss.includes('--nt-chrome-to: #8B6F4E')) {
-    fail('Earthy chrome must keep sage→terracotta tokens');
-}
-if (!appearanceCss.includes('var(--nt-chrome-from)') || !appearanceCss.includes('var(--nt-chrome-to)')) {
-    fail('header + bottom nav must paint from shared chrome tokens');
-}
-const headerHtml = readFileSync('src/components/Header.astro', 'utf8');
-if (!headerHtml.includes('id="offline-indicator"') || !headerHtml.includes('offline')) {
-    fail('header must host the offline chip between the title and the bell');
-}
-if (indexHtml.includes('WORKING OFFLINE')) fail('index must not paint WORKING OFFLINE');
-const uiJs = readFileSync('src/lib/ui.js', 'utf8');
-if (uiJs.includes("textContent = 'WORKING OFFLINE'")) {
-    fail('offline chip copy must be offline, not WORKING OFFLINE');
-}
-if (!uiJs.includes("textContent = 'offline'")) fail('scheduleOfflineChrome must set offline copy');
-if (!uiJs.includes('4.5rem + env(safe-area-inset-bottom')) {
-    fail('#toast must sit just above the bottom nav');
-}
-if (sidenav.includes("localStorage.getItem(PREFS_OPEN_KEY) === '1'") || sidenav.includes('prefsInitialOpen')) {
-    fail('Theme & Preferences must always open collapsed');
-}
-if (!sidenav.includes('setPrefsOpen(false)')) {
-    fail('Theme accordion must start collapsed');
-}
-if (!hubJs.includes('__ntSetPrefsOpen')) {
-    fail('openAppHub must collapse Theme & Preferences');
-}
-const alertsJs = readFileSync('src/lib/alerts-channel.js', 'utf8');
-if (alertsJs.includes('absolute top-2 right-4')) {
-    fail('applyBellFromNotices must not slam the main hamburger-header absolute position');
-}
-if (!alertsJs.includes('translate-x-1/4')) fail('live bell badge must stay outside the circle');
-
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.24.01 polish (folded 23 Aug What’s New)');
+console.log('✓ V8_08.24.02 polish (What’s New on the live legacy tree)');

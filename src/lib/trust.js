@@ -408,10 +408,7 @@ function applyBanModeOffline() {
     const pulseOffline = () => {
         try { $isOffline.set(true); } catch { /* ignore */ }
         const ind = document.getElementById('offline-indicator');
-        if (ind) {
-            ind.textContent = 'offline';
-            ind.style.display = 'inline-flex';
-        }
+        if (ind) ind.style.display = '';
         const wrap = document.getElementById('offline-wrapper');
         if (wrap) wrap.classList.remove('hidden');
     };
@@ -446,10 +443,7 @@ function applyBanModeOffline() {
 function applyBanModeFreeze() {
     try { $isOffline.set(true); } catch { /* ignore */ }
     const ind = document.getElementById('offline-indicator');
-    if (ind) {
-        ind.textContent = 'offline';
-        ind.style.display = 'inline-flex';
-    }
+    if (ind) ind.style.display = '';
 
     let freeze = document.getElementById('nt-ban-freeze-overlay');
     if (!freeze) {

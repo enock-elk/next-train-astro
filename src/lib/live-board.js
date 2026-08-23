@@ -652,8 +652,8 @@ export function findNextTrains() {
         if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
         if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
     }
-    if (pretoriaHeaderEl()) pretoriaHeaderEl().innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
-    if (pienaarspoortHeaderEl()) pienaarspoortHeaderEl().innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
+    if (pretoriaHeaderEl()) pretoriaHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
+    if (pienaarspoortHeaderEl()) pienaarspoortHeaderEl().innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
     
     if (!selectedStation) {
         if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
@@ -1293,7 +1293,7 @@ export function updateLastUpdatedText() {
     
     displayDate = formatEffectiveDate(displayDate);
     
-    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Effective from: ${displayDate}`;
+    if (displayDate && lastUpdatedEl()) lastUpdatedEl().textContent = `Schedule Effective from: ${displayDate}`;
 }
 
 export function startSmartRefresh() {

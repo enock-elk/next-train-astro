@@ -2,7 +2,6 @@
  * App preferences (localStorage) — Settings, dual nav, appearance packs
  */
 import { safeStorage } from './utils.js';
-import { applyAdminAuthedChrome } from './admin-chrome.js';
 
 export const NAV_STYLE_KEY = 'navStyle';
 export const COLOUR_PACK_KEY = 'colourPack';
@@ -13,11 +12,10 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'earthy' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
+/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
-    EARTHY: 'earthy',
     MIDNIGHT: 'midnight',
     CONTRAST: 'contrast',
     SIGNAL: 'signal',
@@ -26,7 +24,6 @@ export const COLOUR_PACKS = {
 
 export const COLOUR_PACK_LABELS = {
     classic: 'Classic',
-    earthy: 'Earthy',
     midnight: 'Midnight',
     contrast: 'High contrast',
     signal: 'Signal',
@@ -36,14 +33,15 @@ export const COLOUR_PACK_LABELS = {
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
 export function getNavStyle() {
-    // Product: always use the bottom bar (Options opens the hub).
-    return NAV_STYLES.BOTTOM;
+    const v = safeStorage.getItem(NAV_STYLE_KEY);
+    return v === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
 }
 
-export function setNavStyle(_style) {
-    safeStorage.setItem(NAV_STYLE_KEY, NAV_STYLES.BOTTOM);
-    applyNavChrome(NAV_STYLES.BOTTOM);
-    return NAV_STYLES.BOTTOM;
+export function setNavStyle(style) {
+    const next = style === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
+    safeStorage.setItem(NAV_STYLE_KEY, next);
+    applyNavChrome(next);
+    return next;
 }
 
 export function getColourPack() {
@@ -81,11 +79,6 @@ export function setColourPack(pack) {
         document.documentElement.setAttribute('data-colour-pack', next);
         requestAnimationFrame(() => syncThemeColorMeta());
         syncColourPackUi(next);
-        const sub = document.getElementById('prefs-accordion-sub');
-        if (sub) {
-            const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
-            sub.textContent = `${COLOUR_PACK_LABELS[next] || 'Classic'} · ${mode}`;
-        }
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('colourpackchange', { detail: { pack: next } }));
         }
@@ -127,7 +120,6 @@ export function bindColourPackControls() {
 }
 
 export function hydratePrefs() {
-    applyAdminAuthedChrome(false);
     applyNavChrome(getNavStyle());
     setColourPack(getColourPack());
     applyReturningUserChrome();
@@ -186,7 +178,7 @@ export async function setNotifyPref(wantOn) {
 
 /**
  * Apply top vs bottom navigation chrome.
- * Bottom: Home · Plan · Options (Map + Community after allowlisted admin auth).
+ * Bottom: Home · Plan · Community · More.
  * Top tabs are hidden in bottom mode to reclaim vertical space.
  */
 export function applyNavChrome(style = getNavStyle()) {
@@ -196,13 +188,6 @@ export function applyNavChrome(style = getNavStyle()) {
     document.body?.classList.toggle('nav-bottom', isBottom);
     document.body?.classList.toggle('nav-top', !isBottom);
 
-    const welcome = document.getElementById('welcome-modal');
-    const welcomeOpen = !!(welcome && !welcome.classList.contains('hidden'));
-    const inApp = safeStorage.getItem('welcomeSeen') === 'true' && !welcomeOpen;
-    const showBottom = isBottom && inApp;
-    document.documentElement.classList.toggle('nt-onboarding', !inApp);
-    document.documentElement.classList.toggle('nt-in-app', inApp);
-
     const topTabs = document.getElementById('app-top-tabs');
     const bottomNav = document.getElementById('bottom-nav');
     if (topTabs) {
@@ -210,8 +195,8 @@ export function applyNavChrome(style = getNavStyle()) {
         topTabs.setAttribute('aria-hidden', isBottom ? 'true' : 'false');
     }
     if (bottomNav) {
-        bottomNav.classList.toggle('hidden', !showBottom);
-        bottomNav.setAttribute('aria-hidden', showBottom ? 'false' : 'true');
+        bottomNav.classList.toggle('hidden', !isBottom);
+        bottomNav.setAttribute('aria-hidden', isBottom ? 'false' : 'true');
     }
 
     document.querySelectorAll('[data-nav-style-option]').forEach((btn) => {
@@ -244,12 +229,6 @@ export function applyReturningUserChrome() {
     document.body?.classList.toggle('chrome-compact', seen);
     const main = document.getElementById('main-content');
     main?.classList.toggle('chrome-compact', seen);
-}
-
-/** After Welcome closes (or a share link skips it): show the in-app bottom bar. */
-export function syncInAppChrome() {
-    applyReturningUserChrome();
-    applyNavChrome();
 }
 
 const VALID_CRM_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);

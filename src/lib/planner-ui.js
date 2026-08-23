@@ -1865,7 +1865,7 @@ function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
     const routeSafe = escapeHTML(String(routeId || ''));
     const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<button type="button" class="planner-train-name-btn underline underline-offset-2 decoration-1 decoration-blue-400/70 hover:decoration-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}</button>`;
+    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-2 decoration-blue-500 font-semibold hover:decoration-[2.5px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}<svg class="w-3 h-3 shrink-0 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg></button>`;
 }
 
 export function openPlannerTrainSheet(routeId, trainId) {
@@ -1878,27 +1878,34 @@ export function openPlannerTrainSheet(routeId, trainId) {
     }
     const origin = stationDisplayName(sheet.origin);
     const terminus = stationDisplayName(sheet.terminus);
-    const corridor = String(sheet.route?.name || `${origin} ↔ ${terminus}`).replace(/<->/g, '↔');
     const titleEl = document.getElementById('planner-train-sheet-title');
-    const idEl = document.getElementById('planner-train-sheet-id');
-    const routeEl = document.getElementById('planner-train-sheet-route');
     const dirEl = document.getElementById('planner-train-sheet-direction');
     const dayEl = document.getElementById('planner-train-sheet-day');
     const fareEl = document.getElementById('planner-train-sheet-fare');
     const listEl = document.getElementById('planner-train-sheet-stops');
     if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
-    if (idEl) idEl.textContent = `Train ${sheet.trainId}`;
-    if (routeEl) routeEl.textContent = corridor;
     if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
     if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType);
     const zone = resolvePlannerRouteZone(sheet.route.id);
     const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (fareEl) {
+        fareEl.dataset.routeId = sheet.route.id;
         if (detailed?.single != null) {
-            fareEl.textContent = `Full route adult single · ${zone} · R${Number(detailed.single).toFixed(2)}`;
+            fareEl.textContent = `${zone} · R${Number(detailed.single).toFixed(2)}`;
         } else {
-            fareEl.textContent = 'Full route fare not listed for this corridor';
+            fareEl.textContent = 'Fare';
         }
+        fareEl.onclick = (ev) => {
+            ev.stopPropagation();
+            const openFare = typeof window.openFareModalForRoute === 'function'
+                ? window.openFareModalForRoute
+                : null;
+            if (openFare) {
+                openFare(sheet.route.id);
+                return;
+            }
+            import('./live-board-ui.js').then((m) => m.openFareModalForRoute?.(sheet.route.id)).catch(() => {});
+        };
     }
     if (listEl) {
         listEl.innerHTML = sheet.stops.map((stop, i) => {
@@ -1963,7 +1970,7 @@ export const PlannerRenderer = {
         return name;
     },
 
-    buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, connectHtml, variant = 'transfer' }) => {
+    buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, variant = 'transfer' }) => {
         let iconBg = 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400';
         let titleColor = 'text-blue-600 dark:text-blue-400';
         let waitColor = 'text-gray-900 dark:text-white';
@@ -1982,10 +1989,10 @@ export const PlannerRenderer = {
             leftBorder = 'border-l-emerald-500';
             centerSvg = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
         }
-        const rightCol = (connectHtml || connectValue) ? `
+        const rightCol = connectValue ? `
         <div class="flex flex-col items-end text-right min-w-0 flex-1 pl-2">
             <span class="text-[8px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">${connectLabel}</span>
-            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${escapeHTML(String(connectValue || '').replace(/<[^>]*>/g, ''))}">${connectHtml || escapeHTML(connectValue)}</span>
+            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${escapeHTML(String(connectValue || ''))}">${escapeHTML(connectValue)}</span>
         </div>` : '';
         return `
         <div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2 ${opacity}">
@@ -2236,7 +2243,6 @@ export const PlannerRenderer = {
                 waitStr,
                 connectLabel: 'Switch To',
                 connectValue: `${train2Dest} Train ${it.train2}`,
-                connectHtml: plannerTrainNameButton(leg.route?.id, train2Dest, it.train2),
                 variant: transferVariant
             });
 
@@ -2585,7 +2591,6 @@ export const PlannerRenderer = {
                     waitStr,
                     connectLabel: 'Connect To',
                     connectValue: `${trainDest} Train ${nextLeg.train}`,
-                    connectHtml: plannerTrainNameButton(nextLeg.route?.id, trainDest, nextLeg.train),
                     variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
                 });
             }
@@ -2630,7 +2635,6 @@ export const PlannerRenderer = {
             waitStr,
             connectLabel: 'Connect To',
             connectValue: `${train2Dest} Train ${step.leg2.train}`,
-            connectHtml: plannerTrainNameButton(step.leg2.route?.id, train2Dest, step.leg2.train),
             variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
         });
 
@@ -2690,7 +2694,6 @@ export const PlannerRenderer = {
             waitStr: wait1Str,
             connectLabel: 'Connect To',
             connectValue: `${train2Dest} Train ${step.leg2.train}`,
-            connectHtml: plannerTrainNameButton(step.leg2.route?.id, train2Dest, step.leg2.train),
             variant: isExtended1 ? 'extended' : (isInstant1 ? 'instant' : 'transfer')
         });
 
@@ -2721,7 +2724,6 @@ export const PlannerRenderer = {
             waitStr: wait2Str,
             connectLabel: 'Connect To',
             connectValue: `${train3Dest} Train ${step.leg3.train}`,
-            connectHtml: plannerTrainNameButton(step.leg3.route?.id, train3Dest, step.leg3.train),
             variant: isExtended2 ? 'extended' : (isInstant2 ? 'instant' : 'transfer')
         });
 
@@ -2819,6 +2821,13 @@ export function initPlanner() {
         return;
     }
     if (typeof window !== 'undefined') window.__ntPlannerInitBound = true;
+
+    if (typeof window !== 'undefined' && !window.__ntPlannerHistoryListSub) {
+        window.__ntPlannerHistoryListSub = true;
+        $masterStationList.subscribe(() => {
+            try { renderPlannerHistory(); } catch { /* ignore */ }
+        });
+    }
 
     // When live disruptions arrive after a plan, re-run so Irene/Centurion cuts
     // replace sinkhole-blind through-trips (first open race).
@@ -3179,27 +3188,25 @@ export function renderPlannerHistory() {
     let rawHistory = [];
     try { rawHistory = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { rawHistory = []; }
 
-    let validHistory = rawHistory;
+    let validHistory = Array.isArray(rawHistory) ? rawHistory : [];
     const masterList = getMasterStationList();
     // History stores cleaned names (no " STATION"); master list usually includes the suffix.
     const stationKey = (s) => String(s || '').replace(/ STATION/gi, '').toUpperCase().trim();
-    
-    if (masterList && masterList.length > 0) {
+    const listReady = Array.isArray(masterList) && masterList.length > 0;
+
+    if (listReady) {
         const masterKeys = new Set(masterList.map(stationKey));
-        validHistory = rawHistory.filter((item) =>
+        validHistory = validHistory.filter((item) =>
             masterKeys.has(stationKey(item.fullFrom || item.from)) &&
             masterKeys.has(stationKey(item.fullTo || item.to))
         );
-    } else if (masterList && masterList.length === 0) {
-        container.classList.add('hidden');
-        return;
     }
 
     if (validHistory.length > PLANNER_HISTORY_DISPLAY_CAP) {
         validHistory = validHistory.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
     }
-    // Persist cleaned / capped list so dead or oversize entries don't linger
-    if (JSON.stringify(validHistory) !== JSON.stringify(rawHistory)) {
+    // Only persist a filter wipe when the station index is actually ready.
+    if (listReady && JSON.stringify(validHistory) !== JSON.stringify(rawHistory)) {
         safeStorage.setItem(historyKey, JSON.stringify(validHistory));
     }
     

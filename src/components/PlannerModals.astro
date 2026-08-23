@@ -159,27 +159,18 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- PLANNER TRAIN SHEET (full origin → terminus column) -->
-<div id="planner-train-sheet-modal" class="fixed inset-0 bg-black/70 z-[130] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden border border-blue-100 dark:border-blue-900/40 transform transition-transform duration-300 scale-100">
-        <div class="relative shrink-0 px-5 pt-5 pb-4 bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100/90 mb-1">Full train sheet</p>
-                    <h3 id="planner-train-sheet-title" class="text-xl font-black tracking-tight truncate">Train</h3>
-                    <p id="planner-train-sheet-id" class="text-sm font-bold text-blue-100 mt-0.5">Train</p>
-                </div>
-                <button type="button" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition focus:outline-none shrink-0" aria-label="Close train sheet">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+<div id="planner-train-sheet-modal" class="fixed inset-0 bg-black/70 z-[130] hidden flex items-center justify-center p-2 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md h-[min(96dvh,100%)] max-h-[96dvh] flex flex-col overflow-hidden border border-blue-100 dark:border-blue-900/40 transform transition-transform duration-300 scale-100">
+        <div class="relative shrink-0 px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white">
+            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100/90 mb-1">Full train sheet</p>
+            <h3 id="planner-train-sheet-title" class="text-lg font-black tracking-tight leading-snug break-words">Train</h3>
+            <p id="planner-train-sheet-direction" class="text-sm font-semibold text-white/95 mt-2">Origin → Terminus</p>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <span id="planner-train-sheet-day" class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/15 text-white">Weekdays</span>
+                <button type="button" id="planner-train-sheet-fare" data-route-id="" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight bg-white text-blue-800 hover:bg-blue-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Fare</button>
             </div>
-            <p id="planner-train-sheet-route" class="mt-3 text-sm font-bold text-white/95">Route</p>
-            <p id="planner-train-sheet-direction" class="text-xs font-semibold text-blue-100/90 mt-0.5">Origin → Terminus</p>
         </div>
-        <div class="px-5 py-3 shrink-0 flex flex-wrap gap-2 border-b border-slate-100 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/40">
-            <span id="planner-train-sheet-day" class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">Weekdays</span>
-            <span id="planner-train-sheet-fare" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Fare</span>
-        </div>
-        <ol id="planner-train-sheet-stops" class="px-5 py-2 overflow-y-auto custom-scrollbar flex-grow min-h-0"></ol>
+        <ol id="planner-train-sheet-stops" class="px-5 py-2 overflow-y-auto custom-scrollbar flex-1 min-h-0"></ol>
         <div class="p-4 border-t border-slate-100 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/40 shrink-0">
             <button type="button" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">
                 Close

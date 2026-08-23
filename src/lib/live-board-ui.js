@@ -13,6 +13,7 @@ import {
     getAllStations,
     getRouteFare,
     getDetailedFare,
+    resolveZoneForRoute,
     populateStationList,
     findNextTrains,
     updateLastUpdatedText,
@@ -291,7 +292,25 @@ export function openFareModalForCurrentRoute() {
     return false;
 }
 
-export function openFareModal(fareDetails) {
+/** Fare table for a specific corridor — does not retarget the live-board pin. */
+export function openFareModalForRoute(routeId) {
+    const zone = resolveZoneForRoute(routeId);
+    const prices = zone && FARE_CONFIG.zones_detailed?.[zone];
+    let detailed = prices ? { code: zone, prices } : null;
+    if (!detailed?.prices) {
+        const route = ROUTES[routeId];
+        const sheetKey = route?.sheetKeys ? Object.values(route.sheetKeys)[0] : null;
+        detailed = sheetKey ? getDetailedFare(sheetKey) : null;
+    }
+    if (detailed?.prices) {
+        openFareModal(detailed, routeId);
+        return true;
+    }
+    showToast('Ticket prices unavailable for this route yet.', 'info', 2200);
+    return false;
+}
+
+export function openFareModal(fareDetails, forRouteId = null) {
     triggerHaptic();
     if (!fareDetails) return;
 
@@ -320,7 +339,7 @@ export function openFareModal(fareDetails) {
         document.body.appendChild(modal);
     }
 
-    const routeId = $currentRouteId.get();
+    const routeId = forRouteId || $currentRouteId.get();
     const routeNameHtml = routeId && ROUTES[routeId] ? formatRouteLabelHtml(ROUTES[routeId].name) : '';
     const zoneEl = document.getElementById('fare-zone-badge');
     if (zoneEl) {
@@ -617,6 +636,7 @@ export function attachLiveBoardUiGlobals() {
     window.updateFareDisplay = updateFareDisplay;
     window.openFareModal = openFareModal;
     window.openFareModalForCurrentRoute = openFareModalForCurrentRoute;
+    window.openFareModalForRoute = openFareModalForRoute;
     window.openScheduleModal = openScheduleModal;
     window.selectProfile = selectProfile;
     window.updatePinUI = updatePinUI;

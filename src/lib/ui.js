@@ -1125,6 +1125,7 @@ export function switchTab(tab) {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {
             history.pushState({ tab: 'planner' }, '', '#planner');
         }
+        import('./planner-ui.js').then((m) => m.renderPlannerHistory?.()).catch(() => {});
     } else if (tab === 'community') {
         if (location.hash !== '#community') {
             history.pushState({ tab: 'community' }, '', '#community');

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.6 — Planner Recent Trips + train sheet (23 Aug 2026)
+
+- Recent Trips no longer hide when the master station list is still empty on first paint. Incomplete-index filter no longer writes a wipe back to `plannerHistory_{region}`. Re-render on Trip Planner tab open and when `$masterStationList` fills.
+- Train sheet: one `{Origin} → {Terminus}` line, wrapping title, no top X or redundant Train id subtitle, taller near-full card. Day + short `Z2 · R12.00` fare chip live in the blue header; the chip opens the existing fare table for that train’s route (does not retarget the live-board pin). Hash stack is `#planner-results` → `#train-sheet` → `#fare`.
+- Depart-line train name is the only sheet opener (stronger underline + chevron). Connect To is plain text.
+
 ## V8_08.23.5 — One What's New card; keep Dev Hub out of Google snippets (23 Aug 2026)
 
 - Folded the 23.4 / 23.3 / 23.2 / 21.1 What's New cards into one concise commuter card. Dropped SEO / route-page / logo bullets from the public list.

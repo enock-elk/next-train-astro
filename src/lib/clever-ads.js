@@ -11,7 +11,8 @@
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
  * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
- * resume. Cloak visibility must not count as “filled” for board shift.
+ * resume, scroll-return, and while a shift is still applied. Cloak visibility
+ * must not count as “filled” for board shift.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
@@ -43,6 +44,11 @@ let shellMotionUnlockTimer = 0;
 /** Collapse leftover gap instantly after background/resume (no second ease). */
 let adResumeInstant = false;
 let adResumePassTimer = 0;
+/** Same-session: vendor may empty a sticky unit without resize/visibilitychange. */
+let adScrollSyncTimer = 0;
+const AD_SCROLL_SYNC_MS = 200;
+let adOccupancyWatchTimer = 0;
+const AD_OCCUPANCY_WATCH_MS = 2000;
 const observedOverlayNodes = new Set();
 let overlayResizeObserver = null;
 const AD_SHELL_EASE_MS = 420;
@@ -402,6 +408,7 @@ function syncAdShellMotion() {
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
         prevInFlowH = 0;
+        stopOccupancyWatch();
         return;
     }
 
@@ -430,6 +437,7 @@ function syncAdShellMotion() {
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
         prevInFlowH = 0;
+        stopOccupancyWatch();
         return;
     }
 
@@ -464,6 +472,7 @@ function syncAdShellMotion() {
 
     prevOverlayH = overlayH;
     prevInFlowH = inFlowH;
+    if (targetShift > 0 || inFlowH > 0) maybeStartOccupancyWatch();
 }
 
 function requestAdShellSync() {
@@ -472,6 +481,34 @@ function requestAdShellSync() {
         adShellSyncRaf = 0;
         syncAdShellMotion();
     });
+}
+
+function scheduleScrollOccupancyCheck() {
+    if (adScrollSyncTimer) return;
+    adScrollSyncTimer = window.setTimeout(() => {
+        adScrollSyncTimer = 0;
+        requestAdShellSync();
+    }, AD_SCROLL_SYNC_MS);
+}
+
+function stopOccupancyWatch() {
+    if (!adOccupancyWatchTimer) return;
+    clearInterval(adOccupancyWatchTimer);
+    adOccupancyWatchTimer = 0;
+}
+
+/** Poll occupancy only while the board is still shifted by a leftover unit. */
+function maybeStartOccupancyWatch() {
+    if (adOccupancyWatchTimer) return;
+    adOccupancyWatchTimer = window.setInterval(() => {
+        const shifted = Math.abs(currentShellShift()) >= 1 || prevOverlayH > 8 || prevInFlowH > 8;
+        if (!shifted) {
+            stopOccupancyWatch();
+            return;
+        }
+        const { overlayH, inFlowH } = measureAdLayout();
+        if (overlayH < 8 && inFlowH < 8) requestAdShellSync();
+    }, AD_OCCUPANCY_WATCH_MS);
 }
 
 function refreshOverlayObservations() {
@@ -634,6 +671,11 @@ export function initCleverAds() {
         clearTimeout(adResumePassTimer);
         adResumePassTimer = 0;
     }
+    if (adScrollSyncTimer) {
+        clearTimeout(adScrollSyncTimer);
+        adScrollSyncTimer = 0;
+    }
+    stopOccupancyWatch();
     document.documentElement.classList.remove('nt-ads-entering');
 
     let stabilizedAt = 0;
@@ -820,4 +862,11 @@ export function initCleverAds() {
     });
     window.addEventListener('pageshow', onAppResume);
     document.addEventListener('resume', onAppResume);
+
+    // Same-session: vendor may discard a sticky unit while the tab stays visible.
+    // Scroll back to top will not fire visibilitychange/pageshow/resume.
+    window.addEventListener('scroll', scheduleScrollOccupancyCheck, { passive: true });
+    if ('onscrollend' in window) {
+        window.addEventListener('scrollend', () => requestAdShellSync(), { passive: true });
+    }
 }

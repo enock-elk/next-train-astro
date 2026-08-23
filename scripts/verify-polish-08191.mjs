@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.3 SEO chrome) plus leftover ad-gap / 20.1 history.
+ * Current polish gate (V8_08.23.3 SEO chrome) plus 23.2 Saturday/ad history.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -28,6 +28,18 @@ if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|cleve
     fail('Whats New must stay commuter-only');
 }
 
+const card232 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.2');
+const wn232 = (card232?.features || []).join(' ');
+if (!/ads/i.test(wn232) || !/blank strip|scroll/i.test(wn232)) {
+    fail('V8_08.23.2 card must keep leftover ad space on scroll-back');
+}
+if (!/planner/i.test(wn232) || !/saturday|weekend|holiday/i.test(wn232)) {
+    fail('V8_08.23.2 card must keep Saturday planner notices');
+}
+if (!/no service/i.test(wn232)) {
+    fail('V8_08.23.2 card must keep Saturday No Service on the board');
+}
+
 const card211 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.21.1');
 const wn211 = (card211?.features || []).join(' ');
 if (!/ads/i.test(wn211) || !/blank strip|gap/i.test(wn211)) {
@@ -44,6 +56,7 @@ const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.2')) fail('V8_08.23.2 card must remain in history');
 if (!folded.has('V8_08.21.1')) fail('V8_08.21.1 card must remain in history');
 if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
 if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
@@ -246,11 +259,18 @@ if (!ads.includes('unitOccupiesSpace')) fail('clever-ads must measure occupancy,
 if (!ads.includes('data-nt-ad-idle')) fail('empty leftovers must be marked data-nt-ad-idle');
 if (!ads.includes('markResumeInstant')) fail('resume must collapse leftover gap without a second ease');
 if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app becomes visible');
+if (!ads.includes('scheduleScrollOccupancyCheck')) fail('must remasure leftover ads on scroll-return');
 if (!layout.includes('[data-nt-ad-idle="1"]')) fail('Layout must collapse idle leftover ad boxes');
+if (!readFileSync('src/lib/saturday-service.js', 'utf8').includes('SATURDAY_PLACEHOLDER_ROUTES')) {
+    fail('Saturday planner must gate on SATURDAY_PLACEHOLDER_ROUTES + live times');
+}
+const logicJs = readFileSync('src/lib/logic.js', 'utf8');
+if (!logicJs.includes('paintHeaderDayLabel')) fail('header must paint No Service when Saturday sheets are empty');
+if (!logicJs.includes('currentRouteSaturdayClosed')) fail('header No Service must use both Saturday directions');
 
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.3 polish (SEO chrome; 21.1 ad-gap + 20.1 history kept)');
+console.log('✓ V8_08.23.3 polish (SEO chrome; 23.2 Saturday/ad + 21.1 history kept)');

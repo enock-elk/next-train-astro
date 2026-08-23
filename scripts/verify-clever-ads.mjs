@@ -75,6 +75,11 @@ if (layout.includes('[data-nt-ad-idle="1"]') && /\[data-nt-ad-idle="1"\][\s\S]{0
 if (!ads.includes('markResumeInstant')) fail('resume must collapse leftover gap without a second ease');
 if (!ads.includes("addEventListener('pageshow'")) fail('must remeasure ads on pageshow (bfcache)');
 if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app becomes visible');
+if (!ads.includes('scheduleScrollOccupancyCheck')) fail('scroll-return must trigger occupancy remasure');
+if (!ads.includes("addEventListener('scroll'")) fail('must remeasure ad occupancy on scroll (same-session gap)');
+if (!ads.includes("addEventListener('scrollend'")) fail('must remasure ads on scrollend when available');
+if (!ads.includes('maybeStartOccupancyWatch')) fail('must watch occupancy while the board is still shifted');
+if (!ads.includes('stopOccupancyWatch')) fail('occupancy watch must stop when the board is unshifted');
 if (!ads.includes('iframeLooksAlive')) fail('discarded/blank iframes must not keep a top gap');
 if (ads.includes('setAdPadding(true)')) fail('must not reserve an empty ad gap via padding');
 if (!layout.includes('transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)))')) {

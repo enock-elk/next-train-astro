@@ -83,6 +83,25 @@ ok(workerJs.includes("{ name: \"sessions\" }"), 'worker fetches sessions alongsi
 ok(adminJs.includes("Admin._deActiveTab = 'trips'"), 'planner telemetry defaults to trip plans');
 ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-trips"') < adminJs.indexOf('id="de-tab-fails"'), 'Trip Plans tab is listed before Fails');
 ok(adminJs.includes('limitToLast='), 'trip plans fetch is windowed with limitToLast');
+ok(adminJs.includes('_deTripWindowStep'), 'admin can load more than the first 400 batches');
+ok(adminJs.includes('See ${Admin._deTripWindowStep') || adminJs.includes('more batches'), 'See more batches button exists');
+ok(adminJs.includes("`${entry.origin}|${entry.destination}|${entry.region || ''}`"), 'trip corridors merge all day types');
+ok(!adminJs.includes("`${entry.origin}|${entry.destination}|${entry.dayType || 'unknown'}|${entry.region || ''}`"), 'trip corridor key must not split by day type');
+ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-install time');
+{
+    const parseJoined = (id) => {
+        const m = String(id || '').match(/_(\d{10,13})$/);
+        if (!m) return null;
+        const n = Number(m[1]);
+        const ms = n < 1e12 ? n * 1000 : n;
+        if (ms < Date.UTC(2020, 0, 1) || ms > Date.now() + 86400000) return null;
+        return ms;
+    };
+    ok(parseJoined('usr_abc12xyz9_1700000000000') === 1700000000000, 'usr_ epoch suffix decodes');
+    ok(parseJoined('Anonymous / Legacy') == null, 'legacy ids have no join time');
+}
+ok(adminJs.includes('userIdJoinHintHtml'), 'admin shows an i next to user ids');
+ok(adminJs.includes('de-filter-day') && adminJs.includes('All days'), 'day-type filter stays off (All days)');
 ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');
 ok(adminJs.includes('_deTripPageSize'), 'corridor list is paginated');
 ok(!adminJs.includes('hitsHtml'), 'do not dump every hit into corridor card HTML');

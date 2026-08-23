@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.23.4";
+export const APP_VERSION = "V8_08.23.5";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -891,53 +891,24 @@ export const SATURDAY_PLACEHOLDER_ROUTES = ['herc-koed', 'ec-berlin'];
 /** Junctions on herc-koed that still have Saturday trains on other routes. */
 export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 
-// 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
+// 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 2–4 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
 // Badge / seen key use `id` (=== APP_VERSION for latest).
 //
-// COMMUTER-ONLY COPY (strict) — every entry is rendered in the public What's New panel:
-// - Never mention admin mode, Dev Hub, operator tools, or how staff publish content.
-// - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
-// - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
+// PUBLIC SURFACE (strict) — competitors read this list. Every entry is shown as-is:
+// - Only obvious in-app behaviour a commuter can spot (board, planner, alerts, notices).
+// - Never mention admin / Dev Hub / operator tools / deploy / workers / NUKE / analytics.
+// - Never mention SEO, Google, indexing, route landing pages, or app configuration.
+// - Do not explain strategy or "we fixed". Short bullets. Detail stays in CHANGELOG.md.
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.23.4",
+        id: "V8_08.23.5",
         title: "What's new",
         date: "23 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Planner:</b> Tap an underlined train name to see its full route, every stop time, the adult single fare, and which days it runs.",
-            "<b>Saturday notices:</b> When a line cannot reach your station on Saturdays, that is now written on the banner, with Details beside the terminating-at line."
-        ]
-    },
-    {
-        id: "V8_08.23.3",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Route pages:</b> Each corridor now shows both directions, a fare overview, and a clearer jump into the live timetable.",
-            "<b>Home:</b> The Next Train logo on those pages opens the app with your province already selected."
-        ]
-    },
-    {
-        id: "V8_08.23.2",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Ads:</b> If a top advert disappears while you scroll away, the board no longer leaves a blank strip when you come back.",
-            "<b>Planner:</b> Saturday and holiday plans on lines with no weekend trains now say so clearly, and still offer the next weekday.",
-            "<b>Board:</b> Routes with no Saturday trains show red No Service on the day label."
-        ]
-    },
-    {
-        id: "V8_08.21.1",
-        title: "What's new",
-        date: "21 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Ads:</b> If a top advert disappears while you are away, the board no longer leaves a blank strip when you come back."
+            "<b>Planner:</b> Tap a train name for its full route, stop times, fare, and days. Saturday trips that cannot reach your station say so.",
+            "<b>Board:</b> Routes with no Saturday trains show red No Service. A vanished top advert no longer leaves a blank strip."
         ]
     },
     {
@@ -961,8 +932,7 @@ export const CHANGELOG_DATA = [
             "<b>Ads:</b> Moved to the top to make way for future bottom navigation. When a unit appears or you close it, the board eases into place.",
             "<b>Back where you were:</b> Closing What's New or an alert reply returns you to the menu or notice you were viewing.",
             "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap.",
-            "<b>Alerts:</b> Hold a photo notice to react, same as text.",
-            "<b>Route timetables:</b> Corridor pages now show the full grid with real stop times — empty stations are gone. Open the live sheet in Next Train for Download and Share."
+            "<b>Alerts:</b> Hold a photo notice to react, same as text."
         ]
     },
     {

@@ -1,6 +1,11 @@
 # Changelog
 
-Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
+Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
+
+## V8_08.23.5 — One What's New card; keep Dev Hub out of Google snippets (23 Aug 2026)
+
+- Folded the 23.4 / 23.3 / 23.2 / 21.1 What's New cards into one concise commuter card. Dropped SEO / route-page / logo bullets from the public list.
+- Homepage no longer ships Dev Hub / Admin Gateway HTML in the crawlable document. Operator chrome lives in `<template id="nt-admin-chrome-template">` and is stamped only after the 5-tap unlock. That is why Google was showing “30 Mins / Today / 30 Days (MAU)” under the nexttrain.co.za result.
 
 ## V8_08.23.4 — Planner train sheet + Saturday advisory quote (23 Aug 2026)
 

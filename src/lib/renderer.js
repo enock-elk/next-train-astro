@@ -1126,8 +1126,8 @@ export const Renderer = {
         return Renderer._toTitleCase(name);
     },
 
-    // Public What's New list. Renders every CHANGELOG_DATA entry — commuter-visible
-    // benefits only. Never inject admin, Dev Hub, or internal / IP notes here.
+    // Public What's New list. Renders every CHANGELOG_DATA entry. Competitors
+    // read this — only obvious in-app behaviour. Never inject admin, SEO, or config notes.
     renderChangelogModal: (changelogData) => {
         if (typeof document === 'undefined') return;
         // Leave the sidenav on the history stack and visually intact.

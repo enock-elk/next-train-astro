@@ -320,8 +320,10 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
+<!-- Operator chrome is stamped after 5-tap unlock. Keep it out of the crawlable homepage. -->
+<template id="nt-admin-chrome-template">
 <!-- LOGIN -->
-<div id="login-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+<div id="login-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300" data-nosnippet>
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-8 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
         <div class="flex justify-center mb-4">
             <div class="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-600 dark:text-blue-400">
@@ -357,7 +359,7 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- DEV / ADMIN PANEL -->
-<div id="dev-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300 overflow-y-auto">
+<div id="dev-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300 overflow-y-auto" data-nosnippet>
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100 my-auto">
         <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
@@ -416,6 +418,7 @@ import { withBase } from '../lib/config.js';
         <div id="admin-signout-container"></div>
     </div>
 </div>
+</template>
 
 <!-- ADMIN REPLY -->
 <div id="developer-reply-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">

@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.4 planner train sheet) plus 23.3 SEO / 23.2 Saturday history.
+ * Current polish gate (V8_08.23.5 one What's New card + Dev Hub off the homepage).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,48 +11,24 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.4') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.5') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.4') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
-if (!Array.isArray(latest?.features) || latest.features.length < 2) {
-    fail(`What's New must have commuter bullets, got ${latest?.features?.length}`);
+if (latest?.id !== 'V8_08.23.5') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
+    fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
 if (!/planner/i.test(wn) || !/train/i.test(wn) || !/fare/i.test(wn)) {
     fail(`What's New must mention the planner train sheet and fare: ${wn}`);
 }
-if (!/saturday/i.test(wn) || !/terminat/i.test(wn)) {
-    fail(`What's New must mention Saturday terminating notices: ${wn}`);
+if (!/saturday/i.test(wn) || !/no service/i.test(wn)) {
+    fail(`What's New must mention Saturday board/planner behaviour: ${wn}`);
 }
-if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|clever/i.test(wn)) {
-    fail('Whats New must stay commuter-only');
+if (!/advert|blank strip/i.test(wn)) {
+    fail(`What's New must mention the leftover ad strip: ${wn}`);
 }
-
-const card233 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.3');
-const wn233 = (card233?.features || []).join(' ');
-if (!/route pages/i.test(wn233) || !/fare/i.test(wn233) || !/timetable/i.test(wn233)) {
-    fail(`V8_08.23.3 card must keep route pages and fares: ${wn233}`);
-}
-if (!/logo/i.test(wn233) || !/province|region/i.test(wn233)) {
-    fail('V8_08.23.3 card must keep the logo home jump');
-}
-
-const card232 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.2');
-const wn232 = (card232?.features || []).join(' ');
-if (!/ads/i.test(wn232) || !/blank strip|scroll/i.test(wn232)) {
-    fail('V8_08.23.2 card must keep leftover ad space on scroll-back');
-}
-if (!/planner/i.test(wn232) || !/saturday|weekend|holiday/i.test(wn232)) {
-    fail('V8_08.23.2 card must keep Saturday planner notices');
-}
-if (!/no service/i.test(wn232)) {
-    fail('V8_08.23.2 card must keep Saturday No Service on the board');
-}
-
-const card211 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.21.1');
-const wn211 = (card211?.features || []).join(' ');
-if (!/ads/i.test(wn211) || !/blank strip|gap/i.test(wn211)) {
-    fail('V8_08.21.1 card must keep the leftover ad-space bullet');
+if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
+    fail('Whats New must stay obvious in-app behaviour only');
 }
 
 const card201 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.20.1');
@@ -65,17 +41,19 @@ const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
-if (!folded.has('V8_08.23.3')) fail('V8_08.23.3 card must remain in history');
-if (!folded.has('V8_08.23.2')) fail('V8_08.23.2 card must remain in history');
-if (!folded.has('V8_08.21.1')) fail('V8_08.21.1 card must remain in history');
+for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+}
 if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
 if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
+const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []).join(' ');
+if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.4') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.5') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.4') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.5') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -100,6 +78,19 @@ if (!plannerModals.includes('id="legal-modal-content"') || !plannerModals.includ
 }
 if (!plannerModals.includes('id="planner-train-sheet-modal"')) fail('planner must ship the train-sheet modal');
 if (!plannerModals.includes('id="disruption-modal-reply-btn"')) fail('advisory Reply must have a stable id');
+
+const hubModals = readFileSync('src/components/HubModals.astro', 'utf8');
+if (!hubModals.includes('id="nt-admin-chrome-template"')) {
+    fail('Dev Hub / Admin Gateway must live in nt-admin-chrome-template');
+}
+const crawlableHub = hubModals.replace(/<template\b[\s\S]*?<\/template>/gi, '');
+if (/30 Days \(MAU\)|Last 30 Mins|Admin Gateway|Developer Mode|Live Telemetry/i.test(crawlableHub)) {
+    fail('Dev Hub labels must not sit in crawlable homepage HTML');
+}
+const adminBridge = readFileSync('src/lib/admin-bridge.js', 'utf8');
+if (!adminBridge.includes('stampAdminChrome') || !adminBridge.includes('nt-admin-chrome-template')) {
+    fail('admin-bridge must stamp operator chrome only after unlock');
+}
 
 const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
 if (liveBoard.includes('SeoFeaturedRoutes')) fail('LiveBoard footer must not include SeoFeaturedRoutes');
@@ -297,4 +288,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.4 polish (train sheet + Saturday quote; 23.3 SEO / 23.2 Saturday history kept)');
+console.log('✓ V8_08.23.5 polish (one What\'s New card; Dev Hub off the crawlable homepage)');

@@ -135,6 +135,14 @@ function loadClassicAdminScript() {
     });
 }
 
+function stampAdminChrome() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('dev-modal') || document.getElementById('login-modal')) return;
+    const tpl = document.getElementById('nt-admin-chrome-template');
+    if (!tpl?.content) return;
+    document.body.appendChild(tpl.content.cloneNode(true));
+}
+
 let _adminLoadPromise = null;
 
 /**
@@ -149,6 +157,7 @@ export function ensureAdminLoaded() {
     _adminLoadPromise = (async () => {
         try {
             window.__ntAdminSessionActive = true;
+            stampAdminChrome();
             exposeAdminGlobals();
             await bootFirebase();
             await loadClassicAdminScript();

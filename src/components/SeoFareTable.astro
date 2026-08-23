@@ -1,0 +1,55 @@
+---
+/**
+ * Maximum adult fares for one corridor zone (terminus to terminus).
+ * Prices come from FARE_CONFIG — do not invent numbers here.
+ */
+interface Props {
+  zoneCode: string;
+  inferred?: boolean;
+  origin: string;
+  dest: string;
+  tickets: { label: string; value: string }[];
+}
+
+const { zoneCode, inferred = false, origin, dest, tickets } = Astro.props;
+const zoneLabel = zoneCode.replace(/^Z/i, 'Zone ');
+---
+
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4 sm:p-5" data-seo-fares>
+  <h2 class="text-lg font-bold text-slate-900 dark:text-white">Maximum fares</h2>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+    These are the <strong>maximum</strong> adult cash fares for {origin} ↔ {dest}
+    ({zoneLabel}{inferred ? ', network maximum' : ''}) — terminus to terminus.
+    Shorter trips on the same line can cost less, especially for weekday
+    <strong>off-peak</strong> singles and returns (09:30–14:30).
+  </p>
+  {inferred && (
+    <p class="mt-2 text-xs text-slate-500">
+      This corridor’s zone was not in the published dump, so the table shows Zone 4 (the network maximum).
+    </p>
+  )}
+  <div class="mt-4 overflow-x-auto">
+    <table class="w-full text-sm text-left border-collapse">
+      <caption class="sr-only">
+        Maximum adult Metrorail fares for {origin} ↔ {dest} ({zoneLabel})
+      </caption>
+      <thead>
+        <tr class="border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-500">
+          <th scope="col" class="py-2 pr-3">Ticket</th>
+          <th scope="col" class="py-2 pl-3 text-right">Max fare</th>
+        </tr>
+      </thead>
+      <tbody class="text-slate-900 dark:text-white">
+        {tickets.map((row) => (
+          <tr class="border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <th scope="row" class="py-2.5 pr-3 font-semibold">{row.label}</th>
+            <td class="py-2.5 pl-3 text-right tabular-nums">{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-xs text-slate-500 leading-relaxed">
+    Tickets are bought with cash at the station, not in this app. Off-peak does not apply on Saturday, Sunday, or public holidays.
+  </p>
+</section>

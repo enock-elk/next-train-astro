@@ -1,5 +1,5 @@
 /**
- * V8_08.21.1 polish: leftover ad gap on return, keep 20.1 history.
+ * Current polish gate (V8_08.23.3 SEO chrome) plus leftover ad-gap / 20.1 history.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,18 +11,27 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.21.1') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.3') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.21.1') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
-if (!Array.isArray(latest?.features) || latest.features.length < 1) {
+if (latest?.id !== 'V8_08.23.3') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (!Array.isArray(latest?.features) || latest.features.length < 2) {
     fail(`What's New must have commuter bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/ads/i.test(wn) || !/blank strip|gap/i.test(wn)) {
-    fail(`What's New must mention leftover ad space: ${wn}`);
+if (!/route pages/i.test(wn) || !/fare/i.test(wn) || !/timetable/i.test(wn)) {
+    fail(`What's New must mention route pages and fares: ${wn}`);
+}
+if (!/logo/i.test(wn) || !/province|region/i.test(wn)) {
+    fail(`What's New must mention the logo home jump: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|clever/i.test(wn)) {
     fail('Whats New must stay commuter-only');
+}
+
+const card211 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.21.1');
+const wn211 = (card211?.features || []).join(' ');
+if (!/ads/i.test(wn211) || !/blank strip|gap/i.test(wn211)) {
+    fail('V8_08.21.1 card must keep the leftover ad-space bullet');
 }
 
 const card201 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.20.1');
@@ -35,14 +44,15 @@ const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
+if (!folded.has('V8_08.21.1')) fail('V8_08.21.1 card must remain in history');
 if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
 if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.21.1') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.3') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.21.1') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.3') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -89,6 +99,27 @@ if (!routePage.includes('Open live timetable in Next Train')) {
 }
 if (!routePage.includes('max-w-6xl')) fail('Route landing timetable block should widen past max-w-2xl');
 if (!routePage.includes('buildRouteGridAppPath')) fail('Route landing must deep-link the in-app grid');
+if (!routePage.includes('SeoPageHeader')) fail('Route landing must use SeoPageHeader');
+if (!routePage.includes('bidirectionalTitle')) fail('Route landing must use the calm bidirectional title');
+if (!routePage.includes('SeoFareTable')) fail('Route landing must include the max fare table');
+if (routePage.includes('<dt') && routePage.includes('Origin')) {
+    fail('Route landing metadata must not list exclusive Origin');
+}
+
+const regionPage = readFileSync('src/pages/regions/[slug].astro', 'utf8');
+if (!regionPage.includes('SeoPageHeader')) fail('Region hub must use SeoPageHeader');
+{
+    const figStart = regionPage.indexOf('id="region-seo-map"');
+    const figEnd = regionPage.indexOf('</figure>', figStart);
+    const figure = figStart >= 0 && figEnd > figStart ? regionPage.slice(figStart, figEnd) : '';
+    if (!figure) fail('Region hub missing #region-seo-map figure');
+    if (figure.includes('<a')) fail('Region network map figure must not wrap the PNG in a Leaflet link');
+}
+if (!regionPage.includes('Interactive map')) fail('Region hub missing Interactive map control');
+
+const header = readFileSync('src/components/SeoPageHeader.astro', 'utf8');
+if (!header.includes('icons/icon-48.png')) fail('SeoPageHeader must use the 48px mark');
+if (!header.includes('variant="inline"')) fail('SeoPageHeader theme toggle must sit in-flow');
 
 const gridCss = readFileSync('src/components/SeoTimetableGrid.astro', 'utf8');
 if (gridCss.includes('22rem')) fail('SeoTimetableGrid still clips at 22rem');
@@ -222,4 +253,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.21.1 polish (leftover ad gap on return; 20.1 history kept)');
+console.log('✓ V8_08.23.3 polish (SEO chrome; 21.1 ad-gap + 20.1 history kept)');

@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FARE_CONFIG } from './config.js';
 import { orderGridTrainIds } from './grid-order.js';
 import { isRealTime, timeToSeconds } from './utils.js';
 import { stationLabel } from './seo-routes.js';
@@ -331,8 +332,93 @@ export function buildRouteJsonLd({
     };
 }
 
+/** Corridor ends as a calm pair — used in H1, <title>, and metadata. */
+export function corridorPairLabel(origin, dest) {
+    return `${origin} ↔ ${dest}`;
+}
+
+/** `{A} ↔ {B} Train Schedule & Times` — do not stuff both "X to Y & Y to X" into the title. */
+export function bidirectionalTitle(origin, dest) {
+    return `${corridorPairLabel(origin, dest)} Train Schedule & Times`;
+}
+
+/** Exact directional phrase for body headings and meta copy. */
+export function directionPhrase(from, to) {
+    return `${from} to ${to}`;
+}
+
+/** @deprecated Use bidirectionalTitle — kept so older verify scripts fail closed if they still import this name. */
 export function bothDirectionTitle(origin, dest) {
-    return `${origin} to ${dest} & ${dest} to ${origin} train schedule`;
+    return bidirectionalTitle(origin, dest);
+}
+
+export function routeDocumentTitle(origin, dest) {
+    return `${bidirectionalTitle(origin, dest)} | Metrorail Next Train`;
+}
+
+export function routeMetaDescription(origin, dest, province) {
+    return `Check Metrorail train schedules and times between ${origin} and ${dest} (${province}), including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}.`;
+}
+
+function getDumpValue(db, key) {
+    if (!key || !db) return null;
+    for (const nest of REGION_NESTS) {
+        const nested = db[nest]?.[key];
+        if (nested != null && nested !== '') return nested;
+    }
+    if (db[key] != null && db[key] !== '') return db[key];
+    return null;
+}
+
+function splitSheetKey(key) {
+    const m = String(key || '').match(/^(.*)_to_(.*)_(weekday|sat|saturday)$/);
+    if (!m) return null;
+    return { prefix: m[1], dest: m[2], suffix: `_${m[3]}` };
+}
+
+/**
+ * Build-time zone for a route. Reads `{sheetKey}_zone` from the dump (region nest
+ * first, same overlay as getSheet). Missing zone → Z4 maximum + inferred flag.
+ */
+export function resolveRouteZone(route, dump = loadScheduleDump()) {
+    const keys = Object.values(route?.sheetKeys || {});
+    for (const key of keys) {
+        const zone = getDumpValue(dump, `${key}_zone`);
+        if (zone && FARE_CONFIG.zones[zone]) {
+            return { code: zone, inferred: false };
+        }
+    }
+    for (const key of keys) {
+        const parts = splitSheetKey(key);
+        if (!parts) continue;
+        const reverseKey = `${parts.dest}_to_${parts.prefix}${parts.suffix}_zone`;
+        const reverseZone = getDumpValue(dump, reverseKey);
+        if (reverseZone && FARE_CONFIG.zones[reverseZone]) {
+            return { code: reverseZone, inferred: false };
+        }
+    }
+    return { code: 'Z4', inferred: true };
+}
+
+function zar(n) {
+    return `R${Number(n).toFixed(2)}`;
+}
+
+/** Five maximum adult tickets for the route page fare table. */
+export function buildRouteFareTable(route, dump = loadScheduleDump()) {
+    const { code, inferred } = resolveRouteZone(route, dump);
+    const prices = FARE_CONFIG.zones_detailed[code] || FARE_CONFIG.zones_detailed.Z4;
+    return {
+        zoneCode: code,
+        inferred,
+        tickets: [
+            { label: 'Single', value: zar(prices.single) },
+            { label: 'Return', value: zar(prices.return) },
+            { label: 'Weekly Mon–Fri', value: zar(prices.weekly_mon_fri) },
+            { label: 'Weekly Mon–Sat', value: zar(prices.weekly_mon_sat) },
+            { label: 'Monthly', value: zar(prices.monthly) },
+        ],
+    };
 }
 
 export function firstLastSummaryLine(grid) {

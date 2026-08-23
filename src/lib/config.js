@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.21.1";
+export const APP_VERSION = "V8_08.23.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -891,6 +891,16 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.23.3",
+        title: "What's new",
+        date: "23 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Route pages:</b> Each corridor now shows both directions, a fare overview, and a clearer jump into the live timetable.",
+            "<b>Home:</b> The Next Train logo on those pages opens the app with your province already selected."
+        ]
+    },
     {
         id: "V8_08.21.1",
         title: "What's new",

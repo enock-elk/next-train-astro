@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.3 — SEO route pages: calm titles, fares, conversion chrome (23 Aug 2026)
+
+- Route landings use `{A} ↔ {B} Train Schedule & Times` instead of stuffing both “X to Y & Y to X” into the H1. Body copy still includes both directional phrases as headings.
+- Metadata lists a Corridor pair, not exclusive Origin / Destination. One canonical URL per corridor (no thin reverse-direction duplicates).
+- Each route page shows a 5-ticket **maximum** adult fare table from `FARE_CONFIG` + dump `{sheetKey}_zone` (Z4 if missing), with the off-peak / shorter-trip disclaimer.
+- Shared `SeoPageHeader`: logo → `/?region=`, **Open Next Train · {province}** at the top, theme toggle in document flow so the H1 cannot sit under the moon button.
+- Region hubs: static network PNG is no longer a link. Interactive map sits under the figure. Duplicate map CTA removed from the bottom grid.
+
 ## V8_08.21.1 — Drop leftover top-ad gap on return (21 Aug 2026)
 
 - Port of the #27 occupancy fix onto current `main` (after #28). Do not merge conflicted #27 as-is — it still pins `V8_08.19.7`.

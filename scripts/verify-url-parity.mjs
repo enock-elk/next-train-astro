@@ -247,6 +247,39 @@ if (!existsSync(swPath)) {
   }
 }
 
+// 8. SEO landing copy: calm ↔ titles, both-direction body, unlinked region map.
+{
+  const naledi = join(DIST, 'routes/johannesburg-to-naledi.html');
+  if (existsSync(naledi)) {
+    const html = readFileSync(naledi, 'utf8');
+    if (!html.includes('Johannesburg ↔ Naledi Train Schedule &amp; Times') && !html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
+      fail('Naledi landing title must be the calm ↔ form');
+    }
+    if (/Johannesburg to Naledi &amp; Naledi to Johannesburg/.test(html)) {
+      fail('Naledi landing still uses the stuffed both-direction title');
+    }
+    if (!html.includes('Johannesburg to Naledi') || !html.includes('Naledi to Johannesburg')) {
+      fail('Naledi landing body must include both directional phrases');
+    }
+    if (!html.includes('Maximum fares') || !html.includes('Weekly Mon–Fri')) {
+      fail('Naledi landing missing the max fare table');
+    }
+    if (!html.includes('Open Next Train · Gauteng')) {
+      fail('Naledi landing missing header Open Next Train · Gauteng');
+    }
+  }
+  const gauteng = join(DIST, 'regions/gauteng.html');
+  if (existsSync(gauteng)) {
+    const html = readFileSync(gauteng, 'utf8');
+    if (!html.includes('id="region-seo-map"')) fail('Gauteng hub missing #region-seo-map');
+    if (/<a[^>]+href="[^"]*map\.html[^"]*"[^>]*>[\s\S]{0,800}network-map/.test(html)) {
+      fail('Gauteng network map image must not be a link to the Leaflet map');
+    }
+    if (!html.includes('Interactive map')) fail('Gauteng hub missing Interactive map control');
+    if (!html.includes('Open Next Train · Gauteng')) fail('Gauteng hub missing Open Next Train · Gauteng');
+  }
+}
+
 for (const note of notes) console.log(`  note: ${note}`);
 
 if (failures.length) {

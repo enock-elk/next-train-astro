@@ -3,8 +3,9 @@
  *
  * Library tests (no dist): weekday grids from full-database.json follow
  * MANUAL_GRID_ORDER; first/last trains exist for flagship OD corridors.
- * HTML tests (after astro build): light first-paint, both-direction titles,
- * real <table> times, FAQPage JSON-LD, crawlable home/guide links.
+ * HTML tests (after astro build): light first-paint, calm ↔ titles plus
+ * both-direction body copy, fare table, real <table> times, FAQPage JSON-LD,
+ * crawlable home/guide links.
  *
  * Usage: node scripts/verify-route-seo.mjs [distDir]
  */
@@ -15,7 +16,13 @@ import { ROUTES } from '../src/lib/config.js';
 import { listFeaturedSeoRoutes, getSeoRouteBySlug } from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
-  bothDirectionTitle,
+  bidirectionalTitle,
+  corridorPairLabel,
+  directionPhrase,
+  routeDocumentTitle,
+  routeMetaDescription,
+  buildRouteFareTable,
+  resolveRouteZone,
   ogTimetableImageUrl,
   getSheet,
   loadScheduleDump,
@@ -91,9 +98,48 @@ const featured = listFeaturedSeoRoutes();
 if (featured.length < 6) fail(`expected ≥6 featured SEO routes, found ${featured.length}`);
 if (!featured.some((e) => e.route.id === 'jhb-soweto')) fail('featured list must include Naledi (jhb-soweto)');
 
-const title = bothDirectionTitle('Johannesburg', 'Naledi');
-if (!title.includes('Johannesburg to Naledi') || !title.includes('Naledi to Johannesburg')) {
-  fail(`both-direction title is "${title}"`);
+const title = bidirectionalTitle('Johannesburg', 'Naledi');
+if (title !== 'Johannesburg ↔ Naledi Train Schedule & Times') {
+  fail(`calm bidirectional title is "${title}"`);
+}
+if (/to .+ & .+ to /i.test(title)) {
+  fail(`title must not stuff both "X to Y & Y to X": "${title}"`);
+}
+if (corridorPairLabel('Durban', 'Umlazi') !== 'Durban ↔ Umlazi') {
+  fail('corridor pair should be Durban ↔ Umlazi');
+}
+if (directionPhrase('Pretoria', 'Mabopane') !== 'Pretoria to Mabopane') {
+  fail('directionPhrase should be "Pretoria to Mabopane"');
+}
+const docTitle = routeDocumentTitle('Pretoria', 'Mabopane');
+if (!docTitle.startsWith('Pretoria ↔ Mabopane Train Schedule & Times |')) {
+  fail(`document title is "${docTitle}"`);
+}
+const meta = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng');
+if (!meta.includes('Pretoria to Mabopane') || !meta.includes('Mabopane to Pretoria')) {
+  fail(`meta description must name both directions: "${meta}"`);
+}
+if (meta.includes(' & Mabopane to')) {
+  fail('meta description should not use the stuffed & title form');
+}
+
+{
+  const mabZone = resolveRouteZone(ROUTES['pta-mabopane']);
+  if (mabZone.code !== 'Z2' || mabZone.inferred) {
+    fail(`pta-mabopane zone should be Z2 from dump, got ${JSON.stringify(mabZone)}`);
+  }
+  const fares = buildRouteFareTable(ROUTES['pta-mabopane']);
+  const labels = fares.tickets.map((t) => t.label);
+  if (
+    !labels.includes('Single') ||
+    !labels.includes('Return') ||
+    !labels.includes('Weekly Mon–Fri') ||
+    !labels.includes('Weekly Mon–Sat') ||
+    !labels.includes('Monthly')
+  ) {
+    fail(`fare table missing a ticket type: ${labels.join(', ')}`);
+  }
+  if (fares.tickets.length !== 5) fail(`fare table should have 5 tickets, got ${fares.tickets.length}`);
 }
 const og = ogTimetableImageUrl('jhb-soweto', 'A');
 if (!og.includes('/og/timetable.png') || !og.includes('rt=jhb-soweto') || !og.includes('d=wd')) {
@@ -195,6 +241,27 @@ if (existsSync(DIST)) {
     if (!html.includes('Johannesburg to Naledi') || !html.includes('Naledi to Johannesburg')) {
       fail('Naledi route HTML must mention both directions');
     }
+    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
+      fail('Naledi route H1/title should use the calm ↔ form');
+    }
+    if (/Johannesburg to Naledi &amp; Naledi to Johannesburg/.test(html) || /Johannesburg to Naledi & Naledi to Johannesburg/.test(html)) {
+      fail('Naledi route HTML still uses the stuffed both-direction title');
+    }
+    if (!html.includes('data-seo-fares') || !html.includes('Maximum fares') || !html.includes('Weekly Mon–Fri')) {
+      fail('Naledi route HTML missing the max fare table');
+    }
+    if (!html.includes('Open Next Train · Gauteng')) {
+      fail('Naledi route HTML missing header Open Next Train · Gauteng');
+    }
+    if (!html.includes('icons/icon-48.png')) {
+      fail('Naledi route HTML missing logo mark');
+    }
+    if (!html.includes('>Corridor<') && !html.includes('>Corridor</')) {
+      fail('Naledi route metadata should list Corridor, not exclusive Origin/Destination');
+    }
+    if (/<dt[^>]*>Origin<\/dt>/.test(html) || />Origin<\/dt>/.test(html)) {
+      fail('Naledi route metadata still lists exclusive Origin');
+    }
     if (!html.includes('<table')) fail('Naledi route HTML has no <table> timetable');
     if (!html.includes('FAQPage')) fail('Naledi route HTML missing FAQPage JSON-LD');
     if (!html.includes('/og/timetable.png')) fail('Naledi route HTML missing og:image timetable PNG');
@@ -247,6 +314,14 @@ if (existsSync(DIST)) {
   if (existsSync(region)) {
     const html = readFileSync(region, 'utf8');
     if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Gauteng region page has html.dark');
+    if (!html.includes('id="region-seo-map"')) fail('Gauteng region page missing #region-seo-map figure');
+    if (/<a[^>]+href="[^"]*map\.html[^"]*"[^>]*>[\s\S]{0,800}network-map/.test(html)) {
+      fail('Gauteng network map image must not be wrapped in a map.html link');
+    }
+    if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
+    if (!html.includes('Open Next Train · Gauteng')) {
+      fail('Gauteng region page missing Open Next Train · Gauteng');
+    }
   }
 } else {
   console.log(`  note: ${DIST}/ not found — skipping built-HTML asserts (library checks still ran)`);

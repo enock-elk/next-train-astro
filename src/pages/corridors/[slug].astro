@@ -1,13 +1,12 @@
 ---
 import ContentLayout from '../../layouts/ContentLayout.astro';
-import SeoThemeToggle from '../../components/SeoThemeToggle.astro';
+import SeoPageHeader from '../../components/SeoPageHeader.astro';
 import { withBase } from '../../lib/config.js';
 import {
   listSeoCorridors,
   getSeoCorridorBySlug,
   listSeoRegions,
   displayRouteName,
-  stationLabel,
   regionName,
 } from '../../lib/seo-routes.js';
 
@@ -26,6 +25,7 @@ const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
+const appHref = withBase(`/?region=${encodeURIComponent(entry.region)}`);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -45,10 +45,10 @@ const jsonLd = {
   forceLight={true}
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
-  <SeoThemeToggle />
+  <SeoPageHeader region={entry.region} regionLabel={province} />
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
-    <div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
+    <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
       <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
         <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
         <span class="text-slate-400 dark:text-slate-500"> / </span>
@@ -57,7 +57,7 @@ const jsonLd = {
         {entry.label}
       </p>
 
-      <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
         {entry.label} schedules
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
@@ -74,9 +74,9 @@ const jsonLd = {
                 class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
               >
                 <span class="block text-base font-bold text-slate-900 dark:text-white">
-                  {stationLabel(route.destA)} to {stationLabel(route.destB)}
+                  {displayRouteName(route)}
                 </span>
-                <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">{displayRouteName(route)}</span>
+                <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">{entry.label}</span>
               </a>
             </li>
           ))}
@@ -84,10 +84,10 @@ const jsonLd = {
       </section>
 
       <a
-        href={withBase(`/?rt=${encodeURIComponent(entry.routes[0]?.route.id || '')}`)}
+        href={appHref}
         class="mt-10 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 transition-colors"
       >
-        Open live board
+        Open Next Train · {province}
       </a>
       <p class="mt-2 text-center text-[11px] text-slate-500">
         Returning visitors keep their saved region &amp; route.

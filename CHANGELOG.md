@@ -2,6 +2,21 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.2 — Header No Service, telemetry merge, join hint (23 Aug 2026)
+
+- Live-board header: Saturday / GP-holiday day chip is red **No Service** when the pinned route has no timed Saturday trains in either direction (EC, herc-koed, or any route). Live Saturday columns restore “Saturday Schedule”.
+- Planner telemetry: corridor cards merge weekday/Sat/Sun into one entry; day-type filter stays off. **See more batches** grows the `limitToLast` window past 400.
+- Admin: `usr_*_{epoch}` user IDs get a small **i** showing first-install time (toast + title). Feedback, crashes, trip plans, reply header.
+
+## V8_08.23.1 — Ad scroll-gap + Saturday planner notices (23 Aug 2026)
+
+- Same-session leftover top-ad strip: remasure occupancy on `scroll` / `scrollend`, and watch only while `--nt-ad-shift` is still applied. Resume/visibility path from 21.1 is unchanged.
+- Planner Saturday placeholders: hardcoded `herc-koed` and `ec-berlin` only. Live `*_sat` times automatically restore normal planning.
+- Intra-line / Eastern Cape: `ERR_NO_SATURDAY_SERVICE` advisory modal + See Next Available Day.
+- Dest on the Koed–Herc stub: Line Severed — cannot reach, showing trains terminating at the junction.
+- Origin on the stub: boarding blocked — cannot depart, showing trains from the junction.
+- East↔North that only works via the herc-koed bridge: same modal when no other Saturday path exists.
+
 ## V8_08.21.1 — Drop leftover top-ad gap on return (21 Aug 2026)
 
 - Port of the #27 occupancy fix onto current `main` (after #28). Do not merge conflicted #27 as-is — it still pins `V8_08.19.7`.

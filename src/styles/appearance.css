@@ -467,11 +467,20 @@ html.dark #app-header.nt-maint-active {
   z-index: 70;
 }
 
-/* Planner notices: icon + accent bar + wash all live on the right. */
+/* Planner notices: icon + accent bar on the right. Do not pad the whole
+   body — that boxed Details into a leftover column on phones. */
 .planner-notice-body {
   position: relative;
-  padding-right: 3.25rem;
+  padding-right: 0.875rem;
   text-align: left;
+}
+.planner-notice-title {
+  padding-right: 2.75rem;
+}
+.planner-notice-details-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
 }
 .planner-notice-icon {
   width: 2.25rem;

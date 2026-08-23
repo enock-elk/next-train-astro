@@ -585,25 +585,23 @@ function buildPlannerNotice({
     const chevronSvg = `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
     const detailsLabel = interactive?.detailsLabel || 'Details';
     const detailsHtml = interactive?.onclickAttr
-        ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap self-end shrink-0">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
+        ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon on the right. Details sits on the last body row
-    // ("Showing trains terminating at…"), not under the title icon.
+    // Accent bar + icon on the right. Details is its own row (no shared
+    // flex with the copy) so phones do not squeeze it into the icon gutter.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
     const inner = `
         <div class="flex items-stretch">
-            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 pr-14 text-left">
+            <div class="planner-notice-body relative flex-1 min-w-0 px-3.5 pt-3.5 pb-3 text-left">
                 <div class="absolute top-3.5 right-3.5">
                     <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
                         ${iconSvg}
                     </div>
                 </div>
-                <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5 pr-1">${escapeHTML(title)}</h4>
-                <div class="flex items-end justify-between gap-3">
-                    <div class="min-w-0 flex-1 text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
-                    ${detailsHtml}
-                </div>
+                <h4 class="planner-notice-title text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5">${escapeHTML(title)}</h4>
+                <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                ${detailsHtml ? `<div class="planner-notice-details-row">${detailsHtml}</div>` : ''}
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
@@ -1179,6 +1177,14 @@ function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'pl
     };
 }
 
+/** Restore the blue corridor ends on “Lies Between A & B”. */
+function paintSaturdayBetweenLine(line) {
+    const raw = String(line || '');
+    const match = raw.match(/^Lies Between\s+(.+?)\s+&\s+(.+)$/i);
+    if (!match) return escapeHTML(raw);
+    return `Lies Between <span class="text-blue-600 dark:text-blue-400">${escapeHTML(match[1])}</span> & <span class="text-blue-600 dark:text-blue-400">${escapeHTML(match[2])}</span>`;
+}
+
 export function openSaturdayServiceModal(routeId = 'herc-koed') {
     if (typeof triggerHaptic === 'function') triggerHaptic();
     const payload = {
@@ -1194,7 +1200,7 @@ export function openSaturdayServiceModal(routeId = 'herc-koed') {
     if (titleEl) {
         const extra = (copy.lines || []).filter(Boolean);
         titleEl.innerHTML = `<span class="block">${escapeHTML(copy.title)}</span>${
-            extra.map((line) => `<span class="block mt-2 text-[13px] font-bold tracking-normal normal-case text-slate-700 dark:text-slate-200">${escapeHTML(line)}</span>`).join('')
+            extra.map((line) => `<span class="block mt-2 text-[13px] font-bold tracking-normal normal-case text-slate-700 dark:text-slate-200">${paintSaturdayBetweenLine(line)}</span>`).join('')
         }`;
     }
     if (bodyEl) bodyEl.textContent = copy.lead || saturdayNoServiceCopy(payload.routeId).body;
@@ -1865,7 +1871,7 @@ function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
     const routeSafe = escapeHTML(String(routeId || ''));
     const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-2 decoration-blue-500 font-semibold hover:decoration-[2.5px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}<svg class="w-3 h-3 shrink-0 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg></button>`;
+    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}</button>`;
 }
 
 export function openPlannerTrainSheet(routeId, trainId) {

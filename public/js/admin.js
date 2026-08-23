@@ -4315,10 +4315,14 @@ const Admin = {
                                 <option value="EC">Eastern Cape</option>
                             </select>
                         </div>
-                        <div class="hidden">
+                        <div>
                             <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
                             <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
                                 <option value="" selected>All days</option>
+                                <option value="weekday">Weekday</option>
+                                <option value="saturday">Saturday</option>
+                                <option value="sunday">Sunday</option>
+                                <option value="public_holiday">Public holiday</option>
                             </select>
                         </div>
                         <div class="relative" id="de-filter-userid-container">
@@ -4421,6 +4425,7 @@ const Admin = {
             el.addEventListener('input', apply);
         };
         bindTripFilter('de-filter-region', 'region');
+        bindTripFilter('de-filter-day', 'dayType');
         bindTripFilter('de-filter-userid', 'userId');
 
         // Premium custom dropdown for User ID (matches excl-route pattern)
@@ -4656,7 +4661,7 @@ const Admin = {
         };
 
         Admin.tripCorridorKey = (entry) =>
-            `${entry.origin}|${entry.destination}|${entry.region || ''}`;
+            `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
 
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
@@ -4747,24 +4752,26 @@ const Admin = {
         };
 
         Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
-            const pageSize = Admin._deTripPageSize || 40;
-            const page = Math.max(0, Admin._deTripPage || 0);
-            const start = page * pageSize;
-            const slice = sorted.slice(start, start + pageSize);
             const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
             const esc = Admin.secureDeEscape;
-            const summary = document.createElement('div');
-            summary.className = 'text-[9px] text-gray-400 px-1 mb-1';
-            summary.textContent = `Window: ${meta.windowNote}. Showing ${meta.filteredCount} logged trips / ${sorted.length} corridors / ${meta.userBatchCount} user-batches. List ${start + 1}–${start + slice.length} (export uses current filters).`;
-            listDiv.appendChild(summary);
+            const usersCollected = Number(meta.uniqueUsers || 0);
+            const banner = document.createElement('div');
+            banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
+            banner.innerHTML = `
+                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users collected</p>
+                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersCollected}</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · window ${esc(meta.windowNote || '')}</p>
+            `;
+            listDiv.appendChild(banner);
 
-            slice.forEach((item) => {
+            sorted.forEach((item) => {
                 const dateStr = Admin.formatDate(item.lastSeen);
                 const card = document.createElement('div');
                 card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
                 const corridorKey = Admin.tripCorridorKey({
                     origin: item.origin,
                     destination: item.dest,
+                    dayType: item.dayType,
                     region: item.region,
                 });
                 const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
@@ -4774,10 +4781,11 @@ const Admin = {
                             <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${esc(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${esc(item.dest)}</div>
                             <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${esc(item.dayType || 'unknown')}</span>
                                 <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${esc(item.region || '-')}</span>
                                 <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${esc(item.depSample || '-')}</span>
                             </div>
-                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate inline-flex items-center max-w-full" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}${Admin.userIdJoinHintHtml(item.userId)}</div>
+                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}</div>
                             <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
                         </div>
                         <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
@@ -4804,7 +4812,7 @@ const Admin = {
             if (meta.canLoadMore) {
                 const more = document.createElement('button');
                 more.type = 'button';
-                more.className = 'w-full mb-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none';
+                more.className = 'w-full mt-1 mb-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none';
                 more.textContent = `See ${Admin._deTripWindowStep || 400} more batches`;
                 more.onclick = async () => {
                     Admin._deTripWindowSize = (Admin._deTripWindowSize || 400) + (Admin._deTripWindowStep || 400);
@@ -4812,32 +4820,6 @@ const Admin = {
                     Admin.renderTripPlanBatches(listDiv, secret);
                 };
                 listDiv.appendChild(more);
-            }
-
-            if (sorted.length > pageSize) {
-                const nav = document.createElement('div');
-                nav.className = 'flex items-center justify-between gap-2 pt-1';
-                const prevBtn = document.createElement('button');
-                prevBtn.type = 'button';
-                prevBtn.className = 'px-2 py-1 text-[10px] font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 disabled:opacity-40';
-                prevBtn.textContent = 'Newer';
-                prevBtn.disabled = page <= 0;
-                prevBtn.onclick = () => {
-                    Admin._deTripPage = Math.max(0, page - 1);
-                    Admin.renderTripPlanBatches(listDiv, null, true);
-                };
-                const nextBtn = document.createElement('button');
-                nextBtn.type = 'button';
-                nextBtn.className = 'px-2 py-1 text-[10px] font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 disabled:opacity-40';
-                nextBtn.textContent = 'Older';
-                nextBtn.disabled = start + slice.length >= sorted.length;
-                nextBtn.onclick = () => {
-                    Admin._deTripPage = page + 1;
-                    Admin.renderTripPlanBatches(listDiv, null, true);
-                };
-                nav.appendChild(prevBtn);
-                nav.appendChild(nextBtn);
-                listDiv.appendChild(nav);
             }
         };
 
@@ -4906,7 +4888,7 @@ const Admin = {
                 });
 
                 const totalRows = allRows.length;
-                const userCount = new Set(filtered.map((r) => `${r.userId || ''}::${r.batchId || ''}`).filter(Boolean)).size;
+                const uniqueUsers = new Set(allRows.map((r) => r.userId).filter(Boolean)).size;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
@@ -4915,7 +4897,7 @@ const Admin = {
                 listDiv.innerHTML = '';
                 Admin.paintTripCorridorPage(listDiv, sorted, {
                     filteredCount: filtered.length,
-                    userBatchCount: userCount,
+                    uniqueUsers,
                     windowNote: `latest ${Admin._deTripWindowSize || 400} batches`,
                     canLoadMore: !!Admin._deTripWindowFull,
                 });

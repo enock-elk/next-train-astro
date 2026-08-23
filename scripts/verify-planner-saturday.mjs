@@ -53,7 +53,9 @@ if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the 
 if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
 if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
-if (!ui.includes('items-end justify-between')) fail('Details must sit on the terminating-at row');
+if (!ui.includes('planner-notice-details-row')) fail('Details must sit on its own row');
+if (ui.includes('pr-14')) fail('planner notice must not reserve pr-14 on phones');
+if (!ui.includes('paintSaturdayBetweenLine')) fail('Saturday advisory must paint blue corridor ends');
 if (!sat.includes('buildSaturdayAdvisoryCopy')) fail('saturday-service must build dynamic advisory copy');
 if (!core.includes('extractTrainSheetStops')) fail('planner-core must extract the full train column');
 const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
@@ -135,10 +137,10 @@ const boarding = buildSaturdayAdvisoryCopy({
     boardingBlocked: true,
     blockedOrigin: 'Gezina',
 });
-if (!/Gezina/.test(boarding.title) || !boarding.lines.some((l) => /Lies Between HERCULES/.test(l))) {
+if (!/^Your selected station: Gezina\.$/.test(boarding.title) || !boarding.lines.some((l) => /Lies Between HERCULES/.test(l))) {
     fail(`boarding modal copy drifted: ${JSON.stringify(boarding)}`);
 }
-if (!/Boarding blocked/i.test(boarding.quote) || !/Gezina/.test(boarding.quote) || !/Hercules to Koedoespoort/i.test(boarding.quote)) {
+if (!/Boarding blocked/i.test(boarding.quote) || !/Your selected station: Gezina/.test(boarding.quote) || !/Hercules to Koedoespoort/i.test(boarding.quote)) {
     fail(`boarding reply quote drifted: ${boarding.quote}`);
 }
 
@@ -148,14 +150,20 @@ const severed = buildSaturdayAdvisoryCopy({
     intendedDest: 'Gezina',
     partialDest: 'Hercules',
 });
-if (!/Cannot reach Gezina on Saturdays/.test(severed.title)) {
+if (!/^Your selected station: Gezina\.$/.test(severed.title)) {
     fail(`severed modal title drifted: ${severed.title}`);
 }
-if (!severed.lines.some((l) => /Showing trains terminating at Hercules/.test(l))) {
-    fail(`severed modal lines drifted: ${JSON.stringify(severed.lines)}`);
+if (severed.lines.some((l) => /Cannot reach|Showing trains terminating/.test(l))) {
+    fail(`severed modal must not repeat the board: ${JSON.stringify(severed.lines)}`);
 }
-if (!/Line Severed/i.test(severed.quote) || !/on Saturdays/.test(severed.quote)) {
+if (!severed.lines.some((l) => /Lies Between HERCULES/.test(l))) {
+    fail(`severed modal must keep Lies Between: ${JSON.stringify(severed.lines)}`);
+}
+if (!/Line Severed/i.test(severed.quote) || !/Your selected station: Gezina/.test(severed.quote)) {
     fail(`severed reply quote drifted: ${severed.quote}`);
+}
+if (/Cannot reach|Showing trains terminating/.test(severed.quote)) {
+    fail(`severed reply must not repeat the board: ${severed.quote}`);
 }
 
 $fullDatabase.set({

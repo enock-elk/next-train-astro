@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.7 — Saturday advisory, calm train tap, telemetry cards (23 Aug 2026)
+
+- Line Severed / boarding-blocked Details sits on its own row. Dropped the shared flex + `pr-14` / `padding-right: 3.25rem` gutter that boxed the control on phones.
+- Saturday advisory modal no longer repeats the board (“Cannot reach… / Showing trains…”). Title is `Your selected station: {name}.` Corridor line is `Lies Between` with blue station names. Reply quote matches.
+- Planner result train names that open the sheet are `font-medium` with a light underline (no heavy chevron).
+- Planner telemetry cards restore day-type + region chips. Headline **Users collected** is unique `userId`s in the loaded window. Keep `limitToLast` + See more batches; hits still lazy-load on expand (no `hitsHtml` dump).
+
 ## V8_08.23.6 — Planner Recent Trips + train sheet (23 Aug 2026)
 
 - Recent Trips no longer hide when the master station list is still empty on first paint. Incomplete-index filter no longer writes a wipe back to `plannerHistory_{region}`. Re-render on Trip Planner tab open and when `$masterStationList` fills.

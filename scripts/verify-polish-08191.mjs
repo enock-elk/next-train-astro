@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.6 planner history + train sheet).
+ * Current polish gate (V8_08.23.7 Saturday advisory + calm train tap + telemetry cards).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,18 +11,18 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.6') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.7') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.6') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.7') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/recent trips/i.test(wn) || !/\blast 5\b/i.test(wn)) {
-    fail(`What's New must mention Recent Trips (last 5): ${wn}`);
+if (!/saturday/i.test(wn) || !/station/i.test(wn) || !/corridor/i.test(wn)) {
+    fail(`What's New must mention Saturday details + selected station: ${wn}`);
 }
-if (!/train sheet/i.test(wn) || !/fare/i.test(wn)) {
-    fail(`What's New must mention the train sheet fare chip: ${wn}`);
+if (!/train names/i.test(wn) && !/lighter tap/i.test(wn)) {
+    fail(`What's New must mention the calmer train-name tap: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -41,6 +41,7 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.6')) fail('V8_08.23.6 card must remain in history');
 if (!folded.has('V8_08.23.5')) fail('V8_08.23.5 card must remain in history');
 const card235 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.5');
 const wn235 = (card235?.features || []).join(' ');
@@ -57,9 +58,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.6') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.7') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.6') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.7') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -231,7 +232,18 @@ if (alerts.includes('toLocaleDateString()')) fail('alerts-channel still uses sla
 if (!admin.includes('applyWysiwygFont')) fail('composer must apply font face + class, not only execCommand');
 if (!admin.includes('limitToLast=')) fail('planner telemetry must window the RTDB fetch');
 if (!admin.includes('expandTripCorridorHits')) fail('planner telemetry must lazy-load hit history');
-if (!admin.includes('_deTripPageSize')) fail('planner telemetry must paginate corridor cards');
+if (!admin.includes('See ${Admin._deTripWindowStep') && !admin.includes('See ${Admin._deTripWindowStep || 400} more batches')) {
+    fail('planner telemetry must keep See more batches');
+}
+if (!admin.includes('Users collected') || !admin.includes('de-users-collected')) {
+    fail('planner telemetry must show unique users collected');
+}
+if (!admin.includes('text-indigo-600 dark:text-indigo-400 uppercase')) {
+    fail('planner telemetry cards must restore the day-type chip');
+}
+if (admin.includes('<div class="hidden">\n                            <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>')) {
+    fail('day-type filter must be visible again');
+}
 if (admin.includes('hitsHtml')) fail('planner telemetry must not dump every hit into card HTML');
 
 const rich = readFileSync('src/lib/rich-text.js', 'utf8');
@@ -289,8 +301,11 @@ if (!logicJs.includes('currentRouteSaturdayClosed')) fail('header No Service mus
 const plannerUi = readFileSync('src/lib/planner-ui.js', 'utf8');
 if (!plannerUi.includes('openPlannerTrainSheet')) fail('planner-ui must open the train-sheet modal');
 if (!plannerUi.includes('planner-train-name-btn')) fail('planner results must underline the train name');
-if (!plannerUi.includes('decoration-2') || !plannerUi.includes('font-semibold')) {
-    fail('Depart train name must read as a stronger button');
+if (!plannerUi.includes('planner-train-name-btn') || !plannerUi.includes('font-medium') || !plannerUi.includes('decoration-1')) {
+    fail('Depart train name must stay a calm underlined control');
+}
+if (/planner-train-name-btn[^"]*font-semibold/.test(plannerUi) || /planner-train-name-btn[^"]*decoration-2/.test(plannerUi)) {
+    fail('Depart train name must not use the heavy underline / semibold treatment');
 }
 if (plannerUi.includes('connectHtml: plannerTrainNameButton')) {
     fail('Connect To must be plain text, not a second sheet opener');
@@ -312,7 +327,13 @@ if (plannerUi.includes('$masterStationList.subscribe') === false) {
 if (!ui.includes('m.renderPlannerHistory')) {
     fail('switchTab trip-planner must re-render planner history');
 }
-if (!plannerUi.includes('items-end justify-between')) fail('Details must sit on the terminating-at row');
+if (!plannerUi.includes('planner-notice-details-row')) fail('Details must sit on its own row, not share a squeezed flex');
+if (plannerUi.includes('pr-14')) fail('planner notice body must not reserve pr-14 (boxes Details on phones)');
+const appearance = readFileSync('src/styles/appearance.css', 'utf8');
+if (!appearance.includes('planner-notice-details-row')) fail('appearance.css must drop the blocking notice-body pad');
+if (!plannerUi.includes('paintSaturdayBetweenLine') || !plannerUi.includes('text-blue-600 dark:text-blue-400')) {
+    fail('Saturday advisory must restore blue corridor ends');
+}
 if (!plannerUi.includes('planner-notice-details')) fail('terminating banners must keep a Details control');
 if (!plannerUi.includes('on Saturdays')) fail('dest-cut banner must say on Saturdays');
 if (!plannerUi.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory');
@@ -334,4 +355,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.6 polish (Recent Trips + train sheet fare stack)');
+console.log('✓ V8_08.23.7 polish (Saturday advisory, calm train tap, telemetry cards)');

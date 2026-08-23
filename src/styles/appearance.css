@@ -374,23 +374,75 @@ html[data-colour-pack="earthy"] #main-content {
   border-color: var(--nt-border) !important;
 }
 
-html[data-colour-pack="midnight"] .app-header,
 html[data-colour-pack="contrast"] .app-header,
 html[data-colour-pack="signal"] .app-header,
 html[data-colour-pack="ember"] .app-header,
-html[data-colour-pack="earthy"] .app-header,
 html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
 html[data-colour-pack="earthy"] #app-top-tabs,
-html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
+}
+
+/*
+ * Midnight + Earthy chrome: same hero as Full Train Sheet
+ * (bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 / sage→terracotta).
+ */
+html[data-colour-pack="midnight"] .app-header,
+html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar {
+  background-color: #2563eb !important;
+  background-image: linear-gradient(to bottom right, #2563eb, #2563eb, #4338ca) !important;
+  border-color: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-colour-pack="earthy"] .app-header,
+html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
+  background-color: #6B705C !important;
+  background-image: linear-gradient(to bottom right, #6B705C, #6B705C, #8B6F4E) !important;
+  border-color: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-colour-pack="midnight"] #app-title.header-title,
+html[data-colour-pack="earthy"] #app-title.header-title {
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  color: #ffffff !important;
+}
+html[data-colour-pack="midnight"] #current-day,
+html[data-colour-pack="earthy"] #current-day {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff !important;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+html[data-colour-pack="midnight"] #current-day span,
+html[data-colour-pack="earthy"] #current-day span {
+  color: #ffffff !important;
+}
+html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item,
+html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item.is-active,
+html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item.is-active {
+  color: #ffffff !important;
+}
+html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item:focus-visible,
+html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item:focus-visible {
+  --tw-ring-color: rgba(255, 255, 255, 0.7);
 }
 
 html[data-colour-pack="midnight"] .view-section,

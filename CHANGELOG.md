@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.14 — Trip Planner label; Midnight/Earthy sheet chrome (23 Aug 2026)
+
+- Bottom-nav middle tab label is **Trip Planner** (route icon stays).
+- Midnight + Earthy: header and bottom nav use the Full Train Sheet hero (`to bottom right` blue→indigo / sage→terracotta), white title, day chip (`#current-day` as a white/15 pill), white active tab. Other packs unchanged. Alerts keep their colours.
+
 ## V8_08.23.13 — Plan/Options icons, main-style alert badge, Theme & Preferences (23 Aug 2026)
 
 - Plan tab uses the Lucide route icon. Options uses the Lucide menu icon (unread badge stays).

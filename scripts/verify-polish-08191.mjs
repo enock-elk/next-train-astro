@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.13 icons, main-style bell, Theme & Preferences).
+ * Current polish gate (V8_08.23.14 Trip Planner + Midnight/Earthy sheet chrome).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,18 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.13') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.14') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.13') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.14') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/plan/i.test(wn) || !/route/i.test(wn) || !/menu/i.test(wn)) {
-    fail(`What's New must mention Plan route + Options menu icons: ${wn}`);
+if (!/trip planner/i.test(wn)) {
+    fail(`What's New must mention the Trip Planner tab label: ${wn}`);
 }
-if (!/alert/i.test(wn) || !/circle/i.test(wn)) {
-    fail(`What's New must mention the alert badge outside the circle: ${wn}`);
-}
-if (!/theme/i.test(wn) || !/preferences/i.test(wn)) {
-    fail(`What's New must mention Theme & Preferences: ${wn}`);
+if (!/midnight/i.test(wn) || !/earthy/i.test(wn) || !/train sheet/i.test(wn)) {
+    fail(`What's New must mention Midnight/Earthy train-sheet chrome: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -43,6 +40,12 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+}
+if (!folded.has('V8_08.23.13')) fail('V8_08.23.13 card must remain in history');
+const card2313 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.13');
+const wn2313 = (card2313?.features || []).join(' ');
+if (!/route/i.test(wn2313) || !/menu/i.test(wn2313)) {
+    fail('V8_08.23.13 card must keep the route + menu icons');
 }
 if (!folded.has('V8_08.23.12')) fail('V8_08.23.12 card must remain in history');
 const card2312 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.12');
@@ -106,9 +109,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.13') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.14') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.13') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.14') fail(`app-version.json is ${appVer.version}`);
 if (appVer.forceUpdate !== true) fail('app-version.json forceUpdate must stay true unless the owner flips it');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
@@ -621,6 +624,8 @@ if (indexHtml.includes('z-[110]')) fail('bottom nav must not paint over Welcome 
 if (!indexHtml.includes('lucide-route') || !indexHtml.includes('cx="6"')) {
     fail('Plan tab must use the Lucide route icon');
 }
+if (!indexHtml.includes('>Trip Planner<')) fail('middle tab label must be Trip Planner');
+if (/>Plan</.test(indexHtml)) fail('bottom nav must not say Plan');
 if (!indexHtml.includes('lucide-menu') || !indexHtml.includes('M4 12h16')) {
     fail('Options tab must use the Lucide menu icon');
 }
@@ -640,6 +645,12 @@ const prefsPacks = readFileSync('src/lib/prefs.js', 'utf8');
 if (!prefsPacks.includes("EARTHY: 'earthy'")) fail('prefs must register the Earthy pack');
 const appearanceCss = readFileSync('src/styles/appearance.css', 'utf8');
 if (!appearanceCss.includes('data-colour-pack="earthy"')) fail('appearance.css must define Earthy');
+if (!appearanceCss.includes('to bottom right, #2563eb, #2563eb, #4338ca')) {
+    fail('Midnight header/nav must use the train-sheet blue→indigo gradient');
+}
+if (!appearanceCss.includes('to bottom right, #6B705C, #6B705C, #8B6F4E')) {
+    fail('Earthy header/nav must use the sage→terracotta gradient');
+}
 const alertsJs = readFileSync('src/lib/alerts-channel.js', 'utf8');
 if (alertsJs.includes('absolute top-2 right-4')) {
     fail('applyBellFromNotices must not slam the main hamburger-header absolute position');
@@ -651,4 +662,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.13 polish (icons, main-style bell, Theme & Preferences)');
+console.log('✓ V8_08.23.14 polish (Trip Planner + Midnight/Earthy sheet chrome)');

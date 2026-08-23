@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.15 toasts, header offline, shared chrome).
+ * Current polish gate (V8_08.24.01 folded 23 Aug What’s New).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,24 +11,24 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.15') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.24.01') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.15') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.24.01') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/toast/i.test(wn) || !/bottom/i.test(wn)) {
-    fail(`What's New must mention toasts above the bottom bar: ${wn}`);
+if (!/bottom/i.test(wn) || !/trip planner/i.test(wn) || !/options/i.test(wn)) {
+    fail(`What's New must mention the bottom bar tabs: ${wn}`);
 }
-if (!/offline/i.test(wn) || !/bell/i.test(wn)) {
-    fail(`What's New must mention the header offline chip: ${wn}`);
+if (!/toast/i.test(wn) || !/offline/i.test(wn)) {
+    fail(`What's New must mention toasts and offline: ${wn}`);
 }
 if (!/theme/i.test(wn) && !/look/i.test(wn)) {
     fail(`What's New must mention theme/looks chrome: ${wn}`);
 }
-if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
-    fail('Whats New must stay obvious in-app behaviour only');
+if (!/recent trips/i.test(wn) || !/max\.?\s*single fare/i.test(wn)) {
+    fail(`What's New must keep Recent Trips + Max. Single Fare: ${wn}`);
 }
 
 const card201 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.20.1');
@@ -42,70 +42,14 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
-    if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.01, not kept as its own card`);
 }
-if (!folded.has('V8_08.23.14')) fail('V8_08.23.14 card must remain in history');
-if (!folded.has('V8_08.23.13')) fail('V8_08.23.13 card must remain in history');
-const card2313 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.13');
-const wn2313 = (card2313?.features || []).join(' ');
-if (!/route/i.test(wn2313) || !/menu/i.test(wn2313)) {
-    fail('V8_08.23.13 card must keep the route + menu icons');
-}
-if (!folded.has('V8_08.23.12')) fail('V8_08.23.12 card must remain in history');
-const card2312 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.12');
-const wn2312 = (card2312?.features || []).join(' ');
-if (!/bottom bar/i.test(wn2312) || !/welcome/i.test(wn2312)) {
-    fail('V8_08.23.12 card must keep Welcome + bottom bar');
-}
-if (!folded.has('V8_08.23.11')) fail('V8_08.23.11 card must remain in history');
-const card2311 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.11');
-const wn2311 = (card2311?.features || []).join(' ');
-if (!/bottom bar/i.test(wn2311) || !/options/i.test(wn2311)) {
-    fail('V8_08.23.11 card must keep the bottom bar + Options');
-}
-if (!/messages/i.test(wn2311) || !/team/i.test(wn2311)) {
-    fail('V8_08.23.11 card must keep Messages');
-}
-if (folded.has('V8_08.23.10')) {
-    fail('V8_08.23.10 is admin/Account password — fold it out of What’s New');
+for (const id of ['V8_08.23.15', 'V8_08.23.14', 'V8_08.23.13', 'V8_08.23.12', 'V8_08.23.11', 'V8_08.23.10', 'V8_08.23.9', 'V8_08.23.8', 'V8_08.23.7', 'V8_08.23.6', 'V8_08.23.5']) {
+    if (folded.has(id)) fail(`${id} must be folded into V8_08.24.01, not kept as its own card`);
 }
 const allWhatsNew = CHANGELOG_DATA.flatMap((e) => e.features || []).join(' ');
-if (/account|password|face\s*id|sign-?in/i.test(allWhatsNew)) {
-    fail('What’s New must not mention Account, password, Face ID, or sign-in');
-}
-if (!folded.has('V8_08.23.9')) fail('V8_08.23.9 card must remain in history');
-if (!folded.has('V8_08.23.8')) fail('V8_08.23.8 card must remain in history');
-const card239 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.9');
-const wn239 = (card239?.features || []).join(' ');
-if (!/max\.?\s*single fare/i.test(wn239) && !/fare chip/i.test(wn239)) {
-    fail('V8_08.23.9 card must keep the fare chip bullet');
-}
-if (!/recent trips/i.test(wn239) || !/province/i.test(wn239)) {
-    fail('V8_08.23.9 card must keep Recent Trips across provinces');
-}
-if (!folded.has('V8_08.23.7')) fail('V8_08.23.7 card must remain in history');
-if (!folded.has('V8_08.23.6')) fail('V8_08.23.6 card must remain in history');
-if (!folded.has('V8_08.23.5')) fail('V8_08.23.5 card must remain in history');
-const card238 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.8');
-const wn238 = (card238?.features || []).join(' ');
-if (!/notice/i.test(wn238) || !/version/i.test(wn238)) {
-    fail('V8_08.23.8 card must keep the incoming-version notice');
-}
-if (!/download/i.test(wn238) && !/ready/i.test(wn238)) {
-    fail('V8_08.23.8 card must keep the download-ready bullet');
-}
-const card237 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.7');
-const wn237 = (card237?.features || []).join(' ');
-if (!/saturday/i.test(wn237) || !/station/i.test(wn237)) {
-    fail('V8_08.23.7 card must keep Saturday details + selected station');
-}
-const card235 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.5');
-const wn235 = (card235?.features || []).join(' ');
-if (!/saturday/i.test(wn235) || !/no service/i.test(wn235)) {
-    fail('V8_08.23.5 card must keep Saturday No Service');
-}
-if (!/advert|blank strip/i.test(wn235)) {
-    fail('V8_08.23.5 card must keep the leftover ad strip');
+if (/account|password|face\s*id|sign-?in|admin|dev hub|telemetry|firebase|dump|\bseo\b|google|analytics|clever|deploy|worker|nuke|force.update|allowlist|rtdb|token|secret|under-the-hood|data engine|alert ranking|unaffiliated|kempton|danger zone/i.test(allWhatsNew)) {
+    fail('What’s New must not mention admin, secrets, IP, or gated chrome');
 }
 if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
 if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
@@ -114,9 +58,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.15') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.24.1') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.15') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.24.01') fail(`app-version.json is ${appVer.version}`);
 if (appVer.forceUpdate !== true) fail('app-version.json forceUpdate must stay true unless the owner flips it');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
@@ -698,4 +642,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.15 polish (toasts, header offline, shared chrome)');
+console.log('✓ V8_08.24.01 polish (folded 23 Aug What’s New)');

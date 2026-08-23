@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.24.01 — Fold 23 Aug What’s New; scrub public cards (24 Aug 2026)
+
+- In-app What’s New is one `V8_08.24.01` card for everything shipped on 23 Aug. Older `V8_08.23.*` cards are folded out of `CHANGELOG_DATA`.
+- Commuter bullets: bottom bar + toasts + offline chip; theme chrome matching the timetable button + unread outside the bell; Recent Trips + Max. Single Fare; Theme & Preferences + Messages.
+- Scrub remaining What’s New cards: no Account/password, no disruption-scope internals, no “data engine” / “under-the-hood” / alert ranking / legal-unaffiliated / future-nav strategy / Kempton corridor name.
+
 ## V8_08.23.15 — Toasts above nav; header offline; shared chrome tokens (23 Aug 2026)
 
 - `#toast` and `#offline-toast` sit just above `#bottom-nav` (`4.5rem + safe-area`).

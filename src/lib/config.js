@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.23.15";
+export const APP_VERSION = "V8_08.24.01";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -903,108 +903,15 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Do not explain strategy or "we fixed". Short bullets. Detail stays in CHANGELOG.md.
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.23.15",
+        id: "V8_08.24.01",
         title: "What's new",
-        date: "23 Aug 2026",
+        date: "24 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Home:</b> Toasts now sit just above the bottom bar.",
-            "<b>Offline:</b> When you are offline, a small offline label sits between Next Train and the alert bell.",
-            "<b>Looks:</b> Every theme paints the header and bottom bar the same colour as the timetable button."
-        ]
-    },
-    {
-        id: "V8_08.23.14",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Home:</b> The middle tab now reads Trip Planner.",
-            "<b>Looks:</b> Midnight and Earthy paint the header and bottom bar like the full train sheet."
-        ]
-    },
-    {
-        id: "V8_08.23.13",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Plan:</b> The Plan tab now uses a route icon. Options uses the menu icon.",
-            "<b>Alerts:</b> Unread sits outside the red circle, top-right.",
-            "<b>Options:</b> Theme & Preferences holds looks, Dark Mode, and Vibrations."
-        ]
-    },
-    {
-        id: "V8_08.23.12",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Home:</b> The bottom bar sits on the screen and stays off the welcome screen.",
-            "<b>Options:</b> The menu now slides in from the right.",
-            "<b>About:</b> Terms, privacy, and Kazembe CodeWorks sit at the bottom."
-        ]
-    },
-    {
-        id: "V8_08.23.11",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Home:</b> Next Train, Plan, and Options live on the bottom bar.",
-            "<b>Messages:</b> Open Options to chat with the team.",
-            "<b>Timetable:</b> View full timetable now shows the effective date."
-        ]
-    },
-    {
-        id: "V8_08.23.9",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Train sheet:</b> The fare chip now reads Max. Single Fare and the price.",
-            "<b>Recent Trips:</b> Your last five trips stay visible when you switch province.",
-            "<b>Guide:</b> How long a printed Metrorail ticket stays valid."
-        ]
-    },
-    {
-        id: "V8_08.23.8",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Update:</b> You'll see a notice when a new version is incoming. The app you already have stays until the download is ready.",
-            "<b>Links:</b> Opening a shared route lands on that corridor."
-        ]
-    },
-    {
-        id: "V8_08.23.7",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> Saturday details name your station and the closed corridor, without repeating the board.",
-            "<b>Trip:</b> Train names that open the full sheet are a lighter tap."
-        ]
-    },
-    {
-        id: "V8_08.23.6",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> Recent Trips always show (last 5).",
-            "<b>Train sheet:</b> One direction line. Tap the fare chip for ticket prices."
-        ]
-    },
-    {
-        id: "V8_08.23.5",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> Tap a train name for its full route, stop times, fare, and days. Saturday trips that cannot reach your station say so.",
-            "<b>Board:</b> Routes with no Saturday trains show red No Service. A vanished top advert no longer leaves a blank strip."
+            "<b>Home:</b> Next Train, Trip Planner, and Options sit on the bottom bar. Toasts sit just above it. Offline sits between the name and the alert bell.",
+            "<b>Looks:</b> Every theme paints the header and bottom bar the same colour as the timetable button. Unread sits outside the alert circle.",
+            "<b>Planner:</b> Recent Trips stay when you switch province. The fare chip reads Max. Single Fare.",
+            "<b>Options:</b> Theme & Preferences is in the menu. You can message the team from there."
         ]
     },
     {
@@ -1024,8 +931,8 @@ export const CHANGELOG_DATA = [
         date: "19 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Menus:</b> Feedback, About, Privacy, and the network map sit on the screen again — scroll the text, and Close Map is back at the bottom.",
-            "<b>Ads:</b> Moved to the top to make way for future bottom navigation. When a unit appears or you close it, the board eases into place.",
+            "<b>Menus:</b> Feedback, About, and Privacy sit on the screen again — scroll the text, and Close is back at the bottom.",
+            "<b>Ads:</b> Sit at the top. When a unit appears or you close it, the board eases into place.",
             "<b>Back where you were:</b> Closing What's New or an alert reply returns you to the menu or notice you were viewing.",
             "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap.",
             "<b>Alerts:</b> Hold a photo notice to react, same as text."
@@ -1038,7 +945,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Alerts:</b> Bell opens a notice channel. Hold to react; tap counts for the split.",
-            "<b>Kempton Park:</b> Running weekday trains no longer show a false no-service tag.",
+            "<b>Board:</b> Weekday trains no longer show a false no-service tag.",
             "<b>Region:</b> After you pick a route, the board stays put."
         ]
     },
@@ -1061,7 +968,7 @@ export const CHANGELOG_DATA = [
         // Keep false unless you intentionally want What's New to auto-open once for this version.
         forceShow: false,
         features: [
-            "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays — they use dedicated holiday timetables.",
+            "<b>Western Cape:</b> Public holidays use their own timetables, not Saturday by default.",
             "<b>Timetable grid:</b> Western Cape day picker is now Mon–Fri, Saturday, or Public Holiday (separate from Sat).",
             "<b>Trip Planner:</b> Travel Day for Western Cape includes a standalone Public Holiday option so holiday trips use the right trains."
         ]
@@ -1074,7 +981,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Trip map:</b> Optional Show station times on the planner route map.",
             "<b>Fares:</b> Weekend and public-holiday tickets no longer show weekday off-peak discounts.",
-            "<b>Network map:</b> Region picker stays fully on-screen; side-nav map opens without a white flash.",
+            "<b>Region:</b> The picker stays fully on-screen.",
             "<b>Region switch:</b> Opens route selection so you choose — never auto-pins a random route.",
             "<b>Notices:</b> Service alerts and public-holiday cards only auto-open on Next Train / Trip Planner after the app is ready."
         ]
@@ -1096,9 +1003,9 @@ export const CHANGELOG_DATA = [
         date: "05 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Trip Planner redesign:</b> Cleaner results chrome, clearer notices, and a more polished trip-planning interface.",
-            "<b>Bug fixes:</b> Guide and map return without reloading the app; alert ranking and planner glitches cleaned up.",
-            "<b>Stability:</b> Smoother navigation around About and in-app sheets."
+            "<b>Trip Planner:</b> Cleaner results and clearer notices.",
+            "<b>Guide:</b> Guide and map return without reloading the app.",
+            "<b>Sheets:</b> Smoother move around About and in-app sheets."
         ]
     },
     {
@@ -1107,7 +1014,6 @@ export const CHANGELOG_DATA = [
         date: "04 Aug 2026",
         forceShow: false,
         features: [
-            "Massive under-the-hood upgrade for a faster, more reliable Next Train.",
             "<b>Weekend clarity:</b> Clear notices when a route has no Saturday service, with the next weekday train on the board.",
             "<b>Sunday & holidays:</b> Red “No Service” on the day chip; guide notes that holidays aren’t always Saturday schedules.",
             "<b>You're here:</b> Terminus stops use a location pin instead of plain “at this station” text."
@@ -1120,9 +1026,9 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Smoother App Navigation:</b> Fine-tuned rapid taps and screen transitions for a faster, more responsive feel.",
-            "<b>Smarter Connectivity Checks:</b> Better detection when the network struggles, with safer fallback to saved offline schedules.",
+            "<b>Offline:</b> When the network struggles, the saved timetable stays available.",
             "<b>Cleaner Visuals:</b> Tighter route cards and a simpler timeline view for easier trip reading.",
-            "<b>Background Improvements:</b> Leaner data engine for less battery use and more reliable schedule updates."
+            "<b>Updates:</b> Schedule refreshes stay reliable on the go."
         ]
     },
     {
@@ -1131,7 +1037,7 @@ export const CHANGELOG_DATA = [
         date: "11 Jul 2026",
         forceShow: false,
         features: [
-            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning; alerts only when your train crosses the danger zone.",
+            "<b>Incident Warnings:</b> Warnings only show when they affect your trip.",
             "<b>Seamless Navigation:</b> “See Next Available Day” on empty late-night/Sunday boards syncs the day dropdown correctly.",
             "<b>Sleeker Interface:</b> Trip Planner result cards cleaned up with fewer glitches and misaligned borders."
         ]
@@ -1143,8 +1049,8 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Sleeker Timeline:</b> Tighter Trip Planner timeline for more screen space and clearer transfers.",
-            "<b>Clearer Disruptions:</b> Line-severance alerts break out of the timeline to show exactly where a train terminates.",
-            "<b>Official Rebranding:</b> Rebranded to <b>Next Train</b> for legal clarity as an unaffiliated commuter tool."
+            "<b>Clearer Disruptions:</b> Line-severance alerts show where a train terminates.",
+            "<b>Name:</b> The app is called Next Train."
         ]
     },
     {
@@ -1154,7 +1060,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Sleeker Design:</b> Modern icons and cleaner timeline layouts in place of cluttered emoji chrome.",
-            "<b>Smarter Route Status:</b> Impossible connections explain why (incidents or extreme timetable gaps) with quick links.",
+            "<b>Smarter Route Status:</b> Impossible connections explain why, with quick links.",
             "<b>Layover Warnings:</b> Unusually long transfer waits are flagged so you are not stranded.",
             "<b>Smoother Experience:</b> Fixed mobile text clipping and improved station-select prompts."
         ]
@@ -1167,7 +1073,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Smarter Trip Planner:</b> Finds overnight and extended weekend connections that were previously hidden.",
             "<b>Clearer Journey Timelines:</b> Unified colours and fixed text cut-off on smaller phones.",
-            "<b>Accurate Route Status:</b> Explains why a trip is impossible today (incident, gaps, or disconnected lines)."
+            "<b>Accurate Route Status:</b> Explains why a trip is impossible today."
         ]
     },
     {
@@ -1178,7 +1084,7 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Instant Loading:</b> Welcome screen no longer freezes on “Loading Route”.",
             "<b>Cleaner Interface:</b> Tighter menus, better small-screen text, ads no longer leak onto welcome.",
-            "<b>Data Reliability:</b> Stronger background sync on patchy networks."
+            "<b>Offline:</b> Schedules stay available on patchy networks."
         ]
     },
     {
@@ -1229,7 +1135,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Cape Town is Here:</b> Full Western Cape schedules and offline trip planning.",
-            "<b>All-New App Menu:</b> Settings, sync, and region in one side menu.",
+            "<b>All-New App Menu:</b> Settings and region in one menu.",
             "<b>Better Navigation:</b> Back closes popups instead of exiting the app."
         ]
     },

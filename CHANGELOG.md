@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.11 — Lab chrome on main: bottom nav, Messages, force-update reader (23 Aug 2026)
+
+- Cherry-pick lab bottom nav / Next Train header / timetable CTA onto current `main`. Do not merge `origin/lab`.
+- Commuters see Home · Plan · Options (`grid-cols-3`). Map + Community exist in markup but stay `hidden` + `inert` until `Admin.isAllowlistedAdmin`. Same gate for sidenav Account and the notifications toggle. No hide-after-paint flash.
+- Admin Map tab opens the existing map sheet (not lab MapView). `#community` / `#map` deep links stay no-ops for commuters.
+- Commuter Messages thread (`#messages-thread-modal`) + sidenav Messages row. Banner Read opens the thread. Do not port ride-nearby or delay-report flags.
+- `app-version.json` now includes `forceUpdate: false`. The running shell peeks that flag on `onNeedRefresh`. Do not flip it true in this ship. Incoming toast is still always shown; 30s half-download guard stays.
+
 ## V8_08.23.10 — Admin password eye + device password fill (23 Aug 2026)
 
 - Admin Gateway eye preview was bound at commuter boot, but the login modal only exists after the 5-tap `<template>` stamp — so the button did nothing. Bind `bindPasswordReveal` after stamp (and again in `setupLoginAccess`).

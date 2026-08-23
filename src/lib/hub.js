@@ -31,6 +31,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
+import { checkContentSafety, checkRateLimit, recordRateHit } from './trust.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
 
@@ -178,6 +179,7 @@ export function closeAppHub(skipHistory = false) {
         setTimeout(() => overlay.classList.add('hidden'), 300);
     }
     document.body.classList.remove('sidenav-open', 'modal-active');
+    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
 }
 
 export function openAppHub() {
@@ -203,6 +205,7 @@ export function openAppHub() {
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
     }
+    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
 }
 
 export function resetProfile() {
@@ -446,11 +449,13 @@ async function submitFeedback() {
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
 
         trackAnalyticsEvent('submit_feedback_success', { type: type || 'general' });
+        try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
         // closeSmoothModal may history.back() early — restore parked overlay after pop closes feedback
         setTimeout(() => restoreFeedbackReturnOverlay(), 380);
+        setTimeout(() => openMessagesThread(), 420);
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -482,6 +487,216 @@ function ensureLightboxPlusBadges(root) {
         if (!/\brelative\b/.test(btn.className)) btn.className = `${btn.className} relative`.trim();
         btn.insertAdjacentHTML('beforeend', LIGHTBOX_PLUS_BADGE_HTML);
     });
+}
+
+const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
+const FEEDBACK_WINDOW_MS = 30 * 60 * 1000;
+const FEEDBACK_MAX = 6;
+const FEEDBACK_COOLDOWN_MS = 20 * 1000;
+const LOCAL_INBOX_KEY = 'ntInboxLocalV1';
+
+function checkFeedbackRate() {
+    return checkRateLimit(FEEDBACK_RATE_KEY, {
+        windowMs: FEEDBACK_WINDOW_MS,
+        max: FEEDBACK_MAX,
+        cooldownMs: FEEDBACK_COOLDOWN_MS,
+    });
+}
+
+export function syncInboxBadges(count = 0) {
+    if (typeof document === 'undefined') return;
+    const n = Math.max(0, Number(count) || 0);
+    const label = n > 9 ? '9+' : String(n);
+    const rowBadge = document.getElementById('sidenav-inbox-badge');
+    if (rowBadge) {
+        rowBadge.textContent = label;
+        rowBadge.classList.toggle('hidden', n === 0);
+    }
+    const sub = document.getElementById('sidenav-inbox-sub');
+    if (sub) {
+        sub.textContent = n > 0
+            ? `${n} new ${n === 1 ? 'reply' : 'replies'} from the team`
+            : 'Contact the team';
+    }
+    const navDot = document.getElementById('open-nav-badge');
+    if (navDot) navDot.classList.toggle('hidden', n === 0);
+}
+
+function getThreadDeviceId() {
+    return $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+}
+
+function readLocalInbox() {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(LOCAL_INBOX_KEY) || '[]');
+        return Array.isArray(raw) ? raw.filter((m) => m && (m.message || m.text)) : [];
+    } catch {
+        return [];
+    }
+}
+
+function rememberLocalInbox(msg) {
+    if (!msg || !(msg.message || msg.text)) return;
+    const list = readLocalInbox();
+    const key = msg.id || `${msg.timestamp}|${String(msg.message || msg.text).slice(0, 48)}`;
+    if (list.some((m) => (m.id && m.id === msg.id) || (`${m.timestamp}|${String(m.message || m.text).slice(0, 48)}` === key))) {
+        return;
+    }
+    list.push(msg);
+    const packed = JSON.stringify(list.slice(-80));
+    safeStorage.setItem(LOCAL_INBOX_KEY, packed);
+    safeStorage.setResilientItem?.(LOCAL_INBOX_KEY, packed)?.catch?.(() => {});
+}
+
+function mergeInboxThread(remote, local) {
+    const byKey = new Map();
+    const add = (m) => {
+        if (!m || !(m.message || m.text)) return;
+        const text = String(m.message || m.text);
+        const key = m.id || `${m.timestamp || 0}|${text.slice(0, 48)}`;
+        if ([...byKey.values()].some((x) => x.timestamp === m.timestamp && String(x.message || x.text) === text)) return;
+        byKey.set(key, m);
+    };
+    (remote || []).forEach(add);
+    (local || []).forEach(add);
+    return [...byKey.values()].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+}
+
+function isCommuterInboxMsg(m) {
+    return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
+}
+
+function stripAdminSignoff(html) {
+    return String(html || '')
+        .replace(/(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*[-–—]\s*[^<]*<\/span>\s*$/i, '')
+        .replace(/(?:<br\s*\/?>|\n)*\s*[-–—]\s*[A-Za-z]{2,20}\s*$/i, '')
+        .trim();
+}
+
+function adminBubbleName(m, rawHtml) {
+    const named = String(m?.fromName || '').trim();
+    if (named) return named;
+    const text = String(rawHtml || m?.message || m?.text || '');
+    const match = text.match(/[-–—]\s*([A-Za-z]{2,20})\s*(?:<\/span>)?\s*$/i);
+    if (match) return match[1].trim();
+    return 'Admin';
+}
+
+function inboxClock(ts) {
+    const d = new Date(ts || Date.now());
+    if (Number.isNaN(d.getTime())) return '--:--';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+async function fetchRemoteInbox() {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId) return [];
+    const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json?t=${Date.now()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return Object.entries(data)
+        .map(([id, m]) => ({ id, ...(m || {}) }))
+        .filter((m) => m && (m.message || m.text));
+}
+
+async function fetchInboxThread() {
+    let remote = [];
+    try { remote = await fetchRemoteInbox(); } catch { remote = []; }
+    return mergeInboxThread(remote, readLocalInbox());
+}
+
+function renderMessagesThread(list) {
+    const host = document.getElementById('messages-thread-list');
+    if (!host) return;
+    if (!list.length) {
+        host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below — you and the team will see the full chat here.</p>';
+        return;
+    }
+    host.innerHTML = list.map((m) => {
+        const mine = isCommuterInboxMsg(m);
+        const raw = m.message || m.text || '';
+        const body = mine ? escapeHTML(raw) : sanitizeHTML(stripAdminSignoff(raw));
+        const clock = inboxClock(m.timestamp);
+        const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
+        const avatar = mine
+            ? ''
+            : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
+        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}">
+      ${avatar}
+      <div class="inbox-bubble-wrap">
+        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}">
+          <div class="inbox-bubble-name-row">${who}</div>
+          <div class="inbox-bubble-body">
+            <div class="inbox-msg-text">${body}<span class="inbox-msg-time">${clock}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    }).join('');
+    host.scrollTop = host.scrollHeight;
+}
+
+async function postCommuterInboxCopy({ text, feedbackType }) {
+    const deviceId = getThreadDeviceId();
+    if (!deviceId || !text) return false;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+    let authToken = '';
+    if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+        try { authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true); } catch { /* ignore */ }
+    }
+    const msgId = `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        from: 'commuter',
+        deviceId,
+        message: String(text).slice(0, 2000),
+        timestamp: Date.now(),
+        type: feedbackType || 'general',
+        read: true,
+    };
+    rememberLocalInbox({ id: msgId, ...payload });
+    const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${msgId}.json${authParam}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+    return res.ok;
+}
+
+export async function openMessagesThread() {
+    triggerHaptic();
+    closeAppHub(true);
+    document.getElementById('developer-reply-banner')?.classList.add('hidden');
+    const host = document.getElementById('messages-thread-list');
+    if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
+    try {
+        const list = await fetchInboxThread();
+        renderMessagesThread(list);
+        const deviceId = getThreadDeviceId();
+        const unread = list.filter((m) => !isCommuterInboxMsg(m) && inboxReplyStillVisible(m) && m.id);
+        if (unread.length && deviceId) {
+            const updates = {};
+            unread.forEach((m) => {
+                updates[`${m.id}/read`] = true;
+                updates[`${m.id}/readAt`] = Date.now();
+                updates[`${m.id}/acknowledged`] = true;
+            });
+            fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates),
+            }).catch(() => {});
+            syncInboxBadges(0);
+        }
+    } catch {
+        renderMessagesThread(readLocalInbox());
+    }
 }
 
 function sanitizeHTML(dirtyHtml) {
@@ -952,6 +1167,7 @@ export async function checkServiceAlerts() {
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
                         const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k]));
+                        syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
@@ -983,96 +1199,8 @@ export async function checkServiceAlerts() {
             replyBanner.classList.remove('hidden');
 
             if (viewReplyBtn) {
-                viewReplyBtn.onclick = () => {
-                    triggerHaptic();
-
-                    const replyContent = document.getElementById('developer-reply-content');
-                    const markReadBtn = document.getElementById('mark-reply-read-btn');
-
-                    if (!adminReply.viewedAt) {
-                        const viewedAt = Date.now();
-                        adminReply.viewedAt = viewedAt;
-                        fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}/${adminReply._key}.json`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ viewedAt }),
-                        }).catch(() => {});
-                    }
-
-                    if (replyContent) {
-                        const replyModalCard = document.querySelector('#developer-reply-modal > div');
-                        if (replyModalCard && !replyModalCard.dataset.styled) {
-                            replyModalCard.dataset.styled = 'true';
-                            replyModalCard.classList.add('max-h-[85vh]', 'flex', 'flex-col', 'p-0', 'overflow-hidden');
-                            replyModalCard.classList.remove('p-6');
-
-                            const headerDiv = replyModalCard.querySelector('.flex.items-center.justify-between');
-                            if (headerDiv) {
-                                headerDiv.classList.add('p-5', 'bg-white', 'dark:bg-gray-800', 'border-b', 'border-gray-200', 'dark:border-gray-700', 'shrink-0');
-                                headerDiv.classList.remove('mb-4');
-                            }
-
-                            replyContent.classList.add('overflow-y-auto', 'custom-scrollbar', 'flex-grow', 'p-5', 'rounded-none', 'border-0', 'mb-0');
-                            replyContent.classList.remove('mb-6', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-gray-700');
-                        }
-
-                        replyContent.innerHTML = sanitizeHTML(adminReply.message || '');
-                    }
-
-                    if (markReadBtn) {
-                        markReadBtn.textContent = 'Got it, Thanks!';
-                        markReadBtn.disabled = false;
-
-                        const actionsContainer = document.getElementById('admin-message-actions') || markReadBtn.parentNode;
-                        actionsContainer.className = 'flex space-x-3 w-full shrink-0 p-5 pt-0';
-                        markReadBtn.className = 'flex-1 bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm';
-
-                        markReadBtn.onclick = async () => {
-                            triggerHaptic();
-                            markReadBtn.disabled = true;
-                            markReadBtn.textContent = 'Marking...';
-                            try {
-                                await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}/${adminReply._key}.json`, {
-                                    method: 'PATCH',
-                                    body: JSON.stringify({ read: true, readAt: Date.now(), acknowledged: true })
-                                });
-                            } catch (e) {}
-
-                            if (location.hash === '#devreply') history.back();
-                            else closeSmoothModal('developer-reply-modal');
-                            replyBanner.classList.add('hidden');
-                        };
-
-                        let replyToAdminBtn = document.getElementById('reply-to-admin-btn');
-                        if (!replyToAdminBtn) {
-                            replyToAdminBtn = document.createElement('button');
-                            replyToAdminBtn.id = 'reply-to-admin-btn';
-                            replyToAdminBtn.type = 'button';
-                            replyToAdminBtn.className = 'flex-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-2 border-blue-600 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none flex items-center justify-center text-sm';
-                            replyToAdminBtn.innerHTML = '<svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> Reply to Admin';
-                            actionsContainer.appendChild(replyToAdminBtn);
-                        }
-
-                        replyToAdminBtn.onclick = () => {
-                            triggerHaptic();
-                            let truncatedAdminMsg = htmlToPlainSnippet(adminReply.message || '', 8);
-                            truncatedAdminMsg = truncatedAdminMsg.replace(/—.*/, '').trim();
-                            // Keep snippet inside the bracket block so admin quote parsing
-                            // never treats the quoted text as the commuter’s reply body.
-                            const safeSnippet = String(truncatedAdminMsg || '')
-                                .replace(/[\[\]]/g, '')
-                                .replace(/\s+/g, ' ')
-                                .trim();
-                            openFeedbackReplyFromOverlay('developer-reply-modal', {
-                                label: 'Replying to Admin:',
-                                snippet: truncatedAdminMsg,
-                                rawMsg: `[REPLY TO ADMIN: ${adminReply._key} | ${safeSnippet}]`,
-                            });
-                        };
-                    }
-
-                    history.pushState({ modal: 'devreply' }, '', '#devreply');
-                    openSmoothModal('developer-reply-modal', 'dev-banner');
-                };
+                window.__ntOpenAdminReply = () => openMessagesThread();
+                viewReplyBtn.onclick = () => openMessagesThread();
             }
 
             const devReplyCloseTop = document.querySelector('#developer-reply-modal button.text-gray-400');
@@ -1152,6 +1280,7 @@ export function initHub() {
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
     window.openFeedbackModal = openFeedbackModal;
+    window.openMessagesThread = openMessagesThread;
     injectRichTextStyles();
     initAlertsChannel();
 
@@ -1479,8 +1608,8 @@ export function initHub() {
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
-    // Feedback (live board CTA + Settings Support row)
-    const openFeedback = (e) => {
+    // Feedback (live board CTA + Settings Messages row)
+    const openFeedback = async (e) => {
         e?.preventDefault?.();
         e?.stopPropagation?.();
         triggerHaptic();
@@ -1489,11 +1618,91 @@ export function initHub() {
         const location = id === 'feedback-btn-planner'
             ? 'planner'
             : (id === 'settings-feedback-btn' ? 'settings' : 'board');
+        try {
+            const thread = await fetchInboxThread();
+            if (thread.length) {
+                openMessagesThread();
+                return;
+            }
+        } catch { /* fall through to the form */ }
         setTimeout(() => openFeedbackModal({ location }), 50);
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
-    document.getElementById('settings-feedback-btn')?.addEventListener('click', openFeedback);
+    document.getElementById('settings-feedback-btn')?.addEventListener('click', () => {
+        openMessagesThread();
+    });
+    document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('messages-thread-input');
+        const sendBtn = document.getElementById('messages-thread-send');
+        const text = input?.value?.trim() || '';
+        if (text.length < 5) {
+            showToast('Please write a bit more (at least 5 characters).', 'error');
+            return;
+        }
+        const limit = checkFeedbackRate();
+        if (!limit.ok) {
+            showToast(limit.message, 'error');
+            return;
+        }
+        const safety = checkContentSafety(text);
+        if (!safety.ok) {
+            showToast(safety.message, 'error');
+            const hint = document.getElementById('messages-thread-hint');
+            if (hint) hint.textContent = safety.message;
+            return;
+        }
+        if (sendBtn) sendBtn.disabled = true;
+        try {
+            if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+                await window.firebaseSignInAnonymously(window.firebaseAuth);
+            }
+            let authToken = '';
+            if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+                authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+            }
+            const payload = {
+                type: 'thread_reply',
+                text,
+                email: '',
+                status: 'unread',
+                appVersion: APP_VERSION,
+                routeId: $currentRouteId.get() || 'none',
+                region: $userRegion.get() || 'GP',
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent,
+                deviceId: getThreadDeviceId() || 'unknown',
+                isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+            };
+            const authParam = authToken ? `?auth=${authToken}` : '';
+            const res = await fetch(`${DYNAMIC_BASE_URL}feedback.json${authParam}`, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`Failed (${res.status})`);
+            recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
+            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
+            if (input) input.value = '';
+            renderMessagesThread(await fetchInboxThread());
+            showToast('Message sent.', 'success');
+        } catch (err) {
+            showToast(err?.message || 'Could not send message.', 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+        }
+    });
+    document.getElementById('feedback-text')?.addEventListener('input', () => {
+        const hint = document.getElementById('feedback-mod-hint');
+        const safety = checkContentSafety(document.getElementById('feedback-text')?.value || '');
+        if (hint) hint.textContent = safety.ok ? '' : safety.message;
+    });
+    document.getElementById('messages-thread-input')?.addEventListener('input', () => {
+        const hint = document.getElementById('messages-thread-hint');
+        const safety = checkContentSafety(document.getElementById('messages-thread-input')?.value || '');
+        if (hint) hint.textContent = safety.ok ? '' : safety.message;
+    });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     // Clear reply mode when modal is cancelled/closed via footer/X
     document.querySelectorAll('#feedback-modal [onclick*="feedback-modal"]').forEach((btn) => {

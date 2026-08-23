@@ -24,6 +24,20 @@ const versionBadge = String(APP_VERSION);
       <h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-5 mb-2 mt-4">Preferences</h3>
       <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
 
+        <button type="button" id="settings-account-btn" data-admin-authed-only hidden inert aria-hidden="true" class="hidden w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+          <div class="flex items-center space-x-4 min-w-0">
+            <span id="settings-account-avatar" class="relative w-9 h-9 shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center overflow-hidden" data-signed-in="false">
+              <img id="settings-account-avatar-img" class="hidden w-full h-full object-cover" alt="" />
+              <span id="settings-account-avatar-ph" class="text-sm font-black text-blue-700 dark:text-blue-300 select-none">?</span>
+            </span>
+            <div class="text-left min-w-0">
+              <p id="settings-account-name" class="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">Account</p>
+              <p id="settings-account-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">Guest · Sign in optional</p>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+
         <div class="relative" id="sidenav-region-wrapper">
           <button
             type="button"
@@ -66,6 +80,20 @@ const versionBadge = String(APP_VERSION);
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
 
+        <button type="button" id="settings-feedback-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+          <div class="flex items-center space-x-4">
+            <span class="relative inline-flex">
+              <svg class="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span id="sidenav-inbox-badge" class="hidden absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
+            </span>
+            <div class="text-left">
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Messages &amp; Feedback</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="sidenav-inbox-sub">Contact the team</p>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+
         <button type="button" id="settings-theme-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
           <div class="flex items-center space-x-4">
             <svg class="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -76,6 +104,20 @@ const versionBadge = String(APP_VERSION);
           <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
             <input type="checkbox" id="settings-theme-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
             <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+          </div>
+        </button>
+
+        <button type="button" id="settings-notify-toggle" data-admin-authed-only hidden inert aria-hidden="true" class="hidden w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800 focus:outline-none group">
+          <div class="flex items-center space-x-4 min-w-0">
+            <svg class="w-5 h-5 text-amber-500 group-hover:scale-110 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+            <div class="text-left min-w-0">
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Notifications</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5" id="settings-notify-hint">Official notices and confirmed delays</p>
+            </div>
+          </div>
+          <div class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in shrink-0">
+            <input type="checkbox" id="settings-notify-checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+            <label for="settings-notify-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
           </div>
         </button>
 

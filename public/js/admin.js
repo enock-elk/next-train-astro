@@ -2207,10 +2207,16 @@ const Admin = {
                         console.log("Guardian: Non-admin Firebase session ignored (anonymous or commuter).");
                         Admin.currentUser = null;
                     }
+                    if (typeof window.applyAdminAuthedChrome === 'function') {
+                        window.applyAdminAuthedChrome(false);
+                    }
                     return;
                 }
 
                 Admin.currentUser = user;
+                if (typeof window.applyAdminAuthedChrome === 'function') {
+                    window.applyAdminAuthedChrome(true);
+                }
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
 
@@ -2252,6 +2258,9 @@ const Admin = {
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
+                if (typeof window.applyAdminAuthedChrome === 'function') {
+                    window.applyAdminAuthedChrome(false);
+                }
                 if (signoutContainer) signoutContainer.innerHTML = '';
             }
         });

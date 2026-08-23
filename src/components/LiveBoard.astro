@@ -25,7 +25,6 @@
                 <svg class="w-5 h-5 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
         </div>
-        <p id="last-updated-date" class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-1">Schedule Effective from: --</p>
     </div>
 
     <!-- Commuter delay reports (parity cutover: UI gated via DELAY_REPORTS_UI_ENABLED) -->
@@ -62,7 +61,7 @@
     <!-- LIVE BOARDS — SSR shell matches the empty “select station” state (avoids pure-white boot) -->
     <div class="space-y-4 mb-6">
         <div class="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-            <h2 id="pretoria-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">Next train to <span class="text-blue-500 dark:text-blue-400">…</span></h2>
+            <h2 id="pretoria-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center justify-center gap-1.5 flex-wrap text-center">Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span></h2>
             <div id="pretoria-time" class="text-center flex items-center justify-center">
                 <div class="min-h-[96px] h-auto flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 rounded-xl w-full border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50">
                     <svg class="w-6 h-6 mb-1 opacity-50 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -71,7 +70,7 @@
             </div>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-            <h2 id="pienaarspoort-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">Next train to <span class="text-blue-500 dark:text-blue-400">…</span></h2>
+            <h2 id="pienaarspoort-header" class="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center justify-center gap-1.5 flex-wrap text-center">Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span></h2>
             <div id="pienaarspoort-time" class="text-center flex items-center justify-center">
                 <div class="min-h-[96px] h-auto flex flex-col justify-center items-center text-gray-400 dark:text-gray-500 rounded-xl w-full border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50">
                     <svg class="w-6 h-6 mb-1 opacity-50 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -82,14 +81,10 @@
     </div>
 
     <!-- Full timetable (visible as shell chrome; JS still toggles when route is ready) -->
-    <div id="grid-trigger-container" class="mb-4 mt-2 px-1">
-        <button type="button" id="view-full-timetable-btn" class="w-full flex items-center justify-center space-x-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 group focus:outline-none">
-            <svg class="w-5 h-5 shrink-0 opacity-95 group-hover:scale-105 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-                <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
-            </svg>
-            <span class="tracking-wide">VIEW FULL TIMETABLE</span>
+    <div id="grid-trigger-container" class="mb-5 mt-1">
+        <button type="button" id="view-full-timetable-btn" class="w-full flex flex-col items-center justify-center gap-0.5 px-3.5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 focus:outline-none">
+            <span class="block text-sm font-black uppercase tracking-wide text-white leading-tight">View full timetable</span>
+            <span id="last-updated-date" class="block text-[11px] font-bold text-blue-100 tracking-wide truncate max-w-full">Effective from: —</span>
         </button>
     </div>
 
@@ -130,11 +125,5 @@
         </div>
         <div id="copied-message" class="hidden text-center text-green-500 font-medium mt-2 text-xs">Link copied to clipboard!</div>
 
-        <div class="flex justify-center items-center space-x-4 mt-4">
-            <button type="button" class="hub-legal-link text-[10px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none" data-legal="terms">Terms of Use</button>
-            <span class="text-gray-300 dark:text-gray-600 text-[10px]">|</span>
-            <button type="button" class="hub-legal-link text-[10px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none" data-legal="privacy">Privacy Policy</button>
-        </div>
-        <p class="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">2026 &copy; Kazembe CodeWorks.</p>
     </div>
 </div>

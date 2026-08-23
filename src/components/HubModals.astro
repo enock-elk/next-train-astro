@@ -32,6 +32,7 @@ import { withBase } from '../lib/config.js';
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">Details</label>
                 <textarea id="feedback-text" rows="5" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-inner resize-none" placeholder="Tell us what you noticed..."></textarea>
+                <p id="feedback-mod-hint" class="mt-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 min-h-[1rem]" aria-live="polite"></p>
             </div>
             <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                 <summary class="cursor-pointer flex items-center justify-between p-3.5 text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -211,7 +212,16 @@ import { withBase } from '../lib/config.js';
                 </button>
             </div>
         </div>
-        <p id="about-version-label" class="mt-8 text-[10px] text-gray-400 font-mono">Version</p>
+        <div class="w-full mt-8 pt-5 border-t border-gray-100 dark:border-gray-800">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Legal</p>
+            <div class="flex justify-center items-center space-x-4">
+                <button type="button" class="hub-legal-link text-xs text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 font-bold transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none" data-legal="terms">Terms of Use</button>
+                <span class="text-gray-300 dark:text-gray-600 text-xs">|</span>
+                <button type="button" class="hub-legal-link text-xs text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 font-bold transition-colors cursor-pointer underline underline-offset-2 decoration-gray-300 dark:decoration-gray-600 focus:outline-none" data-legal="privacy">Privacy Policy</button>
+            </div>
+            <p id="about-version-label" class="mt-4 text-[10px] text-gray-400 font-mono">Version</p>
+            <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">2026 &copy; Kazembe CodeWorks.</p>
+        </div>
     </div>
 </div>
 
@@ -425,6 +435,115 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 </template>
+
+<!-- MESSAGES THREAD (commuter POV) -->
+<div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md h-[min(90dvh,40rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Inbox</p>
+                <h3 class="text-base font-black text-gray-900 dark:text-white tracking-tight">Messages &amp; Feedback</h3>
+            </div>
+            <button type="button" id="messages-thread-close" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 focus:outline-none" aria-label="Close messages">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="messages-thread-list" class="inbox-thread-list flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-[#efeae2] dark:bg-gray-950">
+            <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
+        </div>
+        <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-1.5">
+            <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 min-h-[1rem]" aria-live="polite"></p>
+            <div class="flex gap-2 items-end">
+            <textarea id="messages-thread-input" rows="2" maxlength="800" class="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Write a message…"></textarea>
+            <button type="submit" id="messages-thread-send" class="self-end px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black focus:outline-none">Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style is:global>
+  #messages-thread-modal .inbox-row {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+  }
+  #messages-thread-modal .inbox-bubble-wrap {
+    width: 78%;
+    max-width: 78%;
+    flex: 0 0 78%;
+    min-width: 0;
+  }
+  #messages-thread-modal .inbox-bubble {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  #messages-thread-modal .inbox-bubble-own {
+    background: #d9fdd3;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+  }
+  html.dark #messages-thread-modal .inbox-bubble-own {
+    background: #005c4b;
+    color: #e7f8f5;
+  }
+  #messages-thread-modal .inbox-bubble-other {
+    background: #ffffff;
+    color: #111827;
+    border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+    border: 1px solid rgba(229, 231, 235, 0.9);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-other {
+    background: #1f2937;
+    color: #f3f4f6;
+    border-color: #374151;
+  }
+  #messages-thread-modal .inbox-bubble-name-row {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.055);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-name-row {
+    background: rgba(255, 255, 255, 0.07);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  html.dark #messages-thread-modal .inbox-bubble-own .inbox-bubble-name-row {
+    background: rgba(0, 0, 0, 0.18);
+  }
+  #messages-thread-modal .inbox-bubble-body {
+    padding: 0.35rem 0.65rem 0.4rem;
+  }
+  #messages-thread-modal .inbox-msg-text {
+    font-size: 0.84rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #messages-thread-modal .inbox-msg-text p { margin: 0 0 0.35rem; }
+  #messages-thread-modal .inbox-msg-text p:last-child { margin-bottom: 0; }
+  #messages-thread-modal .inbox-msg-time {
+    float: right;
+    margin: 0.2rem 0 0 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.1;
+    opacity: 0.65;
+    white-space: nowrap;
+  }
+  #messages-thread-modal .inbox-avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.15rem;
+  }
+</style>
 
 <!-- ADMIN REPLY -->
 <div id="developer-reply-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">

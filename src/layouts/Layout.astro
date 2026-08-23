@@ -463,18 +463,33 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
         overflow: visible !important;
       }
 
-      /* Fill the device height (minus body padding) so short planner/error states
-         don't leave a shrunken card. height:auto still allows tall trips to grow + scroll. */
+      /* Viewport-locked frame: only #app-scroll moves. Bottom nav stays on screen. */
       #main-content.app-shell {
-        min-height: max(600px, calc(100dvh - 2rem));
-        height: auto;
-        max-height: none;
+        height: calc(100dvh - 2rem);
+        max-height: calc(100dvh - 2rem);
+        min-height: 0;
       }
       @media (min-width: 640px) {
         #main-content.app-shell {
-          /* body: pt-12 + pb-4 */
-          min-height: max(600px, calc(100dvh - 4rem));
+          height: calc(100dvh - 4rem);
+          max-height: calc(100dvh - 4rem);
         }
+      }
+      #app-scroll.app-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        display: flex;
+        flex-direction: column;
+      }
+      #app-scroll:has(#view-community.active) {
+        overflow: hidden;
+      }
+      #main-content.app-shell.dropdown-escape #app-scroll {
+        overflow: visible !important;
       }
 
       #map-modal.full-screen, #about-modal.full-screen, #full-schedule-modal.full-screen {
@@ -671,7 +686,7 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
 
   <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
 
-    <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
+    <!-- Offline strip docks above the bottom nav. Toast stays page-level. -->
 
     <!-- GUARDIAN: Lie-Fi / offline transition toast (auto-dismiss) -->
     <div id="offline-toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900/95 dark:bg-gray-800/95 border border-gray-700 dark:border-gray-600 text-white px-4 py-3 rounded-xl shadow-2xl z-[150] transition-all duration-500 translate-y-[150%] opacity-0 flex items-center space-x-3 w-max max-w-[90%] pointer-events-none backdrop-blur-md">

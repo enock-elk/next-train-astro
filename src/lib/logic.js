@@ -1418,8 +1418,8 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
                 : String(nextRoute.destB || '').replace(/ STATION/gi, '').toUpperCase();
             const pretH = document.getElementById('pretoria-header');
             const pienH = document.getElementById('pienaarspoort-header');
-            if (pretH) pretH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
-            if (pienH) pienH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
+            if (pretH) pretH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiDestA}</span>`;
+            if (pienH) pienH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiDestB}</span>`;
         }
 
         const pret = typeof document !== 'undefined' ? document.getElementById('pretoria-time') : null;

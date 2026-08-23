@@ -432,11 +432,11 @@ export function updateNextTrainView() {
         const uiB = window.Renderer?._applyUIIntercepts
             ? window.Renderer._applyUIIntercepts(route.destB).toUpperCase()
             : String(route.destB).replace(/ STATION/gi, '').toUpperCase();
-        if (pretH) pretH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiA}</span>`;
-        if (pienH) pienH.innerHTML = `Next train to <span class="text-blue-500 dark:text-blue-400">${uiB}</span>`;
+        if (pretH) pretH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiA}</span>`;
+        if (pienH) pienH.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${uiB}</span>`;
     } else {
-        if (pretH) pretH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
-        if (pienH) pienH.innerHTML = 'Next train to <span class="text-blue-500 dark:text-blue-400">…</span>';
+        if (pretH) pretH.innerHTML = 'Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span>';
+        if (pienH) pienH.innerHTML = 'Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">…</span>';
     }
 
     // SPA: show/hide the timetable CTA with the route, don't leave a disabled ghost button

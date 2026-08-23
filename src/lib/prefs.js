@@ -2,6 +2,7 @@
  * App preferences (localStorage) — Settings, dual nav, appearance packs
  */
 import { safeStorage } from './utils.js';
+import { applyAdminAuthedChrome } from './admin-chrome.js';
 
 export const NAV_STYLE_KEY = 'navStyle';
 export const COLOUR_PACK_KEY = 'colourPack';
@@ -33,15 +34,14 @@ export const COLOUR_PACK_LABELS = {
 const VALID_PACKS = new Set(Object.values(COLOUR_PACKS));
 
 export function getNavStyle() {
-    const v = safeStorage.getItem(NAV_STYLE_KEY);
-    return v === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
+    // Product: always use the bottom bar (Options opens the hub).
+    return NAV_STYLES.BOTTOM;
 }
 
-export function setNavStyle(style) {
-    const next = style === NAV_STYLES.BOTTOM ? NAV_STYLES.BOTTOM : NAV_STYLES.TOP;
-    safeStorage.setItem(NAV_STYLE_KEY, next);
-    applyNavChrome(next);
-    return next;
+export function setNavStyle(_style) {
+    safeStorage.setItem(NAV_STYLE_KEY, NAV_STYLES.BOTTOM);
+    applyNavChrome(NAV_STYLES.BOTTOM);
+    return NAV_STYLES.BOTTOM;
 }
 
 export function getColourPack() {
@@ -120,6 +120,7 @@ export function bindColourPackControls() {
 }
 
 export function hydratePrefs() {
+    applyAdminAuthedChrome(false);
     applyNavChrome(getNavStyle());
     setColourPack(getColourPack());
     applyReturningUserChrome();
@@ -178,7 +179,7 @@ export async function setNotifyPref(wantOn) {
 
 /**
  * Apply top vs bottom navigation chrome.
- * Bottom: Home · Plan · Community · More.
+ * Bottom: Home · Plan · Options (Map + Community after allowlisted admin auth).
  * Top tabs are hidden in bottom mode to reclaim vertical space.
  */
 export function applyNavChrome(style = getNavStyle()) {

@@ -100,6 +100,7 @@ const MODAL_HASH = {
     'route-modal': '#route',
     'profile-modal': '#profile',
     'feedback-modal': '#feedback',
+    'messages-thread-modal': '#messages',
     'about-modal': '#about',
     'help-modal': '#help',
     // legal-modal uses #privacy / #terms (see openLegal); #legal is a legacy alias
@@ -247,6 +248,7 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     } else if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
         unlockBackgroundScroll();
     }
+    if (modalId === 'map-modal') syncBottomNavActive();
 }
 
 export function openSmoothModal(modalId, customOrigin = null, opts = null) {
@@ -302,6 +304,7 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
     if (!skipHash && wasHidden && hash && location.hash !== hash) {
         try { history.pushState({ modal: modalId }, '', hash); } catch { /* ignore */ }
     }
+    if (modalId === 'map-modal') syncBottomNavActive();
 }
 
 /**
@@ -1071,15 +1074,20 @@ export function moveTabIndicator(element) {
     });
 }
 
-/** Sync Home · Plan · Community active state on the bottom bar (Phase 8). More is hub-only. */
+/** Sync Home · Plan · Map · Community · Options on the bottom bar. */
 export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'next-train') {
     if (typeof document === 'undefined') return;
     const home = document.getElementById('bottom-nav-home');
     const plan = document.getElementById('bottom-nav-plan');
+    const map = document.getElementById('bottom-nav-map');
     const community = document.getElementById('bottom-nav-community');
-    if (!home && !plan && !community) return;
+    const options = document.getElementById('bottom-nav-options');
+    if (!home && !plan && !community && !options) return;
 
     const mode = tab === 'community' ? 'community' : (tab === 'trip-planner' ? 'plan' : 'home');
+    const hubOpen = document.body.classList.contains('sidenav-open');
+    const mapModal = document.getElementById('map-modal');
+    const mapOpen = !!(mapModal && !mapModal.classList.contains('hidden'));
     const paint = (el, on) => {
         if (!el) return;
         el.classList.toggle('is-active', on);
@@ -1089,9 +1097,11 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
         el.classList.toggle('dark:text-gray-500', !on);
         el.setAttribute('aria-current', on ? 'page' : 'false');
     };
-    paint(home, mode === 'home');
-    paint(plan, mode === 'plan');
-    paint(community, mode === 'community');
+    paint(home, !hubOpen && !mapOpen && mode === 'home');
+    paint(plan, !hubOpen && !mapOpen && mode === 'plan');
+    paint(community, !hubOpen && !mapOpen && mode === 'community');
+    paint(map, !hubOpen && mapOpen);
+    paint(options, hubOpen);
 }
 
 /**
@@ -1147,6 +1157,9 @@ export function switchTab(tab) {
     if (typeof document === 'undefined') return;
 
     const prev = safeStorage.getItem('activeTab') || 'next-train';
+    if (tab === 'community' && window.__ntAdminAuthed !== true) {
+        tab = 'next-train';
+    }
 
     if (tab === 'trip-planner') {
         if (location.hash !== '#planner' && location.hash !== '#planner-results') {

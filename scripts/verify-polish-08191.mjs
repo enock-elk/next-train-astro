@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.10 password eye + device password fill).
+ * Current polish gate (V8_08.23.11 lab chrome + force-update reader).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,20 +11,23 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.10') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.11') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.10') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.11') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/eye/i.test(wn) || !/password/i.test(wn)) {
-    fail(`What's New must mention the account password eye: ${wn}`);
+if (!/bottom bar/i.test(wn) || !/options/i.test(wn)) {
+    fail(`What's New must mention the bottom bar + Options: ${wn}`);
 }
-if (!/saved password/i.test(wn) || !/face id/i.test(wn)) {
-    fail(`What's New must mention phone password fill: ${wn}`);
+if (!/messages/i.test(wn) || !/team/i.test(wn)) {
+    fail(`What's New must mention Messages: ${wn}`);
 }
-if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
+if (!/timetable/i.test(wn) || !/effective date/i.test(wn)) {
+    fail(`What's New must mention the timetable effective date: ${wn}`);
+}
+if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
 }
 
@@ -40,6 +43,12 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+}
+if (!folded.has('V8_08.23.10')) fail('V8_08.23.10 card must remain in history');
+const card2310 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.10');
+const wn2310 = (card2310?.features || []).join(' ');
+if (!/eye/i.test(wn2310) || !/password/i.test(wn2310)) {
+    fail('V8_08.23.10 card must keep the password eye');
 }
 if (!folded.has('V8_08.23.9')) fail('V8_08.23.9 card must remain in history');
 if (!folded.has('V8_08.23.8')) fail('V8_08.23.8 card must remain in history');
@@ -82,9 +91,10 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.10') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.11') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.10') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.11') fail(`app-version.json is ${appVer.version}`);
+if (appVer.forceUpdate !== false) fail('app-version.json forceUpdate must stay false on this reader ship');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -459,6 +469,12 @@ if (!appUpdate.includes('INCOMING_UPDATE_FALLBACK_MS = 30000')) {
     if (/if\s*\(\s*FORCE_UPDATE_REQUIRED\s*\)/.test(onNeed)) {
         fail('incoming-version toast must not be gated on FORCE_UPDATE_REQUIRED');
     }
+    if (!onNeed.includes('peekIncomingUpdate') && !appUpdate.includes('forceUpdate')) {
+        fail('onNeedRefresh must peek forceUpdate from app-version.json');
+    }
+    if (!appUpdate.includes('peekIncomingUpdate')) {
+        fail('must peek incoming version + forceUpdate together');
+    }
     if (!onNeed.includes('keeping cached version')) {
         fail('onNeedRefresh must keep the cached shell if the incoming worker is not ready');
     }
@@ -500,9 +516,53 @@ if (!guidePage.includes('NO CONCESSION') || !guidePage.includes('40% Off Peak'))
     fail('ticket FAQ must mention peak NO CONCESSION and off-peak 40%');
 }
 
+const prefsJs = readFileSync('src/lib/prefs.js', 'utf8');
+if (!prefsJs.includes('return NAV_STYLES.BOTTOM')) {
+    fail('getNavStyle must force the bottom bar');
+}
+const indexHtml = readFileSync('src/pages/index.astro', 'utf8');
+if (!indexHtml.includes('id="bottom-nav-options"')) fail('bottom nav must use Options');
+if (!indexHtml.includes('id="bottom-nav-map"')) fail('Map tab markup must exist for admin reveal');
+if (!indexHtml.includes('data-admin-authed-only')) fail('Map/Community must be hidden until allowlisted auth');
+if (indexHtml.includes('ride-nearby')) fail('must not port Trains near you');
+if (!indexHtml.includes('id="app-scroll"')) fail('shell must use #app-scroll so the bottom nav stays put');
+const sidenav = readFileSync('src/components/Sidenav.astro', 'utf8');
+if (!sidenav.includes('id="settings-feedback-btn"')) fail('sidenav must show Messages & Feedback');
+if (!sidenav.includes('id="settings-account-btn"') || !sidenav.includes('data-admin-authed-only')) {
+    fail('Account must exist but stay hidden until admin auth');
+}
+if (!sidenav.includes('id="settings-notify-toggle"')) fail('Notifications toggle markup must exist for admin reveal');
+const hubJs = readFileSync('src/lib/hub.js', 'utf8');
+if (!hubJs.includes('export async function openMessagesThread')) fail('must port the commuter messages thread');
+if (!hubJs.includes('viewReplyBtn.onclick = () => openMessagesThread()')) {
+    fail('banner Read must open the messages thread');
+}
+const hubModals = readFileSync('src/components/HubModals.astro', 'utf8');
+if (!hubModals.includes('id="messages-thread-modal"')) fail('HubModals must include the messages thread');
+const delayJs = readFileSync('src/lib/delay-reports.js', 'utf8');
+if (!delayJs.includes('DELAY_REPORTS_UI_ENABLED = false')) {
+    fail('Direct Train flags / delay-report UI must stay off');
+}
+const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
+if (liveBoard.includes('ride-nearby')) fail('LiveBoard must not include Trains near you');
+if (!liveBoard.includes('id="last-updated-date"') || !liveBoard.includes('view-full-timetable-btn')) {
+    fail('effective date must live inside the timetable CTA');
+}
+const adminJs = readFileSync('public/js/admin.js', 'utf8');
+if (!adminJs.includes('applyAdminAuthedChrome(true)')) {
+    fail('allowlisted sign-in must reveal operator chrome');
+}
+if (!adminJs.includes('isAllowlistedAdmin(user)')) {
+    fail('admin chrome must still require isAllowlistedAdmin');
+}
+const adminChrome = readFileSync('src/lib/admin-chrome.js', 'utf8');
+if (adminChrome.includes('__ntAdminReady') || adminChrome.includes('__ntAdminSessionActive')) {
+    fail('operator chrome must not use 5-tap / session-active flags');
+}
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.10 polish (password eye, device password fill)');
+console.log('✓ V8_08.23.11 polish (bottom nav, Messages, force-update reader)');

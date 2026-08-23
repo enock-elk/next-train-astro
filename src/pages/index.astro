@@ -153,9 +153,10 @@ const faqLd = {
         >App stuck? Get help</a>
     </div>
 
-    <!-- MAIN APP — fills device height; active tab expands into remaining space -->
+    <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
     <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">
-        
+
+        <div id="app-scroll" class="app-scroll">
         <Header />
 
         <!-- SPA surface: Next Train + Trip Planner only (Community stays in DOM for later, off chrome) -->
@@ -190,30 +191,38 @@ const faqLd = {
         <TripPlanner />
         <CommunityView />
 
-        <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-40 bottom-nav-bar" aria-label="Primary" aria-hidden="true">
-            <div class="grid grid-cols-4 gap-0 max-w-md mx-auto">
+        <div id="offline-wrapper" class="shrink-0 nt-offline-dock" aria-live="polite">
+            <div id="offline-indicator" style="display: none;" class="nt-offline-strip">WORKING OFFLINE</div>
+        </div>
+        </div>
+
+        <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">
+            <div id="bottom-nav-grid">
                 <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-blue-600 dark:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
-                    <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
-                    <span class="text-[10px] sm:text-[11px] font-bold tracking-tight leading-tight text-center">Next Train</span>
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Next Train</span>
                 </button>
                 <button type="button" id="bottom-nav-plan" data-bottom-nav="plan" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Trip Planner" aria-current="false">
-                    <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
-                    <span class="text-[10px] sm:text-[11px] font-bold tracking-tight leading-tight text-center">Trip Planner</span>
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Plan</span>
                 </button>
-                <button type="button" id="bottom-nav-community" data-bottom-nav="community" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
+                <button type="button" id="bottom-nav-map" data-bottom-nav="map" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Network map" aria-current="false">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Map</span>
+                </button>
+                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
                     <span class="relative inline-flex mb-1">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
                         <span id="community-unread-badge" class="hidden absolute -top-1.5 -right-2.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
                     </span>
-                    <span class="text-[10px] sm:text-[11px] font-bold tracking-tight leading-tight text-center">Community</span>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Community</span>
                 </button>
-                <button type="button" id="bottom-nav-more" data-bottom-nav="more" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="More: Settings">
-                    <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="5" r="2"></circle>
-                        <circle cx="12" cy="12" r="2"></circle>
-                        <circle cx="12" cy="19" r="2"></circle>
-                    </svg>
-                    <span class="text-[10px] sm:text-[11px] font-bold tracking-tight leading-tight text-center">More</span>
+                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
+                    <span class="relative inline-flex mb-1">
+                        <img src={withBase('icons/icon-192.png')} alt="" class="w-5 h-5 sm:w-6 sm:h-6 rounded-md shadow-sm" width="24" height="24" />
+                        <span id="open-nav-badge" class="hidden absolute -top-1 -right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>
+                    </span>
+                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Options</span>
                 </button>
             </div>
         </nav>
@@ -266,6 +275,7 @@ const faqLd = {
         bindMaintenanceBanner
     } from '../lib/ui.js';
     import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
+    import { isAdminAuthed } from '../lib/admin-chrome.js';
     import {
         prepareDeeplinkIntents,
         consumeHashDeeplinks,
@@ -316,11 +326,25 @@ const faqLd = {
         switchTab('trip-planner');
     });
     document.getElementById('bottom-nav-community')?.addEventListener('click', () => {
+        if (!isAdminAuthed()) return;
         window.triggerHaptic?.();
         switchTab('community');
     });
-    document.getElementById('bottom-nav-more')?.addEventListener('click', () => {
+    document.getElementById('bottom-nav-map')?.addEventListener('click', () => {
+        if (!isAdminAuthed()) return;
         window.triggerHaptic?.();
+        switchTab('next-train');
+        if (typeof window.setupMapLogic === 'function') {
+            try { window.setupMapLogic(); } catch { /* ignore */ }
+        }
+        window.openSmoothModal?.('map-modal');
+    });
+    document.getElementById('bottom-nav-options')?.addEventListener('click', () => {
+        window.triggerHaptic?.();
+        if (document.body.classList.contains('sidenav-open')) {
+            window.closeAppHub?.();
+            return;
+        }
         window.openAppHub?.();
     });
 
@@ -328,17 +352,18 @@ const faqLd = {
     if (hash === '#planner' || hash === '#planner-results') {
         switchTab('trip-planner');
     } else if (hash === '#community') {
-        switchTab('community');
+        if (isAdminAuthed()) switchTab('community');
+        else switchTab('next-train');
     } else if (hash === '#alerts') {
         switchTab('next-train');
         setTimeout(() => window.openAlertsChannel?.(), 400);
     } else if (hash === '#map') {
         switchTab('next-train');
-        setTimeout(() => window.openSmoothModal?.('map-modal'), 300);
+        if (isAdminAuthed()) setTimeout(() => window.openSmoothModal?.('map-modal'), 300);
     } else {
         const lastTab = safeStorage.getItem('activeTab');
         if (lastTab === 'trip-planner') switchTab('trip-planner');
-        else if (lastTab === 'community') switchTab('community');
+        else if (lastTab === 'community' && isAdminAuthed()) switchTab('community');
         else switchTab('next-train');
     }
 

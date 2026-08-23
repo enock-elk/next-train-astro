@@ -1,14 +1,24 @@
 ---
 /**
- * Compact top-right theme control for SEO/content pages (no sidenav).
+ * Theme control for SEO/content pages (no sidenav).
+ * `inline` sits in the shared header so titles never slide under a fixed moon.
  * Persists to localStorage `theme` — same key as the main app.
  */
+interface Props {
+  variant?: 'fixed' | 'inline';
+}
+
+const variant = Astro.props.variant === 'inline' ? 'inline' : 'fixed';
+const buttonClass =
+  variant === 'inline'
+    ? 'relative p-2.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
+    : 'fixed top-4 right-4 z-50 p-2.5 rounded-full bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-md backdrop-blur-md focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
 ---
 
 <button
   id="seo-theme-toggle"
   type="button"
-  class="fixed top-4 right-4 z-50 p-2.5 rounded-full bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-md backdrop-blur-md focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+  class={buttonClass}
   aria-label="Toggle light and dark mode"
   title="Toggle theme"
 >

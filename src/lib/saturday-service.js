@@ -129,6 +129,69 @@ export function saturdayNoServiceCopy(routeId) {
     };
 }
 
+export function stationDisplayName(raw) {
+    return String(raw || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Dynamic Saturday advisory (banner + modal + Reply quote).
+ * Boarding blocked vs dest-cut vs generic no-weekend-service.
+ */
+export function buildSaturdayAdvisoryCopy(payload = {}) {
+    const routeId = payload.routeId || 'herc-koed';
+    const copy = saturdayNoServiceCopy(routeId);
+    const route = ROUTES[routeId];
+    const endA = stationDisplayName(route?.destA).toUpperCase();
+    const endB = stationDisplayName(route?.destB).toUpperCase();
+    const between = endA && endB ? `Lies Between ${endA} & ${endB}` : '';
+    const lead = copy.body;
+
+    if (payload.boardingBlocked) {
+        const station = stationDisplayName(payload.blockedOrigin);
+        return {
+            kind: 'boarding',
+            badge: 'BOARDING BLOCKED',
+            title: `Your selected departure station: ${station}`,
+            lines: [between].filter(Boolean),
+            lead,
+            quote: [`Boarding blocked.`, `Your selected departure station: ${station}.`, between, lead]
+                .filter(Boolean)
+                .join(' '),
+        };
+    }
+
+    if (payload.saturdayNoService && payload.partialDest) {
+        const dest = stationDisplayName(payload.intendedDest);
+        const term = stationDisplayName(payload.partialDest);
+        const cannotReach = dest ? `Cannot reach ${dest} on Saturdays.` : '';
+        return {
+            kind: 'severed',
+            badge: 'LINE SEVERED',
+            title: cannotReach || 'Line Severed',
+            lines: [
+                term ? `Showing trains terminating at ${term}.` : '',
+                between,
+            ].filter(Boolean),
+            lead,
+            quote: ['Line Severed.', cannotReach, term ? `Showing trains terminating at ${term}.` : '', between, lead]
+                .filter(Boolean)
+                .join(' '),
+        };
+    }
+
+    const title = endA && endB
+        ? `Between ${stationDisplayName(route?.destA)} & ${stationDisplayName(route?.destB)}`
+        : copy.lineLabel;
+    return {
+        kind: 'none',
+        badge: 'NO WEEKEND SERVICE',
+        title,
+        lines: [],
+        lead,
+        quote: lead,
+    };
+}
+
 export function saturdayNoServicePayload(routeId, origin, dest) {
     const copy = saturdayNoServiceCopy(routeId);
     const route = ROUTES[routeId];

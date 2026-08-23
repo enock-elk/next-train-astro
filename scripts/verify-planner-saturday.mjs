@@ -8,12 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { SATURDAY_PLACEHOLDER_ROUTES, HERC_KOED_JUNCTIONS, DEFAULT_EXCLUSIONS } from '../src/lib/config.js';
 import { $fullDatabase, $globalStationIndex } from '../src/store.js';
 import {
+    buildSaturdayAdvisoryCopy,
     classifySaturdayPlaceholderTrip,
     routeHasSaturdayTrains,
     saturdayNoServiceCopy,
     sheetHasTimedService,
     tripNeedsHercKoedBridge,
 } from '../src/lib/saturday-service.js';
+import { extractTrainSheetStops } from '../src/lib/planner-core.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -42,10 +44,18 @@ if (!sat.includes('sheetHasTimedService')) fail('must use timed Saturday columns
 if (core.includes("trains/") || ui.includes("trains/")) fail('must not invent a trains/ RTDB path');
 if (!ui.includes('openSaturdayServiceModal')) fail('planner-ui must open the Saturday advisory modal');
 if (!ui.includes('Cannot reach')) fail('dest-on-stub must keep Line Severed cannot-reach copy');
+if (!ui.includes('on Saturdays')) fail('dest-on-stub must say cannot reach on Saturdays');
 if (!ui.includes('Showing trains terminating at')) fail('dest-on-stub must keep terminating-at copy');
 if (!ui.includes('Cannot depart from')) fail('origin-on-stub must keep boarding-blocked copy');
 if (!ui.includes('Showing trains from')) fail('origin-on-stub must show trains from the junction');
 if (!ui.includes('See Next Available Day')) fail('no-service card must offer weekday rollover');
+if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory for admin');
+if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
+if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
+if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
+if (!ui.includes('items-end justify-between')) fail('Details must sit on the terminating-at row');
+if (!sat.includes('buildSaturdayAdvisoryCopy')) fail('saturday-service must build dynamic advisory copy');
+if (!core.includes('extractTrainSheetStops')) fail('planner-core must extract the full train column');
 const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
 if (!logic.includes('paintHeaderDayLabel') || !logic.includes('currentRouteSaturdayClosed')) {
     fail('header must show No Service when both Saturday directions are empty');
@@ -118,6 +128,47 @@ if (!/Gauteng/i.test(gp.body) || !/Hercules to Koedoespoort/i.test(gp.body)) {
 const ecc = saturdayNoServiceCopy('ec-berlin');
 if (!/Eastern Cape/i.test(ecc.body) || !/East London to Berlin/i.test(ecc.body)) {
     fail(`ec-berlin modal copy drifted: ${ecc.body}`);
+}
+
+const boarding = buildSaturdayAdvisoryCopy({
+    routeId: 'herc-koed',
+    boardingBlocked: true,
+    blockedOrigin: 'Gezina',
+});
+if (!/Gezina/.test(boarding.title) || !boarding.lines.some((l) => /Lies Between HERCULES/.test(l))) {
+    fail(`boarding modal copy drifted: ${JSON.stringify(boarding)}`);
+}
+if (!/Boarding blocked/i.test(boarding.quote) || !/Gezina/.test(boarding.quote) || !/Hercules to Koedoespoort/i.test(boarding.quote)) {
+    fail(`boarding reply quote drifted: ${boarding.quote}`);
+}
+
+const severed = buildSaturdayAdvisoryCopy({
+    routeId: 'herc-koed',
+    saturdayNoService: true,
+    intendedDest: 'Gezina',
+    partialDest: 'Hercules',
+});
+if (!/Cannot reach Gezina on Saturdays/.test(severed.title)) {
+    fail(`severed modal title drifted: ${severed.title}`);
+}
+if (!severed.lines.some((l) => /Showing trains terminating at Hercules/.test(l))) {
+    fail(`severed modal lines drifted: ${JSON.stringify(severed.lines)}`);
+}
+if (!/Line Severed/i.test(severed.quote) || !/on Saturdays/.test(severed.quote)) {
+    fail(`severed reply quote drifted: ${severed.quote}`);
+}
+
+$fullDatabase.set({
+    pta_to_mab_weekday: [
+        { STATION: 'PRETORIA STATION', '4420': '06:10:00' },
+        { STATION: 'WOLMER', '4420': '06:22:00' },
+        { STATION: 'MABOPANE STATION', '4420': '06:55:00' },
+    ],
+    mab_to_pta_weekday: [{ STATION: 'MABOPANE STATION' }],
+});
+const sheet = extractTrainSheetStops('pta-mabopane', '4420', 'weekday');
+if (!sheet || sheet.trainId !== '4420' || sheet.stops.length !== 3 || sheet.origin !== 'PRETORIA STATION' || sheet.terminus !== 'MABOPANE STATION') {
+    fail(`extractTrainSheetStops failed: ${JSON.stringify(sheet)}`);
 }
 
 if (failures.length) {

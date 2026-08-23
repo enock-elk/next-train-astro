@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -519,6 +519,47 @@ export function getDirectionsForRoute(route, dayType) {
         { key: route.sheetKeys.weekday_to_a },
         { key: route.sheetKeys.weekday_to_b },
     ].filter((d) => !!d.key);
+}
+
+/**
+ * Full origin→terminus column for one train on a corridor (planner train-sheet modal).
+ * Tries the requested day first, then the other published sheet day if needed.
+ */
+export function extractTrainSheetStops(routeId, trainId, dayType = 'weekday') {
+    const route = ROUTES[routeId];
+    const db = $fullDatabase.get();
+    if (!route || !trainId || !db) return null;
+    const id = String(trainId);
+    const tryDays = [];
+    for (const day of [dayType, 'weekday', 'saturday']) {
+        if (day && !tryDays.includes(day)) tryDays.push(day);
+    }
+
+    for (const day of tryDays) {
+        for (const dir of getDirectionsForRoute(route, day)) {
+            const schedule = getScheduleFromDb(db, dir.key);
+            const col = schedule?.headers?.find((h) => h && String(h) === id);
+            if (!col) continue;
+            const stops = (schedule.rows || [])
+                .map((row) => ({
+                    station: String(row.STATION || '').trim(),
+                    time: row[col] ?? row[id],
+                }))
+                .filter((s) => s.station && isRealTime(s.time));
+            if (stops.length) {
+                return {
+                    route,
+                    trainId: id,
+                    dayType: day,
+                    sheetKey: dir.key,
+                    origin: stops[0].station,
+                    terminus: stops[stops.length - 1].station,
+                    stops,
+                };
+            }
+        }
+    }
+    return null;
 }
 
 export function createTripObject(route, trainInfo, schedule, startIdx, endIdx, origin, dest) {

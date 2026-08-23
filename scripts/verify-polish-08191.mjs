@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.3 SEO chrome) plus 23.2 Saturday/ad history.
+ * Current polish gate (V8_08.23.4 planner train sheet) plus 23.3 SEO / 23.2 Saturday history.
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,30 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.3') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.4') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.3') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.4') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2) {
     fail(`What's New must have commuter bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/route pages/i.test(wn) || !/fare/i.test(wn) || !/timetable/i.test(wn)) {
-    fail(`What's New must mention route pages and fares: ${wn}`);
+if (!/planner/i.test(wn) || !/train/i.test(wn) || !/fare/i.test(wn)) {
+    fail(`What's New must mention the planner train sheet and fare: ${wn}`);
 }
-if (!/logo/i.test(wn) || !/province|region/i.test(wn)) {
-    fail(`What's New must mention the logo home jump: ${wn}`);
+if (!/saturday/i.test(wn) || !/terminat/i.test(wn)) {
+    fail(`What's New must mention Saturday terminating notices: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|googlebot|analytics|clarity|clever/i.test(wn)) {
     fail('Whats New must stay commuter-only');
+}
+
+const card233 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.3');
+const wn233 = (card233?.features || []).join(' ');
+if (!/route pages/i.test(wn233) || !/fare/i.test(wn233) || !/timetable/i.test(wn233)) {
+    fail(`V8_08.23.3 card must keep route pages and fares: ${wn233}`);
+}
+if (!/logo/i.test(wn233) || !/province|region/i.test(wn233)) {
+    fail('V8_08.23.3 card must keep the logo home jump');
 }
 
 const card232 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.2');
@@ -56,6 +65,7 @@ const folded = new Set(CHANGELOG_DATA.map((e) => e.id));
 for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08.19.1', 'V8_08.18.3', 'V8_08.18.2', 'V8_08.18.1', 'V8_08.17.3', 'V8_08.17.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.19.6, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.3')) fail('V8_08.23.3 card must remain in history');
 if (!folded.has('V8_08.23.2')) fail('V8_08.23.2 card must remain in history');
 if (!folded.has('V8_08.21.1')) fail('V8_08.21.1 card must remain in history');
 if (!folded.has('V8_08.20.1')) fail('V8_08.20.1 card must remain in history');
@@ -63,9 +73,9 @@ if (!folded.has('V8_08.19.6')) fail('V8_08.19.6 card must remain in history');
 if (!folded.has('V8_08.16.5')) fail('Older V8_08.16.5 card must remain in history');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.3') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.4') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.3') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.4') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -88,6 +98,8 @@ if (!plannerModals.includes('id="close-map-btn-2"')) fail('map modal must keep t
 if (!plannerModals.includes('id="legal-modal-content"') || !plannerModals.includes('min-h-0 flex-1')) {
     fail('legal body must flex-1 min-h-0 so Privacy scrolls');
 }
+if (!plannerModals.includes('id="planner-train-sheet-modal"')) fail('planner must ship the train-sheet modal');
+if (!plannerModals.includes('id="disruption-modal-reply-btn"')) fail('advisory Reply must have a stable id');
 
 const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
 if (liveBoard.includes('SeoFeaturedRoutes')) fail('LiveBoard footer must not include SeoFeaturedRoutes');
@@ -268,9 +280,21 @@ const logicJs = readFileSync('src/lib/logic.js', 'utf8');
 if (!logicJs.includes('paintHeaderDayLabel')) fail('header must paint No Service when Saturday sheets are empty');
 if (!logicJs.includes('currentRouteSaturdayClosed')) fail('header No Service must use both Saturday directions');
 
+const plannerUi = readFileSync('src/lib/planner-ui.js', 'utf8');
+if (!plannerUi.includes('openPlannerTrainSheet')) fail('planner-ui must open the train-sheet modal');
+if (!plannerUi.includes('planner-train-name-btn')) fail('planner results must underline the train name');
+if (!plannerUi.includes('items-end justify-between')) fail('Details must sit on the terminating-at row');
+if (!plannerUi.includes('planner-notice-details')) fail('terminating banners must keep a Details control');
+if (!plannerUi.includes('on Saturdays')) fail('dest-cut banner must say on Saturdays');
+if (!plannerUi.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory');
+if (!plannerUi.includes('enterFeedbackReplyMode')) fail('advisory Reply must enter feedback reply mode');
+if (!ui.includes("'planner-train-sheet-modal': '#train-sheet'")) {
+    fail('train-sheet modal must have a history hash');
+}
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.3 polish (SEO chrome; 23.2 Saturday/ad + 21.1 history kept)');
+console.log('✓ V8_08.23.4 polish (train sheet + Saturday quote; 23.3 SEO / 23.2 Saturday history kept)');

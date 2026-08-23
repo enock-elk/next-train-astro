@@ -19,8 +19,8 @@ import {
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate
 } from './utils.js';
-import { planUnifiedTrip } from './planner-core.js';
-import { saturdayNoServiceCopy } from './saturday-service.js';
+import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
+import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
@@ -585,23 +585,25 @@ function buildPlannerNotice({
     const chevronSvg = `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
     const detailsLabel = interactive?.detailsLabel || 'Details';
     const detailsHtml = interactive?.onclickAttr
-        ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
+        ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap self-end shrink-0">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon on the right; Details sits under the SVG (not in the title row).
+    // Accent bar + icon on the right. Details sits on the last body row
+    // ("Showing trains terminating at…"), not under the title icon.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
-    const bodyPad = interactive?.onclickAttr ? 'pr-[4.75rem]' : 'pr-14';
     const inner = `
         <div class="flex items-stretch">
-            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 ${bodyPad} text-left">
-                <div class="absolute top-3.5 right-3.5 flex flex-col items-end gap-1">
+            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 pr-14 text-left">
+                <div class="absolute top-3.5 right-3.5">
                     <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
                         ${iconSvg}
                     </div>
-                    ${detailsHtml}
                 </div>
                 <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5 pr-1">${escapeHTML(title)}</h4>
-                <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                <div class="flex items-end justify-between gap-3">
+                    <div class="min-w-0 flex-1 text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                    ${detailsHtml}
+                </div>
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
@@ -710,7 +712,7 @@ function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
         tone: 'critical',
         title: 'Line Severed',
         bodyHtml: `
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>.</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>${payload.saturdayNoService ? ' on Saturdays' : ''}.</p>
             <p>Showing trains terminating at <span class="font-bold text-gray-800 dark:text-gray-200">${safePartial}</span>.</p>
         `,
         icon: 'alert',
@@ -1155,29 +1157,59 @@ export function restorePlannerResultsView() {
     return false;
 }
 
+function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply' }) {
+    const card = document.getElementById('disruption-modal-card');
+    const replyBtn = document.getElementById('disruption-modal-reply-btn')
+        || Array.from(card?.querySelectorAll('button') || []).find((b) => b.textContent.includes('Reply'));
+    if (!replyBtn) return;
+    replyBtn.onclick = (e) => {
+        e.preventDefault();
+        if (typeof triggerHaptic === 'function') triggerHaptic();
+        enterFeedbackReplyMode({
+            label: 'Replying to Advisory:',
+            snippet,
+            rawMsg: rawMsg || snippet,
+            alertId,
+            alertKind: 'disruption',
+        });
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+        setTimeout(() => {
+            openFeedbackModal({ location, skipClear: true });
+        }, 350);
+    };
+}
+
 export function openSaturdayServiceModal(routeId = 'herc-koed') {
     if (typeof triggerHaptic === 'function') triggerHaptic();
-    const copy = saturdayNoServiceCopy(routeId);
+    const payload = {
+        ...(currentPlannerErrorPayload || {}),
+        routeId: routeId || currentPlannerErrorPayload?.routeId || 'herc-koed',
+    };
+    const copy = buildSaturdayAdvisoryCopy(payload);
     const titleEl = document.getElementById('disruption-modal-stations');
     const bodyEl = document.getElementById('disruption-modal-body');
     const badgeEl = document.getElementById('disruption-modal-tier-badge');
     const timeEl = document.getElementById('disruption-modal-timestamp');
     const iconEl = document.getElementById('disruption-icon-svg');
-    const route = ROUTES[routeId];
     if (titleEl) {
-        const a = String(route?.destA || copy.lineLabel).replace(/ STATION/gi, '');
-        const b = String(route?.destB || '').replace(/ STATION/gi, '');
-        titleEl.innerHTML = b
-            ? `Between <span class="text-blue-600 dark:text-blue-400">${escapeHTML(a)}</span> & <span class="text-blue-600 dark:text-blue-400">${escapeHTML(b)}</span>`
-            : escapeHTML(copy.lineLabel);
+        const extra = (copy.lines || []).filter(Boolean);
+        titleEl.innerHTML = `<span class="block">${escapeHTML(copy.title)}</span>${
+            extra.map((line) => `<span class="block mt-2 text-[13px] font-bold tracking-normal normal-case text-slate-700 dark:text-slate-200">${escapeHTML(line)}</span>`).join('')
+        }`;
     }
-    if (bodyEl) bodyEl.textContent = copy.body;
+    if (bodyEl) bodyEl.textContent = copy.lead || saturdayNoServiceCopy(payload.routeId).body;
     if (badgeEl) {
         badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
-        badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} NO WEEKEND SERVICE`;
+        badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} ${escapeHTML(copy.badge)}`;
         if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
     }
     if (timeEl) timeEl.textContent = 'Timetable: Saturday / public holiday';
+    bindAdvisoryReplyButton({
+        snippet: copy.quote,
+        rawMsg: copy.quote,
+        alertId: `saturday-${payload.routeId || 'planner'}`,
+        location: 'planner_saturday_reply',
+    });
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
 
@@ -1251,33 +1283,15 @@ export function openDisruptionModal(id) {
         }
     }
 
-    const modalCard = document.getElementById('disruption-modal-card');
-    if (modalCard) {
-        const replyBtn = Array.from(modalCard.querySelectorAll('button')).find(b => b.textContent.includes('Reply'));
-        if (replyBtn) {
-            replyBtn.onclick = (e) => {
-                e.preventDefault();
-                if (typeof triggerHaptic === 'function') triggerHaptic();
-
-                let shortLocation = locationText.replace(/<[^>]*>?/gm, ''); 
-                let advisoryTitle = targetDisruption.buttonText || (targetDisruption.tier === 'CRITICAL' ? 'Line Severed' : 'Expect Delays');
-                let rawMsg = `${advisoryTitle} - ${shortLocation}`;
-
-                enterFeedbackReplyMode({
-                    label: 'Replying to Advisory:',
-                    snippet: rawMsg,
-                    rawMsg,
-                    alertId: targetDisruption.id || '',
-                    alertKind: 'disruption',
-                });
-
-                if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
-                setTimeout(() => {
-                    openFeedbackModal({ location: 'planner_disruption_reply', skipClear: true });
-                }, 350);
-            };
-        }
-    }
+    const shortLocation = locationText.replace(/<[^>]*>?/gm, '');
+    const advisoryTitle = targetDisruption.buttonText || (targetDisruption.tier === 'CRITICAL' ? 'Line Severed' : 'Expect Delays');
+    const rawMsg = `${advisoryTitle} - ${shortLocation}`;
+    bindAdvisoryReplyButton({
+        snippet: rawMsg,
+        rawMsg,
+        alertId: targetDisruption.id || '',
+        location: 'planner_disruption_reply',
+    });
     
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
@@ -1839,6 +1853,73 @@ export async function openTripMapRenderer(routeData) {
 
 // --- TIMELINE BUILDER VIEW ENGINE ---
 
+function plannerSheetDayLabel(dayType) {
+    if (dayType === 'saturday') return 'Saturdays';
+    if (dayType === 'public_holiday') return 'Sundays & Public Holidays';
+    return 'Weekdays';
+}
+
+function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
+    const destSafe = escapeHTML(String(dest || '').replace(/ STATION/gi, ''));
+    const trainSafe = escapeHTML(String(trainId || ''));
+    const routeSafe = escapeHTML(String(routeId || ''));
+    const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="planner-train-name-btn underline underline-offset-2 decoration-1 decoration-blue-400/70 hover:decoration-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}</button>`;
+}
+
+export function openPlannerTrainSheet(routeId, trainId) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const dayType = selectedPlannerDay || getCurrentDayType();
+    const sheet = extractTrainSheetStops(routeId, trainId, dayType);
+    if (!sheet) {
+        if (typeof showToast === 'function') showToast('Full timetable for this train is not available.', 'error');
+        return;
+    }
+    const origin = stationDisplayName(sheet.origin);
+    const terminus = stationDisplayName(sheet.terminus);
+    const corridor = String(sheet.route?.name || `${origin} ↔ ${terminus}`).replace(/<->/g, '↔');
+    const titleEl = document.getElementById('planner-train-sheet-title');
+    const idEl = document.getElementById('planner-train-sheet-id');
+    const routeEl = document.getElementById('planner-train-sheet-route');
+    const dirEl = document.getElementById('planner-train-sheet-direction');
+    const dayEl = document.getElementById('planner-train-sheet-day');
+    const fareEl = document.getElementById('planner-train-sheet-fare');
+    const listEl = document.getElementById('planner-train-sheet-stops');
+    if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
+    if (idEl) idEl.textContent = `Train ${sheet.trainId}`;
+    if (routeEl) routeEl.textContent = corridor;
+    if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
+    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType);
+    const zone = resolvePlannerRouteZone(sheet.route.id);
+    const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
+    if (fareEl) {
+        if (detailed?.single != null) {
+            fareEl.textContent = `Full route adult single · ${zone} · R${Number(detailed.single).toFixed(2)}`;
+        } else {
+            fareEl.textContent = 'Full route fare not listed for this corridor';
+        }
+    }
+    if (listEl) {
+        listEl.innerHTML = sheet.stops.map((stop, i) => {
+            const isEnd = i === 0 || i === sheet.stops.length - 1;
+            const name = escapeHTML(stationDisplayName(stop.station));
+            const time = escapeHTML(formatTimeDisplay(stop.time));
+            const weight = isEnd ? 'font-black text-slate-900 dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-200';
+            const role = i === 0 ? 'Origin' : (i === sheet.stops.length - 1 ? 'Terminus' : '');
+            return `
+                <li class="flex items-center justify-between gap-3 py-2.5 ${i ? 'border-t border-slate-100 dark:border-slate-700/70' : ''}">
+                    <div class="min-w-0">
+                        <p class="text-sm ${weight} truncate">${name}</p>
+                        ${role ? `<p class="text-[10px] font-black uppercase tracking-widest text-blue-500/80 mt-0.5">${role}</p>` : ''}
+                    </div>
+                    <span class="font-mono text-sm font-bold ${weight} tabular-nums">${time}</span>
+                </li>`;
+        }).join('');
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('planner-train-sheet-modal');
+}
+
 export const PlannerRenderer = {
     isMidnightRollover: () => {
         if (typeof currentPlannerStatus !== 'undefined' && currentPlannerStatus === 'ALL_DEPARTED') return false;
@@ -1882,7 +1963,7 @@ export const PlannerRenderer = {
         return name;
     },
 
-    buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, variant = 'transfer' }) => {
+    buildTransferBadge: ({ opacity = '', title, waitStr, connectLabel = 'Connect To', connectValue, connectHtml, variant = 'transfer' }) => {
         let iconBg = 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400';
         let titleColor = 'text-blue-600 dark:text-blue-400';
         let waitColor = 'text-gray-900 dark:text-white';
@@ -1901,10 +1982,10 @@ export const PlannerRenderer = {
             leftBorder = 'border-l-emerald-500';
             centerSvg = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
         }
-        const rightCol = connectValue ? `
+        const rightCol = (connectHtml || connectValue) ? `
         <div class="flex flex-col items-end text-right min-w-0 flex-1 pl-2">
             <span class="text-[8px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">${connectLabel}</span>
-            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${connectValue}">${connectValue}</span>
+            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${escapeHTML(String(connectValue || '').replace(/<[^>]*>/g, ''))}">${connectHtml || escapeHTML(connectValue)}</span>
         </div>` : '';
         return `
         <div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2 ${opacity}">
@@ -2021,7 +2102,7 @@ export const PlannerRenderer = {
                             <span class="font-mono font-bold ${depTextClass} text-sm">${formatTimeDisplay(stops[0].time)}</span>
                         </div>
                         <div class="text-xs ${depTrainClass} font-medium mb-1">
-                            ${subTrainDest} Train ${subTrain}
+                            ${plannerTrainNameButton(leg.route?.id, subTrainDest, subTrain, depTrainClass)}
                         </div>
                     </div>
                 </div>
@@ -2155,6 +2236,7 @@ export const PlannerRenderer = {
                 waitStr,
                 connectLabel: 'Switch To',
                 connectValue: `${train2Dest} Train ${it.train2}`,
+                connectHtml: plannerTrainNameButton(leg.route?.id, train2Dest, it.train2),
                 variant: transferVariant
             });
 
@@ -2503,6 +2585,7 @@ export const PlannerRenderer = {
                     waitStr,
                     connectLabel: 'Connect To',
                     connectValue: `${trainDest} Train ${nextLeg.train}`,
+                    connectHtml: plannerTrainNameButton(nextLeg.route?.id, trainDest, nextLeg.train),
                     variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
                 });
             }
@@ -2547,6 +2630,7 @@ export const PlannerRenderer = {
             waitStr,
             connectLabel: 'Connect To',
             connectValue: `${train2Dest} Train ${step.leg2.train}`,
+            connectHtml: plannerTrainNameButton(step.leg2.route?.id, train2Dest, step.leg2.train),
             variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
         });
 
@@ -2606,6 +2690,7 @@ export const PlannerRenderer = {
             waitStr: wait1Str,
             connectLabel: 'Connect To',
             connectValue: `${train2Dest} Train ${step.leg2.train}`,
+            connectHtml: plannerTrainNameButton(step.leg2.route?.id, train2Dest, step.leg2.train),
             variant: isExtended1 ? 'extended' : (isInstant1 ? 'instant' : 'transfer')
         });
 
@@ -2636,6 +2721,7 @@ export const PlannerRenderer = {
             waitStr: wait2Str,
             connectLabel: 'Connect To',
             connectValue: `${train3Dest} Train ${step.leg3.train}`,
+            connectHtml: plannerTrainNameButton(step.leg3.route?.id, train3Dest, step.leg3.train),
             variant: isExtended2 ? 'extended' : (isInstant2 ? 'instant' : 'transfer')
         });
 
@@ -3909,6 +3995,7 @@ if (typeof window !== 'undefined') {
     window.restorePlannerSearch = restorePlannerSearch;
     window.openDisruptionModal = openDisruptionModal;
     window.openSaturdayServiceModal = openSaturdayServiceModal;
+    window.openPlannerTrainSheet = openPlannerTrainSheet;
     window.extractTripCoordinates = extractTripCoordinates;
     window.hidePlannerResults = hidePlannerResults;
     window.openPlannerNetworkMap = openPlannerNetworkMap;

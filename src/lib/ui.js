@@ -82,6 +82,7 @@ const MODAL_HASH = {
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
+    'planner-train-sheet-modal': '#train-sheet',
     'cache-clear-modal': '#cacheclear',
     'account-modal': '#account',
     'login-modal': '#login',

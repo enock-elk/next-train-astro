@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.4 — Planner train sheet + Saturday advisory quote (23 Aug 2026)
+
+- Planner results: destination + train id is an underlined button. Tap opens a full origin→terminus sheet (all timed stops), corridor name, day type, and adult peak single from `FARE_CONFIG.zones_detailed`.
+- Saturday Koed–Herc advisory modal is dynamic (boarding blocked vs line severed) and Reply now quotes that text for admin context (`enterFeedbackReplyMode`).
+- Dest-cut banner: “Cannot reach {station} on Saturdays.” Details sits on the “Showing trains terminating at…” row for all terminating-train notices.
+
 ## V8_08.23.3 — SEO route pages: calm titles, fares, conversion chrome (23 Aug 2026)
 
 - Route landings use `{A} ↔ {B} Train Schedule & Times` instead of stuffing both “X to Y & Y to X” into the H1. Body copy still includes both directional phrases as headings.

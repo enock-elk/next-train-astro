@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.14 Trip Planner + Midnight/Earthy sheet chrome).
+ * Current polish gate (V8_08.23.15 toasts, header offline, shared chrome).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,18 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.14') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.15') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.14') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.15') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/trip planner/i.test(wn)) {
-    fail(`What's New must mention the Trip Planner tab label: ${wn}`);
+if (!/toast/i.test(wn) || !/bottom/i.test(wn)) {
+    fail(`What's New must mention toasts above the bottom bar: ${wn}`);
 }
-if (!/midnight/i.test(wn) || !/earthy/i.test(wn) || !/train sheet/i.test(wn)) {
-    fail(`What's New must mention Midnight/Earthy train-sheet chrome: ${wn}`);
+if (!/offline/i.test(wn) || !/bell/i.test(wn)) {
+    fail(`What's New must mention the header offline chip: ${wn}`);
+}
+if (!/theme/i.test(wn) && !/look/i.test(wn)) {
+    fail(`What's New must mention theme/looks chrome: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -41,6 +44,7 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.14')) fail('V8_08.23.14 card must remain in history');
 if (!folded.has('V8_08.23.13')) fail('V8_08.23.13 card must remain in history');
 const card2313 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.13');
 const wn2313 = (card2313?.features || []).join(' ');
@@ -109,9 +113,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.14') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.15') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.14') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.15') fail(`app-version.json is ${appVer.version}`);
 if (appVer.forceUpdate !== true) fail('app-version.json forceUpdate must stay true unless the owner flips it');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
@@ -645,11 +649,42 @@ const prefsPacks = readFileSync('src/lib/prefs.js', 'utf8');
 if (!prefsPacks.includes("EARTHY: 'earthy'")) fail('prefs must register the Earthy pack');
 const appearanceCss = readFileSync('src/styles/appearance.css', 'utf8');
 if (!appearanceCss.includes('data-colour-pack="earthy"')) fail('appearance.css must define Earthy');
-if (!appearanceCss.includes('to bottom right, #2563eb, #2563eb, #4338ca')) {
-    fail('Midnight header/nav must use the train-sheet blue→indigo gradient');
+if (!appearanceCss.includes('--nt-chrome-from') || !appearanceCss.includes('--nt-chrome-to')) {
+    fail('appearance.css must define shared chrome tokens');
 }
-if (!appearanceCss.includes('to bottom right, #6B705C, #6B705C, #8B6F4E')) {
-    fail('Earthy header/nav must use the sage→terracotta gradient');
+if (!appearanceCss.includes('--nt-chrome-from: #2563eb') || !appearanceCss.includes('--nt-chrome-to: #4338ca')) {
+    fail('Classic chrome must use the train-sheet blue→indigo tokens');
+}
+if (!appearanceCss.includes('--nt-chrome-from: #0284c7') || !appearanceCss.includes('--nt-chrome-to: #0c4a6e')) {
+    fail('Midnight chrome must use sky tokens, not Classic blue→indigo');
+}
+if (!appearanceCss.includes('--nt-chrome-from: #6B705C') || !appearanceCss.includes('--nt-chrome-to: #8B6F4E')) {
+    fail('Earthy chrome must keep sage→terracotta tokens');
+}
+if (!appearanceCss.includes('var(--nt-chrome-from)') || !appearanceCss.includes('var(--nt-chrome-to)')) {
+    fail('header + bottom nav must paint from shared chrome tokens');
+}
+const headerHtml = readFileSync('src/components/Header.astro', 'utf8');
+if (!headerHtml.includes('id="offline-indicator"') || !headerHtml.includes('offline')) {
+    fail('header must host the offline chip between the title and the bell');
+}
+if (indexHtml.includes('WORKING OFFLINE')) fail('index must not paint WORKING OFFLINE');
+const uiJs = readFileSync('src/lib/ui.js', 'utf8');
+if (uiJs.includes("textContent = 'WORKING OFFLINE'")) {
+    fail('offline chip copy must be offline, not WORKING OFFLINE');
+}
+if (!uiJs.includes("textContent = 'offline'")) fail('scheduleOfflineChrome must set offline copy');
+if (!uiJs.includes('4.5rem + env(safe-area-inset-bottom')) {
+    fail('#toast must sit just above the bottom nav');
+}
+if (sidenav.includes("localStorage.getItem(PREFS_OPEN_KEY) === '1'") || sidenav.includes('prefsInitialOpen')) {
+    fail('Theme & Preferences must always open collapsed');
+}
+if (!sidenav.includes('setPrefsOpen(false)')) {
+    fail('Theme accordion must start collapsed');
+}
+if (!hubJs.includes('__ntSetPrefsOpen')) {
+    fail('openAppHub must collapse Theme & Preferences');
 }
 const alertsJs = readFileSync('src/lib/alerts-channel.js', 'utf8');
 if (alertsJs.includes('absolute top-2 right-4')) {
@@ -662,4 +697,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.14 polish (Trip Planner + Midnight/Earthy sheet chrome)');
+console.log('✓ V8_08.23.15 polish (toasts, header offline, shared chrome)');

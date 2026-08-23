@@ -174,7 +174,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
 
     // Network guards for non-offline reasons — no banner / toast chrome.
-    // Product: only the classic "WORKING OFFLINE" banner is shown to users.
+    // Product: only the header "offline" chip is shown to users.
     if (reason !== 'offline') {
         if (reason === 'liefi') isLieFi = true;
         return;
@@ -1209,7 +1209,10 @@ export async function loadAllSchedules(force = false) {
         const hasUsableData = !!$fullDatabase.get();
         if (!usedCache && !hasUsableData && typeof document !== 'undefined') {
             const oi = document.getElementById('offline-indicator');
-            if (oi) oi.style.display = 'flex';
+            if (oi) {
+                oi.textContent = 'offline';
+                oi.style.display = 'inline-flex';
+            }
         }
     } finally {
         if (fetchSignal && fetchSignal.aborted) return;

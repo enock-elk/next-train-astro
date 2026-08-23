@@ -674,7 +674,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         style.innerHTML = `
             #toast { 
                 position: fixed; 
-                bottom: 24px; 
+                bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); 
                 left: 50%; 
                 transform: translateX(-50%) translateY(150%); 
                 opacity: 0; 
@@ -1399,8 +1399,8 @@ export function scheduleOfflineChrome() {
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
         const oi = document.getElementById('offline-indicator');
         if (oi) {
-            oi.style.display = 'flex';
-            oi.textContent = 'WORKING OFFLINE';
+            oi.textContent = 'offline';
+            oi.style.display = 'inline-flex';
         }
         if (!window._hasShownOfflineToast) {
             window._hasShownOfflineToast = true;

@@ -348,22 +348,17 @@ const versionBadge = String(APP_VERSION);
   const prefsToggle = document.getElementById('prefs-accordion-toggle');
   const prefsPanel = document.getElementById('prefs-accordion-panel');
   const prefsChevron = document.getElementById('prefs-accordion-chevron');
-  const PREFS_OPEN_KEY = 'ntPrefsAccordionOpen';
 
-  const setPrefsOpen = (open, persist = true) => {
+  const setPrefsOpen = (open) => {
     if (!prefsPanel) return;
     prefsPanel.classList.toggle('hidden', !open);
     prefsPanel.classList.toggle('flex', open);
     prefsToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
     prefsChevron?.classList.toggle('rotate-180', open);
-    if (persist) {
-      try { localStorage.setItem(PREFS_OPEN_KEY, open ? '1' : '0'); } catch (e) { /* ignore */ }
-    }
   };
 
-  let prefsInitialOpen = false;
-  try { prefsInitialOpen = localStorage.getItem(PREFS_OPEN_KEY) === '1'; } catch (e) { /* ignore */ }
-  setPrefsOpen(prefsInitialOpen, false);
+  setPrefsOpen(false);
+  window.__ntSetPrefsOpen = setPrefsOpen;
 
   prefsToggle?.addEventListener('click', () => {
     const open = prefsToggle.getAttribute('aria-expanded') !== 'true';

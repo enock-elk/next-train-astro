@@ -12,6 +12,9 @@
  *   --nt-text-muted       Secondary copy
  *   --nt-border           Hairlines / chrome edges
  *   --nt-theme-meta       <meta name="theme-color">
+ *   --nt-chrome-from      Header + bottom-nav gradient start (same as --nt-primary)
+ *   --nt-chrome-to        Header + bottom-nav gradient end
+ *   --nt-chrome-ink       Title / active tab / offline chip on that chrome
  *
  * Tailwind blue-* is remapped via --nt-blue-{50…900} (RGB channels) so existing
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
@@ -33,6 +36,9 @@
   --nt-text-muted: #6b7280;
   --nt-border: #e5e7eb;
   --nt-theme-meta: #1d4ed8;
+  --nt-chrome-from: #2563eb;
+  --nt-chrome-to: #4338ca;
+  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -61,6 +67,9 @@ html[data-colour-pack="classic"].dark {
   --nt-text-muted: #9ca3af;
   --nt-border: #374151;
   --nt-theme-meta: #1e3a8a;
+  --nt-chrome-from: #2563eb;
+  --nt-chrome-to: #4338ca;
+  --nt-chrome-ink: #ffffff;
 }
 
 /* Explicit classic light (optional clarity) */
@@ -75,6 +84,9 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-text-muted: #6b7280;
   --nt-border: #e5e7eb;
   --nt-theme-meta: #1d4ed8;
+  --nt-chrome-from: #2563eb;
+  --nt-chrome-to: #4338ca;
+  --nt-chrome-ink: #ffffff;
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
   --nt-blue-200: 191 219 254;
@@ -99,6 +111,9 @@ html[data-colour-pack="midnight"] {
   --nt-text-muted: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #0369a1;
+  --nt-chrome-from: #0284c7;
+  --nt-chrome-to: #0c4a6e;
+  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 240 249 255;
   --nt-blue-100: 224 242 254;
@@ -114,9 +129,9 @@ html[data-colour-pack="midnight"] {
 
 html.dark[data-colour-pack="midnight"],
 html[data-colour-pack="midnight"].dark {
-  --nt-primary: #38bdf8;
-  --nt-primary-hover: #7dd3fc;
-  --nt-primary-fg: #0c4a6e;
+  --nt-primary: #0284c7;
+  --nt-primary-hover: #0369a1;
+  --nt-primary-fg: #ffffff;
   --nt-primary-soft: rgba(12, 74, 110, 0.45);
   --nt-surface: #0b1220;
   --nt-surface-muted: #111827;
@@ -124,6 +139,9 @@ html[data-colour-pack="midnight"].dark {
   --nt-text-muted: #94a3b8;
   --nt-border: #1e293b;
   --nt-theme-meta: #0c4a6e;
+  --nt-chrome-from: #0284c7;
+  --nt-chrome-to: #0c4a6e;
+  --nt-chrome-ink: #ffffff;
 }
 
 /* High contrast — crisp neutrals + strong brand blue (WCAG-friendly, not cartoon) */
@@ -138,6 +156,9 @@ html[data-colour-pack="contrast"] {
   --nt-text-muted: #262626;
   --nt-border: #171717;
   --nt-theme-meta: #1d4ed8;
+  --nt-chrome-from: #1d4ed8;
+  --nt-chrome-to: #1e3a8a;
+  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -163,6 +184,9 @@ html[data-colour-pack="contrast"].dark {
   --nt-text-muted: #e5e5e5;
   --nt-border: #e5e5e5;
   --nt-theme-meta: #0a0a0a;
+  --nt-chrome-from: #93c5fd;
+  --nt-chrome-to: #1d4ed8;
+  --nt-chrome-ink: #0a0a0a;
 
   --nt-blue-50: 23 37 84;
   --nt-blue-100: 30 58 138;
@@ -188,6 +212,9 @@ html[data-colour-pack="signal"] {
   --nt-text-muted: #4b5563;
   --nt-border: #d1fae5;
   --nt-theme-meta: #047857;
+  --nt-chrome-from: #059669;
+  --nt-chrome-to: #064e3b;
+  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 236 253 245;
   --nt-blue-100: 209 250 229;
@@ -213,6 +240,9 @@ html[data-colour-pack="signal"].dark {
   --nt-text-muted: #a7f3d0;
   --nt-border: #064e3b;
   --nt-theme-meta: #064e3b;
+  --nt-chrome-from: #34d399;
+  --nt-chrome-to: #064e3b;
+  --nt-chrome-ink: #022c22;
 }
 
 /* Ember — amber / copper accent */
@@ -227,6 +257,9 @@ html[data-colour-pack="ember"] {
   --nt-text-muted: #78716c;
   --nt-border: #fde68a;
   --nt-theme-meta: #b45309;
+  --nt-chrome-from: #d97706;
+  --nt-chrome-to: #78350f;
+  --nt-chrome-ink: #ffffff;
 
   --nt-blue-50: 255 251 235;
   --nt-blue-100: 254 243 199;
@@ -252,6 +285,9 @@ html[data-colour-pack="ember"].dark {
   --nt-text-muted: #fde68a;
   --nt-border: #78350f;
   --nt-theme-meta: #78350f;
+  --nt-chrome-from: #fbbf24;
+  --nt-chrome-to: #78350f;
+  --nt-chrome-ink: #451a03;
 }
 
 /*
@@ -270,6 +306,9 @@ html[data-colour-pack="earthy"] {
   --nt-border: #E8E2D6;
   --nt-theme-meta: #FAF8F3;
   --nt-accent: #A58E74;
+  --nt-chrome-from: #6B705C;
+  --nt-chrome-to: #8B6F4E;
+  --nt-chrome-ink: #FAF8F3;
 
   --nt-blue-50: 250 248 243;
   --nt-blue-100: 243 240 232;
@@ -296,6 +335,9 @@ html[data-colour-pack="earthy"].dark {
   --nt-border: #3F3C37;
   --nt-theme-meta: #2C2A26;
   --nt-accent: #C4A990;
+  --nt-chrome-from: #A3A792;
+  --nt-chrome-to: #6B705C;
+  --nt-chrome-ink: #2C2A26;
 
   --nt-blue-50: 44 42 38;
   --nt-blue-100: 55 53 47;
@@ -321,10 +363,28 @@ html[data-colour-pack="earthy"].dark {
   border-color: color-mix(in srgb, var(--nt-border) 50%, transparent);
 }
 
-#app-top-tabs,
-#bottom-nav.bottom-nav-bar {
+#app-top-tabs {
   background-color: color-mix(in srgb, var(--nt-surface) 95%, transparent);
   border-color: var(--nt-border);
+}
+
+/*
+ * Sheet chrome — every pack. Header + bottom nav share --nt-chrome-from/to.
+ * CTAs (#locate-btn, #view-full-timetable-btn) use --nt-primary, which is
+ * the same start colour so the bar and the timetable button match.
+ */
+.app-header,
+#bottom-nav.bottom-nav-bar {
+  background-color: var(--nt-chrome-from) !important;
+  background-image: linear-gradient(
+    to bottom right,
+    var(--nt-chrome-from),
+    var(--nt-chrome-from),
+    var(--nt-chrome-to)
+  ) !important;
+  border-color: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Classic / SPA: keep Tailwind blue-600 / blue-400 on the indicator.
@@ -337,27 +397,12 @@ html[data-colour-pack="earthy"] #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
 
-/* Never flatten the SPA title gradient to a solid pack fill */
-#app-title {
-  background-image: linear-gradient(to right, #2563eb, #4f46e5);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
-}
-html.dark #app-title {
-  background-image: linear-gradient(to right, #60a5fa, #818cf8);
-}
-
-html[data-colour-pack="midnight"] #app-title,
-html[data-colour-pack="contrast"] #app-title,
-html[data-colour-pack="signal"] #app-title,
-html[data-colour-pack="ember"] #app-title,
-html[data-colour-pack="earthy"] #app-title {
-  background-image: linear-gradient(
-    to right,
-    var(--nt-primary),
-    color-mix(in srgb, var(--nt-primary) 55%, #4f46e5)
-  );
+#app-title,
+#app-title.header-title {
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  color: var(--nt-chrome-ink) !important;
 }
 
 .view-section {
@@ -374,75 +419,38 @@ html[data-colour-pack="earthy"] #main-content {
   border-color: var(--nt-border) !important;
 }
 
-html[data-colour-pack="contrast"] .app-header,
-html[data-colour-pack="signal"] .app-header,
-html[data-colour-pack="ember"] .app-header,
 html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
-html[data-colour-pack="earthy"] #app-top-tabs,
-html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="earthy"] #app-top-tabs {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
 }
 
-/*
- * Midnight + Earthy chrome: same hero as Full Train Sheet
- * (bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 / sage→terracotta).
- */
-html[data-colour-pack="midnight"] .app-header,
-html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar {
-  background-color: #2563eb !important;
-  background-image: linear-gradient(to bottom right, #2563eb, #2563eb, #4338ca) !important;
-  border-color: transparent !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-html[data-colour-pack="earthy"] .app-header,
-html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
-  background-color: #6B705C !important;
-  background-image: linear-gradient(to bottom right, #6B705C, #6B705C, #8B6F4E) !important;
-  border-color: transparent !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-html[data-colour-pack="midnight"] #app-title.header-title,
-html[data-colour-pack="earthy"] #app-title.header-title {
-  background-image: none !important;
-  -webkit-background-clip: border-box !important;
-  background-clip: border-box !important;
-  color: #ffffff !important;
-}
-html[data-colour-pack="midnight"] #current-day,
-html[data-colour-pack="earthy"] #current-day {
+#current-day {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
   padding: 0.2rem 0.65rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff !important;
+  background: color-mix(in srgb, var(--nt-chrome-ink) 15%, transparent);
+  color: var(--nt-chrome-ink) !important;
   font-weight: 800;
   letter-spacing: 0.04em;
 }
-html[data-colour-pack="midnight"] #current-day span,
-html[data-colour-pack="earthy"] #current-day span {
-  color: #ffffff !important;
+#current-day span {
+  color: var(--nt-chrome-ink) !important;
 }
-html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item,
-html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item {
-  color: rgba(255, 255, 255, 0.62) !important;
+
+#bottom-nav .bottom-nav-item {
+  color: color-mix(in srgb, var(--nt-chrome-ink) 62%, transparent) !important;
 }
-html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item.is-active,
-html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item.is-active {
-  color: #ffffff !important;
+#bottom-nav .bottom-nav-item.is-active {
+  color: var(--nt-chrome-ink) !important;
 }
-html[data-colour-pack="midnight"] #bottom-nav .bottom-nav-item:focus-visible,
-html[data-colour-pack="earthy"] #bottom-nav .bottom-nav-item:focus-visible {
-  --tw-ring-color: rgba(255, 255, 255, 0.7);
+#bottom-nav .bottom-nav-item:focus-visible {
+  --tw-ring-color: color-mix(in srgb, var(--nt-chrome-ink) 70%, transparent);
 }
 
 html[data-colour-pack="midnight"] .view-section,
@@ -466,14 +474,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   background-color: var(--nt-primary) !important;
 }
 
-#app-title.header-title {
-  background-image: none !important;
-  -webkit-background-clip: border-box !important;
-  background-clip: border-box !important;
-  color: var(--nt-primary) !important;
-}
-
-/* Pack-tinted CTAs (GPS + full timetable) */
+/* Pack-tinted CTAs (GPS + full timetable) — same start colour as chrome */
 #locate-btn,
 #view-full-timetable-btn {
   background-color: var(--nt-primary) !important;
@@ -493,48 +494,31 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   text-align: center;
 }
 
-/* Offline status docks at the bottom of the shell (above the nav). */
-.nt-offline-dock {
-  width: 100%;
-}
-.nt-offline-strip {
+/* Header chip between the title and the alert bell. */
+.nt-offline-header-slot {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.3rem 0.75rem;
-  background-color: #fbbf24;
-  color: #1c1917;
-  border-top: 1px solid rgba(180, 83, 9, 0.35);
+}
+.nt-offline-chip {
+  display: none;
+  align-items: center;
   font-size: 0.625rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.nt-offline-strip::before {
-  content: "";
-  width: 0.4rem;
-  height: 0.4rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--nt-chrome-ink);
+  background: color-mix(in srgb, var(--nt-chrome-ink) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nt-chrome-ink) 32%, transparent);
   border-radius: 999px;
-  background: #b45309;
-  flex-shrink: 0;
-  animation: nt-offline-pulse 1.8s ease-in-out infinite;
+  padding: 0.2rem 0.55rem;
+  white-space: nowrap;
+  line-height: 1.1;
 }
-@keyframes nt-offline-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-html.dark .nt-offline-strip {
-  background-color: #292524;
-  color: #fbbf24;
-  border-top-color: rgba(251, 191, 36, 0.4);
-}
-html.dark .nt-offline-strip::before {
-  background: #fbbf24;
+
+/* Toasts sit just above the bottom nav (nav ≈ 3.75rem + safe-area). */
+#toast,
+#offline-toast {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 #bottom-nav-grid {
@@ -630,13 +614,15 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 
 /* Maintenance strip pinned to top of header; hamburger stays above it (z-[70]) */
 #app-header.nt-maint-active {
-  /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
+  /* Kill chrome gradient so the hazard strip doesn't glow through */
   background-color: var(--nt-surface) !important;
+  background-image: none !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 html.dark #app-header.nt-maint-active {
   background-color: rgb(31 41 55) !important; /* gray-800 */
+  background-image: none !important;
 }
 #app-header.nt-maint-active #open-nav-btn,
 #app-header.nt-maint-active #notice-bell {

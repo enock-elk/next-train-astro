@@ -202,6 +202,7 @@ export function openAppHub() {
         setTimeout(() => overlay.classList.remove('opacity-0'), 10);
     }
     document.body.classList.add('sidenav-open', 'modal-active');
+    if (typeof window.__ntSetPrefsOpen === 'function') window.__ntSetPrefsOpen(false);
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
     }

@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.15 — Toasts above nav; header offline; shared chrome tokens (23 Aug 2026)
+
+- `#toast` and `#offline-toast` sit just above `#bottom-nav` (`4.5rem + safe-area`).
+- Offline chrome is the header chip `offline` between the title and the alert bell (`#offline-indicator`). Still waits 4s while visible — do not flash on screen-lock.
+- Theme & Preferences always opens collapsed (`setPrefsOpen(false)` on load and on `openAppHub`).
+- Every pack sets `--nt-chrome-from` / `--nt-chrome-to` / `--nt-chrome-ink`. Header + bottom nav use `linear-gradient(to bottom right, from, from, to)`. CTAs keep `--nt-primary`, which matches `--nt-chrome-from`.
+- Classic chrome is the old Midnight sheet (`#2563eb` → `#4338ca`). Midnight uses its own sky (`#0284c7` → `#0c4a6e`) in light and dark so the timetable button matches the bar.
+
 ## V8_08.23.14 — Trip Planner label; Midnight/Earthy sheet chrome (23 Aug 2026)
 
 - Bottom-nav middle tab label is **Trip Planner** (route icon stays).

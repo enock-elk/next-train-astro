@@ -39,6 +39,33 @@ export function triggerHaptic() {
     } catch(e) {}
 }
 
+/**
+ * Show/hide a password field. Bind after the input exists in the document
+ * (admin login lives in a stamped <template>, so boot-time getElementById misses it).
+ */
+export function bindPasswordReveal({ inputId, buttonId, openIconId, closedIconId }) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(buttonId);
+    if (!input || !btn || btn.dataset.revealBound === '1') return;
+    btn.dataset.revealBound = '1';
+    const openIcon = openIconId ? document.getElementById(openIconId) : null;
+    const closedIcon = closedIconId ? document.getElementById(closedIconId) : null;
+    const sync = () => {
+        const hidden = input.type === 'password';
+        btn.setAttribute('aria-label', hidden ? 'Show password' : 'Hide password');
+        btn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+        openIcon?.classList.toggle('hidden', !hidden);
+        closedIcon?.classList.toggle('hidden', hidden);
+    };
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        input.type = input.type === 'password' ? 'text' : 'password';
+        sync();
+    });
+    sync();
+}
+
 // --- GLOBAL SCROLL-LOCK PROTOCOL ---
 export function lockBackgroundScroll() {
     if (typeof document !== 'undefined') document.body.classList.add('modal-active');
@@ -874,7 +901,7 @@ export function initGlobalErrorHandler() {
             "Script error.", "_AutofillCallbackHandler", "ResizeObserver loop limit exceeded",
             "Unexpected end of input", "Unexpected token", "Unexpected token '<'", 
             "Unexpected end of JSON input", "JSON.parse: unexpected end of data",
-            "chrome-extension", "ethereum", "__firefox__", "DarkReader"
+            "chrome-extension", "ethereum", "__firefox__", "DarkReader", "xbrowser"
         ];
 
         if (typeof msg === 'string' && IGNORED_ERRORS.some(err => msg.indexOf(err) > -1)) {

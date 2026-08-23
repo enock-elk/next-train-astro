@@ -2313,6 +2313,9 @@ const Admin = {
                         if (spinner) spinner.classList.add('hidden');
                         
                         if(emailInput) setTimeout(() => emailInput.focus(), 150);
+                        if (typeof window.fillAdminPasswordFromDevice === 'function') {
+                            window.fillAdminPasswordFromDevice();
+                        }
                     }
                 }
             }
@@ -2327,6 +2330,15 @@ const Admin = {
             });
         }
         
+        if (typeof window.bindPasswordReveal === 'function') {
+            window.bindPasswordReveal({
+                inputId: 'admin-password',
+                buttonId: 'toggle-password-btn',
+                openIconId: 'eye-open-icon',
+                closedIconId: 'eye-closed-icon',
+            });
+        }
+
         if (passInput) {
             passInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && loginBtn) loginBtn.click();
@@ -2377,6 +2389,15 @@ const Admin = {
                             Admin.initAutoSim(); 
                         }
                         if (typeof showToast === 'function') showToast(`Welcome back!`, "success");
+                        try {
+                            if (window.PasswordCredential && navigator.credentials?.store) {
+                                navigator.credentials.store(new window.PasswordCredential({
+                                    id: email,
+                                    password,
+                                    name: email,
+                                })).catch(() => {});
+                            }
+                        } catch { /* Credential Management optional */ }
                     })
                     .catch((error) => {
                         const code = error?.code || 'unknown';

@@ -1541,18 +1541,8 @@ export function initHub() {
         });
     });
 
-    // Password eye toggle (login modal)
-    const togglePassBtn = document.getElementById('toggle-password-btn');
-    const passInput = document.getElementById('admin-password');
-    const eyeOpen = document.getElementById('eye-open-icon');
-    const eyeClosed = document.getElementById('eye-closed-icon');
-    togglePassBtn?.addEventListener('click', () => {
-        if (!passInput) return;
-        const show = passInput.type === 'password';
-        passInput.type = show ? 'text' : 'password';
-        eyeOpen?.classList.toggle('hidden', show);
-        eyeClosed?.classList.toggle('hidden', !show);
-    });
+    // Admin password eye is bound after the stamped login modal exists
+    // (bindAdminPasswordPreview in admin-bridge). Do not bind it here.
     // Admin cancel/login history is owned by public/js/admin.js only.
     // A second listener here called history.back() twice and skipped the home page.
 

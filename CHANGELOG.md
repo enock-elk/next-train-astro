@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.10 — Admin password eye + device password fill (23 Aug 2026)
+
+- Admin Gateway eye preview was bound at commuter boot, but the login modal only exists after the 5-tap `<template>` stamp — so the button did nothing. Bind `bindPasswordReveal` after stamp (and again in `setupLoginAccess`).
+- Admin email/password now use `autocomplete="username"` / `current-password`. After a successful sign-in, offer the browser Credential Management store; opening the modal may fill a saved password (`mediation: 'optional'`). That is the phone’s password-manager fingerprint / Face ID path — not a new WebAuthn Firebase login.
+- Commuter Account modal gets the same eye control.
+- Crash shield ignores `xbrowser` (browser-extension noise). `bindKillswitchWatch` remains exported from `logic.js` (the Aug 12 Vite `?t=` misses were a mid-deploy/HMR window, not live production).
+
 ## V8_08.23.9 — Train sheet fare chip, ticket FAQ, telemetry indexes (23 Aug 2026)
 
 - Planner train sheet fare chip is `Max. Single Fare · R12.00` (peak adult single from `FARE_CONFIG`). Still opens the fare table for that train’s route.

@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.9 train sheet, ticket FAQ, Recent Trips merge).
+ * Current polish gate (V8_08.23.10 password eye + device password fill).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,18 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.9') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.10') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.9') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.10') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/max\.?\s*single fare/i.test(wn) && !/fare chip/i.test(wn)) {
-    fail(`What's New must mention the Max. Single Fare chip: ${wn}`);
+if (!/eye/i.test(wn) || !/password/i.test(wn)) {
+    fail(`What's New must mention the account password eye: ${wn}`);
 }
-if (!/recent trips/i.test(wn) || !/province/i.test(wn)) {
-    fail(`What's New must mention Recent Trips across provinces: ${wn}`);
-}
-if (!/ticket/i.test(wn) || !/valid/i.test(wn)) {
-    fail(`What's New must mention ticket validity: ${wn}`);
+if (!/saved password/i.test(wn) || !/face id/i.test(wn)) {
+    fail(`What's New must mention phone password fill: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -44,7 +41,16 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.9')) fail('V8_08.23.9 card must remain in history');
 if (!folded.has('V8_08.23.8')) fail('V8_08.23.8 card must remain in history');
+const card239 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.9');
+const wn239 = (card239?.features || []).join(' ');
+if (!/max\.?\s*single fare/i.test(wn239) && !/fare chip/i.test(wn239)) {
+    fail('V8_08.23.9 card must keep the fare chip bullet');
+}
+if (!/recent trips/i.test(wn239) || !/province/i.test(wn239)) {
+    fail('V8_08.23.9 card must keep Recent Trips across provinces');
+}
 if (!folded.has('V8_08.23.7')) fail('V8_08.23.7 card must remain in history');
 if (!folded.has('V8_08.23.6')) fail('V8_08.23.6 card must remain in history');
 if (!folded.has('V8_08.23.5')) fail('V8_08.23.5 card must remain in history');
@@ -76,9 +82,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.9') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.10') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.9') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.10') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -146,6 +152,28 @@ if (/30 Days \(MAU\)|Last 30 Mins|Admin Gateway|Developer Mode|Live Telemetry/i.
 const adminBridge = readFileSync('src/lib/admin-bridge.js', 'utf8');
 if (!adminBridge.includes('stampAdminChrome') || !adminBridge.includes('nt-admin-chrome-template')) {
     fail('admin-bridge must stamp operator chrome only after unlock');
+}
+if (!adminBridge.includes('bindAdminPasswordPreview') || !adminBridge.includes('bindPasswordReveal')) {
+    fail('admin password eye must bind after the login modal is stamped');
+}
+if (!hubModals.includes('id="toggle-password-btn"') || !hubModals.includes('autocomplete="current-password"')) {
+    fail('admin password field must keep the eye button and current-password autocomplete');
+}
+if (!hubModals.includes('id="account-toggle-password-btn"')) {
+    fail('account password field must have an eye button');
+}
+{
+    const hubSrc = readFileSync('src/lib/hub.js', 'utf8');
+    if (hubSrc.includes("getElementById('toggle-password-btn')")) {
+        fail('hub boot must not bind the admin eye (modal is still in the template)');
+    }
+}
+{
+    const uiSrc = readFileSync('src/lib/ui.js', 'utf8');
+    if (!uiSrc.includes('export function bindPasswordReveal')) {
+        fail('ui.js must export bindPasswordReveal');
+    }
+    if (!uiSrc.includes('"xbrowser"')) fail('crash shield must ignore xbrowser extension noise');
 }
 
 const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
@@ -477,4 +505,4 @@ if (failures.length) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.9 polish (fare chip, ticket FAQ, Recent Trips merge)');
+console.log('✓ V8_08.23.10 polish (password eye, device password fill)');

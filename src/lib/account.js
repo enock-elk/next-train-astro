@@ -15,6 +15,7 @@ import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
 import { safeStorage } from './utils.js';
 import { $deviceId } from '../store.js';
+import { bindPasswordReveal } from './ui.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
 
@@ -276,6 +277,13 @@ export function bindAccountUi() {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
         openAccountModal();
     };
+    bindPasswordReveal({
+        inputId: 'account-password',
+        buttonId: 'account-toggle-password-btn',
+        openIconId: 'account-eye-open-icon',
+        closedIconId: 'account-eye-closed-icon',
+    });
+
     document.getElementById('settings-account-btn')?.addEventListener('click', open);
 
     document.getElementById('account-modal-close')?.addEventListener('click', closeAccountModal);

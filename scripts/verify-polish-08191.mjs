@@ -123,7 +123,10 @@ if (/30 Days \(MAU\)|Last 30 Mins|Admin Gateway|Developer Mode|Live Telemetry/i.
 }
 {
     const struggleStart = hubModals.indexOf('id="network-struggle-modal"');
-    const struggle = struggleStart >= 0 ? hubModals.slice(struggleStart, struggleStart + 2500) : '';
+    const struggleEnd = hubModals.indexOf('id="redirect-modal"');
+    const struggle = struggleStart >= 0
+        ? hubModals.slice(struggleStart, struggleEnd > struggleStart ? struggleEnd : struggleStart + 8000)
+        : '';
     if (!struggle.includes('id="network-struggle-dismiss"') || !struggle.includes('id="network-struggle-retry"')) {
         fail('Weak Signal must keep Dismiss and Try Again');
     }
@@ -285,8 +288,11 @@ if (!admin.includes('bindTripScrollLoadMore') || !admin.includes('loadMoreTripCo
     fail('planner telemetry must load more trips on scroll');
 }
 if (!admin.includes('Admin._deTripPageSize = 40')) fail('planner telemetry must paint 40 cards first');
-if (!admin.includes('Users collected') || !admin.includes('de-users-collected')) {
-    fail('planner telemetry must show unique users collected');
+if (!admin.includes('Users ever') || !admin.includes('de-users-collected')) {
+    fail('planner telemetry must show all-time Users ever');
+}
+if (!admin.includes('unique trip combinations')) {
+    fail('planner telemetry must show unique trip combinations');
 }
 if (!admin.includes('text-indigo-600 dark:text-indigo-400 uppercase')) {
     fail('planner telemetry cards must restore the day-type chip');

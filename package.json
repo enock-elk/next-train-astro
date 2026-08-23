@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "8.8.21.1",
+  "version": "8.8.23.1",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -21,6 +21,7 @@
     "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
     "verify:overlay-return": "node scripts/verify-overlay-return.mjs",
     "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
+    "verify:planner-saturday": "node scripts/verify-planner-saturday.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "astro": "astro"
   },

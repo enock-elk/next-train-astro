@@ -20,6 +20,7 @@ import {
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate
 } from './utils.js';
 import { planUnifiedTrip } from './planner-core.js';
+import { saturdayNoServiceCopy } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
@@ -671,16 +672,40 @@ function buildHolidayNoticeHtml(trip = null, { absorbSunday = false } = {}) {
     });
 }
 
+function saturdayAdvisoryOnclick(routeId) {
+    const id = String(routeId || 'herc-koed').replace(/'/g, "\\'");
+    return `type="button" onclick="if(typeof window.openSaturdayServiceModal === 'function') window.openSaturdayServiceModal('${id}')"`;
+}
+
 function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
     if (!payload) return '';
     const intended = payload.intendedDest || 'Destination';
-    const partial = payload.partialDest || fallbackTo;
+    const partial = payload.partialDest || payload.partialOrigin || fallbackTo;
     const disrId = payload.disruptionId || '';
     const safeIntended = escapeHTML(String(intended).replace(/ STATION/gi, ''));
     const safePartial = escapeHTML(String(partial).replace(/ STATION/gi, ''));
-    const onclickAttr = disrId
-        ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+    const satOnclick = payload.saturdayNoService
+        ? saturdayAdvisoryOnclick(payload.routeId)
         : null;
+    const onclickAttr = satOnclick || (disrId
+        ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+        : null);
+
+    if (payload.saturdayNoService && payload.boardingBlocked) {
+        const originLabel = escapeHTML(String(payload.blockedOrigin || '').replace(/ STATION/gi, ''));
+        const fromLabel = escapeHTML(String(payload.partialOrigin || partial).replace(/ STATION/gi, ''));
+        return buildPlannerNotice({
+            tone: 'critical',
+            title: 'Boarding blocked',
+            bodyHtml: `
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot depart from <span class="text-red-700 dark:text-red-300">${originLabel || safeIntended}</span> on Saturday.</p>
+                <p>Showing trains from <span class="font-bold text-gray-800 dark:text-gray-200">${fromLabel}</span>.</p>
+            `,
+            icon: 'alert',
+            interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+        });
+    }
+
     return buildPlannerNotice({
         tone: 'critical',
         title: 'Line Severed',
@@ -1130,9 +1155,39 @@ export function restorePlannerResultsView() {
     return false;
 }
 
+export function openSaturdayServiceModal(routeId = 'herc-koed') {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const copy = saturdayNoServiceCopy(routeId);
+    const titleEl = document.getElementById('disruption-modal-stations');
+    const bodyEl = document.getElementById('disruption-modal-body');
+    const badgeEl = document.getElementById('disruption-modal-tier-badge');
+    const timeEl = document.getElementById('disruption-modal-timestamp');
+    const iconEl = document.getElementById('disruption-icon-svg');
+    const route = ROUTES[routeId];
+    if (titleEl) {
+        const a = String(route?.destA || copy.lineLabel).replace(/ STATION/gi, '');
+        const b = String(route?.destB || '').replace(/ STATION/gi, '');
+        titleEl.innerHTML = b
+            ? `Between <span class="text-blue-600 dark:text-blue-400">${escapeHTML(a)}</span> & <span class="text-blue-600 dark:text-blue-400">${escapeHTML(b)}</span>`
+            : escapeHTML(copy.lineLabel);
+    }
+    if (bodyEl) bodyEl.textContent = copy.body;
+    if (badgeEl) {
+        badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
+        badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} NO WEEKEND SERVICE`;
+        if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
+    }
+    if (timeEl) timeEl.textContent = 'Timetable: Saturday / public holiday';
+    if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
+}
+
 export function openDisruptionModal(id) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
-    
+    if (String(id || '').startsWith('saturday-')) {
+        openSaturdayServiceModal(String(id).slice('saturday-'.length));
+        return;
+    }
+
     let targetDisruption = null;
     const globalDisruptions = $globalDisruptions.get();
     if (globalDisruptions) {
@@ -2046,6 +2101,7 @@ export const PlannerRenderer = {
             // TRAIN TERMINATES block so users still see the hard stop at the partial dest.
             const forcePartialTerminus = subIsFinalDest
                 && !isSevered
+                && !currentPlannerErrorPayload?.boardingBlocked
                 && (
                     currentPlannerStatus === 'PARTIAL_JOURNEY'
                     || !!(typeof window !== 'undefined' && window._plannerForcePartialTerminus)
@@ -3593,8 +3649,52 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     break;
                 case 'ERR_NO_SERVICE_TODAY':
                     errorTitle = "No service today";
-                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
+                    errorMsg = (selectedPlannerDay === 'saturday' || selectedPlannerDay === 'public_holiday')
+                        ? `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try the next weekday.</p>`
+                        : `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
                     break;
+                case 'ERR_NO_SATURDAY_SERVICE': {
+                    errorTitle = "No weekend service";
+                    errorTone = 'danger';
+                    const copy = saturdayNoServiceCopy(errorPayload?.routeId);
+                    const line = escapeHTML(copy.lineLabel);
+                    errorMsg = `
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${escapeHTML(copy.body)}</p>
+                        <button type="button" onclick="if(typeof window.openSaturdayServiceModal==='function') window.openSaturdayServiceModal('${String(errorPayload?.routeId || 'herc-koed').replace(/'/g, "\\'")}')"
+                            class="w-full text-left mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800/60 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300">
+                                    ${plannerIcon('circle', 'w-2.5 h-2.5 text-red-500')} No weekend service
+                                </span>
+                                <svg class="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            </div>
+                            <p class="text-[11px] text-red-700/90 dark:text-red-300/90 mt-1.5 leading-snug">Tap for details on the ${line} line</p>
+                        </button>
+                    `;
+                    if (errorPayload?.boardingBlocked && Array.isArray(errorPayload.alternateOrigins) && errorPayload.alternateOrigins.length) {
+                        const intended = errorPayload.intendedDest || cleanD;
+                        errorMsg += `
+                            <div class="mt-4 space-y-2">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Board beyond the cut</p>
+                                ${errorPayload.alternateOrigins.map((a) => {
+                                    const st = String(a.station || '').replace(/'/g, "\\'");
+                                    const destSt = String(dest).replace(/'/g, "\\'");
+                                    return `<button type="button" onclick="if(typeof window.planFromAlternateOrigin==='function') window.planFromAlternateOrigin('${st}','${destSt}')"
+                                        class="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors focus:outline-none text-left">
+                                        <span class="text-xs font-bold text-gray-800 dark:text-gray-100">Plan from <span class="text-blue-600 dark:text-blue-400">${escapeHTML(a.label || a.station)}</span> → ${escapeHTML(intended)}</span>
+                                        <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>`;
+                                }).join('')}
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">You may need other transport to reach the alternate station first.</p>
+                            </div>`;
+                    }
+                    errorMsg += `
+                        <button type="button" onclick="if(typeof window.executeManualRollover==='function') window.executeManualRollover('${safeO}', '${safeD}')" class="planner-next-day-cta w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs">
+                            See Next Available Day
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                        </button>`;
+                    break;
+                }
                 case 'ERR_ACTIVE_SUSPENSION': {
                     errorTitle = errorPayload?.boardingBlocked ? "Boarding blocked" : "Route suspended";
                     errorTone = 'danger';
@@ -3808,6 +3908,7 @@ if (typeof window !== 'undefined') {
     window.openFeedbackForMissingRoute = openFeedbackForMissingRoute;
     window.restorePlannerSearch = restorePlannerSearch;
     window.openDisruptionModal = openDisruptionModal;
+    window.openSaturdayServiceModal = openSaturdayServiceModal;
     window.extractTripCoordinates = extractTripCoordinates;
     window.hidePlannerResults = hidePlannerResults;
     window.openPlannerNetworkMap = openPlannerNetworkMap;

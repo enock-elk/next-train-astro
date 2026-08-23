@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.21.1";
+export const APP_VERSION = "V8_08.23.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -882,6 +882,15 @@ export const FARE_CONFIG = {
 // Day Index: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 export const DEFAULT_EXCLUSIONS = {};
 
+/**
+ * Corridors whose Saturday / public-holiday sheets are empty placeholders.
+ * Hardcoded IDs only — never train numbers. Live `*_sat` times override this
+ * automatically (see routeHasSaturdayTrains in saturday-service.js).
+ */
+export const SATURDAY_PLACEHOLDER_ROUTES = ['herc-koed', 'ec-berlin'];
+/** Junctions on herc-koed that still have Saturday trains on other routes. */
+export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
+
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
 // Badge / seen key use `id` (=== APP_VERSION for latest).
@@ -891,6 +900,16 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.23.1",
+        title: "What's new",
+        date: "23 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Ads:</b> If a top advert disappears while you scroll away, the board no longer leaves a blank strip when you come back.",
+            "<b>Planner:</b> Saturday and holiday plans on lines with no weekend trains now say so clearly, and still offer the next weekday."
+        ]
+    },
     {
         id: "V8_08.21.1",
         title: "What's new",

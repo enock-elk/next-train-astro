@@ -189,6 +189,13 @@ export function applyNavChrome(style = getNavStyle()) {
     document.body?.classList.toggle('nav-bottom', isBottom);
     document.body?.classList.toggle('nav-top', !isBottom);
 
+    const welcome = document.getElementById('welcome-modal');
+    const welcomeOpen = !!(welcome && !welcome.classList.contains('hidden'));
+    const inApp = safeStorage.getItem('welcomeSeen') === 'true' && !welcomeOpen;
+    const showBottom = isBottom && inApp;
+    document.documentElement.classList.toggle('nt-onboarding', !inApp);
+    document.documentElement.classList.toggle('nt-in-app', inApp);
+
     const topTabs = document.getElementById('app-top-tabs');
     const bottomNav = document.getElementById('bottom-nav');
     if (topTabs) {
@@ -196,8 +203,8 @@ export function applyNavChrome(style = getNavStyle()) {
         topTabs.setAttribute('aria-hidden', isBottom ? 'true' : 'false');
     }
     if (bottomNav) {
-        bottomNav.classList.toggle('hidden', !isBottom);
-        bottomNav.setAttribute('aria-hidden', isBottom ? 'false' : 'true');
+        bottomNav.classList.toggle('hidden', !showBottom);
+        bottomNav.setAttribute('aria-hidden', showBottom ? 'false' : 'true');
     }
 
     document.querySelectorAll('[data-nav-style-option]').forEach((btn) => {
@@ -230,6 +237,12 @@ export function applyReturningUserChrome() {
     document.body?.classList.toggle('chrome-compact', seen);
     const main = document.getElementById('main-content');
     main?.classList.toggle('chrome-compact', seen);
+}
+
+/** After Welcome closes (or a share link skips it): show the in-app bottom bar. */
+export function syncInAppChrome() {
+    applyReturningUserChrome();
+    applyNavChrome();
 }
 
 const VALID_CRM_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);

@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.11 lab chrome + force-update reader).
+ * Current polish gate (V8_08.23.12 in-app chrome: welcome hide, right hub, tighter frame).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.11') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.12') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.11') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.12') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/bottom bar/i.test(wn) || !/options/i.test(wn)) {
-    fail(`What's New must mention the bottom bar + Options: ${wn}`);
+if (!/bottom bar/i.test(wn) || !/welcome/i.test(wn)) {
+    fail(`What's New must mention the bottom bar staying off Welcome: ${wn}`);
 }
-if (!/messages/i.test(wn) || !/team/i.test(wn)) {
-    fail(`What's New must mention Messages: ${wn}`);
+if (!/options/i.test(wn) || !/right/i.test(wn)) {
+    fail(`What's New must mention Options opening from the right: ${wn}`);
 }
-if (!/timetable/i.test(wn) || !/effective date/i.test(wn)) {
-    fail(`What's New must mention the timetable effective date: ${wn}`);
+if (!/about/i.test(wn) || !/terms/i.test(wn) || !/privacy/i.test(wn)) {
+    fail(`What's New must mention About terms/privacy: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -43,6 +43,15 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+}
+if (!folded.has('V8_08.23.11')) fail('V8_08.23.11 card must remain in history');
+const card2311 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.11');
+const wn2311 = (card2311?.features || []).join(' ');
+if (!/bottom bar/i.test(wn2311) || !/options/i.test(wn2311)) {
+    fail('V8_08.23.11 card must keep the bottom bar + Options');
+}
+if (!/messages/i.test(wn2311) || !/team/i.test(wn2311)) {
+    fail('V8_08.23.11 card must keep Messages');
 }
 if (!folded.has('V8_08.23.10')) fail('V8_08.23.10 card must remain in history');
 const card2310 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.10');
@@ -91,9 +100,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.11') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.12') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.11') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.12') fail(`app-version.json is ${appVer.version}`);
 if (appVer.forceUpdate !== false) fail('app-version.json forceUpdate must stay false on this reader ship');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
@@ -558,9 +567,52 @@ if (adminChrome.includes('window.__ntAdminReady') || adminChrome.includes('windo
     fail('operator chrome must not use 5-tap / session-active flags');
 }
 
+if (!prefsJs.includes('welcomeSeen') || !prefsJs.includes('nt-onboarding')) {
+    fail('applyNavChrome must hide the bottom bar during Welcome');
+}
+if (!prefsJs.includes('export function syncInAppChrome')) {
+    fail('prefs must export syncInAppChrome after Welcome');
+}
+if (!layout.includes('html.nt-onboarding #bottom-nav')) {
+    fail('layout must hide #bottom-nav while onboarding');
+}
+if (!layout.includes('p-0 sm:p-4')) fail('app frame must use lab-tight p-0 sm:p-4');
+if (layout.includes('pt-4 sm:pt-12')) fail('do not keep the tall top margin outside the frame');
+if (!layout.includes('height: 100dvh')) fail('mobile frame must be 100dvh so the bar sits on the screen');
+if (!/id="sidenav"\s[\s\S]{0,400}right-0/.test(sidenav) || !sidenav.includes('translate-x-full')) {
+    fail('sidenav must open from the right');
+}
+if (/id="sidenav"\s[\s\S]{0,400}left-0/.test(sidenav)) {
+    fail('sidenav drawer must not be left-0');
+}
+if (!sidenav.includes('transform: translateX(100%)')) {
+    fail('closed sidenav must sit off the right edge');
+}
+if (!sidenav.includes('dx > 56')) fail('sidenav swipe-close must be toward the right');
+if (!hubJs.includes('translate-x-full') || hubJs.includes('Left drawer')) {
+    fail('closeAppHub must treat the hub as a right drawer');
+}
+const planner = readFileSync('src/components/TripPlanner.astro', 'utf8');
+if (planner.includes('hub-legal-link') || /Kazembe CodeWorks/.test(planner)) {
+    fail('planner footer must not repeat Terms / Privacy / Kazembe');
+}
+if (!hubModals.includes('hub-legal-link') || !hubModals.includes('Kazembe CodeWorks')) {
+    fail('About must keep Legal links and Kazembe CodeWorks at the bottom');
+}
+if (!plannerModals.includes('Kazembe CodeWorks')) {
+    fail('legal modal must end with Kazembe CodeWorks');
+}
+const appHeader = readFileSync('src/components/Header.astro', 'utf8');
+if (!appHeader.includes('aria-label="Service Alert"')) fail('alert bell must use lab Service Alert label');
+if (!appHeader.includes('w-5 h-5') || !appHeader.includes('top-1.5 right-1.5')) {
+    fail('alert bell must match lab size and dot position');
+}
+if (appHeader.includes('translate-x-1/4')) fail('alert dot must not sit outside the bell');
+if (indexHtml.includes('z-[110]')) fail('bottom nav must not paint over Welcome (drop z-110)');
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.11 polish (bottom nav, Messages, force-update reader)');
+console.log('✓ V8_08.23.12 polish (welcome hide, right hub, tighter frame)');

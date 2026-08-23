@@ -45,8 +45,8 @@ function openMap() {
         const sidenav = document.getElementById('sidenav');
         const sidenavOverlay = document.getElementById('sidenav-overlay');
         if (sidenav) {
-            sidenav.classList.remove('open', 'translate-x-0');
-            sidenav.classList.add('-translate-x-full');
+            sidenav.classList.remove('open', 'translate-x-0', '-translate-x-full');
+            sidenav.classList.add('translate-x-full');
             if (sidenavOverlay) {
                 sidenavOverlay.classList.remove('open');
                 sidenavOverlay.classList.add('hidden', 'opacity-0');

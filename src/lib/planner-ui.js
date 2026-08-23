@@ -3505,6 +3505,7 @@ export async function applyPlannerDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
     // and MASTER_STATION_LIST never fills → "Connection timeout".

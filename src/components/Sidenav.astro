@@ -1,6 +1,6 @@
 ---
 /**
- * SPA-parity App Hub — flat left drawer matching metrorail-app / spa-reference.
+ * SPA-parity App Hub — flat right drawer (lab / thumb-friendly).
  * Sections: Preferences · Network Maps · Data & Sync · About & Updates
  */
 import { APP_VERSION } from '../lib/config.js';
@@ -9,10 +9,10 @@ const versionBadge = String(APP_VERSION);
 
 <div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-300"></div>
 
-<!-- APP HUB SIDENAV (Flat Native UI Edition — slides from left like live SPA) -->
+<!-- APP HUB SIDENAV — slides in from the right -->
 <div
   id="sidenav"
-  class="fixed inset-y-0 left-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col h-full z-[100] -translate-x-full transition-transform duration-300"
+  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-300"
   role="dialog"
   aria-label="App Hub"
   style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
@@ -214,7 +214,7 @@ const versionBadge = String(APP_VERSION);
 
   document.getElementById('sidenav-overlay')?.addEventListener('click', closeNav);
 
-  // Swipe right→left inside the open drawer to dismiss (does not touch home tab swipes)
+  // Swipe left→right inside the open right-hand drawer to dismiss
   const sidenavEl = document.getElementById('sidenav');
   if (sidenavEl && sidenavEl.dataset.swipeCloseBound !== '1') {
     sidenavEl.dataset.swipeCloseBound = '1';
@@ -236,8 +236,8 @@ const versionBadge = String(APP_VERSION);
       if (!t) return;
       const dx = t.clientX - startX;
       const dy = t.clientY - startY;
-      // Horizontal swipe left, not a vertical scroll
-      if (dx < -56 && Math.abs(dx) > Math.abs(dy) * 1.25) closeNav();
+      // Horizontal swipe toward the right edge, not a vertical scroll
+      if (dx > 56 && Math.abs(dx) > Math.abs(dy) * 1.25) closeNav();
     }, { passive: true });
   }
 
@@ -308,7 +308,7 @@ const versionBadge = String(APP_VERSION);
 <style>
   /* Mirror SPA JIT bypass so open class wins over Tailwind translate utilities */
   #sidenav {
-    transform: translateX(-100%);
+    transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   #sidenav.open {

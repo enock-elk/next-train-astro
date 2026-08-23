@@ -169,9 +169,9 @@ export function closeAppHub(skipHistory = false) {
         setTimeout(() => { window._isSidenavClosing = false; }, 150);
     }
     if (sidenav) {
-        // Left drawer (SPA): closed = -translate-x-full / no .open
-        sidenav.classList.remove('translate-x-0', 'open');
-        sidenav.classList.add('-translate-x-full');
+        // Right drawer (lab): closed = translate-x-full / no .open
+        sidenav.classList.remove('translate-x-0', 'open', '-translate-x-full');
+        sidenav.classList.add('translate-x-full');
     }
     if (overlay) {
         overlay.classList.add('opacity-0');

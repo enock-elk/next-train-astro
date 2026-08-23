@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.12 — Pin chrome: welcome hides nav, right hub, tighter frame (23 Aug 2026)
+
+- Bottom nav is in-app only: hidden on Welcome (`html.nt-onboarding` + `#welcome-modal` visible) and not painted over the welcome overlay (`z-40`).
+- Pin the bar to the screen edge: `#nt-shell` is `p-0 sm:p-4`; mobile `#main-content` is `100dvh` with no radius. Do not restyle vendor `left`/`top`/`transform`.
+- App Hub opens from the right (lab swipe-to-close). Alert bell matches lab (`w-5`, dot `top-1.5 right-1.5`).
+- Planner footer no longer repeats Terms / Privacy / Kazembe. Those stay on About; legal modal also ends with Kazembe CodeWorks.
+
 ## V8_08.23.11 — Lab chrome on main: bottom nav, Messages, force-update reader (23 Aug 2026)
 
 - Cherry-pick lab bottom nav / Next Train header / timetable CTA onto current `main`. Do not merge `origin/lab`.

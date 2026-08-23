@@ -290,6 +290,7 @@ export async function applyPlannerShortcutDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
     return true;
@@ -314,6 +315,7 @@ export async function applyShareTargetDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -345,6 +347,7 @@ export async function applyMapDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
 

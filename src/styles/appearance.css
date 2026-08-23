@@ -624,6 +624,20 @@ html.dark #app-header.nt-maint-active {
   background-color: rgb(31 41 55) !important; /* gray-800 */
   background-image: none !important;
 }
+#app-header.nt-maint-active #app-title,
+#app-header.nt-maint-active #app-title.header-title,
+#app-header.nt-maint-active #current-day,
+#app-header.nt-maint-active #current-day span,
+#app-header.nt-maint-active .nt-offline-chip {
+  color: var(--nt-text) !important;
+}
+#app-header.nt-maint-active #current-day {
+  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
+}
+#app-header.nt-maint-active .nt-offline-chip {
+  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--nt-text) 22%, transparent);
+}
 #app-header.nt-maint-active #open-nav-btn,
 #app-header.nt-maint-active #notice-bell {
   z-index: 70;

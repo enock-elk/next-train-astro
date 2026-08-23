@@ -898,6 +898,7 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // PUBLIC SURFACE (strict) — competitors read this list. Every entry is shown as-is:
 // - Only obvious in-app behaviour a commuter can spot (board, planner, alerts, notices).
 // - Never mention admin / Dev Hub / operator tools / deploy / workers / NUKE / analytics.
+// - Never mention Account, password, sign-in, Face ID, or other gated chrome.
 // - Never mention SEO, Google, indexing, route landing pages, or app configuration.
 // - Do not explain strategy or "we fixed". Short bullets. Detail stays in CHANGELOG.md.
 export const CHANGELOG_DATA = [
@@ -953,16 +954,6 @@ export const CHANGELOG_DATA = [
             "<b>Home:</b> Next Train, Plan, and Options live on the bottom bar.",
             "<b>Messages:</b> Open Options to chat with the team.",
             "<b>Timetable:</b> View full timetable now shows the effective date."
-        ]
-    },
-    {
-        id: "V8_08.23.10",
-        title: "What's new",
-        date: "23 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Account:</b> Tap the eye to show or hide your password.",
-            "<b>Account:</b> Your phone can fill a saved password, including Face ID if it offers that."
         ]
     },
     {

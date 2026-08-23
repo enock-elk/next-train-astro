@@ -56,7 +56,7 @@ Scheme: `V{major}_{MM.DD}.{n}` (example `V8_08.17.1`). Same calendar day → inc
 
 Keep in sync: `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, `public/app-version.json`, and a `CHANGELOG.md` heading.
 
-**What’s New is a public commuter list. Competitors read it.** Only obvious in-app behaviour a commuter can spot (board, planner, alerts, notices). Never mention admin, Dev Hub, deploy, workers, NUKE, analytics, SEO, Google, indexing, route landing pages, or app configuration. Do not explain strategy or “we fixed.” Short bullets. Engineering detail stays in `CHANGELOG.md`.
+**What’s New is a public commuter list. Competitors read it.** Only obvious in-app behaviour a commuter can spot (board, planner, alerts, notices). Never mention admin, Account, password, sign-in, Face ID, Dev Hub, deploy, workers, NUKE, analytics, SEO, Google, indexing, route landing pages, or app configuration. Do not explain strategy or “we fixed.” Short bullets. Engineering detail stays in `CHANGELOG.md`.
 
 ## How to update the Firebase dump (Windows)
 

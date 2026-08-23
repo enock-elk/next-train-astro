@@ -9,6 +9,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Theme & Preferences always opens collapsed (`setPrefsOpen(false)` on load and on `openAppHub`).
 - Every pack sets `--nt-chrome-from` / `--nt-chrome-to` / `--nt-chrome-ink`. Header + bottom nav use `linear-gradient(to bottom right, from, from, to)`. CTAs keep `--nt-primary`, which matches `--nt-chrome-from`.
 - Classic chrome is the old Midnight sheet (`#2563eb` → `#4338ca`). Midnight uses its own sky (`#0284c7` → `#0c4a6e`) in light and dark so the timetable button matches the bar.
+- Drop `V8_08.23.10` from in-app What’s New (`CHANGELOG_DATA`). Admin/Account password eye stays in this file only.
 
 ## V8_08.23.14 — Trip Planner label; Midnight/Earthy sheet chrome (23 Aug 2026)
 

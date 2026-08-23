@@ -66,11 +66,12 @@ if (!/bottom bar/i.test(wn2311) || !/options/i.test(wn2311)) {
 if (!/messages/i.test(wn2311) || !/team/i.test(wn2311)) {
     fail('V8_08.23.11 card must keep Messages');
 }
-if (!folded.has('V8_08.23.10')) fail('V8_08.23.10 card must remain in history');
-const card2310 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.10');
-const wn2310 = (card2310?.features || []).join(' ');
-if (!/eye/i.test(wn2310) || !/password/i.test(wn2310)) {
-    fail('V8_08.23.10 card must keep the password eye');
+if (folded.has('V8_08.23.10')) {
+    fail('V8_08.23.10 is admin/Account password — fold it out of What’s New');
+}
+const allWhatsNew = CHANGELOG_DATA.flatMap((e) => e.features || []).join(' ');
+if (/account|password|face\s*id|sign-?in/i.test(allWhatsNew)) {
+    fail('What’s New must not mention Account, password, Face ID, or sign-in');
 }
 if (!folded.has('V8_08.23.9')) fail('V8_08.23.9 card must remain in history');
 if (!folded.has('V8_08.23.8')) fail('V8_08.23.8 card must remain in history');

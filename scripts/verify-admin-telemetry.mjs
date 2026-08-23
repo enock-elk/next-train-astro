@@ -107,6 +107,30 @@ ok(adminJs.includes('de-filter-day') && adminJs.includes('All days'), 'day-type 
 ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');
 ok(adminJs.includes('_deTripPageSize'), 'corridor list is paginated');
 ok(!adminJs.includes('hitsHtml'), 'do not dump every hit into corridor card HTML');
+ok(adminJs.includes('fetchTripPlanEverStats'), 'admin loads all-time user + pair indexes');
+ok(adminJs.includes('Users ever'), 'banner shows Users ever');
+ok(adminJs.includes('unique trip combinations'), 'banner shows unique trip combinations');
+ok(adminJs.includes('buildTripInsightsHtml') && adminJs.includes('id="de-trip-insights"'), 'insights strip lives on the trips panel');
+ok(adminJs.includes("bindDeSwipe(document.getElementById('de-tabs-swipe'))"), 'swipe is bound on the tab strip');
+ok(!/bindDeSwipe\(\s*document\.getElementById\('de-list'\)\s*\)/.test(adminJs), 'swipe is not bound on #de-list alone');
+ok(adminJs.includes('fetchDiagJson:'), 'Admin.fetchDiagJson is hoisted');
+ok(adminJs.includes('normalizeStationName'), 'Deep Scan dest checks use normalizeStationName');
+ok(adminJs.includes('Expected — no Saturday service'), 'placeholder Saturday sheets are expected, not errors');
+ok(adminJs.includes('Joined:') && adminJs.includes('Last seen:'), 'device lookup shows joined + last seen');
+ok(adminJs.includes('Linked devices:'), 'device lookup lists linked device ids');
+ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users index');
+{
+    const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
+    ok(rules.includes('"trip_plan_users"'), 'rules allow trip_plan_users index');
+    ok(rules.includes('"trip_plan_pairs"'), 'rules allow trip_plan_pairs index');
+    ok(rules.includes('thandeka05nxumalo@gmail.com') && rules.includes('enockelk@gmail.com'), 'rules keep both operator emails');
+}
+{
+    const tel = readFileSync(join(ROOT, 'src/lib/planner-telemetry.js'), 'utf8');
+    ok(tel.includes('upsertTripPlanIndexes'), 'flush writes all-time user + pair indexes');
+    ok(tel.includes('trip_plan_users'), 'client upserts trip_plan_users');
+    ok(tel.includes('trip_plan_pairs'), 'client upserts trip_plan_pairs');
+}
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
 ok(adminJs.includes('Unique users by last selected region'), 'regional modal says unique users, not a partition of TODAY');

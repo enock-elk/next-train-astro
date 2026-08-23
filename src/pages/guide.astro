@@ -77,6 +77,14 @@ const faqJsonLd = {
     },
     {
       "@type": "Question",
+      "name": "How long is a Metrorail ticket valid?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A standard METRO SINGLE ADULT ticket is bought with cash at the station. Printed tickets say they are valid for one unbroken journey, are not transferable, are valid for 3 hours, and are valid for the day of purchase. Peak tickets print NO CONCESSION; off-peak adult tickets can print 40% Off Peak on weekdays between 09:30 and 14:30."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "Which provinces and stations are supported?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -452,6 +460,23 @@ const faqJsonLd = {
                                 </table>
                             </div>
                             <p class="text-xs text-gray-500 mt-2"><em>Note: These are the same adult fares the app uses in Ticket Prices. The estimated fare shown for a trip is typically the maximum route cost (terminus-to-terminus). If you are traveling a shorter distance along the line, your actual ticket price at the station may be slightly cheaper. Tickets must be bought at the station.</em></p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                        <summary class="cursor-pointer flex items-center justify-between p-4 font-bold text-gray-900 dark:text-white select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            How long is a Metrorail ticket valid?
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7 7"></path></svg>
+                        </summary>
+                        <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                            <p>A printed <strong>METRO SINGLE ADULT</strong> ticket is bought with <strong>cash</strong> at the station ticket office. The fare is printed on the ticket. Next Train does not sell tickets.</p>
+                            <ul class="list-disc pl-5 space-y-1 mt-3 mb-2">
+                                <li><strong>Valid for one unbroken journey</strong> — do not leave the station and re-enter on the same ticket.</li>
+                                <li><strong>Ticket not transferable</strong> — only the person who bought it may travel on it.</li>
+                                <li><strong>Valid for 3 hours</strong>.</li>
+                                <li><strong>Valid for the day of purchase</strong> — it cannot be used on a later day.</li>
+                            </ul>
+                            <p class="mt-2">Peak tickets print <strong>NO CONCESSION</strong>. Off-peak adult tickets can print <strong>40% Off Peak</strong> on weekdays between 09:30 and 14:30 (see the off-peak FAQ above). Confirm the printed fare and expiry at the window before you travel.</p>
                         </div>
                     </details>
 

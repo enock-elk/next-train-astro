@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.9 — Train sheet fare chip, ticket FAQ, telemetry indexes (23 Aug 2026)
+
+- Planner train sheet fare chip is `Max. Single Fare · R12.00` (peak adult single from `FARE_CONFIG`). Still opens the fare table for that train’s route.
+- Analytics: `view_planner_train_sheet` fires after the sheet populates (`route_id`, `train_id`, `day_type`, `zone`), not on the “timetable not available” toast.
+- Guide accordion + JSON-LD: **How long is a Metrorail ticket valid?** — copy from printed METRO SINGLE ADULT tickets only (unbroken journey, not transferable, 3 hours, day of purchase; peak NO CONCESSION / off-peak 40%).
+- Recent Trips unions `plannerHistory_GP|WC|KZN|EC` plus `plannerHistory_all`. Restore soft-pins that trip’s region before `executeTripPlan`. Filter-wipe only drops unknown stations in that trip’s own region.
+- Telemetry flush also upserts `sys_logs/trip_plan_users` and `sys_logs/trip_plan_pairs`. Admin banner: **Users ever** + unique trip combinations; insights strip (region / day / top corridors / transfer vs direct / fail reasons). Swipe between tabs is bound only on `#de-tabs-swipe`.
+- Device lookup shows Joined, Last seen, and Linked devices from `users.createdAt` / `usr_*_{epoch}` / `updatedAt` / `devices.linkedAt` / `trip_plan_users.lastSeen`.
+- Schedule QA: `Admin.fetchDiagJson` (fixes `fetchDiagJson is not defined`). Deep Scan dest A/B uses `normalizeStationName`; Hercules / EC Berlin Saturday empty sheets are **Expected — no Saturday service**.
+- Weak Signal: **Dismiss | Try Again** on one row (captive “Open browser to sign in” stays full-width above).
+- Rules: `trip_plan_users` / `trip_plan_pairs` child upserts (Thandeka + Enock stay on the admin write allowlist). Deploy RTDB rules for the indexes to accept client writes.
+
 ## V8_08.23.8 — Incoming update toast, route deep links, SEO copy (23 Aug 2026)
 
 - Restore the crucial incoming-version toast (`Crucial system update incoming: {version}`). It was gated on `FORCE_UPDATE_REQUIRED`, so the waiting service worker stayed silent.

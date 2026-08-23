@@ -158,6 +158,67 @@ export function enqueueSuccessfulTripPlan(entry) {
     }
 }
 
+function telemetryPathKey(raw) {
+    return String(raw || 'unknown').replace(/[.#$[\]/]/g, '_');
+}
+
+function tripPairKey(origin, dest) {
+    return `${telemetryPathKey(String(origin).toUpperCase())}~${telemetryPathKey(String(dest).toUpperCase())}`;
+}
+
+async function upsertIndexNode(url, createBody, patchBody) {
+    try {
+        const existing = await fetch(url, { cache: 'no-store' });
+        if (existing.ok) {
+            const prev = await existing.json();
+            if (prev && typeof prev === 'object') {
+                await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(patchBody),
+                });
+                return;
+            }
+        }
+    } catch { /* create */ }
+    await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createBody),
+    });
+}
+
+/** All-time unique users + unique origin/destination pairs (sibling of trip_plans). */
+async function upsertTripPlanIndexes(userId, region, trips, q) {
+    const now = Date.now();
+    const did = telemetryPathKey(userId);
+    if (!did || did === 'unknown') return;
+    const userUrl = `${DYNAMIC_BASE_URL}sys_logs/trip_plan_users/${encodeURIComponent(did)}.json${q}`;
+    await upsertIndexNode(
+        userUrl,
+        { firstSeen: now, lastSeen: now, region: region || null },
+        { lastSeen: now, region: region || null },
+    );
+    const seen = new Set();
+    for (const t of trips || []) {
+        if (!t?.origin || !t?.destination) continue;
+        const key = tripPairKey(t.origin, t.destination);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const pairUrl = `${DYNAMIC_BASE_URL}sys_logs/trip_plan_pairs/${encodeURIComponent(key)}.json${q}`;
+        await upsertIndexNode(
+            pairUrl,
+            {
+                firstSeen: now,
+                lastSeen: now,
+                origin: t.origin,
+                destination: t.destination,
+            },
+            { lastSeen: now },
+        );
+    }
+}
+
 /** Collapse duplicate searches within one flush batch (same OD / day / dep). */
 function dedupeTripsForBatch(trips) {
     const seen = new Set();
@@ -223,6 +284,11 @@ export async function flushTripPlanQueue(force = false) {
             if (!res.ok) {
                 console.warn('🛡️ Guardian: trip_plans write failed', res.status);
                 return;
+            }
+            try {
+                await upsertTripPlanIndexes(did, payload.region, batch, q);
+            } catch (idxErr) {
+                console.warn('🛡️ Guardian: trip_plan index write failed', idxErr);
             }
             // Success — reset flushed portion; keep any trips enqueued during the request
             const latest = readTripQueue();

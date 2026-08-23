@@ -1897,7 +1897,7 @@ export function openPlannerTrainSheet(routeId, trainId) {
     if (fareEl) {
         fareEl.dataset.routeId = sheet.route.id;
         if (detailed?.single != null) {
-            fareEl.textContent = `${zone} · R${Number(detailed.single).toFixed(2)}`;
+            fareEl.textContent = `Max. Single Fare · R${Number(detailed.single).toFixed(2)}`;
         } else {
             fareEl.textContent = 'Fare';
         }
@@ -1931,6 +1931,14 @@ export function openPlannerTrainSheet(routeId, trainId) {
         }).join('');
     }
     if (typeof openSmoothModal === 'function') openSmoothModal('planner-train-sheet-modal');
+    if (typeof trackAnalyticsEvent === 'function') {
+        trackAnalyticsEvent('view_planner_train_sheet', {
+            route_id: sheet.route.id,
+            train_id: sheet.trainId,
+            day_type: sheet.dayType || dayType || '',
+            zone: zone || '',
+        });
+    }
 }
 
 export const PlannerRenderer = {
@@ -2912,14 +2920,17 @@ export function initPlanner() {
             const historyItem = e.target.closest('.planner-history-item-btn');
             
             if (clearBtn) {
-                const historyKey = 'plannerHistory_' + $userRegion.get();
-                try { safeStorage.removeItem(historyKey); } catch(ex) {}
+                try {
+                    PLANNER_HISTORY_REGIONS.forEach((r) => safeStorage.removeItem(`plannerHistory_${r}`));
+                    safeStorage.removeItem(PLANNER_HISTORY_MERGED_KEY);
+                } catch (ex) { /* ignore */ }
                 renderPlannerHistory();
             } else if (historyItem) {
                 const fullFrom = historyItem.getAttribute('data-full-from');
                 const fullTo = historyItem.getAttribute('data-full-to');
+                const region = historyItem.getAttribute('data-region') || '';
                 if (fullFrom && fullTo && typeof window.restorePlannerSearch === 'function') {
-                    window.restorePlannerSearch(fullFrom, fullTo);
+                    window.restorePlannerSearch(fullFrom, fullTo, region);
                 }
             }
         });
@@ -3151,12 +3162,64 @@ export function initPlanner() {
         window.__ntPlannerDayRegionSub = true;
         $userRegion.subscribe(() => {
             syncPlannerDayDropdownForRegion();
+            try { renderPlannerHistory(); } catch { /* ignore */ }
         });
     }
 }
 
 /** Max recent trips shown in the planner UI (telemetry flush size is separate). */
 const PLANNER_HISTORY_DISPLAY_CAP = 5;
+const PLANNER_HISTORY_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+const PLANNER_HISTORY_MERGED_KEY = 'plannerHistory_all';
+
+function readPlannerHistoryArray(key) {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(key) || '[]');
+        return Array.isArray(raw) ? raw : [];
+    } catch {
+        return [];
+    }
+}
+
+function plannerHistoryDedupeKey(item) {
+    return `${String(item.from || '').toUpperCase()}|${String(item.to || '').toUpperCase()}`;
+}
+
+function normalizePlannerHistoryItem(item, fallbackRegion) {
+    if (!item?.from || !item?.to) return null;
+    return {
+        from: item.from,
+        to: item.to,
+        fullFrom: item.fullFrom || item.from,
+        fullTo: item.fullTo || item.to,
+        at: Number(item.at) || 0,
+        region: item.region || fallbackRegion || null,
+    };
+}
+
+/** Union per-region keys + merged list so trips survive a province swap. */
+function unionPlannerHistory() {
+    const byKey = new Map();
+    const absorb = (list, fallbackRegion) => {
+        for (const raw of list || []) {
+            const item = normalizePlannerHistoryItem(raw, fallbackRegion);
+            if (!item) continue;
+            const key = plannerHistoryDedupeKey(item);
+            const prev = byKey.get(key);
+            if (!prev || item.at > prev.at) byKey.set(key, item);
+        }
+    };
+    absorb(readPlannerHistoryArray(PLANNER_HISTORY_MERGED_KEY), null);
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        absorb(readPlannerHistoryArray(`plannerHistory_${region}`), region);
+    });
+    return [...byKey.values()].sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+
+function persistMergedPlannerHistory(list) {
+    const cap = (list || []).slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+    safeStorage.setItem(PLANNER_HISTORY_MERGED_KEY, JSON.stringify(cap));
+}
 
 /** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
@@ -3164,12 +3227,10 @@ export function savePlannerHistory(from, to, opts = {}) {
     const cleanFrom = from.replace(/ STATION/gi, '');
     const cleanTo = to.replace(/ STATION/gi, '');
     const routeKey = `${cleanFrom}|${cleanTo}`;
-    
-    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
-    
-    let history = [];
-    try { history = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { history = []; }
-    if (!Array.isArray(history)) history = [];
+    const region = $userRegion.get() || 'GP';
+    const historyKey = 'plannerHistory_' + region;
+
+    let history = readPlannerHistoryArray(historyKey);
     history = history.filter((item) => `${item.from}|${item.to}` !== routeKey);
     history.unshift({
         from: cleanFrom,
@@ -3177,24 +3238,25 @@ export function savePlannerHistory(from, to, opts = {}) {
         fullFrom: from,
         fullTo: to,
         at: Date.now(),
+        region,
     });
     if (history.length > PLANNER_HISTORY_DISPLAY_CAP) {
         history = history.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
     }
-    
+
     safeStorage.setItem(historyKey, JSON.stringify(history));
+    persistMergedPlannerHistory(unionPlannerHistory());
     renderPlannerHistory();
 }
 
 export function renderPlannerHistory() {
     const container = document.getElementById('planner-history-container');
     if (!container) return;
-    
-    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
-    let rawHistory = [];
-    try { rawHistory = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { rawHistory = []; }
 
-    let validHistory = Array.isArray(rawHistory) ? rawHistory : [];
+    const currentRegion = $userRegion.get() || 'GP';
+    const historyKey = 'plannerHistory_' + currentRegion;
+    const rawCurrent = readPlannerHistoryArray(historyKey);
+    let validHistory = unionPlannerHistory();
     const masterList = getMasterStationList();
     // History stores cleaned names (no " STATION"); master list usually includes the suffix.
     const stationKey = (s) => String(s || '').replace(/ STATION/gi, '').toUpperCase().trim();
@@ -3202,25 +3264,40 @@ export function renderPlannerHistory() {
 
     if (listReady) {
         const masterKeys = new Set(masterList.map(stationKey));
-        validHistory = validHistory.filter((item) =>
-            masterKeys.has(stationKey(item.fullFrom || item.from)) &&
-            masterKeys.has(stationKey(item.fullTo || item.to))
-        );
+        validHistory = validHistory.filter((item) => {
+            const itemRegion = item.region || currentRegion;
+            // Other provinces stay visible even when this region's index is loaded.
+            if (itemRegion !== currentRegion) return true;
+            return masterKeys.has(stationKey(item.fullFrom || item.from))
+                && masterKeys.has(stationKey(item.fullTo || item.to));
+        });
     }
 
     if (validHistory.length > PLANNER_HISTORY_DISPLAY_CAP) {
         validHistory = validHistory.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
     }
-    // Only persist a filter wipe when the station index is actually ready.
-    if (listReady && JSON.stringify(validHistory) !== JSON.stringify(rawHistory)) {
-        safeStorage.setItem(historyKey, JSON.stringify(validHistory));
+
+    // Only persist a filter wipe for *this* region's key when its index is ready.
+    // Do not rewrite the region key from the last-5 display union — older same-region
+    // trips must stay stored so a province swap cannot delete them.
+    if (listReady) {
+        const currentFiltered = rawCurrent.filter((item) => {
+            const norm = normalizePlannerHistoryItem(item, currentRegion);
+            if (!norm) return false;
+            return masterKeys.has(stationKey(norm.fullFrom || norm.from))
+                && masterKeys.has(stationKey(norm.fullTo || norm.to));
+        });
+        if (JSON.stringify(currentFiltered) !== JSON.stringify(rawCurrent)) {
+            safeStorage.setItem(historyKey, JSON.stringify(currentFiltered));
+        }
+        persistMergedPlannerHistory(validHistory);
     }
-    
+
     if (validHistory.length === 0) {
         container.classList.add('hidden');
         return;
     }
-    
+
     container.classList.remove('hidden');
     container.innerHTML = `
         <div class="flex items-center justify-between mb-2 px-1">
@@ -3230,7 +3307,7 @@ export function renderPlannerHistory() {
         <div class="flex flex-col gap-2">
             ${validHistory.map((item) => `
                 <button class="planner-history-item-btn w-full flex items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
-                    data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}">
+                    data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}" data-region="${escapeHTML(item.region || '')}">
                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center min-w-0">
                         <span class="truncate">${escapeHTML(item.from)}</span>
                         <svg class="w-3 h-3 mx-1.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
@@ -4154,12 +4231,12 @@ export function openFeedbackForMissingRoute(origin, dest) {
     }, 350); 
 }
 
-export function restorePlannerSearch(fullFrom, fullTo) {
+export async function restorePlannerSearch(fullFrom, fullTo, region) {
     const fromSelect = document.getElementById('planner-from');
     const toSelect = document.getElementById('planner-to');
     const fromInput = document.getElementById('planner-from-search');
     const toInput = document.getElementById('planner-to-search');
-    
+
     if (fromSelect && toSelect) {
         fromSelect.value = fullFrom;
         toSelect.value = fullTo;
@@ -4171,15 +4248,23 @@ export function restorePlannerSearch(fullFrom, fullTo) {
             toInput.value = fullTo.replace(' STATION', '');
             toInput.dataset.resolvedValue = fullTo;
         }
-        
+
         if (!selectedPlannerDay) {
             selectedPlannerDay = getCurrentDayType();
         }
 
+        const target = ['GP', 'WC', 'KZN', 'EC'].includes(String(region || '').toUpperCase())
+            ? String(region).toUpperCase()
+            : null;
+        if (target && ($userRegion.get() || 'GP') !== target) {
+            ensureRoutePinnedForRegion(target);
+            try { await loadAllSchedules(true); } catch { /* still try the restore */ }
+        }
+
         if (typeof showToast === 'function') showToast("Restored recent search", "info", 1000);
-        
+
         if (typeof trackAnalyticsEvent === 'function') {
-            trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo });
+            trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo, region: target || '' });
         }
 
         // History is recorded when executeTripPlan finishes (with status)

@@ -4420,7 +4420,6 @@ const Admin = {
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
-        bindDeSwipe(listDiv);
 
         const bindTripFilter = (id, key) => {
             const el = document.getElementById(id);
@@ -4866,20 +4865,145 @@ const Admin = {
             sentinel.querySelector('.de-trip-load-more')?.addEventListener('click', () => Admin.loadMoreTripCorridors(listDiv));
         };
 
+        Admin.tripIndexKey = (origin, dest) => {
+            const clean = (s) => String(s || 'unknown').toUpperCase().replace(/[.#$[\]/]/g, '_');
+            return `${clean(origin)}~${clean(dest)}`;
+        };
+
+        Admin.fetchTripPlanEverStats = async (secret) => {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const qs = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+            let users = {};
+            let pairs = {};
+            try {
+                const [uRes, pRes] = await Promise.all([
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json${qs}`, {}, 15000),
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json${qs}`, {}, 15000),
+                ]);
+                if (uRes && uRes.ok) users = (await uRes.json()) || {};
+                if (pRes && pRes.ok) pairs = (await pRes.json()) || {};
+            } catch { /* empty until backfill */ }
+            if (!users || typeof users !== 'object') users = {};
+            if (!pairs || typeof pairs !== 'object') pairs = {};
+
+            const batches = Admin._cachedTripPlans || {};
+            const userPatch = {};
+            const pairPatch = {};
+            Object.values(batches).forEach((batch) => {
+                if (!batch) return;
+                const uid = batch.userId;
+                const ts = Number(batch.flushedAt || 0) || Date.now();
+                if (uid) {
+                    const prev = users[uid] || {};
+                    const next = {
+                        firstSeen: Math.min(Number(prev.firstSeen) || ts, ts),
+                        lastSeen: Math.max(Number(prev.lastSeen) || 0, ts),
+                        region: batch.region || prev.region || null,
+                    };
+                    if (!users[uid] || next.lastSeen !== Number(prev.lastSeen) || !prev.firstSeen) {
+                        users[uid] = next;
+                        userPatch[uid] = next;
+                    }
+                }
+                (batch.trips || []).forEach((t) => {
+                    if (!t?.origin || !t?.destination) return;
+                    const k = Admin.tripIndexKey(t.origin, t.destination);
+                    const prev = pairs[k] || {};
+                    const next = {
+                        firstSeen: Math.min(Number(prev.firstSeen) || ts, ts),
+                        lastSeen: Math.max(Number(prev.lastSeen) || 0, ts),
+                        origin: t.origin,
+                        destination: t.destination,
+                    };
+                    if (!pairs[k] || !prev.firstSeen) {
+                        pairs[k] = next;
+                        pairPatch[k] = next;
+                    }
+                });
+            });
+            if (secret) {
+                try {
+                    if (Object.keys(userPatch).length) {
+                        await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?auth=${encodeURIComponent(secret)}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userPatch),
+                        });
+                    }
+                    if (Object.keys(pairPatch).length) {
+                        await fetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json?auth=${encodeURIComponent(secret)}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(pairPatch),
+                        });
+                    }
+                } catch { /* ignore */ }
+            }
+            Admin._deTripEverUsers = Object.keys(users).filter((k) => users[k]).length;
+            Admin._deTripEverPairs = Object.keys(pairs).filter((k) => pairs[k]).length;
+            Admin._deTripUserIndex = users;
+            return { usersEver: Admin._deTripEverUsers, pairsEver: Admin._deTripEverPairs };
+        };
+
+        Admin.buildTripInsightsHtml = (sorted, rows, esc) => {
+            const regionCounts = { GP: 0, WC: 0, KZN: 0, EC: 0 };
+            const dayCounts = {};
+            let direct = 0;
+            let transfer = 0;
+            (rows || []).forEach((r) => {
+                const rg = String(r.region || '').toUpperCase();
+                if (regionCounts[rg] != null) regionCounts[rg] += 1;
+                const day = String(r.dayType || 'unknown');
+                dayCounts[day] = (dayCounts[day] || 0) + 1;
+                if (Number(r.transfers || 0) > 0) transfer += 1;
+                else direct += 1;
+            });
+            const top = (sorted || []).slice(0, 5);
+            const failReasons = {};
+            Object.values(Admin._cachedRoutingFails || {}).forEach((f) => {
+                if (!f) return;
+                const reason = String(f.reason || 'UNKNOWN');
+                failReasons[reason] = (failReasons[reason] || 0) + 1;
+            });
+            const failTop = Object.entries(failReasons).sort((a, b) => b[1] - a[1]).slice(0, 4);
+            const chip = (label, n) => `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/80 dark:bg-gray-900/60 border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">${esc(label)} <span class="font-mono text-slate-800 dark:text-slate-100">${n}</span></span>`;
+            return `
+                <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights (this window)</p>
+                    <div class="flex flex-wrap gap-1">${chip('GP', regionCounts.GP)}${chip('WC', regionCounts.WC)}${chip('KZN', regionCounts.KZN)}${chip('EC', regionCounts.EC)}</div>
+                    <div class="flex flex-wrap gap-1">${Object.entries(dayCounts).map(([d, n]) => chip(d, n)).join('') || chip('days', 0)}</div>
+                    <p class="text-[10px] text-slate-500">${chip('Direct', direct)}${chip('Transfer', transfer)}</p>
+                    <table class="w-full text-[10px]">
+                        <thead><tr class="text-[9px] uppercase tracking-wider text-slate-400"><th class="text-left font-bold py-0.5">Top corridors</th><th class="text-right font-bold">Users</th><th class="text-right font-bold">Hits</th></tr></thead>
+                        <tbody>
+                            ${top.map((item) => `<tr class="border-t border-slate-100 dark:border-slate-800"><td class="py-1 pr-2 text-slate-700 dark:text-slate-200">${esc(item.origin)} → ${esc(item.dest)}</td><td class="text-right font-mono">${item.count || item.displayCount || 0}</td><td class="text-right font-mono">${item.hitCount || 0}</td></tr>`).join('') || '<tr><td class="py-1 text-slate-400" colspan="3">No corridors yet.</td></tr>'}
+                        </tbody>
+                    </table>
+                    ${failTop.length ? `<p class="text-[9px] text-slate-500">Fail reasons: ${failTop.map(([r, n]) => `${esc(r)} ${n}`).join(' · ')}</p>` : ''}
+                </div>
+            `;
+        };
+
         Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
             const esc = Admin.secureDeEscape;
-            const usersCollected = Number(meta.uniqueUsers || 0);
+            const usersWindow = Number(meta.uniqueUsers || 0);
+            const usersEver = Number(meta.usersEver || 0);
+            const pairsEver = Number(meta.pairsEver || 0);
             Admin._deTripSorted = sorted;
             Admin._deTripMeta = meta;
             Admin._deTripPainted = 0;
             const banner = document.createElement('div');
             banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
             banner.innerHTML = `
-                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users collected</p>
-                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersCollected}</p>
-                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · window ${esc(meta.windowNote || '')}</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users ever</p>
+                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersEver}</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${pairsEver} unique trip combinations</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">In this window: ${usersWindow} users · ${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · ${esc(meta.windowNote || '')}</p>
             `;
             listDiv.appendChild(banner);
+            const insights = document.createElement('div');
+            insights.innerHTML = Admin.buildTripInsightsHtml(sorted, Admin.getFilteredTripPlanRows(), esc);
+            listDiv.appendChild(insights);
             Admin.bindTripScrollLoadMore(listDiv);
             const first = sorted.slice(0, Admin._deTripPageSize || 40);
             Admin._deTripPainted = first.length;
@@ -4968,9 +5092,15 @@ const Admin = {
                 }
 
                 listDiv.innerHTML = '';
+                let ever = { usersEver: Admin._deTripEverUsers || 0, pairsEver: Admin._deTripEverPairs || 0 };
+                if (!useCacheOnly) {
+                    try { ever = await Admin.fetchTripPlanEverStats(secret); } catch { /* keep window count */ }
+                }
                 Admin.paintTripCorridorPage(listDiv, sorted, {
                     filteredCount: filtered.length,
                     uniqueUsers,
+                    usersEver: ever.usersEver || uniqueUsers,
+                    pairsEver: ever.pairsEver || 0,
                     windowNote: `latest ${Admin._deTripWindowSize || 80} batches`,
                     canLoadMore: !!Admin._deTripWindowFull,
                 });
@@ -7027,7 +7157,7 @@ const Admin = {
                 if (device?.uid) {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
-                        return { uid: device.uid, user, via: 'device?uid', deviceId: q };
+                        return { uid: device.uid, user, via: 'device?uid', deviceId: q, device };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
@@ -7044,6 +7174,7 @@ const Admin = {
                     },
                     via: 'device',
                     deviceId: q,
+                    device,
                 };
             }
 
@@ -7074,7 +7205,7 @@ const Admin = {
                     out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_…</code>), or account email.</p>';
                     return;
                 }
-                const { uid, user, via, deviceId } = resolved;
+                const { uid, user, via, deviceId, device } = resolved;
                 const flags = user.flags || {};
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
@@ -7085,12 +7216,36 @@ const Admin = {
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
                 const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
                 const email = (user.email || '-').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device ? account' : 'user id'));
+                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device → account' : 'user id'));
+                const joinedMs = Number(user.createdAt)
+                    || Admin.parseJoinedAtFromUserId(deviceId)
+                    || Admin.parseJoinedAtFromUserId(uid);
+                let lastSeenMs = Number(user.updatedAt) || Number(device?.linkedAt) || 0;
+                const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
+                    ? Object.keys(user.deviceIds).filter(Boolean)
+                    : (deviceId ? [deviceId] : []);
+                try {
+                    const secret = await Admin.getAuthKey();
+                    const lookIds = [...new Set([deviceId, ...linkedIds].filter(Boolean))];
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                    for (const lookId of lookIds) {
+                        const idxRes = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users/${encodeURIComponent(lookId)}.json${auth}`);
+                        if (!idxRes.ok) continue;
+                        const idx = await idxRes.json();
+                        if (idx && Number(idx.lastSeen) > lastSeenMs) lastSeenMs = Number(idx.lastSeen);
+                    }
+                } catch { /* optional */ }
+                const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
+                const lastSeenLabel = lastSeenMs ? Admin.formatDate(lastSeenMs) : 'unknown';
+                const devicesLabel = linkedIds.length ? linkedIds.map((id) => String(id).replace(/</g, '&lt;')).join(', ') : 'none';
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
                         <p class="font-black text-gray-900 dark:text-white">${name}</p>
                         <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
                         <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono">${deviceId}</span>` : ''}</p>
+                        <p class="text-[11px]">Joined: <b>${joinedLabel}</b> · Last seen: <b>${lastSeenLabel}</b></p>
+                        <p class="text-[11px]">Linked devices: <span class="font-mono break-all">${devicesLabel}</span></p>
                         <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
                         <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
                         ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
@@ -11656,6 +11811,20 @@ const Admin = {
         };
     },
 
+    /** Fetch JSON for diagnostics / QA / Deep Scan; surface worker deny bodies. */
+    fetchDiagJson: async (url) => {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) {
+            let detail = `HTTP ${res.status}`;
+            try {
+                const errBody = await res.clone().json();
+                if (errBody && errBody.error) detail += ` — ${errBody.error}`;
+            } catch { /* ignore */ }
+            throw new Error(detail);
+        }
+        return res.json();
+    },
+
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
     setupDiagnosticsManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -12001,20 +12170,6 @@ const Admin = {
             return verMatch ? verMatch[1].split(' - ')[0] : 'Unknown';
         };
 
-        /** Fetch JSON for diagnostics; surface worker deny bodies (e.g. Unauthorized Domain). */
-        const fetchDiagJson = async (url) => {
-            const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) {
-                let detail = `HTTP ${res.status}`;
-                try {
-                    const errBody = await res.clone().json();
-                    if (errBody && errBody.error) detail += ` — ${errBody.error}`;
-                } catch { /* ignore */ }
-                throw new Error(detail);
-            }
-            return res.json();
-        };
-
         const fetchDbForZoneAudit = async (targetRegion, scanSource) => {
             if (scanSource === 'RAM') {
                 if (typeof fullDatabase === 'undefined' || !fullDatabase) {
@@ -12039,7 +12194,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const rawData = await fetchDiagJson(fetchUrl);
+            const rawData = await Admin.fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
@@ -12605,7 +12760,7 @@ const Admin = {
 
                     resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${loadingMsg}</div>`;
                     
-                    let rawData = await fetchDiagJson(fetchUrl);
+                    let rawData = await Admin.fetchDiagJson(fetchUrl);
                     
                     if (targetRegion === 'GP' && rawData.gauteng) dbToScan = rawData.gauteng;
                     else if (targetRegion === 'WC' && rawData.westerncape) dbToScan = rawData.westerncape;
@@ -12644,28 +12799,48 @@ const Admin = {
                         totalRoutes++;
                         let routeHealthy = true;
                         let missingSheets = [];
-                        let structuralErrors = []; 
+                        let structuralErrors = [];
+                        let expectedNotes = [];
 
                         if (route.sheetKeys) {
+                            const normStation = (typeof normalizeStationName === 'function')
+                                ? normalizeStationName
+                                : (s) => String(s || '').toUpperCase().replace(/ STATION/g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+                            const placeholders = (typeof SATURDAY_PLACEHOLDER_ROUTES !== 'undefined' && Array.isArray(SATURDAY_PLACEHOLDER_ROUTES))
+                                ? SATURDAY_PLACEHOLDER_ROUTES
+                                : ['herc-koed', 'ec-berlin'];
                             Object.entries(route.sheetKeys).forEach(([dayDir, key]) => {
                                 const sheet = dbToScan[key];
+                                const isPlaceholderSat = placeholders.includes(route.id) && /sat/i.test(String(dayDir));
                                 if (!sheet || !Array.isArray(sheet) || sheet.length === 0) {
+                                    if (isPlaceholderSat) {
+                                        if (!expectedNotes.includes('Expected — no Saturday service')) {
+                                            expectedNotes.push('Expected — no Saturday service');
+                                        }
+                                        return;
+                                    }
                                     routeHealthy = false;
                                     missingSheets.push(key); 
                                 } else {
                                     const parsedSchedule = typeof parseJSONSchedule === 'function' ? parseJSONSchedule(sheet) : null;
                                     
                                     if (!parsedSchedule || !parsedSchedule.headers || parsedSchedule.headers.length <= 1) {
+                                        if (isPlaceholderSat) {
+                                            if (!expectedNotes.includes('Expected — no Saturday service')) {
+                                                expectedNotes.push('Expected — no Saturday service');
+                                            }
+                                            return;
+                                        }
                                         routeHealthy = false;
                                         if (!structuralErrors.includes("0 Trains")) structuralErrors.push(`0 Trains (${key})`); 
                                     }
                                     
-                                    const cleanA = route.destA.replace(' STATION', '').trim().toUpperCase();
-                                    const cleanB = route.destB.replace(' STATION', '').trim().toUpperCase();
+                                    const cleanA = normStation(route.destA);
+                                    const cleanB = normStation(route.destB);
                                     
-                                    const stationsInSheet = parsedSchedule ? parsedSchedule.rows.map(r => String(r.STATION || '').replace(' STATION', '').trim().toUpperCase()) : [];
-                                    const hasA = stationsInSheet.some(s => s.includes(cleanA));
-                                    const hasB = stationsInSheet.some(s => s.includes(cleanB));
+                                    const stationsInSheet = parsedSchedule ? parsedSchedule.rows.map(r => normStation(r.STATION)) : [];
+                                    const hasA = stationsInSheet.some(s => s.includes(cleanA) || cleanA.includes(s));
+                                    const hasB = stationsInSheet.some(s => s.includes(cleanB) || cleanB.includes(s));
                                     
                                     if (!hasA) {
                                         routeHealthy = false;
@@ -12686,10 +12861,16 @@ const Admin = {
 
                         if (routeHealthy) {
                             healthyCount++;
+                            const expectedHtml = expectedNotes.length
+                                ? `<div class="text-[10px] text-slate-600 dark:text-slate-300 font-mono bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded mt-1.5 border border-slate-200 dark:border-slate-700">${expectedNotes.join(' | ')}</div>`
+                                : '';
                             html += `
-                                <div class="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg text-xs border border-green-100 dark:border-green-800/50 mt-1.5">
-                                    <span class="font-bold text-green-800 dark:text-green-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
-                                    <span class="bg-green-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Healthy</span>
+                                <div class="flex flex-col bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg text-xs border border-green-100 dark:border-green-800/50 mt-1.5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-green-800 dark:text-green-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
+                                        <span class="bg-green-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Healthy</span>
+                                    </div>
+                                    ${expectedHtml}
                                 </div>
                             `;
                         } else {
@@ -12861,7 +13042,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const rawData = await fetchDiagJson(fetchUrl);
+            const rawData = await Admin.fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;

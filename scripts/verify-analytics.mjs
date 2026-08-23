@@ -73,6 +73,7 @@ if (!planner.includes("planner_disruption_reply")) fail('planner disruption repl
 if (!planner.includes("planner_missing_route")) fail('missing-route feedback location missing');
 if (!planner.includes("complex_route_rendered")) fail('planner must ping complex_route_rendered');
 if (!planner.includes("location: 'grid_link'")) fail('grid share must ping click_share with grid_link');
+if (!planner.includes("view_planner_train_sheet")) fail('train sheet must ping view_planner_train_sheet');
 
 const liveUi = src('src/lib/live-board-ui.js');
 if (!liveUi.includes("select_station")) fail('station change must ping select_station');

@@ -8,9 +8,9 @@
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
     ADMIN_EMAILS, isAdminEmail,
-    SPECIAL_DATES, HOLIDAY_NAMES
+    SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML, formatAppDate } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate, normalizeStationName } from './utils.js';
 import { parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
@@ -63,6 +63,8 @@ export function exposeAdminGlobals() {
     window.FARE_CONFIG = FARE_CONFIG;
     window.SPECIAL_DATES = SPECIAL_DATES;
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
+    window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
+    window.normalizeStationName = normalizeStationName;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
     window.formatAppDate = formatAppDate;

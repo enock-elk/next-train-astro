@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.8 incoming toast + route deep links + SEO copy).
+ * Current polish gate (V8_08.23.9 train sheet, ticket FAQ, Recent Trips merge).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.8') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.9') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.8') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.9') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/notice/i.test(wn) || !/version/i.test(wn)) {
-    fail(`What's New must mention the incoming-version notice: ${wn}`);
+if (!/max\.?\s*single fare/i.test(wn) && !/fare chip/i.test(wn)) {
+    fail(`What's New must mention the Max. Single Fare chip: ${wn}`);
 }
-if (!/download/i.test(wn) && !/ready/i.test(wn)) {
-    fail(`What's New must say the saved app stays until the download is ready: ${wn}`);
+if (!/recent trips/i.test(wn) || !/province/i.test(wn)) {
+    fail(`What's New must mention Recent Trips across provinces: ${wn}`);
 }
-if (!/shared route/i.test(wn) && !/corridor/i.test(wn)) {
-    fail(`What's New must mention shared route links landing on that corridor: ${wn}`);
+if (!/ticket/i.test(wn) || !/valid/i.test(wn)) {
+    fail(`What's New must mention ticket validity: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -44,9 +44,18 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.8')) fail('V8_08.23.8 card must remain in history');
 if (!folded.has('V8_08.23.7')) fail('V8_08.23.7 card must remain in history');
 if (!folded.has('V8_08.23.6')) fail('V8_08.23.6 card must remain in history');
 if (!folded.has('V8_08.23.5')) fail('V8_08.23.5 card must remain in history');
+const card238 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.8');
+const wn238 = (card238?.features || []).join(' ');
+if (!/notice/i.test(wn238) || !/version/i.test(wn238)) {
+    fail('V8_08.23.8 card must keep the incoming-version notice');
+}
+if (!/download/i.test(wn238) && !/ready/i.test(wn238)) {
+    fail('V8_08.23.8 card must keep the download-ready bullet');
+}
 const card237 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.7');
 const wn237 = (card237?.features || []).join(' ');
 if (!/saturday/i.test(wn237) || !/station/i.test(wn237)) {
@@ -67,9 +76,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.8') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.9') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.8') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.9') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -111,6 +120,25 @@ if (!hubModals.includes('id="nt-admin-chrome-template"')) {
 const crawlableHub = hubModals.replace(/<template\b[\s\S]*?<\/template>/gi, '');
 if (/30 Days \(MAU\)|Last 30 Mins|Admin Gateway|Developer Mode|Live Telemetry/i.test(crawlableHub)) {
     fail('Dev Hub labels must not sit in crawlable homepage HTML');
+}
+{
+    const struggleStart = hubModals.indexOf('id="network-struggle-modal"');
+    const struggle = struggleStart >= 0 ? hubModals.slice(struggleStart, struggleStart + 2500) : '';
+    if (!struggle.includes('id="network-struggle-dismiss"') || !struggle.includes('id="network-struggle-retry"')) {
+        fail('Weak Signal must keep Dismiss and Try Again');
+    }
+    if (!struggle.includes('flex-row')) {
+        fail('Weak Signal Dismiss | Try Again must sit on one row');
+    }
+    const dismissAt = struggle.indexOf('id="network-struggle-dismiss"');
+    const retryAt = struggle.indexOf('id="network-struggle-retry"');
+    const portalAt = struggle.indexOf('id="network-struggle-open-portal"');
+    if (dismissAt < 0 || retryAt < 0 || dismissAt > retryAt) {
+        fail('Weak Signal row must be Dismiss left, Try Again right');
+    }
+    if (portalAt < 0 || portalAt > dismissAt) {
+        fail('captive Open browser to sign in must stay above the Dismiss | Try Again row');
+    }
 }
 const adminBridge = readFileSync('src/lib/admin-bridge.js', 'utf8');
 if (!adminBridge.includes('stampAdminChrome') || !adminBridge.includes('nt-admin-chrome-template')) {
@@ -336,12 +364,25 @@ if (!plannerUi.includes('openFareModalForRoute')) fail('fare chip must open fare
 if (plannerUi.includes("openFareModalForCurrentRoute")) {
     fail('planner fare must not use the live-board pin');
 }
+if (!plannerUi.includes('Max. Single Fare')) fail('fare chip must read Max. Single Fare · price');
+if (!plannerUi.includes("view_planner_train_sheet")) {
+    fail('opening the populated train sheet must ping view_planner_train_sheet');
+}
+if (!plannerUi.includes('plannerHistory_all') || !plannerUi.includes('unionPlannerHistory')) {
+    fail('Recent Trips must merge plannerHistory_* plus plannerHistory_all');
+}
+if (!plannerUi.includes('ensureRoutePinnedForRegion(target)')) {
+    fail('restorePlannerSearch must soft-pin the trip region');
+}
 const historyFn = plannerUi.slice(plannerUi.indexOf('export function renderPlannerHistory'), plannerUi.indexOf('export function setupAutocomplete'));
 if (!historyFn.includes('listReady')) {
     fail('history must wait for a ready station list before filtering');
 }
 if (/masterList && masterList\.length === 0[\s\S]{0,80}hidden/.test(historyFn)) {
     fail('empty master list must not force Recent Trips hidden');
+}
+if (!historyFn.includes('itemRegion !== currentRegion')) {
+    fail('filter-wipe must keep other-province trips even when this region index is ready');
 }
 if (plannerUi.includes('$masterStationList.subscribe') === false) {
     fail('station-list ready must re-render planner history');
@@ -411,9 +452,23 @@ if (!gridJs.includes('$currentRouteId.set(link.routeId)')) {
     fail('applyRouteDeepLink must pin the linked corridor');
 }
 
+const guidePage = readFileSync('src/pages/guide.astro', 'utf8');
+if (!guidePage.includes('How long is a Metrorail ticket valid?')) {
+    fail('guide must include the ticket-validity FAQ');
+}
+if (!guidePage.includes('Valid for one unbroken journey') || !guidePage.includes('Valid for 3 hours')) {
+    fail('ticket FAQ must quote the printed validity rules');
+}
+if (!guidePage.includes('Ticket not transferable') || !guidePage.includes('Valid for the day of purchase')) {
+    fail('ticket FAQ must quote not transferable + day of purchase');
+}
+if (!guidePage.includes('NO CONCESSION') || !guidePage.includes('40% Off Peak')) {
+    fail('ticket FAQ must mention peak NO CONCESSION and off-peak 40%');
+}
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.8 polish (incoming toast, route deep links, SEO copy)');
+console.log('✓ V8_08.23.9 polish (fare chip, ticket FAQ, Recent Trips merge)');

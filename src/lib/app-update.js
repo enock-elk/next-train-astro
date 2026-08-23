@@ -8,6 +8,9 @@ import { safeStorage } from './utils.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 
+/** If the incoming SW is not fully installed by then, keep the cached shell. */
+const INCOMING_UPDATE_FALLBACK_MS = 30000;
+
 function hardReloadWithCacheBust(reason = 'force_update') {
     markPendingReload(reason, 800);
     const path = window.location.pathname || withBase('/');
@@ -118,31 +121,34 @@ export function bindAppUpdateLifecycle(registerSW) {
     api.updateSW = registerSW({
         immediate: true,
         async onNeedRefresh() {
-            // New SW is waiting. Do not toast or skipWaiting while the user is
-            // in the app — hashed chunks from the old precache must stay valid.
-            // Idle (>5 min background) or the next cold start activates it.
+            // New SW is waiting (precached). Toast the incoming version, then
+            // skipWaiting. Do not wipe caches. If it does not take over in 30s,
+            // keep the cached shell — never hard-reload a half-downloaded build.
             const incomingVersion = await peekIncomingVersion();
-            console.log('GUARDIAN: Silent update waiting →', incomingVersion);
+            console.log('GUARDIAN: Incoming update waiting →', incomingVersion);
+            showCrucialUpdateToast(incomingVersion);
 
-            if (FORCE_UPDATE_REQUIRED) {
-                console.log('GUARDIAN: Force Update Triggered →', incomingVersion);
-                showCrucialUpdateToast(incomingVersion);
-                markPendingReload('sw_force_update', 3500);
-                const token = Date.now();
-                window.__ntPendingUpdateToken = token;
-                await new Promise((r) => setTimeout(r, 1600));
-                try {
-                    await api.updateSW(false);
-                } catch (e) {
-                    hardReloadWithCacheBust('sw_force_fallback');
-                    return;
-                }
-                setTimeout(() => {
-                    if (window.__ntPendingUpdateToken === token) {
-                        hardReloadWithCacheBust('sw_force_timeout');
-                    }
-                }, 2800);
+            const token = Date.now();
+            window.__ntPendingUpdateToken = token;
+            markPendingReload('sw_incoming_ready', INCOMING_UPDATE_FALLBACK_MS);
+            try {
+                await Promise.race([
+                    api.updateSW(false),
+                    new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('incoming_not_ready')), INCOMING_UPDATE_FALLBACK_MS);
+                    }),
+                ]);
+            } catch (e) {
+                window.__ntPendingUpdateToken = null;
+                console.warn('🛡️ Guardian: Incoming update not ready in 30s — keeping cached version.', e);
+                return;
             }
+            setTimeout(() => {
+                if (window.__ntPendingUpdateToken === token) {
+                    window.__ntPendingUpdateToken = null;
+                    console.warn('🛡️ Guardian: Incoming SW did not activate in 30s — keeping cached version.');
+                }
+            }, INCOMING_UPDATE_FALLBACK_MS);
         },
         onRegisteredSW(swUrl, registration) {
             console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
@@ -167,20 +173,27 @@ export function bindAppUpdateLifecycle(registerSW) {
 
     window.triggerAppUpdate = async function triggerAppUpdate() {
         showToast('Updating...', 'success');
-        markPendingReload('sw_user_update', 2500);
+        markPendingReload('sw_user_update', INCOMING_UPDATE_FALLBACK_MS);
         const token = Date.now();
         window.__ntPendingUpdateToken = token;
         try {
-            await api.updateSW(false);
+            await Promise.race([
+                api.updateSW(false),
+                new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('incoming_not_ready')), INCOMING_UPDATE_FALLBACK_MS);
+                }),
+            ]);
         } catch (e) {
-            hardReloadWithCacheBust('sw_user_fallback');
+            window.__ntPendingUpdateToken = null;
+            console.warn('🛡️ Guardian: Manual update not ready in 30s — keeping cached version.', e);
             return;
         }
         setTimeout(() => {
             if (window.__ntPendingUpdateToken === token) {
-                hardReloadWithCacheBust('sw_user_timeout');
+                window.__ntPendingUpdateToken = null;
+                console.warn('🛡️ Guardian: Manual update did not activate in 30s — keeping cached version.');
             }
-        }, 2800);
+        }, INCOMING_UPDATE_FALLBACK_MS);
     };
 
     window.handleUpdateClick = handleUpdateClick;

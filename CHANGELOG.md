@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.8 — Incoming update toast, route deep links, SEO copy (23 Aug 2026)
+
+- Restore the crucial incoming-version toast (`Crucial system update incoming: {version}`). It was gated on `FORCE_UPDATE_REQUIRED`, so the waiting service worker stayed silent.
+- Try to activate the incoming worker as soon as it is waiting. Do not wipe caches. If skipWaiting / takeover does not finish in 30s, keep the cached shell — never hard-reload a half-downloaded build.
+- Route SEO landings: “For more info:” instead of “Need holiday rules or offline tips?”. Intro is the short blurb plus a **When trains run** box (weekdays / Saturdays / Sundays). First/last times stay only in the blue weekday card.
+- “Open live timetable in Next Train” on a route page is `/?rt={id}&r={region}` (that corridor’s live board). URL wins leftover share snapshots. After a successful `?rt=` open, re-ignite must not fall through to the pinned default.
+- Planner telemetry: first Firebase window is 80 batches (was 400), 45s cache, first 40 cards, then scroll / “Load more trips”. Expanding the window busts the stale cache so “See more batches” actually fetches.
+
 ## V8_08.23.7 — Saturday advisory, calm train tap, telemetry cards (23 Aug 2026)
 
 - Line Severed / boarding-blocked Details sits on its own row. Dropped the shared flex + `pr-14` / `padding-right: 3.25rem` gutter that boxed the control on phones.

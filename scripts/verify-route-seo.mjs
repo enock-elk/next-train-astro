@@ -27,6 +27,7 @@ import {
   getSheet,
   loadScheduleDump,
   buildRouteGridAppPath,
+  buildRouteBoardAppPath,
 } from '../src/lib/seo-timetable.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
@@ -150,6 +151,11 @@ const gridPathB = buildRouteGridAppPath('pta-kempton', 'B', 'weekday');
 if (!gridPathB.includes('rt=pta-kempton') || !gridPathB.includes('v=g') || !gridPathB.includes('dir=B') || !gridPathB.includes('d=wd')) {
   fail(`live grid path looks wrong: ${gridPathB}`);
 }
+if (!gridPathB.includes('r=GP')) fail(`live grid path must include region: ${gridPathB}`);
+const boardPath = buildRouteBoardAppPath('herc-koed');
+if (!boardPath.includes('rt=herc-koed') || !boardPath.includes('r=GP') || boardPath.includes('v=g')) {
+  fail(`live board path must be ?rt=herc-koed&r=GP without grid view: ${boardPath}`);
+}
 const gridPathSa = buildRouteGridAppPath('pta-kempton', 'A', 'saturday');
 if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   fail(`Saturday dir-A grid path looks wrong: ${gridPathSa}`);
@@ -267,6 +273,10 @@ if (existsSync(DIST)) {
     if (!html.includes('/og/timetable.png')) fail('Naledi route HTML missing og:image timetable PNG');
     if (!html.includes('summary_large_image')) fail('Naledi route HTML should use summary_large_image');
     if (!html.includes('Weekday first')) fail('Naledi route HTML missing first/last weekday blurb');
+    if (!html.includes('When trains run')) fail('Naledi route HTML missing When trains run box');
+    if (!html.includes('For more info')) fail('Naledi route HTML missing For more info');
+    if (/Need holiday rules/.test(html)) fail('Naledi route HTML still says Need holiday rules');
+    if (!html.includes('rt=jhb-soweto')) fail('Naledi Open live timetable must deep-link ?rt=jhb-soweto');
     // Times must be in the DOM (not a CTA-only stub).
     if (!/\d{1,2}:\d{2}/.test(html)) fail('Naledi route HTML has no clock times');
   }

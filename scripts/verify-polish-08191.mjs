@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.7 Saturday advisory + calm train tap + telemetry cards).
+ * Current polish gate (V8_08.23.8 incoming toast + route deep links + SEO copy).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,18 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.7') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.8') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.7') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.8') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/saturday/i.test(wn) || !/station/i.test(wn) || !/corridor/i.test(wn)) {
-    fail(`What's New must mention Saturday details + selected station: ${wn}`);
+if (!/notice/i.test(wn) || !/version/i.test(wn)) {
+    fail(`What's New must mention the incoming-version notice: ${wn}`);
 }
-if (!/train names/i.test(wn) && !/lighter tap/i.test(wn)) {
-    fail(`What's New must mention the calmer train-name tap: ${wn}`);
+if (!/download/i.test(wn) && !/ready/i.test(wn)) {
+    fail(`What's New must say the saved app stays until the download is ready: ${wn}`);
+}
+if (!/shared route/i.test(wn) && !/corridor/i.test(wn)) {
+    fail(`What's New must mention shared route links landing on that corridor: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -41,8 +44,14 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
 }
+if (!folded.has('V8_08.23.7')) fail('V8_08.23.7 card must remain in history');
 if (!folded.has('V8_08.23.6')) fail('V8_08.23.6 card must remain in history');
 if (!folded.has('V8_08.23.5')) fail('V8_08.23.5 card must remain in history');
+const card237 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.7');
+const wn237 = (card237?.features || []).join(' ');
+if (!/saturday/i.test(wn237) || !/station/i.test(wn237)) {
+    fail('V8_08.23.7 card must keep Saturday details + selected station');
+}
 const card235 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.5');
 const wn235 = (card235?.features || []).join(' ');
 if (!/saturday/i.test(wn235) || !/no service/i.test(wn235)) {
@@ -58,9 +67,9 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.7') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.8') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.7') fail(`app-version.json is ${appVer.version}`);
+if (appVer.version !== 'V8_08.23.8') fail(`app-version.json is ${appVer.version}`);
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -131,6 +140,12 @@ if (!routePage.includes('Open live timetable in Next Train')) {
 }
 if (!routePage.includes('max-w-6xl')) fail('Route landing timetable block should widen past max-w-2xl');
 if (!routePage.includes('buildRouteGridAppPath')) fail('Route landing must deep-link the in-app grid');
+if (!routePage.includes('buildRouteBoardAppPath')) fail('Route landing hero/header must deep-link the live board');
+if (!routePage.includes('ctaHref={liveBoardHref}')) fail('SeoPageHeader CTA must open this corridor, not ?region= only');
+if (!routePage.includes('When trains run')) fail('Route landing must structure operating hours');
+if (!routePage.includes('For more info:')) fail('Route landing must say For more info:');
+if (routePage.includes('Need holiday rules')) fail('Route landing must not say Need holiday rules');
+if (routePage.includes('firstLastBlurb')) fail('intro must not dump first/last times (they live in the weekday card)');
 if (!routePage.includes('SeoPageHeader')) fail('Route landing must use SeoPageHeader');
 if (!routePage.includes('bidirectionalTitle')) fail('Route landing must use the calm bidirectional title');
 if (!routePage.includes('SeoFareTable')) fail('Route landing must include the max fare table');
@@ -232,9 +247,16 @@ if (alerts.includes('toLocaleDateString()')) fail('alerts-channel still uses sla
 if (!admin.includes('applyWysiwygFont')) fail('composer must apply font face + class, not only execCommand');
 if (!admin.includes('limitToLast=')) fail('planner telemetry must window the RTDB fetch');
 if (!admin.includes('expandTripCorridorHits')) fail('planner telemetry must lazy-load hit history');
-if (!admin.includes('See ${Admin._deTripWindowStep') && !admin.includes('See ${Admin._deTripWindowStep || 400} more batches')) {
+if (!admin.includes('See ${Admin._deTripWindowStep') && !admin.includes('See ${Admin._deTripWindowStep || 80} more batches')) {
     fail('planner telemetry must keep See more batches');
 }
+if (!admin.includes('Admin._deTripWindowSize = Admin._deTripWindowSize || 80')) {
+    fail('planner telemetry first window must be 80 batches');
+}
+if (!admin.includes('bindTripScrollLoadMore') || !admin.includes('loadMoreTripCorridors')) {
+    fail('planner telemetry must load more trips on scroll');
+}
+if (!admin.includes('Admin._deTripPageSize = 40')) fail('planner telemetry must paint 40 cards first');
 if (!admin.includes('Users collected') || !admin.includes('de-users-collected')) {
     fail('planner telemetry must show unique users collected');
 }
@@ -350,9 +372,48 @@ if (!/openFareModal\(detailed,\s*routeId\)/.test(liveBoardUi)) {
     fail('planner fare modal must pass the train route id, not $currentRouteId');
 }
 
+const appUpdate = readFileSync('src/lib/app-update.js', 'utf8');
+if (!appUpdate.includes('INCOMING_UPDATE_FALLBACK_MS = 30000')) {
+    fail('incoming update must fall back to the cached shell after 30s');
+}
+{
+    const onNeed = appUpdate.slice(appUpdate.indexOf('async onNeedRefresh'), appUpdate.indexOf('onRegisteredSW'));
+    if (!onNeed.includes('showCrucialUpdateToast(incomingVersion)')) {
+        fail('onNeedRefresh must always toast the incoming version');
+    }
+    if (/if\s*\(\s*FORCE_UPDATE_REQUIRED\s*\)/.test(onNeed)) {
+        fail('incoming-version toast must not be gated on FORCE_UPDATE_REQUIRED');
+    }
+    if (!onNeed.includes('keeping cached version')) {
+        fail('onNeedRefresh must keep the cached shell if the incoming worker is not ready');
+    }
+    if (onNeed.includes('hardReloadWithCacheBust')) {
+        fail('onNeedRefresh must not hard-reload a half-downloaded build');
+    }
+}
+if (!appUpdate.includes('keeping cached version')) {
+    fail('manual update timeout must keep the cached shell');
+}
+
+const indexPage = readFileSync('src/pages/index.astro', 'utf8');
+if (!indexPage.includes('shareRouteOpened')) {
+    fail('ignite must remember a successful ?rt= open');
+}
+if (!indexPage.includes('skip the pinned-default fallthrough')) {
+    fail('re-ignite after ?rt= must not restore the pinned default');
+}
+
+const gridJs = readFileSync('src/lib/timetable-grid.js', 'utf8');
+if (!gridJs.includes('URL wins over a leftover share snapshot')) {
+    fail('parseRouteDeepLink must prefer the URL over a leftover snapshot');
+}
+if (!gridJs.includes('$currentRouteId.set(link.routeId)')) {
+    fail('applyRouteDeepLink must pin the linked corridor');
+}
+
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.7 polish (Saturday advisory, calm train tap, telemetry cards)');
+console.log('✓ V8_08.23.8 polish (incoming toast, route deep links, SEO copy)');

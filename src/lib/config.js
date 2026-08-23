@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.23.7";
+export const APP_VERSION = "V8_08.23.8";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -901,6 +901,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention SEO, Google, indexing, route landing pages, or app configuration.
 // - Do not explain strategy or "we fixed". Short bullets. Detail stays in CHANGELOG.md.
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.23.8",
+        title: "What's new",
+        date: "23 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Update:</b> You'll see a notice when a new version is incoming. The app you already have stays until the download is ready.",
+            "<b>Links:</b> Opening a shared route lands on that corridor."
+        ]
+    },
     {
         id: "V8_08.23.7",
         title: "What's new",

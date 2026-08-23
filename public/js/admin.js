@@ -4356,13 +4356,22 @@ const Admin = {
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
-        Admin._deTripWindowSize = Admin._deTripWindowSize || 400;
-        Admin._deTripWindowStep = 400;
+        Admin._deTripWindowSize = Admin._deTripWindowSize || 80;
+        Admin._deTripWindowStep = 80;
+        Admin._deTripCacheAt = Admin._deTripCacheAt || 0;
+        Admin._deTripCacheTtlMs = 45000;
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
         Admin._deTripPage = 0;
         Admin._deTripPageSize = 40;
+        Admin._deTripPainted = 0;
         Admin._deHitPreviewCap = 25;
         Admin._deUserListCap = 40;
+
+        Admin.tripCacheFresh = () => !!(
+            Admin._cachedTripPlans
+            && Object.keys(Admin._cachedTripPlans).length
+            && (Date.now() - (Admin._deTripCacheAt || 0) < (Admin._deTripCacheTtlMs || 45000))
+        );
 
         const syncDeFiltersVisibility = () => {
             const wrap = document.getElementById('de-trip-filters');
@@ -4751,23 +4760,14 @@ const Admin = {
             `;
         };
 
-        Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+        Admin.appendTripCorridorCards = (listDiv, items) => {
             const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
             const esc = Admin.secureDeEscape;
-            const usersCollected = Number(meta.uniqueUsers || 0);
-            const banner = document.createElement('div');
-            banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
-            banner.innerHTML = `
-                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users collected</p>
-                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersCollected}</p>
-                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · window ${esc(meta.windowNote || '')}</p>
-            `;
-            listDiv.appendChild(banner);
-
-            sorted.forEach((item) => {
+            const frag = document.createDocumentFragment();
+            items.forEach((item) => {
                 const dateStr = Admin.formatDate(item.lastSeen);
                 const card = document.createElement('div');
-                card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
+                card.className = 'de-trip-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
                 const corridorKey = Admin.tripCorridorKey({
                     origin: item.origin,
                     destination: item.dest,
@@ -4806,37 +4806,110 @@ const Admin = {
                         Admin.expandTripCorridorHits(panel, corridorKey);
                     }
                 });
-                listDiv.appendChild(card);
+                frag.appendChild(card);
             });
+            const sentinel = listDiv.querySelector('#de-trip-scroll-sentinel');
+            if (sentinel) listDiv.insertBefore(frag, sentinel);
+            else listDiv.appendChild(frag);
+        };
 
-            if (meta.canLoadMore) {
-                const more = document.createElement('button');
-                more.type = 'button';
-                more.className = 'w-full mt-1 mb-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none';
-                more.textContent = `See ${Admin._deTripWindowStep || 400} more batches`;
-                more.onclick = async () => {
-                    Admin._deTripWindowSize = (Admin._deTripWindowSize || 400) + (Admin._deTripWindowStep || 400);
+        Admin.bindTripScrollLoadMore = (listDiv) => {
+            if (!listDiv || listDiv.dataset.deScrollBound === '1') return;
+            listDiv.dataset.deScrollBound = '1';
+            const nearBottom = () => listDiv.scrollHeight - listDiv.scrollTop - listDiv.clientHeight < 80;
+            const onScroll = () => {
+                if (!nearBottom()) return;
+                Admin.loadMoreTripCorridors(listDiv);
+            };
+            listDiv.addEventListener('scroll', onScroll, { passive: true });
+        };
+
+        Admin.loadMoreTripCorridors = async (listDiv) => {
+            const sorted = Admin._deTripSorted || [];
+            const pageSize = Admin._deTripPageSize || 40;
+            const painted = Admin._deTripPainted || 0;
+            if (painted < sorted.length) {
+                const next = sorted.slice(painted, painted + pageSize);
+                Admin._deTripPainted = painted + next.length;
+                Admin.appendTripCorridorCards(listDiv, next);
+                Admin.syncTripLoadMoreChrome(listDiv);
+                return;
+            }
+            if (Admin._deTripMeta?.canLoadMore && !Admin._deTripLoadingMore) {
+                Admin._deTripLoadingMore = true;
+                Admin._deTripWindowSize = (Admin._deTripWindowSize || 80) + (Admin._deTripWindowStep || 80);
+                Admin._deTripCacheAt = 0;
+                try {
                     const secret = await Admin.getAuthKey();
-                    Admin.renderTripPlanBatches(listDiv, secret);
-                };
-                listDiv.appendChild(more);
+                    await Admin.renderTripPlanBatches(listDiv, secret);
+                } finally {
+                    Admin._deTripLoadingMore = false;
+                }
             }
         };
 
+        Admin.syncTripLoadMoreChrome = (listDiv) => {
+            const sorted = Admin._deTripSorted || [];
+            const painted = Admin._deTripPainted || 0;
+            const canFetch = !!Admin._deTripMeta?.canLoadMore;
+            let sentinel = listDiv.querySelector('#de-trip-scroll-sentinel');
+            if (!sentinel) {
+                sentinel = document.createElement('div');
+                sentinel.id = 'de-trip-scroll-sentinel';
+                sentinel.className = 'py-2';
+                listDiv.appendChild(sentinel);
+            }
+            const moreLeft = painted < sorted.length || canFetch;
+            sentinel.innerHTML = moreLeft
+                ? `<button type="button" class="de-trip-load-more w-full px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none">${canFetch && painted >= sorted.length ? `See ${Admin._deTripWindowStep || 80} more batches` : 'Load more trips'}</button>`
+                : '';
+            sentinel.querySelector('.de-trip-load-more')?.addEventListener('click', () => Admin.loadMoreTripCorridors(listDiv));
+        };
+
+        Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+            const esc = Admin.secureDeEscape;
+            const usersCollected = Number(meta.uniqueUsers || 0);
+            Admin._deTripSorted = sorted;
+            Admin._deTripMeta = meta;
+            Admin._deTripPainted = 0;
+            const banner = document.createElement('div');
+            banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
+            banner.innerHTML = `
+                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users collected</p>
+                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersCollected}</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · window ${esc(meta.windowNote || '')}</p>
+            `;
+            listDiv.appendChild(banner);
+            Admin.bindTripScrollLoadMore(listDiv);
+            const first = sorted.slice(0, Admin._deTripPageSize || 40);
+            Admin._deTripPainted = first.length;
+            Admin.appendTripCorridorCards(listDiv, first);
+            Admin.syncTripLoadMoreChrome(listDiv);
+        };
+
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
-            if (!useCacheOnly) {
+            const hasCache = !!(Admin._cachedTripPlans && Object.keys(Admin._cachedTripPlans).length);
+            const wantedWindow = Math.max(80, Number(Admin._deTripWindowSize) || 80);
+            if (!useCacheOnly && Admin.tripCacheFresh() && (Admin._deTripFetchedWindow || 0) >= wantedWindow) {
+                useCacheOnly = true;
+            }
+            if (!useCacheOnly && hasCache) {
+                try { await Admin.renderTripPlanBatches(listDiv, secret, true); } catch { /* still refresh */ }
+            } else if (!useCacheOnly) {
                 listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
                 Admin._deTripPage = 0;
             }
             try {
                 if (!useCacheOnly) {
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const windowSize = Math.max(400, Number(Admin._deTripWindowSize) || 400);
+                    const windowSize = Math.max(80, Number(Admin._deTripWindowSize) || 80);
                     const qs = `auth=${secret}&orderBy="$key"&limitToLast=${windowSize}`;
                     const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?${qs}`, {}, 20000);
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     Admin._cachedTripPlans = await res.json();
+                    Admin._deTripCacheAt = Date.now();
                     Admin._deTripWindowSize = windowSize;
+                    Admin._deTripFetchedWindow = windowSize;
                     Admin._deTripWindowFull = Object.keys(Admin._cachedTripPlans || {}).length >= windowSize;
                 }
                 const data = Admin._cachedTripPlans;
@@ -4898,7 +4971,7 @@ const Admin = {
                 Admin.paintTripCorridorPage(listDiv, sorted, {
                     filteredCount: filtered.length,
                     uniqueUsers,
-                    windowNote: `latest ${Admin._deTripWindowSize || 400} batches`,
+                    windowNote: `latest ${Admin._deTripWindowSize || 80} batches`,
                     canLoadMore: !!Admin._deTripWindowFull,
                 });
             } catch (e) {

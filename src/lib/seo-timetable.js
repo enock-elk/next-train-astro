@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FARE_CONFIG } from './config.js';
+import { FARE_CONFIG, ROUTES } from './config.js';
 import { orderGridTrainIds } from './grid-order.js';
 import { isRealTime, timeToSeconds } from './utils.js';
 import { stationLabel } from './seo-routes.js';
@@ -445,5 +445,16 @@ export function buildRouteGridAppPath(routeId, dir = 'A', day = 'weekday') {
     params.set('v', 'g');
     if (dir === 'B') params.set('dir', 'B');
     params.set('d', day === 'saturday' ? 'sa' : 'wd');
+    const region = ROUTES[routeId]?.region;
+    if (region) params.set('r', region);
+    return `/?${params.toString()}`;
+}
+
+/** Live board for this corridor (no grid) — header / “open the app” CTAs. */
+export function buildRouteBoardAppPath(routeId) {
+    const params = new URLSearchParams();
+    params.set('rt', routeId || '');
+    const region = ROUTES[routeId]?.region;
+    if (region) params.set('r', region);
     return `/?${params.toString()}`;
 }

@@ -366,6 +366,8 @@ const faqLd = {
 
     let igniteRunning = false;
     let igniteAgain = false;
+    // Survives re-ignite after ?rt= is stripped so a leftover pin cannot overwrite the opened corridor.
+    let shareRouteOpened = false;
     const igniteDataEngine = async () => {
         if (igniteRunning) {
             igniteAgain = true;
@@ -379,6 +381,7 @@ const faqLd = {
                 igniteAgain = false;
                 bindKillswitchWatch();
                 if (await applyRouteDeepLink()) {
+                    shareRouteOpened = true;
                     checkServiceAlerts();
                     await flushPendingDeeplinkIntents();
                     if (location.hash === '#fare') await consumeHashDeeplinks();
@@ -408,6 +411,9 @@ const faqLd = {
                     await flushPendingDeeplinkIntents();
                     continue;
                 }
+
+                // After a successful ?rt= open, skip the pinned-default fallthrough.
+                if (shareRouteOpened) continue;
 
                 const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
                 if (!welcomeSeen) {

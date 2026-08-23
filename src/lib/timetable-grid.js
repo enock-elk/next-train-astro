@@ -37,7 +37,11 @@ export function buildFareShareUrl(routeId) {
 export function parseRouteDeepLink() {
     if (typeof location === 'undefined') return null;
     const snap = peekShareDeeplinkSnapshot();
-    const raw = (snap && snap.kind === 'route') ? snap : parseRouteDeepLinkParams(location.search);
+    const fromUrl = parseRouteDeepLinkParams(location.search);
+    // URL wins over a leftover share snapshot so a Hercules page cannot open Pretoria.
+    const raw = (fromUrl && fromUrl.routeId)
+        ? fromUrl
+        : ((snap && snap.kind === 'route') ? snap : null);
     if (!raw || !ROUTES[raw.routeId]) return null;
     // Grid day: sat/sun deep links use saturday; WC can deep-link public_holiday
     let day = 'weekday';
@@ -48,7 +52,8 @@ export function parseRouteDeepLink() {
         view: raw.view,
         dir: raw.dir,
         day,
-        fromSnapshot: !!(snap && snap.kind === 'route'),
+        region: raw.region || null,
+        fromSnapshot: !!(snap && snap.kind === 'route' && !(fromUrl && fromUrl.routeId)),
     };
 }
 
@@ -63,7 +68,7 @@ export async function applyRouteDeepLink() {
     const route = ROUTES[link.routeId];
     if (!route || !route.isActive) return false;
 
-    if (link.fromSnapshot) consumeShareDeeplinkSnapshot();
+    if (link.fromSnapshot || peekShareDeeplinkSnapshot()?.kind === 'route') consumeShareDeeplinkSnapshot();
 
     showToast('Opening shared link...', 'info', 5000);
 
@@ -81,14 +86,21 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem(defaultKey, link.routeId);
     }
 
-    // Soft region pin (not welcome-skip swap) so schedules can load for the shared corridor
-    ensureRoutePinnedForRegion(route.region);
+    // Set the linked corridor first so a same-region pin cannot restore Pretoria
+    // (or any other default) before schedules load.
+    const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
+    $currentRouteId.set(link.routeId);
+    ensureRoutePinnedForRegion(region);
     $currentRouteId.set(link.routeId);
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
 
     await loadAllSchedules(true);
+    // Pin restore must not win: keep the corridor from this page.
+    $currentRouteId.set(link.routeId);
+    if (typeof window.findNextTrains === 'function') window.findNextTrains();
+    if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
 
     if (typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent('deep_link_open', { type: 'route', route_id: link.routeId, view: link.view || 'board' });

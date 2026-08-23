@@ -83,10 +83,12 @@ ok(workerJs.includes("{ name: \"sessions\" }"), 'worker fetches sessions alongsi
 ok(adminJs.includes("Admin._deActiveTab = 'trips'"), 'planner telemetry defaults to trip plans');
 ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-trips"') < adminJs.indexOf('id="de-tab-fails"'), 'Trip Plans tab is listed before Fails');
 ok(adminJs.includes('limitToLast='), 'trip plans fetch is windowed with limitToLast');
-ok(adminJs.includes('_deTripWindowStep'), 'admin can load more than the first 400 batches');
+ok(adminJs.includes('_deTripWindowStep'), 'admin can load more than the first window of batches');
 ok(adminJs.includes('See ${Admin._deTripWindowStep') || adminJs.includes('more batches'), 'See more batches button exists');
-ok(adminJs.includes("`${entry.origin}|${entry.destination}|${entry.region || ''}`"), 'trip corridors merge all day types');
-ok(!adminJs.includes("`${entry.origin}|${entry.destination}|${entry.dayType || 'unknown'}|${entry.region || ''}`"), 'trip corridor key must not split by day type');
+ok(adminJs.includes("`${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`"), 'trip corridor key includes day type');
+ok(adminJs.includes('_deTripWindowSize || 80') || adminJs.includes('_deTripWindowSize = Admin._deTripWindowSize || 80'), 'first Firebase window is 80 batches');
+ok(adminJs.includes('bindTripScrollLoadMore') && adminJs.includes('loadMoreTripCorridors'), 'trip list loads more on scroll');
+ok(adminJs.includes('_deTripPageSize = 40') || adminJs.includes('_deTripPageSize || 40'), 'first paint is 40 corridor cards');
 ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-install time');
 {
     const parseJoined = (id) => {

@@ -13,10 +13,11 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
+/** @typedef {'classic' | 'earthy' | 'midnight' | 'contrast' | 'signal' | 'ember'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
+    EARTHY: 'earthy',
     MIDNIGHT: 'midnight',
     CONTRAST: 'contrast',
     SIGNAL: 'signal',
@@ -25,6 +26,7 @@ export const COLOUR_PACKS = {
 
 export const COLOUR_PACK_LABELS = {
     classic: 'Classic',
+    earthy: 'Earthy',
     midnight: 'Midnight',
     contrast: 'High contrast',
     signal: 'Signal',
@@ -79,6 +81,11 @@ export function setColourPack(pack) {
         document.documentElement.setAttribute('data-colour-pack', next);
         requestAnimationFrame(() => syncThemeColorMeta());
         syncColourPackUi(next);
+        const sub = document.getElementById('prefs-accordion-sub');
+        if (sub) {
+            const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
+            sub.textContent = `${COLOUR_PACK_LABELS[next] || 'Classic'} · ${mode}`;
+        }
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('colourpackchange', { detail: { pack: next } }));
         }

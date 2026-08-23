@@ -20,7 +20,7 @@ function hardReloadWithCacheBust(reason = 'force_update') {
 /**
  * Incoming = version + optional force flag on the CDN (`app-version.json`).
  * SPA legacy parity: toast must name the build users are about to receive.
- * Reader ships first — leave `forceUpdate: false` until a later emergency flip.
+ * Owner default: `forceUpdate` stays true in app-version.json unless they flip it.
  */
 async function peekIncomingUpdate() {
     try {

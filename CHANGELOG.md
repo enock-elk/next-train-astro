@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.23.13 — Plan/Options icons, main-style alert badge, Theme & Preferences (23 Aug 2026)
+
+- Plan tab uses the Lucide route icon. Options uses the Lucide menu icon (unread badge stays).
+- Alert bell matches legacy `main`: circular wash, `w-6` icon, unread dot outside the circle (`top-0 right-0` + translate). Raised slightly (`-mt-0.5`). `applyBellFromNotices` keeps in-flow classes (does not slam `absolute top-2 right-4`).
+- Theme & Preferences accordion (lab): Classic / Earthy / Ember plus Midnight / Contrast / Signal, Dark Mode, Vibrations. Notifications stay admin-gated.
+- `app-version.json` `forceUpdate` is `true` unless the owner flips it.
+
 ## V8_08.23.12 — Pin chrome: welcome hides nav, right hub, tighter frame (23 Aug 2026)
 
 - Bottom nav is in-app only: hidden on Welcome (`html.nt-onboarding` + `#welcome-modal` visible) and not painted over the welcome overlay (`z-40`).

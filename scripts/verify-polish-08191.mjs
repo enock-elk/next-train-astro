@@ -1,5 +1,5 @@
 /**
- * Current polish gate (V8_08.23.12 in-app chrome: welcome hide, right hub, tighter frame).
+ * Current polish gate (V8_08.23.13 icons, main-style bell, Theme & Preferences).
  * Run: node scripts/verify-polish-08191.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -11,21 +11,21 @@ import { inboxReplyStillVisible, ADMIN_REPLY_HIDE_AFTER_MS } from '../src/lib/in
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
-if (APP_VERSION !== 'V8_08.23.12') fail(`APP_VERSION is ${APP_VERSION}`);
+if (APP_VERSION !== 'V8_08.23.13') fail(`APP_VERSION is ${APP_VERSION}`);
 const latest = CHANGELOG_DATA[0];
-if (latest?.id !== 'V8_08.23.12') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
+if (latest?.id !== 'V8_08.23.13') fail(`CHANGELOG_DATA[0].id is ${latest?.id}`);
 if (!Array.isArray(latest?.features) || latest.features.length < 2 || latest.features.length > 4) {
     fail(`What's New must be 2–4 concise bullets, got ${latest?.features?.length}`);
 }
 const wn = latest.features.join(' ');
-if (!/bottom bar/i.test(wn) || !/welcome/i.test(wn)) {
-    fail(`What's New must mention the bottom bar staying off Welcome: ${wn}`);
+if (!/plan/i.test(wn) || !/route/i.test(wn) || !/menu/i.test(wn)) {
+    fail(`What's New must mention Plan route + Options menu icons: ${wn}`);
 }
-if (!/options/i.test(wn) || !/right/i.test(wn)) {
-    fail(`What's New must mention Options opening from the right: ${wn}`);
+if (!/alert/i.test(wn) || !/circle/i.test(wn)) {
+    fail(`What's New must mention the alert badge outside the circle: ${wn}`);
 }
-if (!/about/i.test(wn) || !/terms/i.test(wn) || !/privacy/i.test(wn)) {
-    fail(`What's New must mention About terms/privacy: ${wn}`);
+if (!/theme/i.test(wn) || !/preferences/i.test(wn)) {
+    fail(`What's New must mention Theme & Preferences: ${wn}`);
 }
 if (/admin|dev hub|telemetry|firebase|dump|seo|google|index|route pages|logo|analytics|clarity|clever|deploy|worker|nuke|hidden tabs|force.update|map tab|community tab/i.test(wn)) {
     fail('Whats New must stay obvious in-app behaviour only');
@@ -43,6 +43,12 @@ for (const id of ['V8_08.19.5', 'V8_08.19.4', 'V8_08.19.3', 'V8_08.19.2', 'V8_08
 }
 for (const id of ['V8_08.23.4', 'V8_08.23.3', 'V8_08.23.2', 'V8_08.21.1']) {
     if (folded.has(id)) fail(`${id} must be folded into V8_08.23.5, not kept as its own card`);
+}
+if (!folded.has('V8_08.23.12')) fail('V8_08.23.12 card must remain in history');
+const card2312 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.12');
+const wn2312 = (card2312?.features || []).join(' ');
+if (!/bottom bar/i.test(wn2312) || !/welcome/i.test(wn2312)) {
+    fail('V8_08.23.12 card must keep Welcome + bottom bar');
 }
 if (!folded.has('V8_08.23.11')) fail('V8_08.23.11 card must remain in history');
 const card2311 = CHANGELOG_DATA.find((e) => e.id === 'V8_08.23.11');
@@ -100,10 +106,10 @@ const wn196 = (CHANGELOG_DATA.find((e) => e.id === 'V8_08.19.6')?.features || []
 if (/corridor pages|seo|google/i.test(wn196)) fail('V8_08.19.6 must not discuss SEO / corridor pages');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-if (pkg.version !== '8.8.23.12') fail(`package.json version is ${pkg.version}`);
+if (pkg.version !== '8.8.23.13') fail(`package.json version is ${pkg.version}`);
 const appVer = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-if (appVer.version !== 'V8_08.23.12') fail(`app-version.json is ${appVer.version}`);
-if (appVer.forceUpdate !== false) fail('app-version.json forceUpdate must stay false on this reader ship');
+if (appVer.version !== 'V8_08.23.13') fail(`app-version.json is ${appVer.version}`);
+if (appVer.forceUpdate !== true) fail('app-version.json forceUpdate must stay true unless the owner flips it');
 
 const layout = readFileSync('src/layouts/Layout.astro', 'utf8');
 if (/body\.modal-active\s*\{[^}]*touch-action:\s*none/.test(layout)) {
@@ -603,16 +609,46 @@ if (!plannerModals.includes('Kazembe CodeWorks')) {
     fail('legal modal must end with Kazembe CodeWorks');
 }
 const appHeader = readFileSync('src/components/Header.astro', 'utf8');
-if (!appHeader.includes('aria-label="Service Alert"')) fail('alert bell must use lab Service Alert label');
-if (!appHeader.includes('w-5 h-5') || !appHeader.includes('top-1.5 right-1.5')) {
-    fail('alert bell must match lab size and dot position');
+if (!appHeader.includes('aria-label="Service alerts"')) fail('alert bell must use Service alerts label');
+if (!appHeader.includes('bg-red-100') || !appHeader.includes('w-6 h-6')) {
+    fail('alert bell must use the main circular wash + w-6 icon');
 }
-if (appHeader.includes('translate-x-1/4')) fail('alert dot must not sit outside the bell');
+if (!appHeader.includes('translate-x-1/4') || !appHeader.includes('top-0 right-0')) {
+    fail('unread badge must sit outside the circle, top-right');
+}
+if (!appHeader.includes('-mt-0.5')) fail('alert cluster must sit slightly higher');
 if (indexHtml.includes('z-[110]')) fail('bottom nav must not paint over Welcome (drop z-110)');
+if (!indexHtml.includes('lucide-route') || !indexHtml.includes('cx="6"')) {
+    fail('Plan tab must use the Lucide route icon');
+}
+if (!indexHtml.includes('lucide-menu') || !indexHtml.includes('M4 12h16')) {
+    fail('Options tab must use the Lucide menu icon');
+}
+if (indexHtml.includes('icons/icon-192.png') && /bottom-nav-options[\s\S]{0,400}icon-192/.test(indexHtml)) {
+    fail('Options must not use the app icon');
+}
+if (!sidenav.includes('id="prefs-accordion-toggle"') || !sidenav.includes('Theme &amp; Preferences')) {
+    fail('hub must package looks inside Theme & Preferences');
+}
+if (!sidenav.includes('data-colour-pack-option="earthy"') || !sidenav.includes('data-colour-pack-option="ember"')) {
+    fail('Theme & Preferences must include lab Earthy + Ember');
+}
+if (!sidenav.includes('id="settings-theme-toggle"') || !sidenav.includes('id="settings-haptics-toggle"')) {
+    fail('Dark Mode and Vibrations must live inside Theme & Preferences');
+}
+const prefsPacks = readFileSync('src/lib/prefs.js', 'utf8');
+if (!prefsPacks.includes("EARTHY: 'earthy'")) fail('prefs must register the Earthy pack');
+const appearanceCss = readFileSync('src/styles/appearance.css', 'utf8');
+if (!appearanceCss.includes('data-colour-pack="earthy"')) fail('appearance.css must define Earthy');
+const alertsJs = readFileSync('src/lib/alerts-channel.js', 'utf8');
+if (alertsJs.includes('absolute top-2 right-4')) {
+    fail('applyBellFromNotices must not slam the main hamburger-header absolute position');
+}
+if (!alertsJs.includes('translate-x-1/4')) fail('live bell badge must stay outside the circle');
 
 if (failures.length) {
     console.error(`\n✗ polish 08191 failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
 }
-console.log('✓ V8_08.23.12 polish (welcome hide, right hub, tighter frame)');
+console.log('✓ V8_08.23.13 polish (icons, main-style bell, Theme & Preferences)');

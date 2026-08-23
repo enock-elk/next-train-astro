@@ -111,7 +111,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         }
         let pack = null;
         try { pack = localStorage.getItem('colourPack'); } catch (e) {}
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember';
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
         try {
           if (!localStorage.getItem('next_train_device_id')) {

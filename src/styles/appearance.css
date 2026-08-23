@@ -17,7 +17,7 @@
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic · midnight · contrast · signal · ember
+ * Packs: classic · earthy · midnight · contrast · signal · ember
  * ---------------------------------------------------------------------------
  */
 
@@ -254,6 +254,61 @@ html[data-colour-pack="ember"].dark {
   --nt-theme-meta: #78350f;
 }
 
+/*
+ * Earthy — editorial cream + sage (lab).
+ * Eggshell paper, muted sage, dusty terracotta, soft charcoal.
+ */
+html[data-colour-pack="earthy"] {
+  --nt-primary: #6B705C;
+  --nt-primary-hover: #5C6150;
+  --nt-primary-fg: #FAF8F3;
+  --nt-primary-soft: #F3F0E8;
+  --nt-surface: #FAF8F3;
+  --nt-surface-muted: #F5F2EA;
+  --nt-text: #353535;
+  --nt-text-muted: #8A8278;
+  --nt-border: #E8E2D6;
+  --nt-theme-meta: #FAF8F3;
+  --nt-accent: #A58E74;
+
+  --nt-blue-50: 250 248 243;
+  --nt-blue-100: 243 240 232;
+  --nt-blue-200: 232 226 214;
+  --nt-blue-300: 201 193 181;
+  --nt-blue-400: 154 150 132;
+  --nt-blue-500: 125 128 110;
+  --nt-blue-600: 107 112 92;
+  --nt-blue-700: 92 97 80;
+  --nt-blue-800: 74 78 65;
+  --nt-blue-900: 53 56 48;
+}
+
+html.dark[data-colour-pack="earthy"],
+html[data-colour-pack="earthy"].dark {
+  --nt-primary: #A3A792;
+  --nt-primary-hover: #C4C6B8;
+  --nt-primary-fg: #2C2A26;
+  --nt-primary-soft: rgba(107, 112, 92, 0.28);
+  --nt-surface: #2C2A26;
+  --nt-surface-muted: #24221F;
+  --nt-text: #F5F1E9;
+  --nt-text-muted: #C9C1B5;
+  --nt-border: #3F3C37;
+  --nt-theme-meta: #2C2A26;
+  --nt-accent: #C4A990;
+
+  --nt-blue-50: 44 42 38;
+  --nt-blue-100: 55 53 47;
+  --nt-blue-200: 63 60 55;
+  --nt-blue-300: 92 97 80;
+  --nt-blue-400: 125 128 110;
+  --nt-blue-500: 154 150 132;
+  --nt-blue-600: 163 167 146;
+  --nt-blue-700: 196 198 184;
+  --nt-blue-800: 221 214 203;
+  --nt-blue-900: 245 241 233;
+}
+
 /* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
 #main-content {
   background-color: var(--nt-surface);
@@ -277,7 +332,8 @@ html[data-colour-pack="ember"].dark {
 html[data-colour-pack="midnight"] #tab-sliding-indicator,
 html[data-colour-pack="contrast"] #tab-sliding-indicator,
 html[data-colour-pack="signal"] #tab-sliding-indicator,
-html[data-colour-pack="ember"] #tab-sliding-indicator {
+html[data-colour-pack="ember"] #tab-sliding-indicator,
+html[data-colour-pack="earthy"] #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
 
@@ -295,7 +351,8 @@ html.dark #app-title {
 html[data-colour-pack="midnight"] #app-title,
 html[data-colour-pack="contrast"] #app-title,
 html[data-colour-pack="signal"] #app-title,
-html[data-colour-pack="ember"] #app-title {
+html[data-colour-pack="ember"] #app-title,
+html[data-colour-pack="earthy"] #app-title {
   background-image: linear-gradient(
     to right,
     var(--nt-primary),
@@ -311,7 +368,8 @@ html[data-colour-pack="ember"] #app-title {
 html[data-colour-pack="midnight"] #main-content,
 html[data-colour-pack="contrast"] #main-content,
 html[data-colour-pack="signal"] #main-content,
-html[data-colour-pack="ember"] #main-content {
+html[data-colour-pack="ember"] #main-content,
+html[data-colour-pack="earthy"] #main-content {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
 }
@@ -320,14 +378,17 @@ html[data-colour-pack="midnight"] .app-header,
 html[data-colour-pack="contrast"] .app-header,
 html[data-colour-pack="signal"] .app-header,
 html[data-colour-pack="ember"] .app-header,
+html[data-colour-pack="earthy"] .app-header,
 html[data-colour-pack="midnight"] #app-top-tabs,
 html[data-colour-pack="contrast"] #app-top-tabs,
 html[data-colour-pack="signal"] #app-top-tabs,
 html[data-colour-pack="ember"] #app-top-tabs,
+html[data-colour-pack="earthy"] #app-top-tabs,
 html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
 html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
+html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar,
+html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
   background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
   border-color: var(--nt-border) !important;
 }
@@ -335,7 +396,8 @@ html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar {
 html[data-colour-pack="midnight"] .view-section,
 html[data-colour-pack="contrast"] .view-section,
 html[data-colour-pack="signal"] .view-section,
-html[data-colour-pack="ember"] .view-section {
+html[data-colour-pack="ember"] .view-section,
+html[data-colour-pack="earthy"] .view-section {
   background-color: var(--nt-surface-muted) !important;
 }
 
@@ -623,4 +685,40 @@ font[face="sans-serif" i] {
 /* Results view: hide Advanced Multi-Transfer chrome entirely */
 #view-trip-planner:has(#planner-results-section:not(.hidden)) .planner-title-block {
   display: none;
+}
+
+html[data-colour-pack="earthy"] #main-content {
+  box-shadow: 0 1px 2px rgba(53, 53, 53, 0.04), 0 16px 40px rgba(53, 53, 53, 0.05);
+}
+html[data-colour-pack="earthy"] .colour-pack-swatch {
+  border: 1px solid var(--nt-border);
+}
+html[data-colour-pack="earthy"] .text-gray-400,
+html[data-colour-pack="earthy"] .text-gray-500,
+html[data-colour-pack="earthy"] .text-gray-600 {
+  color: var(--nt-text-muted) !important;
+}
+html[data-colour-pack="earthy"] .text-gray-700,
+html[data-colour-pack="earthy"] .text-gray-800,
+html[data-colour-pack="earthy"] .text-gray-900,
+html[data-colour-pack="earthy"] .text-black {
+  color: var(--nt-text) !important;
+}
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-300,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-400,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-500 {
+  color: var(--nt-text-muted) !important;
+}
+html.dark[data-colour-pack="earthy"] .dark\:text-white,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-100,
+html.dark[data-colour-pack="earthy"] .dark\:text-gray-200 {
+  color: var(--nt-text) !important;
+}
+html[data-colour-pack="earthy"] #sidenav,
+html[data-colour-pack="ember"] #sidenav,
+html[data-colour-pack="midnight"] #sidenav,
+html[data-colour-pack="contrast"] #sidenav,
+html[data-colour-pack="signal"] #sidenav {
+  background-color: var(--nt-surface) !important;
+  color: var(--nt-text);
 }

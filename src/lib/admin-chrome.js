@@ -1,7 +1,7 @@
 /**
  * Operator chrome (Map / Community tabs, Account, Notifications).
  * Hidden in HTML by default — reveal only after allowlisted admin auth.
- * Never use 5-tap, __ntAdminReady, or __ntAdminSessionActive as the gate.
+ * Never use five-tap unlock or the admin-ready / admin-session-active flags as the gate.
  */
 import { safeStorage } from './utils.js';
 

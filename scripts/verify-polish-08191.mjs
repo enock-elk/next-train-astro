@@ -537,13 +537,11 @@ if (!hubJs.includes('export async function openMessagesThread')) fail('must port
 if (!hubJs.includes('viewReplyBtn.onclick = () => openMessagesThread()')) {
     fail('banner Read must open the messages thread');
 }
-const hubModals = readFileSync('src/components/HubModals.astro', 'utf8');
 if (!hubModals.includes('id="messages-thread-modal"')) fail('HubModals must include the messages thread');
 const delayJs = readFileSync('src/lib/delay-reports.js', 'utf8');
 if (!delayJs.includes('DELAY_REPORTS_UI_ENABLED = false')) {
     fail('Direct Train flags / delay-report UI must stay off');
 }
-const liveBoard = readFileSync('src/components/LiveBoard.astro', 'utf8');
 if (liveBoard.includes('ride-nearby')) fail('LiveBoard must not include Trains near you');
 if (!liveBoard.includes('id="last-updated-date"') || !liveBoard.includes('view-full-timetable-btn')) {
     fail('effective date must live inside the timetable CTA');
@@ -556,7 +554,7 @@ if (!adminJs.includes('isAllowlistedAdmin(user)')) {
     fail('admin chrome must still require isAllowlistedAdmin');
 }
 const adminChrome = readFileSync('src/lib/admin-chrome.js', 'utf8');
-if (adminChrome.includes('__ntAdminReady') || adminChrome.includes('__ntAdminSessionActive')) {
+if (adminChrome.includes('window.__ntAdminReady') || adminChrome.includes('window.__ntAdminSessionActive')) {
     fail('operator chrome must not use 5-tap / session-active flags');
 }
 

@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.23.1";
+export const APP_VERSION = "V8_08.23.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -901,13 +901,14 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.23.1",
+        id: "V8_08.23.2",
         title: "What's new",
         date: "23 Aug 2026",
         forceShow: false,
         features: [
             "<b>Ads:</b> If a top advert disappears while you scroll away, the board no longer leaves a blank strip when you come back.",
-            "<b>Planner:</b> Saturday and holiday plans on lines with no weekend trains now say so clearly, and still offer the next weekday."
+            "<b>Planner:</b> Saturday and holiday plans on lines with no weekend trains now say so clearly, and still offer the next weekday.",
+            "<b>Board:</b> Routes with no Saturday trains show red No Service on the day label."
         ]
     },
     {

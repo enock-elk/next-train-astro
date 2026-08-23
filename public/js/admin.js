@@ -863,6 +863,42 @@ const Admin = {
         return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
     },
 
+    /** usr_{rand}_{Date.now()} — trailing epoch is first-install / join time. */
+    parseJoinedAtFromUserId: (id) => {
+        const s = String(id || '').trim();
+        if (!s || s === 'Anonymous / Legacy' || s === 'unknown') return null;
+        const m = s.match(/_(\d{10,13})$/);
+        if (!m) return null;
+        const n = Number(m[1]);
+        if (!Number.isFinite(n)) return null;
+        const ms = n < 1e12 ? n * 1000 : n;
+        if (ms < Date.UTC(2020, 0, 1) || ms > Date.now() + 86400000) return null;
+        return ms;
+    },
+
+    formatJoinedLabel: (id) => {
+        const ts = Admin.parseJoinedAtFromUserId(id);
+        if (!ts) return null;
+        const pretty = Admin.formatDate(ts);
+        if (!pretty || pretty === 'Unknown') return null;
+        return `Joined ${pretty}`;
+    },
+
+    showJoinedHint: (id) => {
+        const label = Admin.formatJoinedLabel(id);
+        if (!label) return;
+        if (typeof showToast === 'function') showToast(label, 'info', 2800);
+    },
+
+    /** Compact “i” next to a user/device id — title + tap toast, does not replace the id. */
+    userIdJoinHintHtml: (id) => {
+        const label = Admin.formatJoinedLabel(id);
+        if (!label) return '';
+        const safeId = String(id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const title = (typeof escapeHTML === 'function' ? escapeHTML(label) : label.replace(/"/g, '&quot;'));
+        return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
+    },
+
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
     syncAllBadges: async () => {
         const secret = await Admin.getAuthKey();
@@ -3488,7 +3524,7 @@ const Admin = {
                 let groupHTML = `
                     <div class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
                         <div class="flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span></span>
+                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full inline-flex items-center">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span>${Admin.userIdJoinHintHtml(rawDid)}</span>
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center shrink-0">
@@ -4279,14 +4315,10 @@ const Admin = {
                                 <option value="EC">Eastern Cape</option>
                             </select>
                         </div>
-                        <div>
+                        <div class="hidden">
                             <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
                             <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
-                                <option value="">All days</option>
-                                <option value="weekday">Weekday</option>
-                                <option value="saturday">Saturday</option>
-                                <option value="public_holiday">Public Holiday</option>
-                                <option value="sunday">Sunday</option>
+                                <option value="" selected>All days</option>
                             </select>
                         </div>
                         <div class="relative" id="de-filter-userid-container">
@@ -4320,6 +4352,8 @@ const Admin = {
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+        Admin._deTripWindowSize = Admin._deTripWindowSize || 400;
+        Admin._deTripWindowStep = 400;
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
         Admin._deTripPage = 0;
         Admin._deTripPageSize = 40;
@@ -4387,7 +4421,6 @@ const Admin = {
             el.addEventListener('input', apply);
         };
         bindTripFilter('de-filter-region', 'region');
-        bindTripFilter('de-filter-day', 'dayType');
         bindTripFilter('de-filter-userid', 'userId');
 
         // Premium custom dropdown for User ID (matches excl-route pattern)
@@ -4623,7 +4656,7 @@ const Admin = {
         };
 
         Admin.tripCorridorKey = (entry) =>
-            `${entry.origin}|${entry.destination}|${entry.dayType || 'unknown'}|${entry.region || ''}`;
+            `${entry.origin}|${entry.destination}|${entry.region || ''}`;
 
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
@@ -4706,7 +4739,7 @@ const Admin = {
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
                 ${slice.map((h) => `
                     <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                        <span class="font-mono text-gray-500 truncate">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}</span>
+                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}${Admin.userIdJoinHintHtml(h.userId)}</span>
                         <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${esc(h.depTime || '-')}</span>
                     </div>
                 `).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
@@ -4732,7 +4765,6 @@ const Admin = {
                 const corridorKey = Admin.tripCorridorKey({
                     origin: item.origin,
                     destination: item.dest,
-                    dayType: item.dayType,
                     region: item.region,
                 });
                 const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
@@ -4742,11 +4774,10 @@ const Admin = {
                             <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${esc(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${esc(item.dest)}</div>
                             <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
-                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${esc(item.dayType || 'unknown')}</span>
                                 <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${esc(item.region || '-')}</span>
                                 <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${esc(item.depSample || '-')}</span>
                             </div>
-                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}</div>
+                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate inline-flex items-center max-w-full" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}${Admin.userIdJoinHintHtml(item.userId)}</div>
                             <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
                         </div>
                         <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
@@ -4769,6 +4800,19 @@ const Admin = {
                 });
                 listDiv.appendChild(card);
             });
+
+            if (meta.canLoadMore) {
+                const more = document.createElement('button');
+                more.type = 'button';
+                more.className = 'w-full mb-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none';
+                more.textContent = `See ${Admin._deTripWindowStep || 400} more batches`;
+                more.onclick = async () => {
+                    Admin._deTripWindowSize = (Admin._deTripWindowSize || 400) + (Admin._deTripWindowStep || 400);
+                    const secret = await Admin.getAuthKey();
+                    Admin.renderTripPlanBatches(listDiv, secret);
+                };
+                listDiv.appendChild(more);
+            }
 
             if (sorted.length > pageSize) {
                 const nav = document.createElement('div');
@@ -4805,12 +4849,13 @@ const Admin = {
             try {
                 if (!useCacheOnly) {
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const windowSize = 400;
+                    const windowSize = Math.max(400, Number(Admin._deTripWindowSize) || 400);
                     const qs = `auth=${secret}&orderBy="$key"&limitToLast=${windowSize}`;
                     const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?${qs}`, {}, 20000);
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     Admin._cachedTripPlans = await res.json();
                     Admin._deTripWindowSize = windowSize;
+                    Admin._deTripWindowFull = Object.keys(Admin._cachedTripPlans || {}).length >= windowSize;
                 }
                 const data = Admin._cachedTripPlans;
                 if (!data) {
@@ -4872,6 +4917,7 @@ const Admin = {
                     filteredCount: filtered.length,
                     userBatchCount: userCount,
                     windowNote: `latest ${Admin._deTripWindowSize || 400} batches`,
+                    canLoadMore: !!Admin._deTripWindowFull,
                 });
             } catch (e) {
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load trip plans.</div>`;
@@ -5229,7 +5275,7 @@ const Admin = {
                 const commuterTitle = did !== 'Anonymous / Legacy'
                     ? `<div class="min-w-0 w-full space-y-1">
                         ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
-                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>
+                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>${Admin.userIdJoinHintHtml(did)}
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
@@ -7087,8 +7133,8 @@ const Admin = {
 
         const alias = Admin.cachedAliases && Admin.cachedAliases[deviceId] ? Admin.cachedAliases[deviceId] : null;
         const recipientHtml = alias
-            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">-</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
-            : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>`;
+            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">-</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`
+            : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`;
         
         let modal = document.getElementById('admin-reply-modal');
         if (!modal) {

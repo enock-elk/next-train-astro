@@ -46,6 +46,10 @@ if (!ui.includes('Showing trains terminating at')) fail('dest-on-stub must keep 
 if (!ui.includes('Cannot depart from')) fail('origin-on-stub must keep boarding-blocked copy');
 if (!ui.includes('Showing trains from')) fail('origin-on-stub must show trains from the junction');
 if (!ui.includes('See Next Available Day')) fail('no-service card must offer weekday rollover');
+const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
+if (!logic.includes('paintHeaderDayLabel') || !logic.includes('currentRouteSaturdayClosed')) {
+    fail('header must show No Service when both Saturday directions are empty');
+}
 if (ui.includes('Try Saturday / Holiday') && !ui.includes("selectedPlannerDay === 'saturday'")) {
     fail('Saturday no-service must not suggest Try Saturday / Holiday');
 }

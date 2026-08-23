@@ -19,7 +19,7 @@ import {
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
-    loadAllSchedules, guardianFetch
+    loadAllSchedules, guardianFetch, paintHeaderDayLabel
 } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
@@ -606,6 +606,7 @@ export function getDetailedFare(sheetKey) {
 }
 
 export function findNextTrains() {
+    if (typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
 
     const selectedStation = (stationSelectEl() && stationSelectEl().value);

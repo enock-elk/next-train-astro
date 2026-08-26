@@ -28,6 +28,7 @@ import {
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
 import {
     liveBoardJourneyKey,
@@ -285,7 +286,7 @@ export const Renderer = {
                     <p class="text-xs text-gray-700 dark:text-gray-300 mb-4">
                         If you have recent photos of the official station timetables, you can help us launch this route faster!
                     </p>
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe7lhoUNKQFOiW1d6_7ezCHJvyOL5GkHNH1Oetmvdqgee16jw/viewform" target="_blank" class="flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors text-sm group">
+                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe7lhoUNKQFOiW1d6_7ezCHJvyOL5GkHNH1Oetmvdqgee16jw/viewform" target="_blank" data-coming-soon-form class="flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors text-sm group">
                         <svg class="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0L8 8m4-4v12"></path></svg>
                         Share Schedules
                     </a>
@@ -302,8 +303,14 @@ export const Renderer = {
             const parent = element.closest('.space-y-6') || element.closest('.space-y-4');
             if (parent) {
                 parent.innerHTML = msg;
+                parent.querySelector('[data-coming-soon-form]')?.addEventListener('click', () => {
+                    trackAnalyticsEvent('open_google_form_feedback', { location: 'coming_soon', route_name: routeName || '' });
+                });
             } else {
                 element.innerHTML = msg;
+                element.querySelector('[data-coming-soon-form]')?.addEventListener('click', () => {
+                    trackAnalyticsEvent('open_google_form_feedback', { location: 'coming_soon', route_name: routeName || '' });
+                });
             }
         }
     },
@@ -1540,6 +1547,7 @@ export async function triggerNoticeShare() {
             };
             if (navigator.canShare && navigator.canShare(data)) {
                 await navigator.share(data);
+                trackAnalyticsEvent('grid_share_image', { location: 'notice_share' });
             } else {
                 if (typeof showToast === 'function') showToast("Sharing files not supported on this browser.", "error");
             }

@@ -15,6 +15,8 @@
     "verify:schedule": "node scripts/verify-schedule-source.mjs",
     "verify:board-paint": "node scripts/verify-live-board-paint.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
+    "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
+    "verify:analytics": "node scripts/verify-analytics.mjs",
     "verify:deeplink": "node scripts/verify-deeplink-launch.mjs",
     "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
     "verify:planner-saturday": "node scripts/verify-planner-saturday.mjs",

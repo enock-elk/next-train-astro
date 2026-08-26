@@ -10,10 +10,14 @@ import {
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate } from './utils.js';
+import { encodeFeedbackAlertQuote } from './feedback-quote.js';
+import { inboxReplyStillVisible } from './inbox-replies.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import {
-    showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices
+    showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
+    hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
 import {
     fetchUnionNotices,
@@ -143,6 +147,7 @@ export function clearFeedbackReplyMode() {
         contextBox.innerHTML = '';
         delete contextBox.dataset.rawMsg;
         delete contextBox.dataset.alertId;
+        delete contextBox.dataset.alertKind;
     }
     const typeWrap = document.getElementById('feedback-type-wrap');
     if (typeWrap) typeWrap.classList.remove('hidden');
@@ -154,7 +159,7 @@ export function clearFeedbackReplyMode() {
 }
 
 /** Show reply context chip and lock type to Thread Reply. */
-export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '' } = {}) {
+export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice' } = {}) {
     const fText = document.getElementById('feedback-text');
     const fType = document.getElementById('feedback-type');
     const typeWrap = document.getElementById('feedback-type-wrap');
@@ -172,6 +177,7 @@ export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippe
         contextBox.dataset.rawMsg = rawMsg || snippet;
         if (alertId) contextBox.dataset.alertId = alertId;
         else delete contextBox.dataset.alertId;
+        contextBox.dataset.alertKind = alertKind === 'disruption' ? 'disruption' : 'notice';
         contextBox.classList.remove('hidden');
     }
     if (fText) fText.value = '';
@@ -242,6 +248,7 @@ export function resetProfile() {
 
 export async function performHardCacheClear(source = 'modal_confirm') {
     triggerHaptic();
+    trackAnalyticsEvent('execute_hard_cache_clear', { source });
     if (source === 'modal_confirm') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
         await new Promise((r) => setTimeout(r, 600));
@@ -324,7 +331,7 @@ function syncProfileDisplay() {
 
 function syncHapticsToggle() {
     const cb = document.getElementById('settings-haptics-checkbox');
-    if (cb) cb.checked = safeStorage.getItem('hapticsEnabled') !== 'false';
+    if (cb) cb.checked = hapticsAreEnabled();
 }
 
 // What's New is a commuter surface. CHANGELOG_DATA copy must stay commuter-visible
@@ -425,12 +432,23 @@ async function submitFeedback() {
             ? String(contextBox.dataset.rawMsg || '').trim()
             : '';
         if (prefix) {
-            text = prefix.startsWith('[') ? `${prefix}\n${text}` : `[${prefix}]\n${text}`;
+            const alertId = String(contextBox.dataset.alertId || '').trim();
+            const alertKind = String(contextBox.dataset.alertKind || 'notice');
+            const header = encodeFeedbackAlertQuote({
+                alertId,
+                kind: alertKind,
+                snippet: prefix,
+            });
+            text = prefix.startsWith('[ALERT:') ? `${prefix}\n${text}` : `${header}\n${text}`;
         }
     } catch { /* ignore */ }
 
     const hasFile = !!(fileInput?.files?.length);
     triggerHaptic();
+    trackAnalyticsEvent('click_submit_feedback_btn', {
+        type: type || 'general',
+        has_file: hasFile,
+    });
     if (submitBtn) submitBtn.disabled = true;
     if (submitText) submitText.textContent = 'Sending...';
     spinner?.classList.remove('hidden');
@@ -494,6 +512,7 @@ async function submitFeedback() {
         });
         if (!res.ok) throw new Error(`Failed to post feedback: ${res.status}`);
         recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
+        trackAnalyticsEvent('submit_feedback_success', { type: type || 'general' });
 
         try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
 
@@ -510,6 +529,7 @@ async function submitFeedback() {
         document.getElementById('feedback-file-preview')?.classList.add('hidden');
     } catch (e) {
         console.error(e);
+        trackAnalyticsEvent('submit_feedback_error', { message: String(e?.message || e || 'error').slice(0, 80) });
         showToast(e.message || 'Could not send feedback.', 'error');
     } finally {
         if (submitBtn) submitBtn.disabled = false;
@@ -542,9 +562,7 @@ function sanitizeHTML(dirtyHtml) {
 }
 
 function trackAlertEvent(name, params) {
-    if (typeof window.trackAnalyticsEvent === 'function') {
-        window.trackAnalyticsEvent(name, params);
-    }
+    trackAnalyticsEvent(name, params);
 }
 
 /** Alert-severity palette for poll chrome (info=blue, warning=amber, critical=red). */
@@ -1055,9 +1073,8 @@ export function renderServiceAlertModal(notice, options = {}) {
         } else {
             const posted = notice.repostedAt || notice.postedAt || notice.timestamp;
             if (posted) {
-                const date = new Date(posted);
                 const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-                timestamp.textContent = `${label}: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+                timestamp.textContent = `${label}: ${formatAppDate(posted, { withTime: true })}`;
             } else if (mode === 'preview') {
                 timestamp.textContent = 'Preview — not posted yet';
             } else {
@@ -1148,6 +1165,7 @@ export function renderServiceAlertModal(notice, options = {}) {
                 snippet: truncatedMsg,
                 rawMsg: truncatedMsg,
                 alertId: notice?.id || '',
+                alertKind: 'notice',
             });
         };
         btnContainer.appendChild(rightBtn);
@@ -1208,7 +1226,7 @@ export async function checkServiceAlerts() {
                     if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
-                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxData[k] && !inboxData[k].read);
+                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k]));
                         syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
@@ -1328,8 +1346,15 @@ export function initHub() {
     window.prepareRichHtml = prepareRichHtml;
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
+    window.openFeedbackModal = openFeedbackModal;
     injectRichTextStyles();
     initAlertsChannel();
+    bindPasswordReveal({
+        inputId: 'account-password',
+        buttonId: 'account-toggle-password-btn',
+        openIconId: 'account-eye-open-icon',
+        closedIconId: 'account-eye-closed-icon',
+    });
 
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
@@ -1453,7 +1478,7 @@ export function initHub() {
     hapticsToggle?.addEventListener('click', (e) => {
         const t = e.target;
         if (t.tagName !== 'INPUT' && t.tagName !== 'LABEL') {
-            applyHaptics(!(safeStorage.getItem('hapticsEnabled') !== 'false'));
+            applyHaptics(!hapticsAreEnabled());
         }
     });
     hapticsCb?.addEventListener('change', (e) => applyHaptics(e.target.checked));
@@ -1621,12 +1646,20 @@ export function initHub() {
     // "where is my train" view, so this deliberately does NOT switch tabs.
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
+        trackAnalyticsEvent('click_interactive_map', { location: 'sidenav' });
+        trackAnalyticsEvent('click_network_map', { location: 'sidenav' });
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/map'), 'Network Map'), 120);
+        setTimeout(() => {
+            trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
+            openInAppSheet(withBase('/map'), 'Network Map');
+        }, 120);
     });
 
     // Updates
-    document.getElementById('check-updates-btn')?.addEventListener('click', showCacheClearWarning);
+    document.getElementById('check-updates-btn')?.addEventListener('click', () => {
+        trackAnalyticsEvent('check_updates_click', { location: 'sidenav' });
+        showCacheClearWarning();
+    });
 
     // About / Help / Changelog
     document.getElementById('settings-about-btn')?.addEventListener('click', () => {
@@ -1637,13 +1670,19 @@ export function initHub() {
             const edition = (getLatestChangelog()?.title) || 'Next Train';
             ver.textContent = `Version ${APP_VERSION} (${edition})`;
         }
-        setTimeout(() => openSmoothModal('about-modal'), 50);
+        setTimeout(() => {
+            trackAnalyticsEvent('view_about_page', { location: 'sidenav' });
+            openSmoothModal('about-modal');
+        }, 50);
     });
     document.getElementById('close-about-btn')?.addEventListener('click', () => closeSmoothModal('about-modal'));
     document.getElementById('settings-help-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
-        setTimeout(() => openInAppSheet(withBase('/guide.html'), 'Commuter Guide'), 120);
+        setTimeout(() => {
+            trackAnalyticsEvent('view_user_guide', { location: 'sidenav' });
+            openInAppSheet(withBase('/guide.html'), 'Commuter Guide');
+        }, 120);
     });
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
@@ -1652,6 +1691,11 @@ export function initHub() {
         e?.preventDefault?.();
         e?.stopPropagation?.();
         triggerHaptic();
+        const location = e?.currentTarget?.id === 'feedback-btn-planner'
+            ? 'planner'
+            : e?.currentTarget?.id === 'settings-feedback-btn'
+                ? 'settings'
+                : 'board';
         clearFeedbackReplyMode();
         restoreFeedbackReturnOverlay(); // drop any parked alert/inbox overlay from a prior reply
         closeAppHub(true);
@@ -1662,12 +1706,13 @@ export function initHub() {
                 return;
             }
         } catch { /* fall through to the form */ }
-        setTimeout(() => openSmoothModal('feedback-modal'), 50);
+        setTimeout(() => openFeedbackModal({ location, skipClear: true }), 50);
     };
     document.getElementById('feedback-btn')?.addEventListener('click', openFeedback);
     document.getElementById('feedback-btn-planner')?.addEventListener('click', openFeedback);
     // Messages row: always the commuter thread (compose lives inside it).
     document.getElementById('settings-feedback-btn')?.addEventListener('click', () => {
+        trackAnalyticsEvent('open_feedback_modal', { location: 'settings' });
         openMessagesThread();
     });
     document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
@@ -1787,8 +1832,7 @@ export function initHub() {
     });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
-        // Stack feedback on top of About so Cancel / Back returns to About
-        openSmoothModal('feedback-modal');
+        openFeedbackModal({ location: 'about', skipClear: true });
     });
     document.getElementById('about-email-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_email', { location: 'about_modal' });
@@ -1821,20 +1865,7 @@ export function initHub() {
         });
     });
 
-    // Password eye toggle (login modal)
-    const togglePassBtn = document.getElementById('toggle-password-btn');
-    const passInput = document.getElementById('admin-password');
-    const eyeOpen = document.getElementById('eye-open-icon');
-    const eyeClosed = document.getElementById('eye-closed-icon');
-    togglePassBtn?.addEventListener('click', () => {
-        if (!passInput) return;
-        const show = passInput.type === 'password';
-        passInput.type = show ? 'text' : 'password';
-        eyeOpen?.classList.toggle('hidden', show);
-        eyeClosed?.classList.toggle('hidden', !show);
-    });
-    // Admin cancel/login history is owned by public/js/admin.js only.
-    // A second listener here called history.back() twice and skipped the home page.
+    // Admin password eye is bound after stampAdminChrome (login lives in a <template>).
 
     // Poll notices soon after boot, then often while the app is open (refresh was
     // previously the only reliable way to see a just-published alert).

@@ -7,7 +7,7 @@
   "observability": {
     "enabled": true
   },
-  // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN stay in the dashboard).
+  // Plain vars (secrets GA_PRIVATE_KEY / SENTRY_AUTH_TOKEN / CF_API_TOKEN / GH_ACTIONS_TOKEN stay in the dashboard).
   "vars": {
     "GA_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",
     "GA_PROPERTY_ID": "514537103",

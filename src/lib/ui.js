@@ -7,6 +7,7 @@
  */
 
 import { safeStorage } from './utils.js';
+import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload, isReloadPending } from './session-stability.js';
@@ -20,13 +21,49 @@ import {
 } from './recovery.js';
 
 
+/** Vibrations are opt-in. Missing key (new users) means off. */
+export function hapticsAreEnabled() {
+    try {
+        return safeStorage.getItem('hapticsEnabled') === 'true';
+    } catch {
+        return false;
+    }
+}
+
 // --- GLOBAL HAPTIC ENGINE ---
 export function triggerHaptic() {
     try {
-        if (safeStorage.getItem('hapticsEnabled') !== 'false' && navigator.vibrate) {
+        if (hapticsAreEnabled() && navigator.vibrate) {
             navigator.vibrate(50);
         }
     } catch(e) {}
+}
+
+/**
+ * Show/hide a password field. Bind after the input exists in the document
+ * (admin login lives in a stamped <template>, so boot-time getElementById misses it).
+ */
+export function bindPasswordReveal({ inputId, buttonId, openIconId, closedIconId }) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(buttonId);
+    if (!input || !btn || btn.dataset.revealBound === '1') return;
+    btn.dataset.revealBound = '1';
+    const openIcon = openIconId ? document.getElementById(openIconId) : null;
+    const closedIcon = closedIconId ? document.getElementById(closedIconId) : null;
+    const sync = () => {
+        const hidden = input.type === 'password';
+        btn.setAttribute('aria-label', hidden ? 'Show password' : 'Hide password');
+        btn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+        openIcon?.classList.toggle('hidden', !hidden);
+        closedIcon?.classList.toggle('hidden', hidden);
+    };
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        input.type = input.type === 'password' ? 'text' : 'password';
+        sync();
+    });
+    sync();
 }
 
 // --- GLOBAL SCROLL-LOCK PROTOCOL ---
@@ -1338,6 +1375,7 @@ export function openLegal(type, opts = {}) {
     } catch { /* ignore */ }
 
     openSmoothModal('legal-modal');
+    trackAnalyticsEvent('view_legal_doc', { doc: resolved });
 }
 
 export function bindPlannerShellModals() {
@@ -1738,15 +1776,15 @@ export function bindPwaInstallPrompt() {
         window.__ntDeferredInstallPrompt = null;
         if (installBtn) installBtn.classList.add('hidden');
         if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+        trackAnalyticsEvent('install_app_accepted', { location: 'main_view' });
     });
 
     const handleInstallClick = () => {
         triggerHaptic();
-        if (typeof window.gtag === 'function') {
-            window.gtag('event', 'install_app_click', { location: 'main_view', is_webview: isWebView });
-        }
+        trackAnalyticsEvent('install_app_click', { location: 'main_view', is_webview: isWebView });
 
         if (isWebView) {
+            trackAnalyticsEvent('install_app_webview_click', { location: 'main_view' });
             if (isAndroid) {
                 const deviceId = (() => {
                     try { return localStorage.getItem('next_train_device_id') || ''; } catch { return ''; }
@@ -1764,8 +1802,8 @@ export function bindPwaInstallPrompt() {
         if (promptEvent) {
             promptEvent.prompt();
             Promise.resolve(promptEvent.userChoice).then((choiceResult) => {
-                if (typeof window.gtag === 'function') {
-                    window.gtag('event', choiceResult?.outcome === 'accepted' ? 'install_app_accepted' : 'install_app_dismissed');
+                if (choiceResult?.outcome !== 'accepted') {
+                    trackAnalyticsEvent('install_app_dismissed', { location: 'main_view' });
                 }
                 window.deferredInstallPrompt = null;
                 window.__ntDeferredInstallPrompt = null;
@@ -1831,7 +1869,7 @@ export const OfflineTracker = {
                 const item = queue[0];
                 const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
                 try {
-                    window.gtag('event', item.event, enriched);
+                    sendAnalyticsNow(item.event, enriched);
                     queue.shift();
                     if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
                     else safeStorage.removeItem(OfflineTracker.queueKey);
@@ -1908,27 +1946,7 @@ function installAnalyticsOfflineBridge() {
     if (typeof window === 'undefined' || window.__ntAnalyticsOfflineBound) return;
     window.__ntAnalyticsOfflineBound = true;
     window.OfflineTracker = OfflineTracker;
-
-    const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
-    window.trackAnalyticsEvent = (name, params = {}) => {
-        try {
-            const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-            if (offline || !OfflineTracker.gaReady()) {
-                OfflineTracker.enqueue(name, params);
-                if (!offline) OfflineTracker.flush();
-                return;
-            }
-            if (prior) prior(name, params);
-            else window.gtag?.('event', name, params || {});
-            try {
-                const region = params.region || safeStorage.getItem('userRegion') || '';
-                if (region && typeof window.clarity === 'function') {
-                    window.clarity('set', 'crm_region', region);
-                    window.clarity('event', name);
-                }
-            } catch { /* ignore */ }
-        } catch { /* ignore */ }
-    };
+    window.trackAnalyticsEvent = trackAnalyticsEvent;
 
     window.addEventListener('online', () => OfflineTracker.flush());
     window.addEventListener('nt-ga-ready', () => OfflineTracker.flush());
@@ -1948,6 +1966,8 @@ function installAnalyticsOfflineBridge() {
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
+    window.hapticsAreEnabled = hapticsAreEnabled;
+    window.bindPasswordReveal = bindPasswordReveal;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
     window.toggleDropdownScrim = toggleDropdownScrim;

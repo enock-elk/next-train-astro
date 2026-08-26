@@ -1,13 +1,12 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import SeoThemeToggle from '../components/SeoThemeToggle.astro';
+import SeoPageHeader from '../components/SeoPageHeader.astro';
 import { withBase } from '../lib/config.js';
 import {
   listSeoRoutes,
   listSeoRegions,
   displayRouteName,
   regionName,
-  stationLabel,
   getCorridorLabel,
 } from '../lib/seo-routes.js';
 
@@ -30,10 +29,11 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
   description={description}
   canonicalPath="/routes.html"
   themeColor="#1d4ed8"
+  forceLight={true}
 >
-  <SeoThemeToggle />
+  <SeoPageHeader ctaLabel="Open Next Train" />
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
-    <div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
+    <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
       <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
         <a href={withBase('/')} class="hover:underline">Next Train</a>
       </p>
@@ -83,7 +83,7 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
                     class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
                   >
                     <span class="block text-base font-bold text-slate-900 dark:text-white">
-                      {stationLabel(route.destA)} to {stationLabel(route.destB)}
+                      {displayRouteName(route)}
                     </span>
                     <span class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-1">
                       {getCorridorLabel(route) || displayRouteName(route)}

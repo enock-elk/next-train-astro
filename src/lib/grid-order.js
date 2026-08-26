@@ -1885,3 +1885,29 @@ export const MANUAL_GRID_ORDER = {
         "2632"
     ]
 };
+
+const TRAIN_COL_RE = /^\d{4}[a-zA-Z]*$/;
+
+/** Stable column order for SSG grids and OG previews (manual list, then leftover IDs). */
+export function orderGridTrainIds(sheetName, trainIds) {
+    const trainCols = (trainIds || [])
+        .map((id) => String(id).trim())
+        .filter((id) => TRAIN_COL_RE.test(id));
+    const unique = [];
+    const seen = new Set();
+    for (const id of trainCols) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        unique.push(id);
+    }
+    const manualOrder = MANUAL_GRID_ORDER[sheetName];
+    if (!manualOrder) return unique;
+    const sorted = [];
+    const manualSet = new Set(manualOrder);
+    for (const tNum of manualOrder) {
+        if (unique.includes(tNum)) sorted.push(tNum);
+    }
+    const remaining = unique.filter((t) => !manualSet.has(t));
+    remaining.sort((a, b) => a.localeCompare(b));
+    return [...sorted, ...remaining];
+}

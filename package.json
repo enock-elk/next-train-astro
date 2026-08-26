@@ -20,6 +20,7 @@
     "verify:deeplink": "node scripts/verify-deeplink-launch.mjs",
     "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
     "verify:planner-saturday": "node scripts/verify-planner-saturday.mjs",
+    "verify:route-seo": "node scripts/verify-route-seo.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"

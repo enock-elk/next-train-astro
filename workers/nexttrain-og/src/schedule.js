@@ -2,6 +2,8 @@
  * Fetch regional schedule sheets and extract a compact grid preview.
  */
 
+import { orderGridTrainIds } from '../../../src/lib/grid-order.js';
+
 const REGION_NODE = {
   GP: 'schedules/gauteng.json',
   WC: 'schedules/westerncape.json',
@@ -30,6 +32,9 @@ function sheetKeyFor(route, dir, day) {
   return keys[`weekday_to_${ab}`] || null;
 }
 
+const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
+
 /** westerncape/public_holidays is nested in Firebase — flatten for sheet lookups. */
 function flattenPublicHolidays(db) {
   if (!db || typeof db !== 'object' || Array.isArray(db)) return db;
@@ -37,6 +42,35 @@ function flattenPublicHolidays(db) {
   if (!nest || typeof nest !== 'object' || Array.isArray(nest)) return db;
   const { public_holidays: _drop, ...rest } = db;
   return { ...rest, ...nest };
+}
+
+/** Region nest wins over a stale top-level sheet (same overlay as live unwrapDatabase). */
+function getSheet(db, key) {
+  if (!db || !key) return null;
+  for (const nest of REGION_NESTS) {
+    const nested = db[nest]?.[key];
+    if (Array.isArray(nested) && nested.length) return nested;
+  }
+  if (Array.isArray(db[key]) && db[key].length) return db[key];
+  return null;
+}
+
+function unionTrainIds(dataRows) {
+  const ids = new Set();
+  for (const row of dataRows) {
+    if (!row || typeof row !== 'object') continue;
+    for (const k of Object.keys(row)) {
+      if (!IGNORE_KEYS.has(k)) ids.add(k);
+    }
+  }
+  return [...ids];
+}
+
+function rowHasClock(row, trainIds) {
+  return trainIds.some((id) => {
+    const t = compactTime(row?.[id]);
+    return t && t !== '-';
+  });
 }
 
 /**
@@ -48,15 +82,15 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStatio
   const flat = flattenPublicHolidays(db);
   const key = sheetKeyFor(route, dir, day);
   if (!key) return null;
-  const rows = flat[key];
+  const rows = getSheet(flat, key);
   if (!Array.isArray(rows) || rows.length < 2) return null;
 
-  const dataRows = rows.slice(1).filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)));
+  const dataRows = rows.filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)));
   if (!dataRows.length) return null;
 
-  const ignore = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
-  let trainIds = Object.keys(dataRows[0]).filter((k) => !ignore.has(k));
-  // Soft safety for pathological sheets (Worker CPU / SVG size).
+  // Same column order as the in-app grid (union of every row, then MANUAL_GRID_ORDER).
+  let trainIds = orderGridTrainIds(key, unionTrainIds(dataRows));
+  // Soft safety for pathological sheets (Worker CPU / SVG size). Cap AFTER ordering.
   const trainCap = maxTrains > 0 ? maxTrains : 48;
   const stationCap = maxStations > 0 ? maxStations : 40;
   trainIds = trainIds.slice(0, trainCap);
@@ -64,18 +98,25 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStatio
 
   const stations = [];
   const cells = [];
-  for (const row of dataRows.slice(0, stationCap)) {
+  for (const row of dataRows) {
+    if (stations.length >= stationCap) break;
+    if (!rowHasClock(row, trainIds)) continue;
     const name = String(row.STATION || '')
       .replace(/\s+STATION$/i, '')
       .replace(/\s+/g, ' ')
       .trim();
     if (!name || name.toUpperCase() === 'STATION') continue;
     stations.push(name);
-    cells.push(trainIds.map((id) => compactTime(row[id])));
+    cells.push(trainIds.map((id) => compactTime(row[id]) || '-'));
   }
 
   if (!stations.length) return null;
-  const meta = flat[`${key}_meta`] != null ? String(flat[`${key}_meta`]) : null;
+  const meta = (() => {
+    for (const nest of REGION_NESTS) {
+      if (flat[nest]?.[`${key}_meta`] != null) return String(flat[nest][`${key}_meta`]);
+    }
+    return flat[`${key}_meta`] != null ? String(flat[`${key}_meta`]) : null;
+  })();
   return { stations, trainIds, cells, meta, sheetKey: key };
 }
 

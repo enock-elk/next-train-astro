@@ -143,12 +143,14 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
     // SPA parity: bare `?route=pta-pien&view=grid` (no action=) must still open the timetable
     if (!rt && !legacy && !params.get('route')) return null;
 
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
     return {
         kind: 'route',
         routeId,
         view: decodeView(params.get('v') || params.get('view') || ''),
         dir: params.get('dir') === 'B' ? 'B' : 'A',
         day: decodeDay(params.get('d') || params.get('day') || 'weekday'),
+        region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
         legacy: legacy || (!rt && !!params.get('route')),
     };
 }

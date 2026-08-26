@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.26.1 — Production boot/safety onto lab (26 Aug 2026)
+
+- Admin session is an operator email only (`isAdminEmail` / Thandeka + Enock). Anonymous iPhone Firebase is ignored so telemetry does not 403-loop.
+- IndexedDB cache paints before the IP region guess; region check only gates the network waterfall.
+- PWA `navigateFallback` serves the precached `index.html` (no navigation StaleWhileRevalidate on an empty `pages` cache). Lab FCM SW bridge is kept.
+- Incoming service-worker toast + 30s skipWaiting fallback (never hard-reload a half-downloaded build).
+- Facebook / PWA `launchQueue` ingest + OG `/og/share` 302 for humans.
+- Native Back pop-lock: one overlay per Back; on-screen Close does not race the next sheet.
+
 ## V8_08.18.1 — Merge main into lab (18 Aug 2026)
 
 - Lab now includes this week’s live-site work from `main`: Alerts channel (hold-to-react, photo posters, Close, reaction breakdown), quiet board paint, schedule dump / grid-extractor, Digital Asset Links, CWV / guide fares, and agent instructions.

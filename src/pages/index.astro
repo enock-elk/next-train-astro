@@ -283,7 +283,9 @@ const faqLd = {
         applyPlannerShortcutDeepLink,
         applyShareTargetDeepLink,
         flushPendingDeeplinkIntents,
-        applyMapDeepLink
+        applyMapDeepLink,
+        bindLaunchQueueDeeplinks,
+        bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
     import { initRecoveryWatchdog } from '../lib/recovery.js';
@@ -487,4 +489,6 @@ const faqLd = {
     };
 
     igniteDataEngine();
+    bindLaunchQueueDeeplinks(() => { igniteDataEngine(); });
+    bindWebViewDeeplinkResume(() => { igniteDataEngine(); });
 </script>

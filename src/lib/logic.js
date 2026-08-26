@@ -853,8 +853,6 @@ export async function loadAllSchedules(force = false) {
     let usedCache = false; 
     const currentGen = regionSwapGeneration; 
     
-    await regionCheckPromise;
-    
     if (scheduleAbortController) scheduleAbortController.abort();
     scheduleAbortController = new AbortController();
     const fetchSignal = scheduleAbortController.signal;
@@ -934,6 +932,9 @@ export async function loadAllSchedules(force = false) {
             try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
+
+        // First-visit IP region guess — only block the network waterfall, never cache paint.
+        try { await regionCheckPromise; } catch { /* ignore */ }
 
         // Cloaked shadow-ban: only when online (Firebase get can hang offline).
         // Never block cached board paint — cloak runs after eager cache above.

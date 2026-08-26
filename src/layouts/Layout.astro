@@ -93,6 +93,21 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
       (function () {
+        // focus-existing PWAs get the clicked Facebook URL here, not on location.search.
+        try {
+          window.__ntLaunchTargetUrl = window.__ntLaunchTargetUrl || '';
+          function ntStashLaunchUrl(url) {
+            if (!url) return;
+            window.__ntLaunchTargetUrl = url;
+            try { sessionStorage.setItem('nt_launch_target_url', url); } catch (e) {}
+            try { window.dispatchEvent(new CustomEvent('nt-launch-url', { detail: url })); } catch (e) {}
+          }
+          if (window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
+            window.launchQueue.setConsumer(function (params) {
+              if (params && params.targetURL) ntStashLaunchUrl(params.targetURL);
+            });
+          }
+        } catch (e) {}
         function atPolyfill(n) {
           n = Math.trunc(n) || 0;
           if (n < 0) n += this.length;

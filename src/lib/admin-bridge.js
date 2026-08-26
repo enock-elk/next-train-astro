@@ -7,6 +7,7 @@
  */
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
+    ADMIN_EMAILS, isAdminEmail,
     SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 import { safeStorage, escapeHTML } from './utils.js';
@@ -54,6 +55,8 @@ export function exposeAdminGlobals() {
     window.ROUTES = ROUTES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.APP_VERSION = APP_VERSION;
+    window.ADMIN_EMAILS = ADMIN_EMAILS;
+    window.isAdminEmail = isAdminEmail;
     window.DEFAULT_EXCLUSIONS = DEFAULT_EXCLUSIONS;
     window.REGIONS = REGIONS;
     window.FARE_CONFIG = FARE_CONFIG;
@@ -168,7 +171,7 @@ function openAdminEntryUi() {
     const devModal = document.getElementById('dev-modal');
     const emailInput = document.getElementById('admin-email');
 
-    if (window.Admin?.currentUser || window.isSimMode) {
+    if ((typeof window.isAdminEmail === 'function' && window.isAdminEmail(window.Admin?.currentUser?.email)) || window.isSimMode) {
         if (devModal) {
             try {
                 if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');

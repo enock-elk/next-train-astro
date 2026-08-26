@@ -40,7 +40,20 @@ export function unlockBackgroundScroll() {
 
 
 // --- SPATIAL MODAL ENGINE ---
-if (typeof window !== 'undefined') window._isModalAnimating = false;
+if (typeof window !== 'undefined') {
+    window._isModalAnimating = false;
+    window.__ntModalPopLockUntil = 0;
+}
+
+function armModalPopLock() {
+    if (typeof window === 'undefined') return;
+    window.__ntModalPopLockUntil = Date.now() + 500;
+}
+
+function isModalPopLocked() {
+    if (typeof window === 'undefined') return false;
+    return Date.now() < (window.__ntModalPopLockUntil || 0);
+}
 
 /** Modal id → history hash (SPA back-button stack). */
 const MODAL_HASH = {
@@ -129,8 +142,9 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
         const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
         if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
-            // Hide first. history.back() is async; if popstate is ignored while
-            // _isModalAnimating, returning here used to leave Select Route up.
+            // Hide first, then pop. Arm a short lock so the following popstate
+            // does not close the next overlay or call history.back() again.
+            armModalPopLock();
             hideFixedModal(modalId);
             try {
                 history.back();
@@ -290,6 +304,10 @@ export function bindHistoryBackNavigation() {
             }
         }
 
+        if (isModalPopLocked()) {
+            return;
+        }
+
         if (window._isLightboxMode) {
             closeLightbox(true);
             return;
@@ -310,13 +328,6 @@ export function bindHistoryBackNavigation() {
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
             if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
             else adminLightbox.classList.add('hidden');
-            return;
-        }
-
-        if (window._isModalAnimating) {
-            unlockBackgroundScroll();
-            // Do not pushState the current href back — that restored #route
-            // after a route pick and dumped the commuter onto Select Route again.
             return;
         }
 

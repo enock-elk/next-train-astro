@@ -12,7 +12,7 @@ function assert(cond, msg) {
 }
 
 assert(APP_VERSION === 'V8_08.26.1', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.26.1' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.26.1');
+assert(CHANGELOG_DATA[0].id === 'V8_08.26.1' && CHANGELOG_DATA[0].features.length === 4, 'What’s New latest card is V8_08.26.1');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');

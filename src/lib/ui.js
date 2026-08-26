@@ -73,6 +73,7 @@ const MODAL_HASH = {
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
+    'planner-train-sheet-modal': '#train-sheet',
     'cache-clear-modal': '#cacheclear',
     'account-modal': '#account',
     'login-modal': '#login',
@@ -394,6 +395,8 @@ export function bindHistoryBackNavigation() {
             const keepPlannerResults = hashNow === '#planner-results'
                 || hashNow === '#map'
                 || hashNow === '#prasa-map'
+                || hashNow === '#train-sheet'
+                || hashNow === '#fare'
                 || hashNow === '#trip-map'
                 || hashNow === '#sheet'
                 || hashNow === '#sidenav'

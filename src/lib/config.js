@@ -897,6 +897,15 @@ export const FARE_CONFIG = {
 // Day Index: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 export const DEFAULT_EXCLUSIONS = {};
 
+/**
+ * Corridors whose Saturday / public-holiday sheets are empty placeholders.
+ * Hardcoded IDs only — never train numbers. Live `*_sat` times override this
+ * automatically (see routeHasSaturdayTrains in saturday-service.js).
+ */
+export const SATURDAY_PLACEHOLDER_ROUTES = ['herc-koed', 'ec-berlin'];
+/** Junctions on herc-koed that still have Saturday trains on other routes. */
+export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
+
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
 // Badge / seen key use `id` (=== APP_VERSION for latest).
@@ -912,6 +921,7 @@ export const CHANGELOG_DATA = [
         date: "26 Aug 2026",
         forceShow: false,
         features: [
+            "<b>Planner:</b> Saturday corridors without trains show a clear notice. Tap a train name for the full stop list. Recent Trips stay when you switch province.",
             "<b>Offline:</b> The saved app opens even on a captive or weak wifi hotspot, then refreshes times and notices when a real connection returns.",
             "<b>Back:</b> The phone Back button closes the screen you are looking at in one press.",
             "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap."

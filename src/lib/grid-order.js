@@ -509,7 +509,6 @@ export const MANUAL_GRID_ORDER = {
         "7632",
         "7622",
         "7626",
-        "7628"
     ],
     "germ_to_kwesi_sat": [
         "7603",

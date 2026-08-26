@@ -11,6 +11,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Facebook / PWA `launchQueue` ingest + OG `/og/share` 302 for humans.
 - Native Back pop-lock: one overlay per Back; on-screen Close does not race the next sheet.
 - CleverAds: vendor snippet on `document.body` (sticky-top), occupancy + leftover-gap reclaim, ease `#main-content` (never transform `#nt-shell`). Lab bottom nav stays inside the shell.
+- Saturday planner placeholders (`herc-koed`, `ec-berlin`), header No Service chip, planner train sheet, Recent Trips union, cancelled 7628 dropped from grid order, fresher schedule dump.
 
 ## V8_08.18.1 — Merge main into lab (18 Aug 2026)
 

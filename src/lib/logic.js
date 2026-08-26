@@ -20,7 +20,7 @@ import {
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
-    simUsesSpecificDate
+    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet
 } from './utils.js';
 import { showToast, hideOfflineToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
@@ -38,6 +38,63 @@ export let currentTime = null;
 export let currentDayType = 'weekday'; 
 export let currentDayIndex = 0; 
 export let currentScheduleData = {};
+
+function saturdaySheetHasTimes(schedule) {
+    if (!schedule?.rows?.length || !Array.isArray(schedule.headers)) return false;
+    const stationCol = schedule.stationColumnName || 'STATION';
+    const trainCols = schedule.headers.filter((h) => h && h !== stationCol && h !== 'STATION' && h !== 'COORDINATES' && h !== 'KM_MARK' && h !== 'row_index');
+    if (trainCols.length === 0) return false;
+    return schedule.rows.some((row) => trainCols.some((col) => isRealTime(row[col])));
+}
+
+/** True only after Saturday sheets are loaded and both directions have no timed trains. */
+function currentRouteSaturdayClosed() {
+    const s = $schedules.get() || {};
+    if (!('saturday_to_a' in s) && !('saturday_to_b' in s)) return false;
+    return !saturdaySheetHasTimes(s.saturday_to_a) && !saturdaySheetHasTimes(s.saturday_to_b);
+}
+
+/**
+ * Header day chip. Sunday is always No Service. Saturday / GP-holiday shows
+ * red No Service when the pinned route has no Saturday times in either direction.
+ */
+export function paintHeaderDayLabel(opts = {}) {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('current-day');
+    if (!el) return;
+    const day = Number.isFinite(opts.calendarDay) ? opts.calendarDay : currentDayIndex;
+    const dayType = opts.dayType || currentDayType || 'weekday';
+    const dateKey = opts.dateKey || null;
+    const region = opts.region || $userRegion.get() || 'GP';
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
+    const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
+
+    let displayType = dayType === 'sunday' ? 'No Service'
+        : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
+        : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
+    if (dateKey && HOLIDAY_NAMES[dateKey]) {
+        displayType = dayType === 'sunday'
+            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
+            : (dayType === 'public_holiday'
+                ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
+                : `${HOLIDAY_NAMES[dateKey]} Schedule`);
+    }
+    if (satClosed && dayType !== 'sunday') {
+        displayType = (dateKey && HOLIDAY_NAMES[dateKey])
+            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
+            : 'No Service';
+    }
+    const typeClass = (dayType === 'sunday' || satClosed)
+        ? 'font-bold text-red-600 dark:text-red-400 ml-1'
+        : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
+    el.innerHTML = `${dayNames[day] || ''} <span class="${typeClass}">${displayType}</span>`;
+}
+
+if (typeof window !== 'undefined') {
+    window.paintHeaderDayLabel = paintHeaderDayLabel;
+}
+
 export let refreshTimer = null;
 export let lastTrackedOD = null; 
 export let memoryFallbackCache = {}; 
@@ -1578,26 +1635,12 @@ export function updateTime() {
             currentDayIndex = day; 
         }
 
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        let displayType = newDayType === 'sunday' ? 'No Service'
-            : (newDayType === 'public_holiday' ? 'Public Holiday Schedule'
-            : (newDayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
-        if (dateKey && HOLIDAY_NAMES[dateKey]) {
-            displayType = newDayType === 'sunday'
-                ? `${HOLIDAY_NAMES[dateKey]} · No Service`
-                : (newDayType === 'public_holiday'
-                    ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
-                    : `${HOLIDAY_NAMES[dateKey]} Schedule`);
-        }
-        if (typeof document !== 'undefined') {
-            const currentDayEl = document.getElementById('current-day');
-            if (currentDayEl) {
-                const typeClass = newDayType === 'sunday'
-                    ? 'font-bold text-red-600 dark:text-red-400 ml-1'
-                    : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
-                currentDayEl.innerHTML = `${dayNames[day]} <span class="${typeClass}">${displayType}</span>`;
-            }
-        }
+        paintHeaderDayLabel({
+            calendarDay: day,
+            dayType: newDayType,
+            dateKey,
+            region: regionCode,
+        });
 
         // Planner / legacy shims read these from window (after dayType settles)
         if (typeof window !== 'undefined') {

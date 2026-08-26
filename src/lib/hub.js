@@ -125,6 +125,16 @@ export function openFeedbackReplyFromOverlay(returnModalId, replyOpts = {}) {
     openSmoothModal('feedback-modal');
 }
 
+/** Open the feedback modal and always ping `open_feedback_modal` with a location. */
+export function openFeedbackModal({ location = 'unknown', skipClear = false } = {}) {
+    if (!skipClear) {
+        clearFeedbackReplyMode();
+        restoreFeedbackReturnOverlay();
+    }
+    trackAlertEvent('open_feedback_modal', { location });
+    openSmoothModal('feedback-modal');
+}
+
 /** Reset reply chrome so a fresh Feedback open is a normal form. */
 export function clearFeedbackReplyMode() {
     const contextBox = document.getElementById('feedback-reply-context');

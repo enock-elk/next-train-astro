@@ -16,6 +16,7 @@
     "verify:board-paint": "node scripts/verify-live-board-paint.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
     "verify:deeplink": "node scripts/verify-deeplink-launch.mjs",
+    "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"

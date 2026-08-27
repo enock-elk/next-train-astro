@@ -54,6 +54,8 @@ const indexPage = readFileSync(new URL('../src/pages/index.astro', import.meta.u
 assert(indexPage.includes('lucide lucide-route'), 'Plan tab uses Lucide route icon');
 assert(indexPage.includes('data-admin-authed-only'), 'Map/Community are admin-gated');
 assert(indexPage.includes('id="bottom-nav-grid"'), 'bottom-nav-grid id present');
+assert(/<\/div>\s*<div id="offline-wrapper"/.test(indexPage), 'offline dock sits outside #app-scroll');
+assert(indexPage.includes('You are offline.'), 'offline dock copy matches the mockup');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"') && sidenav.includes('data-admin-authed-only'), 'Account row is admin-gated');
@@ -107,6 +109,7 @@ assert(css.includes('padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
 assert(ridePings.includes("if (!isAdminAuthed()) return;"), 'nearby click is admin-gated');
+assert(ridePings.includes('syncRidePresenceRow'), 'presence row hides when nearby and chip are empty');
 
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
@@ -115,6 +118,9 @@ assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-bl
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('id="messages-thread-file"'), 'messages thread has attachment input');
 assert(hubModals.includes('id="messages-thread-contact"'), 'messages thread has optional contact field');
+assert(hubModals.includes('id="messages-thread-privacy"'), 'Feedback Hub contact row has Privacy Policy');
+assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub');
+assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'), 'About unofficial pill dropped low-contrast blue');
@@ -127,18 +133,19 @@ assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
-assert(board.includes('flex items-center justify-center space-x-2.5'), 'timetable CTA is a single centered row');
+assert(board.includes('flex items-center justify-center space-x-2.5'), 'timetable CTA label is a centered row');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
 assert(board.includes('VIEW FULL TIMETABLE'), 'timetable label is the production all-caps row');
 assert(board.includes('id="last-updated-date"'), 'effective date element exists');
-assert(!/#view-full-timetable-btn[\s\S]{0,800}id="last-updated-date"/.test(board), 'effective date is not inside the timetable button');
+assert(/id="view-full-timetable-btn"[\s\S]{0,1200}id="last-updated-date"/.test(board), 'effective date sits inside the timetable button');
 assert(!board.includes('id="share-app-btn"'), 'board footer no longer has Share App');
 assert(!board.includes('id="feedback-btn"'), 'board footer no longer has Feedback');
 
 const sidenavShare = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenavShare.includes('id="settings-share-btn"'), 'Share App lives in Options');
-assert(sidenavShare.includes('id="settings-feedback-btn"'), 'Messages & Feedback stays in Options');
+assert(sidenavShare.includes('id="settings-feedback-btn"'), 'Feedback Hub stays in Options');
+assert(sidenavShare.includes('Feedback Hub'), 'Options row is labelled Feedback Hub');
 
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');

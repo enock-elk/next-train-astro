@@ -22,7 +22,7 @@ import {
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet
 } from './utils.js';
-import { showToast, hideOfflineToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
+import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
@@ -175,7 +175,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
     if (typeof document === 'undefined') return;
 
     // Network guards for non-offline reasons — no banner / toast chrome.
-    // Product: only the classic "WORKING OFFLINE" banner is shown to users.
+    // Product: only the true-offline dock (above the bottom nav) is shown.
     if (reason !== 'offline') {
         if (reason === 'liefi') isLieFi = true;
         return;
@@ -251,12 +251,9 @@ export async function probeReachability(timeoutMs = 3500) {
         }
         isLieFi = false;
         clearStruggleClock();
-        const oi = document.getElementById('offline-indicator');
-        if (oi && oi.dataset.struggleUi === '1' && navigator.onLine) {
-            oi.style.display = 'none';
-            delete oi.dataset.struggleUi;
+        if (navigator.onLine) {
+            try { hideOfflineChrome(); } catch { /* ignore */ }
         }
-        try { hideOfflineToast(); } catch { /* ignore */ }
         return 'ok';
     } catch (err) {
         // Slow / blackhole — warn but allow schedule waterfall to keep trying
@@ -437,12 +434,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         clearStruggleClock();
         
         if (typeof document !== 'undefined') {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) {
-                oi.style.display = 'none';
-                delete oi.dataset.struggleUi;
-            }
-            try { hideOfflineToast(); } catch { /* ignore */ }
+            try { hideOfflineChrome(); } catch { /* ignore */ }
 
             const toastEl = document.getElementById('toast');
             if (toastEl && toastEl.classList.contains('show') && (toastEl.innerText || '').includes('Please wait while we load schedules')) {
@@ -1209,8 +1201,7 @@ export async function loadAllSchedules(force = false) {
         console.error("Fetch Error:", error);
         const hasUsableData = !!$fullDatabase.get();
         if (!usedCache && !hasUsableData && typeof document !== 'undefined') {
-            const oi = document.getElementById('offline-indicator');
-            if (oi) oi.style.display = 'flex';
+            try { scheduleOfflineChrome(); } catch { /* ignore */ }
         }
     } finally {
         if (fetchSignal && fetchSignal.aborted) return;

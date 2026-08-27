@@ -789,7 +789,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
       // 2. React to Offline State changes visually
       // Offline chrome is owned by ui.js (visible + a few seconds without
-      // internet). Do not paint WORKING OFFLINE from the raw navigator event —
+      // internet). Do not paint the offline dock from the raw navigator event —
       // Android fires `offline` when the screen locks.
 
       // 3. SW update lifecycle immediately (PROD) — do not wait on legacy cleanup.

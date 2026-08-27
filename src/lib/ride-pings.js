@@ -755,6 +755,16 @@ export async function startPresenceShare({
     return result;
 }
 
+function syncRidePresenceRow() {
+    const row = document.getElementById('ride-presence-row');
+    if (!row) return;
+    const nearbyBtn = document.getElementById('ride-nearby-btn');
+    const chip = document.getElementById('ride-seen-chip');
+    const nearbyShown = !!(nearbyBtn && !nearbyBtn.classList.contains('hidden') && isAdminAuthed());
+    const chipShown = !!(chip && !chip.classList.contains('hidden') && (chip.innerHTML || '').trim());
+    row.hidden = !(nearbyShown || chipShown);
+}
+
 export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     const host = document.getElementById('ride-seen-chip');
     const cta = document.getElementById('ride-checkin-btn');
@@ -766,6 +776,7 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         cta?.classList.add('hidden');
         document.getElementById('ride-nearby-btn')?.classList.add('hidden');
         paintLiveDirectionHeaders(routeId);
+        syncRidePresenceRow();
         return;
     }
 
@@ -779,11 +790,13 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
         host.classList.remove('hidden');
         const trainBit = mine.trainId ? ` Train ${escapeHTML(String(mine.trainId))}` : ` at ${escapeHTML(stationShort(mine.station))}`;
         host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>You’re sharing${trainBit} · ${minutesLeft(mine.expiresAt)} min left</span>`;
+        syncRidePresenceRow();
         return;
     }
 
     host.classList.add('hidden');
     host.innerHTML = '';
+    syncRidePresenceRow();
 }
 
 export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {

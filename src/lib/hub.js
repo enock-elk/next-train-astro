@@ -1900,6 +1900,12 @@ export function initHub() {
         triggerHaptic();
         window.openLegal?.('privacy');
     });
+    document.getElementById('messages-thread-privacy')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic();
+        window.openLegal?.('privacy');
+    });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
         openFeedbackModal({ location: 'about', skipClear: true });

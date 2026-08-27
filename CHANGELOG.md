@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.9 — Feedback Hub composer, offline dock, timetable date (27 Aug 2026)
+
+- Options → Feedback Hub: WhatsApp-style composer (pill + paperclip inside, circular send). Contact row has Privacy Policy; same `openLegal('privacy')` as the long form.
+- Offline dock (`#offline-wrapper`) sits above `#bottom-nav`, outside `#app-scroll`. Visible tab + 4s hold; stays until online. Copy: “You are offline.” Do not overwrite innerHTML with WORKING OFFLINE. Boot already-offline calls `scheduleOfflineChrome()`.
+- Maintenance tape is a sibling before `#app-scroll` so it does not cover the Next Train title.
+- Effective from date lives inside `#view-full-timetable-btn`. Hide `#ride-presence-row` unless nearby (admin) or sharing chip is shown. Tighter home gaps.
+
 ## V8_08.27.8 — Empty-board one-liner, modal nav clearance, map chrome (27 Aug 2026)
 
 - Merge “No more trains today” / “First train tomorrow is at:” into one line (`No more trains today · first tomorrow 04:49`). Same phrasing on no-service and no-weekend empty states.

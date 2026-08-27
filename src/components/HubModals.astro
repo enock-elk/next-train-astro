@@ -332,7 +332,13 @@ import { withBase } from '../lib/config.js';
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-password">Password</label>
-                        <input id="account-password" type="password" autocomplete="current-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••">
+                        <div class="relative">
+                            <input id="account-password" type="password" autocomplete="current-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none pr-12" placeholder="••••••••">
+                            <button type="button" id="account-toggle-password-btn" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors focus:outline-none h-full w-10 justify-center z-10" aria-label="Show password" aria-pressed="false">
+                                <svg id="account-eye-open-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                <svg id="account-eye-closed-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.978 9.978 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <button type="button" id="account-email-signin-btn" data-account-action class="py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none transition-colors">Sign in</button>
@@ -353,8 +359,10 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
+<!-- Operator chrome is stamped after 5-tap unlock. Keep it out of the crawlable homepage. -->
+<template id="nt-admin-chrome-template">
 <!-- LOGIN -->
-<div id="login-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+<div id="login-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300" data-nosnippet>
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-8 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
         <div class="flex justify-center mb-4">
             <div class="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-600 dark:text-blue-400">
@@ -366,13 +374,13 @@ import { withBase } from '../lib/config.js';
         <div class="space-y-4">
             <div>
                 <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Email</label>
-                <input type="email" id="admin-email" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" placeholder="admin@nexttrain.co.za">
+                <input type="email" id="admin-email" autocomplete="username" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" placeholder="admin@nexttrain.co.za">
             </div>
             <div>
                 <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Password</label>
                 <div class="relative">
-                    <input type="password" id="admin-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all pr-12" placeholder="••••••••">
-                    <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors focus:outline-none h-full w-10 justify-center">
+                    <input type="password" id="admin-password" autocomplete="current-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all pr-12" placeholder="••••••••">
+                    <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors focus:outline-none h-full w-10 justify-center z-10" aria-label="Show password" aria-pressed="false">
                         <svg id="eye-open-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         <svg id="eye-closed-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.978 9.978 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
                     </button>
@@ -390,7 +398,7 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- DEV / ADMIN PANEL -->
-<div id="dev-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300 overflow-y-auto">
+<div id="dev-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300 overflow-y-auto" data-nosnippet>
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100 my-auto">
         <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
@@ -449,6 +457,7 @@ import { withBase } from '../lib/config.js';
         <div id="admin-signout-container"></div>
     </div>
 </div>
+</template>
 
 <!-- MESSAGES THREAD (commuter POV — community chat UI) -->
 <div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">

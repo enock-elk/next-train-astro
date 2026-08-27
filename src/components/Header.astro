@@ -3,9 +3,9 @@
 // Offline status is NOT here — it docks above the bottom nav (see index.astro).
 ---
 
-<header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-center justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
+<header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-start justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
 
-    <div class="min-w-0 flex-1 header-brand-block">
+    <div class="min-w-0 shrink-0 header-brand-block">
         <h1 id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black text-blue-600 dark:text-blue-400 select-none cursor-pointer tracking-[-0.035em] leading-none">
             Next Train
         </h1>
@@ -17,10 +17,10 @@
         </div>
     </div>
 
-    <div class="flex items-center gap-0.5 shrink-0 self-start mt-1 relative z-[70]">
-        <button id="notice-bell" type="button" class="hidden relative p-2 rounded-full text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 focus:outline-none transition-colors" aria-label="Service Alert">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-            <span id="notice-dot" class="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 bg-red-600 hidden"></span>
+    <div class="flex items-center gap-0.5 shrink-0 -mt-0.5 relative z-[70]">
+        <button id="notice-bell" type="button" class="hidden relative shrink-0 p-2 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 shadow-sm focus:outline-none hover:bg-red-200 dark:hover:bg-red-800 transition-colors" aria-label="Service alerts">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+            <span id="notice-dot" class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 bg-red-600 transform translate-x-1/4 -translate-y-1/4 hidden"></span>
         </button>
         <!-- Legacy aliases — Options on the bottom nav opens the hub -->
         <button id="open-nav-btn" type="button" class="hidden" tabindex="-1" aria-hidden="true"></button>
@@ -39,9 +39,9 @@
         var day = d.getDay();
         var type = day === 0 ? 'No Service' : (day === 6 ? 'Saturday Schedule' : 'Weekday Schedule');
         var typeClass = day === 0
-          ? 'font-bold text-red-600 dark:text-red-400 ml-1'
-          : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
-        el.innerHTML = names[day] + ' <span class="' + typeClass + '">' + type + '</span>';
+          ? 'font-bold text-red-600 dark:text-red-400'
+          : 'font-bold text-blue-600 dark:text-blue-400';
+        el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';
       } catch (e) { /* keep Getting schedules… */ }
     })();
 </script>
@@ -62,6 +62,7 @@
             setTimeout(() => overlay.classList.remove('opacity-0'), 10);
         }
         document.body.classList.add('sidenav-open', 'modal-active');
+        import('../lib/ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
     };
 
     document.getElementById('open-nav-btn')?.addEventListener('click', openSettings);

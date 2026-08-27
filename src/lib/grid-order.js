@@ -509,7 +509,6 @@ export const MANUAL_GRID_ORDER = {
         "7632",
         "7622",
         "7626",
-        "7628"
     ],
     "germ_to_kwesi_sat": [
         "7603",
@@ -1152,6 +1151,30 @@ export const MANUAL_GRID_ORDER = {
         "0023",
         "0035",
         "0079"
+    ],
+    "durbn-to-cross_sat": [
+        "9612",
+        "9620",
+        "9672",
+        "9680"
+    ],
+    "cross-to-durbn_sat": [
+        "9613",
+        "9621",
+        "9673",
+        "9681"
+    ],
+    "durbn_to_cross_sat": [
+        "9612",
+        "9620",
+        "9672",
+        "9680"
+    ],
+    "cross_to_durbn_sat": [
+        "9613",
+        "9621",
+        "9673",
+        "9681"
     ],
     "ctcen_in_weekday": [
         "9400",
@@ -1886,3 +1909,63 @@ export const MANUAL_GRID_ORDER = {
         "2632"
     ]
 };
+
+const TRAIN_COL_RE = /^\d{4}[a-zA-Z]*$/;
+const CLOCK_RE = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+
+function cellSeconds(val) {
+    const s = String(val ?? '').trim();
+    if (!s || s === '-' || s === '—' || s === '–') return 0;
+    const m = s.match(CLOCK_RE);
+    if (!m) return 0;
+    return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0);
+}
+
+function orderByEarliestTime(trainIds, rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const colStats = trainIds.map((colId) => {
+        let earliestTime = 86400 * 2;
+        let hasData = false;
+        for (const row of list) {
+            const t = cellSeconds(row?.[colId]);
+            if (t > 0) {
+                if (t < earliestTime) earliestTime = t;
+                hasData = true;
+            }
+        }
+        return { id: colId, time: earliestTime, hasData };
+    });
+    colStats.sort((a, b) => {
+        if (!a.hasData && !b.hasData) return a.id.localeCompare(b.id);
+        if (!a.hasData) return 1;
+        if (!b.hasData) return -1;
+        return a.time - b.time;
+    });
+    return colStats.map((c) => c.id);
+}
+
+/** Stable column order: manual list, leftover IDs; no manual list → earliest clock. */
+export function orderGridTrainIds(sheetName, trainIds, rows) {
+    const trainCols = (trainIds || [])
+        .map((id) => String(id).trim())
+        .filter((id) => TRAIN_COL_RE.test(id));
+    const unique = [];
+    const seen = new Set();
+    for (const id of trainCols) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        unique.push(id);
+    }
+    const manualOrder = MANUAL_GRID_ORDER[sheetName];
+    if (!manualOrder) {
+        return Array.isArray(rows) && rows.length ? orderByEarliestTime(unique, rows) : unique;
+    }
+    const sorted = [];
+    const manualSet = new Set(manualOrder);
+    for (const tNum of manualOrder) {
+        if (unique.includes(tNum)) sorted.push(tNum);
+    }
+    const remaining = unique.filter((t) => !manualSet.has(t));
+    remaining.sort((a, b) => a.localeCompare(b));
+    return [...sorted, ...remaining];
+}

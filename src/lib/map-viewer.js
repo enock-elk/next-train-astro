@@ -2,6 +2,7 @@
  * Network map + alert image pinch/pan/zoom viewer (ported from SPA map-viewer.js).
  */
 import { openSmoothModal, closeSmoothModal, lockBackgroundScroll } from './ui.js';
+import { trackAnalyticsEvent } from './analytics.js';
 
 let mapModal, closeMapBtn, closeMapBtn2, viewMapBtn;
 let mapContainer, mapImage, mapZoomIn, mapZoomOut;
@@ -58,6 +59,7 @@ function openMap() {
         mapModal.classList.remove('hidden', 'opacity-0');
         lockBackgroundScroll();
     }
+    trackAnalyticsEvent('click_static_map', { location: 'sidenav' });
 }
 
 function closeMap() {

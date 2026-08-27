@@ -2,6 +2,68 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.7 — Timetable row, Share in Options, ship to lab (27 Aug 2026)
+
+- Match production **View full timetable**: calendar SVG + label on one row; effective date sits under the route pill, not inside the button.
+- Share App moves to Options (next to Messages & Feedback). Drop the duplicate Share / Feedback pair from the home and planner footers. Install stays a footer CTA when the browser is installable — not a Daily Maverick-style top chip (that fights CleverAds sticky-top and iOS has no `beforeinstallprompt`).
+- Land lab PRs: polish (URL-only timetable/planner share, Alerts card chrome, tap NO SVC, tappable map warnings) plus this themes branch (dark surfaces, admin-only train flags, 24.01 chrome, Crossmoor).
+
+## V8_08.27.6 — Timetable SVG, admin-only train flags, dark surfaces (27 Aug 2026)
+
+- Restore the calendar SVG on **View full timetable** (`currentColor` / `--nt-primary-fg`). Keep the effective-date line under the title.
+- Train title flags / report button only after allowlisted admin auth (`isAdminAuthed`). CSS hides `.nt-train-flag` unless `html[data-admin-authed="1"]`.
+- Dark packs: canvas is near-black; cards use a lighter `--nt-surface`. Remap `dark:bg-gray-900` → canvas and `dark:bg-gray-800` → surface so they no longer collapse to the same colour.
+- Alerts sheet (`#alerts-channel`) uses canvas; `.nt-alert-card` uses surface + shadow so posts separate from the sheet.
+
+## V8_08.27.5 — Hide Welcome bar; 24.01 pin chrome (27 Aug 2026)
+
+- Port V8_08.23.12 pin chrome: hide the bottom bar while Welcome is open (`nt-onboarding` / `syncInAppChrome`), and point Welcome copy at Options.
+- Maintenance strip: switch header title and day chip to `--nt-text` so Classic light ink stays readable on the flattened surface.
+- Stamp `viewedAt` when opening the messages thread (same-day 24.01 follow-up).
+- Wire `PUBLIC_CARTO_API_KEY` through lab/preview/production builds (never commit the key). Set it on GitHub Actions **and** Cloudflare Pages Production + Preview, then rebuild so Voyager tiles drop the watermark.
+
+## V8_08.27.4 — 24.01 chrome onto lab (27 Aug 2026)
+
+- Port V8_08.24.01 header bell (larger icon, unread dot at the outer corner) and Lucide route Plan / menu Options icons.
+- Map and Community bottom-nav items, plus hub Account and Notifications, stay hidden until allowlisted admin auth (`admin-chrome.js`). Commuter bar is three columns; five after sign-in.
+- Lab Map tab still opens after admin auth (not the old PRASA map modal). Keep Classic blue chrome and weekday middot.
+
+## V8_08.27.3 — Main onto lab, Classic blue chrome, Crossmoor (27 Aug 2026)
+
+- Port production planner train sheet, Saturday notices, Recent Trips, telemetry indexes, and Crossmoor from `main` onto lab.
+- Classic light: blue header + nav with white title. Classic dark: navy chrome with blue title.
+- Earthy/Ember: more canvas vs card vs nav separation; lower saturation.
+- OG share columns follow in-app grid order; truncated sheets say so. Admin insights stay all-time.
+- Optional `PUBLIC_CARTO_API_KEY` on Voyager raster tiles (CARTO now watermarks unkeyed requests).
+
+## V8_08.27.1 — Commuter UI polish (27 Aug 2026)
+
+- Planner header Share and grid Share send `{ url }` only; clipboard copies the URL. Share App marketing copy is unchanged.
+- Alerts channel is slightly darker so white cards read as surfaces. Card header is signature (left) + Info/Warning/Critical chip (right); posted time sits above Reply. Trailing `- SIGNATURE` spans are stripped from the body.
+- `mergeUnionNotices` collapses the same notice `id` across `all` / `all_GP` / route buckets (keeps the more specific source). Optional scope label on the card. Union keys stay route ∪ region ∪ `all` — Kempton does not inherit Irene.
+- In-app grid `NO SVC` is a button that opens the advisory sheet with RTDB `reason` (fallback “No service on this day”) and expiry. PNG export stays a static span. `DEFAULT_EXCLUSIONS` remains `{}`.
+- Standalone map paints disruption chords as soon as station coords exist, then refines onto OSM tracks. Warning badges and dashed segments open a popup. Planner trip-map warnings call `openDisruptionModal`.
+- Planner Departs-in uses `text-xs font-bold` to match Total Time; countdown wording uses `formatDuration` when the wait is an hour or more.
+
+## V8_08.26.2 — KZN Crossmoor corridor (26 Aug 2026)
+
+- Register `kzn-crossmoor` (Durban ↔ Crossmoor) as an active KZN Inland route with map yellow (`text-yellow-500`).
+- Sheet keys match the KZN Apps Script sanitize: `durbn_to_cross_{weekday,sat}` / `cross_to_durbn_{weekday,sat}`.
+- Merge Crossmoor sheets + `_meta` / `_zone` from the RTDB export into `public/data/full-database.json` (nested `kzn` and top-level).
+- Map path: Durban trunk → Rossburgh → Clairwood → Montclair → Merebank → Havenside → Bayview → Westcliff → Chatsglen → Crossmoor.
+- destA is `DURBAN STATION` (sheets end at DURBAN, not DURBAN YARD). Saturday columns 9612/9620/9672/9680 outbound and 9613/9621/9673/9681 inbound; weekday sheets in this dump are station rows only.
+
+## V8_08.26.1 — Production boot/safety onto lab (26 Aug 2026)
+
+- Admin session is an operator email only (`isAdminEmail` / Thandeka + Enock). Anonymous iPhone Firebase is ignored so telemetry does not 403-loop.
+- IndexedDB cache paints before the IP region guess; region check only gates the network waterfall.
+- PWA `navigateFallback` serves the precached `index.html` (no navigation StaleWhileRevalidate on an empty `pages` cache). Lab FCM SW bridge is kept.
+- Incoming service-worker toast + 30s skipWaiting fallback (never hard-reload a half-downloaded build).
+- Facebook / PWA `launchQueue` ingest + OG `/og/share` 302 for humans.
+- Native Back pop-lock: one overlay per Back; on-screen Close does not race the next sheet.
+- CleverAds: vendor snippet on `document.body` (sticky-top), occupancy + leftover-gap reclaim, ease `#main-content` (never transform `#nt-shell`). Lab bottom nav stays inside the shell.
+- Saturday planner placeholders (`herc-koed`, `ec-berlin`), header No Service chip, planner train sheet, Recent Trips union, cancelled 7628 dropped from grid order, fresher schedule dump.
+
 ## V8_08.18.1 — Merge main into lab (18 Aug 2026)
 
 - Lab now includes this week’s live-site work from `main`: Alerts channel (hold-to-react, photo posters, Close, reaction breakdown), quiet board paint, schedule dump / grid-extractor, Digital Asset Links, CWV / guide fares, and agent instructions.

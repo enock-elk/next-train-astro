@@ -2,7 +2,7 @@
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
 import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, formatAppDate } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { $currentRouteId } from '../store.js';
@@ -26,6 +26,8 @@ import {
     sanitizeInlineAlertImageUrl,
     collectNoticeImageUrls,
     layoutAlertPost,
+    stripAlertSignoffHtml,
+    noticeScopeLabel,
     shouldIgnoreAlertLongPress,
     buildNoticesMeta,
     listNoticesInTarget,
@@ -117,7 +119,7 @@ function formatPosted(notice) {
     if (!ts) return '';
     const date = new Date(ts);
     const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-    return `${label} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${date.toLocaleDateString()}`;
+    return `${label} ${formatAppDate(date, { withTime: true })}`;
 }
 
 function severityChrome(severity) {
@@ -296,7 +298,7 @@ function renderPostCard(notice, opts = {}) {
     const chrome = severityChrome(severity);
     const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(layout.body);
+    const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
         : '';
@@ -318,10 +320,17 @@ function renderPostCard(notice, opts = {}) {
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
     const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
-    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-l-4 ${chrome.bar} border border-gray-100 dark:border-gray-700 p-4 select-none ${highlight ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-900' : ''}">
-        <div class="flex items-center justify-between gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
-            <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">${escapeHTML(formatPosted(notice))}</span>
+    const signoff = String(notice.authorName || notice.signoff || 'Next Train Ops').replace(/^[-—–]\s*/, '').trim() || 'Next Train Ops';
+    const when = formatPosted(notice);
+    const ts = noticeTimestamp(notice);
+    const scope = noticeScopeLabel(notice._sourceKey);
+    const cardRing = highlight
+        ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
+        : 'ring-1 ring-black/5 dark:ring-white/10';
+    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-4 select-none">
+        <div class="flex items-start justify-between gap-2 mb-2">
+            <span class="nt-alert-signoff text-[13px] font-semibold text-gray-800 dark:text-gray-100 leading-tight">${escapeHTML(signoff)}</span>
+            <span class="nt-alert-chip inline-flex items-center shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
         </div>
         ${titleHtml}
         ${mediaHtml}
@@ -329,6 +338,10 @@ function renderPostCard(notice, opts = {}) {
         ${extra}
         ${renderPollHtml(notice)}
         ${renderReactionsHtml(notice)}
+        <p class="flex items-end justify-between gap-2 mt-2">
+            ${scope ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)}</span>` : '<span></span>'}
+            ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
+        </p>
         <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold text-blue-600 dark:text-blue-400 py-2 rounded-lg border border-blue-100 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}">Reply</button>
     </article>`;
 }
@@ -471,8 +484,8 @@ export function applyBellFromNotices(notices) {
     const unseenCritical = unseen.some((n) => (n.severity || '') === 'critical');
 
     // Lab header is brand-left with an inline bell — do not force SPA absolute chrome.
-    let bellClass = 'relative p-2 rounded-full focus:outline-none transition-colors ';
-    let dotClass = 'absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 ';
+    let bellClass = 'relative shrink-0 p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
+    let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
     if (severity === 'critical') {
         bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
         dotClass += 'bg-red-600';
@@ -487,7 +500,7 @@ export function applyBellFromNotices(notices) {
     bellBtn.classList.remove('hidden');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
-    if (bellSvg) bellSvg.setAttribute('class', 'w-5 h-5');
+    if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
     if (dot) {
         dot.className = dotClass;
         if (unseen.length) dot.classList.remove('hidden');
@@ -706,6 +719,7 @@ function bindAlertsChannelOnce() {
                     snippet,
                     rawMsg: snippet,
                     alertId: id || '',
+                    alertKind: 'notice',
                 });
             }
         }

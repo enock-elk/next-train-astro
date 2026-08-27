@@ -2,6 +2,7 @@
  * App preferences (localStorage) — Settings, dual nav, appearance packs
  */
 import { safeStorage } from './utils.js';
+import { applyAdminAuthedChrome } from './admin-chrome.js';
 
 export const NAV_STYLE_KEY = 'navStyle';
 export const COLOUR_PACK_KEY = 'colourPack';
@@ -157,6 +158,7 @@ export function bindColourPackControls() {
 }
 
 export function hydratePrefs() {
+    applyAdminAuthedChrome(false);
     applyNavChrome(getNavStyle());
     setColourPack(getColourPack());
     applyReturningUserChrome();
@@ -251,6 +253,12 @@ export function applyNavChrome(style = getNavStyle()) {
     document.body?.classList.toggle('nav-bottom', isBottom);
     document.body?.classList.toggle('nav-top', !isBottom);
 
+    const welcome = document.getElementById('welcome-modal');
+    const welcomeOpen = !!(welcome && !welcome.classList.contains('hidden'));
+    const inApp = safeStorage.getItem('welcomeSeen') === 'true' && !welcomeOpen;
+    document.documentElement.classList.toggle('nt-onboarding', !inApp);
+    document.documentElement.classList.toggle('nt-in-app', inApp);
+
     const topTabs = document.getElementById('app-top-tabs');
     const bottomNav = document.getElementById('bottom-nav');
     if (topTabs) {
@@ -259,7 +267,7 @@ export function applyNavChrome(style = getNavStyle()) {
     }
     if (bottomNav) {
         const immersive = document.body?.classList.contains('nt-immersive');
-        const show = isBottom && !immersive;
+        const show = isBottom && inApp && !immersive;
         bottomNav.classList.toggle('hidden', !show);
         bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
@@ -294,6 +302,12 @@ export function applyReturningUserChrome() {
     document.body?.classList.toggle('chrome-compact', seen);
     const main = document.getElementById('main-content');
     main?.classList.toggle('chrome-compact', seen);
+}
+
+/** After Welcome closes (or a share link skips it): show the in-app bottom bar. */
+export function syncInAppChrome() {
+    applyReturningUserChrome();
+    applyNavChrome();
 }
 
 const VALID_CRM_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);

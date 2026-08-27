@@ -47,6 +47,7 @@ jobs:
         env:
           PUBLIC_SITE_URL: https://enock-elk.github.io
           PUBLIC_BASE_PATH: /next-train-astro/
+          PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
 
       - name: De-index the preview
         run: |

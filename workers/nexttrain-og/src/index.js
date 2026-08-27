@@ -12,7 +12,7 @@
  */
 import catalog from './catalog.json';
 import { isSocialCrawler, parseShareIntent, dayLabel, stationLabel, decodeDay } from './parse.js';
-import { buildRouteOgMeta, buildPlannerOgMeta, renderOgHtml } from './og-html.js';
+import { buildRouteOgMeta, buildPlannerOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb } from './schedule.js';
 import { timetablePng, plannerPng, buildTimetableSvg, buildPlannerSvg } from './og-images.js';
 
@@ -101,7 +101,7 @@ async function handleOgPlan(url, env) {
   }
 }
 
-function handleBotShare(url, env) {
+async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
@@ -123,7 +123,16 @@ function handleBotShare(url, env) {
       destB: 'Metrorail',
       region: 'GP',
     };
-    const meta = buildRouteOgMeta(route, intent, site);
+    let grid = null;
+    if (catalog[intent.routeId]) {
+      try {
+        const db = await loadRegionDb(env, route.region, ctx);
+        if (db) grid = extractGridPreview(db, route, intent.dir, intent.day);
+      } catch (e) {
+        console.warn('OG share grid load failed', e.message || e);
+      }
+    }
+    const meta = buildRouteOgMeta(route, intent, site, grid);
     return new Response(renderOgHtml(meta), {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
@@ -159,10 +168,20 @@ export default {
       return handleOgPlan(url, env);
     }
 
-    // Always-on OG HTML for share links (no UA check). Humans meta-refresh into the app.
-    // Stays under /og/* so SPA homepage canonical cannot steal the preview.
+    // Share links: crawlers get OG HTML. Humans (Facebook/Instagram IAB included)
+    // get one HTTP 302 to /?rt=… — JS location.replace in IAB is often stolen by
+    // Android App Links and opens the PWA at start_url with no query.
     if (url.pathname === '/og/share') {
-      const stub = handleBotShare(url, env);
+      const intent = parseShareIntent(url);
+      if (!intent) {
+        return new Response('Missing rt= or plan= share params', { status: 400 });
+      }
+      const uaShare = request.headers.get('user-agent') || '';
+      if (!isSocialCrawler(uaShare)) {
+        const appUrl = buildAppDeepLink(intent, siteBase(env, url));
+        return Response.redirect(appUrl, 302);
+      }
+      const stub = await handleBotShare(url, env, ctx);
       if (stub) {
         stub.headers.set('X-NextTrain-OG', 'share');
         return stub;
@@ -173,7 +192,7 @@ export default {
     // Social crawlers on legacy deep-link homepage shares (/?rt= / ?plan=)
     const ua = request.headers.get('user-agent') || '';
     if (isSocialCrawler(ua) && (url.pathname === '/' || url.pathname === '')) {
-      const stub = handleBotShare(url, env);
+      const stub = await handleBotShare(url, env, ctx);
       if (stub) {
         stub.headers.set('X-NextTrain-OG', 'bot-home');
         return stub;

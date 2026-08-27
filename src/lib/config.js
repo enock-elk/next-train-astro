@@ -12,13 +12,20 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.18.1";
+export const APP_VERSION = "V8_08.27.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
 /** WhatsApp digits for wa.me (no + or spaces). */
 export const SUPPORT_WHATSAPP = '27696473764';
 export const SUPPORT_WHATSAPP_DISPLAY = '+27 69 647 3764';
+
+/** Operator emails — keep in sync with firebase-database.rules.json and nexttrain-telemetry. */
+export const ADMIN_EMAILS = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
+
+export function isAdminEmail(email) {
+    return ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
 
 /** Always ends with `/` (except we normalize bare empty to `/`). Fixes `/next-train-astromanifest` joins. */
 export function normalizeBase(base) {
@@ -165,7 +172,7 @@ export function getCorridorLabel(routeOrCorridorId) {
 export const REGION_SEO = {
     GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
-    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City and inland KZN Metrorail corridor pages.' },
+    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
     EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
 };
 export const MAX_RADIUS_KM = 6;
@@ -813,6 +820,23 @@ export const ROUTES = {
             saturday_to_b: 'durbn_to_pinet_sat' 
         } 
     },
+    'kzn-crossmoor': {
+        id: 'kzn-crossmoor',
+        name: 'Durban <-> Crossmoor',
+        corridorId: 'KZN_WEST',
+        region: 'KZN',
+        colorClass: 'text-yellow-500',
+        isActive: true,
+        destA: 'DURBAN STATION',
+        destB: 'CROSSMOOR STATION',
+        transferStation: null,
+        sheetKeys: {
+            weekday_to_a: 'cross_to_durbn_weekday',
+            weekday_to_b: 'durbn_to_cross_weekday',
+            saturday_to_a: 'cross_to_durbn_sat',
+            saturday_to_b: 'durbn_to_cross_sat',
+        }
+    },
 
     // ==========================================
     // 🛡️ EASTERN CAPE ROUTES (V6 EXPANSION)
@@ -890,6 +914,15 @@ export const FARE_CONFIG = {
 // Day Index: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 export const DEFAULT_EXCLUSIONS = {};
 
+/**
+ * Corridors whose Saturday / public-holiday sheets are empty placeholders.
+ * Hardcoded IDs only — never train numbers. Live `*_sat` times override this
+ * automatically (see routeHasSaturdayTrains in saturday-service.js).
+ */
+export const SATURDAY_PLACEHOLDER_ROUTES = ['herc-koed', 'ec-berlin'];
+/** Junctions on herc-koed that still have Saturday trains on other routes. */
+export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
+
 // 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
 // Badge / seen key use `id` (=== APP_VERSION for latest).
@@ -899,6 +932,83 @@ export const DEFAULT_EXCLUSIONS = {};
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.27.7",
+        title: "Timetable button, Share in Options",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Timetable:</b> View full timetable has the calendar on the same line as the label.",
+            "<b>Share:</b> Share App is in Options, next to Messages & Feedback.",
+            "<b>Board:</b> Tap NO SVC on a timetable to see why that train is cancelled."
+        ]
+    },
+    {
+        id: "V8_08.27.6",
+        title: "Timetable icon, clearer dark",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Timetable:</b> View full timetable has the calendar icon back.",
+            "<b>Dark:</b> The page sits behind the cards, so boards and planner fields lift off the background.",
+            "<b>Alerts:</b> Notice cards sit on a darker sheet so each post is easy to pick out."
+        ]
+    },
+    {
+        id: "V8_08.27.5",
+        title: "Welcome stays clear",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Welcome:</b> Pick your route first — the bottom bar waits until you are in.",
+            "<b>Plan:</b> Trip Planner on the bottom bar uses the route icon.",
+            "<b>Alerts:</b> The bell sits on the header with a clearer unread dot."
+        ]
+    },
+    {
+        id: "V8_08.27.4",
+        title: "Trip Planner icon, quieter bar",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Plan:</b> Trip Planner on the bottom bar uses the route icon.",
+            "<b>Alerts:</b> The bell sits on the header with a clearer unread dot.",
+            "<b>Bar:</b> Home, Trip Planner, and Options along the bottom."
+        ]
+    },
+    {
+        id: "V8_08.27.3",
+        title: "Classic blue, Crossmoor, planner sheet",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>KZN:</b> Durban ↔ Crossmoor is on the board (yellow inland line).",
+            "<b>Planner:</b> Tap a train name for the full stop list. Saturday lines without trains say so clearly.",
+            "<b>Classic:</b> Blue header and nav — white title in light, blue title on navy in dark.",
+            "<b>Colour packs</b> keep header, nav, and cards apart. Today’s line reads Thursday · Weekday Schedule."
+        ]
+    },
+    {
+        id: "V8_08.26.2",
+        title: "What's new",
+        date: "26 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>KZN:</b> Durban ↔ Crossmoor is on the board — the yellow inland line from Rossburgh out to Havenside, Bayview, Westcliff, Chatsglen and Crossmoor."
+        ]
+    },
+    {
+        id: "V8_08.26.1",
+        title: "What's new",
+        date: "26 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Planner:</b> Saturday corridors without trains show a clear notice. Tap a train name for the full stop list. Recent Trips stay when you switch province.",
+            "<b>Offline:</b> The saved app opens even on a captive or weak wifi hotspot, then refreshes times and notices when a real connection returns.",
+            "<b>Back:</b> The phone Back button closes the screen you are looking at in one press.",
+            "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap."
+        ]
+    },
     {
         id: "V8_08.18.1",
         title: "Alerts channel",

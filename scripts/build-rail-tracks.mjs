@@ -46,7 +46,7 @@ const REGION_ROUTES = {
         'ct-strnd', 'ct-well',
     ],
     KZN: [
-        'kzn-umlazi', 'kzn-bridgecity', 'kzn-winklespruit', 'kzn-catoridge', 'kzn-pinetown',
+        'kzn-umlazi', 'kzn-bridgecity', 'kzn-winklespruit', 'kzn-catoridge', 'kzn-pinetown', 'kzn-crossmoor',
     ],
     EC: ['ec-berlin'],
 };

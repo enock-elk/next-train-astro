@@ -188,6 +188,27 @@ const Admin = {
     },
 
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
+    isAllowlistedAdmin: (user) => {
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (!email) return false;
+        if (typeof window.isAdminEmail === 'function') return window.isAdminEmail(email);
+        const list = Array.isArray(window.ADMIN_EMAILS)
+            ? window.ADMIN_EMAILS
+            : ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
+        return list.map((e) => String(e).toLowerCase()).includes(email);
+    },
+
+    stopTelemetryPolling: (reason) => {
+        if (Admin.telemetryInterval) {
+            clearInterval(Admin.telemetryInterval);
+            Admin.telemetryInterval = null;
+        }
+        if (reason && !Admin._telemetryAuthWarned) {
+            Admin._telemetryAuthWarned = true;
+            console.warn('Guardian: Telemetry polling stopped —', reason);
+        }
+    },
+
     getAuthKey: async () => {
         if (window.firebaseAuth && window.firebaseAuth.currentUser) {
             try {
@@ -588,6 +609,21 @@ const Admin = {
         });
     },
 
+    /** Two-step Clear DB: first yes/no popup, then type CLEAR. */
+    confirmClearDb: async function(what) {
+        const label = String(what || 'this database');
+        const first = await Admin.secureConfirm(
+            'Clear DB',
+            `This will permanently delete ${label}. Continue?`
+        );
+        if (!first) return false;
+        return Admin.secureConfirm(
+            'Confirm Clear DB',
+            `Type 'CLEAR' to permanently delete ${label}:`,
+            'CLEAR'
+        );
+    },
+
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
     openLightbox: function(url) {
         window._adminLightboxOpen = true;
@@ -812,6 +848,10 @@ const Admin = {
     // --- UNIVERSAL DATE FORMATTER ---
     formatDate: (ts) => {
         if (!ts) return "Unknown";
+        if (typeof formatAppDate === 'function') {
+            const s = formatAppDate(ts, { withTime: true });
+            return s || "Unknown";
+        }
         const d = new Date(ts);
         const day = d.getDate();
         const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
@@ -821,6 +861,42 @@ const Admin = {
         hours = hours % 12 || 12;
         const minutes = String(d.getMinutes()).padStart(2, '0');
         return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+    },
+
+    /** usr_{rand}_{Date.now()} — trailing epoch is first-install / join time. */
+    parseJoinedAtFromUserId: (id) => {
+        const s = String(id || '').trim();
+        if (!s || s === 'Anonymous / Legacy' || s === 'unknown') return null;
+        const m = s.match(/_(\d{10,13})$/);
+        if (!m) return null;
+        const n = Number(m[1]);
+        if (!Number.isFinite(n)) return null;
+        const ms = n < 1e12 ? n * 1000 : n;
+        if (ms < Date.UTC(2020, 0, 1) || ms > Date.now() + 86400000) return null;
+        return ms;
+    },
+
+    formatJoinedLabel: (id) => {
+        const ts = Admin.parseJoinedAtFromUserId(id);
+        if (!ts) return null;
+        const pretty = Admin.formatDate(ts);
+        if (!pretty || pretty === 'Unknown') return null;
+        return `Joined ${pretty}`;
+    },
+
+    showJoinedHint: (id) => {
+        const label = Admin.formatJoinedLabel(id);
+        if (!label) return;
+        if (typeof showToast === 'function') showToast(label, 'info', 2800);
+    },
+
+    /** Compact “i” next to a user/device id — title + tap toast, does not replace the id. */
+    userIdJoinHintHtml: (id) => {
+        const label = Admin.formatJoinedLabel(id);
+        if (!label) return '';
+        const safeId = String(id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const title = (typeof escapeHTML === 'function' ? escapeHTML(label) : label.replace(/"/g, '&quot;'));
+        return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
     },
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
@@ -1134,29 +1210,39 @@ const Admin = {
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Unique Active Users (Today)</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unique users by last selected region</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">Today unique: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Today sessions: --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
                                     <span id="region-stat-gp" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
                                     <span id="region-stat-wc" class="text-2xl font-black text-green-700 dark:text-green-300">--</span>
+                                    <span id="region-sess-wc" class="text-[9px] font-bold text-green-500/80 dark:text-green-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
                                     <span id="region-stat-kzn" class="text-2xl font-black text-orange-700 dark:text-orange-300">--</span>
+                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-orange-500/80 dark:text-orange-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
                                     <span id="region-stat-ec" class="text-2xl font-black text-purple-700 dark:text-purple-300">--</span>
+                                    <span id="region-sess-ec" class="text-[9px] font-bold text-purple-500/80 dark:text-purple-300/70 mt-0.5">-- sessions</span>
                                 </div>
                             </div>
-                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-4">
-                                <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">Uncategorized / Global</span>
-                                <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
+                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-3">
+                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region set</span>
+                                <div class="text-right">
+                                    <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
+                                    <span id="region-sess-other" class="block text-[9px] font-bold text-slate-500">-- sessions</span>
+                                </div>
                             </div>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">TODAY is unique people. Region cards are unique users by last selected region — they are not sessions, and they will not add up to TODAY if someone switched region or sent hits before a region was set.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
                             <button id="region-view-graph-btn" class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center border border-slate-700 dark:border-slate-600">
@@ -1204,7 +1290,7 @@ const Admin = {
         }
 
         if (telPanel.dataset.adminLoaded === "true") {
-            if (!Admin.telemetryInterval) {
+            if (Admin.isAllowlistedAdmin(Admin.currentUser) && !Admin.telemetryInterval) {
                 Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
             }
             Admin.refreshTelemetry();
@@ -1220,7 +1306,9 @@ const Admin = {
 
         Admin.refreshTelemetry();
         if (Admin.telemetryInterval) clearInterval(Admin.telemetryInterval);
-        Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+        if (Admin.isAllowlistedAdmin(Admin.currentUser)) {
+            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+        }
     },
 
     /**
@@ -1446,6 +1534,11 @@ const Admin = {
             return;
         }
 
+        if (!Admin.isAllowlistedAdmin(Admin.currentUser)) {
+            Admin.stopTelemetryPolling('no operator session');
+            return;
+        }
+
         const secret = await Admin.getAuthKey();
         if (!secret) return;
 
@@ -1478,6 +1571,8 @@ const Admin = {
                 if(statMonthly) statMonthly.textContent = data.mauUsers !== undefined ? Admin.formatNumber(data.mauUsers) : '--';
                 if(statAllTime) statAllTime.textContent = data.allTimeUsers !== undefined ? Admin.formatNumber(data.allTimeUsers) : '--';
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
+                Admin.currentTodayUsers = data.todayUsers;
+                Admin.currentTodaySessions = data.todaySessions;
                 
                 // GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
@@ -1528,6 +1623,7 @@ const Admin = {
                 // GUARDIAN PHASE 2: RAM Array Slicer Engine
                 // INTRADAY worker packs [yesterday 0..47 | today 48..cutoff]. Never take
                 // "last 48" for Today - that straddles midnight and draws a fake cliff.
+                // ALL plots every month from Jan 2026 - do not slice like MAU/DAU (7 points).
                 let pointsPerView = Admin.telemetryRange === 'INTRADAY' ? 48 : 7;
                 let offset = Admin.telemetryWeeksAgo;
                 
@@ -1545,6 +1641,9 @@ const Admin = {
                         startIndex = 0;
                         endIndex = 0;
                     }
+                } else if (Admin.telemetryRange === 'ALL') {
+                    startIndex = 0;
+                    endIndex = masterLen;
                 } else {
                     endIndex = masterLen - (offset * pointsPerView);
                     startIndex = endIndex - pointsPerView;
@@ -1566,6 +1665,8 @@ const Admin = {
                         activeCountsArray = activeCountsArray.slice(0, 48);
                         labelsArray = labelsArray.slice(0, 48);
                     }
+                } else if (Admin.telemetryRange === 'ALL') {
+                    // Full Jan 2026 → now series. Do not left-pad to a 7-point MAU window.
                 } else if (activeCountsArray.length < pointsPerView && masterLen > 0) {
                     const padLen = pointsPerView - activeCountsArray.length;
                     activeCountsArray = [...Array(padLen).fill(0), ...activeCountsArray];
@@ -1574,7 +1675,7 @@ const Admin = {
 
                 // GUARDIAN PHASE 3: Comparison Array Slicer
                 let compareCountsArray = null;
-                if (Admin.isComparing) {
+                if (Admin.isComparing && Admin.telemetryRange !== 'ALL') {
                     if (Admin.telemetryRange === 'INTRADAY' && offset === 0 && masterLen > 48) {
                         compareCountsArray = rawCountsArray.slice(0, 48);
                         if (compareCountsArray.length < 48) {
@@ -1632,6 +1733,14 @@ const Admin = {
                         }
                         return lbl ? 'W' + lbl.substring(4) : '';
                     });
+                } else if (Admin.telemetryRange === 'ALL') {
+                    displayLabels = labelsArray.map(lbl => {
+                        if (lbl && lbl.length === 6) {
+                            const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4, 6), 10) - 1];
+                            return `${mon} ${lbl.substring(2, 4)}`;
+                        }
+                        return lbl;
+                    });
                 } else {
                     displayLabels = labelsArray.map(lbl => {
                         if (lbl && lbl.length === 6) {
@@ -1678,7 +1787,7 @@ const Admin = {
                         const d = new Date(y, 0, 1 + (w - 1) * 7);
                         d.setDate(d.getDate() + (1 - d.getDay()));
                         return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
-                    } else if (raw.length === 6 && Admin.telemetryRange === 'MAU') { // YYYYMM
+                    } else if (raw.length === 6 && (Admin.telemetryRange === 'MAU' || Admin.telemetryRange === 'ALL')) { // YYYYMM
                         return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(raw.substring(4,6))-1]} ${raw.substring(0,4)}`;
                     }
                     return raw;
@@ -1706,7 +1815,7 @@ const Admin = {
                 } else if (Admin.telemetryRange === 'MAU') {
                     titleStr = `Monthly Active Users${rangeStr}`;
                 } else {
-                    titleStr = `All-Time Active Users`;
+                    titleStr = `All-Time Active Users${rangeStr || ' (from Jan 2026)'}`;
                 }
                 
                 const modalTitleEl = document.getElementById('modal-trend-title');
@@ -1746,7 +1855,7 @@ const Admin = {
                     }
                 }
 
-                // Orange marker = last known INTRADAY bucket (worker clips ~3h of lag)
+                // Orange marker = last known INTRADAY bucket (worker clips to latest GA4 row, not a 3h buffer)
                 let isTodayIdx = -1;
                 if (Admin.telemetryRange === 'INTRADAY' && Admin.telemetryWeeksAgo === 0) {
                     for (let i = activeCountsArray.length - 1; i >= 0; i--) {
@@ -1771,6 +1880,10 @@ const Admin = {
                     if (el) el.classList.remove('animate-pulse');
                 });
             } else {
+                if (res.status === 401 || res.status === 403) {
+                    Admin.stopTelemetryPolling('Worker returned status: ' + res.status);
+                    return;
+                }
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
@@ -1937,12 +2050,42 @@ const Admin = {
         const kznEl = document.getElementById('region-stat-kzn');
         const ecEl = document.getElementById('region-stat-ec');
         const otherEl = document.getElementById('region-stat-other');
+        const n = (v) => (v !== undefined && v !== null ? Admin.formatNumber(v) : '--');
+        const sess = data.sessions || {};
         
-        if (gpEl) gpEl.textContent = data.GP !== undefined ? Admin.formatNumber(data.GP) : '--';
-        if (wcEl) wcEl.textContent = data.WC !== undefined ? Admin.formatNumber(data.WC) : '--';
-        if (kznEl) kznEl.textContent = data.KZN !== undefined ? Admin.formatNumber(data.KZN) : '--';
-        if (ecEl) ecEl.textContent = data.EC !== undefined ? Admin.formatNumber(data.EC) : '--';
-        if (otherEl) otherEl.textContent = data.OTHER !== undefined ? Admin.formatNumber(data.OTHER) : '--';
+        if (gpEl) gpEl.textContent = n(data.GP);
+        if (wcEl) wcEl.textContent = n(data.WC);
+        if (kznEl) kznEl.textContent = n(data.KZN);
+        if (ecEl) ecEl.textContent = n(data.EC);
+        if (otherEl) otherEl.textContent = n(data.OTHER);
+
+        const setSess = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = `${n(value)} sessions`;
+        };
+        setSess('region-sess-gp', sess.GP);
+        setSess('region-sess-wc', sess.WC);
+        setSess('region-sess-kzn', sess.KZN);
+        setSess('region-sess-ec', sess.EC);
+        setSess('region-sess-other', sess.OTHER);
+
+        const todayUsers = data.todayUsers ?? Admin.currentTodayUsers;
+        const todaySessions = data.todaySessions ?? Admin.currentTodaySessions;
+        const todayEl = document.getElementById('region-today-total');
+        if (todayEl) todayEl.textContent = `Today unique: ${n(todayUsers)}`;
+        const sessEl = document.getElementById('region-today-sessions');
+        if (sessEl) sessEl.textContent = `Today sessions: ${n(todaySessions)}`;
+
+        const assigned = (Number(data.GP) || 0) + (Number(data.WC) || 0) + (Number(data.KZN) || 0) + (Number(data.EC) || 0);
+        const other = Number(data.OTHER) || 0;
+        const uniqueToday = Number(todayUsers) || 0;
+        const note = document.getElementById('region-note');
+        if (note) {
+            const overlap = Math.max(0, (assigned + other) - uniqueToday);
+            note.textContent = overlap > 0
+                ? `These cards are unique users (not sessions). Region + no-region (${Admin.formatNumber(assigned + other)}) is about ${Admin.formatNumber(overlap)} above TODAY because the same commuter can appear in more than one bucket if they switched region or sent hits before a region was set.`
+                : `These cards are unique users by last selected region, not sessions. TODAY (${n(todayUsers)}) is unique people.`;
+        }
     },
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
@@ -2056,7 +2199,24 @@ const Admin = {
             const sessionChanged = nextUid !== prevUid;
 
             if (user) {
+                // Feedback / community / alerts sign in anonymously on iPhone.
+                // That persisted session is not an operator — do not open Dev Hub
+                // or poll telemetry with a token that has no admin email (403 loop).
+                if (!Admin.isAllowlistedAdmin(user)) {
+                    if (Admin.currentUser) {
+                        console.log("Guardian: Non-admin Firebase session ignored (anonymous or commuter).");
+                        Admin.currentUser = null;
+                    }
+                    if (typeof window.applyAdminAuthedChrome === 'function') {
+                        window.applyAdminAuthedChrome(false);
+                    }
+                    return;
+                }
+
                 Admin.currentUser = user;
+                if (typeof window.applyAdminAuthedChrome === 'function') {
+                    window.applyAdminAuthedChrome(true);
+                }
                 try { localStorage.setItem('analytics_ignore', 'true'); } catch(e){}
                 try { safeStorage.setItem('dev_session_active', 'true'); } catch(e){}
 
@@ -2098,6 +2258,9 @@ const Admin = {
                 try { localStorage.removeItem('analytics_ignore'); } catch(e){}
                 try { safeStorage.removeItem('dev_session_active'); } catch(e){}
                 Admin.currentUser = null;
+                if (typeof window.applyAdminAuthedChrome === 'function') {
+                    window.applyAdminAuthedChrome(false);
+                }
                 if (signoutContainer) signoutContainer.innerHTML = '';
             }
         });
@@ -2132,7 +2295,7 @@ const Admin = {
             if (clickCount >= 5) {
                 clickCount = 0;
                 
-                if (Admin.currentUser || window.isSimMode) {
+                if (Admin.isAllowlistedAdmin(Admin.currentUser) || window.isSimMode) {
                     if (devModal) {
                         // GUARDIAN FIX: Route-aware modal opening prevents router bleed on back-button
                         if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
@@ -2159,6 +2322,9 @@ const Admin = {
                         if (spinner) spinner.classList.add('hidden');
                         
                         if(emailInput) setTimeout(() => emailInput.focus(), 150);
+                        if (typeof window.fillAdminPasswordFromDevice === 'function') {
+                            window.fillAdminPasswordFromDevice();
+                        }
                     }
                 }
             }
@@ -2173,6 +2339,15 @@ const Admin = {
             });
         }
         
+        if (typeof window.bindPasswordReveal === 'function') {
+            window.bindPasswordReveal({
+                inputId: 'admin-password',
+                buttonId: 'toggle-password-btn',
+                openIconId: 'eye-open-icon',
+                closedIconId: 'eye-closed-icon',
+            });
+        }
+
         if (passInput) {
             passInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && loginBtn) loginBtn.click();
@@ -2223,6 +2398,15 @@ const Admin = {
                             Admin.initAutoSim(); 
                         }
                         if (typeof showToast === 'function') showToast(`Welcome back!`, "success");
+                        try {
+                            if (window.PasswordCredential && navigator.credentials?.store) {
+                                navigator.credentials.store(new window.PasswordCredential({
+                                    id: email,
+                                    password,
+                                    name: email,
+                                })).catch(() => {});
+                            }
+                        } catch { /* Credential Management optional */ }
                     })
                     .catch((error) => {
                         const code = error?.code || 'unknown';
@@ -2406,6 +2590,150 @@ const Admin = {
             adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
         }
         return actionBanner;
+    },
+
+    _GSM_TABS: [
+        { id: 'all', label: 'All', types: null },
+        { id: 'alerts', label: 'Alerts', types: ['Alert'] },
+        { id: 'incidents', label: 'Incidents', types: ['Disruption'] },
+        { id: 'grid', label: 'Grid', types: ['Grid Notice'] },
+        { id: 'exclusions', label: 'Exclusions', types: ['Exception'] },
+        { id: 'maint', label: 'Maint', types: ['Maintenance'] },
+    ],
+
+    gsmTabCounts: (items) => {
+        const counts = { all: (items || []).length };
+        (Admin._GSM_TABS || []).forEach((tab) => {
+            if (!tab.types) return;
+            counts[tab.id] = (items || []).filter((it) => tab.types.includes(it.type)).length;
+        });
+        return counts;
+    },
+
+    gsmFilteredItems: (items, tabId) => {
+        const tab = (Admin._GSM_TABS || []).find((t) => t.id === tabId) || Admin._GSM_TABS[0];
+        if (!tab || !tab.types) return items || [];
+        return (items || []).filter((it) => tab.types.includes(it.type));
+    },
+
+    gsmRegionBadge: (rId) => {
+        if (!rId) return '';
+        const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
+        const textClass = "text-xs font-bold text-gray-700 dark:text-gray-300";
+        if (rId.includes('_GP')) return `<span class="${badgeClass}">GP</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_WC')) return `<span class="${badgeClass}">WC</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_KZN')) return `<span class="${badgeClass}">KZN</span> <span class="${textClass}">Global Network</span>`;
+        if (rId.includes('_EC')) return `<span class="${badgeClass}">EC</span> <span class="${textClass}">Global Network</span>`;
+        if (rId === 'all') return `<span class="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5">ALL</span> <span class="${textClass}">Entire Network</span>`;
+        if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass} inline-flex items-center flex-wrap">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span>`;
+        return '';
+    },
+
+    gsmItemCardHtml: (item, now) => {
+        const isPermanent = !item.expiresAt;
+        const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
+        const timeBadge = isPermanent ? 'Permanent' : `Expires: in ${hrsLeft} hrs`;
+        const extendBtnHtml = isPermanent
+            ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`
+            : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`;
+        return `
+            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
+                <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
+                    <div class="min-w-0 shrink">${Admin.gsmRegionBadge(item.routeId)}</div>
+                    <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                        <span class="uppercase tracking-widest text-slate-500">${item.type}</span>
+                        <span class="mx-1.5 text-gray-300 dark:text-gray-600">|</span>
+                        <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
+                    </div>
+                </div>
+                <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
+                    ${item.label}
+                </span>
+                <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
+                    <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
+                    </button>
+                    ${extendBtnHtml}
+                    <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                        Review &rarr;
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    gsmTabBarHtml: (items) => {
+        const counts = Admin.gsmTabCounts(items);
+        const active = Admin._gsmTab || 'all';
+        return `<div id="gsm-tabs" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto custom-scrollbar">
+            ${(Admin._GSM_TABS || []).map((tab) => {
+                const on = active === tab.id;
+                const n = counts[tab.id] || 0;
+                const cls = on
+                    ? 'shrink-0 px-2 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'shrink-0 px-2 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400';
+                return `<button type="button" data-gsm-tab="${tab.id}" class="${cls}">${tab.label}${n ? ` ${n}` : ''}</button>`;
+            }).join('')}
+        </div>`;
+    },
+
+    bindGsmTabs: () => {
+        document.querySelectorAll('[data-gsm-tab]').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Admin._gsmTab = btn.getAttribute('data-gsm-tab') || 'all';
+                Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
+            };
+        });
+    },
+
+    renderGlobalStateMonitor: (actionBanner, activeItems, opts = {}) => {
+        if (!actionBanner) return;
+        Admin._gsmItems = Array.isArray(activeItems) ? activeItems : [];
+        if (!Admin._gsmTab) Admin._gsmTab = 'all';
+        const wasOpen = opts.keepOpen || (document.getElementById('action-body') && !document.getElementById('action-body').classList.contains('hidden'));
+        const adminContainer = document.getElementById('admin-modules-container');
+        const total = Admin._gsmItems.length;
+        const filtered = Admin.gsmFilteredItems(Admin._gsmItems, Admin._gsmTab);
+        const now = Date.now();
+        let listHtml;
+        if (opts.error) {
+            listHtml = `<div class="text-xs text-center text-red-500 py-4">Could not refresh active entities. Tap Refresh from another panel or reopen Dev Mode.</div>`;
+        } else if (!total) {
+            listHtml = `<div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
+                All clear - no active alerts, incidents, grid notices, schedule exceptions, or maintenance banners.
+            </div>`;
+        } else if (!filtered.length) {
+            const tab = (Admin._GSM_TABS || []).find((t) => t.id === Admin._gsmTab);
+            listHtml = `<div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">No active ${(tab && tab.label) || 'items'}.</div>`;
+        } else {
+            listHtml = filtered.map((item) => Admin.gsmItemCardHtml(item, now)).join('');
+        }
+
+        actionBanner.classList.remove('hidden');
+        actionBanner.innerHTML = `
+            <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
+                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${total})</span>
+                </span>
+                <span class="admin-unread-badge ${total ? '' : 'hidden'}" aria-label="Active items">${total || ''}</span>
+                <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="action-body" class="${wasOpen ? 'mt-4 space-y-2' : 'hidden mt-4 space-y-2'}">
+                ${Admin.gsmTabBarHtml(Admin._gsmItems)}
+                <div id="gsm-list">${listHtml}</div>
+            </div>
+        `;
+        Admin.bindGsmTabs();
+        if (wasOpen && !Admin.isGridMode) {
+            actionBanner.querySelector('#action-header-btn')?.style.setProperty('display', 'none', 'important');
+            document.getElementById('action-body')?.classList.remove('hidden');
+        }
+        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
+            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+        }
     },
 
     fetchActionRequired: async () => {
@@ -2601,29 +2929,10 @@ const Admin = {
                 if (typeof Admin.populateAlertTargets === 'function') Admin.populateAlertTargets(true);
                 if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
                 if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
-
-                actionBanner.classList.remove('hidden');
-                actionBanner.innerHTML = `
-                    <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                        <span class="flex flex-col items-center">
-                            ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                            <span class="text-blue-600 dark:text-blue-400">Global State Monitor (0)</span>
-                        </span>
-                        <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="action-body" class="hidden mt-4 space-y-2">
-                        <div class="text-xs text-center text-slate-500 dark:text-slate-400 py-4 px-2 leading-relaxed">
-                            All clear - no active alerts, incidents, grid notices, schedule exceptions, or maintenance banners.
-                        </div>
-                    </div>
-                `;
-                if (adminContainer.firstElementChild !== actionBanner) {
-                    adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-                }
+                Admin.renderGlobalStateMonitor(actionBanner, []);
                 return;
             }
 
-            actionBanner.classList.remove('hidden');
             activeItems.sort((a, b) => {
                 if (!a.expiresAt && !b.expiresAt) return 0;
                 if (!a.expiresAt) return 1; // Push permanent items to the bottom
@@ -2648,99 +2957,11 @@ const Admin = {
             if (typeof Admin.populateDisruptionRoutes === 'function') Admin.populateDisruptionRoutes();
             if (typeof Admin.populateExclusionRoutes === 'function') Admin.populateExclusionRoutes();
 
-            // GUARDIAN UX REDESIGN: Action Required 3-Row Layout with Route Stripping
-            const getRegionBadge = (rId) => {
-                if (!rId) return '';
-                const badgeClass = "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5";
-                const textClass = "text-xs font-bold text-gray-700 dark:text-gray-300";
-                
-                if (rId.includes('_GP')) return `<span class="${badgeClass}">GP</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_WC')) return `<span class="${badgeClass}">WC</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_KZN')) return `<span class="${badgeClass}">KZN</span> <span class="${textClass}">Global Network</span>`;
-                if (rId.includes('_EC')) return `<span class="${badgeClass}">EC</span> <span class="${textClass}">Global Network</span>`;
-                if (rId === 'all') return `<span class="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-black uppercase tracking-wider text-[9px] mr-1.5">ALL</span> <span class="${textClass}">Entire Network</span>`;
-                if (typeof ROUTES !== 'undefined' && ROUTES[rId]) return `<span class="${badgeClass}">${ROUTES[rId].region}</span> <span class="${textClass} inline-flex items-center flex-wrap">${Admin.formatRouteLabelHtml(ROUTES[rId].name)}</span>`;
-                return '';
-            };
-
-            let listHtml = '';
-            activeItems.forEach(item => {
-                const isPermanent = !item.expiresAt;
-                const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
-                
-                const timeBadge = isPermanent ? 'Permanent' : `Expires: in ${hrsLeft} hrs`;
-                
-                // Disable +24h button if permanent
-                const extendBtnHtml = isPermanent 
-                    ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`
-                    : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`;
-
-                listHtml += `
-                    <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
-                        
-                        <!-- Row 1: region + type/expiry -->
-                        <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
-                            <div class="min-w-0 shrink">${getRegionBadge(item.routeId)}</div>
-                            <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
-                                <span class="uppercase tracking-widest text-slate-500">${item.type}</span>
-                                <span class="mx-1.5 text-gray-300 dark:text-gray-600">|</span>
-                                <span class="${isPermanent ? 'text-blue-500' : (hrsLeft < 4 ? 'text-red-500' : 'text-orange-500')} uppercase tracking-widest">${timeBadge}</span>
-                            </div>
-                        </div>
-
-                        <!-- Row 2: Bold Payload -->
-                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
-                            ${item.label}
-                        </span>
-
-                        <!-- Row 3: Actions -->
-                        <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
-                            <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
-                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
-                            </button>
-                            ${extendBtnHtml}
-                            <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
-                                Review &rarr;
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            actionBanner.innerHTML = `
-                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                    <span class="flex flex-col items-center">
-                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${activeItems.length})</span>
-                    </span>
-                    <span class="admin-unread-badge ${activeItems.length ? '' : 'hidden'}" aria-label="Active items">${activeItems.length || ''}</span>
-                    <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
-                <div id="action-body" class="hidden mt-4 space-y-2">
-                    ${listHtml}
-                </div>
-            `;
-            if (adminContainer.firstElementChild !== actionBanner) {
-                adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-            }
+            Admin.renderGlobalStateMonitor(actionBanner, activeItems);
 
         } catch(e) {
             // Stay visible - never delete the tile on fetch failure
-            actionBanner.classList.remove('hidden');
-            actionBanner.innerHTML = `
-                <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                    <span class="flex flex-col items-center">
-                        ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
-                    </span>
-                </button>
-                <div id="action-body" class="hidden mt-4 space-y-2">
-                    <div class="text-xs text-center text-red-500 py-4">Could not refresh active entities. Tap Refresh from another panel or reopen Dev Mode.</div>
-                </div>
-            `;
-            if (adminContainer?.firstElementChild !== actionBanner) {
-                adminContainer?.insertBefore(actionBanner, adminContainer.firstChild);
-            }
+            Admin.renderGlobalStateMonitor(actionBanner, Admin._gsmItems || [], { error: true });
         }
     },
 
@@ -2836,6 +3057,12 @@ const Admin = {
 
     /** Sync a premium dropdown's visible label to match the hidden <select> value. */
     _syncAdminSelectDisplay: (selectId, routeId) => {
+        if (selectId === 'alert-target') {
+            if (typeof Admin.setSelectedAlertTargets === 'function') {
+                Admin.setSelectedAlertTargets([routeId]);
+            }
+            return;
+        }
         const selectEl = document.getElementById(selectId);
         if (!selectEl) return;
         const opt = selectEl.querySelector(`option[value="${CSS.escape ? CSS.escape(routeId) : routeId}"]`)
@@ -2898,6 +3125,11 @@ const Admin = {
         const opt = selectEl.querySelector(`option[value="${CSS.escape ? CSS.escape(routeId) : routeId}"]`)
             || Array.from(selectEl.options).find((o) => o.value === routeId);
         if (!opt) return;
+
+        if (selectId === 'alert-target') {
+            Admin.setSelectedAlertTargets([routeId]);
+            return;
+        }
 
         const changed = selectEl.value !== routeId;
         if (changed) selectEl.value = routeId;
@@ -3322,7 +3554,7 @@ const Admin = {
                 let groupHTML = `
                     <div class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
                         <div class="flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span></span>
+                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full inline-flex items-center">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span>${Admin.userIdJoinHintHtml(rawDid)}</span>
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center shrink-0">
@@ -3683,7 +3915,7 @@ const Admin = {
         };
 
         Admin.clearCrashes = async () => {
-            const confirmed = await Admin.secureConfirm("Clear Crash DB", "Type 'CLEAR' to permanently delete all crash reports from the server:", "CLEAR");
+            const confirmed = await Admin.confirmClearDb('all crash reports from the server');
             if (!confirmed) return;
             
             const secret = await Admin.getAuthKey();
@@ -3960,13 +4192,19 @@ const Admin = {
                 if (card.id === 'crashes-panel') Admin.fetchCrashes(); // GUARDIAN PHASE 7
                 if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
                 if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+                if (card.id === 'maint-panel') {
+                    document.getElementById('maint-mode-body')?.classList.add('hidden');
+                    document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+                }
                 if (card.id === 'alert-panel') {
                     if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
                         Admin.setAlertManagerTab('compose');
                     }
                     Admin.applyPendingAdminRoute('alert-panel');
                     const targetEl = document.getElementById('alert-target');
-                    if (targetEl && !Admin._pendingAdminRoute) targetEl.dispatchEvent(new Event('change'));
+                    if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
+                        Admin.fetchCurrentAlertsForTargets();
+                    }
                 }
             });
 
@@ -4088,10 +4326,10 @@ const Admin = {
                     </div>
                 </div>
                 <div id="de-tabs-swipe" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y">
-                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Fails</button>
-                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Trip Plans</button>
+                    <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Trip Plans</button>
+                    <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Fails</button>
                 </div>
-                <div id="de-trip-filters" class="hidden space-y-2">
+                <div id="de-trip-filters" class="space-y-2">
                     <button type="button" id="de-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
                         <span>Filters</span>
                         <svg id="de-filters-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -4110,11 +4348,11 @@ const Admin = {
                         <div>
                             <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Day type</label>
                             <select id="de-filter-day" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white outline-none">
-                                <option value="">All days</option>
+                                <option value="" selected>All days</option>
                                 <option value="weekday">Weekday</option>
                                 <option value="saturday">Saturday</option>
-                                <option value="public_holiday">Public Holiday</option>
                                 <option value="sunday">Sunday</option>
+                                <option value="public_holiday">Public holiday</option>
                             </select>
                         </div>
                         <div class="relative" id="de-filter-userid-container">
@@ -4126,7 +4364,10 @@ const Admin = {
                                 <span id="de-filter-userid-display" class="truncate font-mono text-[11px]">All users</span>
                                 <svg id="de-filter-userid-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
-                            <ul id="de-filter-userid-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-48 custom-scrollbar text-left"></ul>
+                            <div id="de-filter-userid-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
+                                <input id="de-filter-userid-search" type="search" autocomplete="off" placeholder="Search user…" class="w-full h-9 px-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[11px] font-mono text-gray-900 dark:text-white outline-none">
+                                <ul id="de-filter-userid-options" class="flex flex-col overflow-y-auto max-h-40 custom-scrollbar"></ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4143,9 +4384,24 @@ const Admin = {
         const sortBtn = document.getElementById('de-sort-btn');
         const countModeBtn = document.getElementById('de-count-mode-btn');
         const listDiv = document.getElementById('de-list');
-        Admin._deActiveTab = 'fails';
+        Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+        Admin._deTripWindowSize = Admin._deTripWindowSize || 80;
+        Admin._deTripWindowStep = 80;
+        Admin._deTripCacheAt = Admin._deTripCacheAt || 0;
+        Admin._deTripCacheTtlMs = 45000;
         Admin._deCountMode = Admin._deCountMode || 'users'; // users | hits
+        Admin._deTripPage = 0;
+        Admin._deTripPageSize = 40;
+        Admin._deTripPainted = 0;
+        Admin._deHitPreviewCap = 25;
+        Admin._deUserListCap = 40;
+
+        Admin.tripCacheFresh = () => !!(
+            Admin._cachedTripPlans
+            && Object.keys(Admin._cachedTripPlans).length
+            && (Date.now() - (Admin._deTripCacheAt || 0) < (Admin._deTripCacheTtlMs || 45000))
+        );
 
         const syncDeFiltersVisibility = () => {
             const wrap = document.getElementById('de-trip-filters');
@@ -4189,18 +4445,18 @@ const Admin = {
                 const endX = e.changedTouches?.[0]?.screenX || 0;
                 const diffX = endX - touchStartX;
                 if (Math.abs(diffX) < 48) return;
-                if (diffX > 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
-                else if (diffX < 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+                if (diffX < 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
+                else if (diffX > 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
-        bindDeSwipe(listDiv);
 
         const bindTripFilter = (id, key) => {
             const el = document.getElementById(id);
             if (!el) return;
             const apply = () => {
                 Admin._deTripFilters[key] = (el.value || '').trim();
+                Admin._deTripPage = 0;
                 if (Admin._deActiveTab === 'trips') Admin.renderTripPlanBatches(listDiv, null, true);
             };
             el.addEventListener('change', apply);
@@ -4214,13 +4470,20 @@ const Admin = {
         const uidTrigger = document.getElementById('de-filter-userid-trigger');
         const uidList = document.getElementById('de-filter-userid-list');
         const uidChevron = document.getElementById('de-filter-userid-chevron');
+        const uidSearch = document.getElementById('de-filter-userid-search');
         if (uidTrigger && uidList && uidTrigger.dataset.bound !== '1') {
             uidTrigger.dataset.bound = '1';
             uidTrigger.addEventListener('click', (e) => {
                 e.stopPropagation();
                 uidList.classList.toggle('hidden');
                 uidChevron?.classList.toggle('rotate-180');
+                if (!uidList.classList.contains('hidden')) uidSearch?.focus();
             });
+            uidSearch?.addEventListener('input', () => {
+                Admin._deUserQuery = String(uidSearch.value || '').trim().toLowerCase();
+                Admin.paintTripUserOptions();
+            });
+            uidSearch?.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('click', (e) => {
                 const wrap = document.getElementById('de-filter-userid-container');
                 if (wrap && !wrap.contains(e.target)) {
@@ -4435,6 +4698,9 @@ const Admin = {
             return rows;
         };
 
+        Admin.tripCorridorKey = (entry) =>
+            `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
+
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
             const region = (f.region || '').toUpperCase();
@@ -4451,16 +4717,353 @@ const Admin = {
             });
         };
 
+        Admin.secureDeEscape = (str) => {
+            if (!str) return '';
+            if (typeof escapeHTML === 'function') return escapeHTML(str);
+            return String(str).replace(/[&<>"']/g, (m) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[m]));
+        };
+
+        Admin.paintTripUserOptions = () => {
+            const userSel = document.getElementById('de-filter-userid');
+            const uidOptions = document.getElementById('de-filter-userid-options');
+            const uidDisplay = document.getElementById('de-filter-userid-display');
+            const uidList = document.getElementById('de-filter-userid-list');
+            if (!userSel || !uidOptions) return;
+            const cap = Admin._deUserListCap || 40;
+            const q = String(Admin._deUserQuery || '').toLowerCase();
+            const prev = Admin._deTripFilters?.userId || userSel.value || '';
+            const users = Admin._deTripUserIds || [];
+            const matched = q ? users.filter((u) => u.toLowerCase().includes(q)) : users;
+            const shown = matched.slice(0, cap);
+            userSel.innerHTML = `<option value="">All users</option>` + shown.map((u) =>
+                `<option value="${String(u).replace(/"/g, '&quot;')}">${Admin.secureDeEscape(u)}</option>`
+            ).join('');
+            if (prev && users.includes(prev)) userSel.value = prev;
+            else if (prev && !users.includes(prev)) {
+                userSel.value = '';
+                Admin._deTripFilters.userId = '';
+            }
+            uidOptions.innerHTML = '';
+            const addLi = (value, label) => {
+                const li = document.createElement('li');
+                li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer font-mono';
+                li.textContent = label;
+                li.onclick = () => {
+                    userSel.value = value;
+                    if (uidDisplay) uidDisplay.textContent = label;
+                    uidList?.classList.add('hidden');
+                    document.getElementById('de-filter-userid-chevron')?.classList.remove('rotate-180');
+                    userSel.dispatchEvent(new Event('change'));
+                };
+                uidOptions.appendChild(li);
+            };
+            addLi('', 'All users');
+            shown.forEach((u) => addLi(u, u));
+            if (matched.length > shown.length) {
+                const more = document.createElement('li');
+                more.className = 'px-3 py-2 text-[10px] text-gray-400 italic';
+                more.textContent = `Showing ${shown.length} of ${matched.length} — type to narrow`;
+                uidOptions.appendChild(more);
+            }
+            if (uidDisplay) uidDisplay.textContent = userSel.value || 'All users';
+        };
+
+        Admin.expandTripCorridorHits = (panel, corridorKey) => {
+            if (!panel) return;
+            const cap = Admin._deHitPreviewCap || 25;
+            const hits = Admin.getFilteredTripPlanRows()
+                .filter((r) => Admin.tripCorridorKey(r) === corridorKey)
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const slice = hits.slice(0, cap);
+            const esc = Admin.secureDeEscape;
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
+                ${slice.map((h) => `
+                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}${Admin.userIdJoinHintHtml(h.userId)}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${esc(h.depTime || '-')}</span>
+                    </div>
+                `).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+            `;
+        };
+
+        Admin.appendTripCorridorCards = (listDiv, items) => {
+            const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
+            const esc = Admin.secureDeEscape;
+            const frag = document.createDocumentFragment();
+            items.forEach((item) => {
+                const dateStr = Admin.formatDate(item.lastSeen);
+                const card = document.createElement('div');
+                card.className = 'de-trip-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
+                const corridorKey = Admin.tripCorridorKey({
+                    origin: item.origin,
+                    destination: item.dest,
+                    dayType: item.dayType,
+                    region: item.region,
+                });
+                const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                card.innerHTML = `
+                    <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-corridor-key="${esc(corridorKey)}" aria-expanded="false">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${esc(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${esc(item.dest)}</div>
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${esc(item.dayType || 'unknown')}</span>
+                                <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${esc(item.region || '-')}</span>
+                                <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${esc(item.depSample || '-')}</span>
+                            </div>
+                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${esc(item.userId || '-')}">Latest user: ${esc(item.userId || '-')}</div>
+                            <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
+                            <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
+                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                        </div>
+                    </button>
+                    <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
+                `;
+                card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
+                    const panel = card.querySelector('.de-trip-hits');
+                    const btn = card.querySelector('.de-trip-card-btn');
+                    if (!panel || !btn) return;
+                    const open = panel.classList.toggle('hidden') === false;
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    if (open && !panel.dataset.loaded) {
+                        panel.dataset.loaded = '1';
+                        Admin.expandTripCorridorHits(panel, corridorKey);
+                    }
+                });
+                frag.appendChild(card);
+            });
+            const sentinel = listDiv.querySelector('#de-trip-scroll-sentinel');
+            if (sentinel) listDiv.insertBefore(frag, sentinel);
+            else listDiv.appendChild(frag);
+        };
+
+        Admin.bindTripScrollLoadMore = (listDiv) => {
+            if (!listDiv || listDiv.dataset.deScrollBound === '1') return;
+            listDiv.dataset.deScrollBound = '1';
+            const nearBottom = () => listDiv.scrollHeight - listDiv.scrollTop - listDiv.clientHeight < 80;
+            const onScroll = () => {
+                if (!nearBottom()) return;
+                Admin.loadMoreTripCorridors(listDiv);
+            };
+            listDiv.addEventListener('scroll', onScroll, { passive: true });
+        };
+
+        Admin.loadMoreTripCorridors = async (listDiv) => {
+            const sorted = Admin._deTripSorted || [];
+            const pageSize = Admin._deTripPageSize || 40;
+            const painted = Admin._deTripPainted || 0;
+            if (painted < sorted.length) {
+                const next = sorted.slice(painted, painted + pageSize);
+                Admin._deTripPainted = painted + next.length;
+                Admin.appendTripCorridorCards(listDiv, next);
+                Admin.syncTripLoadMoreChrome(listDiv);
+                return;
+            }
+            if (Admin._deTripMeta?.canLoadMore && !Admin._deTripLoadingMore) {
+                Admin._deTripLoadingMore = true;
+                Admin._deTripWindowSize = (Admin._deTripWindowSize || 80) + (Admin._deTripWindowStep || 80);
+                Admin._deTripCacheAt = 0;
+                try {
+                    const secret = await Admin.getAuthKey();
+                    await Admin.renderTripPlanBatches(listDiv, secret);
+                } finally {
+                    Admin._deTripLoadingMore = false;
+                }
+            }
+        };
+
+        Admin.syncTripLoadMoreChrome = (listDiv) => {
+            const sorted = Admin._deTripSorted || [];
+            const painted = Admin._deTripPainted || 0;
+            const canFetch = !!Admin._deTripMeta?.canLoadMore;
+            let sentinel = listDiv.querySelector('#de-trip-scroll-sentinel');
+            if (!sentinel) {
+                sentinel = document.createElement('div');
+                sentinel.id = 'de-trip-scroll-sentinel';
+                sentinel.className = 'py-2';
+                listDiv.appendChild(sentinel);
+            }
+            const moreLeft = painted < sorted.length || canFetch;
+            sentinel.innerHTML = moreLeft
+                ? `<button type="button" class="de-trip-load-more w-full px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none">${canFetch && painted >= sorted.length ? `See ${Admin._deTripWindowStep || 80} more batches` : 'Load more trips'}</button>`
+                : '';
+            sentinel.querySelector('.de-trip-load-more')?.addEventListener('click', () => Admin.loadMoreTripCorridors(listDiv));
+        };
+
+        Admin.tripIndexKey = (origin, dest) => {
+            const clean = (s) => String(s || 'unknown').toUpperCase().replace(/[.#$[\]/]/g, '_');
+            return `${clean(origin)}~${clean(dest)}`;
+        };
+
+        Admin.fetchTripPlanEverStats = async (secret) => {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const qs = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+            let users = {};
+            let pairs = {};
+            try {
+                const [uRes, pRes] = await Promise.all([
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json${qs}`, {}, 15000),
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json${qs}`, {}, 15000),
+                ]);
+                if (uRes && uRes.ok) users = (await uRes.json()) || {};
+                if (pRes && pRes.ok) pairs = (await pRes.json()) || {};
+            } catch { /* empty until backfill */ }
+            if (!users || typeof users !== 'object') users = {};
+            if (!pairs || typeof pairs !== 'object') pairs = {};
+
+            const batches = Admin._cachedTripPlans || {};
+            const userPatch = {};
+            const pairPatch = {};
+            Object.values(batches).forEach((batch) => {
+                if (!batch) return;
+                const uid = batch.userId;
+                const ts = Number(batch.flushedAt || 0) || Date.now();
+                if (uid) {
+                    const prev = users[uid] || {};
+                    const next = {
+                        firstSeen: Math.min(Number(prev.firstSeen) || ts, ts),
+                        lastSeen: Math.max(Number(prev.lastSeen) || 0, ts),
+                        region: batch.region || prev.region || null,
+                    };
+                    if (!users[uid] || next.lastSeen !== Number(prev.lastSeen) || !prev.firstSeen) {
+                        users[uid] = next;
+                        userPatch[uid] = next;
+                    }
+                }
+                (batch.trips || []).forEach((t) => {
+                    if (!t?.origin || !t?.destination) return;
+                    const k = Admin.tripIndexKey(t.origin, t.destination);
+                    const prev = pairs[k] || {};
+                    const next = {
+                        firstSeen: Math.min(Number(prev.firstSeen) || ts, ts),
+                        lastSeen: Math.max(Number(prev.lastSeen) || 0, ts),
+                        origin: t.origin,
+                        destination: t.destination,
+                    };
+                    if (!pairs[k] || !prev.firstSeen) {
+                        pairs[k] = next;
+                        pairPatch[k] = next;
+                    }
+                });
+            });
+            if (secret) {
+                try {
+                    if (Object.keys(userPatch).length) {
+                        await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?auth=${encodeURIComponent(secret)}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userPatch),
+                        });
+                    }
+                    if (Object.keys(pairPatch).length) {
+                        await fetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json?auth=${encodeURIComponent(secret)}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(pairPatch),
+                        });
+                    }
+                } catch { /* ignore */ }
+            }
+            Admin._deTripEverUsers = Object.keys(users).filter((k) => users[k]).length;
+            Admin._deTripEverPairs = Object.keys(pairs).filter((k) => pairs[k]).length;
+            Admin._deTripUserIndex = users;
+            return { usersEver: Admin._deTripEverUsers, pairsEver: Admin._deTripEverPairs };
+        };
+
+        Admin.buildTripInsightsHtml = (sorted, rows, esc) => {
+            const regionCounts = { GP: 0, WC: 0, KZN: 0, EC: 0 };
+            const dayCounts = {};
+            let direct = 0;
+            let transfer = 0;
+            (rows || []).forEach((r) => {
+                const rg = String(r.region || '').toUpperCase();
+                if (regionCounts[rg] != null) regionCounts[rg] += 1;
+                const day = String(r.dayType || 'unknown');
+                dayCounts[day] = (dayCounts[day] || 0) + 1;
+                if (Number(r.transfers || 0) > 0) transfer += 1;
+                else direct += 1;
+            });
+            const top = (sorted || []).slice(0, 5);
+            const failReasons = {};
+            Object.values(Admin._cachedRoutingFails || {}).forEach((f) => {
+                if (!f) return;
+                const reason = String(f.reason || 'UNKNOWN');
+                failReasons[reason] = (failReasons[reason] || 0) + 1;
+            });
+            const failTop = Object.entries(failReasons).sort((a, b) => b[1] - a[1]).slice(0, 4);
+            const chip = (label, n) => `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/80 dark:bg-gray-900/60 border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">${esc(label)} <span class="font-mono text-slate-800 dark:text-slate-100">${n}</span></span>`;
+            return `
+                <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights (all time)</p>
+                    <div class="flex flex-wrap gap-1">${chip('GP', regionCounts.GP)}${chip('WC', regionCounts.WC)}${chip('KZN', regionCounts.KZN)}${chip('EC', regionCounts.EC)}</div>
+                    <div class="flex flex-wrap gap-1">${Object.entries(dayCounts).map(([d, n]) => chip(d, n)).join('') || chip('days', 0)}</div>
+                    <p class="text-[10px] text-slate-500">${chip('Direct', direct)}${chip('Transfer', transfer)}</p>
+                    <table class="w-full text-[10px]">
+                        <thead><tr class="text-[9px] uppercase tracking-wider text-slate-400"><th class="text-left font-bold py-0.5">Top corridors</th><th class="text-right font-bold">Users</th><th class="text-right font-bold">Hits</th></tr></thead>
+                        <tbody>
+                            ${top.map((item) => `<tr class="border-t border-slate-100 dark:border-slate-800"><td class="py-1 pr-2 text-slate-700 dark:text-slate-200">${esc(item.origin)} → ${esc(item.dest)}</td><td class="text-right font-mono">${item.count || item.displayCount || 0}</td><td class="text-right font-mono">${item.hitCount || 0}</td></tr>`).join('') || '<tr><td class="py-1 text-slate-400" colspan="3">No corridors yet.</td></tr>'}
+                        </tbody>
+                    </table>
+                    ${failTop.length ? `<p class="text-[9px] text-slate-500">Fail reasons: ${failTop.map(([r, n]) => `${esc(r)} ${n}`).join(' · ')}</p>` : ''}
+                </div>
+            `;
+        };
+
+        Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+            const esc = Admin.secureDeEscape;
+            const usersWindow = Number(meta.uniqueUsers || 0);
+            const usersEver = Number(meta.usersEver || 0);
+            const pairsEver = Number(meta.pairsEver || 0);
+            Admin._deTripSorted = sorted;
+            Admin._deTripMeta = meta;
+            Admin._deTripPainted = 0;
+            const banner = document.createElement('div');
+            banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
+            banner.innerHTML = `
+                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users ever</p>
+                <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersEver}</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${pairsEver} unique trip combinations</p>
+                <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">In this window: ${usersWindow} users · ${esc(String(meta.filteredCount || 0))} trips · ${sorted.length} corridors · ${esc(meta.windowNote || '')}</p>
+            `;
+            listDiv.appendChild(banner);
+            const insights = document.createElement('div');
+            insights.innerHTML = Admin.buildTripInsightsHtml(sorted, Admin.getFilteredTripPlanRows(), esc);
+            listDiv.appendChild(insights);
+            Admin.bindTripScrollLoadMore(listDiv);
+            const first = sorted.slice(0, Admin._deTripPageSize || 40);
+            Admin._deTripPainted = first.length;
+            Admin.appendTripCorridorCards(listDiv, first);
+            Admin.syncTripLoadMoreChrome(listDiv);
+        };
+
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
-            if (!useCacheOnly) {
-                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans...</div>';
+            const hasCache = !!(Admin._cachedTripPlans && Object.keys(Admin._cachedTripPlans).length);
+            const wantedWindow = Math.max(80, Number(Admin._deTripWindowSize) || 80);
+            if (!useCacheOnly && Admin.tripCacheFresh() && (Admin._deTripFetchedWindow || 0) >= wantedWindow) {
+                useCacheOnly = true;
+            }
+            if (!useCacheOnly && hasCache) {
+                try { await Admin.renderTripPlanBatches(listDiv, secret, true); } catch { /* still refresh */ }
+            } else if (!useCacheOnly) {
+                listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans…</div>';
+                Admin._deTripPage = 0;
             }
             try {
                 if (!useCacheOnly) {
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
+                    const windowSize = Math.max(80, Number(Admin._deTripWindowSize) || 80);
+                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 20000);
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     Admin._cachedTripPlans = await res.json();
+                    Admin._deTripCacheAt = Date.now();
+                    Admin._deTripWindowSize = windowSize;
+                    Admin._deTripFetchedWindow = windowSize;
+                    Admin._deTripWindowFull = Object.keys(Admin._cachedTripPlans || {}).length >= windowSize;
                 }
                 const data = Admin._cachedTripPlans;
                 if (!data) {
@@ -4469,50 +5072,13 @@ const Admin = {
                 }
 
                 const allRows = Admin.flattenTripPlanRows();
-                // Populate premium user dropdown from full (unfiltered) set
-                const userSel = document.getElementById('de-filter-userid');
-                const uidList = document.getElementById('de-filter-userid-list');
-                const uidDisplay = document.getElementById('de-filter-userid-display');
-                if (userSel) {
-                    const prev = Admin._deTripFilters?.userId || userSel.value || '';
-                    const users = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
-                    userSel.innerHTML = `<option value="">All users</option>` + users.map((u) =>
-                        `<option value="${String(u).replace(/"/g, '&quot;')}">${String(u).replace(/</g, '&lt;')}</option>`
-                    ).join('');
-                    if (prev && users.includes(prev)) userSel.value = prev;
-                    else {
-                        userSel.value = '';
-                        Admin._deTripFilters.userId = '';
-                    }
-                    if (uidList) {
-                        const esc = (s) => String(s).replace(/</g, '&lt;');
-                        uidList.innerHTML = '';
-                        const addLi = (value, label) => {
-                            const li = document.createElement('li');
-                            li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer font-mono';
-                            li.textContent = label;
-                            li.onclick = () => {
-                                userSel.value = value;
-                                if (uidDisplay) uidDisplay.textContent = label;
-                                uidList.classList.add('hidden');
-                                document.getElementById('de-filter-userid-chevron')?.classList.remove('rotate-180');
-                                userSel.dispatchEvent(new Event('change'));
-                            };
-                            uidList.appendChild(li);
-                        };
-                        addLi('', 'All users');
-                        users.forEach((u) => addLi(u, esc(u)));
-                    }
-                    if (uidDisplay) {
-                        uidDisplay.textContent = userSel.value || 'All users';
-                    }
-                }
+                Admin._deTripUserIds = [...new Set(allRows.map((r) => r.userId).filter(Boolean))].sort();
+                Admin.paintTripUserOptions();
 
                 const filtered = Admin.getFilteredTripPlanRows();
-                // Group by trip corridor - uniqueUsers = unique userId/batchId (same user, new batch counts again)
                 const heatMap = {};
                 filtered.forEach((entry) => {
-                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}`;
+                    const key = Admin.tripCorridorKey(entry);
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -4522,15 +5088,15 @@ const Admin = {
                             userId: entry.userId,
                             uniqueKeys: new Set(),
                             count: 0,
+                            hitCount: 0,
                             lastSeen: 0,
                             depSample: entry.depTime || null,
-                            hits: [],
                         };
                     }
-                    const uniq = `${entry.userId || 'anon'}::${entry.batchId || entry.timestamp || 0}`;
+                    const uniq = String(entry.userId || entry.deviceId || '').trim() || 'anon';
                     heatMap[key].uniqueKeys.add(uniq);
                     heatMap[key].count = heatMap[key].uniqueKeys.size;
-                    heatMap[key].hits.push(entry);
+                    heatMap[key].hitCount += 1;
                     if (entry.timestamp > heatMap[key].lastSeen) {
                         heatMap[key].lastSeen = entry.timestamp;
                         heatMap[key].userId = entry.userId;
@@ -4541,83 +5107,29 @@ const Admin = {
                 const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
                 const sorted = Object.values(heatMap).map((item) => ({
                     ...item,
-                    hitCount: (item.hits || []).length,
-                    displayCount: countMode === 'hits' ? (item.hits || []).length : item.count,
+                    displayCount: countMode === 'hits' ? item.hitCount : item.count,
                 })).sort((a, b) => {
                     if (Admin._deSortMode === 'recent') return b.lastSeen - a.lastSeen;
                     return b.displayCount - a.displayCount;
                 });
 
                 const totalRows = allRows.length;
-                const userCount = new Set(filtered.map((r) => `${r.userId || ''}::${r.batchId || ''}`).filter(Boolean)).size;
+                const uniqueUsers = new Set(allRows.map((r) => r.userId).filter(Boolean)).size;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
                 }
 
-                const secureEscape = (str) => {
-                    if (!str) return '';
-                    if (typeof escapeHTML === 'function') return escapeHTML(str);
-                    return String(str).replace(/[&<>"']/g, (m) => ({
-                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-                    }[m]));
-                };
-
-                listDiv.innerHTML = `
-                    <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} logged trips / ${sorted.length} unique corridors / ${userCount} unique user-batches (export uses current filters)
-                    </div>
-                `;
-
-                sorted.forEach((item, idx) => {
-                    const dateStr = Admin.formatDate(item.lastSeen);
-                    const card = document.createElement('div');
-                    card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
-                    const safeOrigin = secureEscape(item.origin);
-                    const safeDest = secureEscape(item.dest);
-                    const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const depLabel = secureEscape(item.depSample || '-');
-                    const regionLabel = secureEscape(item.region || '-');
-                    const uidLabel = secureEscape(item.userId || '-');
-                    const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
-                    const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                    const hitsHtml = hitsSorted.map((h) => `
-                        <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} / ${secureEscape((h.userId || '').slice(0, 14))}</span>
-                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
-                        </div>
-                    `).join('');
-                    card.innerHTML = `
-                        <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
-                            <div class="min-w-0 flex-1 pr-2">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
-                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
-                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                    <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
-                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
-                                </div>
-                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
-                                <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
-                            </div>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                        </button>
-                        <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
-                            ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
-                        </div>
-                    `;
-                    card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
-                        const panel = card.querySelector('.de-trip-hits');
-                        const btn = card.querySelector('.de-trip-card-btn');
-                        if (!panel || !btn) return;
-                        const open = panel.classList.toggle('hidden') === false;
-                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                    });
-                    listDiv.appendChild(card);
+                listDiv.innerHTML = '';
+                let ever = { usersEver: Admin._deTripEverUsers || 0, pairsEver: Admin._deTripEverPairs || 0 };
+                try { ever = await Admin.fetchTripPlanEverStats(secret); } catch { /* keep all-time cache counts */ }
+                Admin.paintTripCorridorPage(listDiv, sorted, {
+                    filteredCount: filtered.length,
+                    uniqueUsers,
+                    usersEver: Math.max(Number(ever.usersEver || 0), uniqueUsers),
+                    pairsEver: Number(ever.pairsEver || 0),
+                    windowNote: 'all batches (cards paged for scroll)',
+                    canLoadMore: false,
                 });
             } catch (e) {
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load trip plans.</div>`;
@@ -4712,7 +5224,7 @@ const Admin = {
         clearBtn.onclick = async () => {
             const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
             const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'routing fail logs';
-            const confirmed = await Admin.secureConfirm('Clear Telemetry DB', `Type 'CLEAR' to permanently delete all ${label} from the server:`, 'CLEAR');
+            const confirmed = await Admin.confirmClearDb(`all ${label} from the server`);
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -4975,7 +5487,7 @@ const Admin = {
                 const commuterTitle = did !== 'Anonymous / Legacy'
                     ? `<div class="min-w-0 w-full space-y-1">
                         ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
-                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>
+                        <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>${Admin.userIdJoinHintHtml(did)}
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
 
@@ -5105,7 +5617,9 @@ const Admin = {
                         } else if (msgDateString === yesterday.toDateString()) {
                             dateDividerText = "Yesterday";
                         } else {
-                            dateDividerText = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+                            dateDividerText = (typeof formatAppDate === 'function')
+                                ? formatAppDate(date)
+                                : date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
                         }
                         
                         groupHTML += `
@@ -5230,7 +5744,7 @@ const Admin = {
                             return lines.join('\n').replace(/^\s+/, '');
                         };
                         // data-* only — never embed snippet in onclick (breaks on quotes/apostrophes)
-                        const waQuoteChip = ({ author, snippet, replyKey = '', alertId = '', alertFallback = '', accent = 'blue' }) => {
+                        const waQuoteChip = ({ author, snippet, replyKey = '', alertId = '', alertFallback = '', alertKind = '', accent = 'blue' }) => {
                             const bar = accent === 'blue'
                                 ? 'border-blue-500 dark:border-blue-400'
                                 : 'border-gray-400 dark:border-gray-500';
@@ -5246,6 +5760,7 @@ const Admin = {
                                 `data-reply-snippet="${secureEscape(cleanSnippet)}"`,
                                 `data-alert-id="${secureEscape(alertId || '')}"`,
                                 `data-alert-fallback="${secureEscape(alertFallback || '')}"`,
+                                `data-alert-kind="${secureEscape(alertKind || '')}"`,
                                 `class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer"`,
                             ].join(' ');
                             return `<button ${attrs}>
@@ -5254,6 +5769,17 @@ const Admin = {
                                 </button>`;
                         };
 
+                        // 0) Service-alert / incident quote: [ALERT:id|kind|snippet]
+                        const parsedAlertQuote = (typeof parseFeedbackAlertQuote === 'function')
+                            ? parseFeedbackAlertQuote(plainBody)
+                            : (function () {
+                                const m = String(plainBody || '').match(/^\[ALERT:([^|\]]*)\|([^|\]]*)\|([^\]]*)\]\s*([\s\S]*)$/i);
+                                if (!m) return null;
+                                const k = String(m[2] || 'notice').trim().toLowerCase();
+                                return { alertId: m[1].trim(), kind: k === 'disruption' ? 'disruption' : 'notice', snippet: m[3].trim(), body: m[4] };
+                            })();
+                        const payloadAlertId = String(item.quotedAlertId || '').trim();
+
                         // 1) Modern: [REPLY TO ADMIN: key | snippet]\nbody  (hub.js) — snippet cannot contain ]
                         const replyWithPipe = plainBody.match(/^\[REPLY TO ADMIN:\s*([^|\]]+?)\s*\|\s*([^\]]*)\]\s*([\s\S]*)$/i);
                         // 2) Legacy header only: [REPLY TO ADMIN: key]\n(optional snippet lines)\nbody
@@ -5261,7 +5787,26 @@ const Admin = {
                             ? plainBody.match(/^\[REPLY TO ADMIN:\s*([^\]]+)\]\s*([\s\S]*)$/i)
                             : null;
 
-                        if (replyWithPipe || replyHeaderOnly) {
+                        if (parsedAlertQuote || payloadAlertId) {
+                            isReply = true;
+                            const alertId = (parsedAlertQuote && parsedAlertQuote.alertId) || payloadAlertId;
+                            const kind = (parsedAlertQuote && parsedAlertQuote.kind) || item.quotedAlertKind || 'notice';
+                            let snippet = parsedAlertQuote ? toQuotePlain(parsedAlertQuote.snippet) : '';
+                            let bodyRest = parsedAlertQuote ? String(parsedAlertQuote.body || '') : plainBody;
+                            if (!snippet) snippet = toQuotePlain(bodyRest).slice(0, 240) || 'Quoted advisory';
+                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
+                            snippet = (snippet || 'Quoted advisory').slice(0, 240);
+                            quoteBlockHtml = waQuoteChip({
+                                author: kind === 'disruption' ? 'Incident' : 'Advisory',
+                                snippet,
+                                replyKey: '',
+                                alertId,
+                                alertFallback: snippet,
+                                alertKind: kind,
+                                accent: 'blue',
+                            });
+                            plainBody = bodyRest;
+                        } else if (replyWithPipe || replyHeaderOnly) {
                             isReply = true;
                             const replyKey = String((replyWithPipe || replyHeaderOnly)[1] || '').trim();
                             let snippet = '';
@@ -5328,13 +5873,16 @@ const Admin = {
                                     quoteSnippet = (quoteSnippet || 'Quoted message').slice(0, 240);
                                     bodyRest = stripDupQuoteFromBody(bodyRest, quoteSnippet);
                                     const alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
-                                    const isAlertQuote = !!(alertIdMatch || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent));
+                                    const isAlertQuote = !!(alertIdMatch || item.quotedAlertId
+                                        || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent)
+                                        || item.type === 'thread_reply');
                                     quoteBlockHtml = waQuoteChip({
                                         author: quoteAuthor,
                                         snippet: quoteSnippet,
                                         replyKey: '',
-                                        alertId: isAlertQuote ? (alertIdMatch ? alertIdMatch[1] : '') : '',
-                                        alertFallback: isAlertQuote ? `${quoteAuthor}: ${quoteSnippet}` : '',
+                                        alertId: isAlertQuote ? (alertIdMatch ? alertIdMatch[1] : (item.quotedAlertId || '')) : '',
+                                        alertFallback: isAlertQuote ? `${quoteAuthor}: ${quoteSnippet}` : quoteSnippet,
+                                        alertKind: item.quotedAlertKind || '',
                                         accent: 'blue',
                                     });
                                     plainBody = bodyRest;
@@ -5482,8 +6030,9 @@ const Admin = {
                     e.stopPropagation();
                     const alertId = quoteBtn.getAttribute('data-alert-id') || '';
                     const alertFallback = quoteBtn.getAttribute('data-alert-fallback') || '';
+                    const alertKind = quoteBtn.getAttribute('data-alert-kind') || '';
                     if (alertId || alertFallback) {
-                        Admin.viewContextAlert(alertId || null, alertFallback);
+                        Admin.viewContextAlert(alertId || null, alertFallback, alertKind);
                     } else {
                         const threadBody = quoteBtn.closest('.feedback-thread-body');
                         Admin.jumpToQuotedFeedback(
@@ -5544,6 +6093,10 @@ const Admin = {
         };
 
         Admin.fetchFeedback = async () => {
+            if (!Admin.isAllowlistedAdmin(Admin.currentUser)) {
+                if (typeof showToast === 'function') showToast('Sign in as an operator to load feedback.', 'error', 3500);
+                return;
+            }
             const secret = await Admin.getAuthKey();
             if (!secret) return;
 
@@ -5570,7 +6123,7 @@ const Admin = {
                     window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000)
                 ]);
                 
-                if (!res.ok) throw new Error("Failed to fetch feedback");
+                if (!res.ok) throw new Error("Failed to fetch feedback (" + res.status + ")");
                 const data = await res.json();
                 const inboxData = inboxRes.ok ? await inboxRes.json() : {};
                 Admin.cachedAliases = aliasesRes.ok ? (await aliasesRes.json()) || {} : {};
@@ -5613,6 +6166,7 @@ const Admin = {
                 listContainer.innerHTML = '<div class="text-xs text-red-500 text-center py-4">Failed to load feedback.</div>';
                 if (tabInbox) tabInbox.innerHTML = "Error";
                 if (tabArchive) tabArchive.innerHTML = "Error";
+                if (typeof showToast === 'function') showToast(e.message || 'Failed to load feedback.', 'error', 3500);
             }
         };
 
@@ -6046,7 +6600,7 @@ const Admin = {
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">User reports plus auto-held messages. Held text is hidden until you approve it.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports (message / user). Hide posts or shadow-ban without schema rewrites.</p>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -6107,104 +6661,24 @@ const Admin = {
                     const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
-                    const snippet = (r.body || r.snippet) ? String(r.body || r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-                    const closed = status === 'closed' || status === 'resolved' || status === 'approved' || status === 'rejected';
-                    const autoHold = (r.type || '') === 'auto_hold';
-                    const reason = r.reason ? String(r.reason).replace(/</g, '&lt;') : '';
+                    const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                    const closed = status === 'closed' || status === 'resolved';
                     return `
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : autoHold ? 'ring-1 ring-amber-300 dark:ring-amber-700' : ''}" data-mq-id="${r.reportId || r._key}">
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
                             <div class="flex justify-between gap-2 mb-1">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${autoHold ? 'AUTO HOLD' : type} - ${r.routeId || r.source || '-'}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} - ${r.routeId || '-'}</p>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1">${reason ? `reason: ${reason} · ` : ''}uid: ${(r.targetUid || '-').toString().slice(0, 16)}</p>
-                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2 whitespace-pre-wrap">"${snippet}"</p>` : ''}
-                            ${closed ? `<span class="text-[10px] text-gray-400">${status}</span>` : `
+                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}</p>
+                            ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">"${snippet}"</p>` : ''}
+                            ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
                             <div class="flex flex-wrap gap-2 mt-1">
-                                ${autoHold ? `
-                                <button type="button" class="mq-approve text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve &amp; publish</button>
-                                <button type="button" class="mq-reject text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-id="${r.reportId || r._key}">Reject</button>
-                                ` : `
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
                                 <button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>
                                 <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
-                                `}
                             </div>`}
                         </div>`;
                 }).join('');
-
-                const setMqStatus = async (id, status) => {
-                    const s = await Admin.getAuthKey();
-                    const put = await fetch(`${dynamicEndpoint}moderation_queue/${id}/status.json?auth=${s}`, {
-                        method: 'PUT', body: JSON.stringify(status),
-                    });
-                    if (!put.ok) throw new Error('status fail');
-                };
-
-                const publishHeld = async (item) => {
-                    const s = await Admin.getAuthKey();
-                    const pub = item.publish || {};
-                    if (pub.kind === 'community_post' && pub.routeId && pub.payload?.postId) {
-                        const put = await fetch(`${dynamicEndpoint}route_community/${encodeURIComponent(pub.routeId)}/posts/${encodeURIComponent(pub.payload.postId)}.json?auth=${s}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...pub.payload, hidden: false, pendingReview: false, timestamp: Date.now() }),
-                        });
-                        if (!put.ok) throw new Error('publish post failed');
-                        return;
-                    }
-                    if (pub.kind === 'community_reply' && pub.routeId && pub.postId && pub.payload?.replyId) {
-                        const put = await fetch(`${dynamicEndpoint}route_community/${encodeURIComponent(pub.routeId)}/posts/${encodeURIComponent(pub.postId)}/replies/${encodeURIComponent(pub.payload.replyId)}.json?auth=${s}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...pub.payload, hidden: false, pendingReview: false, timestamp: Date.now() }),
-                        });
-                        if (!put.ok) throw new Error('publish reply failed');
-                        return;
-                    }
-                    if (pub.kind === 'feedback' && pub.payload) {
-                        const post = await fetch(`${dynamicEndpoint}feedback.json?auth=${s}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...pub.payload, status: 'unread', timestamp: Date.now(), fromModeration: true }),
-                        });
-                        if (!post.ok) throw new Error('publish feedback failed');
-                    }
-                };
-
-                list.querySelectorAll('.mq-approve').forEach((btn) => {
-                    btn.onclick = async () => {
-                        const id = btn.getAttribute('data-id');
-                        const item = items.find((x) => (x.reportId || x._key) === id);
-                        if (!id || !item) return;
-                        btn.disabled = true;
-                        try {
-                            await publishHeld(item);
-                            await setMqStatus(id, 'approved');
-                            if (typeof showToast === 'function') showToast('Approved and published', 'success');
-                            Admin.fetchModerationQueue();
-                        } catch (e) {
-                            if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
-                            btn.disabled = false;
-                        }
-                    };
-                });
-
-                list.querySelectorAll('.mq-reject').forEach((btn) => {
-                    btn.onclick = async () => {
-                        const id = btn.getAttribute('data-id');
-                        if (!id) return;
-                        btn.disabled = true;
-                        try {
-                            await setMqStatus(id, 'rejected');
-                            if (typeof showToast === 'function') showToast('Rejected — not published', 'info');
-                            Admin.fetchModerationQueue();
-                        } catch (e) {
-                            if (typeof showToast === 'function') showToast('Could not reject', 'error');
-                            btn.disabled = false;
-                        }
-                    };
-                });
 
                 list.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {
@@ -6710,7 +7184,7 @@ const Admin = {
                 if (device?.uid) {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
-                        return { uid: device.uid, user, via: 'device?uid', deviceId: q };
+                        return { uid: device.uid, user, via: 'device?uid', deviceId: q, device };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
@@ -6727,6 +7201,7 @@ const Admin = {
                     },
                     via: 'device',
                     deviceId: q,
+                    device,
                 };
             }
 
@@ -6757,7 +7232,7 @@ const Admin = {
                     out.innerHTML = '<p class="text-red-500">Not found. Try a Firebase UID, device ID (<code class="font-mono">usr_…</code>), or account email.</p>';
                     return;
                 }
-                const { uid, user, via, deviceId } = resolved;
+                const { uid, user, via, deviceId, device } = resolved;
                 const flags = user.flags || {};
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
@@ -6768,12 +7243,36 @@ const Admin = {
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
                 const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
                 const email = (user.email || '-').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device ? account' : 'user id'));
+                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device → account' : 'user id'));
+                const joinedMs = Number(user.createdAt)
+                    || Admin.parseJoinedAtFromUserId(deviceId)
+                    || Admin.parseJoinedAtFromUserId(uid);
+                let lastSeenMs = Number(user.updatedAt) || Number(device?.linkedAt) || 0;
+                const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
+                    ? Object.keys(user.deviceIds).filter(Boolean)
+                    : (deviceId ? [deviceId] : []);
+                try {
+                    const secret = await Admin.getAuthKey();
+                    const lookIds = [...new Set([deviceId, ...linkedIds].filter(Boolean))];
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                    for (const lookId of lookIds) {
+                        const idxRes = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users/${encodeURIComponent(lookId)}.json${auth}`);
+                        if (!idxRes.ok) continue;
+                        const idx = await idxRes.json();
+                        if (idx && Number(idx.lastSeen) > lastSeenMs) lastSeenMs = Number(idx.lastSeen);
+                    }
+                } catch { /* optional */ }
+                const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
+                const lastSeenLabel = lastSeenMs ? Admin.formatDate(lastSeenMs) : 'unknown';
+                const devicesLabel = linkedIds.length ? linkedIds.map((id) => String(id).replace(/</g, '&lt;')).join(', ') : 'none';
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
                         <p class="font-black text-gray-900 dark:text-white">${name}</p>
                         <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
                         <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono">${deviceId}</span>` : ''}</p>
+                        <p class="text-[11px]">Joined: <b>${joinedLabel}</b> · Last seen: <b>${lastSeenLabel}</b></p>
+                        <p class="text-[11px]">Linked devices: <span class="font-mono break-all">${devicesLabel}</span></p>
                         <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
                         <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
                         ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
@@ -6871,8 +7370,8 @@ const Admin = {
 
         const alias = Admin.cachedAliases && Admin.cachedAliases[deviceId] ? Admin.cachedAliases[deviceId] : null;
         const recipientHtml = alias
-            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">-</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>`
-            : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>`;
+            ? `<span class="font-bold text-gray-800 dark:text-gray-100">${String(alias).replace(/</g, '&lt;')}</span><span class="text-gray-400 mx-1">-</span><span class="font-mono">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`
+            : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`;
         
         let modal = document.getElementById('admin-reply-modal');
         if (!modal) {
@@ -6910,7 +7409,7 @@ const Admin = {
                 editor.classList.remove('min-h-[120px]', 'p-2.5');
                 editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
                 const bar = editor.previousElementSibling;
-                if (bar && !bar.querySelector('[onclick*="fontVerdana"]')) {
+                if (bar && !bar.querySelector('[data-nt-font-select]')) {
                     bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
                 }
             }
@@ -7032,8 +7531,10 @@ const Admin = {
                 return;
             }
             
+            // Auto-Signoff Logic
             const adminEmail = Admin.currentUser?.email || '';
             const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
+            text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
             
             const btn = document.getElementById('reply-send');
             btn.textContent = "Sending...";
@@ -7051,9 +7552,7 @@ const Admin = {
                     message: text,
                     timestamp: Date.now(),
                     feedbackId: feedbackId,
-                    read: false,
-                    from: 'admin',
-                    fromName: adminName,
+                    read: false
                 };
 
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
@@ -7150,7 +7649,7 @@ const Admin = {
         setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'rounded-xl'), 1600);
     },
 
-    viewContextAlert: async (alertId, fallbackText) => {
+    viewContextAlert: async (alertId, fallbackText, alertKind = '') => {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         
@@ -7185,150 +7684,54 @@ const Admin = {
         
         openSmoothModal('admin-context-modal');
 
+        const showPreview = async (foundData) => {
+            if (foundData.poll && foundData.poll.active && !foundData.pollResults && foundData.id) {
+                const liveTallies = await Admin.fetchPollResultsSnapshot(foundData.id, secret);
+                if (liveTallies) foundData = { ...foundData, pollResults: liveTallies };
+            }
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('admin-context-modal');
+            else modal.classList.add('hidden');
+            Admin.previewArchivedAlert(foundData);
+        };
+
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-            let foundData = null;
+            const authQ = `?auth=${encodeURIComponent(secret)}`;
+            const fetchJson = async (path) => {
+                const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`);
+                const data = await res.json();
+                if (!data || data.error) return null;
+                return data;
+            };
 
-            // Search Active and Archived nodes
-            if (alertId && alertId !== 'null' && alertId !== 'undefined') {
-                let res = await fetch(`${dynamicEndpoint}notices.json?auth=${secret}`);
-                let data = await res.json();
-                if (data && !data.error) Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
-                
-                if (!foundData) {
-                    res = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`); // GUARDIAN FIX: Removed REST index constraint to prevent 400 Bad Request
-                    data = await res.json();
-                    if (data && !data.error) {
-                        Object.values(data).forEach(alert => { if (alert.id === String(alertId)) foundData = alert; });
-                    }
-                }
+            const [notices, noticesArchive, disruptions, disruptionsArchive] = await Promise.all([
+                fetchJson('notices'),
+                fetchJson('notices_archive'),
+                fetchJson('disruptions'),
+                fetchJson('disruptions_archive'),
+            ]);
 
-                // Match Transit Incident Manager entries by id (active + archive)
-                if (!foundData) {
-                    const disrActiveRes = await fetch(`${dynamicEndpoint}disruptions.json?auth=${secret}`);
-                    const disrActiveData = await disrActiveRes.json();
-                    if (disrActiveData && !disrActiveData.error) {
-                        Object.entries(disrActiveData).forEach(([rId, routeNode]) => {
-                            if (typeof routeNode !== 'object' || !routeNode) return;
-                            Object.values(routeNode).forEach((disr) => {
-                                if (disr && String(disr.id) === String(alertId)) {
-                                    foundData = {
-                                        ...disr,
-                                        kind: 'disruption',
-                                        clearedFrom: rId,
-                                        severity: disr.tier === 'CRITICAL' ? 'critical' : (disr.severity || 'warning'),
-                                    };
-                                }
-                            });
-                        });
-                    }
-                }
-                if (!foundData) {
-                    const disrArchRes = await fetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`);
-                    const disrArchData = await disrArchRes.json();
-                    if (disrArchData && !disrArchData.error) {
-                        Object.entries(disrArchData).forEach(([rId, routeNode]) => {
-                            if (typeof routeNode !== 'object' || !routeNode) return;
-                            Object.values(routeNode).forEach((disr) => {
-                                if (disr && String(disr.id) === String(alertId)) {
-                                    foundData = {
-                                        ...disr,
-                                        kind: 'disruption',
-                                        clearedFrom: disr.clearedFrom || rId,
-                                        severity: disr.severity || (disr.tier === 'CRITICAL' ? 'critical' : 'warning'),
-                                    };
-                                }
-                            });
-                        });
-                    }
-                }
-            }
-
-            // Fuzzy Text Fallback (For legacy quotes without IDs)
-            if (!foundData && fallbackText) {
-                const cleanFallback = fallbackText.replace(/['"]/g, '').toLowerCase().substring(0, 30); 
-                
-                const resActive = await fetch(`${dynamicEndpoint}notices.json?auth=${secret}`);
-                const activeData = await resActive.json();
-                if (activeData && !activeData.error) {
-                    Object.values(activeData).forEach(alert => {
-                        if (alert.message && alert.message.toLowerCase().includes(cleanFallback)) foundData = alert;
-                    });
-                }
-
-                if (!foundData) {
-                    const resArch = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`);
-                    const archData = await resArch.json();
-                    if (archData && !archData.error) {
-                        Object.values(archData).forEach(alert => {
-                            if (alert.message && alert.message.toLowerCase().includes(cleanFallback)) foundData = alert;
-                        });
-                    }
-                }
-            }
-
-            // GUARDIAN PHASE 14: Disruption Graveyard Sweep
-            if (!foundData && fallbackText) {
-                const cleanFallback = fallbackText.replace(/['"]/g, '').toLowerCase().substring(0, 30);
-                
-                // Sweep active disruptions globally
-                const disrActiveRes = await fetch(`${dynamicEndpoint}disruptions.json?auth=${secret}`);
-                const disrActiveData = await disrActiveRes.json();
-                if (disrActiveData && !disrActiveData.error) {
-                    Object.values(disrActiveData).forEach(routeNode => {
-                        if (typeof routeNode === 'object') {
-                            Object.values(routeNode).forEach(disr => {
-                                const dMsg = disr.message || disr.longExplanation || '';
-                                if (dMsg.toLowerCase().includes(cleanFallback) || (disr.buttonText && disr.buttonText.toLowerCase().includes(cleanFallback))) {
-                                    foundData = { ...disr, severity: disr.tier === 'CRITICAL' ? 'critical' : 'warning' };
-                                }
-                            });
-                        }
-                    });
-                }
-
-                // Sweep the new Graveyard
-                if (!foundData) {
-                    const disrArchRes = await fetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`);
-                    const disrArchData = await disrArchRes.json();
-                    if (disrArchData && !disrArchData.error) {
-                        Object.values(disrArchData).forEach(routeNode => {
-                            if (typeof routeNode === 'object') {
-                                Object.values(routeNode).forEach(disr => {
-                                    const dMsg = disr.message || disr.longExplanation || '';
-                                    if (dMsg.toLowerCase().includes(cleanFallback) || (disr.buttonText && disr.buttonText.toLowerCase().includes(cleanFallback))) {
-                                        foundData = { ...disr, severity: disr.tier === 'CRITICAL' ? 'critical' : 'warning', archivedAt: disr.archivedAt };
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }
-            }
+            let foundData = Admin.findQuotedAlertRecord(alertId, fallbackText, {
+                notices,
+                noticesArchive,
+                disruptions,
+                disruptionsArchive,
+            });
 
             if (foundData) {
-                // Live poll tallies when previewing an active poll alert from Feedback
-                if (foundData.poll && foundData.poll.active && !foundData.pollResults && foundData.id) {
-                    const liveTallies = await Admin.fetchPollResultsSnapshot(foundData.id, secret);
-                    if (liveTallies) foundData = { ...foundData, pollResults: liveTallies };
-                }
-                if (typeof closeSmoothModal === 'function') closeSmoothModal('admin-context-modal');
-                else modal.classList.add('hidden');
-                Admin.previewArchivedAlert(foundData);
+                await showPreview(foundData);
                 return;
-            } else {
-                contentDiv.innerHTML = `
-                    <div class="text-center py-4">
-                        <span class="inline-flex justify-center text-gray-400 mb-2">${Admin.icon('search', 'w-8 h-8')}</span>
-                        <p class="text-gray-500 text-sm font-bold">Alert not found in database.</p>
-                        <p class="text-xs text-gray-400 mt-2">It may have been permanently deleted or too old to retrieve. Here is the snippet we have:</p>
-                        <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded italic text-xs text-gray-600 dark:text-gray-400">"${fallbackText}"</div>
-                    </div>
-                `;
             }
 
+            const reconstructed = Admin.buildSyntheticQuotedAlert(alertId, fallbackText, alertKind);
+            await showPreview(reconstructed);
         } catch(e) {
-            contentDiv.innerHTML = `<div class="text-red-500 text-center py-4">Error fetching context: ${e.message}</div>`;
+            const reconstructed = Admin.buildSyntheticQuotedAlert(alertId, fallbackText, alertKind);
+            try {
+                await showPreview(reconstructed);
+            } catch {
+                contentDiv.innerHTML = `<div class="text-red-500 text-center py-4">Error fetching context: ${e.message}</div>`;
+            }
         }
     },
 
@@ -7346,41 +7749,151 @@ const Admin = {
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
         const fileLabelId = opts.fileLabelId ? String(opts.fileLabelId).replace(/[^a-z0-9_-]/gi, '') : '';
         const btn = (tag, title, inner, extraClass = '') =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none flex-1 ${extraClass}" title="${title}">${inner}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded focus:outline-none ${extraClass}" title="${title}">${inner}</button>`;
         const iconBtn = (tag, title, svg) =>
-            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center focus:outline-none flex-1" title="${title}">${svg}</button>`;
+            `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="px-1.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer flex-1 whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
         const alignC = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M7 12h10M4 18h16"></path></svg>';
         const alignR = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M10 12h10M4 18h16"></path></svg>';
+        const fontSelect = `<div class="relative shrink-0" data-nt-font-select>
+                            <button type="button" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.toggleWysiwygFontMenu(this)" class="h-7 min-w-[4.75rem] px-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded flex items-center justify-between gap-1 focus:outline-none" title="Font">
+                                <span data-nt-font-label>Font</span>
+                                <svg class="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <ul class="hidden absolute left-0 z-[210] mt-1 min-w-[8.5rem] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden text-left">
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontDefault" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700">Default</li>
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontVerdana" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700" style="font-family:Verdana,Geneva,sans-serif">Verdana</li>
+                                <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontTimes" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer" style="font-family:'Times New Roman',Times,serif">Times</li>
+                            </ul>
+                        </div>`;
         return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
-                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5">
+                        <div class="flex items-center w-full p-0.5 gap-1">
+                            <div class="flex flex-1 items-center justify-evenly min-w-0">
                             ${btn('bold', 'Bold', 'B')}
                             ${btn('italic', 'Italic', 'I', 'italic')}
                             ${btn('underline', 'Underline', 'U', 'underline')}
-                            ${sep}
-                            ${btn('smaller', 'Decrease Size', 'A-')}
-                            ${btn('larger', 'Increase Size', 'A+')}
                             ${sep}
                             ${iconBtn('justifyLeft', 'Align Left', alignL)}
                             ${iconBtn('justifyCenter', 'Align Center', alignC)}
                             ${iconBtn('justifyRight', 'Align Right', alignR)}
                             ${sep}
                             ${btn('ul', 'Bullet list', '• List', 'whitespace-nowrap')}
-                            ${sep}
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="px-1.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none flex-1" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            </div>
                             ${media}
                         </div>
-                        <div class="flex items-center w-full p-0.5 overflow-x-auto custom-scrollbar space-x-0.5 border-t border-gray-300 dark:border-gray-600">
+                        <div class="flex items-center w-full p-0.5 gap-1 border-t border-gray-300 dark:border-gray-600">
+                            <div class="flex flex-1 items-center justify-evenly min-w-0">
                             ${btn('title', 'Title heading', 'Title', 'whitespace-nowrap')}
-                            ${btn('fontVerdana', 'Verdana', 'Verdana', 'whitespace-nowrap font-normal')}
-                            ${btn('fontTimes', 'Times New Roman', 'Times', 'whitespace-nowrap font-normal')}
+                            ${fontSelect}
+                            ${btn('smaller', 'Decrease Size', 'A-')}
+                            ${btn('larger', 'Increase Size', 'A+')}
+                            </div>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
+    },
+
+    toggleWysiwygFontMenu: (btn) => {
+        Admin.saveCursorRange();
+        const wrap = btn?.closest?.('[data-nt-font-select]');
+        const list = wrap?.querySelector('ul');
+        if (!list) return;
+        document.querySelectorAll('[data-nt-font-select] ul').forEach((ul) => {
+            if (ul !== list) ul.classList.add('hidden');
+        });
+        list.classList.toggle('hidden');
+    },
+
+    pickWysiwygFont: (li, editorId) => {
+        Admin.saveCursorRange();
+        const tag = li?.getAttribute?.('data-font') || 'fontDefault';
+        Admin.formatAlertText(tag, editorId);
+        const wrap = li?.closest?.('[data-nt-font-select]');
+        const label = wrap?.querySelector('[data-nt-font-label]');
+        if (label) {
+            label.textContent = (li.textContent || 'Font').trim();
+            const fam = tag === 'fontVerdana'
+                ? 'Verdana, Geneva, Tahoma, sans-serif'
+                : tag === 'fontTimes'
+                    ? '"Times New Roman", Times, serif'
+                    : '';
+            if (fam) label.style.fontFamily = fam;
+            else label.style.fontFamily = '';
+        }
+        wrap?.querySelector('ul')?.classList.add('hidden');
+    },
+
+    applyWysiwygFont: (editor, fontKey) => {
+        const map = {
+            fontDefault: { face: 'sans-serif', family: 'ui-sans-serif, system-ui, sans-serif', cls: 'nt-font-default' },
+            fontVerdana: { face: 'Verdana', family: 'Verdana, Geneva, Tahoma, sans-serif', cls: 'nt-font-verdana' },
+            fontTimes: { face: 'Times New Roman', family: '"Times New Roman", Times, Georgia, serif', cls: 'nt-font-times' },
+        };
+        const spec = map[fontKey] || map.fontDefault;
+        const paint = (el) => {
+            if (!el || el.nodeType !== 1) return;
+            el.setAttribute('face', spec.face);
+            el.style.setProperty('font-family', spec.family, 'important');
+            el.classList.remove('nt-font-default', 'nt-font-verdana', 'nt-font-times');
+            el.classList.add(spec.cls);
+        };
+        editor.focus();
+        if (Admin._savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(Admin._savedRange);
+            Admin._savedRange = null;
+        }
+        try { document.execCommand('styleWithCSS', false, false); } catch { /* ignore */ }
+        try { document.execCommand('fontName', false, spec.face); } catch { /* ignore */ }
+
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+
+        const wrapCollapsed = () => {
+            let node = sel.anchorNode;
+            if (node && node.nodeType === 3) node = node.parentElement;
+            let fontEl = node;
+            while (fontEl && fontEl !== editor && fontEl.tagName !== 'FONT') fontEl = fontEl.parentElement;
+            if (fontEl && fontEl !== editor) {
+                paint(fontEl);
+                return;
+            }
+            const font = document.createElement('font');
+            paint(font);
+            font.appendChild(document.createTextNode('\u200b'));
+            range.insertNode(font);
+            const caret = document.createRange();
+            caret.setStart(font.firstChild, 1);
+            caret.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(caret);
+        };
+
+        if (range.collapsed) {
+            wrapCollapsed();
+        } else {
+            try {
+                const font = document.createElement('font');
+                paint(font);
+                range.surroundContents(font);
+            } catch {
+                /* execCommand already wrapped; paint those faces next */
+            }
+        }
+        editor.querySelectorAll('font, span[style*="font-family"]').forEach((el) => {
+            const face = (el.getAttribute('face') || el.style.fontFamily || '').replace(/['"]/g, '');
+            if (new RegExp(spec.face.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(face)
+                || el.classList.contains(spec.cls)) {
+                paint(el);
+            }
+        });
     },
 
 // RICH TEXT FORMATTING HELPER ---
@@ -7396,8 +7909,20 @@ const Admin = {
                 font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
                 font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
-                font[face="Verdana"], font[face="verdana"] { font-family: Verdana, Geneva, sans-serif !important; }
-                font[face="Times New Roman"], font[face="times new roman"] { font-family: "Times New Roman", Times, serif !important; }
+                .nt-font-verdana, font.nt-font-verdana, span.nt-font-verdana,
+                font[face="Verdana" i], #alert-msg font[face="Verdana" i],
+                #admin-reply-text font[face="Verdana" i], #disr-msg font[face="Verdana" i] {
+                    font-family: Verdana, Geneva, Tahoma, sans-serif !important;
+                }
+                .nt-font-times, font.nt-font-times, span.nt-font-times,
+                font[face="Times New Roman" i], font[face="Times" i],
+                #alert-msg font[face="Times New Roman" i],
+                #admin-reply-text font[face="Times New Roman" i], #disr-msg font[face="Times New Roman" i] {
+                    font-family: "Times New Roman", Times, Georgia, serif !important;
+                }
+                .nt-font-default, font.nt-font-default, font[face="sans-serif" i] {
+                    font-family: ui-sans-serif, system-ui, sans-serif !important;
+                }
                 #alert-msg, #admin-reply-text, #disr-msg { overflow-wrap: anywhere; word-break: break-word; }
             `;
             document.head.appendChild(style);
@@ -7433,10 +7958,8 @@ const Admin = {
                 }
             }
             document.execCommand('formatBlock', false, block);
-        } else if (tag === 'fontVerdana') {
-            document.execCommand('fontName', false, 'Verdana');
-        } else if (tag === 'fontTimes') {
-            document.execCommand('fontName', false, 'Times New Roman');
+        } else if (tag === 'fontDefault' || tag === 'fontVerdana' || tag === 'fontTimes') {
+            Admin.applyWysiwygFont(editor, tag);
         } else if (tag === 'larger' || tag === 'smaller') {
             // GUARDIAN DOM SCANNER: queryCommandValue is broken on mobile WebViews.
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
@@ -7537,6 +8060,200 @@ const Admin = {
         return [];
     },
 
+    ALERT_SCOPE_CHIPS: [
+        { value: 'all', label: 'Entire network' },
+        { value: 'all_GP', label: 'Gauteng' },
+        { value: 'all_WC', label: 'Western Cape' },
+        { value: 'all_KZN', label: 'KwaZulu-Natal' },
+        { value: 'all_EC', label: 'Eastern Cape' },
+    ],
+
+    alertTargetLabel: (value) => {
+        const v = String(value || '');
+        const chip = (Admin.ALERT_SCOPE_CHIPS || []).find((c) => c.value === v);
+        if (chip) return chip.label;
+        if (typeof ROUTES !== 'undefined' && ROUTES[v]) {
+            return typeof Admin.formatRouteLabelPlain === 'function'
+                ? Admin.formatRouteLabelPlain(ROUTES[v].name)
+                : (ROUTES[v].name || v);
+        }
+        return v;
+    },
+
+    dedupeAlertTargets: (targets) => {
+        const set = new Set((Array.isArray(targets) ? targets : []).filter(Boolean).map(String));
+        if (set.has('all')) return ['all'];
+        const out = [];
+        for (const t of set) {
+            if (/^all_[A-Z0-9]+$/i.test(t)) {
+                out.push(t);
+                continue;
+            }
+            const region = (typeof ROUTES !== 'undefined' && ROUTES[t] && ROUTES[t].region) || '';
+            if (region && set.has(`all_${region}`)) continue;
+            out.push(t);
+        }
+        return out;
+    },
+
+    getSelectedAlertTargets: () => Admin.dedupeAlertTargets(Admin._selectedAlertTargets || []),
+
+    setSelectedAlertTargets: (list, opts = {}) => {
+        const fetchLive = opts.fetch !== false;
+        Admin._selectedAlertTargets = Admin.dedupeAlertTargets(list);
+        const select = document.getElementById('alert-target');
+        if (select) {
+            Array.from(select.options || []).forEach((opt) => {
+                opt.selected = Admin._selectedAlertTargets.includes(opt.value);
+            });
+            if (Admin._selectedAlertTargets[0]) select.value = Admin._selectedAlertTargets[0];
+        }
+        document.querySelectorAll('[data-alert-target]').forEach((el) => {
+            const v = el.getAttribute('data-alert-target');
+            const on = Admin._selectedAlertTargets.includes(v);
+            if (el.type === 'checkbox') el.checked = on;
+            if (el.getAttribute('data-alert-chip') === '1') {
+                el.classList.toggle('bg-blue-600', on);
+                el.classList.toggle('text-white', on);
+                el.classList.toggle('border-blue-600', on);
+                el.classList.toggle('bg-gray-50', !on);
+                el.classList.toggle('dark:bg-gray-900', !on);
+                el.classList.toggle('text-gray-800', !on);
+                el.classList.toggle('dark:text-gray-200', !on);
+            }
+        });
+        if (typeof Admin.syncAlertTargetSummary === 'function') Admin.syncAlertTargetSummary();
+        if (fetchLive && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
+            Admin.fetchCurrentAlertsForTargets(Admin.getSelectedAlertTargets());
+        }
+    },
+
+    syncAlertTargetSummary: () => {
+        const display = document.getElementById('alert-target-display');
+        if (!display) return;
+        const selected = Admin.getSelectedAlertTargets();
+        if (!selected.length) {
+            display.textContent = 'Select routes or regions…';
+            return;
+        }
+        const labels = selected.map((v) => Admin.alertTargetLabel(v));
+        display.textContent = selected.length === 1
+            ? labels[0]
+            : `${selected.length} selected — ${labels.slice(0, 3).join(', ')}${labels.length > 3 ? '…' : ''}`;
+    },
+
+    toggleAlertTarget: (value) => {
+        const v = String(value || '');
+        if (!v) return;
+        let next = Admin.getSelectedAlertTargets().slice();
+        if (v === 'all') {
+            next = next.includes('all') ? [] : ['all'];
+        } else if (next.includes(v)) {
+            next = next.filter((t) => t !== v);
+        } else {
+            next = next.filter((t) => t !== 'all');
+            if (!/^all_/i.test(v) && typeof ROUTES !== 'undefined' && ROUTES[v] && ROUTES[v].region) {
+                next = next.filter((t) => t !== `all_${ROUTES[v].region}`);
+            }
+            next = next.concat([v]);
+        }
+        if (!next.length) {
+            const def = typeof currentRegion !== 'undefined' ? `all_${currentRegion}` : 'all_GP';
+            next = [def];
+        }
+        Admin.setSelectedAlertTargets(next);
+    },
+
+    walkNoticeRecords: (root, visit) => {
+        if (!root || typeof root !== 'object' || typeof visit !== 'function') return;
+        const seen = new Set();
+        const walk = (node, depth) => {
+            if (!node || typeof node !== 'object' || depth > 8) return;
+            if (seen.has(node)) return;
+            seen.add(node);
+            Admin.listNoticesInTarget(node).forEach((n) => visit(n));
+            Object.values(node).forEach((child) => {
+                if (child && typeof child === 'object') walk(child, depth + 1);
+            });
+        };
+        walk(root, 0);
+    },
+
+    walkDisruptionRecords: (root, visit) => {
+        if (!root || typeof root !== 'object' || typeof visit !== 'function') return;
+        Object.entries(root).forEach(([rId, routeNode]) => {
+            if (!routeNode || typeof routeNode !== 'object') return;
+            if (routeNode.tier || routeNode.longExplanation || routeNode.stations) {
+                visit({
+                    ...routeNode,
+                    kind: 'disruption',
+                    clearedFrom: routeNode.clearedFrom || rId,
+                    severity: routeNode.tier === 'CRITICAL' ? 'critical' : (routeNode.severity || 'warning'),
+                });
+            }
+            Object.values(routeNode).forEach((disr) => {
+                if (!disr || typeof disr !== 'object') return;
+                if (!(disr.id || disr.message || disr.longExplanation || disr.tier)) return;
+                visit({
+                    ...disr,
+                    kind: 'disruption',
+                    clearedFrom: disr.clearedFrom || rId,
+                    severity: disr.tier === 'CRITICAL' ? 'critical' : (disr.severity || 'warning'),
+                });
+            });
+        });
+    },
+
+    findQuotedAlertRecord: (alertId, fallbackText, trees = {}) => {
+        const id = String(alertId || '').trim();
+        const needle = String(fallbackText || '').replace(/['"]/g, '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 48);
+        let byId = null;
+        let byText = null;
+        const consider = (rec) => {
+            if (!rec || typeof rec !== 'object') return;
+            const recId = String(rec.id || rec._key || '');
+            if (id && (recId === id || recId.startsWith(`${id}_`))) byId = rec;
+            if (!byText && needle.length >= 10) {
+                const blob = `${rec.message || ''} ${rec.text || ''} ${rec.longExplanation || ''} ${rec.buttonText || ''}`
+                    .replace(/<[^>]*>/g, ' ')
+                    .toLowerCase();
+                if (blob.includes(needle.slice(0, 30))) byText = rec;
+            }
+        };
+        if (trees.notices) Admin.walkNoticeRecords(trees.notices, (n) => consider({ ...n, kind: n.kind || 'notice' }));
+        if (trees.noticesArchive) Admin.walkNoticeRecords(trees.noticesArchive, (n) => consider({ ...n, kind: n.kind || 'notice' }));
+        if (trees.disruptions) Admin.walkDisruptionRecords(trees.disruptions, consider);
+        if (trees.disruptionsArchive) Admin.walkDisruptionRecords(trees.disruptionsArchive, consider);
+        return byId || byText;
+    },
+
+    buildSyntheticQuotedAlert: (alertId, fallbackText, kind) => {
+        const snippet = String(fallbackText || '')
+            .replace(/^(?:Next Train Ops|Advisory|Incident|Enock):\s*/i, '')
+            .trim() || 'Original message unavailable.';
+        const isDisr = kind === 'disruption' || /line severed|expect delays|between /i.test(snippet);
+        if (isDisr) {
+            return {
+                id: alertId || 'quoted',
+                kind: 'disruption',
+                reconstructed: true,
+                archiveReason: 'Reconstructed from feedback quote',
+                buttonText: snippet.slice(0, 80),
+                message: snippet,
+                longExplanation: snippet,
+                tier: /sever|critical/i.test(snippet) ? 'CRITICAL' : 'WARNING',
+            };
+        }
+        return {
+            id: alertId || 'quoted',
+            reconstructed: true,
+            archiveReason: 'Reconstructed from feedback quote',
+            message: snippet.replace(/\n/g, '<br>'),
+            authorName: '',
+            severity: 'info',
+        };
+    },
+
     collectAlertImageUrls: (notice) => {
         if (typeof window.collectNoticeImageUrls === 'function') return window.collectNoticeImageUrls(notice || {});
         const raw = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
@@ -7558,15 +8275,25 @@ const Admin = {
             { file: 'service-update.svg', label: 'Service update' },
             { file: 'safety-notice.svg', label: 'Safety notice' },
             { file: '2025-fare-adjustment.jpg', label: 'Fare adjustment' },
+            { file: 'avoid_trouble_travel_ticket.jpg', label: 'Avoid trouble — travel with a ticket' },
             { file: 'be-rail-smart-pea.jpg', label: 'Be rail smart' },
             { file: 'considerate_seating.jpg', label: 'Considerate seating' },
+            { file: 'ger_leralla_ballast.jpg', label: 'Germiston–Leralla ballast' },
             { file: 'have_ticket_reminder.jpg', label: 'Have your ticket' },
+            { file: 'inflation_rising_train_isnt.jpg', label: 'Inflation is rising, the train isn’t' },
+            { file: 'level_crossing_warning.jpg', label: 'Level crossing warning' },
+            { file: 'mind_the_gap.jpg', label: 'Mind the gap' },
             { file: 'monthly_tickets.jpg', label: 'Monthly tickets' },
             { file: 'no_eating.jpg', label: 'No eating' },
             { file: 'off_peak_discounts.jpg', label: 'Off-peak discounts' },
+            { file: 'phelophepa_health_train.jpg', label: 'Phelophepa health train' },
             { file: 'priority-seating.jpg', label: 'Priority seating' },
             { file: 'pta-kempton-0618-0619.jpg', label: 'Pretoria–Kempton 0618/0619' },
             { file: 'smoke_free_stations.jpg', label: 'Smoke-free stations' },
+            { file: 'stand_behind_yellow.jpg', label: 'Stand behind the yellow line' },
+            { file: 'stay_away_from_tracks.jpg', label: 'Stay away from the tracks' },
+            { file: 'stoning_train_crime.jpg', label: 'Stoning trains is a crime' },
+            { file: 'train_rules.jpg', label: 'Train rules' },
         ];
         const fromManifest = Array.isArray(Admin._alertPosterManifest) ? Admin._alertPosterManifest : [];
         const seen = new Set();
@@ -7594,31 +8321,60 @@ const Admin = {
     renderAlertPosterPicker: () => {
         const selectedEl = document.getElementById('alert-poster-selected');
         const select = document.getElementById('alert-poster-select');
+        const list = document.getElementById('alert-poster-list');
+        const display = document.getElementById('alert-poster-display');
+        const trigger = document.getElementById('alert-poster-toggle');
         const preview = document.getElementById('alert-poster-preview');
         const selected = Admin.getSelectedAlertPosters();
         const catalog = Admin.alertPosterCatalog();
+        const esc = (typeof escapeHTML === 'function')
+            ? escapeHTML
+            : (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const labelFor = (path) => {
             const file = String(path || '').split('/').pop();
             return catalog.find((item) => item.file === file)?.label || file;
         };
         if (selectedEl) {
             selectedEl.innerHTML = selected.length
-                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${labelFor(p)}<span aria-hidden="true">×</span></button>`).join('')
+                ? selected.map((p) => `<button type="button" data-remove-poster="${p}" class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-xs font-bold text-blue-700 dark:text-blue-300">${esc(labelFor(p))}<span aria-hidden="true">×</span></button>`).join('')
                 : '<span class="text-xs text-gray-400">No poster yet — pick one below</span>';
             selectedEl.querySelectorAll('[data-remove-poster]').forEach((btn) => {
                 btn.onclick = () => Admin.setSelectedAlertPosters(selected.filter((p) => p !== btn.getAttribute('data-remove-poster')));
             });
+        }
+        const atLimit = selected.length >= 2;
+        if (display) display.textContent = atLimit ? 'Poster limit reached' : 'Add a poster…';
+        if (trigger) {
+            trigger.classList.toggle('opacity-50', atLimit);
+            trigger.classList.toggle('pointer-events-none', atLimit);
         }
         if (select) {
             const options = ['<option value="">Add a poster…</option>']
                 .concat(catalog.map((item) => {
                     const path = `/images/alerts/${item.file}`;
                     const taken = selected.includes(path);
-                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${item.label}</option>`;
+                    return `<option value="${path}" ${taken ? 'disabled' : ''}>${esc(item.label)}</option>`;
                 }));
             select.innerHTML = options.join('');
             select.value = '';
-            select.disabled = selected.length >= 2;
+            select.disabled = atLimit;
+        }
+        if (list) {
+            list.innerHTML = catalog.map((item) => {
+                const path = `/images/alerts/${item.file}`;
+                const taken = selected.includes(path);
+                const cls = taken
+                    ? 'px-3 py-2.5 text-xs font-bold text-gray-400 dark:text-gray-500 opacity-50 pointer-events-none border-b border-gray-100 dark:border-gray-700'
+                    : 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer w-full text-left';
+                return `<li data-poster="${esc(path)}" class="${cls}">${esc(item.label)}</li>`;
+            }).join('');
+            list.querySelectorAll('li[data-poster]').forEach((li) => {
+                li.onclick = () => {
+                    list.classList.add('hidden');
+                    document.getElementById('alert-poster-chevron')?.classList.remove('rotate-180');
+                    Admin.addAlertPoster(li.getAttribute('data-poster') || '');
+                };
+            });
         }
         if (preview) {
             const last = selected[selected.length - 1];
@@ -7626,6 +8382,18 @@ const Admin = {
                 ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
                 : '';
         }
+    },
+
+    addAlertPoster: (rawPath) => {
+        const path = Admin.sanitizeAlertPosterPath(rawPath);
+        if (!path) return;
+        const cur = Admin.getSelectedAlertPosters();
+        if (cur.includes(path)) return;
+        if (cur.length >= 2) {
+            if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
+            return;
+        }
+        Admin.setSelectedAlertPosters(cur.concat(path));
     },
 
     loadAlertPosterManifest: async () => {
@@ -7937,7 +8705,13 @@ const Admin = {
             if (!data || typeof data !== 'object') return { published: 0 };
             const now = Date.now();
             for (const [schedId, job] of Object.entries(data)) {
-                if (!job || job.enabled === false || !job.target || !job.notice) continue;
+                if (!job || job.enabled === false || !job.notice) continue;
+                const jobTargets = Admin.dedupeAlertTargets(
+                    Array.isArray(job.targets) && job.targets.length
+                        ? job.targets
+                        : (job.target ? [job.target] : [])
+                );
+                if (!jobTargets.length) continue;
                 const nextRun = Number(job.nextRunAt || 0);
                 if (!nextRun || nextRun > now) continue;
                 try {
@@ -7951,7 +8725,9 @@ const Admin = {
                         expiresAt: Date.now() + expiresInMs,
                     };
                     try {
-                        await Admin.publishNoticeToTarget(job.target, payload, secret);
+                        for (const t of jobTargets) {
+                            await Admin.publishNoticeToTarget(t, { ...payload }, secret);
+                        }
                     } catch {
                         continue;
                     }
@@ -8024,7 +8800,10 @@ const Admin = {
                 } catch { return '(empty)'; }
             })();
             const freq = escapeHTML(String(job.frequency || 'once'));
-            const target = escapeHTML(String(job.target || '-'));
+            const targetList = typeof Admin.dedupeAlertTargets === 'function'
+                ? Admin.dedupeAlertTargets(Array.isArray(job.targets) && job.targets.length ? job.targets : (job.target ? [job.target] : []))
+                : (job.target ? [job.target] : []);
+            const target = escapeHTML(targetList.map((t) => Admin.alertTargetLabel(t)).join(', ') || '-');
             const idSafe = escapeHTML(String(job.id || ''));
             return `
                 <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm ${paused ? 'opacity-70' : ''}" data-sched-id="${idSafe}">
@@ -8105,8 +8884,12 @@ const Admin = {
                         if (chev) chev.classList.remove('rotate-180');
                     }
                 };
-                checkClose('alert-target-container', 'alert-target-list', 'alert-target-chevron');
+                checkClose('alert-target-container', 'alert-target-panel', 'alert-target-chevron');
                 checkClose('alert-severity-container', 'alert-severity-list', 'alert-severity-chevron');
+                checkClose('alert-poster-container', 'alert-poster-list', 'alert-poster-chevron');
+                document.querySelectorAll('[data-nt-font-select]').forEach((wrap) => {
+                    if (!wrap.contains(e.target)) wrap.querySelector('ul')?.classList.add('hidden');
+                });
                 checkClose('disr-route-container', 'disr-route-list', 'disr-route-chevron');
                 checkClose('disr-tier-container', 'disr-tier-list', 'disr-tier-chevron');
                 checkClose('disr-station-a-container', 'disr-station-a-list', 'disr-station-a-chevron');
@@ -8121,6 +8904,12 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
+        if (
+            alertPanel.dataset.adminLoaded === "true"
+            && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]'))
+        ) {
+            delete alertPanel.dataset.adminLoaded;
+        }
         if (alertPanel.dataset.adminLoaded === "true" && !alertShellEmpty) {
             return;
         }
@@ -8145,14 +8934,16 @@ const Admin = {
 
                 <div id="alert-compose-pane" class="space-y-4">
                 <div>
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target Audience (God-Mode)</label>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target audience</label>
+                    <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2 leading-snug">Pick any mix of the whole network, regions, and routes. The same alert is posted to each.</p>
                     <div class="relative" id="alert-target-container">
-                        <select id="alert-target" class="hidden"></select>
-                        <div onclick="document.getElementById('alert-target-list').classList.toggle('hidden'); document.getElementById('alert-target-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                            <span id="alert-target-display" class="truncate flex items-center">Select Target...</span>
+                        <select id="alert-target" class="hidden" multiple></select>
+                        <div id="alert-target-chips" class="flex flex-wrap gap-1.5 mb-2"></div>
+                        <button type="button" id="alert-target-toggle" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                            <span id="alert-target-display" class="truncate text-left">Select routes or regions…</span>
                             <svg id="alert-target-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                        <ul id="alert-target-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
+                        </button>
+                        <div id="alert-target-panel" class="hidden mt-1 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-xl max-h-64 overflow-y-auto custom-scrollbar"></div>
                     </div>
                 </div>
 
@@ -8205,9 +8996,16 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Channel poster</label>
                     <p id="alert-live-count" class="text-[10px] text-gray-400 mb-2"></p>
                     <div id="alert-poster-selected" class="flex flex-wrap gap-2 mb-2"></div>
-                    <select id="alert-poster-select" class="w-full min-h-[48px] px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="">Add a poster…</option>
-                    </select>
+                    <div class="relative" id="alert-poster-container">
+                        <select id="alert-poster-select" class="hidden">
+                            <option value="">Add a poster…</option>
+                        </select>
+                        <button type="button" id="alert-poster-toggle" class="w-full min-h-[48px] px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                            <span id="alert-poster-display" class="truncate text-left">Add a poster…</span>
+                            <svg id="alert-poster-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
+                    </div>
                     <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
 
@@ -8585,9 +9383,9 @@ const Admin = {
             const firstEl = document.getElementById('alert-schedule-first');
             const freqEl = document.getElementById('alert-schedule-freq');
             let msg = (alertMsg?.innerHTML || '').trim();
-            const target = alertTarget?.value;
+            const targets = Admin.getSelectedAlertTargets();
             if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast('Fill the alert message first.', 'error'); return; }
-            if (!target) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
+            if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : NaN;
             if (!Number.isFinite(firstMs)) { if (typeof showToast === 'function') showToast('Set a valid first-run time.', 'error'); return; }
             const durVal = parseFloat(document.getElementById('alert-schedule-duration-val')?.value || '0');
@@ -8611,7 +9409,8 @@ const Admin = {
             const schedId = `sched_${Date.now()}`;
             const job = {
                 id: schedId,
-                target,
+                target: targets[0],
+                targets,
                 frequency: freqEl?.value || 'once',
                 nextRunAt: firstMs,
                 createdAt: Date.now(),
@@ -8668,19 +9467,7 @@ const Admin = {
             header?.classList.add('mb-4');
 
             if (alertTarget) {
-                alertTarget.value = target;
-                const customDisplay = document.getElementById('alert-target-display');
-                const customList = document.getElementById('alert-target-list');
-                const selectedOpt = Array.from(alertTarget.options).find((o) => o.value === target);
-                if (customDisplay) {
-                    if (customList) {
-                        const matchLi = Array.from(customList.querySelectorAll('li')).find((li) => selectedOpt && li.textContent.includes(selectedOpt.textContent.split(' [')[0]));
-                        if (matchLi) customDisplay.innerHTML = matchLi.innerHTML;
-                        else customDisplay.textContent = selectedOpt ? selectedOpt.textContent : target;
-                    } else {
-                        customDisplay.textContent = selectedOpt ? selectedOpt.textContent : target;
-                    }
-                }
+                Admin.setSelectedAlertTargets([target], { fetch: false });
             }
 
             existingAlertId = null;
@@ -8865,159 +9652,138 @@ const Admin = {
             });
         }
 
-        async function fetchCurrentAlert(target) {
+        async function fetchCurrentAlertsForTargets(targets) {
             if (Admin._skipAlertFetchOnce) {
                 Admin._skipAlertFetchOnce = false;
                 return;
             }
             existingAlertId = null;
+            const list = Admin.dedupeAlertTargets(targets || Admin.getSelectedAlertTargets());
+            const countEl = document.getElementById('alert-live-count');
+            if (!list.length) {
+                if (countEl) countEl.textContent = 'Pick at least one route or region.';
+                return;
+            }
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
-                const data = await res.json();
-                const listed = Admin.listNoticesInTarget(data);
-                const live = listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now());
-                const countEl = document.getElementById('alert-live-count');
+                let totalLive = 0;
+                for (const target of list) {
+                    const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
+                    const data = await res.json();
+                    const listed = Admin.listNoticesInTarget(data);
+                    totalLive += listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now()).length;
+                }
+                const labels = list.map((t) => Admin.alertTargetLabel(t)).join(', ');
                 if (countEl) {
-                    countEl.textContent = live.length
-                        ? `${live.length} live post${live.length === 1 ? '' : 's'} on this target — composer starts a new channel post.`
-                        : 'No live posts on this target — composer starts a new channel post.';
+                    countEl.textContent = list.length === 1
+                        ? (totalLive
+                            ? `${totalLive} live post${totalLive === 1 ? '' : 's'} on ${labels} — composer starts a new channel post.`
+                            : `No live posts on ${labels} — composer starts a new channel post.`)
+                        : `Posting to ${list.length} targets (${labels}). ${totalLive} live post${totalLive === 1 ? '' : 's'} across them — composer starts a new channel post on each.`;
                 }
                 if (sendBtn) sendBtn.textContent = 'Preview Alert';
             } catch (e) {
-                const countEl = document.getElementById('alert-live-count');
-                if (countEl) countEl.textContent = 'Could not read live posts for this target.';
+                if (countEl) countEl.textContent = 'Could not read live posts for these targets.';
             }
         }
+        Admin.fetchCurrentAlertsForTargets = fetchCurrentAlertsForTargets;
 
         Admin.populateAlertTargets = (skipFetch = false) => {
-            const currentVal = alertTarget.value;
+            if (!alertTarget) return;
             alertTarget.innerHTML = '';
-            
-            const customList = document.getElementById('alert-target-list');
-            if (customList) customList.innerHTML = '';
-            const customDisplay = document.getElementById('alert-target-display');
+            const chipsEl = document.getElementById('alert-target-chips');
+            const panelEl = document.getElementById('alert-target-panel');
+            const toggleBtn = document.getElementById('alert-target-toggle');
+            const chevronEl = document.getElementById('alert-target-chevron');
+            if (chipsEl) chipsEl.innerHTML = '';
+            if (panelEl) panelEl.innerHTML = '';
 
-            const addGroup = (label) => {
-                const group = document.createElement('optgroup');
-                group.label = label;
-                alertTarget.appendChild(group);
-
-                if (customList) {
-                    const liGroup = document.createElement('li');
-                    liGroup.className = "px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest bg-gray-100 dark:bg-gray-800 select-none sticky top-0 z-10 border-y border-gray-200 dark:border-gray-700";
-                    liGroup.textContent = label;
-                    customList.appendChild(liGroup);
-                }
-                return group;
-            };
-
-            const addOption = (group, value, text, htmlText = text) => {
+            const addSelectOption = (value, text) => {
                 const opt = document.createElement('option');
                 opt.value = value;
                 opt.textContent = text;
-                group.appendChild(opt);
-
-                if (customList) {
-                    const li = document.createElement('li');
-                    // GUARDIAN UX FIX: Added pl-6 for child indentation
-                    li.className = "pl-6 pr-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer flex items-center";
-                    li.setAttribute('data-value', value);
-                    li.innerHTML = htmlText;
-                    li.onclick = () => {
-                        alertTarget.value = value;
-                        if (customDisplay) customDisplay.innerHTML = htmlText;
-                        customList.classList.add('hidden');
-                        const chevron = document.getElementById('alert-target-chevron');
-                        if (chevron) chevron.classList.remove('rotate-180');
-                        alertTarget.dispatchEvent(new Event('change'));
-                    };
-                    customList.appendChild(li);
-                }
+                alertTarget.appendChild(opt);
             };
 
-            const globalGroup = addGroup("Global Alerts");
-            addOption(globalGroup, "all", "Entire Network (All Regions)", `<span class='truncate inline-flex items-center gap-1'>${Admin.icon('globe', 'w-3.5 h-3.5 shrink-0')} Entire Network (All Regions)</span>`);
-            addOption(globalGroup, "all_GP", "Gauteng Only", "<span class='truncate'>Gauteng Only</span>");
-            addOption(globalGroup, "all_WC", "Western Cape Only", "<span class='truncate'>Western Cape Only</span>");
-            addOption(globalGroup, "all_KZN", "KwaZulu-Natal Only", "<span class='truncate'>KwaZulu-Natal Only</span>");
-            addOption(globalGroup, "all_EC", "Eastern Cape Only", "<span class='truncate'>Eastern Cape Only</span>");
+            (Admin.ALERT_SCOPE_CHIPS || []).forEach((chip) => {
+                addSelectOption(chip.value, chip.label);
+                if (!chipsEl) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.setAttribute('data-alert-target', chip.value);
+                btn.setAttribute('data-alert-chip', '1');
+                btn.className = 'px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600';
+                btn.textContent = chip.label;
+                btn.onclick = () => Admin.toggleAlertTarget(chip.value);
+                chipsEl.appendChild(btn);
+            });
 
-            if (typeof ROUTES !== 'undefined') {
-                const regions = [
-                    { code: 'GP', label: "Gauteng Routes" },
-                    { code: 'WC', label: "Western Cape Routes" },
-                    { code: 'KZN', label: "KwaZulu-Natal Routes" },
-                    { code: 'EC', label: "Eastern Cape Routes" }
-                ];
-
-                regions.forEach(regionInfo => {
-                    const regionalRoutes = Object.values(ROUTES).filter(r => r.region === regionInfo.code && r.isActive && r.id !== 'special_event');
-                    if (regionalRoutes.length > 0) {
-                        const group = addGroup(regionInfo.label);
-                        regionalRoutes.forEach(r => {
-                            const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(r.id) : '';
-                            const plainName = Admin.formatRouteLabelPlain(r.name);
-                            const text = `${plainName}${cues}`;
-                            
-                            let badgeHtml = '';
-                            if (cues) {
-                                if (cues.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
-                                if (cues.includes('Bans')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-[8px] rounded uppercase flex-shrink-0">Ban</span>';
-                                if (cues.includes('Incident')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 text-[8px] rounded uppercase flex-shrink-0">Inc</span>';
-                                if (cues.includes('Alert')) badgeHtml += '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 text-[8px] rounded uppercase flex-shrink-0">Alert</span>';
-                            }
-                            const htmlText = `<span class="truncate mr-1 inline-flex items-center">${Admin.formatRouteLabelHtml(r.name)}</span>${badgeHtml}`;
-                            addOption(group, r.id, text, htmlText);
-                        });
-                    }
+            const regions = [
+                { code: 'GP', label: 'Gauteng routes' },
+                { code: 'WC', label: 'Western Cape routes' },
+                { code: 'KZN', label: 'KwaZulu-Natal routes' },
+                { code: 'EC', label: 'Eastern Cape routes' },
+            ];
+            if (panelEl && typeof ROUTES !== 'undefined') {
+                regions.forEach((regionInfo) => {
+                    const regionalRoutes = Object.values(ROUTES).filter((r) => r.region === regionInfo.code && r.isActive && r.id !== 'special_event');
+                    if (!regionalRoutes.length) return;
+                    const head = document.createElement('div');
+                    head.className = 'px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest bg-gray-100 dark:bg-gray-800 sticky top-0 z-10 border-y border-gray-200 dark:border-gray-700';
+                    head.textContent = regionInfo.label;
+                    panelEl.appendChild(head);
+                    regionalRoutes.forEach((r) => {
+                        const plainName = Admin.formatRouteLabelPlain(r.name);
+                        addSelectOption(r.id, plainName);
+                        const row = document.createElement('label');
+                        row.className = 'flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.setAttribute('data-alert-target', r.id);
+                        cb.className = 'rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+                        cb.onchange = () => Admin.toggleAlertTarget(r.id);
+                        const name = document.createElement('span');
+                        name.className = 'truncate inline-flex items-center min-w-0';
+                        name.innerHTML = Admin.formatRouteLabelHtml(r.name);
+                        row.appendChild(cb);
+                        row.appendChild(name);
+                        panelEl.appendChild(row);
+                    });
                 });
             }
-            
-            // Prefer GSM / Review deep-link target over sticky "Gauteng Only" default
-            const preferVal = Admin._pendingAdminRoute || currentVal || '';
-            let selectedOpt = null;
-            if (preferVal) {
-                const optionToSelect = Array.from(alertTarget.options).find((o) => o.value === preferVal);
-                if (optionToSelect) {
-                    optionToSelect.selected = true;
-                    alertTarget.value = preferVal;
-                    selectedOpt = optionToSelect;
-                }
-            }
-            if (!selectedOpt) {
-                const defOpt = typeof currentRegion !== 'undefined' ? `all_${currentRegion}` : 'all_GP';
-                const optionToSelect = Array.from(alertTarget.options).find((o) => o.value === defOpt);
-                if (optionToSelect) {
-                    optionToSelect.selected = true;
-                    selectedOpt = optionToSelect;
-                }
+
+            if (toggleBtn && toggleBtn.dataset.bound !== '1') {
+                toggleBtn.dataset.bound = '1';
+                toggleBtn.addEventListener('click', () => {
+                    const open = panelEl && panelEl.classList.toggle('hidden') === false;
+                    chevronEl?.classList.toggle('rotate-180', !!open);
+                });
             }
 
-            if (selectedOpt) {
-                Admin._syncAdminSelectDisplay('alert-target', selectedOpt.value);
-            }
-
-            if (!skipFetch) fetchCurrentAlert(alertTarget.value);
+            const preferVal = Admin._pendingAdminRoute || (Admin._selectedAlertTargets && Admin._selectedAlertTargets[0]) || '';
+            const defOpt = typeof currentRegion !== 'undefined' ? `all_${currentRegion}` : 'all_GP';
+            const initial = preferVal || defOpt;
+            Admin.setSelectedAlertTargets([initial], { fetch: !skipFetch });
         };
 
-        if (alertTarget) {
-            alertTarget.addEventListener('change', () => fetchCurrentAlert(alertTarget.value));
-        }
         Admin.populateAlertTargets();
         Admin._alertPosterPaths = Admin._alertPosterPaths || [];
         Admin.loadAlertPosterManifest();
+        const posterToggle = document.getElementById('alert-poster-toggle');
+        const posterList = document.getElementById('alert-poster-list');
+        const posterChevron = document.getElementById('alert-poster-chevron');
+        if (posterToggle && posterToggle.dataset.bound !== '1') {
+            posterToggle.dataset.bound = '1';
+            posterToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = posterList && posterList.classList.toggle('hidden') === false;
+                posterChevron?.classList.toggle('rotate-180', !!open);
+            });
+        }
         document.getElementById('alert-poster-select')?.addEventListener('change', (e) => {
-            const path = Admin.sanitizeAlertPosterPath(e.target?.value || '');
+            const path = e.target?.value || '';
             e.target.value = '';
-            if (!path) return;
-            const cur = Admin.getSelectedAlertPosters();
-            if (cur.includes(path)) return;
-            if (cur.length >= 2) {
-                if (typeof showToast === 'function') showToast('Maximum 2 posters.', 'warning');
-                return;
-            }
-            Admin.setSelectedAlertPosters(cur.concat(path));
+            Admin.addAlertPoster(path);
         });
 
         const now = new Date();
@@ -9027,7 +9793,7 @@ const Admin = {
 
         sendBtn.onclick = async () => {
             let msg = alertMsg.innerHTML.trim();
-            const target = alertTarget.value;
+            const targets = Admin.getSelectedAlertTargets();
             const severity = severitySelect.value;
             
             const signoff = signoffInput.value.trim() || "Next Train Ops";
@@ -9036,6 +9802,7 @@ const Admin = {
             const secret = await Admin.getAuthKey();
             
             if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast("Message required!", "error"); return; }
+            if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
             msg = Admin.repairMojibake(msg);
@@ -9080,14 +9847,29 @@ const Admin = {
                 try {
                     sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
                     sendBtn.disabled = true;
-                    await Admin.publishNoticeToTarget(target, payload, secret);
+                    let ok = 0;
+                    const errors = [];
+                    for (const t of targets) {
+                        try {
+                            await Admin.publishNoticeToTarget(t, { ...payload }, secret);
+                            ok++;
+                        } catch (err) {
+                            errors.push(`${Admin.alertTargetLabel(t)}: ${err.message || 'failed'}`);
+                        }
+                    }
                     existingAlertId = null;
                     Admin._alertRepostDraft = false;
                     Admin.setSelectedAlertPosters([]);
                     if (alertMsg) alertMsg.innerHTML = '';
-                    if (typeof showToast === 'function') showToast(isRepost ? "Alert Reposted!" : "Alert Posted!", "success");
+                    if (ok && typeof showToast === 'function') {
+                        const label = ok === 1 ? Admin.alertTargetLabel(targets[0]) : `${ok} targets`;
+                        showToast(isRepost ? `Alert reposted to ${label}` : `Alert posted to ${label}`, 'success');
+                    }
+                    if (errors.length && typeof showToast === 'function') {
+                        showToast(errors[0], 'error');
+                    }
                     if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
-                    fetchCurrentAlert(target);
+                    fetchCurrentAlertsForTargets(targets);
                 } catch (e) {
                     if (typeof showToast === 'function') showToast(e.message || "Failed. Check Session.", "error");
                 } finally {
@@ -9115,15 +9897,20 @@ const Admin = {
         };
 
         clearBtn.onclick = async () => {
-            const target = alertTarget.value;
+            const targets = Admin.getSelectedAlertTargets();
             const secret = await Admin.getAuthKey();
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required.", "error"); return; }
-            
-            const confirmed = await Admin.secureConfirm("Clear Alert", `Archive & clear alert for: ${target}?`);
+            if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
+
+            const labels = targets.map((t) => Admin.alertTargetLabel(t)).join(', ');
+            const confirmed = await Admin.secureConfirm("Clear Alert", `Archive & clear alerts for: ${labels}?`);
             if (!confirmed) return;
 
             try {
-                const archivedCount = await Admin.archiveAllNoticesForTarget(target, secret);
+                let archivedCount = 0;
+                for (const target of targets) {
+                    archivedCount += (await Admin.archiveAllNoticesForTarget(target, secret)) || 0;
+                }
                 if (!archivedCount) {
                     if (typeof showToast === 'function') showToast("No active alert to clear for this target.", "info");
                     return;
@@ -9461,7 +10248,9 @@ const Admin = {
         const postedStr = posted ? Admin.formatDate(posted) : '-';
         const archStr = item.archivedAt ? Admin.formatDate(item.archivedAt) : null;
         const timestampHtml = `Posted: ${escapeHTML(postedStr)}${archStr ? `<br>Archived: ${escapeHTML(archStr)}` : ''}<br><span class="text-[10px]">ID: ${escapeHTML(String(item.id || '-'))}</span>`;
-        const prefixHtml = item.archivedAt
+        const prefixHtml = item.reconstructed
+            ? `<span class="inline-block bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Reconstructed from quote</span>`
+            : item.archivedAt
             ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
             : '';
         if (typeof window.renderServiceAlertModal === 'function') {
@@ -9470,7 +10259,7 @@ const Admin = {
                 prefixHtml,
                 timestampHtml,
                 onClose: finish,
-                onRevive: (item.archivedAt || item.archiveReason)
+                onRevive: (!item.reconstructed && (item.archivedAt || item.archiveReason))
                     ? () => { finish(); Admin.reviveArchivedAlert(item); }
                     : null,
             });
@@ -9503,7 +10292,9 @@ const Admin = {
         }
         if (titleEl) titleEl.innerHTML = locationText;
         if (bodyEl) {
-            const statusChip = item.archivedAt
+            const statusChip = item.reconstructed
+                ? `<span class="inline-block bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Reconstructed from quote</span>`
+                : item.archivedAt
                 ? `<span class="inline-block bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2">Archived${item.archiveReason ? ` - ${escapeHTML(String(item.archiveReason))}` : ''}</span>`
                 : '';
             const rawMsg = item.message || item.longExplanation || item.buttonText || 'No additional details provided.';
@@ -9539,7 +10330,7 @@ const Admin = {
         };
 
         if (actionsRow) {
-            const canRevive = !!(item.archivedAt || item.archiveReason);
+            const canRevive = !item.reconstructed && !!(item.archivedAt || item.archiveReason);
             actionsRow.innerHTML = `
                 <button type="button" id="admin-disr-preview-close" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Close</button>
                 ${canRevive
@@ -10001,7 +10792,9 @@ const Admin = {
                     if (item.stations && item.stations.length === 2) targetStr = `${item.stations[0].replace(' STATION', '')} - ${item.stations[1].replace(' STATION', '')}`;
                     else if (item.stations && item.stations.length === 1) targetStr = item.stations[0].replace(' STATION', '');
 
-                    const expStr = item.expiresAt ? new Date(item.expiresAt).toLocaleDateString() : 'Never';
+                    const expStr = item.expiresAt
+                        ? (typeof formatAppDate === 'function' ? formatAppDate(item.expiresAt, { withTime: true }) : Admin.formatDate(item.expiresAt))
+                        : 'Never';
                     const expColor = isExpired ? 'text-red-500 font-bold' : 'text-gray-400';
 
                     const row = document.createElement('div');
@@ -10771,7 +11564,9 @@ const Admin = {
                     if (item.expiresAt) {
                         const expDate = new Date(item.expiresAt);
                         const isExpired = Date.now() > item.expiresAt;
-                        const expStr = `${expDate.toLocaleDateString()} ${expDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                        const expStr = typeof formatAppDate === 'function'
+                            ? formatAppDate(expDate, { withTime: true })
+                            : Admin.formatDate(expDate);
                         
                         if (isExpired) {
                             expiryHtml = `<div class="text-[9px] text-red-500 font-bold mt-0.5">EXPIRED: ${expStr}</div>`;
@@ -11041,6 +11836,20 @@ const Admin = {
                 saveBtn.disabled = false;
             }
         };
+    },
+
+    /** Fetch JSON for diagnostics / QA / Deep Scan; surface worker deny bodies. */
+    fetchDiagJson: async (url) => {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) {
+            let detail = `HTTP ${res.status}`;
+            try {
+                const errBody = await res.clone().json();
+                if (errBody && errBody.error) detail += ` — ${errBody.error}`;
+            } catch { /* ignore */ }
+            throw new Error(detail);
+        }
+        return res.json();
     },
 
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
@@ -11388,20 +12197,6 @@ const Admin = {
             return verMatch ? verMatch[1].split(' - ')[0] : 'Unknown';
         };
 
-        /** Fetch JSON for diagnostics; surface worker deny bodies (e.g. Unauthorized Domain). */
-        const fetchDiagJson = async (url) => {
-            const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) {
-                let detail = `HTTP ${res.status}`;
-                try {
-                    const errBody = await res.clone().json();
-                    if (errBody && errBody.error) detail += ` — ${errBody.error}`;
-                } catch { /* ignore */ }
-                throw new Error(detail);
-            }
-            return res.json();
-        };
-
         const fetchDbForZoneAudit = async (targetRegion, scanSource) => {
             if (scanSource === 'RAM') {
                 if (typeof fullDatabase === 'undefined' || !fullDatabase) {
@@ -11426,7 +12221,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const rawData = await fetchDiagJson(fetchUrl);
+            const rawData = await Admin.fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
@@ -11992,7 +12787,7 @@ const Admin = {
 
                     resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${loadingMsg}</div>`;
                     
-                    let rawData = await fetchDiagJson(fetchUrl);
+                    let rawData = await Admin.fetchDiagJson(fetchUrl);
                     
                     if (targetRegion === 'GP' && rawData.gauteng) dbToScan = rawData.gauteng;
                     else if (targetRegion === 'WC' && rawData.westerncape) dbToScan = rawData.westerncape;
@@ -12031,28 +12826,48 @@ const Admin = {
                         totalRoutes++;
                         let routeHealthy = true;
                         let missingSheets = [];
-                        let structuralErrors = []; 
+                        let structuralErrors = [];
+                        let expectedNotes = [];
 
                         if (route.sheetKeys) {
+                            const normStation = (typeof normalizeStationName === 'function')
+                                ? normalizeStationName
+                                : (s) => String(s || '').toUpperCase().replace(/ STATION/g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+                            const placeholders = (typeof SATURDAY_PLACEHOLDER_ROUTES !== 'undefined' && Array.isArray(SATURDAY_PLACEHOLDER_ROUTES))
+                                ? SATURDAY_PLACEHOLDER_ROUTES
+                                : ['herc-koed', 'ec-berlin'];
                             Object.entries(route.sheetKeys).forEach(([dayDir, key]) => {
                                 const sheet = dbToScan[key];
+                                const isPlaceholderSat = placeholders.includes(route.id) && /sat/i.test(String(dayDir));
                                 if (!sheet || !Array.isArray(sheet) || sheet.length === 0) {
+                                    if (isPlaceholderSat) {
+                                        if (!expectedNotes.includes('Expected — no Saturday service')) {
+                                            expectedNotes.push('Expected — no Saturday service');
+                                        }
+                                        return;
+                                    }
                                     routeHealthy = false;
                                     missingSheets.push(key); 
                                 } else {
                                     const parsedSchedule = typeof parseJSONSchedule === 'function' ? parseJSONSchedule(sheet) : null;
                                     
                                     if (!parsedSchedule || !parsedSchedule.headers || parsedSchedule.headers.length <= 1) {
+                                        if (isPlaceholderSat) {
+                                            if (!expectedNotes.includes('Expected — no Saturday service')) {
+                                                expectedNotes.push('Expected — no Saturday service');
+                                            }
+                                            return;
+                                        }
                                         routeHealthy = false;
                                         if (!structuralErrors.includes("0 Trains")) structuralErrors.push(`0 Trains (${key})`); 
                                     }
                                     
-                                    const cleanA = route.destA.replace(' STATION', '').trim().toUpperCase();
-                                    const cleanB = route.destB.replace(' STATION', '').trim().toUpperCase();
+                                    const cleanA = normStation(route.destA);
+                                    const cleanB = normStation(route.destB);
                                     
-                                    const stationsInSheet = parsedSchedule ? parsedSchedule.rows.map(r => String(r.STATION || '').replace(' STATION', '').trim().toUpperCase()) : [];
-                                    const hasA = stationsInSheet.some(s => s.includes(cleanA));
-                                    const hasB = stationsInSheet.some(s => s.includes(cleanB));
+                                    const stationsInSheet = parsedSchedule ? parsedSchedule.rows.map(r => normStation(r.STATION)) : [];
+                                    const hasA = stationsInSheet.some(s => s.includes(cleanA) || cleanA.includes(s));
+                                    const hasB = stationsInSheet.some(s => s.includes(cleanB) || cleanB.includes(s));
                                     
                                     if (!hasA) {
                                         routeHealthy = false;
@@ -12073,10 +12888,16 @@ const Admin = {
 
                         if (routeHealthy) {
                             healthyCount++;
+                            const expectedHtml = expectedNotes.length
+                                ? `<div class="text-[10px] text-slate-600 dark:text-slate-300 font-mono bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded mt-1.5 border border-slate-200 dark:border-slate-700">${expectedNotes.join(' | ')}</div>`
+                                : '';
                             html += `
-                                <div class="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg text-xs border border-green-100 dark:border-green-800/50 mt-1.5">
-                                    <span class="font-bold text-green-800 dark:text-green-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
-                                    <span class="bg-green-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Healthy</span>
+                                <div class="flex flex-col bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg text-xs border border-green-100 dark:border-green-800/50 mt-1.5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-green-800 dark:text-green-300 inline-flex items-center">${Admin.formatRouteLabelHtml(route.name)}</span>
+                                        <span class="bg-green-500 text-white px-2 py-0.5 rounded shadow-sm text-[9px] uppercase tracking-wider font-bold">Healthy</span>
+                                    </div>
+                                    ${expectedHtml}
                                 </div>
                             `;
                         } else {
@@ -12248,7 +13069,7 @@ const Admin = {
                 fetchUrl = `https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`;
             }
 
-            const rawData = await fetchDiagJson(fetchUrl);
+            const rawData = await Admin.fetchDiagJson(fetchUrl);
 
             if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
             if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
@@ -12690,12 +13511,18 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-everything-btn'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
         }
-        if (maintPanel.dataset.loaded === "true") return;
+        if (maintPanel.dataset.loaded === "true") {
+            const persistBody = document.getElementById('maint-mode-body');
+            const persistChev = document.getElementById('maint-mode-chevron');
+            persistBody?.classList.add('hidden');
+            persistChev?.classList.add('-rotate-90');
+            return;
+        }
         maintPanel.dataset.loaded = "true";
 
         maintPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
@@ -12823,6 +13650,49 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Publish live (GitHub Actions → metrorail-app) -->
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="deploy-live-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
+                        <span class="flex items-center">
+                            <span class="text-emerald-600 dark:text-emerald-400 mr-2 inline-flex">${Admin.icon('rocket', 'w-4 h-4')}</span> Publish live site
+                        </span>
+                        <svg id="deploy-live-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="deploy-live-body" class="p-3 hidden space-y-3">
+                        <p class="text-[11px] text-emerald-800 dark:text-emerald-200 font-bold leading-snug">Publishes current <span class="font-mono">main</span> to <span class="font-mono">nexttrain.co.za</span> (same as GitHub → Actions → Deploy production → metrorail-app).</p>
+                        <p class="text-[10px] text-emerald-700/90 dark:text-emerald-400/90 leading-snug">github.io preview already updates when you push <span class="font-mono">main</span>. This button is the live cutover. After GitHub finishes, purge Cloudflare so phones pick up the new HTML and service worker.</p>
+                        <label class="flex items-start gap-2 text-[11px] text-emerald-900 dark:text-emerald-100 font-bold cursor-pointer">
+                            <input type="checkbox" id="deploy-production-dry-run" class="mt-0.5 rounded border-emerald-400">
+                            <span>Dry run — build on GitHub but do not push to the live host</span>
+                        </label>
+                        <button type="button" id="deploy-production-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
+                            Publish live
+                        </button>
+                        <div id="deploy-production-status" class="text-[11px] text-emerald-900 dark:text-emerald-100 bg-white/70 dark:bg-gray-900/40 rounded-lg border border-emerald-100 dark:border-emerald-900/50 p-2 leading-snug hidden"></div>
+                        <div class="flex gap-2">
+                            <button type="button" id="deploy-status-refresh-btn" class="flex-1 bg-white dark:bg-gray-800 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide focus:outline-none">Refresh status</button>
+                            <a id="deploy-github-run-link" href="https://github.com/enock-elk/next-train-astro/actions/workflows/deploy-production.yml" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-white dark:bg-gray-800 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide">Open GitHub</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cloudflare edge cache (separate from killswitch) -->
+                <div class="bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="cf-purge-header-btn" class="w-full px-3 py-3 bg-orange-100/50 dark:bg-orange-900/40 text-left text-[10px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-orange-200/50 dark:hover:bg-orange-900/60">
+                        <span class="flex items-center">
+                            <span class="text-orange-600 dark:text-orange-400 mr-2 inline-flex">${Admin.icon('globe', 'w-4 h-4')}</span> Cloudflare Purge
+                        </span>
+                        <svg id="cf-purge-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="cf-purge-body" class="p-3 hidden space-y-3">
+                        <p class="text-[11px] text-orange-800 dark:text-orange-200 font-bold leading-snug">Cloudflare edge cache</p>
+                        <p class="text-[10px] text-orange-700/90 dark:text-orange-400/90 leading-snug">Same as Dashboard → Caching → Configuration → <span class="font-bold">Purge Everything</span>. Clears CDN-cached HTML / SW / assets for nexttrain.co.za (does not wipe user devices or fire the killswitch).</p>
+                        <button type="button" id="cf-purge-everything-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
+                            Purge Cloudflare Cache
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Transplanted Nuclear Cache Wipe -->
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 overflow-hidden shadow-sm transition-all">
                     <button id="nuke-header-btn" class="w-full px-3 py-3 bg-red-100/50 dark:bg-red-900/40 text-left text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-red-200/50 dark:hover:bg-red-900/60">
@@ -12838,14 +13708,6 @@ const Admin = {
                         <button id="nuke-fire-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
                             Fire Killswitch
                         </button>
-
-                        <div class="border-t border-red-200 dark:border-red-800 pt-3 space-y-2">
-                            <p class="text-[11px] text-orange-700 dark:text-orange-300 font-bold leading-snug">Cloudflare edge cache</p>
-                            <p class="text-[10px] text-orange-600/90 dark:text-orange-400/90 leading-snug">Same as Dashboard → Caching → Configuration → <span class="font-bold">Purge Everything</span>. Clears CDN-cached HTML / SW / assets for nexttrain.co.za (does not wipe user devices or fire the killswitch).</p>
-                            <button id="cf-purge-everything-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide focus:outline-none">
-                                Purge Cloudflare Cache
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -13122,7 +13984,18 @@ const Admin = {
         const nukeBody = document.getElementById('nuke-body');
         const nukeChevron = document.getElementById('nuke-chevron');
         const nukeFireBtn = document.getElementById('nuke-fire-btn');
+        const cfPurgeHeader = document.getElementById('cf-purge-header-btn');
+        const cfPurgeBody = document.getElementById('cf-purge-body');
+        const cfPurgeChevron = document.getElementById('cf-purge-chevron');
         const cfPurgeBtn = document.getElementById('cf-purge-everything-btn');
+        const deployLiveHeader = document.getElementById('deploy-live-header-btn');
+        const deployLiveBody = document.getElementById('deploy-live-body');
+        const deployLiveChevron = document.getElementById('deploy-live-chevron');
+        const deployBtn = document.getElementById('deploy-production-btn');
+        const deployDry = document.getElementById('deploy-production-dry-run');
+        const deployStatusEl = document.getElementById('deploy-production-status');
+        const deployRefreshBtn = document.getElementById('deploy-status-refresh-btn');
+        const deployRunLink = document.getElementById('deploy-github-run-link');
 
         const promoHeader = document.getElementById('promo-header-btn');
         const promoBody = document.getElementById('promo-body');
@@ -13172,6 +14045,22 @@ const Admin = {
             };
         }
 
+        if (cfPurgeHeader && cfPurgeBody) {
+            cfPurgeHeader.onclick = () => {
+                cfPurgeBody.classList.toggle('hidden');
+                if (cfPurgeBody.classList.contains('hidden')) cfPurgeChevron?.classList.add('-rotate-90');
+                else cfPurgeChevron?.classList.remove('-rotate-90');
+            };
+        }
+
+        if (deployLiveHeader && deployLiveBody) {
+            deployLiveHeader.onclick = () => {
+                deployLiveBody.classList.toggle('hidden');
+                if (deployLiveBody.classList.contains('hidden')) deployLiveChevron?.classList.add('-rotate-90');
+                else deployLiveChevron?.classList.remove('-rotate-90');
+            };
+        }
+
         if (promoHeader) {
             promoHeader.onclick = () => {
                 promoBody.classList.toggle('hidden');
@@ -13207,6 +14096,8 @@ const Admin = {
                     chevron?.classList.remove('-rotate-90');
                     header.classList.add('mb-4');
                 }
+                maintModeBody?.classList.add('hidden');
+                maintModeChevron?.classList.add('-rotate-90');
             };
         }
         
@@ -13265,10 +14156,8 @@ const Admin = {
                 }
                 resetMaintComposer();
                 renderMaintActiveList();
-                if (countLiveMaint() > 0) {
-                    maintModeBody?.classList.remove('hidden');
-                    maintModeChevron?.classList.remove('-rotate-90');
-                }
+                maintModeBody?.classList.add('hidden');
+                maintModeChevron?.classList.add('-rotate-90');
 
                 try {
                     const banSecret = await Admin.getAuthKey();
@@ -13511,6 +14400,166 @@ const Admin = {
             maintModeBody?.classList.remove('hidden');
             maintModeChevron?.classList.remove('-rotate-90');
         };
+
+        const TELEMETRY_ORIGIN = 'https://nexttrain-telemetry.enock.workers.dev';
+        const deployEsc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const deployPhaseLabel = {
+            idle: 'No production deploy in progress.',
+            queued: 'Queued on GitHub…',
+            in_progress: 'GitHub is building and publishing…',
+            waiting_host: 'Workflow succeeded. Waiting for metrorail-app to show the new commit…',
+            published: 'Live host updated. Purge Cloudflare so commuters get the new HTML and service worker. GitHub Pages can take another 1–2 minutes.',
+            dry_success: 'Dry run finished. Nothing was pushed to nexttrain.co.za. Untick Dry run and publish when you want to go live.',
+            failure: 'Workflow failed — open GitHub for the log.',
+            cancelled: 'Workflow cancelled.',
+            startup_failure: 'Workflow failed to start.',
+            timed_out: 'Workflow timed out.',
+            unknown: 'Status unknown.',
+        };
+        const stopDeployPoll = () => {
+            if (Admin._deployPollTimer) {
+                clearInterval(Admin._deployPollTimer);
+                Admin._deployPollTimer = null;
+            }
+        };
+        const paintDeployStatus = (payload) => {
+            if (!deployStatusEl) return;
+            deployStatusEl.classList.remove('hidden');
+            if (payload?.error && !payload?.run) {
+                deployStatusEl.innerHTML = `<p class="font-bold text-red-700 dark:text-red-300">${deployEsc(payload.error)}</p>${payload.message ? `<p class="mt-1 text-[10px]">${deployEsc(payload.message)}</p>` : ''}`;
+                return;
+            }
+            const run = payload?.run;
+            const phase = payload?.phase || (run ? (run.status === 'completed' ? (run.conclusion || 'unknown') : run.status) : 'idle');
+            const jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
+            if (run?.htmlUrl && deployRunLink) deployRunLink.href = run.htmlUrl;
+            const sha = run?.headSha ? String(run.headSha).slice(0, 7) : '';
+            const jobHtml = jobs.length
+                ? `<ul class="mt-2 space-y-0.5 font-mono text-[10px]">${jobs.map((j) => {
+                    const state = j.conclusion || j.status || '';
+                    let color = 'text-gray-500 dark:text-gray-400';
+                    if (j.conclusion === 'success') color = 'text-emerald-700 dark:text-emerald-300';
+                    else if (j.conclusion === 'failure' || j.conclusion === 'cancelled') color = 'text-red-600 dark:text-red-400';
+                    else if (j.status === 'in_progress') color = 'text-amber-700 dark:text-amber-300';
+                    return `<li class="${color}">${deployEsc(j.name)}: ${deployEsc(state)}</li>`;
+                }).join('')}</ul>`
+                : '';
+            const hostSha = payload?.hostDeploy?.sourceSha ? String(payload.hostDeploy.sourceSha).slice(0, 7) : '';
+            deployStatusEl.innerHTML = `
+                <p class="font-bold">${deployEsc(deployPhaseLabel[phase] || phase)}</p>
+                ${run ? `<p class="mt-1 font-mono text-[10px] opacity-80">#${deployEsc(run.runId)}${sha ? ` · ${deployEsc(sha)}` : ''}${run.conclusion ? ` · ${deployEsc(run.conclusion)}` : ''}</p>` : ''}
+                ${hostSha ? `<p class="mt-1 text-[10px] opacity-80">Host astro-deploy.json: ${deployEsc(hostSha)}</p>` : ''}
+                ${jobHtml}
+            `;
+        };
+        const fetchDeployStatus = async ({ runId, since } = {}) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return null;
+            const qs = new URLSearchParams();
+            if (runId) qs.set('run_id', String(runId));
+            if (since) qs.set('since', String(since));
+            const res = await fetch(`${TELEMETRY_ORIGIN}/admin/deploy-status?${qs.toString()}`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            });
+            let data = null;
+            try { data = await res.json(); } catch { data = {}; }
+            if (!res.ok) {
+                paintDeployStatus({ error: data.error || `HTTP ${res.status}`, message: data.message || data.details?.message });
+                return data;
+            }
+            const dryDone = Admin._deployPoll?.dryRun && data.run?.conclusion === 'success';
+            if (dryDone) {
+                paintDeployStatus({ ...data, phase: 'dry_success' });
+                stopDeployPoll();
+                return data;
+            }
+            paintDeployStatus(data);
+            const done = data.phase && !['queued', 'in_progress', 'waiting_host'].includes(data.phase);
+            if (done) stopDeployPoll();
+            return data;
+        };
+        const startDeployPoll = ({ runId, since, dryRun }) => {
+            stopDeployPoll();
+            Admin._deployPoll = { runId, since, dryRun: !!dryRun, startedAt: Date.now() };
+            Admin._deployPollTimer = setInterval(() => {
+                if (Date.now() - Admin._deployPoll.startedAt > 25 * 60 * 1000) {
+                    stopDeployPoll();
+                    paintDeployStatus({ error: 'Stopped polling after 25 minutes. Use Refresh status or Open GitHub.' });
+                    return;
+                }
+                fetchDeployStatus(Admin._deployPoll).catch(() => {});
+            }, 4000);
+        };
+
+        if (deployRefreshBtn) {
+            deployRefreshBtn.onclick = async () => {
+                const state = Admin._deployPoll || {};
+                await fetchDeployStatus({ runId: state.runId, since: state.since });
+            };
+        }
+
+        if (deployBtn) {
+            deployBtn.onclick = async () => {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                    return;
+                }
+                const dryRun = !!deployDry?.checked;
+                const confirmed = await Admin.secureConfirm(
+                    dryRun ? 'Dry-run production build' : 'Publish live site',
+                    dryRun
+                        ? "Type 'DEPLOY' to start a GitHub dry run (build only, no push to nexttrain.co.za):"
+                        : "Type 'DEPLOY' to publish current main to nexttrain.co.za:",
+                    'DEPLOY'
+                );
+                if (!confirmed) return;
+
+                const label = deployBtn.textContent;
+                deployBtn.textContent = dryRun ? 'Starting dry run…' : 'Starting publish…';
+                deployBtn.disabled = true;
+                try {
+                    const res = await fetch(`${TELEMETRY_ORIGIN}/admin/deploy-production`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${secret}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ confirm: 'DEPLOY', dryRun }),
+                    });
+                    let data = null;
+                    try { data = await res.json(); } catch { data = {}; }
+                    if (!res.ok || data.ok === false) {
+                        paintDeployStatus({
+                            error: data.error || `HTTP ${res.status}`,
+                            message: data.message || (typeof data.details === 'string' ? data.details : ''),
+                        });
+                        if (typeof showToast === 'function') {
+                            showToast(data.error || 'Could not start production deploy', 'error', 6000);
+                        }
+                        return;
+                    }
+                    const runId = data.run?.runId || null;
+                    const since = data.dispatchedAt || Date.now();
+                    paintDeployStatus({
+                        ...data,
+                        phase: data.run ? (data.run.status === 'queued' ? 'queued' : 'in_progress') : 'queued',
+                        jobs: data.jobs || [],
+                    });
+                    startDeployPoll({ runId, since, dryRun });
+                    fetchDeployStatus({ runId, since }).catch(() => {});
+                    if (typeof showToast === 'function') {
+                        showToast(dryRun ? 'Dry run started on GitHub' : 'Production deploy started on GitHub', 'success', 4000);
+                    }
+                } catch (e) {
+                    paintDeployStatus({ error: 'Network error contacting deploy endpoint' });
+                    if (typeof showToast === 'function') showToast('Network error contacting deploy endpoint', 'error');
+                } finally {
+                    deployBtn.textContent = label || 'Publish live';
+                    deployBtn.disabled = false;
+                }
+            };
+        }
 
         if (nukeFireBtn) {
             nukeFireBtn.onclick = async () => {

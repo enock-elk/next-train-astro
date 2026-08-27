@@ -14,7 +14,7 @@ import {
     ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel
 } from './config.js';
 
-import { MANUAL_GRID_ORDER } from './grid-order.js';
+import { orderGridTrainIds } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
@@ -28,6 +28,7 @@ import {
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
 import {
     liveBoardJourneyKey,
@@ -285,7 +286,7 @@ export const Renderer = {
                     <p class="text-xs text-gray-700 dark:text-gray-300 mb-4">
                         If you have recent photos of the official station timetables, you can help us launch this route faster!
                     </p>
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe7lhoUNKQFOiW1d6_7ezCHJvyOL5GkHNH1Oetmvdqgee16jw/viewform" target="_blank" class="flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors text-sm group">
+                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSe7lhoUNKQFOiW1d6_7ezCHJvyOL5GkHNH1Oetmvdqgee16jw/viewform" target="_blank" data-coming-soon-form class="flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors text-sm group">
                         <svg class="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0L8 8m4-4v12"></path></svg>
                         Share Schedules
                     </a>
@@ -302,8 +303,14 @@ export const Renderer = {
             const parent = element.closest('.space-y-6') || element.closest('.space-y-4');
             if (parent) {
                 parent.innerHTML = msg;
+                parent.querySelector('[data-coming-soon-form]')?.addEventListener('click', () => {
+                    trackAnalyticsEvent('open_google_form_feedback', { location: 'coming_soon', route_name: routeName || '' });
+                });
             } else {
                 element.innerHTML = msg;
+                element.querySelector('[data-coming-soon-form]')?.addEventListener('click', () => {
+                    trackAnalyticsEvent('open_google_form_feedback', { location: 'coming_soon', route_name: routeName || '' });
+                });
             }
         }
     },
@@ -812,40 +819,7 @@ export const Renderer = {
 
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false) => {
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
-        let sortedCols = [];
-
-        if (MANUAL_GRID_ORDER[sheetName]) {
-            const manualOrder = MANUAL_GRID_ORDER[sheetName];
-            manualOrder.forEach(tNum => { if (trainCols.includes(tNum)) sortedCols.push(tNum); });
-            const manualSet = new Set(manualOrder);
-            const remainingCols = trainCols.filter(t => !manualSet.has(t));
-            remainingCols.sort((a, b) => a.localeCompare(b));
-            sortedCols = [...sortedCols, ...remainingCols];
-        } else {
-            // Earliest-time fallback when no manual order exists for this sheet
-            const colStats = trainCols.map(colId => {
-                let earliestTime = 86400 * 2;
-                let hasData = false;
-                for (const row of schedule.rows) {
-                    const val = row[colId];
-                    if (isRealTime(val)) {
-                        const t = timeToSeconds(val);
-                        if (t > 0) {
-                            if (t < earliestTime) earliestTime = t;
-                            hasData = true;
-                        }
-                    }
-                }
-                return { id: colId, time: earliestTime, hasData };
-            });
-            colStats.sort((a, b) => {
-                if (!a.hasData && !b.hasData) return a.id.localeCompare(b.id);
-                if (!a.hasData) return 1;
-                if (!b.hasData) return -1;
-                return a.time - b.time;
-            });
-            sortedCols = colStats.map(c => c.id);
-        }
+        const sortedCols = orderGridTrainIds(sheetName, trainCols, schedule.rows);
 
         let selectedStation = "";
         if (!isExport && typeof document !== 'undefined') {
@@ -959,8 +933,10 @@ export const Renderer = {
                                     bgClass = 'export-banned-col relative';
                                     headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center;">${banIcon} NO SVC</span>${h}`;
                                 } else {
+                                    const safeRoute = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                                    const safeTrain = String(h || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
-                                    headerContent = `<span class="absolute top-[2px] left-0 w-full text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none flex justify-center items-center">${banIcon} NO SVC</span>${h}`;
+                                    headerContent = `<button type="button" class="absolute top-[2px] left-0 w-full text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none flex justify-center items-center focus:outline-none" aria-label="Why train ${escapeHTML(String(h))} has no service" onclick="event.stopPropagation(); if(typeof window.openTrainExclusionSheet==='function') window.openTrainExclusionSheet('${safeRoute}','${safeTrain}',${Number(dayIdx)})">${banIcon} NO SVC</button>${h}`;
                                 }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
@@ -1540,6 +1516,7 @@ export async function triggerNoticeShare() {
             };
             if (navigator.canShare && navigator.canShare(data)) {
                 await navigator.share(data);
+                trackAnalyticsEvent('grid_share_image', { location: 'notice_share' });
             } else {
                 if (typeof showToast === 'function') showToast("Sharing files not supported on this browser.", "error");
             }

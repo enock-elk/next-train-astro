@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V8_08.18.1', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V8_08.27.7', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -39,9 +39,30 @@ assert(
     'empty Firebase exclusions do not ban 0619 on Monday'
 );
 
+function getTrainExclusionRule(store, trainNumber, routeId, dayIdx, now = Date.now()) {
+    const rules = store?.[routeId] || null;
+    if (!rules || !rules[trainNumber]) return null;
+    const rule = rules[trainNumber];
+    if (rule.expiresAt && now > rule.expiresAt) return null;
+    if (rule.days && rule.days.includes(parseInt(dayIdx, 10))) return rule;
+    return null;
+}
+
 const liveBan = {
-    'pta-kempton': { '0619': { days: [1, 5], type: 'banned', reason: 'Admin' } },
+    'pta-kempton': { '0619': { days: [1, 5], type: 'banned', reason: 'Admin', expiresAt: Date.now() + 60_000 } },
 };
+assert(
+    getTrainExclusionRule(liveBan, '0619', 'pta-kempton', 1)?.reason === 'Admin',
+    'getTrainExclusionRule returns live reason'
+);
+assert(
+    getTrainExclusionRule(liveBan, '0619', 'pta-kempton', 1, Date.now() + 120_000) === null,
+    'getTrainExclusionRule honours expiresAt'
+);
+assert(
+    getTrainExclusionRule({}, '0619', 'pta-kempton', 1) === null,
+    'empty store has no hardcoded exclusion rule'
+);
 assert(
     isTrainExcluded(liveBan, '0619', 'pta-kempton', 1) === 'banned',
     'Firebase ban still applies when present'
@@ -70,6 +91,20 @@ function shouldOpenRoutePicker({ swapGen, currentGen, currentRouteId }) {
 assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 1, currentRouteId: null }) === true, 'open picker when no route');
 assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 1, currentRouteId: 'pta-kempton' }) === false, 'do not reopen after route pick');
 assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }) === false, 'ignore stale swap generation');
+
+{
+    const { readFileSync } = await import('node:fs');
+    const board = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
+    assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
+    assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
+    const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+    assert(renderer.includes('openTrainExclusionSheet'), 'in-app NO SVC opens exclusion sheet');
+    assert(renderer.includes('export-banned-col relative'), 'PNG export NO SVC stays a static span');
+    const map = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    assert(map.includes('attachMapDisruptionPopup'), 'map warnings open a popup');
+    assert(map.includes('Promise.all'), 'map parallelises disruptions and tracks');
+    assert(!map.includes('interactive: false'), 'map warning markers are tappable');
+}
 
 if (failed) {
     console.error(`\n${failed} check(s) failed`);

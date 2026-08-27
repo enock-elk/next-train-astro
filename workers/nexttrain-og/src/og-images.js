@@ -62,9 +62,17 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
   const title = `${originT} to ${destT}`;
   const trainCount = grid?.trainIds?.length || 0;
   const stationCount = grid?.stations?.length || 0;
+  const totalTrains = Number(grid?.totalTrains || trainCount);
+  const totalStations = Number(grid?.totalStations || stationCount);
+  const trainBit = totalTrains > trainCount
+    ? `Showing ${trainCount} of ${totalTrains} trains`
+    : `${trainCount} trains`;
+  const stationBit = totalStations > stationCount
+    ? `${stationCount} of ${totalStations} stations`
+    : `${stationCount} stations`;
   const subtitle =
     trainCount && stationCount
-      ? `${day} timetable · ${trainCount} trains · ${stationCount} stations`
+      ? `${day} timetable · ${trainBit} · ${stationBit}`
       : `${day} timetable`;
 
   let gridBody = '';

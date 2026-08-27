@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa6';
+const OG_IMAGE_CACHE_BUST = 'wa7';
 
 function esc(s) {
   return String(s ?? '')
@@ -59,14 +59,17 @@ function withImageCacheBust(imgUrl) {
   return img.toString();
 }
 
-export function buildRouteOgMeta(route, intent, site) {
+export function buildRouteOgMeta(route, intent, site, grid = null) {
   const origin = stationLabel(intent.dir === 'B' ? route.destB : route.destA);
   const dest = stationLabel(intent.dir === 'B' ? route.destA : route.destB);
   const day = dayLabel(intent.day);
   // Keep title short — WhatsApp truncates aggressively in the compact card.
   const title = `${origin} → ${dest} · ${day}`;
-  const description =
-    'Live Metrorail boards, full grid & fares in Next Train — free, works offline.';
+  const shown = grid?.trainIds?.length || 0;
+  const total = Number(grid?.totalTrains || shown);
+  const description = (grid?.truncatedTrains && total > shown)
+    ? `${day} timetable showing ${shown} of ${total} trains. Open Next Train for the full grid.`
+    : 'Live Metrorail boards, full grid & fares in Next Train — free, works offline.';
   const d = dayCode(intent.day);
   const img = new URL('/og/timetable.png', site);
   img.searchParams.set('rt', route.id);

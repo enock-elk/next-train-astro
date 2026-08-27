@@ -253,6 +253,11 @@
             "POET'S CORNER": [-29.879624, 30.931123], 
             "BELLAIR": [-29.888762, 30.941657], 
             "SEA VIEW": [-29.902065, 30.961951],
+            "HAVENSIDE": [-29.926302426956735, 30.937562200751156],
+            "BAYVIEW": [-29.915492485588356, 30.918491645667224],
+            "WESTCLIFF": [-29.90911584089301, 30.902484294984493],
+            "CHATSGLEN": [-29.90702562701478, 30.88513415841232],
+            "CROSSMOOR": [-29.898514072933363, 30.861925638560148],
 
             // --- EASTERN CAPE ---
             "EAST LONDON": [-33.016726, 27.907383],
@@ -310,6 +315,7 @@
             'kzn-winklespruit': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "PELGRIM", "ISIPINGO", "UMBOGINTWINI", "PAHLA", "AMANZIMTOTI", "DOONSIDE", "WARNER BEACH", "WINKLESPRUIT"],
             'kzn-catoridge': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "MOUNT VERNON", "CAVENDISH", "BURLINGTON", "SHALLCROSS", "KLAARWATER", "MARIANNHILL", "THORNWOOD", "SITUNDU HILLS", "DASSENHOEK", "KWANDENGEZI", "DELVILLE WOOD", "NSHONGWENI", "CLIFFDALE", "HAMMARSDALE", "KWATANDAZA", "GEORGEDALE", "CATO RIDGE"],
             'kzn-pinetown': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "SEA VIEW", "BELLAIR", "POET'S CORNER", "MALVERN", "ESCOMBE", "NORTHDENE", "MOSELEY", "GLEN PARK", "SARNIA", "PINETOWN"],
+            'kzn-crossmoor': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "HAVENSIDE", "BAYVIEW", "WESTCLIFF", "CHATSGLEN", "CROSSMOOR"],
             
             // --- EASTERN CAPE ---
             'ec-berlin': ["EAST LONDON", "SOUTHERNWOOD", "PANMURE", "CHISELHURST", "VINCENT", "CAMBRIDGE", "HIGHGATE", "HORSESHOE", "DAWN", "WILSONIA", "ARNOLDTON", "MTSOTSO", "MDANTSANE", "MOUNT RUTH", "EGERTON", "FORT JACKSON", "LONETREE", "BERLIN"]
@@ -831,6 +837,55 @@
             return { ...db, ...regionalData };
         };
 
+        function parseDisruptionsPayload(disrData) {
+            const globalDisruptions = {};
+            if (!disrData) return globalDisruptions;
+            const now = Date.now();
+            Object.keys(disrData).forEach((routeKey) => {
+                const routeObj = disrData[routeKey];
+                if (routeObj && typeof routeObj === 'object') {
+                    Object.values(routeObj).forEach((d) => {
+                        if (d && (!d.expiresAt || d.expiresAt > now)) {
+                            const rid = d.routeId || routeKey;
+                            if (!globalDisruptions[rid]) globalDisruptions[rid] = [];
+                            globalDisruptions[rid].push(d);
+                        }
+                    });
+                }
+            });
+            return globalDisruptions;
+        }
+
+        async function fetchLiveDisruptions() {
+            try {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const disrResp = await fetch(`${dynamicEndpoint}disruptions.json?t=${Date.now()}`);
+                if (!disrResp.ok) return {};
+                return parseDisruptionsPayload(await disrResp.json());
+            } catch (e) {
+                console.warn('Disruptions fetch failed.');
+                return {};
+            }
+        }
+
+        function disruptionPopupHtml(d) {
+            const isCritical = d && d.tier === 'CRITICAL';
+            const title = isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS';
+            const raw = String(d?.message || d?.longExplanation || 'Service warning on this section.')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 280);
+            const msg = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            return `<div class="text-left max-w-[220px]"><b class="text-xs">${title}</b><br><span class="text-[11px] leading-snug">${msg}</span></div>`;
+        }
+
+        function attachMapDisruptionPopup(layer, d) {
+            if (!layer || !d) return layer;
+            layer.bindPopup(disruptionPopupHtml(d), { maxWidth: 260 });
+            return layer;
+        }
+
         async function initDynamicMap() {
             if (typeof L === 'undefined') throw new Error("Leaflet Missing");
             if (typeof ROUTES === 'undefined') throw new Error("Config Missing");
@@ -854,7 +909,9 @@
             
             // Guardian UX: "Midnight Blue" unified tile layer
             // CSS filter (.dark .leaflet-tile-pane) flips this strictly in dark mode
-            const voyagerTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            const voyagerTiles = (typeof window.ntCartoVoyagerUrl === 'function')
+                ? window.ntCartoVoyagerUrl()
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
             
             const tileLayer = L.tileLayer(voyagerTiles, {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -862,34 +919,16 @@
                 maxZoom: 19
             }).addTo(map);
 
-            // Fetch Database (local cache → network cold-start)
-            const rawDb = await fetchLocalDB(currentRegion);
+            // Fetch schedule DB, live disruptions, and OSM tracks in parallel
+            const dbPromise = fetchLocalDB(currentRegion);
+            const disruptionsPromise = fetchLiveDisruptions();
+            const tracksPromise = loadRailTrackBundle(currentRegion);
+
+            const rawDb = await dbPromise;
             if (!rawDb) throw new Error("No Local Database Cached");
             const mergedDb = unwrapDatabase(rawDb, currentRegion);
 
-            // 🛡️ GUARDIAN PHASE 2: Fetch Live Disruptions for Global Map Overlay
             let globalDisruptions = {};
-            try {
-                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const disrResp = await fetch(`${dynamicEndpoint}disruptions.json?t=${Date.now()}`);
-                if (disrResp.ok) {
-                    const disrData = await disrResp.json();
-                    if (disrData) {
-                        const now = Date.now();
-                        Object.keys(disrData).forEach(routeKey => {
-                            const routeObj = disrData[routeKey];
-                            if (routeObj && typeof routeObj === 'object') {
-                                Object.values(routeObj).forEach(d => {
-                                    if (d && (!d.expiresAt || d.expiresAt > now)) {
-                                        if (!globalDisruptions[d.routeId]) globalDisruptions[d.routeId] = [];
-                                        globalDisruptions[d.routeId].push(d);
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }
-            } catch(e) { console.warn("Disruptions fetch failed."); }
 
             // --- DYNAMIC ROUTE & STATION EXTRACTOR ---
             const colorMap = {
@@ -1048,136 +1087,154 @@
 
             // --- OSM TRACK GEOMETRY (cached GeoJSON + live graph smooth) ---
             // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
-            const trackBundle = await loadRailTrackBundle(currentRegion);
+            const overlayGroup = L.layerGroup().addTo(map);
+            const emptyTracks = { byId: new Map(), graph: null };
 
-            // --- DRAW BASE ROUTES ---
-            drawnRoutes.forEach(r => {
-                const isLive = r.isActive;
-                const lineCoords = resolveRouteLatLngs(r, trackBundle);
-                r.trackCoords = lineCoords;
-                L.polyline(lineCoords, {
-                    color: r.color, // 🛡️ Use actual route color for anticipation
-                    weight: isLive ? 4 : 3,
-                    opacity: isLive ? 0.9 : 0.35, // Faded for future routes
-                    dashArray: isLive ? null : '8, 12', // Distinct dashed look for "Soon"
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    smoothFactor: 1
-                }).addTo(map).bindPopup(`
+            function paintRouteLines(trackBundle) {
+                drawnRoutes.forEach((r) => {
+                    const isLive = r.isActive;
+                    const lineCoords = resolveRouteLatLngs(r, trackBundle);
+                    r.trackCoords = lineCoords;
+                    if (r._polyline) map.removeLayer(r._polyline);
+                    r._polyline = L.polyline(lineCoords, {
+                        color: r.color,
+                        weight: isLive ? 4 : 3,
+                        opacity: isLive ? 0.9 : 0.35,
+                        dashArray: isLive ? null : '8, 12',
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        smoothFactor: 1
+                    }).addTo(map).bindPopup(`
                     <div class="text-center">
                         <b class="uppercase text-sm">${r.name}</b><br>
-                        ${isLive 
-                            ? '<span class="text-green-600 font-bold text-xs">● Active Service</span>' 
+                        ${isLive
+                            ? '<span class="text-green-600 font-bold text-xs">● Active Service</span>'
                             : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">🚧 Launching Soon</span>'}
                     </div>
                 `);
-            });
+                });
+            }
 
-            // --- 🛡️ GUARDIAN PHASE 2: DRAW DYNAMIC DISRUPTION OVERLAYS ---
-            const drawnIncidentIds = new Set();
-            
-            drawnRoutes.forEach(routeObj => {
-                Object.values(globalDisruptions).flat().forEach(d => {
-                    // Prevent duplicate draws per route-incident pair
-                    if (drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
-                    
-                    const isCritical = d.tier === 'CRITICAL';
-                    const color = isCritical ? '#ef4444' : '#eab308';
-                    const currentValidStops = routeObj.validStops;
-                    // Always paint disruptions on the same rail-following path as the route
-                    const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
-                        ? routeObj.trackCoords
-                        : routeObj.coords;
+            function paintDisruptionOverlays(trackBundle, disruptions) {
+                overlayGroup.clearLayers();
+                const drawnIncidentIds = new Set();
 
-                    // No outward pulse rings on incident markers — solid badge only
-                    const iconHtml = `<div class="flex items-center justify-center rounded-full shadow-md border-2 border-white" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`;
-                    const alertIcon = L.divIcon({ className: 'custom-map-dot z-50', html: iconHtml, iconSize: [22, 22], iconAnchor: [11, 11] });
-                    const invisibleIcon = L.divIcon({ className: '', html: '', iconSize: [0,0], iconAnchor: [0,0] });
+                drawnRoutes.forEach((routeObj) => {
+                    Object.values(disruptions || {}).flat().forEach((d) => {
+                        if (!d || drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
 
-                    // 1. Route-Wide Disruption
-                    if (!d.stations || d.stations.length === 0) {
-                        if (d.routeId === routeObj.routeId) {
-                            drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                            L.polyline(trackPath, {
-                                color: color, weight: 10, opacity: 0.8, dashArray: '10, 12', lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
-                            }).addTo(map);
-                            
-                            const startIdx = 0;
-                            const endIdx = trackPath.length - 1;
-                            
-                            L.marker(trackPath[startIdx], { icon: alertIcon }).addTo(map);
-                            L.marker(trackPath[endIdx], { icon: alertIcon }).addTo(map);
+                        const isCritical = d.tier === 'CRITICAL';
+                        const color = isCritical ? '#ef4444' : '#eab308';
+                        const currentValidStops = routeObj.validStops;
+                        const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
+                            ? routeObj.trackCoords
+                            : routeObj.coords;
+                        if (!trackPath || trackPath.length < 1) return;
 
-                            const midIndexExact = (startIdx + endIdx) / 2;
-                            let midLat = 0, midLon = 0;
-                            if (midIndexExact % 1 === 0) {
-                                midLat = trackPath[midIndexExact][0];
-                                midLon = trackPath[midIndexExact][1];
-                            } else {
-                                const f = Math.floor(midIndexExact);
-                                const c = Math.ceil(midIndexExact);
-                                midLat = (trackPath[f][0] + trackPath[c][0]) / 2;
-                                midLon = (trackPath[f][1] + trackPath[c][1]) / 2;
-                            }
+                        const iconHtml = `<div class="flex items-center justify-center rounded-full shadow-md border-2 border-white" style="width: 22px; height: 22px; background-color: ${color};"><span class="text-[11px] text-white font-black">${isCritical ? '✕' : '!'}</span></div>`;
+                        const alertIcon = L.divIcon({ className: 'custom-map-dot z-50', html: iconHtml, iconSize: [22, 22], iconAnchor: [11, 11] });
 
-                            L.marker([midLat, midLon], { icon: invisibleIcon, interactive: false })
-                                .bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, { permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo' })
-                                .addTo(map);
-                        }
-                    } 
-                    // 2. Specific Station Disruption (Cross-Corridor Logic)
-                    else {
-                        const normStations = d.stations.map(s => s.replace(/ STATION/gi, '').trim().toUpperCase());
-                        const routeStationNames = currentValidStops.map(s => s.name);
-                        
-                        // 2A. Segment Blockade (2 stations) — slice along rail track, not station chords
-                        if (normStations.length >= 2) {
-                            if (routeStationNames.includes(normStations[0]) && routeStationNames.includes(normStations[1])) {
-                                const idx1 = routeStationNames.indexOf(normStations[0]);
-                                const idx2 = routeStationNames.indexOf(normStations[1]);
-                                const s1 = currentValidStops[idx1];
-                                const s2 = currentValidStops[idx2];
-                                if (!s1 || !s2) return;
+                        const addWarning = (latlng, tooltipHtml, tooltipOpts) => {
+                            const marker = L.marker(latlng, { icon: alertIcon, interactive: true });
+                            attachMapDisruptionPopup(marker, d);
+                            if (tooltipHtml) marker.bindTooltip(tooltipHtml, tooltipOpts);
+                            marker.addTo(overlayGroup);
+                            return marker;
+                        };
+                        const addDash = (latlngs) => {
+                            const line = L.polyline(latlngs, {
+                                color, weight: 10, opacity: 0.8, dashArray: '10, 12', lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
+                            });
+                            attachMapDisruptionPopup(line, d);
+                            line.addTo(overlayGroup);
+                            return line;
+                        };
 
+                        if (!d.stations || d.stations.length === 0) {
+                            if (d.routeId === routeObj.routeId) {
                                 drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                                const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
-                                const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);
-                                if (i1 < 0 || i2 < 0) return;
-                                const start = Math.min(i1, i2);
-                                const end = Math.max(i1, i2);
-                                const segment = trackPath.slice(start, end + 1);
-                                if (segment.length < 2) return;
+                                addDash(trackPath);
+                                const startIdx = 0;
+                                const endIdx = trackPath.length - 1;
+                                addWarning(trackPath[startIdx]);
+                                addWarning(trackPath[endIdx]);
+                                const midIndexExact = (startIdx + endIdx) / 2;
+                                let midLat = 0, midLon = 0;
+                                if (midIndexExact % 1 === 0) {
+                                    midLat = trackPath[midIndexExact][0];
+                                    midLon = trackPath[midIndexExact][1];
+                                } else {
+                                    const f = Math.floor(midIndexExact);
+                                    const c = Math.ceil(midIndexExact);
+                                    midLat = (trackPath[f][0] + trackPath[c][0]) / 2;
+                                    midLon = (trackPath[f][1] + trackPath[c][1]) / 2;
+                                }
+                                addWarning([midLat, midLon], `<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, {
+                                    permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                                });
+                            }
+                        } else {
+                            const normStations = d.stations.map((s) => s.replace(/ STATION/gi, '').trim().toUpperCase());
+                            const routeStationNames = currentValidStops.map((s) => s.name);
 
-                                L.polyline(segment, {
-                                    color: color, weight: 10, opacity: 0.8, dashArray: '10, 12', lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
-                                }).addTo(map);
+                            if (normStations.length >= 2) {
+                                if (routeStationNames.includes(normStations[0]) && routeStationNames.includes(normStations[1])) {
+                                    const idx1 = routeStationNames.indexOf(normStations[0]);
+                                    const idx2 = routeStationNames.indexOf(normStations[1]);
+                                    const s1 = currentValidStops[idx1];
+                                    const s2 = currentValidStops[idx2];
+                                    if (!s1 || !s2) return;
 
-                                L.marker(trackPath[start], { icon: alertIcon }).addTo(map);
-                                L.marker(trackPath[end], { icon: alertIcon }).addTo(map);
+                                    drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
+                                    const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
+                                    const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);
+                                    if (i1 < 0 || i2 < 0) return;
+                                    const start = Math.min(i1, i2);
+                                    const end = Math.max(i1, i2);
+                                    const segment = trackPath.slice(start, end + 1);
+                                    if (segment.length < 2) return;
 
-                                const midPt = trackPath[Math.floor((start + end) / 2)];
-                                if (midPt) {
-                                    L.marker(midPt, { icon: invisibleIcon, interactive: false })
-                                        .bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, { permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo' })
-                                        .addTo(map);
+                                    addDash(segment);
+                                    addWarning(trackPath[start]);
+                                    addWarning(trackPath[end]);
+                                    const midPt = trackPath[Math.floor((start + end) / 2)];
+                                    if (midPt) {
+                                        addWarning(midPt, `<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, {
+                                            permanent: true, direction: 'center', className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                                        });
+                                    }
+                                }
+                            } else if (normStations.length === 1) {
+                                if (routeStationNames.includes(normStations[0])) {
+                                    const idx1 = routeStationNames.indexOf(normStations[0]);
+                                    drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
+                                    const s1 = currentValidStops[idx1];
+                                    addWarning([s1.lat, s1.lon], `<b>${isCritical ? 'STATION INCIDENT' : 'STATION DELAYS'}</b>`, {
+                                        permanent: true, direction: 'top', offset: [0, -12], className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                                    });
                                 }
                             }
-                        } 
-                        // 2B. Single Station Point
-                        else if (normStations.length === 1) {
-                            if (routeStationNames.includes(normStations[0])) {
-                                const idx1 = routeStationNames.indexOf(normStations[0]);
-                                drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                                const s1 = currentValidStops[idx1];
-                                
-                                L.marker([s1.lat, s1.lon], { icon: alertIcon })
-                                    .bindTooltip(`<b>${isCritical ? 'STATION INCIDENT' : 'STATION DELAYS'}</b>`, { permanent: true, direction: 'top', offset: [0, -12], className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo' })
-                                    .addTo(map);
-                            }
                         }
-                    }
+                    });
                 });
-            });
+            }
+
+            // Phase 1: station-chord overlays as soon as coords exist
+            paintRouteLines(emptyTracks);
+
+            const [disruptionData, trackBundle] = await Promise.all([
+                disruptionsPromise.then((d) => {
+                    globalDisruptions = d || {};
+                    paintDisruptionOverlays(emptyTracks, globalDisruptions);
+                    return globalDisruptions;
+                }),
+                tracksPromise
+            ]);
+            globalDisruptions = disruptionData || {};
+
+            // Phase 2: refine polylines onto OSM tracks, then redraw warnings
+            paintRouteLines(trackBundle);
+            paintDisruptionOverlays(trackBundle, globalDisruptions);
 
             // --- PHASE 8: COMMUTER DELAY REPORT PINS (recent, by station) ---
             try {

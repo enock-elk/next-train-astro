@@ -16,7 +16,7 @@ import { withBase } from '../lib/config.js';
 <!-- NETWORK MAP IMAGE LIGHTBOX -->
 <div id="map-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[115] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col transform transition-transform duration-300 scale-100 overflow-hidden relative">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 relative shrink-0">
             <div class="flex items-center space-x-3">
                 <h3 id="map-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Network Map</h3>
             </div>
@@ -33,7 +33,7 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
 
-        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative">
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 rounded-b-none z-20 relative shrink-0">
             <button id="close-map-btn-2" onclick="if(location.hash === '#prasa-map') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('map-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close Map</button>
         </div>
     </div>
@@ -48,7 +48,7 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="legal-modal-content" class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed"></div>
+        <div id="legal-modal-content" class="p-6 overflow-y-auto min-h-0 flex-1 text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed"></div>
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
             <button id="close-legal-btn-2" class="w-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-lg shadow-sm transition-colors focus:outline-none">
                 Close
@@ -143,17 +143,38 @@ import { withBase } from '../lib/config.js';
         
         <div class="p-5 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50 shrink-0">
             <div class="text-[10px] text-gray-400 dark:text-gray-500 font-mono mb-4 px-1" id="disruption-modal-timestamp">
-                Posted: --:--, --/--/----
+                Posted: -- --- ----
             </div>
             <div class="flex space-x-3">
                 <button onclick="if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('disruption-modal')" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">
                     Close
                 </button>
-                <button onclick="if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('disruption-modal'); document.getElementById('feedback-btn')?.click();" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm flex items-center justify-center">
+                <button id="disruption-modal-reply-btn" type="button" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors focus:outline-none text-sm flex items-center justify-center">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
                     Reply
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- PLANNER TRAIN SHEET (full origin → terminus column) -->
+<div id="planner-train-sheet-modal" class="fixed inset-0 bg-black/70 z-[130] hidden flex items-center justify-center p-2 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md h-[min(96dvh,100%)] max-h-[96dvh] flex flex-col overflow-hidden border border-blue-100 dark:border-blue-900/40 transform transition-transform duration-300 scale-100">
+        <div class="relative shrink-0 px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white">
+            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100/90 mb-1">Full train sheet</p>
+            <h3 id="planner-train-sheet-title" class="text-lg font-black tracking-tight leading-snug break-words">Train</h3>
+            <p id="planner-train-sheet-direction" class="text-sm font-semibold text-white/95 mt-2">Origin → Terminus</p>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <span id="planner-train-sheet-day" class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/15 text-white">Weekdays</span>
+                <button type="button" id="planner-train-sheet-fare" data-route-id="" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight bg-white text-blue-800 hover:bg-blue-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Fare</button>
+            </div>
+        </div>
+        <ol id="planner-train-sheet-stops" class="px-5 py-2 overflow-y-auto custom-scrollbar flex-1 min-h-0"></ol>
+        <div class="p-4 border-t border-slate-100 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/40 shrink-0">
+            <button type="button" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">
+                Close
+            </button>
         </div>
     </div>
 </div>

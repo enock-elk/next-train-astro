@@ -7,12 +7,14 @@
  */
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
-    SPECIAL_DATES, HOLIDAY_NAMES
+    ADMIN_EMAILS, isAdminEmail,
+    SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate, normalizeStationName } from './utils.js';
+import { parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
-    lockBackgroundScroll, unlockBackgroundScroll
+    lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
 } from './ui.js';
 import {
     loadAllSchedules, parseJSONSchedule, updateTime, executeRegionSwap, guardianFetch
@@ -54,19 +56,27 @@ export function exposeAdminGlobals() {
     window.ROUTES = ROUTES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.APP_VERSION = APP_VERSION;
+    window.ADMIN_EMAILS = ADMIN_EMAILS;
+    window.isAdminEmail = isAdminEmail;
     window.DEFAULT_EXCLUSIONS = DEFAULT_EXCLUSIONS;
     window.REGIONS = REGIONS;
     window.FARE_CONFIG = FARE_CONFIG;
     window.SPECIAL_DATES = SPECIAL_DATES;
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
+    window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
+    window.normalizeStationName = normalizeStationName;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
+    window.formatAppDate = formatAppDate;
+    window.parseFeedbackAlertQuote = parseFeedbackAlertQuote;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
     window.triggerHaptic = triggerHaptic;
     window.lockBackgroundScroll = lockBackgroundScroll;
     window.unlockBackgroundScroll = unlockBackgroundScroll;
+    window.bindPasswordReveal = bindPasswordReveal;
+    window.fillAdminPasswordFromDevice = fillAdminPasswordFromDevice;
     window.loadAllSchedules = loadAllSchedules;
     window.parseJSONSchedule = parseJSONSchedule;
     window.updateTime = updateTime;
@@ -129,6 +139,43 @@ function loadClassicAdminScript() {
     });
 }
 
+function bindAdminPasswordPreview() {
+    bindPasswordReveal({
+        inputId: 'admin-password',
+        buttonId: 'toggle-password-btn',
+        openIconId: 'eye-open-icon',
+        closedIconId: 'eye-closed-icon',
+    });
+}
+
+/** Offer a saved password (Android Chrome / some desktops can unlock with fingerprint). */
+async function fillAdminPasswordFromDevice() {
+    try {
+        if (!navigator.credentials?.get) return;
+        const cred = await navigator.credentials.get({
+            password: true,
+            mediation: 'optional',
+        });
+        if (!cred || !('password' in cred) || !cred.password) return;
+        const emailInput = document.getElementById('admin-email');
+        const passInput = document.getElementById('admin-password');
+        if (emailInput && cred.id) emailInput.value = cred.id;
+        if (passInput) passInput.value = cred.password;
+    } catch { /* unsupported or dismissed */ }
+}
+
+function stampAdminChrome() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('dev-modal') || document.getElementById('login-modal')) {
+        bindAdminPasswordPreview();
+        return;
+    }
+    const tpl = document.getElementById('nt-admin-chrome-template');
+    if (!tpl?.content) return;
+    document.body.appendChild(tpl.content.cloneNode(true));
+    bindAdminPasswordPreview();
+}
+
 let _adminLoadPromise = null;
 
 /**
@@ -143,6 +190,7 @@ export function ensureAdminLoaded() {
     _adminLoadPromise = (async () => {
         try {
             window.__ntAdminSessionActive = true;
+            stampAdminChrome();
             exposeAdminGlobals();
             await bootFirebase();
             await loadClassicAdminScript();
@@ -168,7 +216,7 @@ function openAdminEntryUi() {
     const devModal = document.getElementById('dev-modal');
     const emailInput = document.getElementById('admin-email');
 
-    if (window.Admin?.currentUser || window.isSimMode) {
+    if ((typeof window.isAdminEmail === 'function' && window.isAdminEmail(window.Admin?.currentUser?.email)) || window.isSimMode) {
         if (devModal) {
             try {
                 if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
@@ -194,6 +242,7 @@ function openAdminEntryUi() {
         }
         if (spinner) spinner.classList.add('hidden');
         if (emailInput) setTimeout(() => emailInput.focus(), 150);
+        fillAdminPasswordFromDevice();
     }
 }
 

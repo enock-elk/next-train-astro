@@ -7,6 +7,8 @@
  */
 
 import { safeStorage } from './utils.js';
+import { isAdminAuthed } from './admin-chrome.js';
+import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
 import { markPendingReload, isReloadPending } from './session-stability.js';
@@ -20,13 +22,49 @@ import {
 } from './recovery.js';
 
 
+/** Vibrations are opt-in. Missing key (new users) means off. */
+export function hapticsAreEnabled() {
+    try {
+        return safeStorage.getItem('hapticsEnabled') === 'true';
+    } catch {
+        return false;
+    }
+}
+
 // --- GLOBAL HAPTIC ENGINE ---
 export function triggerHaptic() {
     try {
-        if (safeStorage.getItem('hapticsEnabled') !== 'false' && navigator.vibrate) {
+        if (hapticsAreEnabled() && navigator.vibrate) {
             navigator.vibrate(50);
         }
     } catch(e) {}
+}
+
+/**
+ * Show/hide a password field. Bind after the input exists in the document
+ * (admin login lives in a stamped <template>, so boot-time getElementById misses it).
+ */
+export function bindPasswordReveal({ inputId, buttonId, openIconId, closedIconId }) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(buttonId);
+    if (!input || !btn || btn.dataset.revealBound === '1') return;
+    btn.dataset.revealBound = '1';
+    const openIcon = openIconId ? document.getElementById(openIconId) : null;
+    const closedIcon = closedIconId ? document.getElementById(closedIconId) : null;
+    const sync = () => {
+        const hidden = input.type === 'password';
+        btn.setAttribute('aria-label', hidden ? 'Show password' : 'Hide password');
+        btn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+        openIcon?.classList.toggle('hidden', !hidden);
+        closedIcon?.classList.toggle('hidden', hidden);
+    };
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        input.type = input.type === 'password' ? 'text' : 'password';
+        sync();
+    });
+    sync();
 }
 
 // --- GLOBAL SCROLL-LOCK PROTOCOL ---
@@ -40,7 +78,20 @@ export function unlockBackgroundScroll() {
 
 
 // --- SPATIAL MODAL ENGINE ---
-if (typeof window !== 'undefined') window._isModalAnimating = false;
+if (typeof window !== 'undefined') {
+    window._isModalAnimating = false;
+    window.__ntModalPopLockUntil = 0;
+}
+
+function armModalPopLock() {
+    if (typeof window === 'undefined') return;
+    window.__ntModalPopLockUntil = Date.now() + 500;
+}
+
+function isModalPopLocked() {
+    if (typeof window === 'undefined') return false;
+    return Date.now() < (window.__ntModalPopLockUntil || 0);
+}
 
 /** Modal id → history hash (SPA back-button stack). */
 const MODAL_HASH = {
@@ -60,6 +111,7 @@ const MODAL_HASH = {
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
     'disruption-modal': '#disruption',
+    'planner-train-sheet-modal': '#train-sheet',
     'cache-clear-modal': '#cacheclear',
     'account-modal': '#account',
     'login-modal': '#login',
@@ -129,8 +181,9 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
         const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
         if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
-            // Hide first. history.back() is async; if popstate is ignored while
-            // _isModalAnimating, returning here used to leave Select Route up.
+            // Hide first, then pop. Arm a short lock so the following popstate
+            // does not close the next overlay or call history.back() again.
+            armModalPopLock();
             hideFixedModal(modalId);
             try {
                 history.back();
@@ -290,6 +343,10 @@ export function bindHistoryBackNavigation() {
             }
         }
 
+        if (isModalPopLocked()) {
+            return;
+        }
+
         if (window._isLightboxMode) {
             closeLightbox(true);
             return;
@@ -310,13 +367,6 @@ export function bindHistoryBackNavigation() {
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
             if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
             else adminLightbox.classList.add('hidden');
-            return;
-        }
-
-        if (window._isModalAnimating) {
-            unlockBackgroundScroll();
-            // Do not pushState the current href back — that restored #route
-            // after a route pick and dumped the commuter onto Select Route again.
             return;
         }
 
@@ -383,6 +433,8 @@ export function bindHistoryBackNavigation() {
             const keepPlannerResults = hashNow === '#planner-results'
                 || hashNow === '#map'
                 || hashNow === '#prasa-map'
+                || hashNow === '#train-sheet'
+                || hashNow === '#fare'
                 || hashNow === '#trip-map'
                 || hashNow === '#sheet'
                 || hashNow === '#sidenav'
@@ -413,9 +465,11 @@ export function bindHistoryBackNavigation() {
                 try { window.restorePlannerResultsView(); } catch { /* ignore */ }
             }
         } else if (hash === '#community') {
-            if (safeStorage.getItem('activeTab') !== 'community') switchTab('community');
+            if (isAdminAuthed() && safeStorage.getItem('activeTab') !== 'community') switchTab('community');
+            else if (!isAdminAuthed()) switchTab('next-train');
         } else if (hash === '#map') {
-            if (safeStorage.getItem('activeTab') !== 'map') switchTab('map');
+            if (isAdminAuthed() && safeStorage.getItem('activeTab') !== 'map') switchTab('map');
+            else if (!isAdminAuthed()) switchTab('next-train');
         }
     });
 }
@@ -1153,6 +1207,10 @@ export function setImmersiveChrome(on) {
 export function switchTab(tab) {
     if (typeof document === 'undefined') return;
 
+    if ((tab === 'map' || tab === 'community') && !isAdminAuthed()) {
+        tab = 'next-train';
+    }
+
     if (document.body.classList.contains('sidenav-open') && typeof window.closeAppHub === 'function') {
         window.closeAppHub(true);
     }
@@ -1283,9 +1341,12 @@ export function setupSwipeNavigation() {
             // Include Map; Community when the top tab is visible (lab).
             const communityTab = document.getElementById('tab-community');
             const communityVisible = !!(communityTab && !communityTab.classList.contains('hidden'));
-            const order = communityVisible
-                ? ['next-train', 'trip-planner', 'map', 'community']
-                : ['next-train', 'trip-planner', 'map'];
+            const operator = isAdminAuthed();
+            const order = operator
+                ? (communityVisible
+                    ? ['next-train', 'trip-planner', 'map', 'community']
+                    : ['next-train', 'trip-planner', 'map'])
+                : ['next-train', 'trip-planner'];
             const cur = safeStorage.getItem('activeTab') || 'next-train';
             const safeCur = order.includes(cur) ? cur : 'next-train';
             const idx = Math.max(0, order.indexOf(safeCur));
@@ -1324,6 +1385,7 @@ export function openLegal(type, opts = {}) {
     } catch { /* ignore */ }
 
     openSmoothModal('legal-modal');
+    trackAnalyticsEvent('view_legal_doc', { doc: resolved });
 }
 
 export function bindPlannerShellModals() {
@@ -1724,15 +1786,15 @@ export function bindPwaInstallPrompt() {
         window.__ntDeferredInstallPrompt = null;
         if (installBtn) installBtn.classList.add('hidden');
         if (installBtnPlanner) installBtnPlanner.classList.add('hidden');
+        trackAnalyticsEvent('install_app_accepted', { location: 'main_view' });
     });
 
     const handleInstallClick = () => {
         triggerHaptic();
-        if (typeof window.gtag === 'function') {
-            window.gtag('event', 'install_app_click', { location: 'main_view', is_webview: isWebView });
-        }
+        trackAnalyticsEvent('install_app_click', { location: 'main_view', is_webview: isWebView });
 
         if (isWebView) {
+            trackAnalyticsEvent('install_app_webview_click', { location: 'main_view' });
             if (isAndroid) {
                 const deviceId = (() => {
                     try { return localStorage.getItem('next_train_device_id') || ''; } catch { return ''; }
@@ -1750,8 +1812,8 @@ export function bindPwaInstallPrompt() {
         if (promptEvent) {
             promptEvent.prompt();
             Promise.resolve(promptEvent.userChoice).then((choiceResult) => {
-                if (typeof window.gtag === 'function') {
-                    window.gtag('event', choiceResult?.outcome === 'accepted' ? 'install_app_accepted' : 'install_app_dismissed');
+                if (choiceResult?.outcome !== 'accepted') {
+                    trackAnalyticsEvent('install_app_dismissed', { location: 'main_view' });
                 }
                 window.deferredInstallPrompt = null;
                 window.__ntDeferredInstallPrompt = null;
@@ -1817,7 +1879,7 @@ export const OfflineTracker = {
                 const item = queue[0];
                 const enriched = { ...(item.params || {}), offline_captured: true, original_ts: item.timestamp };
                 try {
-                    window.gtag('event', item.event, enriched);
+                    sendAnalyticsNow(item.event, enriched);
                     queue.shift();
                     if (queue.length > 0) safeStorage.setItem(OfflineTracker.queueKey, JSON.stringify(queue));
                     else safeStorage.removeItem(OfflineTracker.queueKey);
@@ -1894,27 +1956,7 @@ function installAnalyticsOfflineBridge() {
     if (typeof window === 'undefined' || window.__ntAnalyticsOfflineBound) return;
     window.__ntAnalyticsOfflineBound = true;
     window.OfflineTracker = OfflineTracker;
-
-    const prior = typeof window.trackAnalyticsEvent === 'function' ? window.trackAnalyticsEvent : null;
-    window.trackAnalyticsEvent = (name, params = {}) => {
-        try {
-            const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-            if (offline || !OfflineTracker.gaReady()) {
-                OfflineTracker.enqueue(name, params);
-                if (!offline) OfflineTracker.flush();
-                return;
-            }
-            if (prior) prior(name, params);
-            else window.gtag?.('event', name, params || {});
-            try {
-                const region = params.region || safeStorage.getItem('userRegion') || '';
-                if (region && typeof window.clarity === 'function') {
-                    window.clarity('set', 'crm_region', region);
-                    window.clarity('event', name);
-                }
-            } catch { /* ignore */ }
-        } catch { /* ignore */ }
-    };
+    window.trackAnalyticsEvent = trackAnalyticsEvent;
 
     window.addEventListener('online', () => OfflineTracker.flush());
     window.addEventListener('nt-ga-ready', () => OfflineTracker.flush());
@@ -1934,6 +1976,8 @@ function installAnalyticsOfflineBridge() {
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
+    window.hapticsAreEnabled = hapticsAreEnabled;
+    window.bindPasswordReveal = bindPasswordReveal;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
     window.toggleDropdownScrim = toggleDropdownScrim;

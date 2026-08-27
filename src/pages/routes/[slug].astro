@@ -1,6 +1,8 @@
 ---
 import ContentLayout from '../../layouts/ContentLayout.astro';
-import SeoThemeToggle from '../../components/SeoThemeToggle.astro';
+import SeoPageHeader from '../../components/SeoPageHeader.astro';
+import SeoFareTable from '../../components/SeoFareTable.astro';
+import SeoTimetableGrid from '../../components/SeoTimetableGrid.astro';
 import { withBase } from '../../lib/config.js';
 import {
   listSeoRoutes,
@@ -12,6 +14,20 @@ import {
   listSeoRegions,
   listSeoCorridors,
 } from '../../lib/seo-routes.js';
+import {
+  buildRouteSeoTimetable,
+  buildRouteJsonLd,
+  bidirectionalTitle,
+  corridorPairLabel,
+  directionPhrase,
+  routeDocumentTitle,
+  routeMetaDescription,
+  firstLastSummaryLine,
+  ogTimetableImageUrl,
+  buildRouteGridAppPath,
+  buildRouteBoardAppPath,
+  buildRouteFareTable,
+} from '../../lib/seo-timetable.js';
 
 export function getStaticPaths() {
   return listSeoRoutes().map(({ seed }) => ({
@@ -30,32 +46,45 @@ const name = displayRouteName(route);
 const origin = stationLabel(route.destA);
 const dest = stationLabel(route.destB);
 const province = regionName(route.region);
-const corridorLabel = getCorridorLabel(route);
+const lineLabel = getCorridorLabel(route);
+const pairLabel = corridorPairLabel(origin, dest);
 const regionEntry = listSeoRegions().find((r) => r.region === route.region);
 const corridorEntry = listSeoCorridors().find(
   (c) => route.corridorId && c.corridorIds.includes(route.corridorId)
 );
-const title = `${origin} to ${dest} Train Times | Metrorail Next Train`;
-const description = `${seed.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
+const heading = bidirectionalTitle(origin, dest);
+const timetable = buildRouteSeoTimetable(route);
+const firstB = firstLastSummaryLine(timetable.weekday.b);
+const firstA = firstLastSummaryLine(timetable.weekday.a);
+const satNote = timetable.hasSaturday
+  ? 'Saturday trains are listed further down this page.'
+  : 'This corridor has no Saturday sheet in the published dump.';
+const title = routeDocumentTitle(origin, dest);
+const description = routeMetaDescription(origin, dest, province);
 const canonicalPath = `/routes/${seed.slug}.html`;
-const appHref = withBase(`/?rt=${encodeURIComponent(route.id)}`);
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
+const liveBoardHref = withBase(buildRouteBoardAppPath(route.id));
+const liveGridWeekdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'weekday'));
+const liveGridWeekdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'weekday'));
+const liveGridSaturdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'saturday'));
+const liveGridSaturdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'saturday'));
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
 const corridorHref = corridorEntry ? withBase(`corridors/${corridorEntry.slug}.html`) : null;
+const ogImage = ogTimetableImageUrl(route.id, 'A');
+const fares = buildRouteFareTable(route);
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebPage',
-  name: title,
+const jsonLd = buildRouteJsonLd({
+  title,
   description,
-  about: name,
-  isPartOf: {
-    '@type': 'WebSite',
-    name: 'Metrorail Next Train',
-    url: 'https://nexttrain.co.za/',
-  },
-};
+  pageUrl,
+  name,
+  origin,
+  dest,
+  operatingNote: seed.operatingNote,
+  timetable,
+});
 
 const related = [
   ...listSeoRoutes().filter(
@@ -72,63 +101,216 @@ const related = [
   description={description}
   canonicalPath={canonicalPath}
   themeColor="#1d4ed8"
+  forceLight={true}
+  ogImage={ogImage}
+  ogImageWidth="3000"
+  ogImageHeight="1575"
+  twitterCard="summary_large_image"
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
-  <SeoThemeToggle />
+  <SeoPageHeader region={route.region} regionLabel={province} ctaHref={liveBoardHref} />
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
-    <div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
+    <div class="max-w-2xl mx-auto px-4 pt-6 sm:pt-8">
       <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
         <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
         <span class="text-slate-400 dark:text-slate-500"> / </span>
         <a href={regionHref} class="hover:underline">{province}</a>
-        {corridorLabel && (
+        {lineLabel && (
           <>
             <span class="text-slate-400 dark:text-slate-500"> / </span>
-            {corridorHref ? <a href={corridorHref} class="hover:underline">{corridorLabel}</a> : corridorLabel}
+            {corridorHref ? <a href={corridorHref} class="hover:underline">{lineLabel}</a> : lineLabel}
           </>
         )}
       </p>
 
-      <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-        {origin} to {dest} train times
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+        {heading}
       </h1>
-      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        {seed.blurb}
-      </p>
+      <a
+        href={liveBoardHref}
+        class="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 text-sm sm:text-base transition-colors shadow-lg shadow-blue-900/20"
+      >
+        Open live timetable in Next Train
+      </a>
+      <div class="mt-4 space-y-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p>{seed.blurb}</p>
+        <div class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-3 text-sm space-y-2">
+          <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">When trains run</p>
+          <p>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">Weekdays.</span>
+            Full times are listed below. Open Next Train for the live board.
+          </p>
+          <p>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">Saturdays.</span>
+            {satNote}
+          </p>
+          <p>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">Sundays and public holidays.</span>
+            {seed.operatingNote}
+          </p>
+        </div>
+      </div>
 
-      <div class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
+      <section class="mt-8 space-y-5">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">{directionPhrase(origin, dest)}</h2>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Train times and departures from {origin} towards {dest}.
+          </p>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">{directionPhrase(dest, origin)}</h2>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Train times and departures from {dest} towards {origin}.
+          </p>
+        </div>
+      </section>
+
+      {(firstB || firstA) && (
+        <div class="mt-6 rounded-2xl border border-blue-100 bg-blue-50/80 dark:border-blue-900/40 dark:bg-blue-950/30 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+          <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">
+            Weekday first &amp; last
+          </p>
+          {firstB && <p>{firstB}</p>}
+          {firstA && <p>{firstA}</p>}
+        </div>
+      )}
+
+      <SeoFareTable
+        zoneCode={fares.zoneCode}
+        inferred={fares.inferred}
+        origin={origin}
+        dest={dest}
+        tickets={fares.tickets}
+      />
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      {timetable.hasWeekday && (
+        <section>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">Weekday timetable</h2>
+          {timetable.weekday.a && (
+            <div class="mt-4">
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.weekday.a.heading}
+                </h3>
+                <a
+                  href={liveGridWeekdayA}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
+              <SeoTimetableGrid
+                grid={timetable.weekday.a}
+                caption={`Weekday trains to ${origin}`}
+              />
+            </div>
+          )}
+          {timetable.weekday.b && (
+            <div class="mt-8">
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.weekday.b.heading}
+                </h3>
+                <a
+                  href={liveGridWeekdayB}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
+              <SeoTimetableGrid
+                grid={timetable.weekday.b}
+                caption={`Weekday trains to ${dest}`}
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {timetable.hasSaturday && (
+        <details class="mt-6 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4">
+          <summary class="cursor-pointer text-sm font-bold text-slate-900 dark:text-white">
+            Saturday timetable
+          </summary>
+          {timetable.saturday.a && (
+            <div class="mt-4">
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.saturday.a.heading}
+                </h3>
+                <a
+                  href={liveGridSaturdayA}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
+              <SeoTimetableGrid
+                grid={timetable.saturday.a}
+                caption={`Saturday trains to ${origin}`}
+              />
+            </div>
+          )}
+          {timetable.saturday.b && (
+            <div class="mt-4">
+              <div class="flex flex-wrap items-end justify-between gap-2">
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                  {timetable.saturday.b.heading}
+                </h3>
+                <a
+                  href={liveGridSaturdayB}
+                  class="text-sm font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  Open live timetable in Next Train
+                </a>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500">Download and Share are there.</p>
+              <SeoTimetableGrid
+                grid={timetable.saturday.b}
+                caption={`Saturday trains to ${dest}`}
+              />
+            </div>
+          )}
+        </details>
+      )}
+    </div>
+
+    <div class="max-w-2xl mx-auto px-4 pb-10 sm:pb-14">
+      <div class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-5 sm:p-6 shadow-xl">
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Origin</dt>
-            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{origin}</dd>
-          </div>
-          <div>
-            <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Destination</dt>
-            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{dest}</dd>
+            <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Corridor</dt>
+            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{pairLabel}</dd>
           </div>
           <div>
             <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Province</dt>
             <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{province}</dd>
           </div>
-          <div>
-            <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Corridor</dt>
-            <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{corridorLabel || 'Metrorail'}</dd>
-          </div>
+          {lineLabel && (
+            <div>
+              <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Line</dt>
+              <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{lineLabel}</dd>
+            </div>
+          )}
         </dl>
 
-        <p class="mt-5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-800 pt-4">
-          {seed.operatingNote}
-        </p>
-
         <a
-          href={appHref}
+          href={liveBoardHref}
           class="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-4 transition-colors shadow-lg shadow-blue-900/20 dark:shadow-blue-900/40"
         >
-          Open live board for {name}
+          Open live timetable in Next Train
         </a>
         <p class="mt-2 text-center text-[11px] text-slate-500">
-          First visit can open this route. Returning visitors keep their saved region &amp; route.
+          Download and Share are on the live sheet.
+          <a href={liveBoardHref} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Open the live board</a>
+          if you only need upcoming trains.
         </p>
       </div>
 
@@ -149,7 +331,7 @@ const related = [
       </section>
 
       <p class="mt-10 text-sm text-slate-500">
-        Need holiday rules or offline tips?
+        For more info:
         <a href={guideHref} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Read the user guide</a>
         ·
         <a href={withBase('/')} class="text-blue-600 dark:text-blue-400 hover:underline ml-1">Home</a>

@@ -2,12 +2,17 @@
  * Next Train — Appearance packs (Phase 3)
  * ---------------------------------------------------------------------------
  * Tokens (semantic):
- *   --nt-primary          Brand / CTA fill
+ *   --nt-primary          Brand / CTA fill (desaturated)
  *   --nt-primary-hover    Pressed / hover CTA
  *   --nt-primary-fg       Text on primary
  *   --nt-primary-soft     Soft wash behind accents
- *   --nt-surface          App shell / cards
- *   --nt-surface-muted    Recessed panels (board bg)
+ *   --nt-canvas           Page / board recess (behind cards)
+ *   --nt-surface          Cards / sheets
+ *   --nt-surface-muted    Recessed panels
+ *   --nt-chrome-header    App header (not an alias of --nt-surface)
+ *   --nt-chrome-header-border
+ *   --nt-chrome-nav       Bottom nav (must differ from header and CTA)
+ *   --nt-chrome-nav-border
  *   --nt-text             Primary copy
  *   --nt-text-muted       Secondary copy
  *   --nt-border           Hairlines / chrome edges
@@ -22,16 +27,23 @@
  */
 
 :root {
-  /* Classic defaults (also used when data-colour-pack is missing) */
+  /* Classic light — blue header + nav, white title */
   --nt-primary: #2563eb;
   --nt-primary-hover: #1d4ed8;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #eff6ff;
+  --nt-primary-soft: #eef3fa;
+  --nt-canvas: #e8eef4;
   --nt-surface: #ffffff;
-  --nt-surface-muted: #f9fafb;
-  --nt-text: #111827;
-  --nt-text-muted: #6b7280;
-  --nt-border: #e5e7eb;
+  --nt-surface-muted: #f3f6f9;
+  --nt-chrome-header: #1d4ed8;
+  --nt-chrome-header-border: #1e40af;
+  --nt-chrome-nav: #163d96;
+  --nt-chrome-nav-border: #1e3a8a;
+  --nt-chrome-fg: #ffffff;
+  --nt-chrome-muted: rgba(255, 255, 255, 0.82);
+  --nt-text: #1e293b;
+  --nt-text-muted: #64748b;
+  --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
 
   --nt-blue-50: 239 246 255;
@@ -50,17 +62,25 @@
 html.dark:not([data-colour-pack]),
 html.dark[data-colour-pack="classic"],
 html[data-colour-pack="classic"].dark {
-  /* SPA keeps blue-600 CTAs with white label in dark mode */
-  --nt-primary: #2563eb;
-  --nt-primary-hover: #1d4ed8;
+  /* Title stays pack blue; header + nav are the same dark-navy family, not gray-800 */
+  --nt-primary: #3b82f6;
+  --nt-primary-hover: #60a5fa;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: rgba(30, 58, 138, 0.35);
-  --nt-surface: #1f2937;
-  --nt-surface-muted: rgba(17, 24, 39, 0.5);
-  --nt-text: #f9fafb;
-  --nt-text-muted: #9ca3af;
-  --nt-border: #374151;
-  --nt-theme-meta: #1e3a8a;
+  --nt-primary-soft: rgba(11, 31, 58, 0.55);
+  /* Near-black canvas; navy cards sit above it. Header/nav stay Classic blue. */
+  --nt-canvas: #07090d;
+  --nt-surface: #1a2d4a;
+  --nt-surface-muted: #101827;
+  --nt-chrome-header: #0b1f3a;
+  --nt-chrome-header-border: #163258;
+  --nt-chrome-nav: #061428;
+  --nt-chrome-nav-border: #163258;
+  --nt-chrome-fg: #93c5fd;
+  --nt-chrome-muted: #9fb4cc;
+  --nt-text: #e8eef6;
+  --nt-text-muted: #9fb0c8;
+  --nt-border: #2a3d5c;
+  --nt-theme-meta: #0b1f3a;
 }
 
 /* Explicit classic light (optional clarity) */
@@ -68,12 +88,19 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-primary: #2563eb;
   --nt-primary-hover: #1d4ed8;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #eff6ff;
+  --nt-primary-soft: #eef3fa;
+  --nt-canvas: #e8eef4;
   --nt-surface: #ffffff;
-  --nt-surface-muted: #f9fafb;
-  --nt-text: #111827;
-  --nt-text-muted: #6b7280;
-  --nt-border: #e5e7eb;
+  --nt-surface-muted: #f3f6f9;
+  --nt-chrome-header: #1d4ed8;
+  --nt-chrome-header-border: #1e40af;
+  --nt-chrome-nav: #163d96;
+  --nt-chrome-nav-border: #1e3a8a;
+  --nt-chrome-fg: #ffffff;
+  --nt-chrome-muted: rgba(255, 255, 255, 0.82);
+  --nt-text: #1e293b;
+  --nt-text-muted: #64748b;
+  --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -89,16 +116,23 @@ html[data-colour-pack="classic"]:not(.dark) {
 
 /* Midnight — slate surfaces + sky accent (professional, transit-like) */
 html[data-colour-pack="midnight"] {
-  --nt-primary: #0284c7;
-  --nt-primary-hover: #0369a1;
+  --nt-primary: #0e7490;
+  --nt-primary-hover: #155e75;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #f0f9ff;
-  --nt-surface: #f8fafc;
-  --nt-surface-muted: #f1f5f9;
+  --nt-primary-soft: #e8f4f8;
+  --nt-canvas: #e4ebf2;
+  --nt-surface: #f7fafc;
+  --nt-surface-muted: #eef3f7;
+  --nt-chrome-header: #f4f7fa;
+  --nt-chrome-header-border: #d5dee8;
+  --nt-chrome-nav: #cfd8e3;
+  --nt-chrome-nav-border: #b7c3d0;
+  --nt-chrome-fg: #0e7490;
+  --nt-chrome-muted: #64748b;
   --nt-text: #0f172a;
   --nt-text-muted: #64748b;
-  --nt-border: #e2e8f0;
-  --nt-theme-meta: #0369a1;
+  --nt-border: #d5dee8;
+  --nt-theme-meta: #155e75;
 
   --nt-blue-50: 240 249 255;
   --nt-blue-100: 224 242 254;
@@ -114,30 +148,44 @@ html[data-colour-pack="midnight"] {
 
 html.dark[data-colour-pack="midnight"],
 html[data-colour-pack="midnight"].dark {
-  --nt-primary: #38bdf8;
-  --nt-primary-hover: #7dd3fc;
+  --nt-primary: #7dd3fc;
+  --nt-primary-hover: #bae6fd;
   --nt-primary-fg: #0c4a6e;
-  --nt-primary-soft: rgba(12, 74, 110, 0.45);
-  --nt-surface: #0b1220;
-  --nt-surface-muted: #111827;
-  --nt-text: #f1f5f9;
+  --nt-primary-soft: rgba(12, 74, 110, 0.4);
+  --nt-canvas: #080b11;
+  --nt-surface: #1a2538;
+  --nt-surface-muted: #101826;
+  --nt-chrome-header: #0e1726;
+  --nt-chrome-header-border: #1e2c42;
+  --nt-chrome-nav: #121c2e;
+  --nt-chrome-nav-border: #24344c;
+  --nt-chrome-fg: #7dd3fc;
+  --nt-chrome-muted: #94a3b8;
+  --nt-text: #e8eef6;
   --nt-text-muted: #94a3b8;
-  --nt-border: #1e293b;
+  --nt-border: #1e2c42;
   --nt-theme-meta: #0c4a6e;
 }
 
 /* High contrast — crisp neutrals + strong brand blue (WCAG-friendly, not cartoon) */
 html[data-colour-pack="contrast"] {
-  --nt-primary: #1d4ed8;
-  --nt-primary-hover: #1e3a8a;
+  --nt-primary: #1e4fc2;
+  --nt-primary-hover: #163d96;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #eff6ff;
-  --nt-surface: #f8fafc;
-  --nt-surface-muted: #f1f5f9;
+  --nt-primary-soft: #eef2fb;
+  --nt-canvas: #e6e6e6;
+  --nt-surface: #ffffff;
+  --nt-surface-muted: #f1f1f1;
+  --nt-chrome-header: #ffffff;
+  --nt-chrome-header-border: #171717;
+  --nt-chrome-nav: #d4d4d4;
+  --nt-chrome-nav-border: #262626;
+  --nt-chrome-fg: #1e4fc2;
+  --nt-chrome-muted: #262626;
   --nt-text: #0a0a0a;
   --nt-text-muted: #262626;
   --nt-border: #171717;
-  --nt-theme-meta: #1d4ed8;
+  --nt-theme-meta: #1e4fc2;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -157,8 +205,15 @@ html[data-colour-pack="contrast"].dark {
   --nt-primary-hover: #bfdbfe;
   --nt-primary-fg: #0a0a0a;
   --nt-primary-soft: rgba(147, 197, 253, 0.16);
-  --nt-surface: #0a0a0a;
-  --nt-surface-muted: #141414;
+  --nt-canvas: #050505;
+  --nt-surface: #141414;
+  --nt-surface-muted: #0c0c0c;
+  --nt-chrome-header: #0a0a0a;
+  --nt-chrome-header-border: #e5e5e5;
+  --nt-chrome-nav: #1a1a1a;
+  --nt-chrome-nav-border: #d4d4d4;
+  --nt-chrome-fg: #93c5fd;
+  --nt-chrome-muted: #e5e5e5;
   --nt-text: #fafafa;
   --nt-text-muted: #e5e5e5;
   --nt-border: #e5e5e5;
@@ -178,16 +233,23 @@ html[data-colour-pack="contrast"].dark {
 
 /* Signal — emerald transit green */
 html[data-colour-pack="signal"] {
-  --nt-primary: #059669;
-  --nt-primary-hover: #047857;
+  --nt-primary: #2f7d5b;
+  --nt-primary-hover: #246348;
   --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #ecfdf5;
-  --nt-surface: #f4fdf8;
-  --nt-surface-muted: #ecfdf5;
-  --nt-text: #052e16;
-  --nt-text-muted: #4b5563;
-  --nt-border: #d1fae5;
-  --nt-theme-meta: #047857;
+  --nt-primary-soft: #e8f4ee;
+  --nt-canvas: #e4eee8;
+  --nt-surface: #f6fbf8;
+  --nt-surface-muted: #eef6f1;
+  --nt-chrome-header: #f3faf6;
+  --nt-chrome-header-border: #cfe0d6;
+  --nt-chrome-nav: #c9ddd2;
+  --nt-chrome-nav-border: #b3cbbd;
+  --nt-chrome-fg: #2f7d5b;
+  --nt-chrome-muted: #4b6358;
+  --nt-text: #123024;
+  --nt-text-muted: #4b6358;
+  --nt-border: #cfe0d6;
+  --nt-theme-meta: #246348;
 
   --nt-blue-50: 236 253 245;
   --nt-blue-100: 209 250 229;
@@ -203,57 +265,89 @@ html[data-colour-pack="signal"] {
 
 html.dark[data-colour-pack="signal"],
 html[data-colour-pack="signal"].dark {
-  --nt-primary: #34d399;
-  --nt-primary-hover: #6ee7b7;
+  --nt-primary: #6ee7b7;
+  --nt-primary-hover: #a7f3d0;
   --nt-primary-fg: #022c22;
-  --nt-primary-soft: rgba(6, 78, 59, 0.45);
-  --nt-surface: #022c22;
-  --nt-surface-muted: #052e16;
+  --nt-primary-soft: rgba(6, 78, 59, 0.4);
+  --nt-canvas: #050e0b;
+  --nt-surface: #143328;
+  --nt-surface-muted: #0a1c16;
+  --nt-chrome-header: #0a241b;
+  --nt-chrome-header-border: #164233;
+  --nt-chrome-nav: #0d2c22;
+  --nt-chrome-nav-border: #1a4a3a;
+  --nt-chrome-fg: #6ee7b7;
+  --nt-chrome-muted: #a7f3d0;
   --nt-text: #ecfdf5;
   --nt-text-muted: #a7f3d0;
-  --nt-border: #064e3b;
+  --nt-border: #164233;
   --nt-theme-meta: #064e3b;
 }
 
-/* Ember — amber / copper, no leftover white cards */
+/* Ember — muted copper, stepped canvas / cards / chrome (not one muddy brown) */
 html[data-colour-pack="ember"] {
-  --nt-primary: #d97706;
-  --nt-primary-hover: #b45309;
-  --nt-primary-fg: #ffffff;
-  --nt-primary-soft: #ffedd5;
-  --nt-surface: #fff7ed;
-  --nt-surface-muted: #ffedd5;
-  --nt-text: #1c1917;
-  --nt-text-muted: #78716c;
-  --nt-border: #fdba74;
-  --nt-theme-meta: #b45309;
-  --nt-accent: #c2410c;
+  --nt-primary: #a35c28;
+  --nt-primary-hover: #8a4c20;
+  --nt-primary-fg: #fffaf6;
+  --nt-primary-soft: #efe4d8;
+  --nt-canvas: #e8ddd2;
+  --nt-surface: #f7f1ea;
+  --nt-surface-muted: #efe6dc;
+  --nt-chrome-header: #ddd0c3;
+  --nt-chrome-header-border: #cbbbaa;
+  --nt-chrome-nav: #c9b7a6;
+  --nt-chrome-nav-border: #b09a86;
+  --nt-chrome-fg: #5c3d2e;
+  --nt-chrome-muted: #7c5a48;
+  --nt-text: #2a2118;
+  --nt-text-muted: #6f5e50;
+  --nt-border: #d4c4b4;
+  --nt-theme-meta: #8a4c20;
+  --nt-accent: #9a5a32;
 
-  --nt-blue-50: 255 247 237;
-  --nt-blue-100: 255 237 213;
-  --nt-blue-200: 254 215 170;
-  --nt-blue-300: 253 186 116;
-  --nt-blue-400: 251 146 60;
-  --nt-blue-500: 249 115 22;
-  --nt-blue-600: 217 119 6;
-  --nt-blue-700: 180 83 9;
-  --nt-blue-800: 146 64 14;
-  --nt-blue-900: 120 53 15;
+  --nt-blue-50: 247 241 234;
+  --nt-blue-100: 239 228 216;
+  --nt-blue-200: 224 204 184;
+  --nt-blue-300: 196 164 132;
+  --nt-blue-400: 176 124 80;
+  --nt-blue-500: 163 92 40;
+  --nt-blue-600: 154 86 32;
+  --nt-blue-700: 138 76 32;
+  --nt-blue-800: 112 64 28;
+  --nt-blue-900: 88 52 28;
 }
 
 html.dark[data-colour-pack="ember"],
 html[data-colour-pack="ember"].dark {
-  --nt-primary: #fbbf24;
-  --nt-primary-hover: #fcd34d;
-  --nt-primary-fg: #451a03;
-  --nt-primary-soft: rgba(120, 53, 15, 0.45);
-  --nt-surface: #1c1410;
-  --nt-surface-muted: #120e0b;
-  --nt-text: #fef3c7;
-  --nt-text-muted: #fde68a;
-  --nt-border: #78350f;
-  --nt-theme-meta: #78350f;
-  --nt-accent: #fb923c;
+  --nt-primary: #c4926a;
+  --nt-primary-hover: #d4a888;
+  --nt-primary-fg: #1c1612;
+  --nt-primary-soft: rgba(80, 56, 36, 0.45);
+  --nt-canvas: #100e0c;
+  --nt-surface: #322c26;
+  --nt-surface-muted: #1c1916;
+  --nt-chrome-header: #352e28;
+  --nt-chrome-header-border: #4a4038;
+  --nt-chrome-nav: #0c0b0a;
+  --nt-chrome-nav-border: #2a2420;
+  --nt-chrome-fg: #e8cfc0;
+  --nt-chrome-muted: #c4a392;
+  --nt-text: #f4ebe3;
+  --nt-text-muted: #c4a392;
+  --nt-border: #4a4038;
+  --nt-theme-meta: #352e28;
+  --nt-accent: #c4926a;
+
+  --nt-blue-50: 53 46 40;
+  --nt-blue-100: 62 52 44;
+  --nt-blue-200: 74 62 52;
+  --nt-blue-300: 120 88 60;
+  --nt-blue-400: 168 120 80;
+  --nt-blue-500: 196 146 106;
+  --nt-blue-600: 196 146 106;
+  --nt-blue-700: 212 176 144;
+  --nt-blue-800: 224 200 176;
+  --nt-blue-900: 244 235 227;
 }
 
 /*
@@ -262,17 +356,24 @@ html[data-colour-pack="ember"].dark {
  * Desaturated and light: no forest-green fills, no kraft-tan paper.
  */
 html[data-colour-pack="earthy"] {
-  --nt-primary: #6B705C;
-  --nt-primary-hover: #5C6150;
+  --nt-primary: #5e5a4e;
+  --nt-primary-hover: #4a473e;
   --nt-primary-fg: #FAF8F3;
   --nt-primary-soft: #F3F0E8;
+  --nt-canvas: #e4ddd0;
   --nt-surface: #FAF8F3;
-  --nt-surface-muted: #F5F2EA;
+  --nt-surface-muted: #F0EBE0;
+  --nt-chrome-header: #d9d2c4;
+  --nt-chrome-header-border: #c9c0b0;
+  --nt-chrome-nav: #c5cbb8;
+  --nt-chrome-nav-border: #aeb6a0;
+  --nt-chrome-fg: #353535;
+  --nt-chrome-muted: #6b655c;
   --nt-text: #353535;
-  --nt-text-muted: #8A8278;
-  --nt-border: #E8E2D6;
-  --nt-theme-meta: #FAF8F3;
-  --nt-accent: #A58E74;
+  --nt-text-muted: #7a746a;
+  --nt-border: #d4cdb8;
+  --nt-theme-meta: #d9d2c4;
+  --nt-accent: #8f7d68;
 
   --nt-blue-50: 250 248 243;
   --nt-blue-100: 243 240 232;
@@ -280,24 +381,31 @@ html[data-colour-pack="earthy"] {
   --nt-blue-300: 201 193 181;
   --nt-blue-400: 154 150 132;
   --nt-blue-500: 125 128 110;
-  --nt-blue-600: 107 112 92;
-  --nt-blue-700: 92 97 80;
-  --nt-blue-800: 74 78 65;
+  --nt-blue-600: 94 90 78;
+  --nt-blue-700: 74 71 62;
+  --nt-blue-800: 62 58 50;
   --nt-blue-900: 53 56 48;
 }
 
 html.dark[data-colour-pack="earthy"],
 html[data-colour-pack="earthy"].dark {
-  --nt-primary: #A3A792;
-  --nt-primary-hover: #C4C6B8;
-  --nt-primary-fg: #2C2A26;
+  --nt-primary: #b8b4a4;
+  --nt-primary-hover: #ccc8ba;
+  --nt-primary-fg: #1c1b18;
   --nt-primary-soft: rgba(107, 112, 92, 0.28);
-  --nt-surface: #2C2A26;
-  --nt-surface-muted: #24221F;
+  --nt-canvas: #0f0f0d;
+  --nt-surface: #2e2c27;
+  --nt-surface-muted: #1c1b18;
+  --nt-chrome-header: #32302b;
+  --nt-chrome-header-border: #4a4640;
+  --nt-chrome-nav: #0e0d0c;
+  --nt-chrome-nav-border: #2c2a26;
+  --nt-chrome-fg: #e7e5e0;
+  --nt-chrome-muted: #c9c1b5;
   --nt-text: #F5F1E9;
   --nt-text-muted: #C9C1B5;
-  --nt-border: #3F3C37;
-  --nt-theme-meta: #2C2A26;
+  --nt-border: #4a4640;
+  --nt-theme-meta: #32302b;
   --nt-accent: #C4A990;
 
   --nt-blue-50: 44 42 38;
@@ -306,7 +414,7 @@ html[data-colour-pack="earthy"].dark {
   --nt-blue-300: 92 97 80;
   --nt-blue-400: 125 128 110;
   --nt-blue-500: 154 150 132;
-  --nt-blue-600: 163 167 146;
+  --nt-blue-600: 184 180 164;
   --nt-blue-700: 196 198 184;
   --nt-blue-800: 221 214 203;
   --nt-blue-900: 245 241 233;
@@ -320,22 +428,62 @@ html[data-colour-pack="earthy"] .colour-pack-swatch {
   border: 1px solid var(--nt-border);
 }
 
-/* Shell surfaces follow pack tokens (alerts untouched elsewhere) */
+/* Shell: canvas vs cards vs distinct header/nav chrome */
+html, body {
+  background-color: var(--nt-canvas);
+}
+
 #main-content {
-  background-color: var(--nt-surface);
+  background-color: var(--nt-canvas);
   border-color: var(--nt-border);
   color: var(--nt-text);
 }
 
-.app-header {
-  background-color: color-mix(in srgb, var(--nt-surface) 90%, transparent);
-  border-color: color-mix(in srgb, var(--nt-border) 50%, transparent);
+.app-header,
+#app-header {
+  background-color: var(--nt-chrome-header) !important;
+  border-bottom: 1px solid var(--nt-chrome-header-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-#app-top-tabs,
+#app-top-tabs {
+  background-color: var(--nt-chrome-header);
+  border-color: var(--nt-chrome-header-border);
+}
+
 #bottom-nav.bottom-nav-bar {
-  background-color: color-mix(in srgb, var(--nt-surface) 95%, transparent);
-  border-color: var(--nt-border);
+  background-color: var(--nt-chrome-nav) !important;
+  border-top: 1px solid var(--nt-chrome-nav-border) !important;
+  box-shadow: 0 -10px 28px color-mix(in srgb, #000 16%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#bottom-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+html[data-admin-authed="1"] #bottom-nav-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  max-width: 32rem;
+}
+
+#bottom-nav .bottom-nav-item:not(.is-active) {
+  color: var(--nt-text-muted);
+}
+
+#bottom-nav .bottom-nav-item.is-active {
+  color: var(--nt-primary) !important;
+  font-weight: 800;
+  background: transparent;
+}
+
+#current-day {
+  letter-spacing: 0.01em;
 }
 
 /* Brand-left header: solid pack primary (Ember → amber/orange) */
@@ -347,48 +495,22 @@ html[data-colour-pack="earthy"] .colour-pack-swatch {
   background-image: none !important;
   -webkit-background-clip: border-box !important;
   background-clip: border-box !important;
-  color: var(--nt-primary) !important;
+  color: var(--nt-chrome-fg) !important;
 }
 
 .view-section {
-  background-color: var(--nt-surface-muted);
+  background-color: var(--nt-canvas);
 }
 
-/* Non-classic packs: beat Tailwind gray utilities on shell surfaces */
-html[data-colour-pack="midnight"] #main-content,
-html[data-colour-pack="contrast"] #main-content,
-html[data-colour-pack="signal"] #main-content,
-html[data-colour-pack="ember"] #main-content,
-html[data-colour-pack="earthy"] #main-content {
-  background-color: var(--nt-surface) !important;
+#main-content.app-shell {
+  background-color: var(--nt-canvas) !important;
   border-color: var(--nt-border) !important;
 }
 
-html[data-colour-pack="midnight"] .app-header,
-html[data-colour-pack="contrast"] .app-header,
-html[data-colour-pack="signal"] .app-header,
-html[data-colour-pack="ember"] .app-header,
-html[data-colour-pack="midnight"] #app-top-tabs,
-html[data-colour-pack="contrast"] #app-top-tabs,
-html[data-colour-pack="signal"] #app-top-tabs,
-html[data-colour-pack="ember"] #app-top-tabs,
-html[data-colour-pack="earthy"] .app-header,
-html[data-colour-pack="earthy"] #app-top-tabs,
-html[data-colour-pack="midnight"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="contrast"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="signal"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="ember"] #bottom-nav.bottom-nav-bar,
-html[data-colour-pack="earthy"] #bottom-nav.bottom-nav-bar {
-  background-color: color-mix(in srgb, var(--nt-surface) 94%, transparent) !important;
-  border-color: var(--nt-border) !important;
-}
-
-html[data-colour-pack="midnight"] .view-section,
-html[data-colour-pack="contrast"] .view-section,
-html[data-colour-pack="signal"] .view-section,
-html[data-colour-pack="ember"] .view-section,
-html[data-colour-pack="earthy"] .view-section {
-  background-color: var(--nt-surface-muted) !important;
+.app-header,
+#app-top-tabs {
+  background-color: var(--nt-chrome-header) !important;
+  border-color: var(--nt-chrome-header-border) !important;
 }
 
 html[data-colour-pack="contrast"] #main-content {
@@ -400,7 +522,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-/* Pack-tinted CTAs (GPS + full timetable) — Ember turns these amber/orange */
+/* Pack-tinted CTAs — rounded, inset, drop shadow; extra canvas gap above nav */
 #locate-btn,
 #view-full-timetable-btn {
   background-color: var(--nt-primary) !important;
@@ -411,13 +533,21 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 #view-full-timetable-btn:hover {
   background-color: var(--nt-primary-hover) !important;
 }
-#view-full-timetable-btn #last-updated-date {
-  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
-  font-weight: 700;
-  text-align: center;
-}
 #view-full-timetable-btn {
   text-align: center;
+  width: calc(100% - 0.5rem);
+  margin-inline: auto;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
+}
+#grid-trigger-container {
+  padding-bottom: 1.35rem;
+}
+.nt-board-footer.mt-auto {
+  padding-bottom: 1.25rem;
+}
+.nt-board-footer:not(:has(#install-app-btn:not(.hidden), #install-app-btn-planner:not(.hidden))) {
+  border-top-color: transparent;
+  padding-top: 0;
 }
 
 /* Colour pack picker (Settings) */
@@ -548,12 +678,21 @@ html.dark .nt-offline-strip::before {
 /* Maintenance strip pinned to top of header; alerts stay above it (z-[70]) */
 #app-header.nt-maint-active {
   /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
-  background-color: var(--nt-surface) !important;
+  background-color: var(--nt-chrome-header) !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 html.dark #app-header.nt-maint-active {
-  background-color: rgb(31 41 55) !important; /* gray-800 */
+  background-color: var(--nt-chrome-header) !important;
+}
+#app-header.nt-maint-active #app-title,
+#app-header.nt-maint-active #app-title.header-title,
+#app-header.nt-maint-active #current-day,
+#app-header.nt-maint-active #current-day span {
+  color: var(--nt-text) !important;
+}
+#app-header.nt-maint-active #current-day {
+  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
 }
 #app-header.nt-maint-active #open-nav-btn,
 #app-header.nt-maint-active #notice-bell {
@@ -653,133 +792,139 @@ html.dark .tab-btn.active {
   color: var(--nt-primary) !important;
 }
 
-/* Non-classic packs: kill leftover Tailwind whites / cool grays.
+/* Cards, hub, Alerts sheet, planner modals follow pack surfaces.
    Alert severity (red / amber / yellow / green / orange) is NOT remapped. */
-html[data-colour-pack="midnight"] body,
-html[data-colour-pack="contrast"] body,
-html[data-colour-pack="signal"] body,
-html[data-colour-pack="ember"] body,
-html[data-colour-pack="earthy"] body {
-  background-color: var(--nt-surface-muted) !important;
+html, body {
+  background-color: var(--nt-canvas) !important;
   color: var(--nt-text);
 }
 
-html[data-colour-pack="midnight"] .bg-white,
-html[data-colour-pack="midnight"] .bg-white\/95,
-html[data-colour-pack="contrast"] .bg-white,
-html[data-colour-pack="contrast"] .bg-white\/95,
-html[data-colour-pack="signal"] .bg-white,
-html[data-colour-pack="signal"] .bg-white\/95,
-html[data-colour-pack="ember"] .bg-white,
-html[data-colour-pack="ember"] .bg-white\/95,
-html[data-colour-pack="earthy"] .bg-white,
-html[data-colour-pack="earthy"] .bg-white\/95 {
+.bg-white,
+.bg-white\/95,
+.bg-white\/80 {
   background-color: var(--nt-surface) !important;
 }
 
-html[data-colour-pack="midnight"] .bg-gray-50,
-html[data-colour-pack="midnight"] .bg-gray-100,
-html[data-colour-pack="contrast"] .bg-gray-50,
-html[data-colour-pack="contrast"] .bg-gray-100,
-html[data-colour-pack="signal"] .bg-gray-50,
-html[data-colour-pack="signal"] .bg-gray-100,
-html[data-colour-pack="ember"] .bg-gray-50,
-html[data-colour-pack="ember"] .bg-gray-100,
-html[data-colour-pack="earthy"] .bg-gray-50,
-html[data-colour-pack="earthy"] .bg-gray-100 {
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-50\/80 {
   background-color: var(--nt-surface-muted) !important;
 }
 
-html.dark[data-colour-pack="midnight"] .dark\:bg-gray-800,
-html.dark[data-colour-pack="midnight"] .dark\:bg-gray-900,
-html.dark[data-colour-pack="contrast"] .dark\:bg-gray-800,
-html.dark[data-colour-pack="contrast"] .dark\:bg-gray-900,
-html.dark[data-colour-pack="signal"] .dark\:bg-gray-800,
-html.dark[data-colour-pack="signal"] .dark\:bg-gray-900,
-html.dark[data-colour-pack="ember"] .dark\:bg-gray-800,
-html.dark[data-colour-pack="ember"] .dark\:bg-gray-900,
-html.dark[data-colour-pack="earthy"] .dark\:bg-gray-800,
-html.dark[data-colour-pack="earthy"] .dark\:bg-gray-900 {
+html.dark .dark\:bg-gray-800,
+html.dark .dark\:bg-gray-800\/80,
+html.dark .dark\:bg-gray-800\/50,
+html.dark .dark\:bg-gray-800\/95 {
   background-color: var(--nt-surface) !important;
 }
 
-html.dark[data-colour-pack="midnight"] .dark\:bg-gray-900\/50,
-html.dark[data-colour-pack="midnight"] .dark\:bg-gray-800\/50,
-html.dark[data-colour-pack="contrast"] .dark\:bg-gray-900\/50,
-html.dark[data-colour-pack="contrast"] .dark\:bg-gray-800\/50,
-html.dark[data-colour-pack="signal"] .dark\:bg-gray-900\/50,
-html.dark[data-colour-pack="signal"] .dark\:bg-gray-800\/50,
-html.dark[data-colour-pack="ember"] .dark\:bg-gray-900\/50,
-html.dark[data-colour-pack="ember"] .dark\:bg-gray-800\/50,
-html.dark[data-colour-pack="earthy"] .dark\:bg-gray-900\/50,
-html.dark[data-colour-pack="earthy"] .dark\:bg-gray-800\/50 {
-  background-color: color-mix(in srgb, var(--nt-surface) 50%, transparent) !important;
+html.dark .dark\:bg-gray-900,
+html.dark .dark\:bg-gray-900\/50,
+html.dark .dark\:bg-gray-900\/95,
+html.dark .dark\:bg-gray-950\/40 {
+  background-color: var(--nt-canvas) !important;
 }
 
-html[data-colour-pack="midnight"] .border-gray-100,
-html[data-colour-pack="midnight"] .border-gray-200,
-html[data-colour-pack="midnight"] .border-gray-200\/80,
-html[data-colour-pack="contrast"] .border-gray-100,
-html[data-colour-pack="contrast"] .border-gray-200,
-html[data-colour-pack="contrast"] .border-gray-200\/80,
-html[data-colour-pack="signal"] .border-gray-100,
-html[data-colour-pack="signal"] .border-gray-200,
-html[data-colour-pack="signal"] .border-gray-200\/80,
-html[data-colour-pack="ember"] .border-gray-100,
-html[data-colour-pack="ember"] .border-gray-200,
-html[data-colour-pack="ember"] .border-gray-200\/80,
-html[data-colour-pack="earthy"] .border-gray-100,
-html[data-colour-pack="earthy"] .border-gray-200,
-html[data-colour-pack="earthy"] .border-gray-200\/80 {
+.border-gray-100,
+.border-gray-200,
+.border-gray-200\/80,
+.border-gray-300,
+html.dark .dark\:border-gray-700,
+html.dark .dark\:border-gray-800 {
   border-color: var(--nt-border) !important;
 }
 
-html[data-colour-pack="earthy"] .hover\:bg-blue-50:hover,
-html[data-colour-pack="ember"] .hover\:bg-blue-50:hover {
+.text-gray-400,
+.text-gray-500,
+.text-gray-600,
+html.dark .dark\:text-gray-400,
+html.dark .dark\:text-gray-500,
+html.dark .dark\:text-gray-300 {
+  color: var(--nt-text-muted) !important;
+}
+
+.text-gray-700,
+.text-gray-800,
+.text-gray-900,
+.text-black,
+html.dark .dark\:text-white,
+html.dark .dark\:text-gray-100,
+html.dark .dark\:text-gray-200 {
+  color: var(--nt-text) !important;
+}
+
+.hover\:bg-blue-50:hover {
   background-color: color-mix(in srgb, var(--nt-accent, var(--nt-primary)) 14%, var(--nt-surface)) !important;
 }
 
-html[data-colour-pack="earthy"] .text-gray-400,
-html[data-colour-pack="earthy"] .text-gray-500,
-html[data-colour-pack="earthy"] .text-gray-600 {
-  color: var(--nt-text-muted) !important;
-}
-html[data-colour-pack="earthy"] .text-gray-700,
-html[data-colour-pack="earthy"] .text-gray-800,
-html[data-colour-pack="earthy"] .text-gray-900,
-html[data-colour-pack="earthy"] .text-black {
-  color: var(--nt-text) !important;
-}
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-300,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-400,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-500 {
-  color: var(--nt-text-muted) !important;
-}
-html.dark[data-colour-pack="earthy"] .dark\:text-white,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-100,
-html.dark[data-colour-pack="earthy"] .dark\:text-gray-200 {
-  color: var(--nt-text) !important;
-}
-
-html[data-colour-pack="earthy"] #sidenav,
-html[data-colour-pack="ember"] #sidenav,
-html[data-colour-pack="midnight"] #sidenav,
-html[data-colour-pack="contrast"] #sidenav,
-html[data-colour-pack="signal"] #sidenav {
+#sidenav {
   background-color: var(--nt-surface) !important;
   color: var(--nt-text);
 }
 
-html[data-colour-pack="earthy"] #route-selector-pill,
-html[data-colour-pack="earthy"] #station-search-input,
-html[data-colour-pack="ember"] #route-selector-pill,
-html[data-colour-pack="ember"] #station-search-input {
+#alerts-channel,
+#alerts-channel-card {
+  background-color: var(--nt-canvas) !important;
+  color: var(--nt-text);
+}
+#alerts-channel header {
+  background-color: var(--nt-surface) !important;
+}
+.nt-alert-card {
+  background-color: var(--nt-surface) !important;
+  border-color: var(--nt-border);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 22%, transparent), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+}
+
+.nt-train-flag {
+  display: none !important;
+}
+html[data-admin-authed="1"] .nt-train-flag {
+  display: inline-block !important;
+}
+
+#route-selector-pill,
+#station-search-input {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
   color: var(--nt-text) !important;
 }
 
-html.dark[data-colour-pack="earthy"] #app-header.nt-maint-active,
-html.dark[data-colour-pack="ember"] #app-header.nt-maint-active {
-  background-color: var(--nt-surface) !important;
+html.dark #app-header.nt-maint-active {
+  background-color: var(--nt-chrome-header) !important;
+}
+
+/* Classic: white title on blue (light); pack-blue title on navy (dark).
+   Nav items must not stay slate/gray on a blue bar. */
+html[data-colour-pack="classic"] #current-day,
+html:not([data-colour-pack]) #current-day {
+  color: var(--nt-chrome-muted) !important;
+}
+html[data-colour-pack="classic"] #current-day span,
+html:not([data-colour-pack]) #current-day span {
+  color: var(--nt-chrome-muted) !important;
+}
+html[data-colour-pack="classic"] #current-day span.text-red-600,
+html:not([data-colour-pack]) #current-day span.text-red-600 {
+  color: #fecaca !important;
+}
+html.dark[data-colour-pack="classic"] #current-day span.text-red-600,
+html.dark[data-colour-pack="classic"] #current-day span.dark\:text-red-400,
+html.dark:not([data-colour-pack]) #current-day span.text-red-600 {
+  color: #fca5a5 !important;
+}
+
+html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),
+html:not([data-colour-pack]) #bottom-nav .bottom-nav-item:not(.is-active) {
+  color: var(--nt-chrome-muted) !important;
+}
+html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
+html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
+html[data-colour-pack="classic"] .bottom-nav-item.is-active {
+  color: var(--nt-chrome-fg) !important;
+  background: rgba(255, 255, 255, 0.12);
+}
+html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
+html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
+  background: rgba(147, 197, 253, 0.16);
 }

@@ -15,6 +15,43 @@ import {
 
 const INTENT_KEY = 'nt_pending_deeplink';
 const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
+const LAUNCH_URL_KEY = 'nt_launch_target_url';
+
+function parseShareFromSearch(search) {
+    return parsePlannerDeepLink(search)
+        || parseRouteDeepLinkParams(search)
+        || parseMapDeepLink(search)
+        || parsePlannerShortcutDeepLink(search)
+        || parseShareTargetDeepLink(search)
+        || null;
+}
+
+function shareFingerprint(snap) {
+    if (!snap || !snap.kind) return '';
+    if (snap.kind === 'route') return `route:${snap.routeId}:${snap.view || ''}:${snap.dir || ''}:${snap.day || ''}`;
+    if (snap.kind === 'planner') return `planner:${snap.from}:${snap.to}:${snap.time || ''}:${snap.day || ''}:${snap.region || ''}`;
+    if (snap.kind === 'planner-shortcut') return 'planner-shortcut';
+    if (snap.kind === 'map') return 'map';
+    if (snap.kind === 'share-target') return `share-target:${snap.url || ''}:${snap.text || ''}`;
+    return snap.kind;
+}
+
+export function isInAppBrowser(ua = typeof navigator !== 'undefined' ? navigator.userAgent : '') {
+    return /FBAN|FBAV|Instagram|Line\//i.test(String(ua || ''));
+}
+
+function readStashedLaunchUrl() {
+    try {
+        const fromWin = typeof window !== 'undefined' ? window.__ntLaunchTargetUrl : '';
+        const fromStore = sessionStorage.getItem(LAUNCH_URL_KEY);
+        const url = fromWin || fromStore || '';
+        if (fromStore) sessionStorage.removeItem(LAUNCH_URL_KEY);
+        if (typeof window !== 'undefined') window.__ntLaunchTargetUrl = '';
+        return url || null;
+    } catch {
+        return null;
+    }
+}
 
 function isLegalHash(hash) {
     return hash === '#privacy' || hash === '#terms' || hash === '#legal';
@@ -54,21 +91,23 @@ function stripHashKeepQuery() {
 }
 
 /** Capture legacy + short share links before any UI mutates location.search. */
-export function snapshotShareDeeplink() {
+export function snapshotShareDeeplink(searchOverride) {
     if (typeof window === 'undefined') return null;
     try {
-        const existing = sessionStorage.getItem(SHARE_SNAPSHOT_KEY);
-        if (existing) {
-            try { return JSON.parse(existing); } catch { /* fall through */ }
+        const search = searchOverride != null
+            ? searchOverride
+            : (typeof location !== 'undefined' ? location.search : '');
+        const snap = parseShareFromSearch(search);
+        const existing = peekShareDeeplinkSnapshot();
+        if (snap) {
+            // First Facebook/IAB hop is often `/` with no params; a later launch
+            // URL must be allowed to replace that empty/stale snapshot.
+            if (shareFingerprint(existing) !== shareFingerprint(snap)) {
+                sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
+            }
+            return snap;
         }
-        const planner = parsePlannerDeepLink(location.search);
-        const route = parseRouteDeepLinkParams(location.search);
-        const map = parseMapDeepLink(location.search);
-        const plannerShortcut = parsePlannerShortcutDeepLink(location.search);
-        const shareTarget = parseShareTargetDeepLink(location.search);
-        const snap = planner || route || map || plannerShortcut || shareTarget || null;
-        if (snap) sessionStorage.setItem(SHARE_SNAPSHOT_KEY, JSON.stringify(snap));
-        return snap;
+        return existing;
     } catch {
         return null;
     }
@@ -94,6 +133,83 @@ export function peekShareDeeplinkSnapshot() {
 }
 
 /**
+ * Installed PWA uses launch_handler: focus-existing. Chrome delivers the
+ * clicked URL via launchQueue — not location.search — on the first open.
+ * Convert /og/share?… to /?… so Welcome + ignite see the same params.
+ */
+export function ingestLaunchTargetUrl(targetURL) {
+    if (!targetURL || typeof window === 'undefined') return null;
+    let url;
+    try {
+        url = new URL(targetURL, location.origin);
+    } catch {
+        return null;
+    }
+    if (url.origin !== location.origin) return null;
+
+    const snap = snapshotShareDeeplink(url.search);
+    if (!snap) return null;
+
+    try {
+        const destPath = /\/og\/share\/?$/.test(url.pathname) ? '/' : (url.pathname || '/');
+        const next = destPath + url.search + (url.hash || '');
+        const cur = location.pathname + location.search + location.hash;
+        if (next !== cur) history.replaceState(history.state || {}, '', next);
+    } catch { /* ignore */ }
+    return snap;
+}
+
+export function hasInboundShareIntent(search = typeof location !== 'undefined' ? location.search : '') {
+    if (parseShareFromSearch(search)) return true;
+    const snap = peekShareDeeplinkSnapshot();
+    return !!(snap && (
+        snap.kind === 'route'
+        || snap.kind === 'planner'
+        || snap.kind === 'planner-shortcut'
+        || snap.kind === 'map'
+        || snap.kind === 'share-target'
+    ));
+}
+
+/**
+ * Head script stashes launchQueue targetURL. Bind here to apply it and
+ * re-run boot when a late Facebook/PWA launch arrives.
+ */
+export function bindLaunchQueueDeeplinks(onLaunch) {
+    if (typeof window === 'undefined' || window.__ntLaunchQueueModuleBound) return;
+    window.__ntLaunchQueueModuleBound = true;
+
+    const apply = (raw) => {
+        if (!raw) return;
+        if (raw === window.__ntLastLaunchApplied) return;
+        const snap = ingestLaunchTargetUrl(raw);
+        if (!snap) return;
+        window.__ntLastLaunchApplied = raw;
+        if (typeof onLaunch === 'function') onLaunch(raw);
+    };
+
+    apply(readStashedLaunchUrl());
+    window.addEventListener('nt-launch-url', (e) => apply(e?.detail));
+}
+
+/** Facebook IAB often paints hidden, then reveals — re-apply if the URL arrived late. */
+export function bindWebViewDeeplinkResume(onResume) {
+    if (typeof window === 'undefined' || window.__ntDeeplinkResumeBound) return;
+    window.__ntDeeplinkResumeBound = true;
+
+    const resume = () => {
+        snapshotShareDeeplink();
+        if (!hasInboundShareIntent()) return;
+        if (typeof onResume === 'function') onResume();
+    };
+
+    window.addEventListener('pageshow', resume);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') resume();
+    });
+}
+
+/**
  * Call as early as possible on boot. For first-time users, stash modal intents
  * and clear the hash so Welcome can own the first screen.
  */
@@ -102,7 +218,9 @@ export function prepareDeeplinkIntents() {
     window.__ntDeeplinkPrepared = true;
 
     // SPA parity: freeze share params first (Welcome used to strip region= before planner ran)
-    snapshotShareDeeplink();
+    const launchUrl = readStashedLaunchUrl();
+    if (launchUrl) ingestLaunchTargetUrl(launchUrl);
+    else snapshotShareDeeplink();
 
     const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
     const hash = location.hash || '';

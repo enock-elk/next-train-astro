@@ -22,6 +22,8 @@ import {
     buildNoticesMeta,
     summarizeAlertReactions,
     buildAlertReactionBreakdown,
+    stripAlertSignoffHtml,
+    noticeScopeLabel,
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
 } from '../src/lib/alerts-feed.js';
@@ -179,11 +181,60 @@ const now = 1_700_000_000_000;
 }
 
 {
+    const kemptonKeys = noticeScopeKeys('GP', 'pta-kempton');
+    assert(kemptonKeys.includes('pta-kempton') && kemptonKeys.includes('all_GP'), 'Kempton union is route ∪ region ∪ all');
+    assert(!kemptonKeys.includes('pta-irene'), 'Kempton pin does not inherit Irene');
+}
+
+{
+    const dup = mergeUnionNotices([
+        [{ id: 'same', message: 'gp copy', postedAt: 1, _sourceKey: 'all_GP' }],
+        [{ id: 'same', message: 'kempton copy', postedAt: 1, _sourceKey: 'pta-kempton' }],
+        [{ id: 'other', message: 'network', postedAt: 2, _sourceKey: 'all' }],
+    ]);
+    assert(dup.length === 2, `same-id union collapses to one card, got ${dup.length}`);
+    const kept = dup.find((n) => n.id === 'same');
+    assert(kept && kept._sourceKey === 'pta-kempton', `same-id prefers route source, got ${kept?._sourceKey}`);
+}
+
+{
+    const stripped = stripAlertSignoffHtml('<p>Please take note of this</p><br><span class="opacity-75">- Next Train Ops</span>');
+    assert(stripped.includes('Please take note') && !stripped.includes('Next Train Ops'), `signoff stripped from html ${stripped}`);
+    assert(noticeScopeLabel('all_GP') === 'Gauteng', `scope all_GP ${noticeScopeLabel('all_GP')}`);
+    assert(noticeScopeLabel('all') === 'Network', 'scope all is Network');
+    const signed = layoutAlertPost({
+        title: 'Advisory',
+        message: '<p>Trains resume Monday.</p><br><span>- Next Train Ops</span>',
+    });
+    assert(signed.body.includes('Trains resume') && !signed.body.includes('Next Train Ops'), `layout body drops signoff ${signed.body}`);
+}
+
+{
     const { readFileSync } = await import('node:fs');
     const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
     assert(channel.includes('>Close</button>'), 'header has a labeled Close button');
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
     assert(!channel.includes('When PRASA or Next Train'), 'empty-state no longer mentions PRASA');
+    assert(channel.includes('bg-slate-200 dark:bg-gray-950'), 'channel background contrasts with white cards');
+
+    const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    assert(js.includes('nt-alert-signoff'), 'card has signature class');
+    assert(js.includes('nt-alert-chip'), 'card has severity chip class');
+    assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
+    assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');
+    assert(js.indexOf('nt-alert-time') < js.indexOf('nt-alert-reply'), 'timestamp precedes Reply');
+
+    const shareApp = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(shareApp.includes('Say Goodbye to Waiting'), 'Share App still has marketing sentence');
+
+    const gridShare = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+    assert(!gridShare.includes('Check out the weekday'), 'grid share has no caption');
+    assert(gridShare.includes('{ url: shareUrl }'), 'grid share is URL-only');
+
+    const plannerShare = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+    assert(!plannerShare.includes('Trip Plan:'), 'planner header share has no Trip Plan caption');
+    assert(!plannerShare.includes('Check details here:'), 'planner header share has no extra text');
+    assert(plannerShare.includes('{ url: shareUrl }') || plannerShare.includes('{ url: shareLink }'), 'planner share payloads are URL-only');
 }
 
 {

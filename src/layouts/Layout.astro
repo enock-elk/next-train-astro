@@ -32,6 +32,8 @@ const resolvedTwitterDescription = twitterDescription || resolvedOgDescription;
 const labModeBoot = import.meta.env.PUBLIC_LAB_MODE === 'true'
   || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
 const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
+/** Optional CARTO raster key. Unkeyed Voyager tiles now watermark “API KEY REQUIRED”. */
+const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 ---
 
 <!DOCTYPE html>
@@ -93,6 +95,21 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
     <script is:inline>
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
       (function () {
+        // focus-existing PWAs get the clicked Facebook URL here, not on location.search.
+        try {
+          window.__ntLaunchTargetUrl = window.__ntLaunchTargetUrl || '';
+          function ntStashLaunchUrl(url) {
+            if (!url) return;
+            window.__ntLaunchTargetUrl = url;
+            try { sessionStorage.setItem('nt_launch_target_url', url); } catch (e) {}
+            try { window.dispatchEvent(new CustomEvent('nt-launch-url', { detail: url })); } catch (e) {}
+          }
+          if (window.launchQueue && typeof window.launchQueue.setConsumer === 'function') {
+            window.launchQueue.setConsumer(function (params) {
+              if (params && params.targetURL) ntStashLaunchUrl(params.targetURL);
+            });
+          }
+        } catch (e) {}
         function atPolyfill(n) {
           n = Math.trunc(n) || 0;
           if (n < 0) n += this.length;
@@ -126,6 +143,18 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
         </style>
       </>
     )}
+    <script is:inline>
+      // Hide the bottom bar until Welcome is done (before first paint).
+      (function () {
+        try {
+          var seen = localStorage.getItem('welcomeSeen') === 'true';
+          document.documentElement.classList.toggle('nt-onboarding', !seen);
+          document.documentElement.classList.toggle('nt-in-app', seen);
+        } catch (e) {
+          document.documentElement.classList.add('nt-onboarding');
+        }
+      })();
+    </script>
     <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;
@@ -163,8 +192,16 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
         console.error = function () { saveLog('ERROR', arguments); return origError.apply(console, arguments); };
       })();
     </script>
-    <script is:inline define:vars={{ base }}>
+    <script is:inline define:vars={{ base, cartoKey }}>
       window.__NT_BASE__ = base;
+      window.__NT_CARTO_KEY = cartoKey || '';
+      window.ntCartoVoyagerUrl = function () {
+        var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        if (window.__NT_CARTO_KEY) {
+          url += '?key=' + encodeURIComponent(window.__NT_CARTO_KEY);
+        }
+        return url;
+      };
     </script>
 
     <!-- Google Fonts — non-blocking so FCP/LCP are not gated on fonts.googleapis.com -->
@@ -375,7 +412,20 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
 
       html, body { height: 100%; }
       body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
-      body.modal-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
+      body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
+      #dev-modal,
+      #alerts-channel,
+      [id$="-modal"].fixed {
+        touch-action: pan-y;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+      body.modal-active #dev-modal {
+        inset: 0;
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow-y: auto;
+      }
       
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -498,6 +548,10 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
           box-shadow: none;
         }
       }
+      html.nt-onboarding #bottom-nav,
+      body:has(#welcome-modal:not(.hidden)) #bottom-nav {
+        display: none !important;
+      }
 
       #app-scroll.app-scroll {
         flex: 1 1 auto;
@@ -587,33 +641,114 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
         bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
       }
 
-      /* CleverAds sits fixed from the bottom. Never reserve page space for it. */
-      #clever-core {
-        max-height: 100px !important;
-        min-height: 0;
-        height: auto;
-        overflow: hidden !important;
-        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-        pointer-events: none;
-      }
-      #clever-core iframe {
-        max-height: 100px !important;
-      }
-      #clever-core.ad-cloaked {
-        transform: translateY(150%) !important;
-        pointer-events: none !important;
-        opacity: 0;
-        min-height: 0 !important;
-        height: 0 !important;
-      }
+      /* CleverAds is a vendor overlay. Never reserve page space for it. */
       #view-next-train.view-section.active {
         display: flex;
         flex-direction: column;
       }
+      /* Ease the live board when a unit fills or dismisses. Never transform
+         vendor nodes, and never transform #nt-shell — it wraps every
+         position:fixed overlay (map, feedback, about, privacy, Dev Hub). */
+      #nt-shell {
+        --nt-ad-shift: 0px;
+        --nt-ad-flip: 0px;
+      }
+      #main-content.app-shell {
+        transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #nt-shell.nt-ad-shifted #main-content.app-shell,
+      html.nt-ads-entering #main-content.app-shell {
+        transform: translateY(calc(var(--nt-ad-shift) + var(--nt-ad-flip)));
+      }
+      #nt-shell.nt-ad-no-motion #main-content.app-shell {
+        transition: none !important;
+      }
+      html.nt-ads-cloaked #nt-shell,
+      body.modal-active #nt-shell {
+        --nt-ad-shift: 0px !important;
+        --nt-ad-flip: 0px !important;
+      }
+      html.nt-ads-cloaked #main-content.app-shell,
+      body.modal-active #main-content.app-shell {
+        transform: none !important;
+        transition: none !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #main-content.app-shell { transition: none !important; }
+      }
+      /* Size overlays to the screen, not a tall transformed ancestor. */
+      #nt-shell [id$="-modal"].fixed,
+      #nt-shell #alerts-channel {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: auto;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+      }
+      /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
+      html.nt-ads-cloaked iframe[src*="cleverwebserver"],
+      html.nt-ads-cloaked iframe[src*="clever"],
+      html.nt-ads-cloaked [id*="Clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-cloaked [class*="Clever"],
+      html.nt-ads-cloaked [id*="clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-cloaked [class*="clever"],
+      html.nt-ads-entering iframe[src*="cleverwebserver"],
+      html.nt-ads-entering iframe[src*="clever"],
+      html.nt-ads-entering [id*="Clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-entering [class*="Clever"],
+      html.nt-ads-entering [id*="clever"]:not(#clever-core):not(#CleverCoreLoader103008),
+      html.nt-ads-entering [class*="clever"] {
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      /* Empty leftover wrappers (creative gone, box still in the tree).
+         Do not use display:none (Clever measures from layout). Do not touch left/top/transform. */
+      [data-nt-ad-idle="1"] {
+        max-height: 0 !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
     </style>
+    <!--
+      CleverAds vendor tag. Original IIFE is wrapped so Guardian can delay it
+      until welcome/safe-zone. Do not restyle their overlay coordinates.
+    -->
+    <script is:inline data-cfasync="false" type="text/javascript" id="clever-core">
+      /* <![CDATA[ */
+      window.__ntCleverVendorInject = function () {
+        if (document.getElementById('CleverCoreLoader103008')) return;
+        (function (document, window) {
+          var a, c = document.createElement('script'), f = window.frameElement;
+          c.id = 'CleverCoreLoader103008';
+          c.src = 'https://scripts.cleverwebserver.com/a399a0d9cfe9817e0ccd10f89b4e320a.js';
+          c.async = !0;
+          c.type = 'text/javascript';
+          c.setAttribute('data-target', window.name || (f && f.getAttribute('id')));
+          c.setAttribute('data-callback', 'put-your-callback-function-here');
+          c.setAttribute('data-callback-url-click', 'put-your-click-macro-here');
+          c.setAttribute('data-callback-url-view', 'put-your-view-macro-here');
+          try {
+            a = parent.document.getElementsByTagName('script')[0] || document.getElementsByTagName('script')[0];
+          } catch (e) {
+            a = !1;
+          }
+          a || (a = document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]);
+          a.parentNode.insertBefore(c, a);
+        })(document, window);
+      };
+      /* ]]> */
+    </script>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-stretch sm:items-center justify-center h-[100dvh] max-h-[100dvh] overflow-hidden p-0 sm:p-4 transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300">
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 
@@ -626,11 +761,11 @@ const robots = labModeBoot ? 'noindex, nofollow' : 'index, follow';
       </div>
     </div>
 
-    <!-- Page Content Injected Here -->
+    <!-- App frame: flex centering lives here, not on body, so vendor ad
+         nodes cannot sit as a second flex item beside the board. -->
+    <div id="nt-shell" class="flex items-stretch sm:items-center justify-center h-[100dvh] max-h-[100dvh] p-0 sm:p-4">
     <slot />
-
-    <!-- CleverAds host slot (cloaked until safe zone; contained max-height) -->
-    <div id="clever-core" class="ad-cloaked fixed bottom-0 left-0 w-full z-[80] flex justify-center items-end" aria-hidden="true"></div>
+    </div>
 
     <!-- Client-Side Bootstrapper -->
     <script>

@@ -4406,6 +4406,15 @@ const Admin = {
             }
         };
 
+        Admin._deTripPageSize = Admin._deTripPageSize || 40;
+
+        Admin.tripCorridorKey = (entry) =>
+            `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
+
+        Admin.tripUserKey = (entry) => String(entry?.userId || entry?.deviceId || '').trim();
+
+        Admin.tripOdKey = (entry) => `${String(entry.origin || '').toUpperCase()}|${String(entry.destination || '').toUpperCase()}`;
+
         /** Flatten cached trip_plans batches into filterable rows. */
         Admin.flattenTripPlanRows = (data = Admin._cachedTripPlans) => {
             const rows = [];
@@ -4451,16 +4460,197 @@ const Admin = {
             });
         };
 
+        Admin.mergeTripPlanBatches = (target, incoming) => {
+            const out = target && typeof target === 'object' ? target : {};
+            if (!incoming || typeof incoming !== 'object') return out;
+            Object.keys(incoming).forEach((k) => {
+                if (incoming[k]) out[k] = incoming[k];
+            });
+            return out;
+        };
+
+        /** All-time trip_plans payload. Full GET first; chunk with orderBy=$key if needed. */
+        Admin.fetchAllTripPlanBatches = async (secret) => {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const auth = secret ? `auth=${encodeURIComponent(secret)}` : '';
+            try {
+                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?${auth}`, {}, 20000);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && typeof data === 'object') return data;
+                }
+            } catch (e) {
+                console.warn('Full trip_plans fetch failed, paging', e);
+            }
+            let merged = {};
+            let endAt = '\uf8ff';
+            const chunk = 200;
+            for (let i = 0; i < 40; i++) {
+                const qs = `${auth}&orderBy=${encodeURIComponent('"$key"')}&limitToLast=${chunk}&endAt=${encodeURIComponent(`"${endAt}"`)}`;
+                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?${qs}`, {}, 15000);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const page = await res.json();
+                if (!page || typeof page !== 'object') break;
+                const keys = Object.keys(page).sort();
+                if (!keys.length) break;
+                const before = Object.keys(merged).length;
+                merged = Admin.mergeTripPlanBatches(merged, page);
+                if (keys.length < chunk) break;
+                const oldest = keys[0];
+                if (!oldest || oldest === endAt) break;
+                endAt = oldest;
+                if (Object.keys(merged).length === before) break;
+            }
+            return merged;
+        };
+
+        /** Unique users / OD pairs from the all-time cache. Never use a windowed subset. */
+        Admin.fetchTripPlanEverStats = async (secret) => {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const qs = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+            let users = null;
+            try {
+                const uRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json${qs}`, {}, 10000);
+                if (uRes && uRes.ok) {
+                    const raw = await uRes.json();
+                    if (raw && typeof raw === 'object') users = raw;
+                }
+            } catch { /* index optional on lab */ }
+            const rows = Admin.flattenTripPlanRows();
+            const userSet = new Set(rows.map((r) => Admin.tripUserKey(r)).filter(Boolean));
+            const pairSet = new Set(rows.map((r) => Admin.tripOdKey(r)).filter((k) => k !== '|'));
+            const indexCount = users ? Object.keys(users).filter((k) => users[k]).length : 0;
+            const usersEver = Math.max(indexCount, userSet.size);
+            Admin._deTripEverUsers = usersEver;
+            Admin._deTripEverPairs = pairSet.size;
+            return { usersEver, pairsEver: pairSet.size, fromIndex: indexCount > 0 };
+        };
+
+        Admin.buildTripInsightsHtml = (sorted, rows, esc) => {
+            const regionCounts = { GP: 0, WC: 0, KZN: 0, EC: 0 };
+            const dayCounts = {};
+            let direct = 0;
+            let transfer = 0;
+            (rows || []).forEach((r) => {
+                const rg = String(r.region || '').toUpperCase();
+                if (regionCounts[rg] != null) regionCounts[rg] += 1;
+                const day = String(r.dayType || 'unknown');
+                dayCounts[day] = (dayCounts[day] || 0) + 1;
+                if (Number(r.transfers || 0) > 0) transfer += 1;
+                else direct += 1;
+            });
+            const top = (sorted || []).slice(0, 5);
+            const chip = (label, n) => `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/80 dark:bg-gray-900/60 border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">${esc(label)} <span class="font-mono text-slate-800 dark:text-slate-100">${n}</span></span>`;
+            return `
+                <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights (all time)</p>
+                    <div class="flex flex-wrap gap-1">${chip('GP', regionCounts.GP)}${chip('WC', regionCounts.WC)}${chip('KZN', regionCounts.KZN)}${chip('EC', regionCounts.EC)}</div>
+                    <div class="flex flex-wrap gap-1">${Object.entries(dayCounts).map(([d, n]) => chip(d, n)).join('') || chip('days', 0)}</div>
+                    <p class="text-[10px] text-slate-500">${chip('Direct', direct)}${chip('Transfer', transfer)}</p>
+                    <table class="w-full text-[10px]">
+                        <thead><tr class="text-[9px] uppercase tracking-wider text-slate-400"><th class="text-left font-bold py-0.5">Top corridors</th><th class="text-right font-bold">Users</th><th class="text-right font-bold">Hits</th></tr></thead>
+                        <tbody>
+                            ${top.map((item) => `<tr class="border-t border-slate-100 dark:border-slate-800"><td class="py-1 pr-2 text-slate-700 dark:text-slate-200">${esc(item.origin)} → ${esc(item.dest)}</td><td class="text-right font-mono">${item.count || item.displayCount || 0}</td><td class="text-right font-mono">${item.hitCount || 0}</td></tr>`).join('') || '<tr><td class="py-1 text-slate-400" colspan="3">No corridors yet.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        };
+
+        Admin.appendTripCorridorCards = (listDiv, items, startIdx = 0) => {
+            const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
+            const secureEscape = (str) => {
+                if (!str) return '';
+                if (typeof escapeHTML === 'function') return escapeHTML(str);
+                return String(str).replace(/[&<>"']/g, (m) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+                }[m]));
+            };
+            items.forEach((item, offset) => {
+                const idx = startIdx + offset;
+                const dateStr = Admin.formatDate(item.lastSeen);
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
+                const safeOrigin = secureEscape(item.origin);
+                const safeDest = secureEscape(item.dest);
+                const dayLabel = secureEscape(item.dayType || 'unknown');
+                const depLabel = secureEscape(item.depSample || '-');
+                const regionLabel = secureEscape(item.region || '-');
+                const uidLabel = secureEscape(item.userId || '-');
+                const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 25);
+                const hitsHtml = hitsSorted.map((h) => `
+                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} / ${secureEscape((h.userId || '').slice(0, 14))}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
+                    </div>
+                `).join('');
+                card.innerHTML = `
+                    <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
+                                <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
+                            </div>
+                            <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
+                            <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
+                            <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
+                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                        </div>
+                    </button>
+                    <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
+                        <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
+                        ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+                    </div>
+                `;
+                card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
+                    const panel = card.querySelector('.de-trip-hits');
+                    const btn = card.querySelector('.de-trip-card-btn');
+                    if (!panel || !btn) return;
+                    const open = panel.classList.toggle('hidden') === false;
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                listDiv.appendChild(card);
+            });
+        };
+
+        Admin.syncTripLoadMoreChrome = (listDiv) => {
+            const sorted = Admin._deTripSorted || [];
+            const painted = Admin._deTripPainted || 0;
+            let sentinel = listDiv.querySelector('.de-trip-load-more-wrap');
+            if (!sentinel) {
+                sentinel = document.createElement('div');
+                sentinel.className = 'de-trip-load-more-wrap py-2';
+                listDiv.appendChild(sentinel);
+            } else {
+                listDiv.appendChild(sentinel);
+            }
+            if (painted >= sorted.length) {
+                sentinel.innerHTML = '';
+                return;
+            }
+            sentinel.innerHTML = `<button type="button" class="de-trip-load-more w-full px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 focus:outline-none">Load more trips</button>`;
+            sentinel.querySelector('.de-trip-load-more')?.addEventListener('click', () => {
+                const next = sorted.slice(painted, painted + (Admin._deTripPageSize || 40));
+                Admin._deTripPainted = painted + next.length;
+                sentinel.remove();
+                Admin.appendTripCorridorCards(listDiv, next, painted);
+                Admin.syncTripLoadMoreChrome(listDiv);
+            });
+        };
+
         Admin.renderTripPlanBatches = async (listDiv, secret, useCacheOnly = false) => {
             if (!useCacheOnly) {
                 listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">Loading trip plans...</div>';
             }
             try {
                 if (!useCacheOnly) {
-                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 10000);
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    Admin._cachedTripPlans = await res.json();
+                    Admin._cachedTripPlans = await Admin.fetchAllTripPlanBatches(secret);
                 }
                 const data = Admin._cachedTripPlans;
                 if (!data) {
@@ -4509,10 +4699,9 @@ const Admin = {
                 }
 
                 const filtered = Admin.getFilteredTripPlanRows();
-                // Group by trip corridor - uniqueUsers = unique userId/batchId (same user, new batch counts again)
                 const heatMap = {};
                 filtered.forEach((entry) => {
-                    const key = `${entry.origin}|${entry.destination}|${entry.dayType}|${entry.region}`;
+                    const key = Admin.tripCorridorKey(entry);
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -4527,7 +4716,7 @@ const Admin = {
                             hits: [],
                         };
                     }
-                    const uniq = `${entry.userId || 'anon'}::${entry.batchId || entry.timestamp || 0}`;
+                    const uniq = Admin.tripUserKey(entry) || 'anon';
                     heatMap[key].uniqueKeys.add(uniq);
                     heatMap[key].count = heatMap[key].uniqueKeys.size;
                     heatMap[key].hits.push(entry);
@@ -4549,7 +4738,6 @@ const Admin = {
                 });
 
                 const totalRows = allRows.length;
-                const userCount = new Set(filtered.map((r) => `${r.userId || ''}::${r.batchId || ''}`).filter(Boolean)).size;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
@@ -4563,62 +4751,30 @@ const Admin = {
                     }[m]));
                 };
 
-                listDiv.innerHTML = `
-                    <div class="text-[9px] text-gray-400 px-1 mb-1">
-                        Showing ${filtered.length} logged trips / ${sorted.length} unique corridors / ${userCount} unique user-batches (export uses current filters)
-                    </div>
-                `;
+                let ever = { usersEver: Admin._deTripEverUsers || 0, pairsEver: Admin._deTripEverPairs || 0 };
+                try { ever = await Admin.fetchTripPlanEverStats(secret); } catch { /* keep all-time cache counts */ }
+                const usersEver = Number(ever.usersEver || 0);
+                const pairsEver = Number(ever.pairsEver || 0);
+                const pageSize = Admin._deTripPageSize || 40;
+                const first = sorted.slice(0, pageSize);
+                Admin._deTripSorted = sorted;
+                Admin._deTripPainted = first.length;
 
-                sorted.forEach((item, idx) => {
-                    const dateStr = Admin.formatDate(item.lastSeen);
-                    const card = document.createElement('div');
-                    card.className = 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden transition-colors hover:border-emerald-300';
-                    const safeOrigin = secureEscape(item.origin);
-                    const safeDest = secureEscape(item.dest);
-                    const dayLabel = secureEscape(item.dayType || 'unknown');
-                    const depLabel = secureEscape(item.depSample || '-');
-                    const regionLabel = secureEscape(item.region || '-');
-                    const uidLabel = secureEscape(item.userId || '-');
-                    const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
-                    const hitsSorted = [...(item.hits || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                    const hitsHtml = hitsSorted.map((h) => `
-                        <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                            <span class="font-mono text-gray-500 truncate">${secureEscape(Admin.formatDate(h.timestamp))} / ${secureEscape((h.userId || '').slice(0, 14))}</span>
-                            <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${secureEscape(h.depTime || '-')}</span>
-                        </div>
-                    `).join('');
-                    card.innerHTML = `
-                        <button type="button" class="de-trip-card-btn w-full text-left p-3 flex items-center justify-between focus:outline-none" data-trip-idx="${idx}" aria-expanded="false">
-                            <div class="min-w-0 flex-1 pr-2">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
-                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Trip</span>
-                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                    <span class="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase">${regionLabel}</span>
-                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 font-mono">dep ${depLabel}</span>
-                                </div>
-                                <div class="mt-1.5 text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate" title="${uidLabel}">Latest user: ${uidLabel}</div>
-                                <div class="text-[9px] text-gray-400 font-mono mt-0.5">Last: ${dateStr}</div>
-                            </div>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm shrink-0">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                        </button>
-                        <div class="de-trip-hits hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history</p>
-                            ${hitsHtml || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
-                        </div>
-                    `;
-                    card.querySelector('.de-trip-card-btn')?.addEventListener('click', () => {
-                        const panel = card.querySelector('.de-trip-hits');
-                        const btn = card.querySelector('.de-trip-card-btn');
-                        if (!panel || !btn) return;
-                        const open = panel.classList.toggle('hidden') === false;
-                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                    });
-                    listDiv.appendChild(card);
-                });
+                listDiv.innerHTML = '';
+                const banner = document.createElement('div');
+                banner.className = 'rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 mb-2';
+                banner.innerHTML = `
+                    <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Users ever</p>
+                    <p id="de-users-collected" class="text-2xl font-black text-blue-800 dark:text-blue-200 leading-none mt-0.5">${usersEver}</p>
+                    <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">${pairsEver} unique trip combinations</p>
+                    <p class="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1">In this window: ${first.length} of ${sorted.length} corridors · ${secureEscape(String(filtered.length))} trips (list is paged for scroll)</p>
+                `;
+                listDiv.appendChild(banner);
+                const insights = document.createElement('div');
+                insights.innerHTML = Admin.buildTripInsightsHtml(sorted, filtered, secureEscape);
+                listDiv.appendChild(insights);
+                Admin.appendTripCorridorCards(listDiv, first, 0);
+                Admin.syncTripLoadMoreChrome(listDiv);
             } catch (e) {
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to load trip plans.</div>`;
             }

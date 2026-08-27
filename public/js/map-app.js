@@ -1367,7 +1367,6 @@
             const themeMoonSvg = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
             let isDarkNow = document.documentElement.classList.contains('dark');
             if (themeBtn) {
-                themeBtn.classList.add('text-amber-500');
                 themeBtn.innerHTML = isDarkNow ? themeMoonSvg : themeSunSvg;
                 themeBtn.onclick = () => {
                     isDarkNow = !isDarkNow;

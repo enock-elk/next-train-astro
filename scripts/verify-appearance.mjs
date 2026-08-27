@@ -101,6 +101,29 @@ assert(css.includes('#alerts-channel-card'), 'alerts sheet card uses canvas');
 assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
 assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
+assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
+assert(css.includes('padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px))'), 'non-fullscreen modals clear the bottom nav');
+
+const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
+assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
+assert(ridePings.includes("if (!isAdminAuthed()) return;"), 'nearby click is admin-gated');
+
+const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
+assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
+assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[90]'), 'upcoming trains no longer z-90 under the nav');
+
+const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
+assert(hubModals.includes('id="messages-thread-file"'), 'messages thread has attachment input');
+assert(hubModals.includes('id="messages-thread-contact"'), 'messages thread has optional contact field');
+assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
+assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
+assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'), 'About unofficial pill dropped low-contrast blue');
+
+const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+assert(mapPage.includes('map-chrome-btn-wide'), 'Network Lines uses map-chrome-btn');
+assert(mapPage.includes('var(--nt-surface'), 'map chrome follows colour-pack surface');
+assert(!mapPage.includes('text-blue-700 dark:text-blue-300'), 'GP button dropped hardcoded blue');
+assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped hardcoded amber');
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');

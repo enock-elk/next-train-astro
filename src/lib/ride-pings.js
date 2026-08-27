@@ -13,6 +13,7 @@
  * TTL ~10 minutes (rules allow up to 20); one active ride per device.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { isAdminAuthed } from './admin-chrome.js';
 import { safeStorage, escapeHTML, normalizeStationName, getDistanceFromLatLonInKm, formatTimeDisplay } from './utils.js';
 import { $currentRouteId, $deviceId, $globalStationIndex } from '../store.js';
 import { $account } from './account.js';
@@ -769,7 +770,8 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     }
 
     cta?.classList.add('hidden');
-    document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
+    if (isAdminAuthed()) document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
+    else document.getElementById('ride-nearby-btn')?.classList.add('hidden');
     const mine = getActiveShare();
     paintLiveDirectionHeaders(routeId);
 
@@ -1022,6 +1024,7 @@ export function bindRideCheckInUi() {
     });
 
     document.getElementById('ride-nearby-btn')?.addEventListener('click', () => {
+        if (!isAdminAuthed()) return;
         triggerHaptic();
         import('./map-tab.js').then((m) => m.openNearbyTrainsModal()).catch(() => {});
     });
@@ -1100,6 +1103,7 @@ if (typeof window !== 'undefined') {
     window.startPresenceShare = startPresenceShare;
     window.stopRideShare = stopRideShare;
     window.refreshRideSeenSurface = refreshRideSeenSurface;
+    window.renderRideSeenChip = renderRideSeenChip;
     window.bindRideCheckInUi = bindRideCheckInUi;
     window.computeRideDelta = computeRideDelta;
     window.getRideDelta = getRideDelta;

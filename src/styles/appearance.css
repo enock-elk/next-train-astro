@@ -883,6 +883,11 @@ html[data-admin-authed="1"] .nt-train-flag {
   display: inline-block !important;
 }
 
+/* Trains near you is operator-only; keep it hidden for commuters even if JS unhides it. */
+html:not([data-admin-authed="1"]) #ride-nearby-btn {
+  display: none !important;
+}
+
 #route-selector-pill,
 #station-search-input {
   background-color: var(--nt-surface) !important;
@@ -927,4 +932,16 @@ html[data-colour-pack="classic"] .bottom-nav-item.is-active {
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
   background: rgba(147, 197, 253, 0.16);
+}
+
+/* Non-fullscreen cards/sheets sit above the bottom nav, not under it.
+   Full-screen overlays (About, Welcome, map lightbox, timetable grid) skip this. */
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal),
+#nt-on-train-sheet {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal) > div,
+#nt-on-train-sheet > div {
+  max-height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)) !important;
 }

@@ -40,7 +40,75 @@ const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
 const FEEDBACK_WINDOW_MS = 30 * 60 * 1000;
 const FEEDBACK_MAX = 6;
 const FEEDBACK_COOLDOWN_MS = 20 * 1000;
+const THREAD_CONTACT_KEY = 'nt_feedback_contact';
+const FEEDBACK_FILE_MAX_BYTES = 5 * 1024 * 1024;
 let feedbackWaitCancel = null;
+
+async function uploadFeedbackAttachments(fileList) {
+    if (!fileList?.length || !window.firebaseStorage || !window.firebaseStorageRef) return [];
+    const files = Array.from(fileList).slice(0, 4);
+    const uploads = files.map(async (file) => {
+        try {
+            if (file.size > FEEDBACK_FILE_MAX_BYTES) return null;
+            const ext = file.name.split('.').pop();
+            const fileName = `feedback_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+            const storageReference = window.firebaseStorageRef(window.firebaseStorage, `feedback_attachments/${fileName}`);
+            const task = window.firebaseUploadBytesResumable(storageReference, file);
+            await new Promise((resolve, reject) => {
+                task.on('state_changed', null, reject, resolve);
+            });
+            return await window.firebaseGetDownloadURL(task.snapshot.ref);
+        } catch (e) {
+            console.warn('Attachment upload failed', e);
+            return null;
+        }
+    });
+    return (await Promise.all(uploads)).filter(Boolean);
+}
+
+function signedInContactEmail() {
+    const email = window.firebaseAuth?.currentUser?.email;
+    return (email && !window.firebaseAuth.currentUser.isAnonymous) ? String(email).trim() : '';
+}
+
+function resolveThreadContact() {
+    const signedIn = signedInContactEmail();
+    if (signedIn) return signedIn;
+    const field = document.getElementById('messages-thread-contact')?.value?.trim() || '';
+    if (field) return field;
+    try { return safeStorage.getItem(THREAD_CONTACT_KEY) || ''; } catch { return ''; }
+}
+
+function paintThreadContactRow() {
+    const row = document.getElementById('messages-thread-contact-row');
+    const input = document.getElementById('messages-thread-contact');
+    if (!row || !input) return;
+    const signedIn = signedInContactEmail();
+    if (signedIn) {
+        input.value = signedIn;
+        row.classList.add('hidden');
+        return;
+    }
+    row.classList.remove('hidden');
+    if (!input.value) {
+        try { input.value = safeStorage.getItem(THREAD_CONTACT_KEY) || ''; } catch { /* ignore */ }
+    }
+}
+
+function paintThreadFileChip(fileInput) {
+    const preview = document.getElementById('messages-thread-file-chip');
+    const nameEl = document.getElementById('messages-thread-file-name');
+    if (fileInput?.files?.length) {
+        if (nameEl) {
+            nameEl.textContent = fileInput.files.length === 1
+                ? fileInput.files[0].name
+                : `${fileInput.files.length} files selected`;
+        }
+        preview?.classList.remove('hidden');
+    } else {
+        preview?.classList.add('hidden');
+    }
+}
 
 function checkFeedbackRate() {
     return checkRateLimit(FEEDBACK_RATE_KEY, {
@@ -469,22 +537,7 @@ async function submitFeedback() {
         let attachmentUrls = [];
         if (hasFile && window.firebaseStorage && window.firebaseStorageRef) {
             if (submitText) submitText.textContent = 'Uploading Files...';
-            const uploads = Array.from(fileInput.files).map(async (file) => {
-                try {
-                    const ext = file.name.split('.').pop();
-                    const fileName = `feedback_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
-                    const storageReference = window.firebaseStorageRef(window.firebaseStorage, `feedback_attachments/${fileName}`);
-                    const task = window.firebaseUploadBytesResumable(storageReference, file);
-                    await new Promise((resolve, reject) => {
-                        task.on('state_changed', null, reject, resolve);
-                    });
-                    return await window.firebaseGetDownloadURL(task.snapshot.ref);
-                } catch (e) {
-                    console.warn('Attachment upload failed', e);
-                    return null;
-                }
-            });
-            attachmentUrls = (await Promise.all(uploads)).filter(Boolean);
+            attachmentUrls = await uploadFeedbackAttachments(fileInput.files);
         }
 
         if (submitText) submitText.textContent = 'Saving...';
@@ -910,6 +963,7 @@ export async function openMessagesThread() {
     document.getElementById('developer-reply-banner')?.classList.add('hidden');
     const host = document.getElementById('messages-thread-list');
     if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    paintThreadContactRow();
     setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
     try {
         const list = await fetchInboxThread();
@@ -1721,11 +1775,15 @@ export function initHub() {
         e.preventDefault();
         const input = document.getElementById('messages-thread-input');
         const sendBtn = document.getElementById('messages-thread-send');
-        const text = input?.value?.trim() || '';
-        if (text.length < 5) {
+        const threadFile = document.getElementById('messages-thread-file');
+        const hasFile = !!(threadFile?.files?.length);
+        let text = input?.value?.trim() || '';
+        if (!text && hasFile) text = '(attachment)';
+        if (text.length < 5 && !hasFile) {
             showToast('Please write a bit more (at least 5 characters).', 'error');
             return;
         }
+        const email = resolveThreadContact();
         const limit = checkFeedbackRate();
         if (!limit.ok) {
             showToast(limit.message, 'error');
@@ -1750,7 +1808,7 @@ export function initHub() {
                     payload: {
                         type: 'thread_reply',
                         text,
-                        email: '',
+                        email,
                         status: 'unread',
                         appVersion: APP_VERSION,
                         routeId: $currentRouteId.get() || 'none',
@@ -1776,10 +1834,16 @@ export function initHub() {
             if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
                 authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
             }
+            let attachmentUrls = [];
+            if (hasFile) {
+                attachmentUrls = await uploadFeedbackAttachments(threadFile.files);
+            }
             const payload = {
                 type: 'thread_reply',
                 text,
-                email: '',
+                email,
+                attachmentUrl: attachmentUrls[0] || null,
+                attachmentUrls: attachmentUrls.length ? attachmentUrls : null,
                 status: 'unread',
                 appVersion: APP_VERSION,
                 routeId: $currentRouteId.get() || 'none',
@@ -1796,8 +1860,13 @@ export function initHub() {
             });
             if (!res.ok) throw new Error(`Failed (${res.status})`);
             recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
+            if (email && !signedInContactEmail()) {
+                try { safeStorage.setItem(THREAD_CONTACT_KEY, email); } catch { /* ignore */ }
+            }
             await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
             if (input) input.value = '';
+            if (threadFile) threadFile.value = '';
+            paintThreadFileChip(threadFile);
             renderMessagesThread(await fetchInboxThread());
             showToast('Message sent.', 'success');
         } catch (err) {
@@ -1855,6 +1924,19 @@ export function initHub() {
     document.getElementById('feedback-file-remove')?.addEventListener('click', () => {
         if (fileInput) fileInput.value = '';
         document.getElementById('feedback-file-preview')?.classList.add('hidden');
+    });
+
+    const threadFileInput = document.getElementById('messages-thread-file');
+    threadFileInput?.addEventListener('change', () => paintThreadFileChip(threadFileInput));
+    document.getElementById('messages-thread-file-remove')?.addEventListener('click', () => {
+        if (threadFileInput) threadFileInput.value = '';
+        paintThreadFileChip(threadFileInput);
+    });
+    document.getElementById('messages-thread-contact')?.addEventListener('change', () => {
+        const val = document.getElementById('messages-thread-contact')?.value?.trim() || '';
+        if (val) {
+            try { safeStorage.setItem(THREAD_CONTACT_KEY, val); } catch { /* ignore */ }
+        }
     });
 
     // Legal in sidenav

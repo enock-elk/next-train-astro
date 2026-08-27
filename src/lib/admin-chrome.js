@@ -43,6 +43,10 @@ export function applyAdminAuthedChrome(authed) {
     if (typeof window.syncBottomNavActive === 'function') {
         window.syncBottomNavActive(safeStorage.getItem('activeTab') || 'next-train');
     }
+
+    if (typeof window.renderRideSeenChip === 'function') {
+        window.renderRideSeenChip();
+    }
 }
 
 if (typeof window !== 'undefined') {

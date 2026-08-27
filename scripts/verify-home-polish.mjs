@@ -11,8 +11,8 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.27.7', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.27.7' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.27.7');
+assert(APP_VERSION === 'V8_08.27.8', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.27.8' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.27.8');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
@@ -31,7 +31,10 @@ assert(!renderer.includes('⚠️'), 'home board has no warning emoji');
 assert(board.includes('warningTriangleSvg()'), 'upcoming modal uses warning SVG');
 assert(renderer.includes('warningTriangleSvg()'), 'home board uses warning SVG');
 assert(warningTriangleSvg().includes('<svg'), 'warningTriangleSvg returns svg');
-assert(renderer.includes('nt-station-col'), 'grid marks the station column');
+assert(renderer.includes('emptyBoardHeadline'), 'empty board uses condensed headline helper');
+assert(renderer.includes('No more trains today · first'), 'empty board one-liner copy');
+assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First train … is at: removed');
+assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
 

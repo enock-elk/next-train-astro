@@ -207,7 +207,7 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'full-schedule-modal';
-        modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[95] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
+        modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[125] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative transform">
                 <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center gap-2 bg-gray-50 dark:bg-gray-800 z-20 shrink-0">

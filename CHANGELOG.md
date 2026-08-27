@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.4 — 24.01 chrome onto lab (27 Aug 2026)
+
+- Port V8_08.24.01 header bell (larger icon, unread dot at the outer corner) and Lucide route Plan / menu Options icons.
+- Map and Community bottom-nav items, plus hub Account and Notifications, stay hidden until allowlisted admin auth (`admin-chrome.js`). Commuter bar is three columns; five after sign-in.
+- Lab Map tab still opens after admin auth (not the old PRASA map modal). Keep Classic blue chrome and weekday middot.
+
 ## V8_08.27.3 — Main onto lab, Classic blue chrome, Crossmoor (27 Aug 2026)
 
 - Port production planner train sheet, Saturday notices, Recent Trips, telemetry indexes, and Crossmoor from `main` onto lab.

@@ -471,8 +471,8 @@ export function applyBellFromNotices(notices) {
     const unseenCritical = unseen.some((n) => (n.severity || '') === 'critical');
 
     // Lab header is brand-left with an inline bell — do not force SPA absolute chrome.
-    let bellClass = 'relative p-2 rounded-full focus:outline-none transition-colors ';
-    let dotClass = 'absolute top-1.5 right-1.5 block h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900 ';
+    let bellClass = 'relative shrink-0 p-2 rounded-full shadow-sm focus:outline-none transition-colors ';
+    let dotClass = 'absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 transform translate-x-1/4 -translate-y-1/4 ';
     if (severity === 'critical') {
         bellClass += 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800';
         dotClass += 'bg-red-600';
@@ -487,7 +487,7 @@ export function applyBellFromNotices(notices) {
     bellBtn.classList.remove('hidden');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
-    if (bellSvg) bellSvg.setAttribute('class', 'w-5 h-5');
+    if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
     if (dot) {
         dot.className = dotClass;
         if (unseen.length) dot.classList.remove('hidden');

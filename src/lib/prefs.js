@@ -2,6 +2,7 @@
  * App preferences (localStorage) — Settings, dual nav, appearance packs
  */
 import { safeStorage } from './utils.js';
+import { applyAdminAuthedChrome } from './admin-chrome.js';
 
 export const NAV_STYLE_KEY = 'navStyle';
 export const COLOUR_PACK_KEY = 'colourPack';
@@ -157,6 +158,7 @@ export function bindColourPackControls() {
 }
 
 export function hydratePrefs() {
+    applyAdminAuthedChrome(false);
     applyNavChrome(getNavStyle());
     setColourPack(getColourPack());
     applyReturningUserChrome();

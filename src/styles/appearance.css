@@ -459,6 +459,18 @@ html, body {
   -webkit-backdrop-filter: none;
 }
 
+#bottom-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+html[data-admin-authed="1"] #bottom-nav-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  max-width: 32rem;
+}
+
 #bottom-nav .bottom-nav-item:not(.is-active) {
   color: var(--nt-text-muted);
 }

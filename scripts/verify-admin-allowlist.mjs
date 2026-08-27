@@ -23,7 +23,8 @@ const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 ok(adminJs.includes('isAllowlistedAdmin'), 'admin.js gates on allowlisted email');
 ok(adminJs.includes('Non-admin Firebase session ignored'), 'anonymous session is ignored');
 ok(adminJs.includes('stopTelemetryPolling'), '403 stops the 10s telemetry loop');
-ok(adminJs.includes('isAllowlistedAdmin(Admin.currentUser) || window.isSimMode'), '5-tap does not open Dev Hub for anonymous');
+ok(adminJs.includes('applyAdminAuthedChrome(true)'), 'allowlisted admin reveals operator chrome');
+ok(adminJs.includes('applyAdminAuthedChrome(false)'), 'sign-out hides operator chrome');
 
 const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
 ok(bridge.includes('isAdminEmail(window.Admin?.currentUser?.email)'), 'bridge skips login only for operators');

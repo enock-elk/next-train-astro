@@ -11,8 +11,8 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.27.8', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.27.8' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.27.8');
+assert(APP_VERSION === 'V8_08.27.9', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.27.9' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.27.9');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
@@ -41,6 +41,10 @@ assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy remov
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');
 assert(ui.includes('document.visibilityState !== \'visible\''), 'offline chrome requires visible tab');
+assert(ui.includes("offlineDock()"), 'offline chrome toggles #offline-wrapper');
+assert(!ui.includes("oi.textContent = 'WORKING OFFLINE'"), 'offline dock keeps mockup copy');
+assert(ui.includes("scheduleOfflineChrome();"), 'already-offline boot schedules the dock');
+assert(ui.includes("mainAppNode.insertBefore(banner, scroll)"), 'maintenance tape sits above #app-scroll');
 
 const manifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));
 assert(manifest.posters.some((p) => p.file === 'pta-kempton-0618-0619.jpg'), 'manifest lists Kempton poster');

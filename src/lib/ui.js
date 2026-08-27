@@ -1455,14 +1455,23 @@ const OFFLINE_CHROME_HOLD_MS = 4000;
 let _offlineChromeTimer = null;
 let _offlineChromeBound = false;
 
+function offlineDock() {
+    return typeof document !== 'undefined' ? document.getElementById('offline-wrapper') : null;
+}
+
 export function hideOfflineChrome() {
     if (_offlineChromeTimer) {
         clearTimeout(_offlineChromeTimer);
         _offlineChromeTimer = null;
     }
     hideOfflineToast();
+    const wrap = offlineDock();
+    if (wrap) wrap.classList.add('hidden');
     const oi = typeof document !== 'undefined' ? document.getElementById('offline-indicator') : null;
-    if (oi) oi.style.display = 'none';
+    if (oi) {
+        oi.style.removeProperty('display');
+        delete oi.dataset.struggleUi;
+    }
 }
 
 export function scheduleOfflineChrome() {
@@ -1475,14 +1484,12 @@ export function scheduleOfflineChrome() {
     _offlineChromeTimer = setTimeout(() => {
         _offlineChromeTimer = null;
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
+        const wrap = offlineDock();
+        if (wrap) wrap.classList.remove('hidden');
         const oi = document.getElementById('offline-indicator');
         if (oi) {
-            oi.style.display = 'flex';
-            oi.textContent = 'WORKING OFFLINE';
-        }
-        if (!window._hasShownOfflineToast) {
-            window._hasShownOfflineToast = true;
-            showOfflineToast(0, 'offline');
+            oi.style.removeProperty('display');
+            oi.dataset.struggleUi = '1';
         }
     }, OFFLINE_CHROME_HOLD_MS);
 }
@@ -1499,6 +1506,7 @@ export function bindOfflineChrome() {
         if (document.visibilityState === 'hidden') hideOfflineChrome();
         else scheduleOfflineChrome();
     });
+    scheduleOfflineChrome();
 }
 
 /**
@@ -1662,16 +1670,19 @@ export async function checkMaintenanceStatus() {
                 return;
             }
             const placeBanner = (banner) => {
-                // Pin to the top of the header chrome (same visual as SPA top strip).
-                // Inside #app-header so the alerts control (z-[70]) stays above the strip.
+                // Sibling above #app-scroll so the tape sits at the top of the
+                // shell without covering the Next Train title.
                 banner.style.background = 'repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #d97706 10px, #d97706 20px)';
-                banner.className = 'absolute top-0 left-0 w-full z-[55] text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1 shadow-lg pointer-events-none';
+                banner.className = 'nt-maint-strip shrink-0 w-full text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1.5 pointer-events-none relative z-[40]';
                 banner.innerHTML = String(customMessage).toUpperCase();
-                const header = document.getElementById('app-header');
                 const mainAppNode = document.getElementById('main-content');
-                if (header) {
-                    if (banner.parentNode !== header) header.prepend(banner);
-                    header.classList.add('nt-maint-active');
+                const scroll = document.getElementById('app-scroll');
+                const header = document.getElementById('app-header');
+                header?.classList.remove('nt-maint-active');
+                if (mainAppNode && scroll) {
+                    if (banner.parentNode !== mainAppNode || banner.nextElementSibling !== scroll) {
+                        mainAppNode.insertBefore(banner, scroll);
+                    }
                 } else if (mainAppNode) {
                     mainAppNode.prepend(banner);
                 } else if (!banner.parentNode) {

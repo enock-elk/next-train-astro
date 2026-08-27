@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.27.8";
+export const APP_VERSION = "V8_08.27.9";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.27.9",
+        title: "Feedback Hub, offline banner, timetable date",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Feedback Hub:</b> Write a message, attach a photo, and open Privacy Policy from the contact row.",
+            "<b>Offline:</b> When you lose signal, a banner stays above the bottom bar until you are back online.",
+            "<b>Timetable:</b> The effective date sits on the View full timetable button."
+        ]
+    },
     {
         id: "V8_08.27.8",
         title: "Shorter empty board, lists above the bar",

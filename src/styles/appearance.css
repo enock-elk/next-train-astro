@@ -540,7 +540,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
 }
 #grid-trigger-container {
-  padding-bottom: 1.35rem;
+  padding-bottom: 0.5rem;
 }
 .nt-board-footer.mt-auto {
   padding-bottom: 1.25rem;
@@ -610,49 +610,40 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 }
 
 /* Offline status docks at the bottom of the shell (above the nav) so it never
-   competes with the brand / alerts row for header space. Collapses to zero
-   height when #offline-indicator is display:none. */
+   competes with the brand / alerts row for header space. #offline-wrapper.hidden
+   collapses the dock; do not wipe #offline-indicator innerHTML. */
 .nt-offline-dock {
   width: 100%;
 }
 .nt-offline-strip {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  gap: 0.7rem;
   width: 100%;
-  padding: 0.3rem 0.75rem;
-  background-color: #fbbf24;
-  color: #1c1917;
-  border-top: 1px solid rgba(180, 83, 9, 0.35);
-  font-size: 0.625rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.nt-offline-strip::before {
-  content: "";
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 999px;
-  background: #b45309;
-  flex-shrink: 0;
-  animation: nt-offline-pulse 1.8s ease-in-out infinite;
-}
-@keyframes nt-offline-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  padding: 0.7rem 0.9rem;
+  background-color: #1c2430;
+  color: #f8fafc;
+  border-radius: 0.85rem;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.32);
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
 }
 html.dark .nt-offline-strip {
-  background-color: #292524;
-  color: #fbbf24;
-  border-top-color: rgba(251, 191, 36, 0.4);
+  background-color: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
 }
-html.dark .nt-offline-strip::before {
-  background: #fbbf24;
+
+/* Hazard tape above #app-scroll — not overlaid on the title. */
+#maintenance-banner,
+.nt-maint-strip {
+  flex-shrink: 0;
+  width: 100%;
+  position: relative;
+  z-index: 40;
 }
 
 /* Keep header chrome (menu / bell / maint) below app modals */

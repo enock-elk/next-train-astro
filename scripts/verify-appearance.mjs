@@ -81,6 +81,14 @@ assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyager
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
 
+const labWf = readFileSync(new URL('../.github/workflows/deploy-lab.yml', import.meta.url), 'utf8');
+assert(labWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}'), 'lab build passes CARTO key from secrets');
+const prodWf = readFileSync(new URL('../.github/workflows/deploy-production.yml', import.meta.url), 'utf8');
+assert(prodWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}'), 'production build passes CARTO key from secrets');
+const exampleEnv = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
+assert(exampleEnv.includes('PUBLIC_CARTO_API_KEY='), '.env.example documents PUBLIC_CARTO_API_KEY');
+assert(!exampleEnv.includes('cb1_'), '.env.example must not contain a real CARTO key');
+
 if (failures.length) {
     console.error('verify-appearance failed:');
     failures.forEach((f) => console.error(' -', f));

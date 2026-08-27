@@ -84,6 +84,7 @@ jobs:
         env:
           PUBLIC_SITE_URL: ${{ env.SITE_ORIGIN }}
           PUBLIC_BASE_PATH: /
+          PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
 
       - name: Verify URL parity
         run: npm run verify:urls

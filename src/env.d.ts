@@ -1,5 +1,17 @@
 /// <reference types="astro/client" />
 
+interface ImportMetaEnv {
+  readonly PUBLIC_CARTO_API_KEY?: string;
+  readonly PUBLIC_LAB_MODE?: string;
+  readonly PUBLIC_SITE_URL?: string;
+  readonly PUBLIC_BASE_PATH?: string;
+  readonly PUBLIC_FIREBASE_VAPID_KEY?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 declare module 'virtual:pwa-register' {
   export interface RegisterSWOptions {
     immediate?: boolean;
@@ -43,6 +55,8 @@ interface Window {
   _selectMainDay?: (e: Event | null, value: string, text: string) => void;
   _toggleHeaderDayDropdown?: (e?: Event) => void;
   _selectHeaderDay?: (e: Event | null, value: string, text: string) => void;
+  __NT_CARTO_KEY?: string;
+  ntCartoVoyagerUrl?: () => string;
   openTripMapRenderer?: (routeData: unknown) => Promise<void>;
   _plannerCurrentTripIndex?: number;
   openLightbox?: (url: string) => void;

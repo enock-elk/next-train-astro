@@ -37,6 +37,7 @@ jobs:
         env:
           PUBLIC_SITE_URL: https://nexttrain.co.za
           PUBLIC_BASE_PATH: /
+          PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
 
       - name: Verify URL parity with the live SPA
         run: npm run verify:urls

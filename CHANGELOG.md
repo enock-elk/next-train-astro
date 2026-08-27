@@ -7,6 +7,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Port V8_08.23.12 pin chrome: hide the bottom bar while Welcome is open (`nt-onboarding` / `syncInAppChrome`), and point Welcome copy at Options.
 - Maintenance strip: switch header title and day chip to `--nt-text` so Classic light ink stays readable on the flattened surface.
 - Stamp `viewedAt` when opening the messages thread (same-day 24.01 follow-up).
+- Wire `PUBLIC_CARTO_API_KEY` through lab/preview/production builds (never commit the key). Set it on GitHub Actions **and** Cloudflare Pages Production + Preview, then rebuild so Voyager tiles drop the watermark.
 
 ## V8_08.27.4 — 24.01 chrome onto lab (27 Aug 2026)
 

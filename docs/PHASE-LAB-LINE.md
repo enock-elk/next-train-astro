@@ -23,6 +23,7 @@ Ship **community chatroom + realtime alerts** on a long-lived `lab` branch witho
    - `PUBLIC_BASE_PATH=/`
    - `PUBLIC_LAB_MODE=true`
    - `PUBLIC_FIREBASE_VAPID_KEY=` (Web Push key from Firebase Console → Project settings → Cloud Messaging)
+   - `PUBLIC_CARTO_API_KEY=` (CARTO Voyager raster key — Production **and** Preview; never commit)
 6. Output directory: `dist`
 7. Custom domain: `lab.nexttrain.co.za` (CNAME as Cloudflare instructs).
 
@@ -35,6 +36,7 @@ Repo secrets:
 - `CLOUDFLARE_API_TOKEN` — Pages Edit
 - `CLOUDFLARE_ACCOUNT_ID`
 - `PUBLIC_FIREBASE_VAPID_KEY` (optional until push is fully wired)
+- `PUBLIC_CARTO_API_KEY` (CARTO Voyager raster; also set on the Pages project for Git previews)
 
 Without Cloudflare secrets the workflow still **builds + uploads a `lab-dist` artifact**.
 

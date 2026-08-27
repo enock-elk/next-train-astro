@@ -138,7 +138,7 @@ assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
 assert(board.includes('VIEW FULL TIMETABLE'), 'timetable label is the production all-caps row');
 assert(board.includes('id="last-updated-date"'), 'effective date element exists');
-assert(/#view-full-timetable-btn[\s\S]{0,800}id="last-updated-date"/.test(board), 'effective date sits inside the timetable button');
+assert(/id="view-full-timetable-btn"[\s\S]{0,1200}id="last-updated-date"/.test(board), 'effective date sits inside the timetable button');
 assert(!board.includes('id="share-app-btn"'), 'board footer no longer has Share App');
 assert(!board.includes('id="feedback-btn"'), 'board footer no longer has Feedback');
 

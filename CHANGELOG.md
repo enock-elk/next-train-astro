@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.1 — Commuter UI polish (27 Aug 2026)
+
+- Planner header Share and grid Share send `{ url }` only; clipboard copies the URL. Share App marketing copy is unchanged.
+- Alerts channel is slightly darker so white cards read as surfaces. Card header is signature (left) + Info/Warning/Critical chip (right); posted time sits above Reply. Trailing `- SIGNATURE` spans are stripped from the body.
+- `mergeUnionNotices` collapses the same notice `id` across `all` / `all_GP` / route buckets (keeps the more specific source). Optional scope label on the card. Union keys stay route ∪ region ∪ `all` — Kempton does not inherit Irene.
+- In-app grid `NO SVC` is a button that opens the advisory sheet with RTDB `reason` (fallback “No service on this day”) and expiry. PNG export stays a static span. `DEFAULT_EXCLUSIONS` remains `{}`.
+- Standalone map paints disruption chords as soon as station coords exist, then refines onto OSM tracks. Warning badges and dashed segments open a popup. Planner trip-map warnings call `openDisruptionModal`.
+- Planner Departs-in uses `text-xs font-bold` to match Total Time; countdown wording uses `formatDuration` when the wait is an hour or more.
+
 ## V8_08.26.2 — KZN Crossmoor corridor (26 Aug 2026)
 
 - Register `kzn-crossmoor` (Durban ↔ Crossmoor) as an active KZN Inland route with map yellow (`text-yellow-500`).

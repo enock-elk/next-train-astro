@@ -118,16 +118,35 @@ export function parseNoticeBucket(raw, sourceKey, now = Date.now()) {
 }
 
 export function mergeUnionNotices(buckets) {
-    const seen = new Set();
-    const out = [];
+    const seenFallback = new Set();
+    const byId = new Map();
+    const unkeyed = [];
+
+    const scopeRank = (key) => {
+        const k = String(key || '');
+        if (!k || k === 'all') return 0;
+        if (/^all_/i.test(k)) return 1;
+        return 2;
+    };
+
     (buckets || []).forEach((list) => {
         (list || []).forEach((n) => {
-            const key = `${n._sourceKey || ''}::${n.id || noticeTimestamp(n)}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            out.push(n);
+            const id = n?.id != null && String(n.id).trim() ? String(n.id) : '';
+            if (id) {
+                const prev = byId.get(id);
+                if (!prev || scopeRank(n._sourceKey) > scopeRank(prev._sourceKey)) {
+                    byId.set(id, n);
+                }
+                return;
+            }
+            const key = `${n._sourceKey || ''}::${noticeTimestamp(n)}`;
+            if (seenFallback.has(key)) return;
+            seenFallback.add(key);
+            unkeyed.push(n);
         });
     });
+
+    const out = [...byId.values(), ...unkeyed];
     out.sort((a, b) => noticeTimestamp(a) - noticeTimestamp(b));
     return out;
 }
@@ -299,6 +318,27 @@ export function hoistAlertImagesFromHtml(html) {
     return { urls, body };
 }
 
+/** Admin compose appends `- Signoff` as a trailing span; the card header shows authorName instead. */
+export function stripAlertSignoffHtml(html) {
+    let body = String(html || '');
+    body = body.replace(/(?:<br\s*\/?>|&nbsp;|\s)*<span\b[^>]*>\s*[-—–]\s*[^<]*<\/span>\s*$/i, '');
+    body = body.replace(/(?:<br\s*\/?>|&nbsp;|\s)+$/gi, '');
+    return body;
+}
+
+/** Short label for the union bucket a notice came from. */
+export function noticeScopeLabel(sourceKey) {
+    const key = String(sourceKey || '').trim();
+    if (!key || key === 'all') return 'Network';
+    const regionMatch = key.match(/^all_([A-Z0-9]+)$/i);
+    if (regionMatch) {
+        const code = regionMatch[1].toUpperCase();
+        const names = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+        return names[code] || code;
+    }
+    return key;
+}
+
 /**
  * WhatsApp-style card order: title (if any) → images → remaining text.
  * Channel posters (`imageUrls`) plus any inline <img> in the message.
@@ -318,7 +358,7 @@ export function layoutAlertPost(notice) {
     return {
         title: split.title,
         imageUrls: images.slice(0, 4),
-        body: hoisted.body,
+        body: stripAlertSignoffHtml(hoisted.body),
     };
 }
 

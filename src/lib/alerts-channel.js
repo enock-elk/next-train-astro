@@ -26,6 +26,8 @@ import {
     sanitizeInlineAlertImageUrl,
     collectNoticeImageUrls,
     layoutAlertPost,
+    stripAlertSignoffHtml,
+    noticeScopeLabel,
     shouldIgnoreAlertLongPress,
     buildNoticesMeta,
     listNoticesInTarget,
@@ -296,7 +298,7 @@ function renderPostCard(notice, opts = {}) {
     const chrome = severityChrome(severity);
     const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(layout.body);
+    const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
         : '';
@@ -318,10 +320,17 @@ function renderPostCard(notice, opts = {}) {
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
     const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
-    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-l-4 ${chrome.bar} border border-gray-100 dark:border-gray-700 p-4 select-none ${highlight ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-900' : ''}">
-        <div class="flex items-center justify-between gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
-            <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono">${escapeHTML(formatPosted(notice))}</span>
+    const signoff = String(notice.authorName || notice.signoff || 'Next Train Ops').replace(/^[-—–]\s*/, '').trim() || 'Next Train Ops';
+    const when = formatPosted(notice);
+    const ts = noticeTimestamp(notice);
+    const scope = noticeScopeLabel(notice._sourceKey);
+    const cardRing = highlight
+        ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
+        : 'ring-1 ring-black/5 dark:ring-white/10';
+    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-4 select-none">
+        <div class="flex items-start justify-between gap-2 mb-2">
+            <span class="nt-alert-signoff text-[13px] font-semibold text-gray-800 dark:text-gray-100 leading-tight">${escapeHTML(signoff)}</span>
+            <span class="nt-alert-chip inline-flex items-center shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
         </div>
         ${titleHtml}
         ${mediaHtml}
@@ -329,6 +338,10 @@ function renderPostCard(notice, opts = {}) {
         ${extra}
         ${renderPollHtml(notice)}
         ${renderReactionsHtml(notice)}
+        <p class="flex items-end justify-between gap-2 mt-2">
+            ${scope ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)}</span>` : '<span></span>'}
+            ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
+        </p>
         <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold text-blue-600 dark:text-blue-400 py-2 rounded-lg border border-blue-100 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}">Reply</button>
     </article>`;
 }

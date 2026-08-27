@@ -268,13 +268,12 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     const pubLabel = 'Public Holiday';
     const dayDisplay = isPub ? pubLabel : (isSat ? satLabel : wkLabel);
     const shareUrl = buildGridShareUrl(routeId, direction, sheetDayType);
-    const shareText = `Check out the ${sheetDayType === 'public_holiday' ? 'public holiday' : sheetDayType} schedule to ${destName}`;
 
     if (typeof window !== 'undefined') {
         window._gridShareState = { routeId, dir: direction, day: sheetDayType };
         window.shareCurrentGrid = async () => {
             triggerHaptic();
-            const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };
+            const data = { url: shareUrl };
             try {
                 if (navigator.share) await navigator.share(data);
                 else {

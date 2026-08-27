@@ -966,8 +966,10 @@ export const Renderer = {
                                     bgClass = 'export-banned-col relative';
                                     headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center;">${banIcon} NO SVC</span>${h}`;
                                 } else {
+                                    const safeRoute = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                                    const safeTrain = String(h || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
-                                    headerContent = `<span class="absolute top-[2px] left-0 w-full text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none flex justify-center items-center">${banIcon} NO SVC</span>${h}`;
+                                    headerContent = `<button type="button" class="absolute top-[2px] left-0 w-full text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none flex justify-center items-center focus:outline-none" aria-label="Why train ${escapeHTML(String(h))} has no service" onclick="event.stopPropagation(); if(typeof window.openTrainExclusionSheet==='function') window.openTrainExclusionSheet('${safeRoute}','${safeTrain}',${Number(dayIdx)})">${banIcon} NO SVC</button>${h}`;
                                 }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';

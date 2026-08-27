@@ -14,7 +14,7 @@ import {
     ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel
 } from './config.js';
 
-import { MANUAL_GRID_ORDER } from './grid-order.js';
+import { orderGridTrainIds } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
@@ -812,40 +812,7 @@ export const Renderer = {
 
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false) => {
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
-        let sortedCols = [];
-
-        if (MANUAL_GRID_ORDER[sheetName]) {
-            const manualOrder = MANUAL_GRID_ORDER[sheetName];
-            manualOrder.forEach(tNum => { if (trainCols.includes(tNum)) sortedCols.push(tNum); });
-            const manualSet = new Set(manualOrder);
-            const remainingCols = trainCols.filter(t => !manualSet.has(t));
-            remainingCols.sort((a, b) => a.localeCompare(b));
-            sortedCols = [...sortedCols, ...remainingCols];
-        } else {
-            // Earliest-time fallback when no manual order exists for this sheet
-            const colStats = trainCols.map(colId => {
-                let earliestTime = 86400 * 2;
-                let hasData = false;
-                for (const row of schedule.rows) {
-                    const val = row[colId];
-                    if (isRealTime(val)) {
-                        const t = timeToSeconds(val);
-                        if (t > 0) {
-                            if (t < earliestTime) earliestTime = t;
-                            hasData = true;
-                        }
-                    }
-                }
-                return { id: colId, time: earliestTime, hasData };
-            });
-            colStats.sort((a, b) => {
-                if (!a.hasData && !b.hasData) return a.id.localeCompare(b.id);
-                if (!a.hasData) return 1;
-                if (!b.hasData) return -1;
-                return a.time - b.time;
-            });
-            sortedCols = colStats.map(c => c.id);
-        }
+        const sortedCols = orderGridTrainIds(sheetName, trainCols, schedule.rows);
 
         let selectedStation = "";
         if (!isExport && typeof document !== 'undefined') {

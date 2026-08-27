@@ -101,7 +101,7 @@ async function handleOgPlan(url, env) {
   }
 }
 
-function handleBotShare(url, env) {
+async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
@@ -123,7 +123,16 @@ function handleBotShare(url, env) {
       destB: 'Metrorail',
       region: 'GP',
     };
-    const meta = buildRouteOgMeta(route, intent, site);
+    let grid = null;
+    if (catalog[intent.routeId]) {
+      try {
+        const db = await loadRegionDb(env, route.region, ctx);
+        if (db) grid = extractGridPreview(db, route, intent.dir, intent.day);
+      } catch (e) {
+        console.warn('OG share grid load failed', e.message || e);
+      }
+    }
+    const meta = buildRouteOgMeta(route, intent, site, grid);
     return new Response(renderOgHtml(meta), {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
@@ -162,7 +171,7 @@ export default {
     // Always-on OG HTML for share links (no UA check). Humans meta-refresh into the app.
     // Stays under /og/* so SPA homepage canonical cannot steal the preview.
     if (url.pathname === '/og/share') {
-      const stub = handleBotShare(url, env);
+      const stub = await handleBotShare(url, env, ctx);
       if (stub) {
         stub.headers.set('X-NextTrain-OG', 'share');
         return stub;
@@ -173,7 +182,7 @@ export default {
     // Social crawlers on legacy deep-link homepage shares (/?rt= / ?plan=)
     const ua = request.headers.get('user-agent') || '';
     if (isSocialCrawler(ua) && (url.pathname === '/' || url.pathname === '')) {
-      const stub = handleBotShare(url, env);
+      const stub = await handleBotShare(url, env, ctx);
       if (stub) {
         stub.headers.set('X-NextTrain-OG', 'bot-home');
         return stub;

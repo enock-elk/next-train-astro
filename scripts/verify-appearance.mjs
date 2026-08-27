@@ -62,6 +62,18 @@ assert(chrome.includes('Never use five-tap unlock'), 'admin chrome is not five-t
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CARTO Voyager URL helper');
 assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
+assert(layout.includes('html.nt-onboarding #bottom-nav'), 'Welcome hides the bottom bar');
+assert(layout.includes("classList.toggle('nt-onboarding'"), 'Layout stamps nt-onboarding before first paint');
+
+assert(css.includes('#app-header.nt-maint-active #app-title'), 'maintenance strip keeps header title readable');
+
+const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
+assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
+assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
+
+const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');
+assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');

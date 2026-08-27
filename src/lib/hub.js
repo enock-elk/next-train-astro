@@ -921,6 +921,7 @@ export async function openMessagesThread() {
             unread.forEach((m) => {
                 updates[`${m.id}/read`] = true;
                 updates[`${m.id}/readAt`] = Date.now();
+                updates[`${m.id}/viewedAt`] = Date.now();
                 updates[`${m.id}/acknowledged`] = true;
             });
             fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {

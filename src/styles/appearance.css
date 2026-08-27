@@ -685,6 +685,15 @@ html.dark .nt-offline-strip::before {
 html.dark #app-header.nt-maint-active {
   background-color: var(--nt-chrome-header) !important;
 }
+#app-header.nt-maint-active #app-title,
+#app-header.nt-maint-active #app-title.header-title,
+#app-header.nt-maint-active #current-day,
+#app-header.nt-maint-active #current-day span {
+  color: var(--nt-text) !important;
+}
+#app-header.nt-maint-active #current-day {
+  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
+}
 #app-header.nt-maint-active #open-nav-btn,
 #app-header.nt-maint-active #notice-bell {
   z-index: 70;

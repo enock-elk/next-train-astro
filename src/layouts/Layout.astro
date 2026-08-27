@@ -144,6 +144,18 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       </>
     )}
     <script is:inline>
+      // Hide the bottom bar until Welcome is done (before first paint).
+      (function () {
+        try {
+          var seen = localStorage.getItem('welcomeSeen') === 'true';
+          document.documentElement.classList.toggle('nt-onboarding', !seen);
+          document.documentElement.classList.toggle('nt-in-app', seen);
+        } catch (e) {
+          document.documentElement.classList.add('nt-onboarding');
+        }
+      })();
+    </script>
+    <script is:inline>
       // Capture install prompt as early as the old SPA (before module scripts / SW race)
       window.deferredInstallPrompt = null;
       window.addEventListener('beforeinstallprompt', function (e) {
@@ -535,6 +547,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           max-width: none;
           box-shadow: none;
         }
+      }
+      html.nt-onboarding #bottom-nav,
+      body:has(#welcome-modal:not(.hidden)) #bottom-nav {
+        display: none !important;
       }
 
       #app-scroll.app-scroll {

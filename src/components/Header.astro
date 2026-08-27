@@ -39,9 +39,9 @@
         var day = d.getDay();
         var type = day === 0 ? 'No Service' : (day === 6 ? 'Saturday Schedule' : 'Weekday Schedule');
         var typeClass = day === 0
-          ? 'font-bold text-red-600 dark:text-red-400 ml-1'
-          : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
-        el.innerHTML = names[day] + ' <span class="' + typeClass + '">' + type + '</span>';
+          ? 'font-bold text-red-600 dark:text-red-400'
+          : 'font-bold text-blue-600 dark:text-blue-400';
+        el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';
       } catch (e) { /* keep Getting schedules… */ }
     })();
 </script>

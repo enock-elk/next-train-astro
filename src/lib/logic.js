@@ -1592,9 +1592,9 @@ export function updateTime() {
             const currentDayEl = document.getElementById('current-day');
             if (currentDayEl) {
                 const typeClass = newDayType === 'sunday'
-                    ? 'font-bold text-red-600 dark:text-red-400 ml-1'
-                    : 'font-bold text-blue-600 dark:text-blue-400 ml-1';
-                currentDayEl.innerHTML = `${dayNames[day]} <span class="${typeClass}">${displayType}</span>`;
+                    ? 'font-bold text-red-600 dark:text-red-400'
+                    : 'font-bold text-blue-600 dark:text-blue-400';
+                currentDayEl.innerHTML = `${dayNames[day]} · <span class="${typeClass}">${displayType}</span>`;
             }
         }
 

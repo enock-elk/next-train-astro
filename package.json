@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "8.8.18.1",
+  "version": "8.8.27.2",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -14,6 +14,10 @@
     "verify:alerts": "node scripts/verify-alerts-channel.mjs",
     "verify:schedule": "node scripts/verify-schedule-source.mjs",
     "verify:board-paint": "node scripts/verify-live-board-paint.mjs",
+    "verify:home-polish": "node scripts/verify-home-polish.mjs",
+    "verify:route-seo": "node scripts/verify-route-seo.mjs",
+    "verify:appearance": "node scripts/verify-appearance.mjs",
+    "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"

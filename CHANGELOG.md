@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.2 — OG grid order, all-time planner insights, theme chrome (27 Aug 2026)
+
+- Share OG preview columns use the same `orderGridTrainIds` path as the in-app grid (manual list, else earliest clock). PNG/meta disclose truncated train counts.
+- Admin Trip Plans insights and Users ever aggregate every `sys_logs/trip_plans` batch (cards stay paged). Unique users are device IDs, not user-batches.
+- Appearance packs each get distinct `--nt-chrome-header` / `--nt-chrome-nav` / `--nt-canvas` tokens. Classic dark nav is navy, not gray-800. Timetable CTA has canvas gap above the pinned nav.
+- Header day label uses a middot: `Thursday · Weekday Schedule`.
+
 ## V8_08.18.1 — Merge main into lab (18 Aug 2026)
 
 - Lab now includes this week’s live-site work from `main`: Alerts channel (hold-to-react, photo posters, Close, reaction breakdown), quiet board paint, schedule dump / grid-extractor, Digital Asset Links, CWV / guide fares, and agent instructions.

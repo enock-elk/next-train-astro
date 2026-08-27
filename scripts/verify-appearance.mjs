@@ -14,7 +14,14 @@ assert(css.includes('--nt-canvas'), 'appearance defines --nt-canvas');
 assert(css.includes('--nt-chrome-header-border'), 'appearance defines --nt-chrome-header-border');
 assert(css.includes('--nt-chrome-nav-border'), 'appearance defines --nt-chrome-nav-border');
 assert(css.includes('#0b1f3a'), 'Classic dark header is navy ~#0b1f3a');
-assert(css.includes('#0d2444'), 'Classic dark nav is navy family, not gray-800');
+assert(css.includes('#061428') || css.includes('#0d2444'), 'Classic dark nav is navy family, not gray-800');
+assert(css.includes('--nt-chrome-header: #1d4ed8'), 'Classic light header is blue #1d4ed8');
+assert(css.includes('--nt-chrome-nav: #163d96'), 'Classic light nav is darker blue #163d96');
+assert(css.includes('color: var(--nt-chrome-fg) !important'), 'title uses --nt-chrome-fg (white on Classic light)');
+assert(css.includes('html[data-colour-pack="classic"] #bottom-nav'), 'Classic bottom-nav items use chrome tokens');
+assert(css.includes('--nt-chrome-nav: #0c0b0a'), 'Ember dark nav is near-black, distinct from header');
+assert(css.includes('--nt-chrome-header: #352e28'), 'Ember dark header is lifted off the canvas');
+assert(css.includes('--nt-chrome-nav: #0e0d0c'), 'Earthy dark nav is near-black, distinct from header');
 assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 41 55\)/.test(css), 'maint header must not hardcode gray-800');
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
@@ -28,12 +35,22 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 });
 
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
-assert(logic.includes('${dayNames[day]} · <span'), 'logic.js day label uses middot');
+assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
+
+const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CARTO Voyager URL helper');
+assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
+
+const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
+
+const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

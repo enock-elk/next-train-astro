@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -17,6 +17,12 @@ import {
     currentDayIndex as logicCurrentDayIndex,
 } from './logic.js';
 import { getLookaheadDayInfo, isTrainExcluded } from './live-board.js';
+import {
+    classifySaturdayPlaceholderTrip,
+    isPlaceholderRouteClosed,
+    saturdayNoServicePayload,
+    tripNeedsHercKoedBridge,
+} from './saturday-service.js';
 
 /** Sheet day used for timetable lookups — Sunday has no sheets; WC public holidays use *_pub. */
 function scheduleDayType(dayType, region) {
@@ -513,6 +519,47 @@ export function getDirectionsForRoute(route, dayType) {
         { key: route.sheetKeys.weekday_to_a },
         { key: route.sheetKeys.weekday_to_b },
     ].filter((d) => !!d.key);
+}
+
+/**
+ * Full origin→terminus column for one train on a corridor (planner train-sheet modal).
+ * Tries the requested day first, then the other published sheet day if needed.
+ */
+export function extractTrainSheetStops(routeId, trainId, dayType = 'weekday') {
+    const route = ROUTES[routeId];
+    const db = $fullDatabase.get();
+    if (!route || !trainId || !db) return null;
+    const id = String(trainId);
+    const tryDays = [];
+    for (const day of [dayType, 'weekday', 'saturday']) {
+        if (day && !tryDays.includes(day)) tryDays.push(day);
+    }
+
+    for (const day of tryDays) {
+        for (const dir of getDirectionsForRoute(route, day)) {
+            const schedule = getScheduleFromDb(db, dir.key);
+            const col = schedule?.headers?.find((h) => h && String(h) === id);
+            if (!col) continue;
+            const stops = (schedule.rows || [])
+                .map((row) => ({
+                    station: String(row.STATION || '').trim(),
+                    time: row[col] ?? row[id],
+                }))
+                .filter((s) => s.station && isRealTime(s.time));
+            if (stops.length) {
+                return {
+                    route,
+                    trainId: id,
+                    dayType: day,
+                    sheetKey: dir.key,
+                    origin: stops[0].station,
+                    terminus: stops[stops.length - 1].station,
+                    stops,
+                };
+            }
+        }
+    }
+    return null;
 }
 
 export function createTripObject(route, trainInfo, schedule, startIdx, endIdx, origin, dest) {
@@ -1269,8 +1316,18 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         }
     }
 
+    const satClass = classifySaturdayPlaceholderTrip(origin, dest, dayType, $fullDatabase.get());
+
+    if (satClass?.kind === 'NO_SERVICE') {
+        return {
+            status: 'ERR_NO_SATURDAY_SERVICE',
+            errorPayload: saturdayNoServicePayload(satClass.routeId, origin, dest),
+            trips: [],
+        };
+    }
+
     /** @param {number} offset @param {string} [evalDest] alternate destination for partial journeys */
-    const evaluateDay = (offset, evalDest = dest) => {
+    const evaluateDay = (offset, evalDest = dest, evalOrigin = origin) => {
         let targetDayType = dayType;
         let targetDayLabel = null;
         let targetDayIdx = getCurrentDayIndex();
@@ -1294,7 +1351,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
 
         context.targetDayIdx = targetDayIdx; 
 
-        let allRawTrips = fetchRawTrips(origin, evalDest, targetDayType, isFutureOffset, context);
+        let allRawTrips = fetchRawTrips(evalOrigin, evalDest, targetDayType, isFutureOffset, context);
 
         let capturedTerminus = null;
 
@@ -1438,6 +1495,9 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
     
     const MAX_SAFE_ROLLOVER_DAYS = 7;
     let maxOffset = isExplicitOverride ? startOffset : startOffset + MAX_SAFE_ROLLOVER_DAYS;
+    if (satClass?.kind === 'DEST_CUT' || satClass?.kind === 'ORIGIN_CUT') {
+        maxOffset = startOffset;
+    }
     
     let executionCounter = 0;
     const MAX_EXECUTION_LIMIT = 14;
@@ -1470,6 +1530,12 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         return [...new Set(possibleStations)];
     };
     const testStations = getBackwardStationSequence(dest, dayType);
+    if (satClass?.kind === 'DEST_CUT') {
+        for (const j of [...(satClass.junctions || [])].reverse()) {
+            const already = testStations.some((s) => normalizeStationName(s) === normalizeStationName(j));
+            if (!already) testStations.unshift(j);
+        }
+    }
 
     /** Segment CRITICAL cuts (e.g. Irene↔Centurion) — try these termini even when no raw trip was severed. */
     const getCriticalBoundaryStations = () => {
@@ -1582,12 +1648,61 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
                             buttonText,
                             hasIncident: !!disruptionId,
                         };
+                        if (satClass?.kind === 'DEST_CUT') {
+                            errorPayload = {
+                                ...errorPayload,
+                                ...saturdayNoServicePayload(satClass.routeId, origin, dest),
+                                intendedDest: formatTitle(dest),
+                                partialDest: formatTitle(testDest),
+                                buttonText: 'No weekend service',
+                                hasIncident: true,
+                                disruptionId: `saturday-${satClass.routeId}`,
+                            };
+                        }
                         partialSuccess = true;
                         break;
                     }
                 }
 
                 if (partialSuccess) break;
+            }
+
+            if (satClass?.kind === 'ORIGIN_CUT'
+                && (evalResult.status === 'NO_PATH' || evalResult.status === 'IMPOSSIBLE_TODAY')) {
+                let originShifted = false;
+                for (const junc of satClass.junctions || []) {
+                    if (normalizeStationName(junc) === normalizeStationName(origin)) continue;
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                    const altResult = evaluateDay(offset, dest, junc);
+                    if (altResult.status === 'FOUND' || altResult.status === 'ALL_DEPARTED') {
+                        loopTrips = (altResult.trips || []).map((t) => ({
+                            ...t,
+                            _isPartialJourney: true,
+                            _partialOrigin: junc,
+                            _intendedOrigin: origin,
+                            _intendedDest: dest,
+                        }));
+                        loopStatus = 'PARTIAL_JOURNEY';
+                        errorPayload = {
+                            ...saturdayNoServicePayload(satClass.routeId, origin, dest),
+                            boardingBlocked: true,
+                            blockedOrigin: formatTitle(origin),
+                            partialOrigin: formatTitle(junc),
+                            intendedDest: formatTitle(dest),
+                            buttonText: 'No weekend service',
+                            hasIncident: true,
+                            disruptionId: `saturday-${satClass.routeId}`,
+                            alternateOrigins: (satClass.junctions || []).map((s) => ({
+                                station: s,
+                                label: formatTitle(s),
+                                hasTrips: normalizeStationName(s) === normalizeStationName(junc),
+                            })),
+                        };
+                        originShifted = true;
+                        break;
+                    }
+                }
+                if (originShifted) break;
             }
         } catch (e) {
             console.error("🛡️ Guardian: Fatal execution error during rollover evaluation. Aborting loop.", e);
@@ -1624,6 +1739,30 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             } catch (e) {
                 console.warn('[GUARDIAN] Alternate boarding probe failed', e);
             }
+        }
+
+        if (loopStatus === 'ERR_NO_SERVICE_TODAY'
+            && isPlaceholderRouteClosed('herc-koed', dayType)
+            && tripNeedsHercKoedBridge(origin, dest)) {
+            loopStatus = 'ERR_NO_SATURDAY_SERVICE';
+            errorPayload = saturdayNoServicePayload('herc-koed', origin, dest);
+        }
+
+        if (loopTrips.length === 0 && satClass?.kind === 'ORIGIN_CUT') {
+            loopStatus = 'ERR_NO_SATURDAY_SERVICE';
+            errorPayload = {
+                ...saturdayNoServicePayload(satClass.routeId, origin, dest),
+                boardingBlocked: true,
+                alternateOrigins: (satClass.junctions || []).map((s) => ({
+                    station: s,
+                    label: formatTitle(s),
+                    hasTrips: false,
+                })),
+            };
+        }
+        if (loopTrips.length === 0 && satClass?.kind === 'DEST_CUT') {
+            loopStatus = 'ERR_NO_SATURDAY_SERVICE';
+            errorPayload = saturdayNoServicePayload(satClass.routeId, origin, dest);
         }
     } else if (loopStatus !== 'PARTIAL_JOURNEY') {
         if (initialStatus === 'IMPOSSIBLE_TODAY') {

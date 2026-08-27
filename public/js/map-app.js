@@ -253,6 +253,11 @@
             "POET'S CORNER": [-29.879624, 30.931123], 
             "BELLAIR": [-29.888762, 30.941657], 
             "SEA VIEW": [-29.902065, 30.961951],
+            "HAVENSIDE": [-29.926302426956735, 30.937562200751156],
+            "BAYVIEW": [-29.915492485588356, 30.918491645667224],
+            "WESTCLIFF": [-29.90911584089301, 30.902484294984493],
+            "CHATSGLEN": [-29.90702562701478, 30.88513415841232],
+            "CROSSMOOR": [-29.898514072933363, 30.861925638560148],
 
             // --- EASTERN CAPE ---
             "EAST LONDON": [-33.016726, 27.907383],
@@ -310,6 +315,7 @@
             'kzn-winklespruit': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "PELGRIM", "ISIPINGO", "UMBOGINTWINI", "PAHLA", "AMANZIMTOTI", "DOONSIDE", "WARNER BEACH", "WINKLESPRUIT"],
             'kzn-catoridge': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "MOUNT VERNON", "CAVENDISH", "BURLINGTON", "SHALLCROSS", "KLAARWATER", "MARIANNHILL", "THORNWOOD", "SITUNDU HILLS", "DASSENHOEK", "KWANDENGEZI", "DELVILLE WOOD", "NSHONGWENI", "CLIFFDALE", "HAMMARSDALE", "KWATANDAZA", "GEORGEDALE", "CATO RIDGE"],
             'kzn-pinetown': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "SEA VIEW", "BELLAIR", "POET'S CORNER", "MALVERN", "ESCOMBE", "NORTHDENE", "MOSELEY", "GLEN PARK", "SARNIA", "PINETOWN"],
+            'kzn-crossmoor': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "HAVENSIDE", "BAYVIEW", "WESTCLIFF", "CHATSGLEN", "CROSSMOOR"],
             
             // --- EASTERN CAPE ---
             'ec-berlin': ["EAST LONDON", "SOUTHERNWOOD", "PANMURE", "CHISELHURST", "VINCENT", "CAMBRIDGE", "HIGHGATE", "HORSESHOE", "DAWN", "WILSONIA", "ARNOLDTON", "MTSOTSO", "MDANTSANE", "MOUNT RUTH", "EGERTON", "FORT JACKSON", "LONETREE", "BERLIN"]
@@ -854,7 +860,9 @@
             
             // Guardian UX: "Midnight Blue" unified tile layer
             // CSS filter (.dark .leaflet-tile-pane) flips this strictly in dark mode
-            const voyagerTiles = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            const voyagerTiles = (typeof window.ntCartoVoyagerUrl === 'function')
+                ? window.ntCartoVoyagerUrl()
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
             
             const tileLayer = L.tileLayer(voyagerTiles, {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',

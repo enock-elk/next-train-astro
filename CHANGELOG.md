@@ -2,12 +2,32 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
-## V8_08.27.2 — OG grid order, all-time planner insights, theme chrome (27 Aug 2026)
+## V8_08.27.3 — Main onto lab, Classic blue chrome, Crossmoor (27 Aug 2026)
 
-- Share OG preview columns use the same `orderGridTrainIds` path as the in-app grid (manual list, else earliest clock). PNG/meta disclose truncated train counts.
-- Admin Trip Plans insights and Users ever aggregate every `sys_logs/trip_plans` batch (cards stay paged). Unique users are device IDs, not user-batches.
-- Appearance packs each get distinct `--nt-chrome-header` / `--nt-chrome-nav` / `--nt-canvas` tokens. Classic dark nav is navy, not gray-800. Timetable CTA has canvas gap above the pinned nav.
-- Header day label uses a middot: `Thursday · Weekday Schedule`.
+- Port production planner train sheet, Saturday notices, Recent Trips, telemetry indexes, and Crossmoor from `main` onto lab.
+- Classic light: blue header + nav with white title. Classic dark: navy chrome with blue title.
+- Earthy/Ember: more canvas vs card vs nav separation; lower saturation.
+- OG share columns follow in-app grid order; truncated sheets say so. Admin insights stay all-time.
+- Optional `PUBLIC_CARTO_API_KEY` on Voyager raster tiles (CARTO now watermarks unkeyed requests).
+
+## V8_08.26.2 — KZN Crossmoor corridor (26 Aug 2026)
+
+- Register `kzn-crossmoor` (Durban ↔ Crossmoor) as an active KZN Inland route with map yellow (`text-yellow-500`).
+- Sheet keys match the KZN Apps Script sanitize: `durbn_to_cross_{weekday,sat}` / `cross_to_durbn_{weekday,sat}`.
+- Merge Crossmoor sheets + `_meta` / `_zone` from the RTDB export into `public/data/full-database.json` (nested `kzn` and top-level).
+- Map path: Durban trunk → Rossburgh → Clairwood → Montclair → Merebank → Havenside → Bayview → Westcliff → Chatsglen → Crossmoor.
+- destA is `DURBAN STATION` (sheets end at DURBAN, not DURBAN YARD). Saturday columns 9612/9620/9672/9680 outbound and 9613/9621/9673/9681 inbound; weekday sheets in this dump are station rows only.
+
+## V8_08.26.1 — Production boot/safety onto lab (26 Aug 2026)
+
+- Admin session is an operator email only (`isAdminEmail` / Thandeka + Enock). Anonymous iPhone Firebase is ignored so telemetry does not 403-loop.
+- IndexedDB cache paints before the IP region guess; region check only gates the network waterfall.
+- PWA `navigateFallback` serves the precached `index.html` (no navigation StaleWhileRevalidate on an empty `pages` cache). Lab FCM SW bridge is kept.
+- Incoming service-worker toast + 30s skipWaiting fallback (never hard-reload a half-downloaded build).
+- Facebook / PWA `launchQueue` ingest + OG `/og/share` 302 for humans.
+- Native Back pop-lock: one overlay per Back; on-screen Close does not race the next sheet.
+- CleverAds: vendor snippet on `document.body` (sticky-top), occupancy + leftover-gap reclaim, ease `#main-content` (never transform `#nt-shell`). Lab bottom nav stays inside the shell.
+- Saturday planner placeholders (`herc-koed`, `ec-berlin`), header No Service chip, planner train sheet, Recent Trips union, cancelled 7628 dropped from grid order, fresher schedule dump.
 
 ## V8_08.18.1 — Merge main into lab (18 Aug 2026)
 

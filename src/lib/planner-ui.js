@@ -17,16 +17,18 @@ import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
-    resolveOperatingDayType, simUsesSpecificDate
+    resolveOperatingDayType, simUsesSpecificDate, formatAppDate
 } from './utils.js';
-import { planUnifiedTrip } from './planner-core.js';
+import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
+import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
-import { enterFeedbackReplyMode, clearFeedbackReplyMode } from './hub.js';
+import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
+import { trackAnalyticsEvent } from './analytics.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -583,23 +585,23 @@ function buildPlannerNotice({
     const chevronSvg = `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>`;
     const detailsLabel = interactive?.detailsLabel || 'Details';
     const detailsHtml = interactive?.onclickAttr
-        ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
+        ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon on the right; Details sits under the SVG (not in the title row).
+    // Accent bar + icon on the right. Details is its own row (no shared
+    // flex with the copy) so phones do not squeeze it into the icon gutter.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
-    const bodyPad = interactive?.onclickAttr ? 'pr-[4.75rem]' : 'pr-14';
     const inner = `
         <div class="flex items-stretch">
-            <div class="planner-notice-body relative flex-1 min-w-0 p-3.5 ${bodyPad} text-left">
-                <div class="absolute top-3.5 right-3.5 flex flex-col items-end gap-1">
+            <div class="planner-notice-body relative flex-1 min-w-0 px-3.5 pt-3.5 pb-3 text-left">
+                <div class="absolute top-3.5 right-3.5">
                     <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
                         ${iconSvg}
                     </div>
-                    ${detailsHtml}
                 </div>
-                <h4 class="text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5 pr-1">${escapeHTML(title)}</h4>
+                <h4 class="planner-notice-title text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5">${escapeHTML(title)}</h4>
                 <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                ${detailsHtml ? `<div class="planner-notice-details-row">${detailsHtml}</div>` : ''}
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
@@ -670,21 +672,45 @@ function buildHolidayNoticeHtml(trip = null, { absorbSunday = false } = {}) {
     });
 }
 
+function saturdayAdvisoryOnclick(routeId) {
+    const id = String(routeId || 'herc-koed').replace(/'/g, "\\'");
+    return `type="button" onclick="if(typeof window.openSaturdayServiceModal === 'function') window.openSaturdayServiceModal('${id}')"`;
+}
+
 function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
     if (!payload) return '';
     const intended = payload.intendedDest || 'Destination';
-    const partial = payload.partialDest || fallbackTo;
+    const partial = payload.partialDest || payload.partialOrigin || fallbackTo;
     const disrId = payload.disruptionId || '';
     const safeIntended = escapeHTML(String(intended).replace(/ STATION/gi, ''));
     const safePartial = escapeHTML(String(partial).replace(/ STATION/gi, ''));
-    const onclickAttr = disrId
-        ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+    const satOnclick = payload.saturdayNoService
+        ? saturdayAdvisoryOnclick(payload.routeId)
         : null;
+    const onclickAttr = satOnclick || (disrId
+        ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
+        : null);
+
+    if (payload.saturdayNoService && payload.boardingBlocked) {
+        const originLabel = escapeHTML(String(payload.blockedOrigin || '').replace(/ STATION/gi, ''));
+        const fromLabel = escapeHTML(String(payload.partialOrigin || partial).replace(/ STATION/gi, ''));
+        return buildPlannerNotice({
+            tone: 'critical',
+            title: 'Boarding blocked',
+            bodyHtml: `
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot depart from <span class="text-red-700 dark:text-red-300">${originLabel || safeIntended}</span> on Saturday.</p>
+                <p>Showing trains from <span class="font-bold text-gray-800 dark:text-gray-200">${fromLabel}</span>.</p>
+            `,
+            icon: 'alert',
+            interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+        });
+    }
+
     return buildPlannerNotice({
         tone: 'critical',
         title: 'Line Severed',
         bodyHtml: `
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>.</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Cannot reach <span class="text-red-700 dark:text-red-300">${safeIntended}</span>${payload.saturdayNoService ? ' on Saturdays' : ''}.</p>
             <p>Showing trains terminating at <span class="font-bold text-gray-800 dark:text-gray-200">${safePartial}</span>.</p>
         `,
         icon: 'alert',
@@ -1046,7 +1072,7 @@ export function openPlannerNetworkMap() {
     const resultsSection = document.getElementById('planner-results-section');
     if (resultsSection) resultsSection.classList.remove('hidden');
     // Ensure results hash is under the map entry
-    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#prasa-map') {
+    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#map') {
         try { history.pushState({ view: 'planner-results' }, '', '#planner-results'); } catch { /* ignore */ }
     }
     try {
@@ -1129,9 +1155,77 @@ export function restorePlannerResultsView() {
     return false;
 }
 
+function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply' }) {
+    const card = document.getElementById('disruption-modal-card');
+    const replyBtn = document.getElementById('disruption-modal-reply-btn')
+        || Array.from(card?.querySelectorAll('button') || []).find((b) => b.textContent.includes('Reply'));
+    if (!replyBtn) return;
+    replyBtn.onclick = (e) => {
+        e.preventDefault();
+        if (typeof triggerHaptic === 'function') triggerHaptic();
+        enterFeedbackReplyMode({
+            label: 'Replying to Advisory:',
+            snippet,
+            rawMsg: rawMsg || snippet,
+            alertId,
+            alertKind: 'disruption',
+        });
+        if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+        setTimeout(() => {
+            openFeedbackModal({ location, skipClear: true });
+        }, 350);
+    };
+}
+
+/** Restore the blue corridor ends on “Lies Between A & B”. */
+function paintSaturdayBetweenLine(line) {
+    const raw = String(line || '');
+    const match = raw.match(/^Lies Between\s+(.+?)\s+&\s+(.+)$/i);
+    if (!match) return escapeHTML(raw);
+    return `Lies Between <span class="text-blue-600 dark:text-blue-400">${escapeHTML(match[1])}</span> & <span class="text-blue-600 dark:text-blue-400">${escapeHTML(match[2])}</span>`;
+}
+
+export function openSaturdayServiceModal(routeId = 'herc-koed') {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const payload = {
+        ...(currentPlannerErrorPayload || {}),
+        routeId: routeId || currentPlannerErrorPayload?.routeId || 'herc-koed',
+    };
+    const copy = buildSaturdayAdvisoryCopy(payload);
+    const titleEl = document.getElementById('disruption-modal-stations');
+    const bodyEl = document.getElementById('disruption-modal-body');
+    const badgeEl = document.getElementById('disruption-modal-tier-badge');
+    const timeEl = document.getElementById('disruption-modal-timestamp');
+    const iconEl = document.getElementById('disruption-icon-svg');
+    if (titleEl) {
+        const extra = (copy.lines || []).filter(Boolean);
+        titleEl.innerHTML = `<span class="block">${escapeHTML(copy.title)}</span>${
+            extra.map((line) => `<span class="block mt-2 text-[13px] font-bold tracking-normal normal-case text-slate-700 dark:text-slate-200">${paintSaturdayBetweenLine(line)}</span>`).join('')
+        }`;
+    }
+    if (bodyEl) bodyEl.textContent = copy.lead || saturdayNoServiceCopy(payload.routeId).body;
+    if (badgeEl) {
+        badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
+        badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} ${escapeHTML(copy.badge)}`;
+        if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
+    }
+    if (timeEl) timeEl.textContent = 'Timetable: Saturday / public holiday';
+    bindAdvisoryReplyButton({
+        snippet: copy.quote,
+        rawMsg: copy.quote,
+        alertId: `saturday-${payload.routeId || 'planner'}`,
+        location: 'planner_saturday_reply',
+    });
+    if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
+}
+
 export function openDisruptionModal(id) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
-    
+    if (String(id || '').startsWith('saturday-')) {
+        openSaturdayServiceModal(String(id).slice('saturday-'.length));
+        return;
+    }
+
     let targetDisruption = null;
     const globalDisruptions = $globalDisruptions.get();
     if (globalDisruptions) {
@@ -1189,41 +1283,21 @@ export function openDisruptionModal(id) {
     if (timeEl) {
         if (targetDisruption.postedAt) {
             const d = new Date(targetDisruption.postedAt);
-            const dateStr = d.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const timeStr = d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-            timeEl.textContent = `Posted: ${timeStr}, ${dateStr}`;
+            timeEl.textContent = `Posted: ${formatAppDate(d, { withTime: true })}`;
         } else {
             timeEl.textContent = "Posted: Recently";
         }
     }
 
-    const modalCard = document.getElementById('disruption-modal-card');
-    if (modalCard) {
-        const replyBtn = Array.from(modalCard.querySelectorAll('button')).find(b => b.textContent.includes('Reply'));
-        if (replyBtn) {
-            replyBtn.onclick = (e) => {
-                e.preventDefault();
-                if (typeof triggerHaptic === 'function') triggerHaptic();
-
-                let shortLocation = locationText.replace(/<[^>]*>?/gm, ''); 
-                let advisoryTitle = targetDisruption.buttonText || (targetDisruption.tier === 'CRITICAL' ? 'Line Severed' : 'Expect Delays');
-                let rawMsg = `${advisoryTitle} - ${shortLocation}`;
-
-                enterFeedbackReplyMode({
-                    label: 'Replying to Advisory:',
-                    snippet: rawMsg,
-                    rawMsg,
-                });
-
-                if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
-                setTimeout(() => {
-                    if (typeof trackAnalyticsEvent === 'function') trackAnalyticsEvent('open_feedback_modal', { location: 'planner_disruption_reply' });
-                    history.pushState({ modal: 'feedback' }, '', '#feedback');
-                    if (typeof openSmoothModal === 'function') openSmoothModal('feedback-modal');
-                }, 350);
-            };
-        }
-    }
+    const shortLocation = locationText.replace(/<[^>]*>?/gm, '');
+    const advisoryTitle = targetDisruption.buttonText || (targetDisruption.tier === 'CRITICAL' ? 'Line Severed' : 'Expect Delays');
+    const rawMsg = `${advisoryTitle} - ${shortLocation}`;
+    bindAdvisoryReplyButton({
+        snippet: rawMsg,
+        rawMsg,
+        alertId: targetDisruption.id || '',
+        location: 'planner_disruption_reply',
+    });
     
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
@@ -1479,9 +1553,13 @@ export async function openTripMapRenderer(routeData) {
             });
             try { tripMapInstance.getContainer().style.background = 'transparent'; } catch (e) { /* ignore */ }
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            const voyagerUrl = (typeof window.ntCartoVoyagerUrl === 'function')
+                ? window.ntCartoVoyagerUrl()
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            L.tileLayer(voyagerUrl, {
                 maxZoom: 19,
-                attribution: '&copy; OpenStreetMap'
+                subdomains: 'abcd',
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
             }).addTo(tripMapInstance);
 
             const routeLayerGroup = L.layerGroup().addTo(tripMapInstance);
@@ -1785,6 +1863,88 @@ export async function openTripMapRenderer(routeData) {
 
 // --- TIMELINE BUILDER VIEW ENGINE ---
 
+function plannerSheetDayLabel(dayType) {
+    if (dayType === 'saturday') return 'Saturdays';
+    if (dayType === 'public_holiday') return 'Sundays & Public Holidays';
+    return 'Weekdays';
+}
+
+function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
+    const destSafe = escapeHTML(String(dest || '').replace(/ STATION/gi, ''));
+    const trainSafe = escapeHTML(String(trainId || ''));
+    const routeSafe = escapeHTML(String(routeId || ''));
+    const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}</button>`;
+}
+
+export function openPlannerTrainSheet(routeId, trainId) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const dayType = selectedPlannerDay || getCurrentDayType();
+    const sheet = extractTrainSheetStops(routeId, trainId, dayType);
+    if (!sheet) {
+        if (typeof showToast === 'function') showToast('Full timetable for this train is not available.', 'error');
+        return;
+    }
+    const origin = stationDisplayName(sheet.origin);
+    const terminus = stationDisplayName(sheet.terminus);
+    const titleEl = document.getElementById('planner-train-sheet-title');
+    const dirEl = document.getElementById('planner-train-sheet-direction');
+    const dayEl = document.getElementById('planner-train-sheet-day');
+    const fareEl = document.getElementById('planner-train-sheet-fare');
+    const listEl = document.getElementById('planner-train-sheet-stops');
+    if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
+    if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
+    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType);
+    const zone = resolvePlannerRouteZone(sheet.route.id);
+    const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
+    if (fareEl) {
+        fareEl.dataset.routeId = sheet.route.id;
+        if (detailed?.single != null) {
+            fareEl.textContent = `Max. Single Fare · R${Number(detailed.single).toFixed(2)}`;
+        } else {
+            fareEl.textContent = 'Fare';
+        }
+        fareEl.onclick = (ev) => {
+            ev.stopPropagation();
+            const openFare = typeof window.openFareModalForRoute === 'function'
+                ? window.openFareModalForRoute
+                : null;
+            if (openFare) {
+                openFare(sheet.route.id);
+                return;
+            }
+            import('./live-board-ui.js').then((m) => m.openFareModalForRoute?.(sheet.route.id)).catch(() => {});
+        };
+    }
+    if (listEl) {
+        listEl.innerHTML = sheet.stops.map((stop, i) => {
+            const isEnd = i === 0 || i === sheet.stops.length - 1;
+            const name = escapeHTML(stationDisplayName(stop.station));
+            const time = escapeHTML(formatTimeDisplay(stop.time));
+            const weight = isEnd ? 'font-black text-slate-900 dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-200';
+            const role = i === 0 ? 'Origin' : (i === sheet.stops.length - 1 ? 'Terminus' : '');
+            return `
+                <li class="flex items-center justify-between gap-3 py-2.5 ${i ? 'border-t border-slate-100 dark:border-slate-700/70' : ''}">
+                    <div class="min-w-0">
+                        <p class="text-sm ${weight} truncate">${name}</p>
+                        ${role ? `<p class="text-[10px] font-black uppercase tracking-widest text-blue-500/80 mt-0.5">${role}</p>` : ''}
+                    </div>
+                    <span class="font-mono text-sm font-bold ${weight} tabular-nums">${time}</span>
+                </li>`;
+        }).join('');
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('planner-train-sheet-modal');
+    if (typeof trackAnalyticsEvent === 'function') {
+        trackAnalyticsEvent('view_planner_train_sheet', {
+            route_id: sheet.route.id,
+            train_id: sheet.trainId,
+            day_type: sheet.dayType || dayType || '',
+            zone: zone || '',
+        });
+    }
+}
+
 export const PlannerRenderer = {
     isMidnightRollover: () => {
         if (typeof currentPlannerStatus !== 'undefined' && currentPlannerStatus === 'ALL_DEPARTED') return false;
@@ -1850,7 +2010,7 @@ export const PlannerRenderer = {
         const rightCol = connectValue ? `
         <div class="flex flex-col items-end text-right min-w-0 flex-1 pl-2">
             <span class="text-[8px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">${connectLabel}</span>
-            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${connectValue}">${connectValue}</span>
+            <span class="font-bold text-[10px] text-blue-600 dark:text-blue-400 leading-tight truncate w-full" title="${escapeHTML(String(connectValue || ''))}">${escapeHTML(connectValue)}</span>
         </div>` : '';
         return `
         <div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2 ${opacity}">
@@ -1967,7 +2127,7 @@ export const PlannerRenderer = {
                             <span class="font-mono font-bold ${depTextClass} text-sm">${formatTimeDisplay(stops[0].time)}</span>
                         </div>
                         <div class="text-xs ${depTrainClass} font-medium mb-1">
-                            ${subTrainDest} Train ${subTrain}
+                            ${plannerTrainNameButton(leg.route?.id, subTrainDest, subTrain, depTrainClass)}
                         </div>
                     </div>
                 </div>
@@ -2047,6 +2207,7 @@ export const PlannerRenderer = {
             // TRAIN TERMINATES block so users still see the hard stop at the partial dest.
             const forcePartialTerminus = subIsFinalDest
                 && !isSevered
+                && !currentPlannerErrorPayload?.boardingBlocked
                 && (
                     currentPlannerStatus === 'PARTIAL_JOURNEY'
                     || !!(typeof window !== 'undefined' && window._plannerForcePartialTerminus)
@@ -2679,6 +2840,13 @@ export function initPlanner() {
     }
     if (typeof window !== 'undefined') window.__ntPlannerInitBound = true;
 
+    if (typeof window !== 'undefined' && !window.__ntPlannerHistoryListSub) {
+        window.__ntPlannerHistoryListSub = true;
+        $masterStationList.subscribe(() => {
+            try { renderPlannerHistory(); } catch { /* ignore */ }
+        });
+    }
+
     // When live disruptions arrive after a plan, re-run so Irene/Centurion cuts
     // replace sinkhole-blind through-trips (first open race).
     if (!plannerDisrListenBound) {
@@ -2756,14 +2924,17 @@ export function initPlanner() {
             const historyItem = e.target.closest('.planner-history-item-btn');
             
             if (clearBtn) {
-                const historyKey = 'plannerHistory_' + $userRegion.get();
-                try { safeStorage.removeItem(historyKey); } catch(ex) {}
+                try {
+                    PLANNER_HISTORY_REGIONS.forEach((r) => safeStorage.removeItem(`plannerHistory_${r}`));
+                    safeStorage.removeItem(PLANNER_HISTORY_MERGED_KEY);
+                } catch (ex) { /* ignore */ }
                 renderPlannerHistory();
             } else if (historyItem) {
                 const fullFrom = historyItem.getAttribute('data-full-from');
                 const fullTo = historyItem.getAttribute('data-full-to');
+                const region = historyItem.getAttribute('data-region') || '';
                 if (fullFrom && fullTo && typeof window.restorePlannerSearch === 'function') {
-                    window.restorePlannerSearch(fullFrom, fullTo);
+                    window.restorePlannerSearch(fullFrom, fullTo, region);
                 }
             }
         });
@@ -2995,12 +3166,64 @@ export function initPlanner() {
         window.__ntPlannerDayRegionSub = true;
         $userRegion.subscribe(() => {
             syncPlannerDayDropdownForRegion();
+            try { renderPlannerHistory(); } catch { /* ignore */ }
         });
     }
 }
 
 /** Max recent trips shown in the planner UI (telemetry flush size is separate). */
 const PLANNER_HISTORY_DISPLAY_CAP = 5;
+const PLANNER_HISTORY_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+const PLANNER_HISTORY_MERGED_KEY = 'plannerHistory_all';
+
+function readPlannerHistoryArray(key) {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(key) || '[]');
+        return Array.isArray(raw) ? raw : [];
+    } catch {
+        return [];
+    }
+}
+
+function plannerHistoryDedupeKey(item) {
+    return `${String(item.from || '').toUpperCase()}|${String(item.to || '').toUpperCase()}`;
+}
+
+function normalizePlannerHistoryItem(item, fallbackRegion) {
+    if (!item?.from || !item?.to) return null;
+    return {
+        from: item.from,
+        to: item.to,
+        fullFrom: item.fullFrom || item.from,
+        fullTo: item.fullTo || item.to,
+        at: Number(item.at) || 0,
+        region: item.region || fallbackRegion || null,
+    };
+}
+
+/** Union per-region keys + merged list so trips survive a province swap. */
+function unionPlannerHistory() {
+    const byKey = new Map();
+    const absorb = (list, fallbackRegion) => {
+        for (const raw of list || []) {
+            const item = normalizePlannerHistoryItem(raw, fallbackRegion);
+            if (!item) continue;
+            const key = plannerHistoryDedupeKey(item);
+            const prev = byKey.get(key);
+            if (!prev || item.at > prev.at) byKey.set(key, item);
+        }
+    };
+    absorb(readPlannerHistoryArray(PLANNER_HISTORY_MERGED_KEY), null);
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        absorb(readPlannerHistoryArray(`plannerHistory_${region}`), region);
+    });
+    return [...byKey.values()].sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+
+function persistMergedPlannerHistory(list) {
+    const cap = (list || []).slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+    safeStorage.setItem(PLANNER_HISTORY_MERGED_KEY, JSON.stringify(cap));
+}
 
 /** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
@@ -3008,12 +3231,10 @@ export function savePlannerHistory(from, to, opts = {}) {
     const cleanFrom = from.replace(/ STATION/gi, '');
     const cleanTo = to.replace(/ STATION/gi, '');
     const routeKey = `${cleanFrom}|${cleanTo}`;
-    
-    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
-    
-    let history = [];
-    try { history = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { history = []; }
-    if (!Array.isArray(history)) history = [];
+    const region = $userRegion.get() || 'GP';
+    const historyKey = 'plannerHistory_' + region;
+
+    let history = readPlannerHistoryArray(historyKey);
     history = history.filter((item) => `${item.from}|${item.to}` !== routeKey);
     history.unshift({
         from: cleanFrom,
@@ -3021,52 +3242,66 @@ export function savePlannerHistory(from, to, opts = {}) {
         fullFrom: from,
         fullTo: to,
         at: Date.now(),
+        region,
     });
     if (history.length > PLANNER_HISTORY_DISPLAY_CAP) {
         history = history.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
     }
-    
+
     safeStorage.setItem(historyKey, JSON.stringify(history));
+    persistMergedPlannerHistory(unionPlannerHistory());
     renderPlannerHistory();
 }
 
 export function renderPlannerHistory() {
     const container = document.getElementById('planner-history-container');
     if (!container) return;
-    
-    const historyKey = 'plannerHistory_' + ($userRegion.get() || 'GP');
-    let rawHistory = [];
-    try { rawHistory = JSON.parse(safeStorage.getItem(historyKey) || '[]'); } catch { rawHistory = []; }
 
-    let validHistory = rawHistory;
+    const currentRegion = $userRegion.get() || 'GP';
+    const historyKey = 'plannerHistory_' + currentRegion;
+    const rawCurrent = readPlannerHistoryArray(historyKey);
+    let validHistory = unionPlannerHistory();
     const masterList = getMasterStationList();
     // History stores cleaned names (no " STATION"); master list usually includes the suffix.
     const stationKey = (s) => String(s || '').replace(/ STATION/gi, '').toUpperCase().trim();
-    
-    if (masterList && masterList.length > 0) {
+    const listReady = Array.isArray(masterList) && masterList.length > 0;
+
+    if (listReady) {
         const masterKeys = new Set(masterList.map(stationKey));
-        validHistory = rawHistory.filter((item) =>
-            masterKeys.has(stationKey(item.fullFrom || item.from)) &&
-            masterKeys.has(stationKey(item.fullTo || item.to))
-        );
-    } else if (masterList && masterList.length === 0) {
-        container.classList.add('hidden');
-        return;
+        validHistory = validHistory.filter((item) => {
+            const itemRegion = item.region || currentRegion;
+            // Other provinces stay visible even when this region's index is loaded.
+            if (itemRegion !== currentRegion) return true;
+            return masterKeys.has(stationKey(item.fullFrom || item.from))
+                && masterKeys.has(stationKey(item.fullTo || item.to));
+        });
     }
 
     if (validHistory.length > PLANNER_HISTORY_DISPLAY_CAP) {
         validHistory = validHistory.slice(0, PLANNER_HISTORY_DISPLAY_CAP);
     }
-    // Persist cleaned / capped list so dead or oversize entries don't linger
-    if (JSON.stringify(validHistory) !== JSON.stringify(rawHistory)) {
-        safeStorage.setItem(historyKey, JSON.stringify(validHistory));
+
+    // Only persist a filter wipe for *this* region's key when its index is ready.
+    // Do not rewrite the region key from the last-5 display union — older same-region
+    // trips must stay stored so a province swap cannot delete them.
+    if (listReady) {
+        const currentFiltered = rawCurrent.filter((item) => {
+            const norm = normalizePlannerHistoryItem(item, currentRegion);
+            if (!norm) return false;
+            return masterKeys.has(stationKey(norm.fullFrom || norm.from))
+                && masterKeys.has(stationKey(norm.fullTo || norm.to));
+        });
+        if (JSON.stringify(currentFiltered) !== JSON.stringify(rawCurrent)) {
+            safeStorage.setItem(historyKey, JSON.stringify(currentFiltered));
+        }
+        persistMergedPlannerHistory(validHistory);
     }
-    
+
     if (validHistory.length === 0) {
         container.classList.add('hidden');
         return;
     }
-    
+
     container.classList.remove('hidden');
     container.innerHTML = `
         <div class="flex items-center justify-between mb-2 px-1">
@@ -3076,7 +3311,7 @@ export function renderPlannerHistory() {
         <div class="flex flex-col gap-2">
             ${validHistory.map((item) => `
                 <button class="planner-history-item-btn w-full flex items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
-                    data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}">
+                    data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}" data-region="${escapeHTML(item.region || '')}">
                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center min-w-0">
                         <span class="truncate">${escapeHTML(item.from)}</span>
                         <svg class="w-3 h-3 mx-1.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
@@ -3273,6 +3508,7 @@ export async function applyPlannerDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
     // and MASTER_STATION_LIST never fills → "Connection timeout".
@@ -3593,8 +3829,52 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     break;
                 case 'ERR_NO_SERVICE_TODAY':
                     errorTitle = "No service today";
-                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
+                    errorMsg = (selectedPlannerDay === 'saturday' || selectedPlannerDay === 'public_holiday')
+                        ? `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try the next weekday.</p>`
+                        : `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
                     break;
+                case 'ERR_NO_SATURDAY_SERVICE': {
+                    errorTitle = "No weekend service";
+                    errorTone = 'danger';
+                    const copy = saturdayNoServiceCopy(errorPayload?.routeId);
+                    const line = escapeHTML(copy.lineLabel);
+                    errorMsg = `
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${escapeHTML(copy.body)}</p>
+                        <button type="button" onclick="if(typeof window.openSaturdayServiceModal==='function') window.openSaturdayServiceModal('${String(errorPayload?.routeId || 'herc-koed').replace(/'/g, "\\'")}')"
+                            class="w-full text-left mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800/60 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300">
+                                    ${plannerIcon('circle', 'w-2.5 h-2.5 text-red-500')} No weekend service
+                                </span>
+                                <svg class="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                            </div>
+                            <p class="text-[11px] text-red-700/90 dark:text-red-300/90 mt-1.5 leading-snug">Tap for details on the ${line} line</p>
+                        </button>
+                    `;
+                    if (errorPayload?.boardingBlocked && Array.isArray(errorPayload.alternateOrigins) && errorPayload.alternateOrigins.length) {
+                        const intended = errorPayload.intendedDest || cleanD;
+                        errorMsg += `
+                            <div class="mt-4 space-y-2">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Board beyond the cut</p>
+                                ${errorPayload.alternateOrigins.map((a) => {
+                                    const st = String(a.station || '').replace(/'/g, "\\'");
+                                    const destSt = String(dest).replace(/'/g, "\\'");
+                                    return `<button type="button" onclick="if(typeof window.planFromAlternateOrigin==='function') window.planFromAlternateOrigin('${st}','${destSt}')"
+                                        class="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors focus:outline-none text-left">
+                                        <span class="text-xs font-bold text-gray-800 dark:text-gray-100">Plan from <span class="text-blue-600 dark:text-blue-400">${escapeHTML(a.label || a.station)}</span> → ${escapeHTML(intended)}</span>
+                                        <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>`;
+                                }).join('')}
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">You may need other transport to reach the alternate station first.</p>
+                            </div>`;
+                    }
+                    errorMsg += `
+                        <button type="button" onclick="if(typeof window.executeManualRollover==='function') window.executeManualRollover('${safeO}', '${safeD}')" class="planner-next-day-cta w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none flex items-center justify-center uppercase tracking-wide text-xs">
+                            See Next Available Day
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                        </button>`;
+                    break;
+                }
                 case 'ERR_ACTIVE_SUSPENSION': {
                     errorTitle = errorPayload?.boardingBlocked ? "Boarding blocked" : "Route suspended";
                     errorTone = 'danger';
@@ -3723,10 +4003,43 @@ export function planFromAlternateOrigin(newOrigin, dest) {
     executeTripPlan(fullFrom, fullTo);
 }
 
+/** Last complex-trip ping so the 30s pulse does not spam Clarity/GA. */
+let lastComplexRouteTrackedKey = '';
+
+function plannerTransferCount(step) {
+    if (!step) return 0;
+    if (step.type === 'MULTI_TRANSFER') {
+        let n = step.legs ? step.legs.length - 1 : (step.transferCount || 3);
+        if (step.legs) {
+            step.legs.forEach((leg) => { if (leg.isRelayComposite) n += 1; });
+        }
+        return n;
+    }
+    let n = step.type === 'DOUBLE_TRANSFER' ? 2 : (step.type === 'TRANSFER' ? 1 : 0);
+    if (step.leg1 && step.leg1.isRelayComposite) n += 1;
+    if (step.leg2 && step.leg2.isRelayComposite) n += 1;
+    if (step.leg3 && step.leg3.isRelayComposite) n += 1;
+    return n;
+}
+
 export function renderSelectedTrip(container, index) {
     window._plannerCurrentTripIndex = index; // GUARDIAN: Synchronize global state for Custom Dropdowns
     const selectedTrip = currentTripOptions[index];
-    if (!selectedTrip) return; 
+    if (!selectedTrip) return;
+
+    const transfers = plannerTransferCount(selectedTrip);
+    if (transfers >= 1) {
+        const key = `${selectedTrip.train || ''}|${selectedTrip.depTime || ''}|${selectedTrip.type || ''}|${index}`;
+        if (lastComplexRouteTrackedKey !== key) {
+            lastComplexRouteTrackedKey = key;
+            trackAnalyticsEvent('complex_route_rendered', {
+                transfers,
+                type: selectedTrip.type || '',
+                origin: String(selectedTrip.from || '').replace(/ STATION/gi, ''),
+                destination: String(selectedTrip.to || '').replace(/ STATION/gi, ''),
+            });
+        }
+    }
 
     const isTomorrow = selectedTrip.dayLabel !== undefined;
     const midnightRollover = PlannerRenderer.isMidnightRollover();
@@ -3751,11 +4064,6 @@ export function renderSelectedTrip(container, index) {
     } else {
         renderTripResult(container, currentTripOptions, index);
     }
-
-    // Soft offer: contribute location when this trip is in the live 10‑min window
-    try {
-        import('./map-tab.js').then((m) => m.maybeOfferPlannerContribute?.()).catch(() => {});
-    } catch { /* ignore */ }
 }
 
 export function startPlannerPulse(currentIndex) {
@@ -3780,6 +4088,8 @@ if (typeof window !== 'undefined') {
     window.openFeedbackForMissingRoute = openFeedbackForMissingRoute;
     window.restorePlannerSearch = restorePlannerSearch;
     window.openDisruptionModal = openDisruptionModal;
+    window.openSaturdayServiceModal = openSaturdayServiceModal;
+    window.openPlannerTrainSheet = openPlannerTrainSheet;
     window.extractTripCoordinates = extractTripCoordinates;
     window.hidePlannerResults = hidePlannerResults;
     window.openPlannerNetworkMap = openPlannerNetworkMap;
@@ -3854,11 +4164,14 @@ export async function shareCurrentGrid() {
     const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };
     
     try {
-        if (navigator.share) await navigator.share(data);
-        else {
+        if (navigator.share) {
+            await navigator.share(data);
+            trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
+        } else {
             try {
                 await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
                 handleCopySuccess();
+                trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
             } catch {
                 const textArea = document.createElement('textarea');
                 textArea.value = `${shareText}\n${shareUrl}`;
@@ -3867,9 +4180,11 @@ export async function shareCurrentGrid() {
                 document.execCommand('copy');
                 document.body.removeChild(textArea);
                 handleCopySuccess();
+                trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
             }
         }
     } catch (e) {
+        if (e?.name === 'AbortError') return;
         if (typeof window.showToast === 'function') {
             window.showToast('Could not share link.', 'error');
         }
@@ -3908,14 +4223,7 @@ export function executeManualRollover(origin, dest) {
 
 export function openFeedbackForMissingRoute(origin, dest) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
-    clearFeedbackReplyMode();
-    
-    if (typeof openSmoothModal === 'function') {
-        openSmoothModal('feedback-modal');
-    } else {
-        const modal = document.getElementById('feedback-modal');
-        if (modal) modal.classList.remove('hidden');
-    }
+    openFeedbackModal({ location: 'planner_missing_route' });
 
     setTimeout(() => {
         const msgBox = document.getElementById('feedback-text') || document.querySelector('#feedback-modal textarea');
@@ -3927,12 +4235,12 @@ export function openFeedbackForMissingRoute(origin, dest) {
     }, 350); 
 }
 
-export function restorePlannerSearch(fullFrom, fullTo) {
+export async function restorePlannerSearch(fullFrom, fullTo, region) {
     const fromSelect = document.getElementById('planner-from');
     const toSelect = document.getElementById('planner-to');
     const fromInput = document.getElementById('planner-from-search');
     const toInput = document.getElementById('planner-to-search');
-    
+
     if (fromSelect && toSelect) {
         fromSelect.value = fullFrom;
         toSelect.value = fullTo;
@@ -3944,15 +4252,23 @@ export function restorePlannerSearch(fullFrom, fullTo) {
             toInput.value = fullTo.replace(' STATION', '');
             toInput.dataset.resolvedValue = fullTo;
         }
-        
+
         if (!selectedPlannerDay) {
             selectedPlannerDay = getCurrentDayType();
         }
 
+        const target = ['GP', 'WC', 'KZN', 'EC'].includes(String(region || '').toUpperCase())
+            ? String(region).toUpperCase()
+            : null;
+        if (target && ($userRegion.get() || 'GP') !== target) {
+            ensureRoutePinnedForRegion(target);
+            try { await loadAllSchedules(true); } catch { /* still try the restore */ }
+        }
+
         if (typeof showToast === 'function') showToast("Restored recent search", "info", 1000);
-        
+
         if (typeof trackAnalyticsEvent === 'function') {
-            trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo });
+            trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo, region: target || '' });
         }
 
         // History is recorded when executeTripPlan finishes (with status)

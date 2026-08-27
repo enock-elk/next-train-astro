@@ -10,10 +10,17 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string }} SeoRouteSeed */
 
 export function stationLabel(raw) {
-    return String(raw || '')
+    const cleaned = String(raw || '')
         .replace(/\s+STATION$/i, '')
         .replace(/\s+YARD$/i, '')
+        .replace(/\s+/g, ' ')
         .trim();
+    if (cleaned && cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
+        return cleaned
+            .toLowerCase()
+            .replace(/\b([a-z])/g, (m) => m.toUpperCase());
+    }
+    return cleaned;
 }
 
 export function displayRouteName(route) {
@@ -76,6 +83,11 @@ const SEO_OVERRIDES = {
         slug: 'durban-to-umlazi',
         blurb: 'Durban ↔ Umlazi Metrorail schedule landing for KwaZulu-Natal south corridor trips.',
         operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid.',
+    },
+    'kzn-crossmoor': {
+        slug: 'durban-to-crossmoor',
+        blurb: 'Durban ↔ Crossmoor Metrorail timetable for the yellow inland line via Rossburgh, Havenside, Bayview, Westcliff and Chatsglen.',
+        operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid. Saturday sheets currently carry the published Crossmoor times.',
     },
 };
 
@@ -193,6 +205,26 @@ export function listSeoRegions() {
 
 export function getSeoRegionBySlug(slug) {
     return listSeoRegions().find((r) => r.slug === slug) || null;
+}
+
+/**
+ * High-impression origin–destination landings (Search Console long-tail).
+ * Used for crawlable internal links from home / guide.
+ */
+export const FEATURED_SEO_ROUTE_IDS = [
+    'jhb-soweto',
+    'pta-mabopane',
+    'pta-pien',
+    'pta-saul',
+    'ct-strnd',
+    'ct-bellv',
+    'ct-simon',
+    'kzn-umlazi',
+];
+
+export function listFeaturedSeoRoutes() {
+    const byId = new Map(listSeoRoutes().map((entry) => [entry.route.id, entry]));
+    return FEATURED_SEO_ROUTE_IDS.map((id) => byId.get(id)).filter(Boolean);
 }
 
 export { getCorridorLabel };

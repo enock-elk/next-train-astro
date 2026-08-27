@@ -130,6 +130,18 @@
         "$batchId": {
           ".write": "!data.exists()"
         }
+      },
+      "trip_plan_users": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$userId": {
+          ".write": "newData.exists() && newData.hasChild('lastSeen')"
+        }
+      },
+      "trip_plan_pairs": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$pairId": {
+          ".write": "newData.exists() && newData.hasChild('lastSeen')"
+        }
       }
     },
 

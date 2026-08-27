@@ -19,9 +19,10 @@ import {
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
-    loadAllSchedules, guardianFetch
+    loadAllSchedules, guardianFetch, paintHeaderDayLabel
 } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 export { stopsForTrain, expectedPosition, scoreTrainForFix } from './train-ghosts.js';
 
@@ -63,15 +64,6 @@ function setHeaderDest(el, destUpper) {
         span.textContent = destUpper;
     }
 }
-
-function trackAnalyticsEvent(name, params) {
-    try {
-        if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
-            window.gtag('event', name, params || {});
-        }
-    } catch (e) {}
-}
-
 
 /** True when loaded Saturday sheets contain at least one timed departure. */
 export function scheduleHasService(schedule) {
@@ -628,6 +620,7 @@ export function getDetailedFare(sheetKey) {
 }
 
 export function findNextTrains() {
+    if (typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
 
     const selectedStation = (stationSelectEl() && stationSelectEl().value);
@@ -659,7 +652,11 @@ export function findNextTrains() {
         if (sBtn && sBtn.closest('.border-t')) sBtn.closest('.border-t').classList.remove('hidden');
     }
 
-    if (selectedStation === "FIND_NEAREST") { findNearestStation(false); return; }
+    if (selectedStation === "FIND_NEAREST") {
+        trackAnalyticsEvent('click_auto_locate', { source: 'find_nearest', route_id: getCurrentRouteId() });
+        findNearestStation(false);
+        return;
+    }
     
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();

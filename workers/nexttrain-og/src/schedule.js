@@ -32,6 +32,9 @@ function sheetKeyFor(route, dir, day) {
   return keys[`weekday_to_${ab}`] || null;
 }
 
+const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
+
 /** westerncape/public_holidays is nested in Firebase — flatten for sheet lookups. */
 function flattenPublicHolidays(db) {
   if (!db || typeof db !== 'object' || Array.isArray(db)) return db;
@@ -41,8 +44,15 @@ function flattenPublicHolidays(db) {
   return { ...rest, ...nest };
 }
 
-const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
-const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
+function getSheet(db, key) {
+  if (!db || !key) return null;
+  for (const nest of REGION_NESTS) {
+    const nested = db[nest]?.[key];
+    if (Array.isArray(nested) && nested.length) return nested;
+  }
+  if (Array.isArray(db[key]) && db[key].length) return db[key];
+  return null;
+}
 
 function unionTrainIds(dataRows) {
   const ids = new Set();
@@ -60,16 +70,6 @@ function rowHasClock(row, trainIds) {
     const t = compactTime(row?.[id]);
     return t && t !== '-';
   });
-}
-
-function getSheet(db, key) {
-  if (!db || !key) return null;
-  for (const nest of REGION_NESTS) {
-    const nested = db[nest]?.[key];
-    if (Array.isArray(nested) && nested.length) return nested;
-  }
-  if (Array.isArray(db[key]) && db[key].length) return db[key];
-  return null;
 }
 
 /**

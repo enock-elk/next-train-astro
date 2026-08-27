@@ -46,6 +46,27 @@ if (!existsSync(dumpPath)) {
                 fail(`public/data/full-database.json missing region object "${key}"`);
             }
         }
+        const kzn = dump.kzn;
+        for (const key of [
+            'durbn_to_cross_sat',
+            'cross_to_durbn_sat',
+            'durbn_to_cross_weekday',
+            'cross_to_durbn_weekday',
+        ]) {
+            if (!Array.isArray(kzn?.[key]) || kzn[key].length < 3) {
+                fail(`public/data/full-database.json kzn missing Crossmoor sheet "${key}"`);
+            }
+        }
+        const crossStations = new Set(
+            (kzn?.cross_to_durbn_sat || [])
+                .map((row) => String(row?.STATION || '').toUpperCase())
+                .filter((name) => name && !name.includes('UPDATED')),
+        );
+        for (const station of ['CROSSMOOR', 'CHATSGLEN', 'HAVENSIDE', 'BAYVIEW', 'WESTCLIFF']) {
+            if (!crossStations.has(station)) {
+                fail(`Crossmoor Saturday inbound sheet missing station ${station}`);
+            }
+        }
     }
 }
 

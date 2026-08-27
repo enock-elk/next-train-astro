@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.26.1";
+export const APP_VERSION = "V8_08.26.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -172,7 +172,7 @@ export function getCorridorLabel(routeOrCorridorId) {
 export const REGION_SEO = {
     GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
-    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City and inland KZN Metrorail corridor pages.' },
+    KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
     EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
 };
 export const MAX_RADIUS_KM = 6;
@@ -820,6 +820,23 @@ export const ROUTES = {
             saturday_to_b: 'durbn_to_pinet_sat' 
         } 
     },
+    'kzn-crossmoor': {
+        id: 'kzn-crossmoor',
+        name: 'Durban <-> Crossmoor',
+        corridorId: 'KZN_WEST',
+        region: 'KZN',
+        colorClass: 'text-yellow-500',
+        isActive: true,
+        destA: 'DURBAN STATION',
+        destB: 'CROSSMOOR STATION',
+        transferStation: null,
+        sheetKeys: {
+            weekday_to_a: 'cross_to_durbn_weekday',
+            weekday_to_b: 'durbn_to_cross_weekday',
+            saturday_to_a: 'cross_to_durbn_sat',
+            saturday_to_b: 'durbn_to_cross_sat',
+        }
+    },
 
     // ==========================================
     // 🛡️ EASTERN CAPE ROUTES (V6 EXPANSION)
@@ -915,6 +932,15 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.26.2",
+        title: "What's new",
+        date: "26 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>KZN:</b> Durban ↔ Crossmoor is on the board — the yellow inland line from Rossburgh out to Havenside, Bayview, Westcliff, Chatsglen and Crossmoor."
+        ]
+    },
     {
         id: "V8_08.26.1",
         title: "What's new",

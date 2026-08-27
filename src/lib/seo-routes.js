@@ -84,6 +84,11 @@ const SEO_OVERRIDES = {
         blurb: 'Durban ↔ Umlazi Metrorail schedule landing for KwaZulu-Natal south corridor trips.',
         operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid.',
     },
+    'kzn-crossmoor': {
+        slug: 'durban-to-crossmoor',
+        blurb: 'Durban ↔ Crossmoor Metrorail timetable for the yellow inland line via Rossburgh, Havenside, Bayview, Westcliff and Chatsglen.',
+        operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid. Saturday sheets currently carry the published Crossmoor times.',
+    },
 };
 
 /**

@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.26.2 — KZN Crossmoor corridor (26 Aug 2026)
+
+- Register `kzn-crossmoor` (Durban ↔ Crossmoor) as an active KZN Inland route with map yellow (`text-yellow-500`).
+- Sheet keys match the KZN Apps Script sanitize: `durbn_to_cross_{weekday,sat}` / `cross_to_durbn_{weekday,sat}`.
+- Merge Crossmoor sheets + `_meta` / `_zone` from the RTDB export into `public/data/full-database.json` (nested `kzn` and top-level).
+- Map path: Durban trunk → Rossburgh → Clairwood → Montclair → Merebank → Havenside → Bayview → Westcliff → Chatsglen → Crossmoor.
+- destA is `DURBAN STATION` (sheets end at DURBAN, not DURBAN YARD). Saturday columns 9612/9620/9672/9680 outbound and 9613/9621/9673/9681 inbound; weekday sheets in this dump are station rows only.
+
 ## V8_08.26.1 — Production boot/safety onto lab (26 Aug 2026)
 
 - Admin session is an operator email only (`isAdminEmail` / Thandeka + Enock). Anonymous iPhone Firebase is ignored so telemetry does not 403-loop.

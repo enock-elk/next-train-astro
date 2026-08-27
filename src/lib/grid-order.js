@@ -1152,6 +1152,30 @@ export const MANUAL_GRID_ORDER = {
         "0035",
         "0079"
     ],
+    "durbn-to-cross_sat": [
+        "9612",
+        "9620",
+        "9672",
+        "9680"
+    ],
+    "cross-to-durbn_sat": [
+        "9613",
+        "9621",
+        "9673",
+        "9681"
+    ],
+    "durbn_to_cross_sat": [
+        "9612",
+        "9620",
+        "9672",
+        "9680"
+    ],
+    "cross_to_durbn_sat": [
+        "9613",
+        "9621",
+        "9673",
+        "9681"
+    ],
     "ctcen_in_weekday": [
         "9400",
         "9500",

@@ -773,7 +773,7 @@ export function initLiveBoardUi() {
     const shareApp = async () => {
         triggerHaptic();
         const sourceId = document.activeElement?.id || '';
-        trackAnalyticsEvent('click_share', { location: sourceId === 'share-app-btn-planner' ? 'planner' : 'board' });
+        trackAnalyticsEvent('click_share', { location: sourceId === 'settings-share-btn' ? 'settings' : 'board' });
         const shareText = 'Say Goodbye to Waiting\nUse Next Train to check when your train is due to arrive.';
         const shareData = { title: 'Metrorail Next Train', text: shareText, url: location.origin + location.pathname };
         try {
@@ -791,11 +791,14 @@ export function initLiveBoardUi() {
             }
         }
     };
-    ['share-app-btn', 'share-app-btn-planner'].forEach((id) => {
+    ['settings-share-btn'].forEach((id) => {
         const shareBtn = document.getElementById(id);
         if (shareBtn && !shareBtn.dataset.bound) {
             shareBtn.dataset.bound = '1';
-            shareBtn.addEventListener('click', shareApp);
+            shareBtn.addEventListener('click', async () => {
+                try { window.closeAppHub?.(true); } catch { /* hub optional */ }
+                await shareApp();
+            });
         }
     });
 

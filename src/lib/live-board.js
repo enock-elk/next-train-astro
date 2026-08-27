@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
-    getDistanceFromLatLonInKm, escapeHTML, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
+    getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate
 } from './utils.js';
@@ -269,30 +269,63 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
     return false;
 }
 
-// GUARDIAN HELPER V4.60.70: Ghost Train Logic
-export function isTrainExcluded(trainNumber, routeId, dayIdx) {
-    if (!trainNumber) return false;
-    
+/** Same expiry + days[] rules as isTrainExcluded; returns the RTDB rule or null. DEFAULT_EXCLUSIONS stays {}. */
+export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now()) {
+    if (!trainNumber) return null;
 
     // Source of truth is `$globalExclusions` (Firebase tree, or DEFAULT only
     // when the exclusions fetch failed). Never silently fall back to hardcoded
     // corridor bans — those never appear in Global State Monitor.
     const rules = getGlobalExclusions()?.[routeId] || null;
-    
-    if (rules && rules[trainNumber]) {
-        const rule = rules[trainNumber];
-        
-        // GUARDIAN PHASE C: Automatic Expiry Enforcement
-        if (rule.expiresAt && Date.now() > rule.expiresAt) {
-            return false; // The ban has expired, treat the train as active
-        }
-        
-        if (rule.days && rule.days.includes(parseInt(dayIdx))) {
-            // GUARDIAN PHASE 12: Return specific metadata string instead of generic boolean
-            return rule.type || 'banned'; 
+    if (!rules || !rules[trainNumber]) return null;
+    const rule = rules[trainNumber];
+    if (rule.expiresAt && now > rule.expiresAt) return null;
+    if (rule.days && rule.days.includes(parseInt(dayIdx, 10))) return rule;
+    return null;
+}
+
+// GUARDIAN HELPER V4.60.70: Ghost Train Logic
+export function isTrainExcluded(trainNumber, routeId, dayIdx) {
+    const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
+    return rule ? (rule.type || 'banned') : false;
+}
+
+export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
+    const titleEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-stations') : null;
+    const bodyEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-body') : null;
+    const badgeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-tier-badge') : null;
+    const timeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-timestamp') : null;
+    const iconEl = typeof document !== 'undefined' ? document.getElementById('disruption-icon-svg') : null;
+    const trainLabel = String(trainNumber || '').trim() || 'This train';
+    if (titleEl) titleEl.textContent = `Train ${trainLabel}`;
+    if (bodyEl) bodyEl.textContent = (rule && rule.reason) ? String(rule.reason) : 'No service on this day';
+    if (badgeEl) {
+        badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50';
+        badgeEl.textContent = 'NO SERVICE';
+    }
+    if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
+    if (timeEl) {
+        if (rule && rule.expiresAt) {
+            timeEl.textContent = `Until: ${formatAppDate(rule.expiresAt, { withTime: true })}`;
+        } else {
+            timeEl.textContent = '';
         }
     }
-    return false;
+    const replyBtn = typeof document !== 'undefined' ? document.getElementById('disruption-modal-reply-btn') : null;
+    if (replyBtn) {
+        replyBtn.onclick = (e) => {
+            e.preventDefault();
+            if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+            setTimeout(() => {
+                if (typeof window.openFeedbackModal === 'function') {
+                    window.openFeedbackModal({ location: 'grid_exclusion_reply' });
+                }
+            }, 350);
+        };
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
 
 // --- GUARDIAN PHASE 3: CROSS-CORRIDOR TIERED INCIDENT MANAGEMENT HELPERS ---
@@ -643,13 +676,13 @@ export function findNextTrains() {
         const gContainer = document.getElementById('grid-trigger-container');
         if (gContainer) gContainer.classList.add('hidden');
         
-        const sBtn = document.getElementById('share-app-btn');
-        if (sBtn && sBtn.closest('.border-t')) sBtn.closest('.border-t').classList.add('hidden');
+        const footer = document.querySelector('#view-next-train .nt-board-footer');
+        if (footer) footer.classList.add('hidden');
         
         return; // HALT EXECUTION
     } else {
-        const sBtn = document.getElementById('share-app-btn');
-        if (sBtn && sBtn.closest('.border-t')) sBtn.closest('.border-t').classList.remove('hidden');
+        const footer = document.querySelector('#view-next-train .nt-board-footer');
+        if (footer) footer.classList.remove('hidden');
     }
 
     if (selectedStation === "FIND_NEAREST") {
@@ -1348,6 +1381,8 @@ export function attachLiveBoardGlobals() {
     window.checkDisruption = checkDisruption;
     window.getTripDisruptions = getTripDisruptions;
     window.isTrainExcluded = isTrainExcluded;
+    window.getTrainExclusionRule = getTrainExclusionRule;
+    window.openTrainExclusionSheet = openTrainExclusionSheet;
     window.findNextTrains = findNextTrains;
     window.currentScheduleData = currentScheduleData;
     window.populateStationList = populateStationList;

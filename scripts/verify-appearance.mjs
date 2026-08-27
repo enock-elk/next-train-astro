@@ -104,8 +104,18 @@ assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags 
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
+assert(board.includes('flex items-center justify-center space-x-2.5'), 'timetable CTA is a single centered row');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
+assert(board.includes('VIEW FULL TIMETABLE'), 'timetable label is the production all-caps row');
+assert(board.includes('id="last-updated-date"'), 'effective date element exists');
+assert(!/#view-full-timetable-btn[\s\S]{0,800}id="last-updated-date"/.test(board), 'effective date is not inside the timetable button');
+assert(!board.includes('id="share-app-btn"'), 'board footer no longer has Share App');
+assert(!board.includes('id="feedback-btn"'), 'board footer no longer has Feedback');
+
+const sidenavShare = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
+assert(sidenavShare.includes('id="settings-share-btn"'), 'Share App lives in Options');
+assert(sidenavShare.includes('id="settings-feedback-btn"'), 'Messages & Feedback stays in Options');
 
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');

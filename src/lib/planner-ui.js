@@ -1692,6 +1692,8 @@ export async function openTripMapRenderer(routeData) {
                             L.polyline(segment, {
                                 color, weight: 10, opacity: 0.8, dashArray: '10, 12',
                                 lineCap: 'round', lineJoin: 'round', className: 'disruption-line-overlay'
+                            }).on('click', () => {
+                                if (typeof window.openDisruptionModal === 'function') window.openDisruptionModal(d.id);
                             }).addTo(routeLayerGroup);
                             const midPoint = currentPath[Math.floor((start + end) / 2)];
                             if (midPoint) {
@@ -1704,6 +1706,8 @@ export async function openTripMapRenderer(routeData) {
                                 }).bindTooltip(`<b>${isCritical ? 'LINE SEVERED' : 'EXPECT DELAYS'}</b>`, {
                                     permanent: true, direction: 'top', offset: [0, -10],
                                     className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                                }).on('click', () => {
+                                    if (typeof window.openDisruptionModal === 'function') window.openDisruptionModal(d.id);
                                 }).addTo(routeLayerGroup);
                             }
                         } else if (normStations.length === 1) {
@@ -1720,6 +1724,8 @@ export async function openTripMapRenderer(routeData) {
                             }).bindTooltip(`<b>${isCritical ? 'STATION INCIDENT' : 'STATION DELAYS'}</b>`, {
                                 permanent: true, direction: 'top', offset: [0, -12],
                                 className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
+                            }).on('click', () => {
+                                if (typeof window.openDisruptionModal === 'function') window.openDisruptionModal(d.id);
                             }).addTo(routeLayerGroup);
                         }
                     });
@@ -2416,7 +2422,7 @@ export const PlannerRenderer = {
                 </div>
             `;
         } else {
-            stateBadge = `<div class="flex items-center text-sm font-bold text-blue-600 dark:text-blue-400">
+             stateBadge = `<div class="flex items-center text-xs font-bold text-blue-600 dark:text-blue-400">
                             <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             <span>${countdown}</span>
                           </div>`;
@@ -2783,7 +2789,7 @@ export const PlannerRenderer = {
                 const h = Math.floor(diff / 3600);
                 const m = Math.floor((diff % 3600) / 60);
                 // Use &lt; so innerHTML never treats "< 1" as a broken tag (garbled/CJK glyphs)
-                countdown = h > 0 ? `Departs in ${h}h ${m}m` : (m === 0 ? "Departs in &lt; 1 min" : `Departs in ${m} min`);
+                countdown = h > 0 ? `Departs in ${PlannerRenderer.formatDuration(Math.floor(diff / 60))}` : (m === 0 ? "Departs in &lt; 1 min" : `Departs in ${m} min`);
             } else { countdown = "Departed"; isDeparted = true; }
         }
         
@@ -4159,9 +4165,7 @@ export async function shareCurrentGrid() {
         day,
         origin: 'https://nexttrain.co.za',
     });
-    const destName = state.destName || (dir === 'B' ? 'destination B' : 'destination A');
-    const shareText = `Check out the ${day} schedule to ${destName}`;
-    const data = { title: 'Next Train Schedule', text: shareText, url: shareUrl };
+    const data = { url: shareUrl };
     
     try {
         if (navigator.share) {
@@ -4169,12 +4173,12 @@ export async function shareCurrentGrid() {
             trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
         } else {
             try {
-                await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+                await navigator.clipboard.writeText(shareUrl);
                 handleCopySuccess();
                 trackAnalyticsEvent('click_share', { location: 'grid_link', route_id: routeId || '' });
             } catch {
                 const textArea = document.createElement('textarea');
-                textArea.value = `${shareText}\n${shareUrl}`;
+                textArea.value = shareUrl;
                 document.body.appendChild(textArea);
                 textArea.select();
                 document.execCommand('copy');
@@ -4494,9 +4498,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
                     origin: 'https://nexttrain.co.za',
                     pathname: '/',
                 });
-                const shareText = `Trip Plan: ${fromStation} to ${toStation}.`;
-
-                const data = { title: 'Next Train Trip Plan', text: shareText, url: shareLink };
+                const data = { url: shareLink };
                 
                 const handleCopySuccess = () => {
                     if (typeof window !== 'undefined' && window.showToast) {
@@ -4510,7 +4512,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
                     if (navigator.share) await navigator.share(data); 
                     else {
                         const textArea = document.createElement('textarea');
-                        textArea.value = `${shareText} Check details here: ${shareLink}`;
+                        textArea.value = shareLink;
                         document.body.appendChild(textArea);
                         textArea.select();
                         document.execCommand('copy');

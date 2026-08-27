@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.27.6";
+export const APP_VERSION = "V8_08.27.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.27.7",
+        title: "Timetable button, Share in Options",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Timetable:</b> View full timetable has the calendar on the same line as the label.",
+            "<b>Share:</b> Share App is in Options, next to Messages & Feedback.",
+            "<b>Board:</b> Tap NO SVC on a timetable to see why that train is cancelled."
+        ]
+    },
     {
         id: "V8_08.27.6",
         title: "Timetable icon, clearer dark",

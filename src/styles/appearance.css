@@ -533,22 +533,21 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 #view-full-timetable-btn:hover {
   background-color: var(--nt-primary-hover) !important;
 }
-#view-full-timetable-btn #last-updated-date {
-  color: color-mix(in srgb, var(--nt-primary-fg) 82%, transparent) !important;
-  font-weight: 700;
-  text-align: center;
-}
 #view-full-timetable-btn {
   text-align: center;
   width: calc(100% - 0.5rem);
   margin-inline: auto;
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
 }
 #grid-trigger-container {
   padding-bottom: 1.35rem;
 }
 .nt-board-footer.mt-auto {
   padding-bottom: 1.25rem;
+}
+.nt-board-footer:not(:has(#install-app-btn:not(.hidden), #install-app-btn-planner:not(.hidden))) {
+  border-top-color: transparent;
+  padding-top: 0;
 }
 
 /* Colour pack picker (Settings) */

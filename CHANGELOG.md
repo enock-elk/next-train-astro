@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.7 — Timetable row, Share in Options, ship to lab (27 Aug 2026)
+
+- Match production **View full timetable**: calendar SVG + label on one row; effective date sits under the route pill, not inside the button.
+- Share App moves to Options (next to Messages & Feedback). Drop the duplicate Share / Feedback pair from the home and planner footers. Install stays a footer CTA when the browser is installable — not a Daily Maverick-style top chip (that fights CleverAds sticky-top and iOS has no `beforeinstallprompt`).
+- Land lab PRs: polish (URL-only timetable/planner share, Alerts card chrome, tap NO SVC, tappable map warnings) plus this themes branch (dark surfaces, admin-only train flags, 24.01 chrome, Crossmoor).
+
 ## V8_08.27.6 — Timetable SVG, admin-only train flags, dark surfaces (27 Aug 2026)
 
 - Restore the calendar SVG on **View full timetable** (`currentColor` / `--nt-primary-fg`). Keep the effective-date line under the title.
@@ -29,6 +35,15 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Earthy/Ember: more canvas vs card vs nav separation; lower saturation.
 - OG share columns follow in-app grid order; truncated sheets say so. Admin insights stay all-time.
 - Optional `PUBLIC_CARTO_API_KEY` on Voyager raster tiles (CARTO now watermarks unkeyed requests).
+
+## V8_08.27.1 — Commuter UI polish (27 Aug 2026)
+
+- Planner header Share and grid Share send `{ url }` only; clipboard copies the URL. Share App marketing copy is unchanged.
+- Alerts channel is slightly darker so white cards read as surfaces. Card header is signature (left) + Info/Warning/Critical chip (right); posted time sits above Reply. Trailing `- SIGNATURE` spans are stripped from the body.
+- `mergeUnionNotices` collapses the same notice `id` across `all` / `all_GP` / route buckets (keeps the more specific source). Optional scope label on the card. Union keys stay route ∪ region ∪ `all` — Kempton does not inherit Irene.
+- In-app grid `NO SVC` is a button that opens the advisory sheet with RTDB `reason` (fallback “No service on this day”) and expiry. PNG export stays a static span. `DEFAULT_EXCLUSIONS` remains `{}`.
+- Standalone map paints disruption chords as soon as station coords exist, then refines onto OSM tracks. Warning badges and dashed segments open a popup. Planner trip-map warnings call `openDisruptionModal`.
+- Planner Departs-in uses `text-xs font-bold` to match Total Time; countdown wording uses `formatDuration` when the wait is an hour or more.
 
 ## V8_08.26.2 — KZN Crossmoor corridor (26 Aug 2026)
 

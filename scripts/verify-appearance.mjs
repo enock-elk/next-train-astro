@@ -15,6 +15,9 @@ assert(css.includes('--nt-chrome-header-border'), 'appearance defines --nt-chrom
 assert(css.includes('--nt-chrome-nav-border'), 'appearance defines --nt-chrome-nav-border');
 assert(css.includes('#0b1f3a'), 'Classic dark header is navy ~#0b1f3a');
 assert(css.includes('#061428') || css.includes('#0d2444'), 'Classic dark nav is navy family, not gray-800');
+assert(css.includes('--nt-canvas: #07090d'), 'Classic dark canvas is near-black, not the same navy as cards');
+assert(!css.includes('--nt-canvas: #071526'), 'Classic dark no longer uses #071526 canvas');
+assert(css.includes('--nt-surface: #1a2d4a'), 'Classic dark cards are lifted navy, distinct from canvas');
 assert(css.includes('--nt-chrome-header: #1d4ed8'), 'Classic light header is blue #1d4ed8');
 assert(css.includes('--nt-chrome-nav: #163d96'), 'Classic light nav is darker blue #163d96');
 assert(css.includes('color: var(--nt-chrome-fg) !important'), 'title uses --nt-chrome-fg (white on Classic light)');
@@ -88,6 +91,25 @@ assert(prodWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }
 const exampleEnv = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 assert(exampleEnv.includes('PUBLIC_CARTO_API_KEY='), '.env.example documents PUBLIC_CARTO_API_KEY');
 assert(!exampleEnv.includes('cb1_'), '.env.example must not contain a real CARTO key');
+
+assert(css.includes('html.dark .dark\\:bg-gray-900'), 'dark gray-900 remaps as its own rule');
+assert(css.includes('html.dark .dark\\:bg-gray-800'), 'dark gray-800 remap is present');
+assert(/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,220}var\(--nt-surface\)/.test(css), 'dark gray-800 maps to surface');
+assert(/html\.dark \.dark\\:bg-gray-900,[\s\S]{0,220}var\(--nt-canvas\)/.test(css), 'dark gray-900 maps to canvas, not surface');
+assert(!/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,80}html\.dark \.dark\\:bg-gray-900/.test(css), 'gray-800 and gray-900 remaps are split');
+assert(css.includes('#alerts-channel-card'), 'alerts sheet card uses canvas');
+assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
+assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
+assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
+
+const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
+assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
+assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
+assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
+
+const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
+assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');
+assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()'), 'flags skipped unless admin authed');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

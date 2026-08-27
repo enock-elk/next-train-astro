@@ -67,18 +67,19 @@ html[data-colour-pack="classic"].dark {
   --nt-primary-hover: #60a5fa;
   --nt-primary-fg: #ffffff;
   --nt-primary-soft: rgba(11, 31, 58, 0.55);
-  --nt-canvas: #071526;
-  --nt-surface: #123056;
-  --nt-surface-muted: #0a1c34;
+  /* Near-black canvas; navy cards sit above it. Header/nav stay Classic blue. */
+  --nt-canvas: #07090d;
+  --nt-surface: #1a2d4a;
+  --nt-surface-muted: #101827;
   --nt-chrome-header: #0b1f3a;
   --nt-chrome-header-border: #163258;
   --nt-chrome-nav: #061428;
   --nt-chrome-nav-border: #163258;
-  --nt-chrome-fg: #60a5fa;
-  --nt-chrome-muted: #93c5fd;
+  --nt-chrome-fg: #93c5fd;
+  --nt-chrome-muted: #9fb4cc;
   --nt-text: #e8eef6;
   --nt-text-muted: #9fb0c8;
-  --nt-border: #1e3a5f;
+  --nt-border: #2a3d5c;
   --nt-theme-meta: #0b1f3a;
 }
 
@@ -151,8 +152,8 @@ html[data-colour-pack="midnight"].dark {
   --nt-primary-hover: #bae6fd;
   --nt-primary-fg: #0c4a6e;
   --nt-primary-soft: rgba(12, 74, 110, 0.4);
-  --nt-canvas: #070d16;
-  --nt-surface: #152033;
+  --nt-canvas: #080b11;
+  --nt-surface: #1a2538;
   --nt-surface-muted: #101826;
   --nt-chrome-header: #0e1726;
   --nt-chrome-header-border: #1e2c42;
@@ -268,9 +269,9 @@ html[data-colour-pack="signal"].dark {
   --nt-primary-hover: #a7f3d0;
   --nt-primary-fg: #022c22;
   --nt-primary-soft: rgba(6, 78, 59, 0.4);
-  --nt-canvas: #04150f;
-  --nt-surface: #0c2a20;
-  --nt-surface-muted: #082018;
+  --nt-canvas: #050e0b;
+  --nt-surface: #143328;
+  --nt-surface-muted: #0a1c16;
   --nt-chrome-header: #0a241b;
   --nt-chrome-header-border: #164233;
   --nt-chrome-nav: #0d2c22;
@@ -322,9 +323,9 @@ html[data-colour-pack="ember"].dark {
   --nt-primary-hover: #d4a888;
   --nt-primary-fg: #1c1612;
   --nt-primary-soft: rgba(80, 56, 36, 0.45);
-  --nt-canvas: #1c1815;
-  --nt-surface: #2e2823;
-  --nt-surface-muted: #25201c;
+  --nt-canvas: #100e0c;
+  --nt-surface: #322c26;
+  --nt-surface-muted: #1c1916;
   --nt-chrome-header: #352e28;
   --nt-chrome-header-border: #4a4038;
   --nt-chrome-nav: #0c0b0a;
@@ -392,9 +393,9 @@ html[data-colour-pack="earthy"].dark {
   --nt-primary-hover: #ccc8ba;
   --nt-primary-fg: #1c1b18;
   --nt-primary-soft: rgba(107, 112, 92, 0.28);
-  --nt-canvas: #1a1916;
-  --nt-surface: #2c2a26;
-  --nt-surface-muted: #24221e;
+  --nt-canvas: #0f0f0d;
+  --nt-surface: #2e2c27;
+  --nt-surface-muted: #1c1b18;
   --nt-chrome-header: #32302b;
   --nt-chrome-header-border: #4a4640;
   --nt-chrome-nav: #0e0d0c;
@@ -812,13 +813,17 @@ html, body {
 }
 
 html.dark .dark\:bg-gray-800,
-html.dark .dark\:bg-gray-900,
 html.dark .dark\:bg-gray-800\/80,
 html.dark .dark\:bg-gray-800\/50,
+html.dark .dark\:bg-gray-800\/95 {
+  background-color: var(--nt-surface) !important;
+}
+
+html.dark .dark\:bg-gray-900,
 html.dark .dark\:bg-gray-900\/50,
 html.dark .dark\:bg-gray-900\/95,
 html.dark .dark\:bg-gray-950\/40 {
-  background-color: var(--nt-surface) !important;
+  background-color: var(--nt-canvas) !important;
 }
 
 .border-gray-100,
@@ -853,10 +858,30 @@ html.dark .dark\:text-gray-200 {
   background-color: color-mix(in srgb, var(--nt-accent, var(--nt-primary)) 14%, var(--nt-surface)) !important;
 }
 
-#sidenav,
-#alerts-channel {
+#sidenav {
   background-color: var(--nt-surface) !important;
   color: var(--nt-text);
+}
+
+#alerts-channel,
+#alerts-channel-card {
+  background-color: var(--nt-canvas) !important;
+  color: var(--nt-text);
+}
+#alerts-channel header {
+  background-color: var(--nt-surface) !important;
+}
+.nt-alert-card {
+  background-color: var(--nt-surface) !important;
+  border-color: var(--nt-border);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 22%, transparent), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+}
+
+.nt-train-flag {
+  display: none !important;
+}
+html[data-admin-authed="1"] .nt-train-flag {
+  display: inline-block !important;
 }
 
 #route-selector-pill,
@@ -902,5 +927,5 @@ html[data-colour-pack="classic"] .bottom-nav-item.is-active {
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: rgba(96, 165, 250, 0.16);
+  background: rgba(147, 197, 253, 0.16);
 }

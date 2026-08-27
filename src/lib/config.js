@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.27.5";
+export const APP_VERSION = "V8_08.27.6";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.27.6",
+        title: "Timetable icon, clearer dark",
+        date: "27 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Timetable:</b> View full timetable has the calendar icon back.",
+            "<b>Dark:</b> The page sits behind the cards, so boards and planner fields lift off the background.",
+            "<b>Alerts:</b> Notice cards sit on a darker sheet so each post is easy to pick out."
+        ]
+    },
     {
         id: "V8_08.27.5",
         title: "Welcome stays clear",

@@ -27,6 +27,7 @@ import {
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 import { trainGoingLabel, timetableWhereLabel } from './train-ghosts.js';
+import { isAdminAuthed } from './admin-chrome.js';
 
 /** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
 export let DELAY_REPORTS_UI_ENABLED = false;
@@ -459,7 +460,7 @@ export function buildTrainTitleReportButton({
     routeId, trainId, scheduledTime, arrivalTime, station, destination,
     className = '',
 }) {
-    if (!isDelayReportsUiEnabled(routeId)) {
+    if (!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()) {
         return `<span class="${className}"><span class="truncate">${escapeHTML(label)}</span></span>`;
     }
     const attrs = [

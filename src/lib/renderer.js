@@ -44,6 +44,19 @@ const getCurrentDayIndex = () => typeof window !== 'undefined' && window.current
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
 const isTrainExcluded = (train, route, day) => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day) : false;
 
+function firstTrainDayBit(dayName) {
+    const name = String(dayName || 'Tomorrow');
+    return name === 'Tomorrow' ? 'tomorrow' : `on ${name}`;
+}
+
+function emptyBoardHeadline(kind, dayName, departureTime) {
+    const dayBit = firstTrainDayBit(dayName);
+    const timeBit = departureTime ? ` ${departureTime}` : '';
+    if (kind === 'weekend') return `No weekend service · first ${dayBit}${timeBit}`;
+    if (kind === 'noservice') return `No service today · first ${dayBit}${timeBit}`;
+    return `No more trains today · first ${dayBit}${timeBit}`;
+}
+
 export const Renderer = {
 
     // --- 1. DYNAMIC MENU GENERATION ---
@@ -348,14 +361,15 @@ export const Renderer = {
         const safeDestForClick = escapeHTML(destination).replace(/&#39;/g, "\\'");
         const buttonHTML = `<button onclick="window.openScheduleModal('${safeDestForClick}', '${nextDayInfo.type}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${nextDayInfo.name} Schedule</button>`;
 
-        let dayText = nextDayInfo.name;
-        if (dayText !== "Tomorrow") dayText = `on ${dayText}`;
+        const firstTime = firstNextTrain
+            ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
+            : '';
+        const headline = emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
 
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
-                <div class="text-sm font-bold text-red-600 dark:text-red-400">No weekend service</div>
+                <div class="text-sm font-bold text-red-600 dark:text-red-400 text-center px-2 leading-snug">${headline}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">This route does not run on Saturdays</p>
-                <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-2">First train ${dayText} is at:</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     ${timeHTML}
                 </div>
@@ -388,8 +402,10 @@ export const Renderer = {
         const safeDestForClick = escapeHTML(destination).replace(/&#39;/g, "\\'");
         const buttonHTML = `<button onclick="window.openScheduleModal('${safeDestForClick}', '${nextDayInfo.type}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">Check ${nextDayInfo.name} Schedule</button>`;
 
-        let dayText = nextDayInfo.name;
-        if (dayText !== "Tomorrow") dayText = `on ${dayText}`;
+        const firstTime = firstNextTrain
+            ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
+            : '';
+        const headline = emptyBoardHeadline('noservice', nextDayInfo.name, firstTime);
 
         // --- GUARDIAN PHASE 4: CROSS-CORRIDOR LIVE BOARD DISRUPTION EVALUATOR ---
         let disruptionHtml = '';
@@ -437,9 +453,8 @@ export const Renderer = {
 
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
-                <div class="text-sm font-bold text-gray-600 dark:text-gray-400">No service today</div>
+                <div class="text-sm font-bold text-gray-600 dark:text-gray-400 text-center px-2 leading-snug">${headline}</div>
                 ${disruptionHtml}
-                <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-1">First train ${dayText} is at:</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     ${timeHTML}
                 </div>
@@ -460,10 +475,8 @@ export const Renderer = {
         if (tryPatchLiveBoardCountdown(element, nextKey, timeDiffStr)) return;
         
         const safeDest = escapeHTML(destination);
-        const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
-
-        let dayText = dayName;
-        if (dayText !== "Tomorrow") dayText = `on ${dayText}`;
+        const safeDestForClick = safeDest.replace(/&#39;/g, "\\'");
+        const headline = emptyBoardHeadline('none', dayName, departureTime);
 
         // --- GUARDIAN PHASE 4: CROSS-CORRIDOR LIVE BOARD DISRUPTION EVALUATOR ---
         let disruptionHtml = '';
@@ -511,9 +524,8 @@ export const Renderer = {
 
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div class="text-sm font-bold text-gray-600 dark:text-gray-400">No more trains today</div>
+                <div class="text-sm font-bold text-gray-600 dark:text-gray-400 text-center px-2 leading-snug">${headline}</div>
                 ${disruptionHtml}
-                <p class="text-[10px] text-gray-400 dark:text-gray-50 mt-1">First train ${dayText} is at:</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     <div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div>
                     <div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>

@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.27.8 — Empty-board one-liner, modal nav clearance, map chrome (27 Aug 2026)
+
+- Merge “No more trains today” / “First train tomorrow is at:” into one line (`No more trains today · first tomorrow 04:49`). Same phrasing on no-service and no-weekend empty states.
+- “Trains near you” only after allowlisted admin auth (`isAdminAuthed` + CSS). Not in What’s New.
+- Messages thread: paperclip (same Storage upload as the form) and optional email/WhatsApp contact. Keep the long form for About → In-app message.
+- Map: Back / GP / theme / Network Lines share 2.25rem height and pack tokens (`--nt-surface`, `--nt-text`). Network Lines is a `map-chrome-btn`.
+- About: drop sticky-bar blur + logo glow; Unofficial & Independent pill uses surface + strong text.
+- Non-fullscreen modals: raise `#schedule-modal` / `#notice-modal` / `#redirect-modal` above `#bottom-nav` (z-110) and pad cards `4.5rem + safe-area` so lists are not under the bar.
+
 ## V8_08.27.7 — Timetable row, Share in Options, ship to lab (27 Aug 2026)
 
 - Match production **View full timetable**: calendar SVG + label on one row; effective date sits under the route pill, not inside the button.

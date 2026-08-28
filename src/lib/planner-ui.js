@@ -79,46 +79,6 @@ function plannerIcon(name, className = 'w-4 h-4') {
     return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
-const PLANNER_VIEWPORT_DEFAULT = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content';
-const PLANNER_VIEWPORT_NO_ZOOM = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content';
-let plannerViewportUnlockTimer = 0;
-
-function plannerViewportMeta() {
-    return typeof document !== 'undefined' ? document.querySelector('meta[name="viewport"]') : null;
-}
-
-/** iOS zooms into focused fields and often never restores. Lock before focus (touchstart). */
-function lockPlannerInputZoom() {
-    const meta = plannerViewportMeta();
-    if (!meta) return;
-    if (plannerViewportUnlockTimer) {
-        clearTimeout(plannerViewportUnlockTimer);
-        plannerViewportUnlockTimer = 0;
-    }
-    meta.setAttribute('content', PLANNER_VIEWPORT_NO_ZOOM);
-}
-
-function unlockPlannerInputZoom() {
-    const meta = plannerViewportMeta();
-    if (!meta) return;
-    if (plannerViewportUnlockTimer) clearTimeout(plannerViewportUnlockTimer);
-    plannerViewportUnlockTimer = setTimeout(() => {
-        plannerViewportUnlockTimer = 0;
-        const active = typeof document !== 'undefined' ? document.activeElement : null;
-        const tag = active && active.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-        meta.setAttribute('content', PLANNER_VIEWPORT_DEFAULT);
-    }, 320);
-}
-
-function bindPlannerInputZoomGuard(el) {
-    if (!el || el.dataset.ntZoomGuard === '1') return;
-    el.dataset.ntZoomGuard = '1';
-    el.addEventListener('touchstart', lockPlannerInputZoom, { passive: true });
-    el.addEventListener('focus', lockPlannerInputZoom);
-    el.addEventListener('blur', unlockPlannerInputZoom);
-}
-
 function openPlannerFareModal(routeId) {
     const id = String(routeId || '').trim();
     if (!id) return;
@@ -814,6 +774,40 @@ function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     if (value === 'sunday') return 'Sunday';
     return 'Weekday (Mon-Fri)';
 }
+
+/** Keep an inline planner list inside the visible viewport and above the bottom nav. */
+function positionDropdownAroundTrigger(list, trigger, maxHeight = 240) {
+    if (!list || !trigger || list.classList.contains('hidden')) return;
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const viewportTop = vv?.offsetTop || 0;
+    let viewportBottom = viewportTop + (vv?.height || window.innerHeight || document.documentElement.clientHeight);
+    const triggerRect = trigger.getBoundingClientRect();
+    const nav = document.getElementById('bottom-nav');
+    if (nav && !nav.classList.contains('hidden')) {
+        const navRect = nav.getBoundingClientRect();
+        if (navRect.height > 0 && navRect.top > triggerRect.bottom) {
+            viewportBottom = Math.min(viewportBottom, navRect.top);
+        }
+    }
+
+    const gap = 8;
+    const below = Math.max(0, viewportBottom - triggerRect.bottom - gap);
+    const above = Math.max(0, triggerRect.top - viewportTop - gap);
+    const wanted = Math.min(maxHeight, list.scrollHeight || maxHeight);
+    const openAbove = below < Math.min(wanted, 144) && above > below;
+    const available = openAbove ? above : below;
+    list.style.maxHeight = `${Math.max(72, Math.min(maxHeight, available))}px`;
+    list.style.bottom = 'auto';
+    list.style.marginTop = '0';
+
+    const parentRect = list.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
+    const top = openAbove
+        ? triggerRect.top - parentRect.top - list.offsetHeight - gap
+        : triggerRect.bottom - parentRect.top + gap;
+    list.style.top = `${Math.round(top)}px`;
+}
+
 export let plannerPulse = null; 
 export let plannerExpandedState = new Set(); 
 export let tripMapInstance = null;
@@ -948,6 +942,10 @@ export function toggleMainDayDropdown(e) {
             if (chevron) chevron.classList.remove('rotate-180');
         }
     }
+    const list = document.getElementById('main-day-list');
+    if (list && !list.classList.contains('hidden')) {
+        requestAnimationFrame(() => positionDropdownAroundTrigger(list, list.previousElementSibling, 256));
+    }
 }
 
 /** Single-button travel-day date sheet (replaces the second native date field). */
@@ -990,7 +988,6 @@ function openPlannerDateSheet() {
     }
     const inp = document.getElementById('planner-date-sheet-input');
     if (inp) {
-        bindPlannerInputZoomGuard(inp);
         if (selectedPlannerDate) inp.value = selectedPlannerDate;
         else {
             const t = new Date();
@@ -3537,6 +3534,7 @@ export function setupAutocomplete(inputId, selectId) {
         }
 
         list.classList.remove('hidden');
+        requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     };
 
     input.addEventListener('input', () => { 
@@ -3546,13 +3544,15 @@ export function setupAutocomplete(inputId, selectId) {
     });
     
     input.addEventListener('focus', () => {
-        lockPlannerInputZoom();
-        // iOS stays zoomed if we select() the field. Desktop still selects for quick replace.
-        const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-        if (!coarse) input.select();
+        input.select();
         renderList('');
     });
-    bindPlannerInputZoomGuard(input);
+
+    window.visualViewport?.addEventListener('resize', () => {
+        if (!list.classList.contains('hidden')) {
+            positionDropdownAroundTrigger(list, input, 240);
+        }
+    }, { passive: true });
     
     chevron.addEventListener('click', (e) => { 
         e.stopPropagation(); 

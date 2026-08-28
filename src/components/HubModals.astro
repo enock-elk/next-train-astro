@@ -15,7 +15,7 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div class="p-6 pb-8 overflow-y-auto flex-grow space-y-5 custom-scrollbar min-h-0">
+        <div id="feedback-modal-scroll" data-feedback-scroll class="p-6 pb-8 overflow-y-auto flex-grow space-y-5 custom-scrollbar min-h-0">
             <div id="feedback-reply-context" class="hidden"></div>
             <div id="feedback-type-wrap">
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">What's on your mind?</label>
@@ -505,6 +505,19 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <style is:global>
+  #feedback-modal,
+  #messages-thread-modal {
+    top: var(--nt-feedback-vv-top, 0px);
+    bottom: auto;
+    height: var(--nt-feedback-vv-height, 100dvh);
+  }
+  #feedback-modal > div {
+    max-height: calc(var(--nt-feedback-vv-height, 100dvh) - 2rem);
+  }
+  #messages-thread-modal > div {
+    height: min(calc(var(--nt-feedback-vv-height, 100dvh) - 2rem), 40rem);
+    max-height: calc(var(--nt-feedback-vv-height, 100dvh) - 2rem);
+  }
   #messages-thread-modal .inbox-row,
   #feedback-panel .inbox-row {
     display: flex;

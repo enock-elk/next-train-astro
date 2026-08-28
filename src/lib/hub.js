@@ -128,12 +128,64 @@ function autosizeMessagesThreadInput() {
     const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
     const minH = Math.max(44, line + pad);
     const maxByRows = (10 * line) + pad;
-    const maxByVp = Math.round(window.innerHeight * 0.35);
+    const maxByVp = Math.round((window.visualViewport?.height || window.innerHeight) * 0.35);
     const maxH = Math.max(minH, Math.min(maxByRows, maxByVp));
     el.style.height = 'auto';
     const next = Math.min(Math.max(el.scrollHeight, minH), maxH);
     el.style.height = `${next}px`;
     el.style.overflowY = el.scrollHeight > maxH + 1 ? 'auto' : 'hidden';
+}
+
+const COMMUTER_FEEDBACK_MODAL_IDS = ['feedback-modal', 'messages-thread-modal'];
+let feedbackViewportBound = false;
+
+function keepFeedbackFieldVisible(field) {
+    if (!field?.closest?.('#feedback-modal, #messages-thread-modal')) return;
+    const scroller = field.closest('[data-feedback-scroll]');
+    if (!scroller) return;
+    const fieldRect = field.getBoundingClientRect();
+    const scrollRect = scroller.getBoundingClientRect();
+    const pad = 12;
+    if (fieldRect.bottom > scrollRect.bottom - pad) {
+        scroller.scrollTop += fieldRect.bottom - scrollRect.bottom + pad;
+    } else if (fieldRect.top < scrollRect.top + pad) {
+        scroller.scrollTop -= scrollRect.top - fieldRect.top + pad;
+    }
+}
+
+/** Size commuter feedback overlays to the viewport left above the software keyboard. */
+function syncFeedbackModalViewport() {
+    if (typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
+    const top = Math.max(0, Math.round(vv?.offsetTop || 0));
+    COMMUTER_FEEDBACK_MODAL_IDS.forEach((id) => {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
+        modal.style.setProperty('--nt-feedback-vv-top', `${top}px`);
+    });
+}
+
+function bindFeedbackViewportHandling() {
+    if (feedbackViewportBound || typeof document === 'undefined') return;
+    feedbackViewportBound = true;
+    const update = () => {
+        syncFeedbackModalViewport();
+        const active = document.activeElement;
+        if (active?.closest?.('#feedback-modal, #messages-thread-modal')) {
+            requestAnimationFrame(() => keepFeedbackFieldVisible(active));
+        }
+    };
+    window.addEventListener('resize', update, { passive: true });
+    window.visualViewport?.addEventListener('resize', update, { passive: true });
+    window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    document.addEventListener('focusin', (event) => {
+        if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal')) return;
+        syncFeedbackModalViewport();
+        setTimeout(() => keepFeedbackFieldVisible(event.target), 80);
+    });
+    syncFeedbackModalViewport();
 }
 
 function checkFeedbackRate() {
@@ -220,6 +272,7 @@ export function openFeedbackReplyFromOverlay(returnModalId, replyOpts = {}) {
     trackAlertEvent('open_feedback_modal', {
         location: returnModalId === 'developer-reply-modal' ? 'admin_inbox_reply' : 'alert_reply',
     });
+    syncFeedbackModalViewport();
     openSmoothModal('feedback-modal');
 }
 
@@ -230,6 +283,7 @@ export function openFeedbackModal({ location = 'unknown', skipClear = false } = 
         restoreFeedbackReturnOverlay();
     }
     trackAlertEvent('open_feedback_modal', { location });
+    syncFeedbackModalViewport();
     openSmoothModal('feedback-modal');
 }
 
@@ -1009,6 +1063,7 @@ export async function openMessagesThread() {
     if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
     paintThreadContactRow();
     setTimeout(() => {
+        syncFeedbackModalViewport();
         openSmoothModal('messages-thread-modal');
         autosizeMessagesThreadInput();
     }, 50);
@@ -1796,6 +1851,7 @@ export function initHub() {
     document.getElementById('settings-app-version')?.addEventListener('click', openChangelog);
 
     // Feedback (live board CTA + Settings Support row)
+    bindFeedbackViewportHandling();
     const openFeedback = async (e) => {
         e?.preventDefault?.();
         e?.stopPropagation?.();

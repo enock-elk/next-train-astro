@@ -40,13 +40,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 <html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
     <script is:inline>
       (function () {
         var root = document.documentElement;
         var lastSys = -1;
         var lastH = -1;
-        var lastLayoutH = 0;
         function markStandalone() {
           var on = false;
           try {
@@ -91,16 +90,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var gap = Math.max(0, inner - vh - off);
           var keyboard = gap > 140;
           var env = envBottom();
-          // Layout height — never follow the visual viewport. Android Chrome
-          // shrinks visualViewport for the keyboard; if --nt-app-h follows it,
-          // the oval rides up and a white slab sits on the keys.
-          var h = Math.max(inner, client) || inner || vh || 240;
-          if (!keyboard) {
-            lastLayoutH = h;
-          } else if (lastLayoutH > h) {
-            h = lastLayoutH;
-          }
-          if (h < 240) h = lastLayoutH || inner || vh || 240;
+          // Let the app follow the visible viewport while the keyboard is open.
+          // Keeping the old layout height hid focused fields and dropdown choices.
+          var h = keyboard
+            ? Math.min(vh, client || vh)
+            : Math.min(inner || client, client || inner || vh);
+          if (h < 240) h = vh || inner || client || 240;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
@@ -672,9 +667,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow: hidden;
       }
 
-      /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen.
-         --nt-app-h is layout height (not visualViewport) so the keyboard overlays the oval
-         instead of lifting it. Do not pad a tray under the floating pill. */
+      /* Viewport frame: only #app-scroll moves. While typing, --nt-app-h follows
+         the visible viewport so focused controls are not hidden by the keyboard.
+         Do not pad a tray under the floating pill. */
       #nt-shell {
         height: var(--nt-app-h, 100dvh) !important;
         max-height: var(--nt-app-h, 100dvh) !important;

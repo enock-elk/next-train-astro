@@ -100,7 +100,9 @@ assert(welcome.includes('later in Options'), 'Welcome copy points at Options, no
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
-assert(plannerUi.includes('interactive-widget=overlays-content'), 'planner zoom lock keeps overlays-content on the viewport meta');
+assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
+assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
+assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
 assert(plannerUi.includes('savePlannerHistory(origin, dest)'), 'recents persist when a plan starts');
 assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared station alias resolver');
@@ -208,6 +210,8 @@ assert(hubModals.includes('aria-label="Privacy Policy"'), 'privacy control is th
 }
 assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub');
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
+assert(hubModals.includes('data-feedback-scroll'), 'long feedback form has its own keyboard-safe scroller');
+assert(hubModals.includes('--nt-feedback-vv-height'), 'feedback overlays use visible viewport height');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
@@ -268,6 +272,9 @@ assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Se
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
+assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
+assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
+assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');
 assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
 assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');
 assert(hubJs.includes('resetLookToClassicLight'), 'Check for Updates resets look to Classic light');
@@ -284,8 +291,9 @@ assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #botto
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
-assert(layout.includes('interactive-widget=overlays-content'), 'keyboard overlays the layout instead of resizing it');
-assert(layout.includes('lastLayoutH'), 'keyboard keeps the last layout height');
+assert(!layout.includes('interactive-widget=overlays-content'), 'keyboard can resize the visible app viewport');
+assert(!layout.includes('lastLayoutH'), 'keyboard does not keep a stale full-screen layout height');
+assert(layout.includes('? Math.min(vh, client || vh)'), 'keyboard height follows visualViewport');
 assert(layout.includes('classList.toggle(\'nt-keyboard\''), 'keyboard class is stamped on html');
 assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tray pad under the pill');
 assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');

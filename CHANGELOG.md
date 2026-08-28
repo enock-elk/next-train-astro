@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.6 — Network Lines SVG; isolate a corridor; Avoca→Duff’s Road (28 Aug 2026)
+
+- Network Lines is a square SVG chrome button (same height as WC / theme). The list still opens from that control. Tap a corridor to hide every other polyline and station; tap it again to show the full network.
+- Back sits in the same top flex row as WC / theme / Network Lines (`--map-chrome-h: 2.25rem`, no extra vertical padding) so it cannot outgrow those buttons.
+- KZN Bridge City paint order: Durban … Avoca → Duff’s Road. Temple / Kenville / Effingham are coordinate-only ghosts (no train times) and are not drawn between them. Planner OSM hops that stray >600 m from a station-to-station chord fall back to the chord.
+
 ## V9_08.28.5 — Map station-order lines; CARTO on map layout; map chrome (28 Aug 2026)
 
 - Network map paints each route as consecutive stations in `STATIC_ROUTE_PATHS` / timetable order. OSM may only fill the hop between station *i* and *i+1*; a hop that skips another stop or detours too far falls back to the station chord. Baked GeoJSON is used only if stations appear along it in that order.

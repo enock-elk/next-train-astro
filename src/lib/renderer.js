@@ -56,6 +56,13 @@ function emptyBoardHeadline(kind, dayName, _departureTime) {
     return `No more trains today · first ${dayBit}:`;
 }
 
+/** What's New copy must read as human: no em/en dashes. */
+export function sanitizeWhatsNewText(html) {
+    return String(html || '')
+        .replace(/\u2014/g, ' - ')
+        .replace(/\u2013/g, '-');
+}
+
 export const Renderer = {
 
     // --- 1. DYNAMIC MENU GENERATION ---
@@ -1121,8 +1128,9 @@ export const Renderer = {
         return Renderer._toTitleCase(name);
     },
 
-    // Public What's New list. Renders every CHANGELOG_DATA entry — commuter-visible
-    // benefits only. Never inject admin, Dev Hub, or internal / IP notes here.
+    // Public What's New list. Renders CHANGELOG_DATA. Commuter-visible
+    // benefits only. Never inject admin, Dev Hub, Alerts, Trains near me,
+    // community chat, or other hidden-test copy here.
     renderChangelogModal: (changelogData) => {
         if (typeof document === 'undefined') return;
         const sidenav = document.getElementById('sidenav');
@@ -1170,9 +1178,9 @@ export const Renderer = {
                     const isLatest = index === 0;
                     const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
                     const titleHtml = entry.title
-                        ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${entry.title}</span>`
+                        ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${sanitizeWhatsNewText(entry.title)}</span>`
                         : '';
-                    const features = (entry.features || []).slice(0, 5);
+                    const features = (entry.features || []).slice(0, 5).map(sanitizeWhatsNewText);
                     listContainer.innerHTML += `
                         <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
                             ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}

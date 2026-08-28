@@ -11,18 +11,31 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.5', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V9_08.28.5' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.5');
-assert(CHANGELOG_DATA[1].id === 'V9_08.28.4', 'keep V9_08.28.4 as the previous What’s New card');
-assert(CHANGELOG_DATA[2].id === 'V9_08.28.3', 'keep V9_08.28.3 in What’s New');
-assert(CHANGELOG_DATA[3].id === 'V9_08.28.2', 'keep V9_08.28.2 in What’s New');
-assert(CHANGELOG_DATA[4].id === 'V9_08.28.1', 'keep V9_08.28.1 in What’s New');
-assert(CHANGELOG_DATA[5].id === 'V8_08.18.1', 'keep V8_08.18.1 in What’s New');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('station to station')), 'V9_08.28.5 What’s New mentions station-order map lines');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Network Lines')), 'V9_08.28.5 What’s New mentions Network Lines button');
+assert(APP_VERSION === 'V9_08.28.7', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V9_08.28.7' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.7');
+assert(CHANGELOG_DATA[1].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
+assert(CHANGELOG_DATA[2].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
+assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V9_08.28.3'].includes(e.id)), 'folded 28.6–28.3 out of What’s New');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
+assert(CHANGELOG_DATA[1].features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');
+assert(CHANGELOG_DATA[1].features.some((f) => f.includes('oval bar')), 'folded 28.2 card still mentions floating tabs');
 assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');
+assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card is gone from What’s New');
+{
+    const hidden = /alert|the bell|hold to react|trains near|i['’]m on it|community chat|route chat|live location|ride sharing|firebase|global state/i;
+    const dash = /[\u2014\u2013]/;
+    const emoji = /\p{Extended_Pictographic}/u;
+    for (const entry of CHANGELOG_DATA) {
+        const blob = [entry.title, ...(entry.features || [])].join('\n');
+        assert(!hidden.test(blob), `What’s New ${entry.id} has no hidden-test copy`);
+        assert(!dash.test(blob), `What’s New ${entry.id} has no em/en dashes`);
+        assert(!emoji.test(blob), `What’s New ${entry.id} has no emoji`);
+    }
+}
+assert(readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8').includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');

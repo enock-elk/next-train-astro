@@ -89,10 +89,56 @@ assert(
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('"NDABENI", "PINELANDS", "HAZENDAL"'), 'Cape Flats static path is Ndabeni then Pinelands then Hazendal');
+assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line is Avoca then Duff\'s Road');
+assert(!mapApp.includes('"AVOCA", "TEMPLE"'), 'Avoca is not followed by Temple');
 assert(mapApp.includes('applyCanonicalStationOrder(route.id, validStops, routeCoords)'), 'every drawn route is reordered before paint');
 assert(mapApp.includes('railHopSkipsRouteStop(graph, nodePath, stops, i)'), 'OSM hop skip check is wired');
+assert(mapApp.includes('railHopStraysFromChord(graph, nodePath, a, b)'), 'OSM hops cannot stray off the station chord');
+assert(mapApp.includes('function applySelectedLine'), 'Network Lines rows isolate one corridor');
+assert(mapApp.includes('function setSelectedLine'), 'line filter can reset without toggling');
+assert(mapApp.includes('function fitNetworkView'), 'Show all lines restores the full network bounds');
+assert(mapApp.includes('legend-show-all'), 'legend has an explicit Show all lines row');
+assert(mapApp.includes("back.setAttribute('data-href'"), 'Back navigates via data-href on a button');
+assert(mapApp.includes('function stationPopupHtml'), 'station popup lists corridors under the name');
+assert(mapApp.includes('map-popup-route'), 'station popup rows use map-popup-route');
 assert(mapApp.includes('pathVisitsStopsInOrder(baked, stops)'), 'baked GeoJSON must follow station order');
 assert(mapApp.includes('return chords;'), 'fallback paint is station-to-station chords');
+
+const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
+assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
+
+function escapeMapHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+function stationPopupHtml(origName, routeSet, routes) {
+    const title = escapeMapHtml(String(origName || '').replace(/ STATION/gi, ''));
+    const ids = routeSet instanceof Set ? [...routeSet] : [...(routeSet || [])];
+    const rows = [];
+    const seen = new Set();
+    (routes || []).forEach((item) => {
+        if (!item || !ids.includes(item.routeId) || seen.has(item.routeId)) return;
+        seen.add(item.routeId);
+        const label = escapeMapHtml(String(item.name || item.routeId));
+        const color = item.color || '#64748b';
+        rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:${color}"></span>${label}</div>`);
+    });
+    ids.forEach((rid) => {
+        if (seen.has(rid)) return;
+        rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:#64748b"></span>${escapeMapHtml(rid)}</div>`);
+    });
+    const list = rows.length ? `<div class="map-popup-routes">${rows.join('')}</div>` : '';
+    return `<div class="map-popup-station"><b class="map-popup-name">${title}</b>${list}</div>`;
+}
+const clairwood = stationPopupHtml('CLAIRWOOD', new Set(['kzn-umlazi', 'kzn-winklespruit']), [
+    { routeId: 'kzn-umlazi', name: 'Durban <-> Umlazi', color: '#ef4444' },
+    { routeId: 'kzn-winklespruit', name: 'Durban <-> Winklespruit', color: '#3b82f6' },
+    { routeId: 'kzn-bridgecity', name: 'Berea Road <-> Bridge City', color: '#22c55e' }
+]);
+assert(clairwood.includes('CLAIRWOOD') && clairwood.includes('map-popup-name'), 'popup title is the station name');
+assert(clairwood.includes('Durban &lt;-&gt; Umlazi') && clairwood.includes('Durban &lt;-&gt; Winklespruit'), 'popup lists every corridor that stops there');
+assert(!clairwood.includes('Bridge City'), 'popup omits corridors that do not stop there');
 
 if (failures.length) {
     console.error('verify-map-lines failed:');

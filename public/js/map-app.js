@@ -313,7 +313,7 @@
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
-            'kzn-bridgecity': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "TEMPLE", "KENVILLE", "EFFINGHAM", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU", "BRIDGE CITY"],
+            'kzn-bridgecity': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU", "BRIDGE CITY"],
             'kzn-winklespruit': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "PELGRIM", "ISIPINGO", "UMBOGINTWINI", "PAHLA", "AMANZIMTOTI", "DOONSIDE", "WARNER BEACH", "WINKLESPRUIT"],
             'kzn-catoridge': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "MOUNT VERNON", "CAVENDISH", "BURLINGTON", "SHALLCROSS", "KLAARWATER", "MARIANNHILL", "THORNWOOD", "SITUNDU HILLS", "DASSENHOEK", "KWANDENGEZI", "DELVILLE WOOD", "NSHONGWENI", "CLIFFDALE", "HAMMARSDALE", "KWATANDAZA", "GEORGEDALE", "CATO RIDGE"],
             'kzn-pinetown': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "SEA VIEW", "BELLAIR", "POET'S CORNER", "MALVERN", "ESCOMBE", "NORTHDENE", "MOSELEY", "GLEN PARK", "SARNIA", "PINETOWN"],
@@ -333,6 +333,8 @@
         const RAIL_HOP_DETOUR_MIN_M = 900;
         /** If a hop's rail path passes another stop on this route, it skipped the order. */
         const RAIL_SKIP_STATION_M = 90;
+        /** Reject an OSM hop that leaves the station-to-station corridor. */
+        const RAIL_HOP_STRAY_M = 600;
 
         function railHaversineM(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -423,6 +425,34 @@
             return railM > Math.max(chordM * RAIL_HOP_DETOUR_RATIO, chordM + RAIL_HOP_DETOUR_MIN_M);
         }
 
+        function pointToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon) {
+            const lat0 = ((aLat + bLat) / 2) * Math.PI / 180;
+            const toXY = (lat, lon) => [
+                lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
+                lat * Math.PI / 180 * 6371000
+            ];
+            const [pX, pY] = toXY(pLat, pLon);
+            const [aX, aY] = toXY(aLat, aLon);
+            const [bX, bY] = toXY(bLat, bLon);
+            const abx = bX - aX;
+            const aby = bY - aY;
+            const len2 = abx * abx + aby * aby;
+            if (len2 < 1) return Math.hypot(pX - aX, pY - aY);
+            let t = ((pX - aX) * abx + (pY - aY) * aby) / len2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(pX - (aX + t * abx), pY - (aY + t * aby));
+        }
+
+        function railHopStraysFromChord(graph, nodePath, a, b, maxM = RAIL_HOP_STRAY_M) {
+            if (!graph || !nodePath || nodePath.length < 3 || !a || !b) return false;
+            for (let k = 1; k < nodePath.length - 1; k++) {
+                const n = graph.nodes[nodePath[k]];
+                if (!n) continue;
+                if (pointToSegmentM(n.lat, n.lon, a.lat, a.lon, b.lat, b.lon) > maxM) return true;
+            }
+            return false;
+        }
+
         /** True when the hop's rail path passes a different stop on this route. */
         function railHopSkipsRouteStop(graph, nodePath, stops, hopIndex) {
             if (!graph || !nodePath || nodePath.length < 3 || !stops) return false;
@@ -490,7 +520,8 @@
                         const chordM = railHaversineM(a.lat, a.lon, b.lat, b.lon);
                         const railM = railPathLengthM(graph, nodePath);
                         const skips = railHopSkipsRouteStop(graph, nodePath, stops, i);
-                        if (!skips && !hopDetourTooLong(chordM, railM)) {
+                        const strays = railHopStraysFromChord(graph, nodePath, a, b);
+                        if (!skips && !strays && !hopDetourTooLong(chordM, railM)) {
                             const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
                             if (!out.length) out.push(...seg);
                             else out.push(...seg.slice(1));
@@ -667,7 +698,7 @@
                 el.classList.toggle('is-active', el.getAttribute('data-region') === code);
             });
             const back = document.getElementById('map-back-link');
-            if (back) back.setAttribute('href', regionRoutesHref(code));
+            if (back) back.setAttribute('data-href', regionRoutesHref(code));
         }
 
         function switchMapRegion(region) {
@@ -1046,6 +1077,34 @@
             const drawnRoutes = []; // { routeId, name, color, isActive, coords: [], validStops: [] }
             const hubs = new Set();
             const ends = new Set();
+            let selectedRouteId = null;
+            let networkBounds = null;
+
+            function escapeMapHtml(s) {
+                return String(s || '').replace(/[&<>"']/g, (c) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[c]));
+            }
+
+            function stationPopupHtml(origName, routeSet, routes) {
+                const title = escapeMapHtml(String(origName || '').replace(/ STATION/gi, ''));
+                const ids = routeSet instanceof Set ? [...routeSet] : [...(routeSet || [])];
+                const rows = [];
+                const seen = new Set();
+                (routes || []).forEach((item) => {
+                    if (!item || !ids.includes(item.routeId) || seen.has(item.routeId)) return;
+                    seen.add(item.routeId);
+                    const label = escapeMapHtml(String(item.name || item.routeId));
+                    const color = item.color || '#64748b';
+                    rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:${color}"></span>${label}</div>`);
+                });
+                ids.forEach((rid) => {
+                    if (seen.has(rid)) return;
+                    rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:#64748b"></span>${escapeMapHtml(rid)}</div>`);
+                });
+                const list = rows.length ? `<div class="map-popup-routes">${rows.join('')}</div>` : '';
+                return `<div class="map-popup-station"><b class="map-popup-name">${title}</b>${list}</div>`;
+            }
 
             function stopsAreAdjacent(stops, a, b) {
                 const names = (stops || []).map((s) => s.name);
@@ -1092,21 +1151,13 @@
                 }
                 const ordered = [];
                 for (const name of names) {
-                    let s = byName.get(name);
-                    if (!s && STATION_COORDINATES[name]) {
-                        const [lat, lon] = STATION_COORDINATES[name];
-                        s = { name, lat, lon };
-                    } else if (!s && globalStations[name]) {
-                        const g = globalStations[name];
-                        s = { name, lat: g.lat, lon: g.lon };
+                    const s = byName.get(name);
+                    if (!s) continue;
+                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon });
+                    if (!globalStations[s.name]) {
+                        globalStations[s.name] = { lat: s.lat, lon: s.lon, origName: s.name, routes: new Set() };
                     }
-                    if (s) {
-                        ordered.push({ name: s.name, lat: s.lat, lon: s.lon });
-                        if (!globalStations[s.name]) {
-                            globalStations[s.name] = { lat: s.lat, lon: s.lon, origName: s.name, routes: new Set() };
-                        }
-                        globalStations[s.name].routes.add(routeId);
-                    }
+                    globalStations[s.name].routes.add(routeId);
                 }
                 if (ordered.length < 2) return { validStops, routeCoords };
                 return {
@@ -1292,7 +1343,9 @@
                         lineCap: 'round',
                         lineJoin: 'round',
                         smoothFactor: 1
-                    }).addTo(map).bindPopup(`
+                    });
+                    if (!selectedRouteId || r.routeId === selectedRouteId) r._polyline.addTo(map);
+                    r._polyline.bindPopup(`
                     <div class="text-center">
                         <b class="uppercase text-sm">${r.name}</b><br>
                         ${isLive
@@ -1301,6 +1354,12 @@
                     </div>
                 `);
                 });
+                const bounds = L.latLngBounds([]);
+                drawnRoutes.forEach((r) => {
+                    if (!r._polyline || !r._polyline.getBounds) return;
+                    try { bounds.extend(r._polyline.getBounds()); } catch (_) {}
+                });
+                networkBounds = bounds.isValid() ? bounds : null;
             }
 
             function paintDisruptionOverlays(trackBundle, disruptions) {
@@ -1463,6 +1522,79 @@
                 }
             } catch (e) { /* non-fatal */ }
 
+            const stationLayerItems = [];
+
+            function syncLineFilterChrome() {
+                const filtered = !!selectedRouteId;
+                const resetBtn = document.getElementById('map-reset-line-btn');
+                if (resetBtn) {
+                    resetBtn.hidden = !filtered;
+                    resetBtn.setAttribute('aria-hidden', filtered ? 'false' : 'true');
+                }
+                document.getElementById('map-top-controls')?.classList.toggle('is-line-filtered', filtered);
+                document.querySelectorAll('#legend-content .legend-item[data-route-id]').forEach((btn) => {
+                    const on = selectedRouteId && btn.getAttribute('data-route-id') === selectedRouteId;
+                    btn.classList.toggle('is-selected', !!on);
+                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                const allBtn = document.getElementById('legend-show-all');
+                if (allBtn) {
+                    allBtn.classList.toggle('is-selected', !filtered);
+                    allBtn.setAttribute('aria-pressed', filtered ? 'false' : 'true');
+                }
+            }
+
+            function fitNetworkView() {
+                if (!map || !networkBounds) return;
+                try { map.fitBounds(networkBounds, { padding: [36, 36], maxZoom: 12 }); } catch (_) {}
+            }
+
+            function setSelectedLine(routeId, opts) {
+                const toggle = !!(opts && opts.toggle);
+                const fit = !opts || opts.fit !== false;
+                const wasFiltered = !!selectedRouteId;
+                if (toggle && routeId && selectedRouteId === routeId) selectedRouteId = null;
+                else selectedRouteId = routeId || null;
+
+                drawnRoutes.forEach((r) => {
+                    const show = !selectedRouteId || r.routeId === selectedRouteId;
+                    if (!r._polyline) return;
+                    if (show) {
+                        if (!map.hasLayer(r._polyline)) r._polyline.addTo(map);
+                    } else if (map.hasLayer(r._polyline)) {
+                        map.removeLayer(r._polyline);
+                    }
+                });
+                stationLayerItems.forEach((s) => {
+                    const show = !selectedRouteId || (s.routes && s.routes.has(selectedRouteId));
+                    if (show) {
+                        if (!map.hasLayer(s.marker)) s.marker.addTo(map);
+                    } else if (map.hasLayer(s.marker)) {
+                        map.removeLayer(s.marker);
+                    }
+                });
+                syncLineFilterChrome();
+                if (!fit) return;
+                if (selectedRouteId) {
+                    const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
+                    if (r && r._polyline && r._polyline.getBounds) {
+                        try { map.fitBounds(r._polyline.getBounds(), { padding: [48, 48], maxZoom: 13 }); } catch (_) {}
+                    }
+                } else if (wasFiltered) {
+                    try { map.closePopup(); } catch (_) {}
+                    fitNetworkView();
+                }
+            }
+
+            function applySelectedLine(routeId) {
+                setSelectedLine(routeId, { toggle: true, fit: true });
+            }
+
+            document.getElementById('map-reset-line-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setSelectedLine(null, { toggle: false, fit: true });
+            });
+
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
                 // Important = corridor terminals + designated transfer/relay hubs only
@@ -1476,7 +1608,7 @@
                     ? 'font-bold text-[11px] text-gray-900 dark:text-white z-50 tooltip-dynamic tooltip-halo' 
                     : 'font-medium text-[9.5px] text-gray-700 dark:text-gray-300 tooltip-dynamic tooltip-halo minor-station-tooltip';
 
-                L.circleMarker([data.lat, data.lon], {
+                const marker = L.circleMarker([data.lat, data.lon], {
                     radius: isMajor ? 5 : 2.5,
                     fillColor: "#ffffff",
                     color: isMajor ? "#1f2937" : "#3b82f6",
@@ -1484,19 +1616,35 @@
                     opacity: 1,
                     fillOpacity: 1
                 }).addTo(map)
-                  .bindPopup(`<b class="text-sm">${data.origName.replace(/ STATION/gi, '')}</b>`) 
+                  .bindPopup(
+                      () => stationPopupHtml(data.origName, data.routes, drawnRoutes),
+                      { maxWidth: 280, className: 'map-station-popup' }
+                  )
                   .bindTooltip(data.origName.replace(/ STATION/gi, ''), { 
                       permanent: true, 
                       direction: 'top',
                       offset: [0, -5],
                       className: labelClass
                   });
+                stationLayerItems.push({ name, routes: data.routes, marker });
             });
 
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
             if (legendContent) {
-                legendContent.innerHTML = ''; 
+                legendContent.innerHTML = '';
+                const allBtn = document.createElement('button');
+                allBtn.type = 'button';
+                allBtn.id = 'legend-show-all';
+                allBtn.className = 'legend-item legend-item-all is-selected';
+                allBtn.setAttribute('aria-pressed', 'true');
+                allBtn.setAttribute('aria-label', 'Show all lines');
+                allBtn.innerHTML = `<span class="color-dot" style="background:#94a3b8"></span><span class="text-gray-700 dark:text-gray-200">Show all lines</span>`;
+                allBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setSelectedLine(null, { toggle: false, fit: true });
+                });
+                legendContent.appendChild(allBtn);
                 drawnRoutes.forEach(item => {
                     
                     // Evaluate Dynamic Route Status for the Legend
@@ -1538,13 +1686,22 @@
                         badgeColor = 'bg-blue-600 animate-pulse'; 
                     }
 
-                    legendContent.innerHTML += `
-                        <div class="legend-item ${!item.isActive ? 'opacity-80' : ''}">
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = `legend-item ${!item.isActive ? 'opacity-80' : ''}`;
+                    row.setAttribute('data-route-id', item.routeId);
+                    row.setAttribute('aria-pressed', 'false');
+                    row.setAttribute('aria-label', `Show ${item.name.replace(/<[^>]+>/g, '')}`);
+                    row.innerHTML = `
                             <span class="color-dot" style="background-color: ${item.color}"></span>
                             <span class="text-gray-700 dark:text-gray-200 mr-2">${item.name}</span>
                             <span class="status-badge ${badgeColor}">${routeStatus}</span>
-                        </div>
                     `;
+                    row.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        applySelectedLine(item.routeId);
+                    });
+                    legendContent.appendChild(row);
                 });
             }
 

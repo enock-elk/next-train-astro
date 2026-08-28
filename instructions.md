@@ -57,7 +57,14 @@ Scheme: `V{major}_{MM.DD}.{n}` (example `V8_08.17.1`). Same calendar day → inc
 
 Keep in sync: `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, `public/app-version.json`, and a `CHANGELOG.md` heading.
 
-**What’s New is commuter-only.** No admin, Dev Hub, deploy, workers, NUKE, analytics, or “we pushed a dump.” Short bullets. Engineering detail stays in `CHANGELOG.md`.
+**What’s New is a public commuter list. Competitors read it.** Only obvious in-app behaviour a commuter can tap and see in the build they have (board, planner, map, timetable, Options). Short bullets. Do not explain strategy or “we fixed.” Engineering detail stays in `CHANGELOG.md`.
+
+Never mention:
+- admin, Account, password, sign-in, Face ID, Dev Hub, deploy, workers, NUKE, analytics, SEO, Google, indexing, route landing pages, or app configuration
+- Alerts, the bell, notices, hold-to-react, Trains near me, I’m on it, live location, ride sharing, community chat, or route chat. Those stay hidden while operators test them. Do not list what commuters cannot open today.
+
+Never use emoji in What’s New (including ↔ arrows). Never use emoji on commuter buttons (SVG only).
+Never use em dashes (—) or en dashes (–) in What’s New. Use a comma, a period, or a hyphen.
 
 ## How to update the Firebase dump (Windows)
 

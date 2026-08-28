@@ -10,6 +10,10 @@ const SNAP_MAX_M = 900;
 const MAX_HOPS = 14000;
 /** Ignore bake-time straight-chord teleports when merging route LineStrings into a graph. */
 const MAX_EDGE_M = 2500;
+const HOP_DETOUR_RATIO = 2.8;
+const HOP_DETOUR_MIN_M = 900;
+const HOP_STRAY_M = 600;
+const SKIP_STATION_M = 90;
 const cache = new Map(); // region -> { features, graph } | null
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -162,6 +166,67 @@ function shortestPath(graph, startId, endId) {
     return path;
 }
 
+function pathLengthM(graph, nodePath) {
+    if (!graph || !nodePath || nodePath.length < 2) return 0;
+    let sum = 0;
+    for (let i = 1; i < nodePath.length; i++) {
+        const a = graph.nodes[nodePath[i - 1]];
+        const b = graph.nodes[nodePath[i]];
+        if (!a || !b) continue;
+        sum += haversineM(a.lat, a.lon, b.lat, b.lon);
+    }
+    return sum;
+}
+
+function hopDetourTooLong(chordM, railM) {
+    if (!Number.isFinite(railM) || railM <= 0) return true;
+    if (!Number.isFinite(chordM) || chordM <= 0) return railM > HOP_DETOUR_MIN_M;
+    return railM > Math.max(chordM * HOP_DETOUR_RATIO, chordM + HOP_DETOUR_MIN_M);
+}
+
+function pointToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon) {
+    const lat0 = ((aLat + bLat) / 2) * Math.PI / 180;
+    const toXY = (lat, lon) => [
+        lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
+        lat * Math.PI / 180 * 6371000
+    ];
+    const [pX, pY] = toXY(pLat, pLon);
+    const [aX, aY] = toXY(aLat, aLon);
+    const [bX, bY] = toXY(bLat, bLon);
+    const abx = bX - aX;
+    const aby = bY - aY;
+    const len2 = abx * abx + aby * aby;
+    if (len2 < 1) return Math.hypot(pX - aX, pY - aY);
+    let t = ((pX - aX) * abx + (pY - aY) * aby) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(pX - (aX + t * abx), pY - (aY + t * aby));
+}
+
+function hopStraysFromChord(graph, nodePath, a, b, maxM = HOP_STRAY_M) {
+    if (!graph || !nodePath || nodePath.length < 3 || !a || !b) return false;
+    for (let k = 1; k < nodePath.length - 1; k++) {
+        const n = graph.nodes[nodePath[k]];
+        if (!n) continue;
+        if (pointToSegmentM(n.lat, n.lon, a.lat, a.lon, b.lat, b.lon) > maxM) return true;
+    }
+    return false;
+}
+
+function hopSkipsRouteStop(graph, nodePath, stops, hopIndex, skipM = SKIP_STATION_M) {
+    if (!graph || !nodePath || nodePath.length < 3 || !stops) return false;
+    for (let k = 1; k < nodePath.length - 1; k++) {
+        const n = graph.nodes[nodePath[k]];
+        if (!n) continue;
+        for (let j = 0; j < stops.length; j++) {
+            if (j === hopIndex || j === hopIndex + 1) continue;
+            const s = stops[j];
+            if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
+            if (haversineM(n.lat, n.lon, s.lat, s.lon) < skipM) return true;
+        }
+    }
+    return false;
+}
+
 async function loadRegionBundle(region) {
     const key = String(region || 'GP').toUpperCase();
     if (cache.has(key)) return cache.get(key);
@@ -218,14 +283,20 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         if (snapA != null && snapB != null) {
             const nodePath = shortestPath(graph, snapA, snapB);
             if (nodePath && nodePath.length >= 2) {
-                const seg = nodePath.map((id) => {
-                    const n = graph.nodes[id];
-                    return /** @type {[number, number]} */ ([n.lat, n.lon]);
-                });
-                if (!out.length) out.push(...seg);
-                else out.push(...seg.slice(1));
-                railHops++;
-                continue;
+                const chordM = haversineM(a.lat, a.lon, b.lat, b.lon);
+                const railM = pathLengthM(graph, nodePath);
+                const skips = hopSkipsRouteStop(graph, nodePath, stops, i);
+                const strays = hopStraysFromChord(graph, nodePath, a, b);
+                if (!skips && !strays && !hopDetourTooLong(chordM, railM)) {
+                    const seg = nodePath.map((id) => {
+                        const n = graph.nodes[id];
+                        return /** @type {[number, number]} */ ([n.lat, n.lon]);
+                    });
+                    if (!out.length) out.push(...seg);
+                    else out.push(...seg.slice(1));
+                    railHops++;
+                    continue;
+                }
             }
         }
 

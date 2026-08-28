@@ -113,6 +113,9 @@ assert(mapApp.includes('function applyCanonicalStationOrder'), 'map paints from 
 assert(mapApp.includes('function railHopSkipsRouteStop'), 'OSM hops cannot skip another stop on the route');
 assert(mapApp.includes('function pathVisitsStopsInOrder'), 'baked tracks must visit stations in list order');
 assert(mapApp.includes('function bindMapLegendToggle'), 'Network Lines binds as a button');
+assert(mapApp.includes('function applySelectedLine'), 'legend tap isolates one corridor');
+assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line paints Avoca then Duff\'s Road');
+assert(!mapApp.includes('"AVOCA", "TEMPLE", "KENVILLE", "EFFINGHAM", "DUFF\'S ROAD"'), 'Bridge City path no longer loops Avoca via Effingham');
 assert(!mapApp.includes('if (baked && baked.length > 1) return baked;'), 'map does not paint unordered baked tracks');
 
 const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
@@ -188,10 +191,11 @@ assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-
 assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'), 'About unofficial pill dropped low-contrast blue');
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
-assert(mapPage.includes('map-chrome-btn-wide'), 'Network Lines uses map-chrome-btn');
+assert(mapPage.includes('aria-label="Network Lines"'), 'Network Lines is a labelled SVG button');
+assert(!mapPage.includes('map-lines-label'), 'Network Lines dropped the wide text label');
+assert(mapPage.includes('id="map-back-wrap"') && mapPage.includes('id="map-top-controls"'), 'Back sits in the map top chrome row');
 assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token');
-assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button as Network Lines');
-assert(!mapPage.includes('map-back-btn'), 'Back no longer has a separate padded class');
+assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button height as WC');
 assert(!mapPage.includes('onclick="toggleLegend()"'), 'Network Lines is a button without inline onclick');
 assert(mapPage.includes('id="legend-toggle-btn"') && mapPage.includes('aria-haspopup="true"'), 'Network Lines is a disclosure button');
 assert(mapPage.includes('.legend-container { display: block; }'), 'Network Lines button is visible before map data loads');

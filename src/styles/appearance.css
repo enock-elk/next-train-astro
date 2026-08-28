@@ -292,19 +292,19 @@ html[data-colour-pack="ember"] {
   --nt-primary: #a35c28;
   --nt-primary-hover: #8a4c20;
   --nt-primary-fg: #fffaf6;
-  --nt-primary-soft: #efe4d8;
-  --nt-canvas: #e8ddd2;
-  --nt-surface: #f7f1ea;
-  --nt-surface-muted: #efe6dc;
-  --nt-chrome-header: #ddd0c3;
-  --nt-chrome-header-border: #cbbbaa;
-  --nt-chrome-nav: #c9b7a6;
-  --nt-chrome-nav-border: #b09a86;
+  --nt-primary-soft: #f6efe8;
+  --nt-canvas: #f6efe8;
+  --nt-surface: #fbf7f2;
+  --nt-surface-muted: #f3ebe3;
+  --nt-chrome-header: #eee4d9;
+  --nt-chrome-header-border: #e0d2c4;
+  --nt-chrome-nav: #e8d8ca;
+  --nt-chrome-nav-border: #d4c0ae;
   --nt-chrome-fg: #5c3d2e;
-  --nt-chrome-muted: #7c5a48;
+  --nt-chrome-muted: #8a6a56;
   --nt-text: #2a2118;
   --nt-text-muted: #6f5e50;
-  --nt-border: #d4c4b4;
+  --nt-border: #e6d8cc;
   --nt-theme-meta: #8a4c20;
   --nt-accent: #9a5a32;
 
@@ -362,20 +362,20 @@ html[data-colour-pack="earthy"] {
   --nt-primary: #5e5a4e;
   --nt-primary-hover: #4a473e;
   --nt-primary-fg: #FAF8F3;
-  --nt-primary-soft: #F3F0E8;
-  --nt-canvas: #e4ddd0;
-  --nt-surface: #FAF8F3;
-  --nt-surface-muted: #F0EBE0;
-  --nt-chrome-header: #d9d2c4;
-  --nt-chrome-header-border: #c9c0b0;
-  --nt-chrome-nav: #c5cbb8;
-  --nt-chrome-nav-border: #aeb6a0;
+  --nt-primary-soft: #F7F4EC;
+  --nt-canvas: #f3efe6;
+  --nt-surface: #FCFAF6;
+  --nt-surface-muted: #F6F1E8;
+  --nt-chrome-header: #ebe6db;
+  --nt-chrome-header-border: #ddd6c8;
+  --nt-chrome-nav: #dde3d2;
+  --nt-chrome-nav-border: #c9d0bc;
   --nt-chrome-fg: #353535;
   --nt-chrome-muted: #6b655c;
   --nt-text: #353535;
   --nt-text-muted: #7a746a;
-  --nt-border: #d4cdb8;
-  --nt-theme-meta: #d9d2c4;
+  --nt-border: #e4ddce;
+  --nt-theme-meta: #ebe6db;
   --nt-accent: #8f7d68;
 
   --nt-blue-50: 250 248 243;
@@ -488,15 +488,15 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 
 #bottom-nav .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  font-weight: 800;
-  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
-  border-radius: 1.15rem;
-  margin: 0.28rem 0.18rem;
+  font-weight: 600;
+  background: color-mix(in srgb, #fff 8%, var(--nt-chrome-nav));
+  border-radius: 999px;
+  margin: 0.16rem 0.1rem;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
+  background: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
+  box-shadow: none;
 }
 
 @media (max-height: 740px) {
@@ -520,7 +520,7 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
     font-size: 8px !important;
   }
   #bottom-nav .bottom-nav-item.is-active {
-    margin: 0.1rem 0.12rem;
+    margin: 0.08rem 0.08rem;
   }
 }
 
@@ -920,6 +920,10 @@ html.dark .dark\:text-gray-200 {
   background-color: var(--nt-surface) !important;
   color: var(--nt-text);
 }
+body.nav-bottom:not(.nt-immersive) #sidenav {
+  border-bottom-left-radius: 1.25rem;
+  overflow: hidden;
+}
 
 #alerts-channel,
 #alerts-channel-card {
@@ -982,16 +986,17 @@ html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
-  border-radius: 1.15rem;
-  margin: 0.28rem 0.18rem;
+  font-weight: 600;
+  background: color-mix(in srgb, #fff 8%, var(--nt-chrome-nav));
+  border-radius: 999px;
+  margin: 0.16rem 0.1rem;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
-  border-radius: 1.15rem;
-  margin: 0.28rem 0.18rem;
+  background: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
+  box-shadow: none;
+  border-radius: 999px;
+  margin: 0.16rem 0.1rem;
 }
 
 /* Non-fullscreen cards/sheets sit above the bottom nav, not under it.

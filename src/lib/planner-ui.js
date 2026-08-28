@@ -2203,7 +2203,7 @@ export const PlannerRenderer = {
                             <span class="font-bold ${depTextClass} text-sm">Depart ${subFrom.replace(' STATION', '')}</span>
                             <span class="font-mono font-bold ${depTextClass} text-sm">${formatTimeDisplay(stops[0].time)}</span>
                         </div>
-                        <div class="text-xs ${depTrainClass} font-medium mb-1">
+                        <div class="text-xs ${depTrainClass} font-medium mb-2">
                             ${plannerTrainNameButton(leg.route?.id, subTrainDest, subTrain, depTrainClass)}
                         </div>
                     </div>
@@ -2243,7 +2243,7 @@ export const PlannerRenderer = {
                 // Keep the border intact, let individual stops handle their own greyness
                 html += `
                     <div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2">
-                        <button id="btn-${subLegId}" onclick="if(typeof window.togglePlannerStops === 'function') window.togglePlannerStops('${subLegId}')" class="text-[10px] font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 px-3 py-1 rounded-full transition-colors mb-2 w-fit ml-5 -mt-1 relative top-[-5px] focus:outline-none">
+                        <button id="btn-${subLegId}" onclick="if(typeof window.togglePlannerStops === 'function') window.togglePlannerStops('${subLegId}')" class="text-[10px] font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 px-3 py-1 rounded-full transition-colors mb-2 mt-1.5 w-fit ml-5 focus:outline-none">
                             ${isExpanded ? 'Hide Stops' : 'Show All Stops'}
                         </button>
                         <div id="${subLegId}" class="${isExpanded ? "" : "hidden"} space-y-1 pb-2">${innerHtml}</div>

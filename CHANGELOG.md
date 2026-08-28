@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.7 — Station corridors; Show all lines; Back is a button (28 Aug 2026)
+
+- Station popups list every drawn corridor that includes that stop, under the name (colour swatch + route label).
+- Isolating a Network Lines corridor shows a **Show all lines** chrome control (three bars, same 2.25rem square as WC / sun) and a matching first row in the legend. Either control restores every polyline/station and `fitBounds` to the full network.
+- Back is a `<button>` with `data-href`, not an `<a>`. Links skip Tailwind’s button padding reset and ignore a fixed `height` when they stay `display: inline`, so Back stayed taller than the far-right squares. Height is now `2.25rem !important` with `padding-block: 0`.
+
 ## V9_08.28.6 — Network Lines SVG; isolate a corridor; Avoca→Duff’s Road (28 Aug 2026)
 
 - Network Lines is a square SVG chrome button (same height as WC / theme). The list still opens from that control. Tap a corridor to hide every other polyline and station; tap it again to show the full network.

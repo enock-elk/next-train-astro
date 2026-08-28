@@ -41,7 +41,7 @@ const regionSeoSlugs = Object.fromEntries(
       #map-top-controls {
         --map-chrome-h: 2.25rem;
         position: fixed; top: 12px; left: 12px; right: 12px; z-index: 1001;
-        display: flex; align-items: flex-start; justify-content: flex-end; gap: 0.375rem;
+        display: flex; align-items: center; justify-content: flex-end; gap: 0.375rem;
         pointer-events: none;
       }
       html.nt-map-embedded #map-top-controls {
@@ -59,8 +59,10 @@ const regionSeoSlugs = Object.fromEntries(
       html.nt-map-tab #map-fullscreen-btn { display: inline-flex; }
       #map-back-wrap {
         margin-right: auto;
-        display: flex; align-items: center;
+        display: flex; align-items: stretch;
         height: var(--map-chrome-h);
+        max-height: var(--map-chrome-h);
+        overflow: hidden;
         pointer-events: auto;
       }
       /* Home Map tab (?embed=1) is the stripped "where is my train" view. Region
@@ -103,7 +105,19 @@ const regionSeoSlugs = Object.fromEntries(
         gap: 0.3rem;
       }
       .map-chrome-btn svg { width: 1rem; height: 1rem; flex-shrink: 0; }
-      a.map-chrome-btn { color: var(--nt-text, #111827); }
+      /* Back used to be <a href>. Links do not get Tailwind’s button padding
+         reset, so UA line-height made it taller than WC / sun / Network Lines. */
+      #map-back-link {
+        height: var(--map-chrome-h) !important;
+        min-height: var(--map-chrome-h) !important;
+        max-height: var(--map-chrome-h) !important;
+        padding-block: 0 !important;
+        display: inline-flex !important;
+        align-items: center;
+        box-sizing: border-box;
+        color: var(--nt-text, #111827);
+      }
+      #map-reset-line-btn[hidden] { display: none !important; }
       .region-picker, .legend-container {
         position: relative; pointer-events: auto;
       }
@@ -166,7 +180,48 @@ const regionSeoSlugs = Object.fromEntries(
       .legend-item:hover { background: rgba(59, 130, 246, 0.12); }
       .legend-item.is-selected { background: rgba(37, 99, 235, 0.16); }
       .dark .legend-item.is-selected { background: rgba(96, 165, 250, 0.2); }
+      .legend-item-all {
+        font-weight: 800;
+        border-bottom: 1px solid var(--nt-border, #e5e7eb);
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.55rem;
+      }
+      .dark .legend-item-all { border-bottom-color: #374151; }
       .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+      .leaflet-popup.map-station-popup .leaflet-popup-content {
+        margin: 10px 28px 10px 12px;
+        min-width: 9.5rem;
+      }
+      .map-popup-name {
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        margin: 0 0 0.4rem;
+        color: #111827;
+      }
+      .dark .map-popup-name { color: #f9fafb; }
+      .map-popup-routes {
+        display: flex;
+        flex-direction: column;
+        gap: 0.22rem;
+      }
+      .map-popup-route {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: #4b5563;
+      }
+      .dark .map-popup-route { color: #d1d5db; }
+      .map-popup-swatch {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
       .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: auto; font-weight: 800; color: white; text-transform: uppercase; }
       #map-placeholder {
         position: absolute; inset: 0; background-color: #f3f4f6;
@@ -242,13 +297,13 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
   </noscript>
 
-  <!-- Order: Back (left) · Region · Theme · Network Lines (SVG) -->
+  <!-- Order: Back (left) · Region · Theme · Show all lines · Network Lines (SVG) -->
   <div id="map-top-controls" class="pointer-events-none">
     <div id="map-back-wrap">
-      <a id="map-back-link" href={base} class="map-chrome-btn map-chrome-btn-wide" aria-label="Back to Next Train">
+      <button type="button" id="map-back-link" class="map-chrome-btn map-chrome-btn-wide" data-href={base} aria-label="Back to Next Train">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
         Back
-      </a>
+      </button>
     </div>
     <div class="region-picker" id="region-picker">
       <button type="button" id="region-toggle-btn" class="map-chrome-btn font-black text-[11px] tracking-wide" aria-expanded="false" aria-controls="region-panel" aria-label="Change map region">
@@ -269,6 +324,11 @@ const regionSeoSlugs = Object.fromEntries(
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
       </button>
     </div>
+    <button type="button" id="map-reset-line-btn" class="map-chrome-btn" hidden aria-hidden="true" aria-label="Show all lines" title="Show all lines">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+      </svg>
+    </button>
     <div class="legend-container" id="legend-container">
       <button type="button" id="legend-toggle-btn" class="map-chrome-btn" aria-expanded="false" aria-controls="legend-panel" aria-haspopup="true" aria-label="Network Lines" title="Network Lines">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -394,6 +454,15 @@ const regionSeoSlugs = Object.fromEntries(
       document.getElementById('map-fullscreen-btn')?.addEventListener('click', function (e) {
         e.preventDefault();
         openMapFullscreen();
+      });
+      document.getElementById('map-back-link')?.addEventListener('click', function () {
+        var href = this.getAttribute('data-href') || '';
+        if (!href) return;
+        if (inAppSheet()) {
+          try { window.parent.__ntCloseInAppSheet(); } catch (_) {}
+          return;
+        }
+        window.location.href = href;
       });
       document.addEventListener('click', function (e) {
         if (!inAppSheet()) return;

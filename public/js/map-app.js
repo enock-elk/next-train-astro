@@ -698,7 +698,7 @@
                 el.classList.toggle('is-active', el.getAttribute('data-region') === code);
             });
             const back = document.getElementById('map-back-link');
-            if (back) back.setAttribute('href', regionRoutesHref(code));
+            if (back) back.setAttribute('data-href', regionRoutesHref(code));
         }
 
         function switchMapRegion(region) {
@@ -1077,6 +1077,34 @@
             const drawnRoutes = []; // { routeId, name, color, isActive, coords: [], validStops: [] }
             const hubs = new Set();
             const ends = new Set();
+            let selectedRouteId = null;
+            let networkBounds = null;
+
+            function escapeMapHtml(s) {
+                return String(s || '').replace(/[&<>"']/g, (c) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[c]));
+            }
+
+            function stationPopupHtml(origName, routeSet, routes) {
+                const title = escapeMapHtml(String(origName || '').replace(/ STATION/gi, ''));
+                const ids = routeSet instanceof Set ? [...routeSet] : [...(routeSet || [])];
+                const rows = [];
+                const seen = new Set();
+                (routes || []).forEach((item) => {
+                    if (!item || !ids.includes(item.routeId) || seen.has(item.routeId)) return;
+                    seen.add(item.routeId);
+                    const label = escapeMapHtml(String(item.name || item.routeId));
+                    const color = item.color || '#64748b';
+                    rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:${color}"></span>${label}</div>`);
+                });
+                ids.forEach((rid) => {
+                    if (seen.has(rid)) return;
+                    rows.push(`<div class="map-popup-route"><span class="map-popup-swatch" style="background:#64748b"></span>${escapeMapHtml(rid)}</div>`);
+                });
+                const list = rows.length ? `<div class="map-popup-routes">${rows.join('')}</div>` : '';
+                return `<div class="map-popup-station"><b class="map-popup-name">${title}</b>${list}</div>`;
+            }
 
             function stopsAreAdjacent(stops, a, b) {
                 const names = (stops || []).map((s) => s.name);
@@ -1315,7 +1343,9 @@
                         lineCap: 'round',
                         lineJoin: 'round',
                         smoothFactor: 1
-                    }).addTo(map).bindPopup(`
+                    });
+                    if (!selectedRouteId || r.routeId === selectedRouteId) r._polyline.addTo(map);
+                    r._polyline.bindPopup(`
                     <div class="text-center">
                         <b class="uppercase text-sm">${r.name}</b><br>
                         ${isLive
@@ -1324,6 +1354,12 @@
                     </div>
                 `);
                 });
+                const bounds = L.latLngBounds([]);
+                drawnRoutes.forEach((r) => {
+                    if (!r._polyline || !r._polyline.getBounds) return;
+                    try { bounds.extend(r._polyline.getBounds()); } catch (_) {}
+                });
+                networkBounds = bounds.isValid() ? bounds : null;
             }
 
             function paintDisruptionOverlays(trackBundle, disruptions) {
@@ -1487,10 +1523,37 @@
             } catch (e) { /* non-fatal */ }
 
             const stationLayerItems = [];
-            let selectedRouteId = null;
 
-            function applySelectedLine(routeId) {
-                if (selectedRouteId === routeId) selectedRouteId = null;
+            function syncLineFilterChrome() {
+                const filtered = !!selectedRouteId;
+                const resetBtn = document.getElementById('map-reset-line-btn');
+                if (resetBtn) {
+                    resetBtn.hidden = !filtered;
+                    resetBtn.setAttribute('aria-hidden', filtered ? 'false' : 'true');
+                }
+                document.getElementById('map-top-controls')?.classList.toggle('is-line-filtered', filtered);
+                document.querySelectorAll('#legend-content .legend-item[data-route-id]').forEach((btn) => {
+                    const on = selectedRouteId && btn.getAttribute('data-route-id') === selectedRouteId;
+                    btn.classList.toggle('is-selected', !!on);
+                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                const allBtn = document.getElementById('legend-show-all');
+                if (allBtn) {
+                    allBtn.classList.toggle('is-selected', !filtered);
+                    allBtn.setAttribute('aria-pressed', filtered ? 'false' : 'true');
+                }
+            }
+
+            function fitNetworkView() {
+                if (!map || !networkBounds) return;
+                try { map.fitBounds(networkBounds, { padding: [36, 36], maxZoom: 12 }); } catch (_) {}
+            }
+
+            function setSelectedLine(routeId, opts) {
+                const toggle = !!(opts && opts.toggle);
+                const fit = !opts || opts.fit !== false;
+                const wasFiltered = !!selectedRouteId;
+                if (toggle && routeId && selectedRouteId === routeId) selectedRouteId = null;
                 else selectedRouteId = routeId || null;
 
                 drawnRoutes.forEach((r) => {
@@ -1510,18 +1573,27 @@
                         map.removeLayer(s.marker);
                     }
                 });
-                document.querySelectorAll('#legend-content .legend-item').forEach((btn) => {
-                    const on = selectedRouteId && btn.getAttribute('data-route-id') === selectedRouteId;
-                    btn.classList.toggle('is-selected', !!on);
-                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
+                syncLineFilterChrome();
+                if (!fit) return;
                 if (selectedRouteId) {
                     const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
                     if (r && r._polyline && r._polyline.getBounds) {
                         try { map.fitBounds(r._polyline.getBounds(), { padding: [48, 48], maxZoom: 13 }); } catch (_) {}
                     }
+                } else if (wasFiltered) {
+                    try { map.closePopup(); } catch (_) {}
+                    fitNetworkView();
                 }
             }
+
+            function applySelectedLine(routeId) {
+                setSelectedLine(routeId, { toggle: true, fit: true });
+            }
+
+            document.getElementById('map-reset-line-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setSelectedLine(null, { toggle: false, fit: true });
+            });
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
@@ -1544,7 +1616,10 @@
                     opacity: 1,
                     fillOpacity: 1
                 }).addTo(map)
-                  .bindPopup(`<b class="text-sm">${data.origName.replace(/ STATION/gi, '')}</b>`) 
+                  .bindPopup(
+                      () => stationPopupHtml(data.origName, data.routes, drawnRoutes),
+                      { maxWidth: 280, className: 'map-station-popup' }
+                  )
                   .bindTooltip(data.origName.replace(/ STATION/gi, ''), { 
                       permanent: true, 
                       direction: 'top',
@@ -1557,7 +1632,19 @@
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
             if (legendContent) {
-                legendContent.innerHTML = ''; 
+                legendContent.innerHTML = '';
+                const allBtn = document.createElement('button');
+                allBtn.type = 'button';
+                allBtn.id = 'legend-show-all';
+                allBtn.className = 'legend-item legend-item-all is-selected';
+                allBtn.setAttribute('aria-pressed', 'true');
+                allBtn.setAttribute('aria-label', 'Show all lines');
+                allBtn.innerHTML = `<span class="color-dot" style="background:#94a3b8"></span><span class="text-gray-700 dark:text-gray-200">Show all lines</span>`;
+                allBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setSelectedLine(null, { toggle: false, fit: true });
+                });
+                legendContent.appendChild(allBtn);
                 drawnRoutes.forEach(item => {
                     
                     // Evaluate Dynamic Route Status for the Legend

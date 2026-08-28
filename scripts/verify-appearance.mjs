@@ -195,7 +195,11 @@ assert(mapPage.includes('aria-label="Network Lines"'), 'Network Lines is a label
 assert(!mapPage.includes('map-lines-label'), 'Network Lines dropped the wide text label');
 assert(mapPage.includes('id="map-back-wrap"') && mapPage.includes('id="map-top-controls"'), 'Back sits in the map top chrome row');
 assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token');
+assert(mapPage.includes('<button type="button" id="map-back-link"'), 'Back is a button like WC / sun / Network Lines');
+assert(!mapPage.includes('<a id="map-back-link"'), 'Back is not an <a> (links stay taller than the square chrome)');
 assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button height as WC');
+assert(mapPage.includes('id="map-reset-line-btn"'), 'Show all lines chrome sits next to Network Lines');
+assert(mapPage.includes('#map-back-link'), 'Back height is locked on the button id');
 assert(!mapPage.includes('onclick="toggleLegend()"'), 'Network Lines is a button without inline onclick');
 assert(mapPage.includes('id="legend-toggle-btn"') && mapPage.includes('aria-haspopup="true"'), 'Network Lines is a disclosure button');
 assert(mapPage.includes('.legend-container { display: block; }'), 'Network Lines button is visible before map data loads');

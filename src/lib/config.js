@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V9_08.28.6";
+export const APP_VERSION = "V9_08.28.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_08.28.7",
+        title: "Station lines on the map",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Map:</b> Tap a station to see every corridor that stops there.",
+            "<b>Map:</b> After you pick one line, Show all lines restores the whole network."
+        ]
+    },
     {
         id: "V9_08.28.6",
         title: "One line on the map",

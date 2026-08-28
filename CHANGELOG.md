@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.12 — Remember look across purge; Check for Updates restores Classic light (28 Aug 2026)
+
+- Mirror `theme` and `colourPack` (and `ntProdClassicPackV1`) to IndexedDB via `setResilientItem`. `restoreLookPrefs` reapplies after a localStorage wipe without re-running the one-shot Classic remap over a restored pack.
+- Data & Sync **Check for Updates** (`performHardCacheClear`) still wipes SW/caches/`NextTrainDB`, then `resetLookToClassicLight`. Keeps device id, Welcome, and pinned routes.
+
 ## V9_08.28.11 — Map stations above lines; no LIVE badges; sheet Back height (28 Aug 2026)
 
 - Station markers use Leaflet pane `nt-stations` (z 450) and `raiseStationMarkers()` after filter so polylines cannot cover dots.

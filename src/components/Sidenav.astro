@@ -309,6 +309,7 @@ const versionBadge = String(APP_VERSION);
     try {
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     } catch (err) { /* Safari private / WebView Access Denied */ }
+    if (typeof window.ntPersistTheme === 'function') window.ntPersistTheme(isDark ? 'dark' : 'light');
     if (themeCheckbox) themeCheckbox.checked = isDark;
     syncPrefsSummary();
   };

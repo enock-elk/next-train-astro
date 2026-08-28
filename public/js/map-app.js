@@ -1712,10 +1712,12 @@
                     if (isDarkNow) {
                         document.documentElement.classList.add('dark');
                         try { localStorage.setItem('theme', 'dark'); } catch(e){}
+                        if (typeof window.ntPersistTheme === 'function') window.ntPersistTheme('dark');
                         themeBtn.innerHTML = themeMoonSvg;
                     } else {
                         document.documentElement.classList.remove('dark');
                         try { localStorage.setItem('theme', 'light'); } catch(e){}
+                        if (typeof window.ntPersistTheme === 'function') window.ntPersistTheme('light');
                         themeBtn.innerHTML = themeSunSvg;
                     }
                 };

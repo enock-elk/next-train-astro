@@ -31,7 +31,7 @@ import {
 import { layoutAlertPost } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
-import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js';
+import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
@@ -378,6 +378,7 @@ export async function performHardCacheClear(source = 'modal_confirm') {
             safeStorage.removeItem(`full_db_${$userRegion.get() || 'GP'}`);
             safeStorage.removeItem('app_installed_version');
         }
+        resetLookToClassicLight();
         if (window.indexedDB) {
             await new Promise((resolve) => {
                 try {

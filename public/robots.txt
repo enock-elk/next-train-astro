@@ -15,6 +15,7 @@ Disallow: /status.html
 Disallow: /status
 Disallow: /marketing.html
 Disallow: /marketing
+Disallow: /index.html
 Disallow: /cdn-cgi/
 
 # Block parameterised route/region deep links. These are functional URLs the

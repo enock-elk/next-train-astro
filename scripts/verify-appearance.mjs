@@ -76,8 +76,10 @@ assert(layout.includes("classList.toggle('nt-onboarding'"), 'Layout stamps nt-on
 assert(layout.includes('#main-content.app-shell.dropdown-escape #app-scroll'), 'Travel Day keeps a dedicated #app-scroll overflow rule');
 assert(/dropdown-escape #app-scroll \{\s*overflow-x:\s*hidden !important;\s*overflow-y:\s*auto !important;/.test(layout), 'Travel Day does not freeze #app-scroll');
 assert(!/#main-content\.app-shell\.dropdown-escape #app-scroll \{\s*overflow:\s*visible/.test(layout), 'Travel Day no longer sets #app-scroll to overflow visible');
+assert(layout.includes('body.sidenav-open #app-scroll'), 'Options open freezes #app-scroll');
+assert(/#sidenav-overlay \{\s*touch-action:\s*none;/.test(layout), 'Options scrim does not scroll-chain on iOS');
 
-assert(css.includes('linear-gradient(90deg, #fecb4c 0%, #f4b45c 52%, #ee9366 100%)'), 'maintenance strip is yellow-to-peach');
+assert(css.includes('#app-header .seo-open-app'), 'SEO header Open link uses chrome foreground');
 assert(css.includes('.nt-maint-wrench'), 'maintenance strip has a wrench icon');
 assert(css.includes('.nt-maint-label'), 'maintenance strip has a label');
 assert(!css.includes('repeating-linear-gradient'), 'maintenance strip is not hazard tape');

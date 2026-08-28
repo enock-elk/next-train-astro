@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
-import { listFeaturedSeoRoutes, getSeoRouteBySlug } from '../src/lib/seo-routes.js';
+import { listFeaturedSeoRoutes, getSeoRouteBySlug, stationLabel, slugifyStation } from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
   bidirectionalTitle,
@@ -98,6 +98,16 @@ for (const { id, slug } of FLAGSHIP) {
 const featured = listFeaturedSeoRoutes();
 if (featured.length < 6) fail(`expected ≥6 featured SEO routes, found ${featured.length}`);
 if (!featured.some((e) => e.route.id === 'jhb-soweto')) fail('featured list must include Naledi (jhb-soweto)');
+
+if (stationLabel('JOHANNESBURG STATION') !== 'Johannesburg Park Station') {
+  fail(`stationLabel JOHANNESBURG STATION is "${stationLabel('JOHANNESBURG STATION')}"`);
+}
+if (stationLabel('JOHANNESBURG') !== 'Johannesburg Park Station') {
+  fail(`stationLabel JOHANNESBURG is "${stationLabel('JOHANNESBURG')}"`);
+}
+if (slugifyStation('JOHANNESBURG STATION') !== 'johannesburg') {
+  fail(`slugifyStation must stay johannesburg, got "${slugifyStation('JOHANNESBURG STATION')}"`);
+}
 
 const title = bidirectionalTitle('Johannesburg', 'Naledi');
 if (title !== 'Johannesburg ↔ Naledi Train Schedule & Times') {
@@ -273,11 +283,14 @@ if (existsSync(DIST)) {
     if (!html.includes('forceLight') && !html.includes('Naledi to Johannesburg')) {
       /* forceLight is a build prop; the title is the crawler-visible signal */
     }
-    if (!html.includes('Johannesburg to Naledi') || !html.includes('Naledi to Johannesburg')) {
+    if (!html.includes('Johannesburg Park Station to Naledi') && !html.includes('Showing trains to Johannesburg Park Station')) {
+      fail('Naledi route HTML must mention Johannesburg Park Station as a terminus');
+    }
+    if (!html.includes('Naledi to Johannesburg Park Station') && !html.includes('Showing trains to Naledi')) {
       fail('Naledi route HTML must mention both directions');
     }
-    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
-      fail('Naledi route H1/title should use the calm ↔ form');
+    if (!html.includes('Johannesburg Park Station ↔ Naledi Train Schedule & Times')) {
+      fail('Naledi route H1/title should use Johannesburg Park Station');
     }
     if (/Johannesburg to Naledi &amp; Naledi to Johannesburg/.test(html) || /Johannesburg to Naledi & Naledi to Johannesburg/.test(html)) {
       fail('Naledi route HTML still uses the stuffed both-direction title');
@@ -288,8 +301,14 @@ if (existsSync(DIST)) {
     if (!html.includes('Open Next Train · Gauteng')) {
       fail('Naledi route HTML missing header Open Next Train · Gauteng');
     }
-    if (!html.includes('icons/icon-48.png')) {
-      fail('Naledi route HTML missing logo mark');
+    if (html.includes('seo-theme-toggle') || html.includes('SeoThemeToggle')) {
+      fail('Naledi route HTML must not include the SEO dark-mode toggle');
+    }
+    if (/<header[\s\S]{0,1200}<img[\s\S]{0,400}icon-48/.test(html)) {
+      fail('SEO header must not use the 40×40 logo mark');
+    }
+    if (!html.includes('rel="icon"') || !html.includes('icons/icon-48.png')) {
+      fail('Naledi route HTML missing 48×48 favicon');
     }
     if (!html.includes('>Corridor<') && !html.includes('>Corridor</')) {
       fail('Naledi route metadata should list Corridor, not exclusive Origin/Destination');
@@ -298,6 +317,13 @@ if (existsSync(DIST)) {
       fail('Naledi route metadata still lists exclusive Origin');
     }
     if (!html.includes('<table')) fail('Naledi route HTML has no <table> timetable');
+    {
+      const tableIdx = html.indexOf('<table');
+      const whenIdx = html.indexOf('When trains run');
+      if (tableIdx < 0 || whenIdx < 0 || tableIdx > whenIdx) {
+        fail('Naledi weekday <table> must appear before When trains run');
+      }
+    }
     if (!html.includes('FAQPage')) fail('Naledi route HTML missing FAQPage JSON-LD');
     if (!html.includes('/og/timetable.png')) fail('Naledi route HTML missing og:image timetable PNG');
     if (!html.includes('summary_large_image')) fail('Naledi route HTML should use summary_large_image');

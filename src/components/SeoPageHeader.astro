@@ -1,11 +1,9 @@
 ---
 /**
- * Shared chrome for crawlable SEO landings: logo (home + region hint),
- * primary Open Next Train CTA, and the theme toggle in document flow
- * so titles never slide under a fixed moon button.
+ * Crawlable landings use the in-app header chrome: Next Train left,
+ * Open Next Train · region on the right (bell slot). No logo, no theme toggle.
  */
 import { withBase } from '../lib/config.js';
-import SeoThemeToggle from './SeoThemeToggle.astro';
 
 interface Props {
   region?: string;
@@ -25,32 +23,44 @@ const ctaHref = Astro.props.ctaHref || homeHref;
 const ctaLabel =
   Astro.props.ctaLabel ||
   (regionLabel ? `Open Next Train · ${regionLabel}` : 'Open Next Train');
-const logoSrc = withBase('icons/icon-48.png');
 ---
 
-<header class="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95">
-  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-2 sm:gap-3">
+<header id="app-header" class="app-header shrink-0 px-3 py-2.5 z-30 relative flex items-start justify-between gap-2 border-b">
+  <div class="min-w-0 shrink header-brand-block">
     <a
       href={homeHref}
-      class="shrink-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      class="block rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
       aria-label={regionLabel ? `Next Train home — ${regionLabel}` : 'Next Train home'}
     >
-      <img
-        src={logoSrc}
-        alt="Next Train"
-        width="40"
-        height="40"
-        class="h-10 w-10 rounded-lg"
-      />
+      <p id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black select-none tracking-[-0.035em] leading-none">
+        Next Train
+      </p>
     </a>
-    <a
-      href={ctaHref}
-      class="min-w-0 flex-1 inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm py-2.5 px-3 text-center leading-tight shadow-sm"
-    >
-      {ctaLabel}
-    </a>
-    <div class="shrink-0">
-      <SeoThemeToggle variant="inline" />
+    <div class="header-meta mt-1.5 min-w-0">
+      <p id="current-day" class="text-[11px] sm:text-xs font-medium leading-tight truncate">Getting schedules…</p>
     </div>
   </div>
+  <a
+    href={ctaHref}
+    class="seo-open-app shrink-0 mt-1 max-w-[9.5rem] sm:max-w-none text-[11px] sm:text-xs font-bold text-right leading-tight underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-sm"
+  >
+    {ctaLabel}
+  </a>
 </header>
+
+<script is:inline>
+  (function () {
+    try {
+      var el = document.getElementById('current-day');
+      if (!el) return;
+      var names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      var d = new Date();
+      var day = d.getDay();
+      var type = day === 0 ? 'No Service' : (day === 6 ? 'Saturday Schedule' : 'Weekday Schedule');
+      var typeClass = day === 0
+        ? 'font-bold text-red-600 dark:text-red-400'
+        : 'font-bold text-blue-600 dark:text-blue-400';
+      el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';
+    } catch (e) { /* keep Getting schedules… */ }
+  })();
+</script>

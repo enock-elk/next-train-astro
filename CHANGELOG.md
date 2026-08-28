@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.2 — Options scrim lock; SEO Park Station, app header, timetable hoist (28 Aug 2026)
+
+- Options: `body.sidenav-open #app-scroll` overflow hidden; `#sidenav-overlay` `touch-action: none` so iOS does not scroll the board through the scrim. Drawer list still scrolls.
+- SEO landings: `SeoPageHeader` matches in-app chrome (Next Train + day). Compact `Open Next Train · {region}` on the right. Theme toggle removed. `forceLight` unchanged.
+- SEO display: `stationLabel('JOHANNESBURG')` → Johannesburg Park Station. `slugifyStation` still emits `johannesburg`. Gauteng region blurb updated. Live-board `ROUTES.destA` unchanged.
+- Route landings only: weekday `<table>` grids sit above “When trains run” so crawlers see train numbers and times early.
+- `robots.txt` Disallow `/index.html` (homepage duplicate).
+
 ## V9_08.28.1 — Generation 9; lab chrome on main; fold post-18.1 What’s New (28 Aug 2026)
 
 - Major bump: production tree is the lab shell (left title, floating pill nav, no top tabs).

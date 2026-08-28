@@ -444,6 +444,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html, body { height: 100%; }
       body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
       body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
+      /* iOS: body overflow:hidden does not stop #app-scroll under the Options scrim. */
+      body.sidenav-open #app-scroll {
+        overflow: hidden !important;
+        overscroll-behavior: none;
+      }
+      #sidenav-overlay {
+        touch-action: none;
+        overscroll-behavior: none;
+      }
       #dev-modal,
       #alerts-channel,
       [id$="-modal"].fixed {

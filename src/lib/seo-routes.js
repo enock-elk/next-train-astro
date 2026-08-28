@@ -15,6 +15,10 @@ export function stationLabel(raw) {
         .replace(/\s+YARD$/i, '')
         .replace(/\s+/g, ' ')
         .trim();
+    const key = cleaned.toUpperCase();
+    if (key === 'JOHANNESBURG' || key === 'JOHANNESBURG PARK') {
+        return 'Johannesburg Park Station';
+    }
     if (cleaned && cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
         return cleaned
             .toLowerCase()
@@ -36,7 +40,9 @@ export function regionName(regionCode) {
 
 /** URL slug fragment from a station name. */
 export function slugifyStation(raw) {
-    return stationLabel(raw)
+    const display = stationLabel(raw);
+    const slugSource = display === 'Johannesburg Park Station' ? 'Johannesburg' : display;
+    return slugSource
         .toLowerCase()
         .replace(/['']/g, '')
         .replace(/[^a-z0-9]+/g, '-')

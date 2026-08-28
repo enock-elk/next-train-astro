@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.1 — Generation 9; lab chrome on main; fold post-18.1 What’s New (28 Aug 2026)
+
+- Major bump: production tree is the lab shell (left title, floating pill nav, no top tabs).
+- What’s New: one V9 card for everything after `V8_08.18.1` (28.5–26.1). Keep `V8_08.18.1` as the previous card.
+- Quiet board paint stays on the minute tick (`__ntQuietBoardPaint` + `tryPatchLiveBoardCountdown`) so Next Train clocks patch countdown text instead of remounting.
+
 ## V8_08.28.5 — Lab chrome on main; yellow maintenance bar above header (28 Aug 2026)
 
 - Production tree is the lab app (left title, floating pill nav, no top tabs) plus V8_08.28.4.

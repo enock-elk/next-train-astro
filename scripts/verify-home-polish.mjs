@@ -11,12 +11,13 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.28.5', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.28.5' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V8_08.28.5');
-assert(CHANGELOG_DATA[1].id === 'V8_08.28.4', 'keep V8_08.28.4 as the previous What’s New card');
+assert(APP_VERSION === 'V9_08.28.1', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V9_08.28.1' && CHANGELOG_DATA[0].features.length === 5, 'What’s New latest card is V9_08.28.1');
+assert(CHANGELOG_DATA[1].id === 'V8_08.18.1', 'keep V8_08.18.1 as the previous What’s New card');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('no longer flicker every minute')), 'V9 What’s New keeps the quiet-clocks line');
 assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
-assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.2–26.1 into V8_08.28.3');
+assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');
@@ -35,6 +36,9 @@ assert(board.includes('warningTriangleSvg()'), 'upcoming modal uses warning SVG'
 assert(renderer.includes('warningTriangleSvg()'), 'home board uses warning SVG');
 assert(warningTriangleSvg().includes('<svg'), 'warningTriangleSvg returns svg');
 assert(renderer.includes('emptyBoardHeadline'), 'empty board uses condensed headline helper');
+assert(renderer.includes('tryPatchLiveBoardCountdown'), 'minute tick patches countdown text instead of remounting');
+assert(renderer.includes('data-nt-countdown'), 'countdown node is stamped for quiet paint');
+assert(renderer.includes('stampLiveBoardCard'), 'board cards carry a stable key');
 assert(renderer.includes('No more trains today · first'), 'empty board one-liner copy');
 assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trailing colon, not a duplicated time');
 assert(!renderer.includes('timeBit'), 'empty board headline no longer appends the time');
@@ -42,6 +46,9 @@ assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First trai
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
+
+const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+assert(logic.includes('window.__ntQuietBoardPaint = true'), 'minute tick sets quiet board paint before findNextTrains');
 
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');

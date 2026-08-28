@@ -4,7 +4,7 @@
 /**
  * App version scheme: V{major}_{MM.DD}.{n}
  *
- * - major: product generation (currently 8)
+ * - major: product generation (currently 9)
  * - MM.DD: calendar date of this development session (use today's date)
  * - n: deployment counter for that date (1 = first ship that day)
  *
@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.28.5";
+export const APP_VERSION = "V9_08.28.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -933,37 +933,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.28.5",
-        title: "Yellow bar when the line is down",
+        id: "V9_08.28.1",
+        title: "New home, quieter clocks",
         date: "28 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Board:</b> A yellow bar with a wrench sits above the name when the line is under maintenance.",
-            "<b>Scroll:</b> That bar leaves with the header."
-        ]
-    },
-    {
-        id: "V8_08.28.4",
-        title: "Feedback contact, route pick, Mutual",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Messages:</b> Email or WhatsApp and the privacy lock stay on the Feedback Hub box.",
-            "<b>Board:</b> Pick a route before the empty board. Close stays hidden until a corridor is chosen.",
-            "<b>Map:</b> Mutual and Maitland sit on the same line."
-        ]
-    },
-    {
-        id: "V8_08.28.3",
-        title: "Recents, Crossmoor, floating bar",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
+            "<b>Home:</b> Name on the left. Tabs sit in a floating pill. Swipe left from the planner for Options. Messages and Share App are in Options — Email or WhatsApp and the privacy lock stay on the box. Offline, Refresh or Close.",
+            "<b>Board:</b> The Next Train clocks no longer flicker every minute. Pick a corridor first — Close stays hidden until then. When today’s trains are done, the next one is a single line. A yellow bar with a wrench sits above the name when the line is under maintenance, and it leaves with the header.",
             "<b>KZN:</b> Durban ↔ Crossmoor is on the board (yellow inland line).",
             "<b>Planner:</b> Recent trips stay after you search, newest first. Johannesburg Park and Bosman match. Tap a train for the stop list.",
-            "<b>Bar:</b> Bottom tabs sit in a floating pill. Swipe left from the planner for Options.",
-            "<b>Board:</b> When today’s trains are done, the next one is a single line.",
-            "<b>More:</b> Messages and Share App are in Options. Offline, Refresh or Close."
+            "<b>Map:</b> Mutual and Maitland sit on the same line."
         ]
     },
     {

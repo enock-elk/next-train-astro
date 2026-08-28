@@ -24,6 +24,7 @@ assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V
 assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
 assert(CHANGELOG_DATA[1].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
 assert(CHANGELOG_DATA[2].features.some((f) => f.includes('Max. Single Fare')), 'V9_08.28.8 What’s New mentions train-sheet fares');
+assert(CHANGELOG_DATA[2].features.some((f) => f.includes('Durban to Crossmoor')), 'V9_08.28.8 What’s New mentions Crossmoor train order');
 assert(CHANGELOG_DATA[3].features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
 assert(CHANGELOG_DATA[3].features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
 assert(CHANGELOG_DATA[4].features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');

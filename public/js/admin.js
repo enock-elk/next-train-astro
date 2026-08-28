@@ -73,6 +73,14 @@ const Admin = {
         return cues.length ? ` ${cues.join(' ')}` : '';
     },
 
+    /** Active corridors for operator dropdowns (alerts, incidents, bans, banners). */
+    listOperatorRoutes: (regionCode) => {
+        const all = (typeof ROUTES !== 'undefined' && ROUTES) || {};
+        return Object.values(all).filter((r) =>
+            r && r.isActive && r.id && r.id !== 'special_event' && (!regionCode || r.region === regionCode)
+        );
+    },
+
     /** Repair UTF-8-as-Latin1 mojibake (delegates to app helper when available). */
     repairMojibake: (str) => {
         if (typeof window.repairMojibake === 'function' && window.repairMojibake !== Admin.repairMojibake) {
@@ -9307,8 +9315,7 @@ const Admin = {
         });
         const archRouteSel = document.getElementById('alert-arch-filter-route');
         if (archRouteSel && typeof ROUTES !== 'undefined') {
-            Object.values(ROUTES)
-                .filter((r) => r.isActive && r.id !== 'special_event')
+            Admin.listOperatorRoutes()
                 .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
                 .forEach((r) => {
                     const opt = document.createElement('option');
@@ -9726,7 +9733,7 @@ const Admin = {
             ];
             if (panelEl && typeof ROUTES !== 'undefined') {
                 regions.forEach((regionInfo) => {
-                    const regionalRoutes = Object.values(ROUTES).filter((r) => r.region === regionInfo.code && r.isActive && r.id !== 'special_event');
+                    const regionalRoutes = Admin.listOperatorRoutes(regionInfo.code);
                     if (!regionalRoutes.length) return;
                     const head = document.createElement('div');
                     head.className = 'px-3 py-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest bg-gray-100 dark:bg-gray-800 sticky top-0 z-10 border-y border-gray-200 dark:border-gray-700';
@@ -10632,7 +10639,7 @@ const Admin = {
                 ];
 
                 regions.forEach(regionInfo => {
-                    const regionalRoutes = Object.values(ROUTES).filter(r => r.region === regionInfo.code && r.isActive && r.id !== 'special_event');
+                    const regionalRoutes = Admin.listOperatorRoutes(regionInfo.code);
                     if (regionalRoutes.length > 0) {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
@@ -11250,7 +11257,7 @@ const Admin = {
                 ];
 
                 regions.forEach(regionInfo => {
-                    const regionalRoutes = Object.values(ROUTES).filter(r => r.region === regionInfo.code && r.isActive && r.id !== 'special_event');
+                    const regionalRoutes = Admin.listOperatorRoutes(regionInfo.code);
                     if (regionalRoutes.length > 0) {
                         const group = addGroup(regionInfo.label);
                         regionalRoutes.forEach(r => {
@@ -13921,9 +13928,9 @@ const Admin = {
         const renderMaintRouteChecks = () => {
             if (!maintRouteBox) return;
             const regions = getMaintSelectedRegions();
-            const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
-            const list = Object.values(routesObj).filter((r) =>
-                r && r.isActive !== false && r.id && (!regions.length || regions.includes(r.region))
+            const list = (regions.length
+                ? regions.flatMap((code) => Admin.listOperatorRoutes(code))
+                : Admin.listOperatorRoutes()
             );
             if (!list.length) {
                 maintRouteBox.innerHTML = `<p class="text-[10px] text-orange-500 italic">${regions.length ? 'No routes for selected regions.' : 'Select a region to list its routes — or leave empty for all users.'}</p>`;

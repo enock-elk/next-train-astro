@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.8 — KZN Crossmoor grid order (28 Aug 2026)
+
+- Grid extractor V3.5 writes both Config hyphen keys (`durbn-to-cross_weekday`) and ROUTES underscore keys (`durbn_to_cross_weekday`), auto-discovers missing `XXX-to-YYY` tabs, accepts underscore filenames, searches the script folder, and merges into existing `MANUAL_GRID_ORDER` without clobbering `orderGridTrainIds`.
+- 28 Aug KZN workbook: Crossmoor weekday (9643 / 9652) and Saturday (9612–9681) columns are in grid order. Other KZN/EC hyphen keys now resolve at runtime too.
+- Admin alerts / incidents / bans / maintenance route pickers share `listOperatorRoutes()` so every active corridor, including Durban ↔ Crossmoor, appears.
+- What’s New `forceShow` stays false.
+
 ## V9_08.28.7 — Station corridors; Show all lines; Back is a button (28 Aug 2026)
 
 - Station popups list every drawn corridor that includes that stop, under the name (colour swatch + route label).

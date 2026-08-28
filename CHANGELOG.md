@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.13 — Admin inbox WhatsApp layout; alias modal; edit replies in place (28 Aug 2026)
+
+- Commuter Feedback thread uses the same WhatsApp bubble tokens as Feedback Hub (`#d9fdd3` / dark `#005c4b`, wallpaper `#efeae2`). Options sits in the contact header row (label only). Alias is a person/pencil control that opens a real modal instead of `prompt()`.
+- `#fb-body` / `#fb-list` / `.feedback-thread-chat` are a flex + `min-h-0` + inner scroll chain so the white panel no longer clips in drill-down.
+- Long-press or Edit on an admin bubble PATCHes `inbox/{deviceId}/{msgKey}` (`message`/`text` + `editedAt`). Does not POST a new message or auto-archive.
+
 ## V9_08.28.12 — Remember look across purge; Check for Updates restores Classic light (28 Aug 2026)
 
 - Mirror `theme` and `colourPack` (and `ntProdClassicPackV1`) to IndexedDB via `setResilientItem`. `restoreLookPrefs` reapplies after a localStorage wipe without re-running the one-shot Classic remap over a restored pack.

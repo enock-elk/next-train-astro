@@ -194,7 +194,12 @@ assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub'
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
-assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'), 'About unofficial pill dropped low-contrast blue');
+assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
+assert(hubModals.includes('#feedback-panel .inbox-bubble-other'), 'admin inbox shares WhatsApp other-bubble tokens');
+assert(hubModals.includes('#feedback-panel .feedback-thread-chat'), 'admin thread wallpaper selector');
+assert(hubModals.includes('background: #efeae2'), 'WhatsApp wallpaper token is #efeae2');
+assert(hubModals.includes('#d9fdd3'), 'own bubble is WhatsApp green');
+assert(hubModals.includes('#005c4b'), 'dark own bubble is WhatsApp teal');
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 assert(mapPage.includes('aria-label="Network Lines"'), 'Network Lines is a labelled SVG button');

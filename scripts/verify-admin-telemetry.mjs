@@ -187,6 +187,11 @@ ok(!adminJs.includes('Insights (this window)'), 'must not say Insights (this win
 ok(adminJs.includes('sys_logs/trip_plans.json?auth='), 'all-time trip_plans fetch has no limitToLast on the primary GET');
 ok(!/usersEver:\s*ever\.usersEver\s*\|\|\s*uniqueUsers/.test(adminJs), 'Users ever must not fall back to a window unique-user count');
 
+ok(adminJs.includes('openAliasModal'), 'commuter alias opens a modal');
+ok(adminJs.includes('editedAt: Date.now()'), 'admin reply edit writes editedAt');
+ok(adminJs.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json'), 'edit PATCHes inbox/{deviceId}/{msgKey}');
+ok(!adminJs.includes("icon('more'"), 'feedback Options dropped the more icon');
+
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));
     process.exit(1);

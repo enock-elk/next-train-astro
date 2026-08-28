@@ -11,10 +11,10 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.12', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.13', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_08.28.12' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_08.28.12');
+assert(CHANGELOG_DATA[0].id === 'V9_08.28.13' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_08.28.13');
 assert(CHANGELOG_DATA[1].id === 'V9_08.28.11', 'keep V9_08.28.11 as the previous What’s New card');
 assert(CHANGELOG_DATA[2].id === 'V9_08.28.10', 'keep V9_08.28.10 as the previous What’s New card');
 assert(CHANGELOG_DATA[3].id === 'V9_08.28.9', 'keep V9_08.28.9 as the previous What’s New card');
@@ -23,7 +23,7 @@ assert(CHANGELOG_DATA[5].id === 'V9_08.28.7', 'keep V9_08.28.7 as the previous W
 assert(CHANGELOG_DATA[6].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
 assert(CHANGELOG_DATA[7].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
 assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V9_08.28.3'].includes(e.id)), 'folded 28.6–28.3 out of What’s New');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Check for Updates')), 'V9_08.28.12 What’s New mentions Check for Updates');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Check for Updates')), 'V9_08.28.13 What’s New still mentions Check for Updates');
 assert(CHANGELOG_DATA[1].features.some((f) => f.includes('Station dots sit on the lines')), 'V9_08.28.11 What’s New mentions station dots');
 assert(CHANGELOG_DATA[2].features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
 assert(CHANGELOG_DATA[3].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
@@ -104,6 +104,21 @@ assert(manifest.posters.length >= 10, `manifest has ${manifest.posters.length} p
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');
+assert(admin.includes('openAliasModal'), 'alias uses a real modal');
+assert(admin.includes("modal.id = 'admin-alias-modal'"), 'alias modal id is admin-alias-modal');
+assert(admin.includes('aria-label="Set alias"'), 'Set alias is an SVG control');
+assert(admin.includes("icon('pencil'"), 'alias control includes a pencil icon');
+assert(!admin.includes('>Set alias</button>'), 'Set alias text button removed');
+assert(!/setCommuterAlias[\s\S]{0,500}prompt\(/.test(admin), 'setCommuterAlias no longer uses prompt');
+assert(admin.includes('data-fb-more-toggle'), 'Options toggle remains');
+assert(!admin.includes("icon('more'"), 'Options dropped the more icon');
+assert(admin.includes('feedback-thread-chat'), 'thread wallpaper lives on feedback-thread-chat');
+assert(admin.includes('bg-[#efeae2]'), 'admin thread wallpaper is #efeae2');
+assert(admin.includes("id=\"fb-list\" class=\"space-y-3 pr-1 flex-1 min-h-0 overflow-y-auto"), 'fb-list inner-scrolls');
+assert(admin.includes('openAdminReplyEditor'), 'admin replies open the editor');
+assert(admin.includes('editedAt: Date.now()'), 'edit writes editedAt');
+assert(admin.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json'), 'edit PATCHes inbox/{deviceId}/{msgKey}');
+assert(admin.includes("Does not post a new message or archive the thread."), 'edit path does not POST or archive');
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

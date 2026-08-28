@@ -150,6 +150,7 @@ const Admin = {
             reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 00-4-4H4"/>',
             file: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
             more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+            pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
         };
         const body = paths[name];
@@ -5338,10 +5339,57 @@ const Admin = {
         Admin.currentFeedbackTab = 'inbox';
         Admin.cachedFeedbackData = [];
 
-        fbPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
+        fbPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300 flex flex-col min-h-0";
+
+        if (!document.getElementById('admin-feedback-styles')) {
+            const fbStyles = document.createElement('style');
+            fbStyles.id = 'admin-feedback-styles';
+            fbStyles.textContent = `
+                #admin-modules-container:not(.admin-grid-view) #feedback-panel {
+                    display: flex;
+                    flex-direction: column;
+                    min-height: min(72dvh, 40rem);
+                    max-height: calc(100dvh - 6.5rem);
+                    overflow: hidden;
+                }
+                #feedback-panel #fb-body:not(.hidden) {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #feedback-panel #fb-list {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                }
+                #feedback-panel .fb-thread-open {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                }
+                #feedback-panel .fb-thread-open .feedback-thread-body {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow: hidden;
+                }
+                #feedback-panel .feedback-thread-chat {
+                    flex: 1 1 auto;
+                    min-height: 12rem;
+                    overflow-y: auto;
+                }
+            `;
+            document.head.appendChild(fbStyles);
+        }
 
         fbPanel.innerHTML = `
-            <div id="fb-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
+            <div id="fb-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer shrink-0">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('message', 'text-sky-500 dark:text-sky-400')}
                     <span>Commuter Feedback</span>
@@ -5350,9 +5398,9 @@ const Admin = {
                 <svg id="fb-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             
-            <div id="fb-body" class="hidden mt-4 flex flex-col">
+            <div id="fb-body" class="hidden mt-4 flex flex-col flex-1 min-h-0 overflow-hidden">
                 <!-- GUARDIAN UX FIX: Next Train Style Tabs -->
-                <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3">
+                <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3 shrink-0">
                     <button id="fb-tab-inbox" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none">
                         Inbox
                     </button>
@@ -5362,7 +5410,7 @@ const Admin = {
                 </div>
 
                 <!-- GUARDIAN UX FIX: Search Bar -->
-                <div class="mb-3 relative px-1">
+                <div class="mb-3 relative px-1 shrink-0">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
                         ${Admin.icon('search', 'w-3.5 h-3.5')}
                     </div>
@@ -5370,7 +5418,7 @@ const Admin = {
                 </div>
 
                 <!-- GUARDIAN UX FIX: Relocated Action Buttons -->
-                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1 shrink-0">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
                     </button>
@@ -5379,7 +5427,7 @@ const Admin = {
                     </button>
                 </div>
                 
-                <div id="fb-list" class="space-y-3 pr-1"></div>
+                <div id="fb-list" class="space-y-3 pr-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar"></div>
             </div>
         `;
 
@@ -5562,7 +5610,7 @@ const Admin = {
                 // Always show full Next Train ID (copyable) + optional alias rename
                 const commuterTitle = did !== 'Anonymous / Legacy'
                     ? `<div class="min-w-0 w-full space-y-1">
-                        ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-blue-500 focus:outline-none">Set alias</button>`}
+                        ${alias ? `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '${safeAliasAttr}')" class="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm text-left focus:outline-none" title="Rename alias">${alias.replace(/</g, '&lt;')}</button>` : `<button type="button" onclick="event.stopPropagation(); Admin.setCommuterAlias('${safeDidAttr}', '')" class="inline-flex items-center gap-0.5 p-1 rounded-md text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" title="Set alias" aria-label="Set alias">${Admin.icon('user', 'w-4 h-4')}${Admin.icon('pencil', 'w-3 h-3')}</button>`}
                         <button type="button" onclick="event.stopPropagation(); navigator.clipboard.writeText('${safeDidAttr}').then(()=>{ if(typeof showToast==='function') showToast('User ID copied','success'); }).catch(()=>{});" class="inline-block w-fit max-w-full text-left font-mono text-[11px] leading-snug break-all whitespace-normal text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none cursor-pointer py-0 px-0" title="Click to copy Next Train user ID">${displayDid.replace(/</g, '&lt;')}</button>${Admin.userIdJoinHintHtml(did)}
                       </div>`
                     : `<span class="text-blue-600 dark:text-blue-400 font-mono break-all">${displayDid}</span>`;
@@ -5654,24 +5702,24 @@ const Admin = {
                             </button>
                         </div>
                     </div>
-                    <div class="feedback-thread-body hidden relative bg-white dark:bg-gray-900 p-2 sm:p-3">
-                        <div class="absolute top-2 right-2 z-20" data-fb-more-wrap>
-                            <button type="button" data-fb-more-toggle class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
-                                ${Admin.icon('more', 'w-3.5 h-3.5')} Options
-                                <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
-                                <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
-                                <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
-                                ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 mb-3 pr-24 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                    <div class="feedback-thread-body hidden relative flex flex-col min-h-0">
+                        <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
+                            <div class="relative shrink-0" data-fb-more-wrap>
+                                <button type="button" data-fb-more-toggle class="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
+                                    Options
+                                    <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                    <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                                    <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
+                                </div>
+                            </div>
                         </div>
-                        <div class="space-y-3 mb-2 h-auto min-h-[50px] flex flex-col">
+                        <div class="feedback-thread-chat space-y-3 p-2 sm:p-3 flex-1 min-h-[12rem] overflow-y-auto custom-scrollbar flex flex-col bg-[#efeae2] dark:bg-[#0b141a]">
                 `;
 
                 let lastRenderedDate = "";
@@ -5747,14 +5795,22 @@ const Admin = {
                         // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
                         const rawMsgKey = String(item.id || item.key || '').trim();
                         const msgAnchor = secureEscape(rawMsgKey);
+                        const adminVer = secureEscape(String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin');
+                        const adminRoute = secureEscape(item.routeId || '');
+                        const adminMeta = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         groupHTML += `
-                            <div class="flex flex-col items-end mb-1.5 pl-2 sm:pl-4" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
-                                <div class="flex flex-col bg-slate-700 dark:bg-slate-800 text-white pt-1.5 pb-2 px-3 rounded-2xl rounded-tr-sm shadow-md border border-slate-600 dark:border-slate-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
-                                    <div class="mb-0.5 text-[10px] font-black text-slate-300 uppercase tracking-wider">${adminName}</div>
-                                    <div>${parsedAdminText}</div>
-                                    <div class="flex items-center justify-end mt-1 self-end ml-3">
-                                        <span class="text-[9px] font-mono text-slate-300 opacity-90">${dateStr}</span>
-                                        ${receiptHtml}
+                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
+                                <div class="inbox-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin>
+                                        <div class="inbox-bubble-name-row">
+                                            <span>${secureEscape(adminName)}</span>
+                                            <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
+                                        </div>
+                                        <div class="inbox-bubble-body">
+                                            <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                            <button type="button" data-fb-edit-btn class="text-[9px] font-bold uppercase tracking-wider opacity-70 hover:opacity-100 mt-1 focus:outline-none">Edit</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -6041,22 +6097,21 @@ const Admin = {
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const integratedHeaderHtml = `
-                            <div class="text-[9px] font-black ${headerColorClass} uppercase tracking-widest mb-1.5 border-b border-gray-200 dark:border-gray-700 pb-1 flex justify-between items-center w-full">
-                                <span class="whitespace-nowrap inline-flex items-center gap-1">${headerLabelText}</span>
+                            <div class="inbox-bubble-name-row">
+                                <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
                                 <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} · ${safeRouteId}</span>
                             </div>
                         `;
 
-                        // GUARDIAN UX FIX: Removed extreme padding (pr-12 -> pr-2) and expanded bubble width (max-w-[85%] -> max-w-[95%]) to fix squeezed text.
                         groupHTML += `
-                            <div class="flex flex-col items-start mb-1.5 pr-2 sm:pr-4">
-                                <div class="flex flex-col bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 pt-1.5 pb-2 px-3 rounded-2xl rounded-tl-sm shadow-sm border border-gray-200 dark:border-gray-700 text-sm leading-relaxed text-left w-fit max-w-[95%] sm:max-w-[90%] relative">
-                                    ${integratedHeaderHtml}
-                                    ${quoteBlockHtml}
-                                    <div>${rawText}</div>
-                                    ${attachmentHtml}
-                                    <div class="text-[9px] text-gray-500 font-mono mt-1 opacity-80 self-end ml-3">
-                                        ${dateStr}
+                            <div class="inbox-row justify-start mb-1.5">
+                                <div class="inbox-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-other">
+                                        ${integratedHeaderHtml}
+                                        <div class="inbox-bubble-body">
+                                            ${quoteBlockHtml}
+                                            <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -6064,11 +6119,11 @@ const Admin = {
                 } });
                 // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in Options)
                 const actionHtml = isInbox 
-                    ? `<div class="flex space-x-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                    ? `<div class="flex space-x-2 mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
                          <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
                          ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
                        </div>`
-                    : `<div class="flex justify-between items-center w-full mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                    : `<div class="flex justify-between items-center w-full mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
                          <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived Thread</span>
                          <div class="flex space-x-2">
                              <button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.restoreFeedback('${feedbackId}')">Restore</button>
@@ -6105,6 +6160,19 @@ const Admin = {
                     e.target.closest('[data-fb-more-menu]')?.classList.add('hidden');
                 } else if (!e.target.closest('[data-fb-more-wrap]')) {
                     listContainer.querySelectorAll('[data-fb-more-menu]').forEach((m) => m.classList.add('hidden'));
+                }
+
+                const editBtn = e.target.closest('[data-fb-edit-btn]');
+                if (editBtn && listContainer.contains(editBtn)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const row = editBtn.closest('[data-fb-msg-id]');
+                    Admin.openAdminReplyEditor(
+                        row?.getAttribute('data-fb-msg-id'),
+                        row?.getAttribute('data-fb-device-id'),
+                        row?.getAttribute('data-fb-feedback-id')
+                    );
+                    return;
                 }
 
                 // WhatsApp quote chip — data-* attrs (no fragile inline onclick)
@@ -6149,8 +6217,9 @@ const Admin = {
                     const h = allHeaders[idx];
                     if (b !== body) {
                         b.classList.add('hidden');
-                        h.classList.remove('border-gray-200', 'dark:border-gray-700');
-                        h.classList.add('border-transparent');
+                        h?.parentElement?.classList.remove('fb-thread-open');
+                        h?.classList.remove('border-gray-200', 'dark:border-gray-700');
+                        h?.classList.add('border-transparent');
                         const chevron = h.querySelector('.chevron-icon');
                         if (chevron) chevron.classList.remove('rotate-180');
                     }
@@ -6159,6 +6228,7 @@ const Admin = {
                 // Toggle the selected thread
                 if (isOpening) {
                     body.classList.remove('hidden');
+                    header.parentElement?.classList.add('fb-thread-open');
                     header.classList.add('border-gray-200', 'dark:border-gray-700');
                     header.classList.remove('border-transparent');
                     const chevron = header.querySelector('.chevron-icon');
@@ -6168,12 +6238,52 @@ const Admin = {
                     setTimeout(() => { header.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
                 } else {
                     body.classList.add('hidden');
+                    header.parentElement?.classList.remove('fb-thread-open');
                     header.classList.remove('border-gray-200', 'dark:border-gray-700');
                     header.classList.add('border-transparent');
                     const chevron = header.querySelector('.chevron-icon');
                     if (chevron) chevron.classList.remove('rotate-180');
                 }
             };
+
+            if (!listContainer.dataset.fbHoldBound) {
+                listContainer.dataset.fbHoldBound = '1';
+                let holdTimer = null;
+                let holdFired = false;
+                const clearHold = () => {
+                    if (holdTimer) {
+                        clearTimeout(holdTimer);
+                        holdTimer = null;
+                    }
+                };
+                listContainer.addEventListener('pointerdown', (e) => {
+                    const bubble = e.target.closest('[data-fb-edit-admin]');
+                    if (!bubble || !listContainer.contains(bubble) || e.button) return;
+                    holdFired = false;
+                    clearHold();
+                    holdTimer = setTimeout(() => {
+                        holdFired = true;
+                        const row = bubble.closest('[data-fb-msg-id]');
+                        Admin.openAdminReplyEditor(
+                            row?.getAttribute('data-fb-msg-id'),
+                            row?.getAttribute('data-fb-device-id'),
+                            row?.getAttribute('data-fb-feedback-id')
+                        );
+                    }, 500);
+                });
+                listContainer.addEventListener('pointerup', clearHold);
+                listContainer.addEventListener('pointercancel', clearHold);
+                listContainer.addEventListener('pointermove', (e) => {
+                    if (!holdTimer) return;
+                    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 12) clearHold();
+                });
+                listContainer.addEventListener('click', (e) => {
+                    if (!holdFired) return;
+                    holdFired = false;
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, true);
+            }
         };
 
         Admin.fetchFeedback = async () => {
@@ -6229,12 +6339,17 @@ const Admin = {
                                 id: msgKey,
                                 device_id: deviceId, // For Grouping
                                 isFromAdmin: true,
-                                text: msg.message,
+                                text: msg.message || msg.text,
+                                message: msg.message || msg.text,
                                 timestamp: msg.timestamp,
                                 status: parentStatus,
                                 read: msg.read,
                                 delivered: msg.delivered,
-                                acknowledged: msg.acknowledged
+                                acknowledged: msg.acknowledged,
+                                feedbackId: msg.feedbackId,
+                                appVersion: msg.appVersion,
+                                routeId: msg.routeId,
+                                editedAt: msg.editedAt
                             });
                         });
                     });
@@ -6338,14 +6453,9 @@ const Admin = {
 
         // GUARDIAN PHASE 13: Admin Address Book (Commuter Aliases)
         Admin.setCommuterAlias = async (deviceId, currentAlias) => {
-            // Prefill with existing alias, else the full Next Train ID so admin can
-            // copy/edit/clear it instead of starting from a blank field.
             const initial = (currentAlias && String(currentAlias).trim()) ? String(currentAlias) : String(deviceId || '');
-            const newName = prompt(
-                `Set a friendly alias for this commuter.\n\nThe field starts with their Next Train ID - delete it to type a name, or copy it for bans.\nLeave blank to remove any alias.`,
-                initial
-            );
-            if (newName === null) return; // Action cancelled by user
+            const newName = await Admin.openAliasModal(deviceId, initial);
+            if (newName === null) return;
             
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -7446,7 +7556,57 @@ const Admin = {
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     },
 
-    openReplyModal: (feedbackId, deviceId) => {
+    openAliasModal: (deviceId, currentAlias) => new Promise((resolve) => {
+        document.getElementById('admin-alias-modal')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'admin-alias-modal';
+        modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
+        const initial = String(currentAlias || deviceId || '');
+        const safeInitial = initial.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="alias-title" aria-modal="true">
+                <h3 id="alias-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">Commuter alias</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">The field starts with their Next Train ID. Delete it to type a name, or leave blank to remove any alias.</p>
+                <input id="admin-alias-input" type="text" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value="${safeInitial}" autocomplete="off">
+                <div class="flex space-x-2 mt-4">
+                    <button type="button" id="alias-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Cancel</button>
+                    <button type="button" id="alias-save" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Save</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const input = document.getElementById('admin-alias-input');
+        const finish = (val) => {
+            modal.remove();
+            resolve(val);
+        };
+        document.getElementById('alias-cancel').onclick = () => finish(null);
+        document.getElementById('alias-save').onclick = () => finish(input ? input.value : '');
+        input?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                finish(input.value);
+            } else if (e.key === 'Escape') {
+                finish(null);
+            }
+        });
+        modal.addEventListener('click', (e) => { if (e.target === modal) finish(null); });
+        setTimeout(() => { input?.focus(); input?.select(); }, 0);
+    }),
+
+    openAdminReplyEditor: (msgKey, deviceId, feedbackId) => {
+        const key = String(msgKey || '').trim();
+        if (!key || !deviceId) {
+            if (typeof showToast === 'function') showToast('Cannot edit that reply.', 'error');
+            return;
+        }
+        const item = (Admin.cachedFeedbackData || []).find((i) =>
+            i && i.isFromAdmin && String(i.id) === key && (i.device_id === deviceId || i.deviceId === deviceId)
+        );
+        Admin.openReplyModal(feedbackId || item?.feedbackId || '', deviceId, item || { id: key, text: '' });
+    },
+
+    openReplyModal: (feedbackId, deviceId, editMsg) => {
         if (!deviceId) {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
             return;
@@ -7464,9 +7624,9 @@ const Admin = {
             modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> Reply to Commuter</h3>
+                    <h3 id="admin-reply-title" class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Reply to Commuter</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
+                    <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
                     <div class="flex flex-col min-h-0 flex-1">
                     <div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">
@@ -7510,8 +7670,25 @@ const Admin = {
 
         const recipEl = document.getElementById('admin-reply-recipient');
         if (recipEl) recipEl.innerHTML = recipientHtml;
-        
-        document.getElementById('admin-reply-text').innerHTML = '';
+
+        const editKey = String(editMsg?.id || editMsg?.key || '').trim();
+        modal.dataset.editMsgKey = editKey;
+        modal.dataset.replyDeviceId = deviceId || '';
+        modal.dataset.replyFeedbackId = String(feedbackId || editMsg?.feedbackId || '');
+
+        const titleText = document.getElementById('admin-reply-title-text');
+        const hintEl = document.getElementById('admin-reply-hint');
+        const sendBtn = document.getElementById('reply-send');
+        if (titleText) titleText.textContent = editKey ? 'Edit reply' : 'Reply to Commuter';
+        if (hintEl) {
+            hintEl.textContent = editKey
+                ? 'Saves over this reply. Does not post a new message or archive the thread.'
+                : 'Message will be delivered to their personal inbox upon next app launch.';
+        }
+        if (sendBtn) sendBtn.textContent = editKey ? 'Save' : 'Send Reply';
+
+        const editorEl = document.getElementById('admin-reply-text');
+        if (editorEl) editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : '';
         modal.classList.remove('hidden');
         void modal.offsetWidth; // Trigger reflow
         modal.firstElementChild.classList.remove('scale-95');
@@ -7616,14 +7793,20 @@ const Admin = {
                 if (typeof showToast === 'function') showToast("Please enter a message.", "error");
                 return;
             }
-            
-            // Auto-Signoff Logic
-            const adminEmail = Admin.currentUser?.email || '';
-            const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
-            text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
+
+            const editingKey = String(modal.dataset.editMsgKey || '').trim();
+            const replyDeviceId = modal.dataset.replyDeviceId || deviceId;
+            const replyFeedbackId = modal.dataset.replyFeedbackId || feedbackId;
+
+            if (!editingKey) {
+                const adminEmail = Admin.currentUser?.email || '';
+                const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
+                text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
+            }
             
             const btn = document.getElementById('reply-send');
-            btn.textContent = "Sending...";
+            const idleLabel = editingKey ? 'Save' : 'Send Reply';
+            btn.textContent = editingKey ? 'Saving...' : 'Sending...';
             btn.disabled = true;
 
             try {
@@ -7631,31 +7814,49 @@ const Admin = {
                 if (!secret) throw new Error("Auth missing");
 
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+
+                if (editingKey) {
+                    const patchUrl = `${dynamicEndpoint}inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json?auth=${secret}`;
+                    const patchRes = await fetch(patchUrl, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
+                            message: text,
+                            text,
+                            editedAt: Date.now()
+                        })
+                    });
+                    if (!patchRes.ok) throw new Error('Failed to save');
+                    if (typeof showToast === 'function') showToast('Reply updated.', 'success');
+                    cleanup();
+                    Admin.fetchFeedback();
+                    return;
+                }
                 
                 // Push to inbox array via POST
-                const url = `${dynamicEndpoint}inbox/${deviceId}.json?auth=${secret}`;
+                const url = `${dynamicEndpoint}inbox/${replyDeviceId}.json?auth=${secret}`;
                 const payload = {
                     message: text,
                     timestamp: Date.now(),
-                    feedbackId: feedbackId,
-                    read: false
+                    feedbackId: replyFeedbackId,
+                    read: false,
+                    appVersion: (typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '')
                 };
 
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
                 if (!res.ok) throw new Error("Failed to send");
                 
                 // Flag the original ticket as replied to
-                await fetch(`${dynamicEndpoint}feedback/${feedbackId}.json?auth=${secret}`, {
+                await fetch(`${dynamicEndpoint}feedback/${replyFeedbackId}.json?auth=${secret}`, {
                     method: 'PATCH',
                     body: JSON.stringify({ hasAdminReply: true })
                 });
 
                 // Collect contacts before archive refresh replaces the cache
-                const contacts = Admin.collectFeedbackContacts(deviceId);
-                const commuterName = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || 'this commuter';
+                const contacts = Admin.collectFeedbackContacts(replyDeviceId);
+                const commuterName = (Admin.cachedAliases && Admin.cachedAliases[replyDeviceId]) || 'this commuter';
 
                 // Auto-resolve the feedback item (stays on the current Inbox/Archive tab)
-                await Admin.resolveFeedback(feedbackId, true); 
+                await Admin.resolveFeedback(replyFeedbackId, true); 
                 
                 if (typeof showToast === 'function') showToast("Reply sent & archived!", "success");
                 cleanup();
@@ -7663,9 +7864,9 @@ const Admin = {
                     Admin.showOutreachModal({ ...contacts, commuterName });
                 }
             } catch (e) {
-                if (typeof showToast === 'function') showToast("Failed to send reply.", "error");
+                if (typeof showToast === 'function') showToast(editingKey ? 'Failed to save reply.' : 'Failed to send reply.', 'error');
             } finally {
-                btn.textContent = "Send Reply";
+                btn.textContent = idleLabel;
                 btn.disabled = false;
             }
         };

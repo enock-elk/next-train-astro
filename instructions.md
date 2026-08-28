@@ -4,6 +4,8 @@ This is the standing brief for humans and agents. **Cursor Cloud Agents automati
 
 This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up” core behaviour you do not fully understand.
 
+**No unsolicited changes.** Only change what was asked. Do not rewrite adjacent copy, layout, or behaviour. Do not “improve” strings, presence labels, or UI that was not in the request.
+
 ## Product and repos
 
 - **This repo (`enock-elk/next-train-astro`)** is the Astro source of truth, GitHub Pages preview, and GitHub schedule dump (`public/data/`).
@@ -55,7 +57,11 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 
 Scheme: `V{major}_{MM.DD}.{n}` (example `V8_08.17.1`). Same calendar day → increment `n`. New calendar day → today’s `MM.DD` and `n=1`.
 
-Keep in sync: `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, `public/app-version.json`, and a `CHANGELOG.md` heading.
+Keep in sync on every version bump: `APP_VERSION`, `package.json` `version`, and `public/app-version.json`.
+
+**Changelog is optional.** You may ship a version bump with no What’s New card and no `CHANGELOG.md` heading, or with a heading that is only **no release notes.** When you skip commuter notes, leave `CHANGELOG_DATA[0]` as the last public card. Do not invent What’s New bullets for admin-only, instruction-only, or operator-only ships.
+
+When you do write notes: add a `CHANGELOG.md` heading and, only if there is obvious commuter-facing behaviour, a matching `CHANGELOG_DATA[0]` card.
 
 **What’s New is a public commuter list. Competitors read it.** Only obvious in-app behaviour a commuter can tap and see in the build they have (board, planner, map, timetable, Options). Short bullets. Do not explain strategy or “we fixed.” Engineering detail stays in `CHANGELOG.md`.
 

@@ -1035,7 +1035,10 @@
             }
 
             // Guardian UX: Disabled Leaflet's rigid zoom control for horizontal bar layout
-            const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom); 
+            const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
+            map.createPane('nt-stations');
+            const stationPane = map.getPane('nt-stations');
+            if (stationPane) stationPane.style.zIndex = 450; 
             
             // Guardian UX: "Midnight Blue" unified tile layer
             // CSS filter (.dark .leaflet-tile-pane) flips this strictly in dark mode
@@ -1524,13 +1527,16 @@
 
             const stationLayerItems = [];
 
+            function raiseStationMarkers() {
+                stationLayerItems.forEach((s) => {
+                    if (s.marker && map.hasLayer(s.marker) && typeof s.marker.bringToFront === 'function') {
+                        s.marker.bringToFront();
+                    }
+                });
+            }
+
             function syncLineFilterChrome() {
                 const filtered = !!selectedRouteId;
-                const resetBtn = document.getElementById('map-reset-line-btn');
-                if (resetBtn) {
-                    resetBtn.hidden = !filtered;
-                    resetBtn.setAttribute('aria-hidden', filtered ? 'false' : 'true');
-                }
                 document.getElementById('map-top-controls')?.classList.toggle('is-line-filtered', filtered);
                 document.querySelectorAll('#legend-content .legend-item[data-route-id]').forEach((btn) => {
                     const on = selectedRouteId && btn.getAttribute('data-route-id') === selectedRouteId;
@@ -1573,6 +1579,7 @@
                         map.removeLayer(s.marker);
                     }
                 });
+                raiseStationMarkers();
                 syncLineFilterChrome();
                 if (!fit) return;
                 if (selectedRouteId) {
@@ -1589,11 +1596,6 @@
             function applySelectedLine(routeId) {
                 setSelectedLine(routeId, { toggle: true, fit: true });
             }
-
-            document.getElementById('map-reset-line-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                setSelectedLine(null, { toggle: false, fit: true });
-            });
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
@@ -1614,7 +1616,8 @@
                     color: isMajor ? "#1f2937" : "#3b82f6",
                     weight: isMajor ? 2 : 1,
                     opacity: 1,
-                    fillOpacity: 1
+                    fillOpacity: 1,
+                    pane: 'nt-stations'
                 }).addTo(map)
                   .bindPopup(
                       () => stationPopupHtml(data.origName, data.routes, drawnRoutes),
@@ -1628,6 +1631,7 @@
                   });
                 stationLayerItems.push({ name, routes: data.routes, marker });
             });
+            raiseStationMarkers();
 
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
@@ -1646,14 +1650,10 @@
                 });
                 legendContent.appendChild(allBtn);
                 drawnRoutes.forEach(item => {
-                    
-                    // Evaluate Dynamic Route Status for the Legend
-                    let routeStatus = item.isActive ? 'LIVE' : 'DOWN';
-                    let badgeColor = item.isActive ? 'bg-green-500' : 'bg-gray-500';
-
+                    let dotColor = item.color || '#94a3b8';
                     let isCritical = false;
                     let isWarning = false;
-                    
+
                     Object.values(globalDisruptions).flat().forEach(d => {
                         if (!d.stations || d.stations.length === 0) {
                             if (d.routeId === item.routeId) {
@@ -1677,14 +1677,9 @@
                         }
                     });
 
-                    if (item.isActive) {
-                        if (isCritical) { routeStatus = 'SEVERED'; badgeColor = 'bg-red-500'; } 
-                        else if (isWarning) { routeStatus = 'DELAYS'; badgeColor = 'bg-yellow-500'; }
-                    } else {
-                        // 🛡️ Future Anticipation Badge
-                        routeStatus = 'SOON'; 
-                        badgeColor = 'bg-blue-600 animate-pulse'; 
-                    }
+                    if (!item.isActive) dotColor = '#94a3b8';
+                    else if (isCritical) dotColor = '#ef4444';
+                    else if (isWarning) dotColor = '#eab308';
 
                     const row = document.createElement('button');
                     row.type = 'button';
@@ -1693,9 +1688,8 @@
                     row.setAttribute('aria-pressed', 'false');
                     row.setAttribute('aria-label', `Show ${item.name.replace(/<[^>]+>/g, '')}`);
                     row.innerHTML = `
-                            <span class="color-dot" style="background-color: ${item.color}"></span>
+                            <span class="color-dot" style="background-color: ${dotColor}"></span>
                             <span class="text-gray-700 dark:text-gray-200 mr-2">${item.name}</span>
-                            <span class="status-badge ${badgeColor}">${routeStatus}</span>
                     `;
                     row.addEventListener('click', (e) => {
                         e.stopPropagation();

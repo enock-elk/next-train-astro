@@ -103,6 +103,9 @@ const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.u
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
+assert(plannerUi.includes('keepPlannerFieldVisible'), 'planner fields scroll to the top of the visible viewport');
+assert(plannerUi.includes('vis.height * 0.7'), 'planner list can fill the space above the keyboard');
+assert(!plannerUi.includes('openAbove'), 'planner list opens downward from the field');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
 assert(plannerUi.includes('savePlannerHistory(origin, dest)'), 'recents persist when a plan starts');
 assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared station alias resolver');
@@ -212,6 +215,9 @@ assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub'
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('data-feedback-scroll'), 'long feedback form has its own keyboard-safe scroller');
 assert(hubModals.includes('--nt-feedback-vv-height'), 'feedback overlays use visible viewport height');
+assert(hubModals.includes('html.nt-keyboard #messages-thread-modal'), 'Feedback Hub docks to the keyboard');
+assert(hubModals.includes('padding: 0.5rem 0.5rem 0'), 'Feedback Hub drops the bottom pad against the keyboard');
+assert(hubModals.includes('border-bottom-left-radius: 0'), 'Feedback Hub card meets the keyboard with a square bottom');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
@@ -292,9 +298,11 @@ assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #botto
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
-assert(!layout.includes('interactive-widget=overlays-content'), 'keyboard can resize the visible app viewport');
-assert(!layout.includes('lastLayoutH'), 'keyboard does not keep a stale full-screen layout height');
-assert(layout.includes('? Math.min(vh, client || vh)'), 'keyboard height follows visualViewport');
+assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
+assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
+assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
+assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
+assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');
 assert(layout.includes('classList.toggle(\'nt-keyboard\''), 'keyboard class is stamped on html');
 assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tray pad under the pill');
 assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');

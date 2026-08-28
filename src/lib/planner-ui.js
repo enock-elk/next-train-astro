@@ -775,37 +775,51 @@ function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     return 'Weekday (Mon-Fri)';
 }
 
-/** Keep an inline planner list inside the visible viewport and above the bottom nav. */
+/** Visible viewport (above the software keyboard). Layout height stays full. */
+function visibleViewportRect() {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const top = vv?.offsetTop || 0;
+    const height = vv?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+    return { top, height, bottom: top + height };
+}
+
+/** Scroll a planner field to the top of the visible viewport so its list can open downward. */
+function keepPlannerFieldVisible(field) {
+    if (!field || typeof document === 'undefined') return;
+    const scroller = document.getElementById('app-scroll');
+    if (!scroller) return;
+    const vis = visibleViewportRect();
+    const targetTop = vis.top + 8;
+    const rect = field.getBoundingClientRect();
+    const delta = rect.top - targetTop;
+    if (Math.abs(delta) > 2) scroller.scrollTop += delta;
+}
+
+/** Open the planner list below the trigger, filling space down to the keyboard. */
 function positionDropdownAroundTrigger(list, trigger, maxHeight = 240) {
     if (!list || !trigger || list.classList.contains('hidden')) return;
-    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
-    const viewportTop = vv?.offsetTop || 0;
-    let viewportBottom = viewportTop + (vv?.height || window.innerHeight || document.documentElement.clientHeight);
+    const vis = visibleViewportRect();
     const triggerRect = trigger.getBoundingClientRect();
+    let viewportBottom = vis.bottom;
+    const keyboardOpen = typeof document !== 'undefined' && document.documentElement.classList.contains('nt-keyboard');
     const nav = document.getElementById('bottom-nav');
-    if (nav && !nav.classList.contains('hidden')) {
+    if (!keyboardOpen && nav && !nav.classList.contains('hidden')) {
         const navRect = nav.getBoundingClientRect();
-        if (navRect.height > 0 && navRect.top > triggerRect.bottom) {
+        if (navRect.height > 0 && navRect.top > triggerRect.bottom && navRect.top < vis.bottom) {
             viewportBottom = Math.min(viewportBottom, navRect.top);
         }
     }
 
     const gap = 8;
     const below = Math.max(0, viewportBottom - triggerRect.bottom - gap);
-    const above = Math.max(0, triggerRect.top - viewportTop - gap);
-    const wanted = Math.min(maxHeight, list.scrollHeight || maxHeight);
-    const openAbove = below < Math.min(wanted, 144) && above > below;
-    const available = openAbove ? above : below;
-    list.style.maxHeight = `${Math.max(72, Math.min(maxHeight, available))}px`;
+    const cap = Math.max(maxHeight, Math.round(vis.height * 0.7));
+    list.style.maxHeight = `${Math.max(96, Math.min(cap, below || cap))}px`;
     list.style.bottom = 'auto';
     list.style.marginTop = '0';
 
     const parentRect = list.parentElement?.getBoundingClientRect();
     if (!parentRect) return;
-    const top = openAbove
-        ? triggerRect.top - parentRect.top - list.offsetHeight - gap
-        : triggerRect.bottom - parentRect.top + gap;
-    list.style.top = `${Math.round(top)}px`;
+    list.style.top = `${Math.round(triggerRect.bottom - parentRect.top + gap)}px`;
 }
 
 export let plannerPulse = null; 
@@ -944,7 +958,9 @@ export function toggleMainDayDropdown(e) {
     }
     const list = document.getElementById('main-day-list');
     if (list && !list.classList.contains('hidden')) {
-        requestAnimationFrame(() => positionDropdownAroundTrigger(list, list.previousElementSibling, 256));
+        const trigger = list.previousElementSibling;
+        keepPlannerFieldVisible(trigger);
+        requestAnimationFrame(() => positionDropdownAroundTrigger(list, trigger, 256));
     }
 }
 
@@ -3534,6 +3550,7 @@ export function setupAutocomplete(inputId, selectId) {
         }
 
         list.classList.remove('hidden');
+        keepPlannerFieldVisible(input);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     };
 
@@ -3545,13 +3562,14 @@ export function setupAutocomplete(inputId, selectId) {
     
     input.addEventListener('focus', () => {
         input.select();
-        renderList('');
+        keepPlannerFieldVisible(input);
+        requestAnimationFrame(() => renderList(''));
     });
 
     window.visualViewport?.addEventListener('resize', () => {
-        if (!list.classList.contains('hidden')) {
-            positionDropdownAroundTrigger(list, input, 240);
-        }
+        if (list.classList.contains('hidden')) return;
+        keepPlannerFieldVisible(input);
+        requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     }, { passive: true });
     
     chevron.addEventListener('click', (e) => { 

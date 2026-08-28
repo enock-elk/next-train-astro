@@ -46,6 +46,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var root = document.documentElement;
         var lastSys = -1;
         var lastH = -1;
+        var lastLayoutH = 0;
         function markStandalone() {
           var on = false;
           try {
@@ -90,12 +91,17 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var gap = Math.max(0, inner - vh - off);
           var keyboard = gap > 140;
           var env = envBottom();
-          // Let the app follow the visible viewport while the keyboard is open.
-          // Keeping the old layout height hid focused fields and dropdown choices.
-          var h = keyboard
-            ? Math.min(vh, client || vh)
-            : Math.min(inner || client, client || inner || vh);
-          if (h < 240) h = vh || inner || client || 240;
+          // Layout height never follows visualViewport. Android Chrome shrinks
+          // visualViewport for the keyboard; if --nt-app-h follows it, the oval
+          // rides up and a slab sits on the keys. Overlays (planner list,
+          // Feedback Hub) read visualViewport themselves.
+          var h = Math.max(inner, client) || inner || vh || 240;
+          if (!keyboard) {
+            lastLayoutH = h;
+          } else if (lastLayoutH > h) {
+            h = lastLayoutH;
+          }
+          if (h < 240) h = lastLayoutH || inner || vh || 240;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
@@ -553,6 +559,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         height: 100dvh;
         max-height: 100dvh;
         overflow-y: auto;
+        flex-direction: column;
+        align-items: stretch;
+        background-color: #f9fafb;
+      }
+      html.dark body.modal-active #dev-modal {
+        background-color: #111827;
+      }
+      body.modal-active #dev-modal > div {
+        min-height: 100%;
+        height: auto;
+        flex-shrink: 0;
+        overflow: visible;
+        background-color: #f9fafb;
+      }
+      html.dark body.modal-active #dev-modal > div {
+        background-color: #111827;
       }
       
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -667,9 +689,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow: hidden;
       }
 
-      /* Viewport frame: only #app-scroll moves. While typing, --nt-app-h follows
-         the visible viewport so focused controls are not hidden by the keyboard.
-         Do not pad a tray under the floating pill. */
+      /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves
+         the screen. --nt-app-h is layout height (not visualViewport) so the
+         keyboard overlays the oval instead of lifting it. Do not pad a tray
+         under the floating pill. */
       #nt-shell {
         height: var(--nt-app-h, 100dvh) !important;
         max-height: var(--nt-app-h, 100dvh) !important;

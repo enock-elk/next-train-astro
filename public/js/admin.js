@@ -2560,12 +2560,12 @@ const Admin = {
         // GUARDIAN PHASE 11 (UX FIX): Convert Modal to Native Full-Screen App Architecture
         const devModalCard = document.querySelector('#dev-modal > div');
         if (devModalCard) {
-            devModalCard.className = "bg-gray-50 dark:bg-gray-900 w-full min-h-screen max-w-5xl mx-auto p-4 sm:p-6 flex flex-col relative transition-all duration-300";
+            devModalCard.className = "bg-gray-50 dark:bg-gray-900 w-full min-h-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col relative transition-all duration-300 overflow-visible";
         }
         const devModalContainer = document.getElementById('dev-modal');
         if (devModalContainer) {
-            devModalContainer.classList.remove('p-4', 'items-center');
-            devModalContainer.classList.add('p-0', 'items-start', 'overflow-y-auto');
+            devModalContainer.classList.remove('p-4', 'items-center', 'justify-center', 'bg-black', 'bg-opacity-90');
+            devModalContainer.classList.add('p-0', 'items-stretch', 'overflow-y-auto', 'flex-col', 'bg-gray-50', 'dark:bg-gray-900');
         }
 
         // --- AFTER ---
@@ -4202,8 +4202,8 @@ const Admin = {
                 // GUARDIAN UX FIX: Edge-to-Edge Expansion
                 // Strip padding, borders, and margins so the module touches the exact edge of the screen
                 card.dataset.originalClasses = card.className;
-                card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800');
-                card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-transparent');
+                card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800', 'overflow-hidden');
+                card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-gray-50', 'dark:bg-gray-900', 'overflow-visible');
                 
                 // GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
                 const signoutContainer = document.getElementById('admin-signout-container');

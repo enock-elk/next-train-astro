@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.28.19 — Planner list at top; oval stays put; Feedback Hub docks to keyboard; admin canvas (28 Aug 2026)
+
+- `--nt-app-h` is layout height again (`lastLayoutH`). Keyboard no longer shrinks `#nt-shell`, so the oval stays at the physical bottom and the keys overlay it.
+- Planner From/To (and Travel Day) scroll the field to the top of `visualViewport` and open the list downward into the remaining space. Bottom nav is ignored while `html.nt-keyboard` is on.
+- Feedback Hub / Send Feedback overlays still follow `visualViewport`, but with the keyboard open the card docks to the bottom (no 2rem gap, no centering) so the composer sits on the keys.
+- Admin `#dev-modal` canvas is gray-50 (dark gray-900) for the full scroll height. Drill-down panels keep that canvas (`bg-gray-50`) instead of `bg-transparent` + `min-h-screen`, so list cards no longer sit on the black overlay.
+
 ## V9_08.28.15
 
 no release notes.

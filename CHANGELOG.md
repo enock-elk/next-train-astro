@@ -6,7 +6,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 
 - `--nt-app-h` follows layout height (`innerHeight` / `clientHeight`), not `visualViewport.height`. Keyboard open no longer shrinks `#nt-shell`, so the oval stays at the bottom of the screen (covered by keys) instead of riding up with a white slab on the keyboard.
 - Viewport `interactive-widget=overlays-content` so Chrome does not resize the visual viewport for the IME. Planner zoom lock strings keep that token.
-- Drop the invented 48px Android `--nt-sys-bottom` tray and `#nt-shell` padding-bottom. The pill’s `bottom` is `max(0.35rem, env(safe-area-inset-bottom))`. No white/black block between the oval and the system nav.
+- Drop the invented 48px Android `--nt-sys-bottom` tray and `#nt-shell` padding-bottom. The pill’s `bottom` is `env(safe-area-inset-bottom)` only (0 on Android Chrome with 3-button nav). No white/black block between the oval and the system nav.
 
 ## V9_08.28.8 — Train-sheet fare modal; planner zoom; attachment sniffing (28 Aug 2026)
 

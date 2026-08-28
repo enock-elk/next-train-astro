@@ -488,13 +488,14 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 #bottom-nav .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
   font-weight: 800;
-  background: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent);
+  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
   border-radius: 1.15rem;
   margin: 0.28rem 0.18rem;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, var(--nt-chrome-fg) 22%, transparent);
+  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
 }
 
 @media (max-height: 740px) {
@@ -980,13 +981,14 @@ html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  background: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent);
+  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
   border-radius: 1.15rem;
   margin: 0.28rem 0.18rem;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, var(--nt-chrome-fg) 22%, transparent);
+  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
   border-radius: 1.15rem;
   margin: 0.28rem 0.18rem;
 }

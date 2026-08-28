@@ -47,6 +47,8 @@ const {
 const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
   || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
 const robotsContent = labNoIndex ? 'noindex, nofollow' : robots;
+/** Optional CARTO raster key. Map uses this layout — unkeyed Voyager tiles watermark. */
+const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
 const pathForCanonical = canonicalPath === '/'
   ? base
@@ -88,8 +90,16 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="icon" href={withBase('favicon.ico')} sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
     {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
-    <script is:inline define:vars={{ base }}>
+    <script is:inline define:vars={{ base, cartoKey }}>
       window.__NT_BASE__ = base;
+      window.__NT_CARTO_KEY = cartoKey || '';
+      window.ntCartoVoyagerUrl = function () {
+        var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        if (window.__NT_CARTO_KEY) {
+          url += '?key=' + encodeURIComponent(window.__NT_CARTO_KEY);
+        }
+        return url;
+      };
     </script>
     <!-- SEO entity = full brand; short name for iOS homescreen (manifest short_name) -->
     <meta name="application-name" content="Metrorail Next Train" />

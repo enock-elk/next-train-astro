@@ -109,6 +109,15 @@ assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl
 assert(mapApp.includes('ensureMaitlandMutualAdjacency'), 'WC graph inserts Maitland next to Mutual');
 assert(/"MAITLAND", "MUTUAL"/.test(mapApp), 'static WC paths list Maitland then Mutual');
 assert(!mapApp.includes('"ESPLANADE", "YSTERPLAAT", "MUTUAL"'), 'Chris Hani path no longer jumps Ysterplaat to Mutual');
+assert(mapApp.includes('function applyCanonicalStationOrder'), 'map paints from official station order');
+assert(mapApp.includes('function railHopSkipsRouteStop'), 'OSM hops cannot skip another stop on the route');
+assert(mapApp.includes('function pathVisitsStopsInOrder'), 'baked tracks must visit stations in list order');
+assert(mapApp.includes('function bindMapLegendToggle'), 'Network Lines binds as a button');
+assert(!mapApp.includes('if (baked && baked.length > 1) return baked;'), 'map does not paint unordered baked tracks');
+
+const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+assert(contentLayout.includes('window.ntCartoVoyagerUrl'), 'map layout exposes CARTO Voyager URL helper');
+assert(contentLayout.includes('PUBLIC_CARTO_API_KEY'), 'map layout reads PUBLIC_CARTO_API_KEY');
 
 const labWf = readFileSync(new URL('../.github/workflows/deploy-lab.yml', import.meta.url), 'utf8');
 assert(labWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}'), 'lab build passes CARTO key from secrets');
@@ -180,6 +189,12 @@ assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:t
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 assert(mapPage.includes('map-chrome-btn-wide'), 'Network Lines uses map-chrome-btn');
+assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token');
+assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button as Network Lines');
+assert(!mapPage.includes('map-back-btn'), 'Back no longer has a separate padded class');
+assert(!mapPage.includes('onclick="toggleLegend()"'), 'Network Lines is a button without inline onclick');
+assert(mapPage.includes('id="legend-toggle-btn"') && mapPage.includes('aria-haspopup="true"'), 'Network Lines is a disclosure button');
+assert(mapPage.includes('.legend-container { display: block; }'), 'Network Lines button is visible before map data loads');
 assert(mapPage.includes('var(--nt-surface'), 'map chrome follows colour-pack surface');
 assert(!mapPage.includes('text-blue-700 dark:text-blue-300'), 'GP button dropped hardcoded blue');
 assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped hardcoded amber');

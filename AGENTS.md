@@ -34,7 +34,7 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 - Dynamic data (bans, alerts, maintenance, killswitch) **always** uses `DYNAMIC_BASE_URL` (Firebase).
 - Updating `public/data/full-database.json` refreshes the **fallback**, not the live board while Firebase is up. Push `main`; workflow **Sync schedule data → metrorail-app** overlays JSON onto the host. A full site publish still needs **Deploy production → metrorail-app** (`confirm=DEPLOY`).
 - After a real production deploy, purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker).
-- **CARTO Voyager tiles** need `PUBLIC_CARTO_API_KEY` at **build** time (Astro inlines it). Set the same name as a GitHub Actions secret **and** as a Cloudflare Pages variable on `next-train-lab` (Production **and** Preview). Never commit the key.
+- **CARTO Voyager tiles** need `PUBLIC_CARTO_API_KEY` at **build** time (Astro inlines it into `window.ntCartoVoyagerUrl`). The **map page** uses `ContentLayout` (not the app `Layout`) — both layouts must expose the helper. GitHub **Actions** repository secrets are the right place for Actions-built deploys (`deploy-lab.yml`, production). They do **not** reach Cloudflare Pages Git previews (`*.next-train-lab.pages.dev`). Also set the same name as a Cloudflare Pages variable on `next-train-lab` (Production **and** Preview), then retry that deployment. Do not use GitHub Environment secrets unless a workflow has `environment:`. Never commit the key.
 
 ## Alerts
 

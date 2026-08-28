@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "9.8.28.4",
+  "version": "9.8.28.5",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -16,6 +16,7 @@
     "verify:board-paint": "node scripts/verify-live-board-paint.mjs",
     "verify:home-polish": "node scripts/verify-home-polish.mjs",
     "verify:appearance": "node scripts/verify-appearance.mjs",
+    "verify:map-lines": "node scripts/verify-map-lines.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
     "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
     "verify:analytics": "node scripts/verify-analytics.mjs",

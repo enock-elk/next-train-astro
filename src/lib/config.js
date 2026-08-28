@@ -923,14 +923,21 @@ export const SATURDAY_PLACEHOLDER_ROUTES = ['herc-koed', 'ec-berlin'];
 /** Junctions on herc-koed that still have Saturday trains on other routes. */
 export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 
-// 7. CHANGELOG — drives the in-app "What's New" modal (keep short: 3–5 bullets).
+// 7. CHANGELOG drives the in-app What's New modal (keep short: 3-5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
 // Badge / seen key use `id` (=== APP_VERSION for latest).
 //
-// COMMUTER-ONLY COPY (strict) — every entry is rendered in the public What's New panel:
-// - Never mention admin mode, Dev Hub, operator tools, or how staff publish content.
-// - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
-// - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
+// PUBLIC COMMUTER COPY (strict). Competitors read this list.
+// Only obvious behaviour a commuter can tap and see in the build they have
+// (board, planner, map, timetable, Options).
+// Never mention: admin, Account, password, sign-in, Face ID, Dev Hub, deploy,
+// workers, NUKE, analytics, SEO, Google, indexing, route landing pages, or
+// app configuration.
+// Never mention work that is still hidden while operators test it: Alerts /
+// the bell / notices / hold-to-react, Trains near me, I'm on it, live location,
+// ride sharing, community chat, route chat.
+// Never use emoji. Never use em dashes (U+2014) or en dashes (U+2013). Use a
+// comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 export const CHANGELOG_DATA = [
     {
         id: "V9_08.28.7",
@@ -939,56 +946,17 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Map:</b> Tap a station to see every corridor that stops there.",
-            "<b>Map:</b> After you pick one line, Show all lines restores the whole network."
-        ]
-    },
-    {
-        id: "V9_08.28.6",
-        title: "One line on the map",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Map:</b> Network Lines is the route icon. Tap a corridor to show only that line.",
-            "<b>Map:</b> Back matches the other map buttons. After Avoca the next stop is Duff’s Road."
-        ]
-    },
-    {
-        id: "V9_08.28.5",
-        title: "Map lines follow the route",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Map:</b> Each line is drawn station to station in timetable order.",
-            "<b>Map:</b> Back matches the other map buttons. Network Lines is a button."
-        ]
-    },
-    {
-        id: "V9_08.28.4",
-        title: "Floating tabs",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Tabs:</b> The oval bar floats over the board. The page shows through around it.",
-            "<b>Timetable:</b> Calendar on the left, the date centred, arrow on the right."
-        ]
-    },
-    {
-        id: "V9_08.28.3",
-        title: "Tabs stay in reach",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Tabs:</b> The bar sits above the phone buttons, and is shorter on small screens. The open tab stays highlighted in every colour theme.",
-            "<b>Board:</b> Saved times open first, then refresh in the background.",
-            "<b>Planner:</b> Transfer help uses Germiston or Bellville."
+            "<b>Map:</b> After you pick one line, Show all lines brings the network back."
         ]
     },
     {
         id: "V9_08.28.2",
-        title: "Options stays still",
+        title: "Map and floating tabs",
         date: "28 Aug 2026",
         forceShow: false,
         features: [
+            "<b>Map:</b> Lines follow the stations. Tap a corridor in Network Lines to show only that line.",
+            "<b>Tabs:</b> The oval bar floats over the board and sits above the phone buttons.",
             "<b>Options:</b> The board stays still while the menu is open."
         ]
     },
@@ -998,66 +966,21 @@ export const CHANGELOG_DATA = [
         date: "28 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Home:</b> Name on the left. Tabs sit in a floating pill. Swipe left from the planner for Options. Messages and Share App are in Options — Email or WhatsApp and the privacy lock stay on the box. Offline, Refresh or Close.",
-            "<b>Board:</b> The Next Train clocks no longer flicker every minute. Pick a corridor first — Close stays hidden until then. When today’s trains are done, the next one is a single line. A yellow bar with a wrench sits above the name when the line is under maintenance, and it leaves with the header.",
-            "<b>KZN:</b> Durban ↔ Crossmoor is on the board (yellow inland line).",
+            "<b>Home:</b> Name on the left. Tabs sit in a floating pill. Swipe left from the planner for Options. Share App is in Options, with Email or WhatsApp. Offline, Refresh or Close.",
+            "<b>Board:</b> The Next Train clocks no longer flicker every minute. Pick a corridor first. Close stays hidden until then. When today's trains are done, the next one is a single line. A yellow bar with a wrench sits above the name when the line is under maintenance, and it leaves with the header.",
+            "<b>KZN:</b> Durban to Crossmoor is on the board (yellow inland line).",
             "<b>Planner:</b> Recent trips stay after you search, newest first. Johannesburg Park and Bosman match. Tap a train for the stop list.",
             "<b>Map:</b> Mutual and Maitland sit on the same line."
         ]
     },
     {
-        id: "V8_08.18.1",
-        title: "Alerts channel",
-        date: "18 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Alerts:</b> The bell opens a notice channel. Hold to react — including on photos. Tap a count to see the split.",
-            "<b>Alert text:</b> Titles, larger or smaller type, underline, and tappable emails or phone numbers show correctly.",
-            "<b>Board:</b> The Next Train clocks no longer flicker every minute."
-        ]
-    },
-    {
         id: "V8_08.24",
-        title: "Bans, region pick, weekday sim",
+        title: "Region pick, weekday board",
         date: "16 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Train bans</b> come only from live Firebase. Expired or deleted admin bans (like Kempton Park 0619) no longer linger from a hidden app default, and Global State Monitor matches the timetable.",
-            "<b>Region change</b> lets you pick a route once. The Select Route modal no longer reopens after you choose.",
-            "<b>Time simulation</b> Weekday (Mon) now runs the weekday timetable, even when today is Sunday."
-        ]
-    },
-    {
-        id: "V8_08.23",
-        title: "Parked trains, nearby labels, stable chat",
-        date: "14 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>I’m on it</b> asks if the train is moving. If you’re parked, we thank you and watch in the background every 15s until it starts the right way. Closing the app pauses GPS to save battery.",
-            "<b>Trains near you</b> show Train 9106 → Pretoria, plus Real-time last seen and on-time / late / early from reports.",
-            "<b>Messages</b> stay tied to this device after an app update. Map tab drops Locate so Trains near you and Share my location have room."
-        ]
-    },
-    {
-        id: "V8_08.22",
-        title: "Live tracker, check toasts, named chat",
-        date: "14 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Messages</b> show Enock or Thandeka on admin replies — no more grey “- Name” footer.",
-            "<b>Trains near you</b> look out to 2 km. I’m on it starts GPS immediately and narrates checks in a dismissable toast.",
-            "<b>Live location</b> sits on Next train to … when a verified rider is sharing. Tap it for the station list. Several people on one train: one clock driver, count on the badge."
-        ]
-    },
-    {
-        id: "V8_08.21",
-        title: "Locate, reports, and Messages chat",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Locate is back</b> on Next Train, next to the station field. Commuter reports is a button — tap it to open that train’s status.",
-            "<b>Train cards</b> use the original Direct / Shuttle / Connect labels again, with the flag still on the name.",
-            "<b>Messages & Feedback</b> is a two-way chat like Community: your notes and the team’s replies in one thread."
+            "<b>Region:</b> Change region, then pick a route once. Select Route does not pop up again.",
+            "<b>Day chip:</b> Weekday runs the weekday timetable, even when today is Sunday."
         ]
     },
     {
@@ -1072,100 +995,31 @@ export const CHANGELOG_DATA = [
         ]
     },
     {
-        id: "V8_08.19",
-        title: "A quieter Next Train board",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Next Train is leaner:</b> locate, share location, and report / I’m on this train left the board. Tap the flag on the train name for status and “I’m on it.” Share and locate stay on Map.",
-            "<b>Sightings:</b> reports say where the train was last seen, and where the timetable says it should be. On-train sharing keeps updating the location.",
-            "<b>Status colours:</b> early is yellow, on time is green, late is red. Earthy paper is brighter again."
-        ]
-    },
-    {
         id: "V8_08.18",
-        title: "Earthy — calmer cream and sage",
+        title: "Earthy, calmer cream and sage",
         date: "13 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Earthy</b> now uses the cream, muted sage, terracotta, and soft charcoal from our editorial palette — lighter and quieter, not forest-green on tan paper."
+            "<b>Earthy</b> uses cream, muted sage, terracotta, and soft charcoal. Lighter and quieter, not forest-green on tan paper."
         ]
     },
     {
         id: "V8_08.17",
-        title: "Options on the right, Classic look, honest sharing",
+        title: "Options on the right, Classic look",
         date: "13 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Options</b> is on the bottom bar (right of Community) — tap the Next Train logo to open settings from the right.",
-            "<b>Bottom bar stays put</b> except inside a full-screen map. Classic is the default look again.",
-            "<b>Waiting or far away?</b> Others see a commuter online — not that train, and the Next Train clocks don’t move. We only update a train when you’re on it and moving."
-        ]
-    },
-    {
-        id: "V8_08.16",
-        title: "Safer messages — refuse, hold, wait",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>No off-site links or swearing:</b> we stop the message before it sends and tell you why. nexttrain.co.za links are fine.",
-            "<b>Unsure?</b> The text goes to the admin Moderation tab and stays hidden until it’s approved.",
-            "<b>Slow down:</b> if you need to wait, you’ll see why and a countdown until you can send again."
-        ]
-    },
-    {
-        id: "V8_08.15",
-        title: "Trains near you, trip share, late vs skipped",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Trains near you:</b> a full list of nearby timetable trains — and whether you’re close enough to track one.",
-            "<b>Too far from the line:</b> others can still see you, just not as a train tracker. We’ll tell you why.",
-            "<b>Leaving soon?</b> If your trip leaves within 15 minutes and you’re near the station, we’ll ask you to share. Still at the platform after it should have left? Tell us if it’s late or you didn’t board."
-        ]
-    },
-    {
-        id: "V8_08.14",
-        title: "Show where I am — Waze for trains",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Show where I am:</b> one tap shares a rough location for 10 minutes — you don’t have to be on a train. Stop anytime.",
-            "<b>People + trains:</b> the board shows who is visible at stations, and a blue pulse only when a train is live.",
-            "<b>Alerts:</b> optional pings for official corridor notices and confirmed delays — never when someone just drops a pin."
-        ]
-    },
-    {
-        id: "V8_08.13",
-        title: "Live deltas, map pulse, rider marks",
-        date: "13 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Live times:</b> when riders share, stations still ahead can show a live arrival — the printed timetable stays as the small scheduled time.",
-            "<b>Blue pulse:</b> a live train on the board opens the map so you can join. Locate near the rails may ask if you’re on that train.",
-            "<b>Private marks:</b> Bronze → Platinum labels for sharing and confirming — only you see them, no leaderboard."
+            "<b>Options</b> is on the bottom bar. Tap the Next Train logo to open settings from the right.",
+            "<b>Bottom bar stays put</b> except inside a full-screen map. Classic is the default look again."
         ]
     },
     {
         id: "V8_08.12",
-        title: "Earthy packs, live reports, map trains",
+        title: "Earthy and Ember packs",
         date: "13 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Earthy & Ember:</b> packs now colour the whole shell — no leftover white cards. Alerts stay red / amber / blue.",
-            "<b>Train flags:</b> tap Shuttle Train 1151 to report early / on time / late / no-show, and update if it arrives a minute later.",
-            "<b>Messages:</b> Messages & Feedback opens your thread with the team. Map shares vet for 30s, then show a blue train others can join."
-        ]
-    },
-    {
-        id: "V8_08.11",
-        title: "Live board + route chat (lab)",
-        date: "11 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Live alerts:</b> report Early / On time / Late on the train card — pending until a few riders agree, then a verified chip with EXP time.",
-            "<b>Route chat:</b> lean corridor rooms with a short live feed (destroyed when you leave the tab).",
-            "<b>Share my ride:</b> volunteer where a train was last seen for 10 minutes — no GPS trails."
+            "<b>Earthy and Ember:</b> packs colour the whole shell. No leftover white cards."
         ]
     },
     {
@@ -1175,8 +1029,8 @@ export const CHANGELOG_DATA = [
         // Keep false unless you intentionally want What's New to auto-open once for this version.
         forceShow: false,
         features: [
-            "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays — they use dedicated holiday timetables.",
-            "<b>Timetable grid:</b> Western Cape day picker is now Mon–Fri, Saturday, or Public Holiday (separate from Sat).",
+            "<b>Western Cape:</b> Cape Town corridors no longer fall back to Saturday automatically on public holidays. They use dedicated holiday timetables.",
+            "<b>Timetable grid:</b> Western Cape day picker is now Mon-Fri, Saturday, or Public Holiday (separate from Sat).",
             "<b>Trip Planner:</b> Travel Day for Western Cape includes a standalone Public Holiday option so holiday trips use the right trains."
         ]
     },
@@ -1189,8 +1043,7 @@ export const CHANGELOG_DATA = [
             "<b>Trip map:</b> Optional Show station times on the planner route map.",
             "<b>Fares:</b> Weekend and public-holiday tickets no longer show weekday off-peak discounts.",
             "<b>Network map:</b> Region picker stays fully on-screen; side-nav map opens without a white flash.",
-            "<b>Region switch:</b> Opens route selection so you choose — never auto-pins a random route.",
-            "<b>Notices:</b> Service alerts and public-holiday cards only auto-open on Next Train / Trip Planner after the app is ready."
+            "<b>Region switch:</b> Opens route selection so you choose. It never auto-pins a random route."
         ]
     },
     {
@@ -1200,7 +1053,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Holiday notice:</b> Upcoming public holidays show once in a clear stacked card you dismiss when ready.",
-            "<b>Travel Day:</b> Pick a planner date from one clean control — no double date field.",
+            "<b>Travel Day:</b> Pick a planner date from one clean control. No double date field.",
             "<b>Polish:</b> Smoother drawer and tab gestures."
         ]
     },
@@ -1210,8 +1063,8 @@ export const CHANGELOG_DATA = [
         date: "05 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Trip Planner redesign:</b> Cleaner results chrome, clearer notices, and a more polished trip-planning interface.",
-            "<b>Bug fixes:</b> Guide and map return without reloading the app; alert ranking and planner glitches cleaned up.",
+            "<b>Trip Planner redesign:</b> Cleaner results chrome and a more polished trip-planning interface.",
+            "<b>Guide and map:</b> Return without reloading the app.",
             "<b>Stability:</b> Smoother navigation around About and in-app sheets."
         ]
     },
@@ -1221,8 +1074,7 @@ export const CHANGELOG_DATA = [
         date: "04 Aug 2026",
         forceShow: false,
         features: [
-            "Massive under-the-hood upgrade for a faster, more reliable Next Train.",
-            "<b>Weekend clarity:</b> Clear notices when a route has no Saturday service, with the next weekday train on the board.",
+            "<b>Weekend clarity:</b> Clear copy when a route has no Saturday service, with the next weekday train on the board.",
             "<b>Sunday & holidays:</b> Red “No Service” on the day chip; guide notes that holidays aren’t always Saturday schedules.",
             "<b>You're here:</b> Terminus stops use a location pin instead of plain “at this station” text."
         ]
@@ -1245,7 +1097,7 @@ export const CHANGELOG_DATA = [
         date: "11 Jul 2026",
         forceShow: false,
         features: [
-            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning; alerts only when your train crosses the danger zone.",
+            "<b>Smarter Incident Warnings:</b> Safe journeys near a disruption no longer flash a false “Line Severed” warning. The warning shows only when your train crosses the danger zone.",
             "<b>Seamless Navigation:</b> “See Next Available Day” on empty late-night/Sunday boards syncs the day dropdown correctly.",
             "<b>Sleeker Interface:</b> Trip Planner result cards cleaned up with fewer glitches and misaligned borders."
         ]
@@ -1257,7 +1109,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Sleeker Timeline:</b> Tighter Trip Planner timeline for more screen space and clearer transfers.",
-            "<b>Clearer Disruptions:</b> Line-severance alerts break out of the timeline to show exactly where a train terminates.",
+            "<b>Clearer Disruptions:</b> Line-severance warnings break out of the timeline to show exactly where a train terminates.",
             "<b>Official Rebranding:</b> Rebranded to <b>Next Train</b> for legal clarity as an unaffiliated commuter tool."
         ]
     },
@@ -1267,7 +1119,7 @@ export const CHANGELOG_DATA = [
         date: "24 Jun 2026",
         forceShow: false,
         features: [
-            "<b>Sleeker Design:</b> Modern icons and cleaner timeline layouts in place of cluttered emoji chrome.",
+            "<b>Sleeker Design:</b> Modern icons and cleaner timeline layouts.",
             "<b>Smarter Route Status:</b> Impossible connections explain why (incidents or extreme timetable gaps) with quick links.",
             "<b>Layover Warnings:</b> Unusually long transfer waits are flagged so you are not stranded.",
             "<b>Smoother Experience:</b> Fixed mobile text clipping and improved station-select prompts."
@@ -1332,7 +1184,7 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "<b>Smart Weekend & Holiday Routing:</b> Planner skips to the next working train on Sundays/holidays.",
-            "<b>Clearer Disruption Alerts:</b> “Line Severed” blocks show where the train terminates.",
+            "<b>Clearer disruptions:</b> “Line Severed” blocks show where the train terminates.",
             "<b>Sleeker Look & Feel:</b> Better time menus and less text clipping."
         ]
     },

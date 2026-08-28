@@ -431,8 +431,9 @@ function syncHapticsToggle() {
     if (cb) cb.checked = hapticsAreEnabled();
 }
 
-// What's New is a commuter surface. CHANGELOG_DATA copy must stay commuter-visible
-// only — no admin mode, no internal / IP work. See the CHANGELOG_DATA comment in config.js.
+// What's New is a commuter surface. CHANGELOG_DATA copy must stay
+// commuter-visible only: no admin, Alerts, Trains near me, or community chat.
+// See the CHANGELOG_DATA comment in config.js.
 function syncChangelogBadge() {
     const badge = document.getElementById('whats-new-badge');
     const verLabel = document.querySelector('#settings-app-version .font-mono');

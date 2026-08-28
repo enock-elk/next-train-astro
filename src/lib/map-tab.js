@@ -110,11 +110,8 @@ function ensureFrameSrc(force = false) {
 function exposeEmbedBridge() {
     if (typeof window === 'undefined') return;
     window.__ntMapTabEmbed = true;
-    if (typeof window.__ntCloseInAppSheet !== 'function') {
-        window.__ntCloseInAppSheet = () => {
-            import('./ui.js').then((m) => m.switchTab?.('next-train')).catch(() => {});
-        };
-    }
+    // Do not set __ntCloseInAppSheet here. map.html treats that flag as “I am the
+    // sidenav full-screen sheet” and would open #nt-inapp-sheet over this tab.
 }
 
 function postToMap(payload) {

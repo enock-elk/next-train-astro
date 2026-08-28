@@ -43,6 +43,19 @@ export function getRoutesForCurrentRegion() {
     return regionalRoutes;
 }
 
+/** Hide Select Route Close when there is no current corridor (empty home). */
+export function syncRouteModalCloseBtn() {
+    const btn = document.getElementById('route-modal-close-btn');
+    const overlay = document.getElementById('route-modal');
+    const hasRoute = !!$currentRouteId.get();
+    if (btn) {
+        btn.classList.toggle('hidden', !hasRoute);
+        btn.toggleAttribute('disabled', !hasRoute);
+        btn.setAttribute('aria-hidden', hasRoute ? 'false' : 'true');
+    }
+    if (overlay) overlay.dataset.requireRoute = hasRoute ? '0' : '1';
+}
+
 /** Region route picker (pin/unpin, cold boot with no pin, header chevron). */
 export function openRegionRoutePicker() {
     const region = $userRegion.get() || 'GP';
@@ -53,6 +66,7 @@ export function openRegionRoutePicker() {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
     }
     openSmoothModal('route-modal');
+    syncRouteModalCloseBtn();
 }
 
 export function _renderNextTrainList() {
@@ -696,6 +710,7 @@ export function attachLiveBoardUiGlobals() {
     window.updatePinUI = updatePinUI;
     window.updateNextTrainView = updateNextTrainView;
     window.openRegionRoutePicker = openRegionRoutePicker;
+    window.syncRouteModalCloseBtn = syncRouteModalCloseBtn;
 }
 
 export function initLiveBoardUi() {
@@ -705,6 +720,7 @@ export function initLiveBoardUi() {
     loadUserProfile();
     updatePinUI();
     updateNextTrainView();
+    syncRouteModalCloseBtn();
 
     if (typeof window !== 'undefined' && !window._gridPopstateBound) {
         window._gridPopstateBound = true;
@@ -730,6 +746,7 @@ export function initLiveBoardUi() {
     });
 
     $currentRouteId.subscribe((routeId) => {
+        syncRouteModalCloseBtn();
         if (!routeId) return;
         updatePinUI();
         updateNextTrainView();

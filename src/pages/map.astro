@@ -48,6 +48,15 @@ const regionSeoSlugs = Object.fromEntries(
         right: 12px;
       }
       html.nt-map-embedded #map-back-wrap { display: none !important; }
+      .map-theme-stack {
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.375rem;
+      }
+      #map-fullscreen-btn { display: none; }
+      html.nt-map-tab #map-fullscreen-btn { display: inline-flex; }
       #map-back-wrap {
         position: fixed; top: 12px; left: 12px; z-index: 1001;
         display: flex; align-items: center;
@@ -285,9 +294,14 @@ const regionSeoSlugs = Object.fromEntries(
         <button type="button" class="region-option" data-region="EC" role="menuitem"><span class="region-code">EC</span><span>Eastern Cape</span></button>
       </div>
     </div>
-    <button id="custom-theme-btn" type="button" class="map-chrome-btn" aria-label="Toggle theme">
-      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-    </button>
+    <div class="map-theme-stack">
+      <button id="custom-theme-btn" type="button" class="map-chrome-btn" aria-label="Toggle theme">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <button id="map-fullscreen-btn" type="button" class="map-chrome-btn" aria-label="Full screen map" title="Full screen">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
+      </button>
+    </div>
     <div class="legend-container" id="legend-container">
       <button type="button" id="legend-toggle-btn" onclick="toggleLegend()" class="map-chrome-btn map-chrome-btn-wide" aria-expanded="false" aria-controls="legend-panel">
         <span class="font-black text-[10px] uppercase tracking-widest whitespace-nowrap">Network Lines</span>
@@ -324,13 +338,6 @@ const regionSeoSlugs = Object.fromEntries(
   <script is:inline src={`${withBase('js/map-app.js')}?v=${APP_VERSION}`}></script>
   <script is:inline>
     (function () {
-      function inAppSheet() {
-        try {
-          return !!(window.parent && window.parent !== window && typeof window.parent.__ntCloseInAppSheet === 'function');
-        } catch (_) { return false; }
-      }
-      // Only ?embed=1 means the home Map tab. The sidenav sheet shares the same
-      // parent window, so a parent flag cannot tell the two apart.
       function inMapTab() {
         try {
           if (new URLSearchParams(location.search).get('embed') === '1') return true;
@@ -339,15 +346,45 @@ const regionSeoSlugs = Object.fromEntries(
           return document.documentElement.classList.contains('nt-map-tab');
         } catch (_) { return false; }
       }
+      // Only the visible sidenav sheet — never the Map tab iframe.
+      // Parent always had __ntCloseInAppSheet after the tab bound, which opened
+      // #nt-inapp-sheet full-screen on top of the tab.
+      function inAppSheet() {
+        if (inMapTab()) return false;
+        try {
+          if (!window.parent || window.parent === window) return false;
+          if (window.parent.__ntInAppSheetOpen) return true;
+          var el = window.parent.document.getElementById('nt-inapp-sheet');
+          return !!(el && !el.classList.contains('hidden') && el.classList.contains('flex'));
+        } catch (_) { return false; }
+      }
+      function openMapFullscreen() {
+        try {
+          if (window.parent && window.parent !== window && typeof window.parent.__ntOpenNetworkMapSheet === 'function') {
+            window.parent.__ntOpenNetworkMapSheet();
+            return;
+          }
+        } catch (_) {}
+        try {
+          var dest = new URL((window.APP_BASE || '/') + 'map.html', window.location.href);
+          dest.searchParams.delete('embed');
+          if (window.parent && window.parent !== window && typeof window.parent.__ntNavigateInAppSheet === 'function') {
+            window.parent.__ntNavigateInAppSheet(dest.pathname + dest.search, 'Network Map');
+            return;
+          }
+          window.location.href = dest.pathname + dest.search;
+        } catch (_) {}
+      }
       // Parent sheet / Map tab already has chrome — hide Back.
       if (inAppSheet() || inMapTab()) {
         document.documentElement.classList.add('nt-map-embedded');
         document.getElementById('map-back-wrap')?.classList.add('hidden');
-        if (inAppSheet()) {
-          try { window.parent.__ntNavigateInAppSheet?.(null, 'Network Map'); } catch (_) {}
-        }
       }
       if (inMapTab()) document.documentElement.classList.add('nt-map-tab');
+      document.getElementById('map-fullscreen-btn')?.addEventListener('click', function (e) {
+        e.preventDefault();
+        openMapFullscreen();
+      });
       document.addEventListener('click', function (e) {
         if (!inAppSheet()) return;
         var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;

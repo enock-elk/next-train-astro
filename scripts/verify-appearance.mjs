@@ -100,6 +100,9 @@ assert(!plannerUi.includes('Johannesburg Park Station'), 'recents do not show Jo
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
+assert(mapApp.includes('ensureMaitlandMutualAdjacency'), 'WC graph inserts Maitland next to Mutual');
+assert(/"MAITLAND", "MUTUAL"/.test(mapApp), 'static WC paths list Maitland then Mutual');
+assert(!mapApp.includes('"ESPLANADE", "YSTERPLAAT", "MUTUAL"'), 'Chris Hani path no longer jumps Ysterplaat to Mutual');
 
 const labWf = readFileSync(new URL('../.github/workflows/deploy-lab.yml', import.meta.url), 'utf8');
 assert(labWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}'), 'lab build passes CARTO key from secrets');
@@ -131,10 +134,15 @@ assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includ
 assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[90]'), 'upcoming trains no longer z-90 under the nav');
 assert(liveBoardModals.includes('id="modal-title-route"'), 'upcoming title has a shrink-to-fit route line');
 assert(liveBoardModals.includes('id="modal-title-day"'), 'upcoming title has a day row for Tomorrow');
+assert(liveBoardModals.includes('id="route-modal-close-btn"'), 'Select Route Close has an id');
 
 const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
 assert(liveBoardUi.includes('fitScheduleModalRouteTitle'), 'upcoming route title shrinks to one line');
 assert(liveBoardUi.includes('pinRouteIfRegionHasNoDefault'), 'first route pick in a new region is pinned');
+assert(liveBoardUi.includes('syncRouteModalCloseBtn'), 'Select Route Close syncs to current route');
+
+const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
+assert(!mapTab.includes('window.__ntCloseInAppSheet ='), 'Map tab does not stub in-app sheet Close');
 
 const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
 assert(mapView.includes("withBase('/map.html')"), 'Map tab iframe loads map.html not the SPA');
@@ -165,6 +173,10 @@ assert(mapPage.includes('map-chrome-btn-wide'), 'Network Lines uses map-chrome-b
 assert(mapPage.includes('var(--nt-surface'), 'map chrome follows colour-pack surface');
 assert(!mapPage.includes('text-blue-700 dark:text-blue-300'), 'GP button dropped hardcoded blue');
 assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped hardcoded amber');
+assert(mapPage.includes('id="map-fullscreen-btn"'), 'Map tab has a full screen control under the theme toggle');
+assert(mapPage.includes('function inMapTab()'), 'map embed detects the Map tab');
+assert(mapPage.includes('if (inMapTab()) return false;'), 'Map tab iframe is not treated as the sidenav sheet');
+assert(!mapPage.includes("typeof window.parent.__ntCloseInAppSheet === 'function'"), 'map embed does not treat CloseInAppSheet as the sheet');
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
@@ -187,10 +199,15 @@ assert(sidenavShare.includes('setPrefsOpen(false, false)'), 'Theme accordion sta
 const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(uiJs.includes("safeCur === 'trip-planner'"), 'commuter swipe-left from planner opens Options');
 assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
+assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
+assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
+assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');
+assert(hubJs.includes('window.__ntOpenNetworkMapSheet'), 'Map tab fullscreen opens the in-app sheet');
+assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open flag is set');
 
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');

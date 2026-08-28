@@ -166,6 +166,17 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
     if (window._adminDrillBackLock && modalId === 'dev-modal') return;
 
+    // No corridor yet: keep Select Route up so Close / Back cannot land on the empty board.
+    if (modalId === 'route-modal' && !$currentRouteId.get()) {
+        const routeModal = document.getElementById('route-modal');
+        if (routeModal && !routeModal.classList.contains('hidden')) {
+            try {
+                if (location.hash !== '#route') history.pushState({ modal: 'route-modal' }, '', '#route');
+            } catch { /* ignore */ }
+            return;
+        }
+    }
+
     // Drilled Dev Mode: never close the whole modal — step back to the grid first
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
         if (typeof window.Admin.exitDrillToGrid === 'function') {
@@ -287,6 +298,10 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
             });
         }
         lockBackgroundScroll();
+    }
+
+    if (modalId === 'route-modal') {
+        try { window.syncRouteModalCloseBtn?.(); } catch { /* ignore */ }
     }
 
     // Push history so Android/iOS Back closes this overlay instead of leaving the tab.

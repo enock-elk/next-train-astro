@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.4 — Feedback contact, Select Route Close, Mutual–Maitland, Map tab pane (28 Aug 2026)
+
+- Feedback Hub: `paintThreadContactRow()` always shows `#messages-thread-contact-row` and the privacy lock. Signed-in email still prefills; the row is no longer `hidden`.
+- Select Route: `#route-modal-close-btn` is hidden when `$currentRouteId` is null. `closeSmoothModal('route-modal')` re-pushes `#route` so Back cannot land on the empty “Select a route” board.
+- Leaflet: WC static paths put **MAITLAND** next to **MUTUAL** on Central / Cape Flats / Bellville–Mutual. Dynamic extracts splice the pair; a fallback `wc-maitland-mutual` edge is drawn if still missing.
+- Map tab: iframe no longer treats parent `__ntCloseInAppSheet` as the sidenav sheet (that opened `#nt-inapp-sheet` full-screen). Tab stays in the app chrome. Full screen control sits under the theme toggle (`html.nt-map-tab #map-fullscreen-btn`) and calls `__ntOpenNetworkMapSheet`.
+
 ## V8_08.28.3 — Upcoming title, map iframe, region pin, recents caps, compressed What’s New (28 Aug 2026)
 
 - Upcoming trains modal: route line (`Devenish Street → Pienaarspoort`) is nowrap and shrink-to-fit; day suffix (`Tomorrow`) is a second row.

@@ -300,14 +300,16 @@
             'jhb-midway': ["JOHANNESBURG", "BRAAMFONTEIN", "MAYFAIR", "GROSVENOR", "LANGLAAGTE", "CROESUS", "LONGDALE", "NEW CANADA", "MLAMLANKUNZI", "ORLANDO", "NANCEFIELD", "KLIPTOWN", "TSHIAWELO", "MIDWAY"],
             
             // --- WESTERN CAPE (GUARDIAN CORRECTED PATHS) ---
-            'ct-chrishani': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE", "NONKQUBELA", "KHAYELITSHA", "KUYASA", "CHRIS HANI"],
-            'ct-kapteinsklip': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "NDABENI", "PINELANDS", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"],
-            'bellville-mutual': ["BELLVILLE", "SAREPTA", "PENTECH", "UNIBELL", "BELHAR", "LAVISTOWN", "BONTEHEUWEL", "LANGA", "MUTUAL"],
+            // Mainline: Cape Town → Koeberg Rd → Maitland → Mutual, then split.
+            'ct-chrishani': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE", "NONKQUBELA", "KHAYELITSHA", "KUYASA", "CHRIS HANI"],
+            'ct-kapteinsklip': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"],
+            'bellville-mutual': ["BELLVILLE", "SAREPTA", "PENTECH", "UNIBELL", "BELHAR", "LAVISTOWN", "BONTEHEUWEL", "LANGA", "MUTUAL", "MAITLAND"],
+            'ct-bellv': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "BELLVILLE"],
             
             // GUARDIAN: Western Cape Expansion Paths
             'ct-malm': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "CENTURY CITY", "MONTE VISTA", "AVONDALE", "OOSTERZEE", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN", "FISANTKRAAL", "MELLISH", "MIKPUNT", "KLIPHEUWEL", "WINTEVOGEL", "KALBASKRAAL", "ABBOTSDALE", "MALMESBURY"],
-            'ct-flats': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "NDABENI", "PINELANDS", "HAZENDAL", "ATHLONE", "CRAWFORD", "LANSDOWNE", "WETTON", "OTTERY", "SOUTHFIELD", "HEATHFIELD", "RETREAT"],
-            'ct-nolu': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "NDABENI", "PINELANDS", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
+            'ct-flats': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "NDABENI", "PINELANDS", "HAZENDAL", "ATHLONE", "CRAWFORD", "LANSDOWNE", "WETTON", "OTTERY", "SOUTHFIELD", "HEATHFIELD", "RETREAT"],
+            'ct-nolu': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
@@ -948,6 +950,41 @@
             const hubs = new Set();
             const ends = new Set();
 
+            function stopsAreAdjacent(stops, a, b) {
+                const names = (stops || []).map((s) => s.name);
+                for (let i = 0; i < names.length - 1; i++) {
+                    if ((names[i] === a && names[i + 1] === b) || (names[i] === b && names[i + 1] === a)) return true;
+                }
+                return false;
+            }
+
+            /** Official corridor: Koeberg Rd → Maitland → Mutual. */
+            function ensureMaitlandMutualAdjacency(validStops, routeCoords) {
+                const mai = STATION_COORDINATES.MAITLAND;
+                const mut = STATION_COORDINATES.MUTUAL;
+                if (!mai || !mut || !validStops.length) return;
+                if (stopsAreAdjacent(validStops, 'MAITLAND', 'MUTUAL')) return;
+                const names = validStops.map((s) => s.name);
+                const iMut = names.indexOf('MUTUAL');
+                const iMai = names.indexOf('MAITLAND');
+                const insertAt = (idx, name, coord) => {
+                    validStops.splice(idx, 0, { name, lat: coord[0], lon: coord[1] });
+                    routeCoords.splice(idx, 0, coord);
+                    if (!globalStations[name]) {
+                        globalStations[name] = { lat: coord[0], lon: coord[1], origName: name, routes: new Set() };
+                    }
+                };
+                const prevIsEastBranch = (idx) => {
+                    const prev = names[idx - 1];
+                    return prev === 'LANGA' || prev === 'BONTEHEUWEL' || prev === 'NDABENI' || prev === 'PINELANDS';
+                };
+                if (iMut >= 0 && iMai < 0) {
+                    insertAt(prevIsEastBranch(iMut) ? iMut + 1 : iMut, 'MAITLAND', mai);
+                } else if (iMai >= 0 && iMut < 0) {
+                    insertAt(iMai + 1, 'MUTUAL', mut);
+                }
+            }
+
             Object.values(ROUTES).forEach(route => {
                 if (route.region !== currentRegion || route.id === 'special_event') return;
 
@@ -1066,6 +1103,8 @@
                     }
                 }
 
+                if (currentRegion === 'WC') ensureMaitlandMutualAdjacency(validStops, routeCoords);
+
                 if (routeCoords.length > 1) {
                      drawnRoutes.push({
                          routeId: route.id,
@@ -1077,6 +1116,24 @@
                      });
                 }
             });
+
+            if (currentRegion === 'WC' && !drawnRoutes.some((r) => stopsAreAdjacent(r.validStops, 'MAITLAND', 'MUTUAL'))) {
+                const mai = STATION_COORDINATES.MAITLAND;
+                const mut = STATION_COORDINATES.MUTUAL;
+                if (mai && mut) {
+                    drawnRoutes.push({
+                        routeId: 'wc-maitland-mutual',
+                        name: 'Maitland ↔ Mutual',
+                        color: '#22c55e',
+                        isActive: true,
+                        coords: [mai, mut],
+                        validStops: [
+                            { name: 'MAITLAND', lat: mai[0], lon: mai[1] },
+                            { name: 'MUTUAL', lat: mut[0], lon: mut[1] }
+                        ]
+                    });
+                }
+            }
 
             // 🛡️ GUARDIAN UX FIX: Empty Map Warning
             if (drawnRoutes.length === 0) {

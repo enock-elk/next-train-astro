@@ -123,6 +123,15 @@ assert(planner.includes('id="planner-from-chevron"'), 'planner From has a matchi
 assert(planner.includes('id="planner-from-chevron"') && planner.includes('absolute right-2 top-1/2'), 'planner From chevron is right-2 like the board');
 assert(!planner.includes('planner-schedule-phantom'), 'planner dropped the phantom Schedule updated spacer');
 assert(planner.includes('min-h-[46px]'), 'planner info pill matches board route pill min-height');
+assert(planner.includes('flex items-center justify-center w-full h-full min-w-0'), 'Advanced Multi-Transfer Routing is vertically centered');
+
+const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+assert(plannerModals.includes('id="close-help-btn"') && plannerModals.includes('text-gray-700 dark:text-gray-200'), 'Tips close uses ink on a chip');
+assert(!plannerModals.includes('text-gray-50 hover:text-gray-700'), 'Tips close is not white-on-white');
+
+const fareUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+assert(!fareUi.includes('text-gray-50 hover:text-gray-900'), 'fare close is not white-on-white');
+assert(fareUi.includes('text-gray-700 dark:text-gray-200 hover:bg-gray-300'), 'fare close uses ink on a chip');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
@@ -215,9 +224,12 @@ assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub'
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('data-feedback-scroll'), 'long feedback form has its own keyboard-safe scroller');
 assert(hubModals.includes('--nt-feedback-vv-height'), 'feedback overlays use visible viewport height');
-assert(hubModals.includes('html.nt-keyboard #messages-thread-modal'), 'Feedback Hub docks to the keyboard');
-assert(hubModals.includes('padding: 0.5rem 0.5rem 0'), 'Feedback Hub drops the bottom pad against the keyboard');
-assert(hubModals.includes('border-bottom-left-radius: 0'), 'Feedback Hub card meets the keyboard with a square bottom');
+assert(hubModals.includes('align-items: flex-end'), 'Feedback Hub docks to the bottom of the visible viewport');
+assert(hubModals.includes('padding-bottom: 0'), 'Feedback Hub has no gap above the keyboard');
+assert(hubModals.includes('#messages-thread-modal > div'), 'Feedback Hub card fills the visible viewport');
+assert(hubModals.includes('height: 100%'), 'Feedback Hub card height matches the keyboard-safe overlay');
+assert(!hubModals.includes('h-[min(90dvh,40rem)]'), 'Feedback Hub is not a centered 40rem card');
+assert(hubModals.includes('items-end justify-center p-0'), 'Feedback Hub overlay has no inset gap');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
@@ -279,6 +291,8 @@ const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8'
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
+assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinned to visualViewport.top');
+assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('fieldRect.height > availableHeight'), 'tall feedback fields align their first line inside a short scroller');
 assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');
@@ -332,7 +346,6 @@ assert(!appUpdate.includes('await registration.unregister()'), 'force-update doe
 assert(appUpdate.includes('You are offline. Using saved times'), 'offline force-update keeps the cached shell');
 assert(appUpdate.includes("New SW active — applying on next launch"), 'controllerchange keeps the session without a pending token');
 
-const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
 assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
 assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
 

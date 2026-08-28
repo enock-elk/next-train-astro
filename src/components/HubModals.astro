@@ -4,7 +4,7 @@ import { withBase } from '../lib/config.js';
 ---
 
 <!-- FEEDBACK -->
-<div id="feedback-modal" class="fixed inset-0 bg-gray-900/60 z-[130] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
+<div id="feedback-modal" class="fixed inset-0 bg-gray-900/60 z-[130] hidden flex items-end justify-center p-4 pb-0 backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col transform transition-all scale-95 border border-white/40 dark:border-gray-700/50">
         <div class="p-5 border-b border-gray-200/50 dark:border-gray-800/50 flex justify-between items-center bg-transparent rounded-t-2xl shrink-0">
             <h3 class="text-lg font-black text-gray-900 dark:text-white flex items-center tracking-tight">
@@ -460,8 +460,8 @@ import { withBase } from '../lib/config.js';
 </template>
 
 <!-- MESSAGES THREAD (commuter POV — WhatsApp-style Feedback Hub) -->
-<div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md h-[min(90dvh,40rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+<div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md h-full flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0">
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Next Train</p>
@@ -510,28 +510,27 @@ import { withBase } from '../lib/config.js';
     top: var(--nt-feedback-vv-top, 0px);
     bottom: auto;
     height: var(--nt-feedback-vv-height, 100dvh);
-  }
-  #feedback-modal > div {
-    max-height: calc(var(--nt-feedback-vv-height, 100dvh) - 2rem);
-  }
-  #messages-thread-modal > div {
-    height: min(calc(var(--nt-feedback-vv-height, 100dvh) - 2rem), 40rem);
-    max-height: calc(var(--nt-feedback-vv-height, 100dvh) - 2rem);
-  }
-  html.nt-keyboard #feedback-modal,
-  html.nt-keyboard #messages-thread-modal {
     align-items: flex-end;
     justify-content: flex-end;
-    padding: 0.5rem 0.5rem 0;
+    padding-bottom: 0;
   }
-  html.nt-keyboard #feedback-modal > div,
-  html.nt-keyboard #messages-thread-modal > div {
+  #feedback-modal > div {
+    max-height: 100%;
+    margin-bottom: 0;
+  }
+  #messages-thread-modal {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  #messages-thread-modal > div {
     width: 100%;
-    max-width: none;
     height: 100%;
     max-height: 100%;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+  }
+  #messages-thread-form {
+    flex-shrink: 0;
   }
   #messages-thread-modal .inbox-row,
   #feedback-panel .inbox-row {

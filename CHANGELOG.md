@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.28.20 — Planner title center; visible Tips close; Feedback Hub flush to keyboard (28 Aug 2026)
+
+- Planner info pill title is a flex-centered `h2` so Advanced Multi-Transfer Routing sits in the middle of the 46px row.
+- `#close-help-btn` and fare-modal close dropped `text-gray-50` (white-on-white). Close chips are ink on `bg-gray-200` / dark `bg-gray-700`.
+- Feedback Hub overlay always matches `visualViewport` (inline top/height) and the card fills it (`items-end`, no 2rem/40rem gap). Composer `#messages-thread-form` is `flex-shrink: 0` at the bottom so extra textarea rows grow upward into the thread, not behind the keyboard.
+
 ## V9_08.28.19 — Planner list at top; oval stays put; Feedback Hub docks to keyboard; admin canvas (28 Aug 2026)
 
 - `--nt-app-h` is layout height again (`lastLayoutH`). Keyboard no longer shrinks `#nt-shell`, so the oval stays at the physical bottom and the keys overlay it.

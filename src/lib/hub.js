@@ -169,6 +169,17 @@ function syncFeedbackModalViewport() {
         if (!modal) return;
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
         modal.style.setProperty('--nt-feedback-vv-top', `${top}px`);
+        modal.style.top = `${top}px`;
+        modal.style.height = `${height}px`;
+        modal.style.bottom = 'auto';
+        modal.style.paddingBottom = '0px';
+        const card = modal.querySelector(':scope > div');
+        if (card) {
+            card.style.maxHeight = '100%';
+            if (id === 'messages-thread-modal') {
+                card.style.height = '100%';
+            }
+        }
     });
 }
 

@@ -5366,6 +5366,10 @@ const Admin = {
                     display: flex;
                     flex-direction: column;
                 }
+                /* overflow-hidden cards get min-height:0 in a flex column and squash to a hairline. */
+                #feedback-panel #fb-list > *:not(.fb-thread-open) {
+                    flex: 0 0 auto;
+                }
                 #feedback-panel .fb-thread-open {
                     display: flex;
                     flex-direction: column;
@@ -6126,6 +6130,7 @@ const Admin = {
                     : `<div class="flex justify-between items-center w-full mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
                          <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived Thread</span>
                          <div class="flex space-x-2">
+                             ${did !== 'Anonymous / Legacy' ? `<button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
                              <button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.restoreFeedback('${feedbackId}')">Restore</button>
                              <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteFeedback('${feedbackId}', '${did}')">Delete</button>
                          </div>
@@ -8080,7 +8085,7 @@ const Admin = {
                             ${btn('smaller', 'Decrease Size', 'A-')}
                             ${btn('larger', 'Increase Size', 'A+')}
                             </div>
-                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center focus:outline-none" title="Add Custom Link">${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
+                            <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none whitespace-nowrap" title="Add Custom Link">URL ${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
     },

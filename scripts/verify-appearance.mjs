@@ -104,6 +104,8 @@ assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared st
 assert(plannerUi.includes('plannerHistoryStationLabel'), 'recents labels resolve aliases then keep caps');
 assert(plannerUi.includes('plannerHistoryDedupeKey'), 'recents dedupe unique station pairs');
 assert(!plannerUi.includes('Johannesburg Park Station'), 'recents do not show Johannesburg Park Station');
+assert(!plannerUi.includes('top-[-5px]'), 'Show All Stops is not pulled up into the train name');
+assert(plannerUi.includes('mb-2'), 'train name row has extra space before Show All Stops');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
@@ -144,8 +146,8 @@ assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trai
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
 assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
-assert(css.includes('color-mix(in srgb, #fff 28%, var(--nt-chrome-nav))'), 'active tab wash uses a light mix on the nav so every pack shows the selected tab');
-assert(css.includes('box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent)'), 'dark active tab has an inset ring so Ember/Earthy stay readable');
+assert(css.includes('color-mix(in srgb, #fff 8%, var(--nt-chrome-nav))'), 'active tab wash is a quiet mix on the nav');
+assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
 
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
@@ -262,6 +264,10 @@ assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tra
 assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
 assert(layout.includes('nt-standalone'), 'standalone class is stamped on html');
+assert(css.includes('#bottom-nav .bottom-nav-item.is-active'), 'active tab has a highlight rule');
+assert(css.includes("color-mix(in srgb, #fff 8%, var(--nt-chrome-nav))"), 'active tab highlight is a quiet mix');
+assert(!css.includes("color-mix(in srgb, #fff 16%, var(--nt-chrome-nav))"), 'active tab dropped the loud 16% mix');
+assert(css.includes('border-bottom-left-radius: 1.25rem'), 'sidenav bottom-left is rounded above the oval');
 
 const recovery = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
 assert(recovery.includes('visibilityState'), 'recovery counts visible time only');

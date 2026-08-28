@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_08.28.9', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.10', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -111,7 +111,10 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(resolvePlannerStationInput('Johannesburg Park Station', gp) === 'JOHANNESBURG', 'Johannesburg Park Station → JOHANNESBURG');
     assert(resolvePlannerStationInput('Bosman Station', gp) === 'PRETORIA', 'Bosman Station → PRETORIA');
     assert(resolvePlannerStationInput('JHB Park', gp) === 'JOHANNESBURG', 'JHB Park → JOHANNESBURG');
-    assert(resolvePlannerStationInput('Park Station', gp) !== 'JOHANNESBURG', 'bare Park Station is not Johannesburg');
+    assert(resolvePlannerStationInput('Park Station', gp) === 'JOHANNESBURG', 'bare Park Station → JOHANNESBURG');
+    assert(resolvePlannerStationInput('park station', gp) === 'JOHANNESBURG', 'park station → JOHANNESBURG');
+    assert(resolvePlannerStationInput('Kempton Park', gp) === 'KEMPTON PARK', 'Kempton Park stays Kempton Park');
+    assert(resolvePlannerStationInput('Ellis Park', gp) === 'ELLIS PARK', 'Ellis Park stays Ellis Park');
     assert(STATION_ALIASES.BOSMAN === 'PRETORIA', 'Bosman alias map');
     assert(plannerStationDisplayName('JOHANNESBURG') === 'JOHANNESBURG', 'Johannesburg recents stay in caps');
     assert(!/Park Station/i.test(plannerStationDisplayName('JOHANNESBURG')), 'Park Station is not a display label');

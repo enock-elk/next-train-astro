@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V9_08.28.9";
+export const APP_VERSION = "V9_08.28.10";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -940,6 +940,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_08.28.10",
+        title: "Park Station and quieter tabs",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Planner:</b> Park Station and Johannesburg Park Station both find Johannesburg. Results still say Johannesburg.",
+            "<b>Look:</b> Earthy and Ember in light mode are paler. The active tab mark is quieter."
+        ]
+    },
     {
         id: "V9_08.28.9",
         title: "Tabs stay at the bottom",

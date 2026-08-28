@@ -848,6 +848,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         bottom: calc(3.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         height: auto;
       }
+      body.nav-bottom:not(.nt-immersive) #sidenav {
+        border-bottom-left-radius: 1.25rem;
+      }
+      html.nt-in-app body.nav-bottom:not(.nt-immersive).sidenav-open #bottom-nav.bottom-nav-bar {
+        overflow: hidden;
+        isolation: isolate;
+        background-clip: padding-box;
+      }
       #bottom-nav .bottom-nav-item {
         transition: color 0.15s ease, transform 0.12s ease;
       }

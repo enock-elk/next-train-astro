@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.10 — Park Station alias; paler Earthy/Ember light; quieter tabs (28 Aug 2026)
+
+- Exact `PARK` (Park Station) resolves to `JOHANNESBURG` in planner input. Results still display board names. Kempton Park / Ellis Park / Loftus stay unaliased.
+- Earthy and Ember **light** canvas / chrome tokens are lighter. Dark packs unchanged.
+- Bottom-nav active chip is a low-contrast capsule (Samsung Health-like). Sidenav bottom-left corner is rounded so it does not square off the oval.
+- Planner “Show All Stops” no longer uses negative margin against the train-name link.
+
 ## V9_08.28.9 — Pin bottom nav; no tray under the pill (28 Aug 2026)
 
 - `--nt-app-h` follows layout height (`innerHeight` / `clientHeight`), not `visualViewport.height`. Keyboard open no longer shrinks `#nt-shell`, so the oval stays at the bottom of the screen (covered by keys) instead of riding up with a white slab on the keyboard.

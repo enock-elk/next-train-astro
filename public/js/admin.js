@@ -5339,51 +5339,7 @@ const Admin = {
         Admin.currentFeedbackTab = 'inbox';
         Admin.cachedFeedbackData = [];
 
-        fbPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300 flex flex-col min-h-0";
-
-        if (!document.getElementById('admin-feedback-styles')) {
-            const fbStyles = document.createElement('style');
-            fbStyles.id = 'admin-feedback-styles';
-            fbStyles.textContent = `
-                #admin-modules-container:not(.admin-grid-view) #feedback-panel {
-                    display: flex;
-                    flex-direction: column;
-                    min-height: min(72dvh, 40rem);
-                    max-height: calc(100dvh - 6.5rem);
-                    overflow: hidden;
-                }
-                #feedback-panel #fb-body:not(.hidden) {
-                    flex: 1 1 auto;
-                    min-height: 0;
-                    overflow: hidden;
-                    display: flex;
-                    flex-direction: column;
-                }
-                #feedback-panel #fb-list {
-                    flex: 1 1 auto;
-                    min-height: 0;
-                    overflow-y: auto;
-                }
-                #feedback-panel .fb-thread-open {
-                    display: flex;
-                    flex-direction: column;
-                    min-height: 0;
-                }
-                #feedback-panel .fb-thread-open .feedback-thread-body {
-                    display: flex;
-                    flex-direction: column;
-                    flex: 1 1 auto;
-                    min-height: 0;
-                    overflow: hidden;
-                }
-                #feedback-panel .feedback-thread-chat {
-                    flex: 1 1 auto;
-                    min-height: 12rem;
-                    overflow-y: auto;
-                }
-            `;
-            document.head.appendChild(fbStyles);
-        }
+        fbPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
         fbPanel.innerHTML = `
             <div id="fb-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer shrink-0">
@@ -5395,7 +5351,7 @@ const Admin = {
                 <svg id="fb-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             
-            <div id="fb-body" class="hidden mt-4 flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div id="fb-body" class="hidden mt-4 flex flex-col">
                 <!-- GUARDIAN UX FIX: Next Train Style Tabs -->
                 <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3 shrink-0">
                     <button id="fb-tab-inbox" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none">
@@ -5424,7 +5380,7 @@ const Admin = {
                     </button>
                 </div>
                 
-                <div id="fb-list" class="space-y-3 pr-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar"></div>
+                <div id="fb-list" class="space-y-3 pr-1"></div>
             </div>
         `;
 
@@ -5699,7 +5655,7 @@ const Admin = {
                             </button>
                         </div>
                     </div>
-                    <div class="feedback-thread-body hidden relative flex flex-col min-h-0">
+                    <div class="feedback-thread-body hidden relative">
                         <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
                             <div class="flex-grow min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
@@ -5716,7 +5672,7 @@ const Admin = {
                                 </div>
                             </div>
                         </div>
-                        <div class="feedback-thread-chat space-y-3 p-2 sm:p-3 flex-1 min-h-[12rem] overflow-y-auto custom-scrollbar flex flex-col bg-[#efeae2] dark:bg-[#0b141a]">
+                        <div class="feedback-thread-chat space-y-3 p-2 sm:p-3 bg-[#efeae2] dark:bg-[#0b141a]">
                 `;
 
                 let lastRenderedDate = "";

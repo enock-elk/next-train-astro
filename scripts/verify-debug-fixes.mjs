@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_08.28.17', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.18', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,

@@ -476,6 +476,8 @@ export function bindHistoryBackNavigation() {
 
 
 // --- CINEMATIC SCRIM ENGINE ---
+let _inlineDropdownDismissBound = false;
+
 export function toggleDropdownScrim(listId = null, chevronId = null) {
     if (typeof window === 'undefined') return;
     const scrim = document.getElementById('global-dropdown-scrim');
@@ -499,6 +501,22 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
     const Z_ELEVATED = 'z-[160]';
     const Z_BASELINE = 'z-10';
     const Z_STALE = ['z-[160]', 'z-[60]', 'z-30', 'z-10'];
+    const PLANNER_INLINE_LISTS = ['main-day-list', 'header-day-list', 'custom-time-list'];
+
+    if (!_inlineDropdownDismissBound && typeof document !== 'undefined') {
+        _inlineDropdownDismissBound = true;
+        document.addEventListener('pointerdown', (e) => {
+            const openId = PLANNER_INLINE_LISTS.find((id) => {
+                const el = document.getElementById(id);
+                return el && !el.classList.contains('hidden');
+            });
+            if (!openId) return;
+            const list = document.getElementById(openId);
+            const wrap = list?.parentElement;
+            if (list?.contains(e.target) || wrap?.contains(e.target)) return;
+            toggleDropdownScrim();
+        });
+    }
 
     const resetAllWrappers = () => {
         allLists.forEach((id) => {
@@ -595,6 +613,9 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
 
             list.classList.remove('hidden');
             if (chevron) chevron.classList.add('rotate-180');
+
+            if (PLANNER_INLINE_LISTS.includes(listId)) scrim.classList.add('pointer-events-none');
+            else scrim.classList.remove('pointer-events-none');
             
             scrim.classList.remove('hidden');
             void scrim.offsetWidth; 
@@ -605,6 +626,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
             resetAllWrappers();
             document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
             document.getElementById('main-content')?.classList.remove('dropdown-escape');
+            scrim.classList.remove('pointer-events-none');
             
             scrim.classList.add('opacity-0');
             setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);
@@ -620,6 +642,7 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
         resetAllWrappers();
         document.querySelectorAll('.view-section.dropdown-escape').forEach((el) => el.classList.remove('dropdown-escape'));
         document.getElementById('main-content')?.classList.remove('dropdown-escape');
+        scrim.classList.remove('pointer-events-none');
         
         scrim.classList.add('opacity-0');
         setTimeout(() => { if (scrim.classList.contains('opacity-0')) scrim.classList.add('hidden'); }, 300);
@@ -1452,18 +1475,28 @@ export function hideOfflineToast() {
 
 /** Only paint offline chrome after the app is visible and still offline. */
 const OFFLINE_CHROME_HOLD_MS = 4000;
+const OFFLINE_CHROME_AUTO_HIDE_MS = 7000;
 let _offlineChromeTimer = null;
+let _offlineChromeHideTimer = null;
 let _offlineChromeBound = false;
 
 function offlineDock() {
     return typeof document !== 'undefined' ? document.getElementById('offline-wrapper') : null;
 }
 
-export function hideOfflineChrome() {
+function clearOfflineChromeTimers() {
     if (_offlineChromeTimer) {
         clearTimeout(_offlineChromeTimer);
         _offlineChromeTimer = null;
     }
+    if (_offlineChromeHideTimer) {
+        clearTimeout(_offlineChromeHideTimer);
+        _offlineChromeHideTimer = null;
+    }
+}
+
+export function hideOfflineChrome(opts = {}) {
+    clearOfflineChromeTimers();
     hideOfflineToast();
     const wrap = offlineDock();
     if (wrap) wrap.classList.add('hidden');
@@ -1471,6 +1504,9 @@ export function hideOfflineChrome() {
     if (oi) {
         oi.style.removeProperty('display');
         delete oi.dataset.struggleUi;
+    }
+    if (opts.dismissed && typeof window !== 'undefined') {
+        window._hasShownOfflineToast = true;
     }
 }
 
@@ -1480,10 +1516,12 @@ export function scheduleOfflineChrome() {
         hideOfflineChrome();
         return;
     }
+    if (typeof window !== 'undefined' && window._hasShownOfflineToast) return;
     if (_offlineChromeTimer) return;
     _offlineChromeTimer = setTimeout(() => {
         _offlineChromeTimer = null;
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
+        if (window._hasShownOfflineToast) return;
         const wrap = offlineDock();
         if (wrap) wrap.classList.remove('hidden');
         const oi = document.getElementById('offline-indicator');
@@ -1491,6 +1529,11 @@ export function scheduleOfflineChrome() {
             oi.style.removeProperty('display');
             oi.dataset.struggleUi = '1';
         }
+        if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
+        _offlineChromeHideTimer = setTimeout(() => {
+            _offlineChromeHideTimer = null;
+            hideOfflineChrome({ dismissed: true });
+        }, OFFLINE_CHROME_AUTO_HIDE_MS);
     }, OFFLINE_CHROME_HOLD_MS);
 }
 
@@ -1505,6 +1548,21 @@ export function bindOfflineChrome() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') hideOfflineChrome();
         else scheduleOfflineChrome();
+    });
+    document.addEventListener('click', (e) => {
+        const el = e.target instanceof Element ? e.target : e.target?.parentElement;
+        if (!el) return;
+        if (el.closest('#offline-refresh-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            try { window.location.reload(); } catch { /* ignore */ }
+            return;
+        }
+        if (el.closest('#offline-dismiss-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            hideOfflineChrome({ dismissed: true });
+        }
     });
     scheduleOfflineChrome();
 }

@@ -208,35 +208,39 @@ const faqLd = {
         <div id="offline-wrapper" class="hidden shrink-0 nt-offline-dock px-3 pb-2" aria-live="polite">
             <div id="offline-indicator" class="nt-offline-strip">
                 <svg class="w-5 h-5 shrink-0 opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a10 10 0 0116 0"/><path d="M8 16.5a6 6 0 018 0"/><path d="M12 20h.01"/><path d="M2 8a14 14 0 0120 0" class="opacity-40"/></svg>
-                <div class="min-w-0 text-left">
+                <div class="min-w-0 text-left flex-1">
                     <p class="text-sm font-bold tracking-wide leading-tight">You are offline.</p>
-                    <p class="text-[10px] font-medium opacity-80 leading-snug">Pull down to refresh when signal returns.</p>
+                    <p class="text-[10px] font-medium opacity-80 leading-snug">Refresh when signal returns.</p>
                 </div>
+                <button type="button" id="offline-refresh-btn" class="shrink-0 text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">Refresh</button>
+                <button type="button" id="offline-dismiss-btn" class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60" aria-label="Dismiss offline notice">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
         </div>
 
-        <nav id="bottom-nav" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">
+        <nav id="bottom-nav" class="hidden shrink-0 z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">
             <div id="bottom-nav-grid">
-                <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
+                <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Next Train</span>
                 </button>
-                <button type="button" id="bottom-nav-plan" data-bottom-nav="plan" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Trip Planner" aria-current="false">
+                <button type="button" id="bottom-nav-plan" data-bottom-nav="plan" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Trip Planner" aria-current="false">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1 lucide lucide-route" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
                     <span class="text-[8px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Trip Planner</span>
                 </button>
-                <button type="button" id="bottom-nav-map" data-bottom-nav="map" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Network map" aria-current="false">
+                <button type="button" id="bottom-nav-map" data-bottom-nav="map" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Network map" aria-current="false">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Map</span>
                 </button>
-                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
+                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
                     <span class="relative inline-flex mb-1">
                         <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
                         <span id="community-unread-badge" class="hidden absolute -top-1.5 -right-2.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
                     </span>
                     <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Community</span>
                 </button>
-                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center pt-3 pb-2.5 px-0.5 min-h-[3.75rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
+                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
                     <span class="relative inline-flex mb-1">
                         <svg class="w-5 h-5 sm:w-6 sm:h-6 lucide lucide-menu" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
                         <span id="open-nav-badge" class="hidden absolute -top-1 -right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>

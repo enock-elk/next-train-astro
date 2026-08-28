@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.27.9";
+export const APP_VERSION = "V8_08.28.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.28.1",
+        title: "Travel Day scroll, offline refresh, floating bar",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Planner:</b> The page still scrolls when Travel Day is open.",
+            "<b>Offline:</b> The notice can Refresh or Close, and it hides itself after a few seconds.",
+            "<b>Bar:</b> The bottom tabs sit in a floating pill."
+        ]
+    },
     {
         id: "V8_08.27.9",
         title: "Feedback Hub, offline banner, timetable date",

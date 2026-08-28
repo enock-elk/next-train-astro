@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.1 — Travel Day scroll, offline strip actions, floating pill nav (28 Aug 2026)
+
+- Travel Day: keep `#app-scroll` `overflow-y: auto` while `dropdown-escape` is on; planner inline scrim is `pointer-events-none` so the page can scroll; header-day-list gets a max-height.
+- Offline dock: 4s visible hold, then auto-hide at 7s. Compact row with Refresh (`location.reload`) and Close (X). Dismissed strip stays down until the next online → offline cycle. Copy: “Refresh when signal returns.”
+- Bottom nav: inset solid pill (`border-radius: 999px`, no `backdrop-filter`). Active tab wash is a rounded rect. Still 3 commuter tabs (Map/Community admin-gated). Timetable CTA has a chevron; effective date stays on the button.
+
 ## V8_08.27.9 — Feedback Hub composer, offline dock, timetable date (27 Aug 2026)
 
 - Options → Feedback Hub: WhatsApp-style composer (pill + paperclip inside, circular send). Contact row has Privacy Policy; same `openLegal('privacy')` as the long form.

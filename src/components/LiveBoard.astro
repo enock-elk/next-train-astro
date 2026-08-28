@@ -90,7 +90,7 @@
 
     <!-- Full timetable — calendar + label, effective date on the button -->
     <div id="grid-trigger-container" class="mb-4">
-        <button type="button" id="view-full-timetable-btn" class="w-full flex flex-col items-center justify-center gap-0.5 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 group focus:outline-none">
+        <button type="button" id="view-full-timetable-btn" class="w-full relative flex flex-col items-center justify-center gap-0.5 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-8 rounded-xl shadow-lg ring-4 ring-blue-100 dark:ring-blue-900 transition-all transform active:scale-95 group focus:outline-none">
             <span class="flex items-center justify-center space-x-2.5">
             <svg class="w-5 h-5 shrink-0 opacity-95 group-hover:scale-105 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -100,6 +100,7 @@
             <span class="tracking-wide">VIEW FULL TIMETABLE</span>
             </span>
             <span id="last-updated-date" class="text-[9px] font-semibold uppercase tracking-wide opacity-80 leading-none">Effective from: --</span>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-80 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
         </button>
     </div>
 

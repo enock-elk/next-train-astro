@@ -201,7 +201,7 @@ assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token')
 assert(mapPage.includes('<button type="button" id="map-back-link"'), 'Back is a button like WC / sun / Network Lines');
 assert(!mapPage.includes('<a id="map-back-link"'), 'Back is not an <a> (links stay taller than the square chrome)');
 assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button height as WC');
-assert(mapPage.includes('id="map-reset-line-btn"'), 'Show all lines chrome sits next to Network Lines');
+assert(!mapPage.includes('id="map-reset-line-btn"'), 'Show all lines is not a second top-bar button');
 assert(mapPage.includes('#map-back-link'), 'Back height is locked on the button id');
 assert(!mapPage.includes('onclick="toggleLegend()"'), 'Network Lines is a button without inline onclick');
 assert(mapPage.includes('id="legend-toggle-btn"') && mapPage.includes('aria-haspopup="true"'), 'Network Lines is a disclosure button');
@@ -248,6 +248,8 @@ assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub conta
 assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');
 assert(hubJs.includes('window.__ntOpenNetworkMapSheet'), 'Map tab fullscreen opens the in-app sheet');
 assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open flag is set');
+assert(hubJs.includes('min-h-[2.25rem]'), 'sheet Back uses the same 2.25rem box as map chrome');
+assert(!hubJs.includes('py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'), 'sheet Back dropped the taller py-2.5 padding');
 
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');

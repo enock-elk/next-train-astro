@@ -1606,7 +1606,7 @@ export function initHub() {
         const closeBtn = document.getElementById('nt-inapp-sheet-close');
         if (closeBtn) {
             closeBtn.className = isMap
-                ? 'pointer-events-auto inline-flex items-center text-sm font-bold text-gray-800 dark:text-white bg-white/95 dark:bg-gray-800/95 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'
+                ? 'pointer-events-auto inline-flex items-center justify-center gap-1 text-sm font-bold text-gray-800 dark:text-white bg-white/95 dark:bg-gray-800/95 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg h-9 min-h-[2.25rem] max-h-[2.25rem] py-0 px-3 box-border hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'
                 : 'inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none';
         }
         if (titleEl) {

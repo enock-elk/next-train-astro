@@ -942,7 +942,7 @@ function renderMessagesThread(list) {
     const host = document.getElementById('messages-thread-list');
     if (!host) return;
     if (!list.length) {
-        host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below — you and the team will see the full chat here.</p>';
+        host.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-400 text-center py-8 px-4">No messages yet. Send one below - you and the team will see the full chat here.</p>';
         return;
     }
     host.innerHTML = list.map((m) => {
@@ -1180,7 +1180,7 @@ export function renderServiceAlertModal(notice, options = {}) {
                 const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
                 timestamp.textContent = `${label}: ${formatAppDate(posted, { withTime: true })}`;
             } else if (mode === 'preview') {
-                timestamp.textContent = 'Preview — not posted yet';
+                timestamp.textContent = 'Preview - not posted yet';
             } else {
                 timestamp.textContent = '';
             }
@@ -1467,7 +1467,7 @@ export function initHub() {
             if (!btn) return;
             e.preventDefault();
             if (document.getElementById('notice-modal')?.dataset?.alertPreview === '1') {
-                showToast('Preview only — votes are not recorded.', 'info');
+                showToast('Preview only - votes are not recorded.', 'info');
                 return;
             }
             const wrap = btn.closest('[id^="poll-container-"]');

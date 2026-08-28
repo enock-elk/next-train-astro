@@ -472,7 +472,7 @@ export function buildTrainTitleReportButton({
         `data-station="${escapeHTML(station || '')}"`,
         `data-dest="${escapeHTML(destination || '')}"`,
     ].join(' ');
-    return `<button type="button" class="${className}" ${attrs} title="Train ${escapeHTML(String(trainId || ''))} — status and I’m on it">
+    return `<button type="button" class="${className}" ${attrs} title="Train ${escapeHTML(String(trainId || ''))} - status and I’m on it">
       <span class="truncate">${escapeHTML(label)}</span>
       ${flagSvgHtml(null)}
     </button>`;
@@ -553,7 +553,7 @@ export async function hydrateTrainReportSlots(root = document) {
               <span class="font-bold">Pending:</span> Commuters report ${escapeHTML(statusLabel(agg))} (${agg.distinctDevices}/${VERIFY_THRESHOLD})
             </p>
             ${validated
-            ? `<span class="mt-1 inline-block text-[8px] font-bold text-green-700 dark:text-green-300">Thanks — counted</span>`
+            ? `<span class="mt-1 inline-block text-[8px] font-bold text-green-700 dark:text-green-300">Thanks - counted</span>`
             : `<button type="button" class="delay-validate-btn mt-1.5 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-[9px] font-bold text-gray-700 dark:text-gray-200 py-1 rounded shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}">Verify delay</button>`}
           </div>`;
     });
@@ -571,7 +571,7 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
     // Softer: allow validate even if full report rate hit — use short local cooldown
     const last = Number(safeStorage.getItem(VALIDATE_RATE_KEY) || 0);
     if (Date.now() - last < 60 * 1000) {
-        return { ok: false, message: 'Slow down — try again in a minute.' };
+        return { ok: false, message: 'Slow down - try again in a minute.' };
     }
 
     const key = trainKey || trainReportKey({ routeId, trainId, scheduledTime, station });
@@ -620,7 +620,7 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
         await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         const { awardMark } = await import('./rider-marks.js');
         awardMark('delay_confirm', { key: `delay:${key}` });
-        showToast('Thanks — that helps others', 'success');
+        showToast('Thanks - that helps others', 'success');
         import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
         return { ok: true };
     } catch (e) {
@@ -832,7 +832,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
                 targetUid: $account.get().uid || null,
             });
             noteToStore = '';
-            showToast('Note held for review — the report will still go through.', 'info');
+            showToast('Note held for review - the report will still go through.', 'info');
         }
     }
 
@@ -1177,7 +1177,7 @@ export function bindDelayReportUi() {
             e.stopPropagation();
             const agree = validateBtn.getAttribute('data-validate') !== 'down';
             if (!agree) {
-                showToast('Thanks — report noted', 'info');
+                showToast('Thanks - report noted', 'info');
                 const key = validateBtn.getAttribute('data-train-key');
                 if (key) markLocalValidated(key);
                 hydrateTrainReportSlots(document.getElementById('view-next-train') || document);

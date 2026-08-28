@@ -404,10 +404,10 @@ function friendlyAuthError(e) {
     if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         return 'Wrong email or password.';
     }
-    if (code === 'auth/email-already-in-use') return 'Email already registered — try Sign in.';
+    if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
-    if (code === 'auth/network-request-failed') return 'Network error — try again.';
-    if (code === 'auth/popup-blocked') return 'Popup blocked — allow popups for Google sign-in.';
+    if (code === 'auth/network-request-failed') return 'Network error - try again.';
+    if (code === 'auth/popup-blocked') return 'Popup blocked - allow popups for Google sign-in.';
     return e?.message || 'Authentication failed.';
 }
 

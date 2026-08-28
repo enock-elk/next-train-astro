@@ -847,7 +847,7 @@ function applyFeedFilter(routeId) {
         if (emptyEl) {
             emptyEl.classList.remove('hidden');
             emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
-                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up for fellow passengers. Keep it kind — this is a quiet feed, not a shouting match.</p>`;
+                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up for fellow passengers. Keep it kind - this is a quiet feed, not a shouting match.</p>`;
         }
         return;
     }
@@ -1004,8 +1004,8 @@ function paintCommunityUnreadBadge(count) {
     const bottom = document.getElementById('bottom-nav-community');
     if (bottom) {
         bottom.setAttribute('aria-label', n > 0
-            ? `Community — ${n} unread on pinned route`
-            : 'Community — route feed');
+            ? `Community - ${n} unread on pinned route`
+            : 'Community - route feed');
     }
 }
 
@@ -1307,7 +1307,7 @@ async function handlePostSubmit() {
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
     if (result.held) {
-        showToast(result.message || 'Held for review — it won’t show until an admin approves it.', 'info');
+        showToast(result.message || 'Held for review - it won’t show until an admin approves it.', 'info');
         if (errEl) errEl.textContent = result.message || 'Held for review. It won’t appear until approved.';
     } else {
         showToast('Posted to the route feed', 'success');
@@ -1475,7 +1475,7 @@ export function bindCommunityUi() {
                 targetUid: post?.uid,
                 snippet: String(post?.body || '').slice(0, 80),
             });
-            showToast(result.ok ? 'Thanks — report sent to moderation.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
+            showToast(result.ok ? 'Thanks - report sent to moderation.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
             return;
         }
 
@@ -1516,7 +1516,7 @@ export function bindCommunityUi() {
             }
             if (input) input.value = '';
             if (result.held) {
-                showToast(result.message || 'Held for review — it won’t show until approved.', 'info');
+                showToast(result.message || 'Held for review - it won’t show until approved.', 'info');
                 return;
             }
             showToast('Reply posted', 'success');

@@ -579,7 +579,7 @@ export async function submitRideCheckIn({
         const toastMsg = trainId
             ? `Others can see ${trainId}${destination ? ` → ${stationShort(destination)}` : ''}`
             : waitingFor
-                ? `You’re visible as a commuter — not on train ${waitingFor} yet`
+                ? `You’re visible as a commuter - not on train ${waitingFor} yet`
                 : `You’re visible at ${stationShort(st)} · ${mins} min`;
         const others = activePings(getCachedRidePings(routeId))
             .filter((p) => String(p.trainId || '') === String(trainId || '') && p.deviceId !== deviceId);
@@ -715,7 +715,7 @@ export async function startPresenceShare({
         coords = await oneShotGps();
     } catch (e) {
         if (e?.code === 1) {
-            showToast('Location is off — we can’t show you on the map', 'error');
+            showToast('Location is off - we can’t show you on the map', 'error');
         }
     }
 

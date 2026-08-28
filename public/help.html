@@ -132,7 +132,7 @@
       <h2>Try this first</h2>
       <ol class="steps" id="steps">
         <li>Pull down to refresh, or close the tab and open Next Train again.</li>
-        <li>If it still looks broken, tap <strong>Reset saved app data</strong> below — this clears an old cached copy (common after a big update).</li>
+        <li>If it still looks broken, tap <strong>Reset saved app data</strong> below - this clears an old cached copy (common after a big update).</li>
         <li>Still stuck? Send your contact details or WhatsApp / email us. We’ll reply when we can.</li>
       </ol>
       <div class="ios" id="ios-tip" hidden>
@@ -177,7 +177,7 @@
           <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
         </div>
 
-        <p class="hint">Sent to our support inbox when Firebase is reachable. If send fails, use WhatsApp or email above — nothing is lost.</p>
+        <p class="hint">Sent to our support inbox when Firebase is reachable. If send fails, use WhatsApp or email above - nothing is lost.</p>
         <button type="submit" class="btn btn-primary" id="btn-send">Please contact me</button>
         <div class="status" id="form-status" role="status"></div>
       </form>
@@ -219,7 +219,7 @@
   var copy = {
     offline: {
       title: 'You look offline',
-      lead: 'Your device has no usable connection right now. Schedules may still work later from a saved copy — first get signal, then reopen the app.'
+      lead: 'Your device has no usable connection right now. Schedules may still work later from a saved copy - first get signal, then reopen the app.'
     },
     boot: {
       title: 'The app is taking too long to start',
@@ -356,7 +356,7 @@
     var note = (document.getElementById('note').value || '').trim();
     var reason = document.getElementById('reason-select').value || reasonKey;
     var honey = (document.getElementById('company').value || '').trim();
-    if (honey) { showStatus(status, 'ok', 'Thanks — we will try to reach you.'); return; }
+    if (honey) { showStatus(status, 'ok', 'Thanks - we will try to reach you.'); return; }
     if (!contact) { showStatus(status, 'err', 'Please leave an email or WhatsApp number.'); return; }
 
     btn.disabled = true;
@@ -399,7 +399,7 @@
     } catch (err) { ok = false; }
 
     if (ok) {
-      showStatus(status, 'ok', 'Sent. We’ll try to contact you — also keep WhatsApp/email handy if systems are down.');
+      showStatus(status, 'ok', 'Sent. We’ll try to contact you - also keep WhatsApp/email handy if systems are down.');
       document.getElementById('note').value = '';
     } else {
       var body =
@@ -412,7 +412,7 @@
       var mail = 'mailto:' + EMAIL +
         '?subject=' + encodeURIComponent('Next Train distress (' + reason + ')') +
         '&body=' + encodeURIComponent(body);
-      var waText = encodeURIComponent('Hi Next Train support — ' + reason + '. Reach me on ' + contact + '. ' + (note || ''));
+      var waText = encodeURIComponent('Hi Next Train support - ' + reason + '. Reach me on ' + contact + '. ' + (note || ''));
       showStatus(status, 'err', 'Could not reach our servers. Opening email… or use WhatsApp.');
       try { location.href = mail; } catch (e) {}
       try {

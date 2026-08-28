@@ -303,7 +303,7 @@ export function buildRouteJsonLd({
             '@type': 'Table',
             name: `Weekday ${grid.heading}`,
             about: `${grid.originStation} → ${grid.destName} weekday Metrorail times`,
-            description: `${grid.stations.length} stations, ${grid.trainIds.length} trains. First ${grid.first || '—'}, last ${grid.last || '—'}.`,
+            description: `${grid.stations.length} stations, ${grid.trainIds.length} trains. First ${grid.first || '-'}, last ${grid.last || '-'}.`,
         });
     }
 

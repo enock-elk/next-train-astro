@@ -18,7 +18,7 @@ export const LOCATE_GHOST_M = 2000;
 /** Max metres from the ghost to count as a train tracker (lab: 2 km for nearby / I’m on it). */
 export const TRAIN_TRACKER_MAX_M = 2000;
 export const HEADING_AGREE_DEG = 90;
-export const NO_COORDS_MESSAGE = 'Live sharing is off on this corridor — we don’t have station locations yet.';
+export const NO_COORDS_MESSAGE = 'Live sharing is off on this corridor - we don’t have station locations yet.';
 
 const SKIP_COLS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 

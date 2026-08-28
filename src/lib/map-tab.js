@@ -83,7 +83,7 @@ let frameWatchdog = 0;
 function showFrameFallback() {
     document.getElementById('map-tab-placeholder')?.classList.add('hidden');
     document.getElementById('map-tab-fallback')?.classList.remove('hidden');
-    setStatus('Map didn’t load — reload or open full map');
+    setStatus('Map didn’t load - reload or open full map');
 }
 
 function armFrameWatchdog() {
@@ -233,7 +233,7 @@ async function vetLocationSamples(samples) {
         const d = haversineM(samples[i - 1], samples[i]);
         const s = Math.max(0.2, (samples[i].t - samples[i - 1].t) / 1000);
         if (d / s > 50) {
-            return { ok: false, message: 'GPS jumped — try again near the tracks.' };
+            return { ok: false, message: 'GPS jumped - try again near the tracks.' };
         }
     }
 
@@ -286,7 +286,7 @@ export async function runContributeVet() {
     }
     document.getElementById('map-contribute-sheet')?.classList.remove('hidden');
     setStatus('Checking you’re on the railway… 30s');
-    setVetProgress(0, 'Hold still or stay on the train — 30 seconds');
+    setVetProgress(0, 'Hold still or stay on the train - 30 seconds');
     try {
         const samples = await sampleGpsFor(VET_WINDOW_MS, (_s, pct) => {
             const left = Math.max(0, Math.ceil((100 - pct) / 100 * 30));
@@ -533,11 +533,11 @@ function nearbyRealtimeLine(trainId, extra = {}, pingMod = {}, delayMod = {}) {
             when = clockHm(reports[0].timestamp);
         }
         const status = delayMod.reportStatusPhrase?.(delayMod.summarizeReportsForTrain?.(trainId, routeId)) || '';
-        if (!place && !status) return 'Real-time: —';
+        if (!place && !status) return 'Real-time: -';
         const seen = place ? `last seen ${place}${when ? ` - ${when}` : ''}` : '';
-        return `Real-time: ${[seen, status].filter(Boolean).join(' · ') || '—'}`;
+        return `Real-time: ${[seen, status].filter(Boolean).join(' · ') || '-'}`;
     } catch {
-        if (!place) return 'Real-time: —';
+        if (!place) return 'Real-time: -';
         return `Real-time: last seen ${place}${when ? ` - ${when}` : ''}`;
     }
 }
@@ -584,7 +584,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             list.innerHTML = '';
             empty?.classList.remove('hidden');
             if (empty) empty.textContent = e?.code === 1
-                ? 'Location is off — allow it to see trains near you.'
+                ? 'Location is off - allow it to see trains near you.'
                 : (e?.message || 'Couldn’t get your location.');
             return;
         }
@@ -663,7 +663,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             <p class="text-[11px] mt-1 ${c.plausible ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-amber-700 dark:text-amber-300'}">${
                 c.plausible
                     ? 'Close enough to track this train'
-                    : 'Too far from this train’s path — you’ll show as a person, not a tracker'
+                    : 'Too far from this train’s path - you’ll show as a person, not a tracker'
             }</p>`;
         btn.addEventListener('click', () => {
             hideNearbyTrainsModal();
@@ -825,7 +825,7 @@ export async function maybePromptLocateOnTrain(detail) {
     const choice = await promptOnTrainSheet({
         title: `Are you on train ${best.trainId}?`,
         body: `You’re next to the rails and train ${best.trainId} should be nearby. Share so others can see it?`,
-        primary: `Yes — train ${best.trainId}`,
+        primary: `Yes - train ${best.trainId}`,
         secondary: 'No thanks',
     });
     if (choice !== 'primary') return;
@@ -1142,7 +1142,7 @@ export async function startOnTrainShare({
         hideCheckToast();
         const parked = await promptOnTrainSheet({
             title: 'Is the train moving?',
-            body: 'GPS doesn’t show movement yet — trains often sit at a station. If you’re parked, we’ll thank you for sharing and watch in the background until the train starts moving the right way.',
+            body: 'GPS doesn’t show movement yet - trains often sit at a station. If you’re parked, we’ll thank you for sharing and watch in the background until the train starts moving the right way.',
             primary: 'Yes, we’re moving',
             secondary: 'No, we’re parked',
             tertiary: 'Cancel',
@@ -1197,7 +1197,7 @@ export async function startOnTrainShare({
                     lat: vet.lat,
                     lng: vet.lng,
                 });
-                showToast('Still looks parked — thanks, we’ll attach you when it moves', 'info', 5000);
+                showToast('Still looks parked - thanks, we’ll attach you when it moves', 'info', 5000);
                 return { ...result, asPerson: true, parked: true };
             }
         } else {
@@ -1223,7 +1223,7 @@ export async function startOnTrainShare({
                 lat: vet.lat,
                 lng: vet.lng,
             });
-            showToast('Thanks for sharing — we’ll attach you when the train starts moving', 'success', 5000);
+            showToast('Thanks for sharing - we’ll attach you when the train starts moving', 'success', 5000);
             return { ...result, asPerson: true, parked: true };
         }
     }
@@ -1245,7 +1245,7 @@ export async function startOnTrainShare({
         });
         hideCheckToast();
         showToast(tooFar
-            ? `You’re about ${formatDistanceM(metres)} from Train ${finalId} — sharing as a commuter`
+            ? `You’re about ${formatDistanceM(metres)} from Train ${finalId} - sharing as a commuter`
             : 'We’ll show you as a commuter until you’re moving with the train', 'info', 5000);
         return { ...result, asPerson: true, tooFar, waiting: !tooFar };
     }
@@ -1512,14 +1512,14 @@ async function runTripWatch(watch) {
             source: 'trip_watch',
         });
         showToast(
-            result.ok ? 'Thanks — we’ll show this train as late' : (result.message || 'Couldn’t send the late report'),
+            result.ok ? 'Thanks - we’ll show this train as late' : (result.message || 'Couldn’t send the late report'),
             result.ok ? 'success' : 'error',
         );
         return;
     }
     if (pick === 'secondary') {
         await stopRideShare({ quiet: true });
-        showToast('Thanks — we stopped tracking you', 'success');
+        showToast('Thanks - we stopped tracking you', 'success');
         return;
     }
     showToast(`Still showing you on train ${watch.trainId}`, 'info');
@@ -1574,7 +1574,7 @@ export function maybeOfferPlannerContribute() {
       <div class="flex items-start gap-2">
         <div class="min-w-0 flex-1">
           <p class="text-[11px] font-black text-gray-900 dark:text-white">${when}.</p>
-          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Share this trip to help other riders — and earn marks.</p>
+          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Share this trip to help other riders - and earn marks.</p>
         </div>
         <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">Share this trip</button>
         <button type="button" id="planner-contribute-dismiss" class="shrink-0 p-1 text-gray-400" aria-label="Dismiss">✕</button>
@@ -1592,7 +1592,7 @@ async function sharePlannerTrip(c) {
         openAccountModal();
         const ok = await waitForSignedIn();
         if (!ok) {
-            showToast('Sign in when you’re ready — you can still use the trip plan.', 'info');
+            showToast('Sign in when you’re ready - you can still use the trip plan.', 'info');
             return;
         }
     }

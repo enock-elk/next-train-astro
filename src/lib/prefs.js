@@ -270,8 +270,8 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
                 try { return !!(import.meta.env?.PUBLIC_FIREBASE_VAPID_KEY); } catch { return false; }
             })();
             hint.textContent = hasVapid
-                ? 'On — alerts for your routes'
-                : 'On — browser permission saved (FCM key pending)';
+                ? 'On - alerts for your routes'
+                : 'On - browser permission saved (FCM key pending)';
         } else {
             hint.textContent = 'Official notices and confirmed delays';
         }
@@ -320,7 +320,7 @@ export async function setNotifyPref(wantOn) {
         safeStorage.setItem(NOTIFY_PREF_KEY, 'true');
         syncNotifyUi(true);
         if (typeof window.showToast === 'function') {
-            window.showToast('Notifications enabled — delivery may be limited', 'success');
+            window.showToast('Notifications enabled - delivery may be limited', 'success');
         }
         return true;
     }

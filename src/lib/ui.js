@@ -1079,7 +1079,7 @@ export function initGlobalErrorHandler() {
         } catch(e) {}
 
         const recoveryHref = helpUrl('crash');
-        const waHref = whatsappSupportUrl(`Hi Next Train — the app crashed. ${String(msg).slice(0, 160)}`);
+        const waHref = whatsappSupportUrl(`Hi Next Train - the app crashed. ${String(msg).slice(0, 160)}`);
         const mailHref = mailtoSupportUrl('Next Train crash report', errorDetails.slice(0, 1800));
         const homeHref = withBase('/');
 
@@ -1099,7 +1099,7 @@ export function initGlobalErrorHandler() {
                 <div style="width:64px;height:64px;border-radius:999px;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:28px">⚠️</div>
                 <h2 style="font-size:1.4rem;font-weight:800;margin:0 0 8px">App crashed</h2>
                 <p style="color:#94a3b8;font-size:0.9rem;margin:0 0 22px;max-width:20rem;line-height:1.45">
-                    A fatal error stopped Next Train. Reset the saved copy on this device, or contact us — WhatsApp ${SUPPORT_WHATSAPP_DISPLAY} · ${SUPPORT_EMAIL}
+                    A fatal error stopped Next Train. Reset the saved copy on this device, or contact us - WhatsApp ${SUPPORT_WHATSAPP_DISPLAY} · ${SUPPORT_EMAIL}
                 </p>
                 <div style="width:100%;max-width:20rem;display:flex;flex-direction:column;gap:10px">
                     <a href="${recoveryHref}" style="display:block;background:#2563eb;color:#fff;font-weight:700;padding:14px 16px;border-radius:12px;text-decoration:none">Open recovery help</a>

@@ -276,7 +276,7 @@ function notifyGhostStation(stationName) {
     const label = bareStationName(stationName) || 'This station';
     if (typeof showToast === 'function') {
         showToast(
-            `${label} is inactive — PRASA does not currently operate service at this station.`,
+            `${label} is inactive - PRASA does not currently operate service at this station.`,
             'info',
             4500
         );
@@ -3762,7 +3762,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
         if (!dbReady) {
             spinnerTimers.forEach(t => clearTimeout(t));
             isSearching = false;
-            showToast('Schedules still loading — try again in a moment.', 'error', 3500);
+            showToast('Schedules still loading - try again in a moment.', 'error', 3500);
             if (resultsContainer) {
                 resultsContainer.innerHTML = `
                     <div class="min-h-[400px] flex flex-col justify-center items-center text-center p-6">

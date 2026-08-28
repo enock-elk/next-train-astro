@@ -8,6 +8,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Isolating a Network Lines corridor shows a **Show all lines** chrome control (three bars, same 2.25rem square as WC / sun) and a matching first row in the legend. Either control restores every polyline/station and `fitBounds` to the full network.
 - Back is a `<button>` with `data-href`, not an `<a>`. Links skip Tailwind’s button padding reset and ignore a fixed `height` when they stay `display: inline`, so Back stayed taller than the far-right squares. Height is now `2.25rem !important` with `padding-block: 0`.
 - What’s New: fold unreleased `V9_08.28.6`–`V9_08.28.3` into a short `V9_08.28.2` card. Drop Alerts / Trains near me / community-chat / live-share cards from the public list. No emoji or em dashes in What’s New copy.
+- `FORCE_UPDATE_REQUIRED` is true so existing shells hard-reload onto this version. What’s New `forceShow` is true for the latest card.
 
 ## V9_08.28.6 — Network Lines SVG; isolate a corridor; Avoca→Duff’s Road (28 Aug 2026)
 

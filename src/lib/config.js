@@ -57,7 +57,7 @@ export function withBase(path = '/') {
 // GUARDIAN: Set to 'true' to force an immediate hard reload on startup.
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // Admin NUKE (killswitch.json) still wipes caches for online clients.
-export const FORCE_UPDATE_REQUIRED = false;
+export const FORCE_UPDATE_REQUIRED = true;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.
@@ -943,7 +943,7 @@ export const CHANGELOG_DATA = [
         id: "V9_08.28.7",
         title: "Station lines on the map",
         date: "28 Aug 2026",
-        forceShow: false,
+        forceShow: true,
         features: [
             "<b>Map:</b> Tap a station to see every corridor that stops there.",
             "<b>Map:</b> After you pick one line, Show all lines brings the network back."

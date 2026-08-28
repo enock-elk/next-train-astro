@@ -10,9 +10,10 @@
  *
  * Future agents: if today's date already matches MM.DD, only increment n.
  * If the calendar date changed, set MM.DD to today and reset n to 1.
- * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
+ * Keep APP_VERSION, package.json, and public/app-version.json in sync.
+ * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_08.28.14";
+export const APP_VERSION = "V9_08.28.15";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -925,7 +926,7 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 
 // 7. CHANGELOG drives the in-app What's New modal (keep short: 3-5 bullets).
 // Longer engineering notes live in /CHANGELOG.md (not shown to commuters).
-// Badge / seen key use `id` (=== APP_VERSION for latest).
+// Badge / seen key use `id`. A version bump may skip a new card (id then lags APP_VERSION).
 //
 // PUBLIC COMMUTER COPY (strict). Competitors read this list.
 // Only obvious behaviour a commuter can tap and see in the build they have

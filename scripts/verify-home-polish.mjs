@@ -11,10 +11,10 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.14', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.15', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_08.28.14' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.14');
+assert(CHANGELOG_DATA[0].id === 'V9_08.28.14' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card stays V9_08.28.14 (15 has no commuter notes)');
 assert(CHANGELOG_DATA[1].id === 'V9_08.28.13', 'keep V9_08.28.13 as the previous What’s New card');
 assert(CHANGELOG_DATA[2].id === 'V9_08.28.11', 'keep V9_08.28.11 as the previous What’s New card');
 assert(CHANGELOG_DATA[3].id === 'V9_08.28.10', 'keep V9_08.28.10 as the previous What’s New card');
@@ -117,10 +117,25 @@ assert(!admin.includes("icon('more'"), 'Options dropped the more icon');
 assert(admin.includes('feedback-thread-chat'), 'thread wallpaper lives on feedback-thread-chat');
 assert(admin.includes('bg-[#efeae2]'), 'admin thread wallpaper is #efeae2');
 assert(admin.includes("id=\"fb-list\" class=\"space-y-3 pr-1 flex-1 min-h-0 overflow-y-auto"), 'fb-list inner-scrolls');
+assert(admin.includes('#feedback-panel #fb-list > *:not(.fb-thread-open)'), 'closed inbox cards do not flex-shrink');
+assert(admin.includes("flex: 0 0 auto"), 'closed inbox cards keep their height');
+assert(admin.includes("formatAlertText('link'") && admin.includes("URL ${Admin.icon('globe'"), 'WYSIWYG link control is URL + globe');
+assert(/Archived Thread[\s\S]{0,800}openReplyModal/.test(admin), 'archived feedback threads have Reply');
 assert(admin.includes('openAdminReplyEditor'), 'admin replies open the editor');
 assert(admin.includes('editedAt: Date.now()'), 'edit writes editedAt');
 assert(admin.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json'), 'edit PATCHes inbox/{deviceId}/{msgKey}');
 assert(admin.includes("Does not post a new message or archive the thread."), 'edit path does not POST or archive');
+
+const presence = readFileSync(new URL('../src/lib/community-presence.js', import.meta.url), 'utf8');
+assert(presence.includes("el.textContent = 'Just you here'"), 'presence fallback is Just you here');
+assert(!presence.includes('Room online'), 'Room online presence copy is gone');
+assert(presence.includes("count <= 1 ? 'Just you here'"), 'solo room still says Just you here');
+const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
+const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
+assert(agents.includes('No unsolicited changes'), 'agent instructions forbid unsolicited changes');
+assert(agents.includes('Changelog is optional'), 'agent instructions allow shipping without changelog');
+assert(agents.includes('no release notes'), 'agent instructions allow no release notes');
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

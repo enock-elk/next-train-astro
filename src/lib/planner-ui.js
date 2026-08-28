@@ -2969,7 +2969,7 @@ export function initPlanner() {
             : '';
 
         daySelectDiv.innerHTML = `
-            <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Travel Day</label>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 uppercase ml-1 mb-1">Travel Day</label>
             <div onclick="if(typeof window._toggleMainDayDropdown === 'function') window._toggleMainDayDropdown(event)" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:outline-none cursor-pointer flex justify-between items-center shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                 <span id="main-day-display">${selText}</span>
                 <svg id="main-day-chevron" class="w-5 h-5 text-gray-500 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -3372,7 +3372,7 @@ export function renderPlannerHistory() {
     container.classList.remove('hidden');
     container.innerHTML = `
         <div class="flex items-center justify-between mb-2 px-1">
-             <p class="text-xs font-bold text-gray-400 uppercase">Recent Trips</p>
+             <p class="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">Recent Trips</p>
              <button id="planner-history-clear-btn" class="text-[10px] text-gray-400 hover:text-red-500 focus:outline-none">Clear</button>
         </div>
         <div class="flex flex-col gap-2">
@@ -3398,10 +3398,13 @@ export function setupAutocomplete(inputId, selectId) {
     select.classList.add('hidden');
     if (input.parentNode && input.parentNode instanceof HTMLElement) input.parentNode.style.position = 'relative';
 
-    const chevron = document.createElement('div');
-    chevron.className = "absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer p-2 hover:text-blue-500 z-10";
-    chevron.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>`;
-    input.parentNode.appendChild(chevron);
+    let chevron = input.parentNode.querySelector('#planner-from-chevron, .planner-station-chevron');
+    if (!chevron) {
+        chevron = document.createElement('div');
+        chevron.className = "planner-station-chevron absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer p-2 hover:text-blue-500 z-10 transition-colors";
+        chevron.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>`;
+        input.parentNode.appendChild(chevron);
+    }
 
     const list = document.createElement('ul');
     list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";

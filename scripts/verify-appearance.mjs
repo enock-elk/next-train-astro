@@ -109,6 +109,15 @@ assert(plannerUi.includes('plannerHistoryDedupeKey'), 'recents dedupe unique sta
 assert(!plannerUi.includes('Johannesburg Park Station'), 'recents do not show Johannesburg Park Station');
 assert(!plannerUi.includes('top-[-5px]'), 'Show All Stops is not pulled up into the train name');
 assert(plannerUi.includes('mb-2'), 'train name row has extra space before Show All Stops');
+assert(plannerUi.includes('right-2 top-1/2'), 'planner From/To chevron matches board right-2');
+assert(plannerUi.includes('text-gray-700 dark:text-gray-200 uppercase ml-1 mb-1">Travel Day'), 'Travel Day label uses primary text contrast');
+
+const planner = readFileSync(new URL('../src/components/TripPlanner.astro', import.meta.url), 'utf8');
+assert(planner.includes('planner-title-block text-center mb-3'), 'planner title block uses the same mb-3 as the board route pill');
+assert(planner.includes('id="planner-from-chevron"'), 'planner From has a matching chevron');
+assert(planner.includes('id="planner-from-chevron"') && planner.includes('absolute right-2 top-1/2'), 'planner From chevron is right-2 like the board');
+assert(!planner.includes('planner-schedule-phantom'), 'planner dropped the phantom Schedule updated spacer');
+assert(planner.includes('min-h-[46px]'), 'planner info pill matches board route pill min-height');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
@@ -149,8 +158,15 @@ assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trai
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
 assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
-assert(css.includes('color-mix(in srgb, #fff 8%, var(--nt-chrome-nav))'), 'active tab wash is a quiet mix on the nav');
+assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-active');
+assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav))'), 'Earthy/Ember light tab chip is an ink wash');
+assert(css.includes('--nt-primary: #c5cbb8'), 'Earthy light CTA is pale sage, not chocolate');
+assert(css.includes('--nt-primary: #e4c4a4'), 'Ember light CTA is pale clay, not chocolate');
+assert(css.includes('#planner-search-btn'), 'Plan Trip uses pack primary tokens');
+assert(css.includes('#planner-locate-btn'), 'planner locate uses pack primary tokens');
+assert(css.includes('html, body, #nt-shell'), 'shell paints canvas so the Options gap is not raw white');
 
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
@@ -276,9 +292,11 @@ assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pi
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
 assert(layout.includes('nt-standalone'), 'standalone class is stamped on html');
 assert(css.includes('#bottom-nav .bottom-nav-item.is-active'), 'active tab has a highlight rule');
-assert(css.includes("color-mix(in srgb, #fff 8%, var(--nt-chrome-nav))"), 'active tab highlight is a quiet mix');
+assert(css.includes('--nt-chrome-nav-active'), 'active tab highlight uses the pack token');
 assert(!css.includes("color-mix(in srgb, #fff 16%, var(--nt-chrome-nav))"), 'active tab dropped the loud 16% mix');
 assert(css.includes('border-bottom-left-radius: 1.25rem'), 'sidenav bottom-left is rounded above the oval');
+assert(layout.includes('body.nav-bottom:not(.nt-immersive) #sidenav-overlay'), 'Options overlay has a dedicated rule');
+assert(/#sidenav-overlay \{\s*inset:\s*0;/.test(layout), 'Options scrim covers the full viewport including under the oval');
 
 const recovery = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
 assert(recovery.includes('visibilityState'), 'recovery counts visible time only');

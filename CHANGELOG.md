@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.14 — Paler Earthy/Ember; From-field align; Options scrim; tab chip; contrast (28 Aug 2026)
+
+- Earthy / Ember **light** CTAs are pale sage / clay with ink `--nt-primary-fg` (not chocolate fills). `--nt-text-muted` and `--nt-chrome-muted` on light packs meet ~4.5:1 on canvas. Light-nav packs get `--nt-chrome-nav-active` as an ink wash so the oval tab chip is visible; Classic keeps the white-on-blue mix.
+- Planner title block matches the board route pill (`mb-3`, no phantom “Schedule updated” spacer). From field uses the same wrap / `h-[54px]` / chevron `right-2` as Select Station.
+- Options scrim (`#sidenav-overlay`) stays `inset: 0` so it no longer leaves a full-width undimmed strip under the pill. `#sidenav` still stops above the oval. `#nt-shell` paints `--nt-canvas`.
+- `#planner-search-btn` / `#planner-locate-btn` use `--nt-primary` / `--nt-primary-fg` like the board locate and timetable CTAs.
+
 ## V9_08.28.13 — Admin inbox WhatsApp layout; alias modal; edit replies in place (28 Aug 2026)
 
 - Commuter Feedback thread uses the same WhatsApp bubble tokens as Feedback Hub (`#d9fdd3` / dark `#005c4b`, wallpaper `#efeae2`). Options sits in the contact header row (label only). Alias is a person/pencil control that opens a real modal instead of `prompt()`.

@@ -3,8 +3,8 @@
 ---
 
 <div id="view-trip-planner" class="view-section p-4 pb-6 bg-gray-50 dark:bg-gray-900/50 flex flex-col flex-grow min-h-0">
-    <div class="planner-title-block text-center mb-5 flex flex-col justify-center items-center w-full shrink-0">
-        <button id="planner-info-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-center bg-white dark:bg-gray-800 h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors overflow-hidden group focus:outline-none">
+    <div class="planner-title-block text-center mb-3 flex flex-col justify-center items-center w-full shrink-0">
+        <button id="planner-info-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 min-h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors overflow-hidden group focus:outline-none">
             <div class="w-full h-full"></div>
             <h2 class="text-sm sm:text-base font-medium text-gray-700 dark:text-gray-200 group-hover:opacity-80 transition-colors truncate w-full px-1 text-center">
                 Advanced Multi-Transfer Routing
@@ -13,20 +13,21 @@
                 <svg class="w-5 h-5 text-blue-500 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
         </button>
-        <!-- Phantom line matches Live Board “Schedule updated” height on the search form only -->
-        <p class="planner-schedule-phantom text-[10px] text-transparent font-medium uppercase tracking-wide select-none mt-1">Schedule updated: --</p>
     </div>
     
     <div id="planner-input-section" class="space-y-7 shrink-0">
-        <!-- FROM SECTION -->
-        <div class="mb-1">
+        <!-- FROM SECTION — same row metrics as #station-field-hit on the board -->
+        <div class="mb-3 relative z-20" id="planner-from-field-hit">
             <label for="planner-from-search" class="sr-only">From Station</label>
             <div class="flex items-center gap-2">
-                <div class="relative flex-grow">
+                <div class="relative flex-grow shadow-sm rounded-xl" id="planner-from-field-wrap">
                     <input type="text" id="planner-from-search" name="planner_origin_search_ignore" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Select From Station..." class="block w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl shadow-sm p-3 text-lg font-medium focus:ring-blue-500 focus:border-blue-500 transition-colors h-[54px] appearance-none pr-12 truncate">
                     <select id="planner-from" class="hidden w-full p-4 rounded-xl bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-lg font-medium text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors">
                         <option value="">Loading stations...</option>
                     </select>
+                    <div id="planner-from-chevron" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer p-2 hover:text-blue-500 z-10 transition-colors" aria-hidden="true">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
                 </div>
                 <button id="planner-locate-btn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl shadow-md transition-colors flex-shrink-0 h-[54px] w-[54px] flex items-center justify-center focus:outline-none" title="Find my nearest station" aria-label="Find Nearest Station">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>

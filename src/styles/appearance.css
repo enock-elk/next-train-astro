@@ -42,12 +42,13 @@
   --nt-chrome-fg: #ffffff;
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
-  --nt-text-muted: #64748b;
+  --nt-text-muted: #475569;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
   --nt-env-bottom: env(safe-area-inset-bottom, 0px);
   --nt-sys-bottom: var(--nt-env-bottom);
   --nt-app-h: 100svh;
+  --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -84,6 +85,7 @@ html[data-colour-pack="classic"].dark {
   --nt-text-muted: #9fb0c8;
   --nt-border: #2a3d5c;
   --nt-theme-meta: #0b1f3a;
+  --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
 }
 
 /* Explicit classic light (optional clarity) */
@@ -102,9 +104,10 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-chrome-fg: #ffffff;
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
-  --nt-text-muted: #64748b;
+  --nt-text-muted: #475569;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
+  --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
   --nt-blue-200: 191 219 254;
@@ -131,11 +134,12 @@ html[data-colour-pack="midnight"] {
   --nt-chrome-nav: #cfd8e3;
   --nt-chrome-nav-border: #b7c3d0;
   --nt-chrome-fg: #0e7490;
-  --nt-chrome-muted: #64748b;
+  --nt-chrome-muted: #475569;
   --nt-text: #0f172a;
-  --nt-text-muted: #64748b;
+  --nt-text-muted: #475569;
   --nt-border: #d5dee8;
   --nt-theme-meta: #155e75;
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
 
   --nt-blue-50: 240 249 255;
   --nt-blue-100: 224 242 254;
@@ -189,6 +193,7 @@ html[data-colour-pack="contrast"] {
   --nt-text-muted: #262626;
   --nt-border: #171717;
   --nt-theme-meta: #1e4fc2;
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -248,11 +253,12 @@ html[data-colour-pack="signal"] {
   --nt-chrome-nav: #c9ddd2;
   --nt-chrome-nav-border: #b3cbbd;
   --nt-chrome-fg: #2f7d5b;
-  --nt-chrome-muted: #4b6358;
+  --nt-chrome-muted: #3d5248;
   --nt-text: #123024;
-  --nt-text-muted: #4b6358;
+  --nt-text-muted: #3d5248;
   --nt-border: #cfe0d6;
   --nt-theme-meta: #246348;
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
 
   --nt-blue-50: 236 253 245;
   --nt-blue-100: 209 250 229;
@@ -287,36 +293,37 @@ html[data-colour-pack="signal"].dark {
   --nt-theme-meta: #064e3b;
 }
 
-/* Ember — muted copper, stepped canvas / cards / chrome (not one muddy brown) */
+/* Ember — pale clay paper; ink on clay CTAs (not chocolate fills) */
 html[data-colour-pack="ember"] {
-  --nt-primary: #a35c28;
-  --nt-primary-hover: #8a4c20;
-  --nt-primary-fg: #fffaf6;
-  --nt-primary-soft: #f6efe8;
-  --nt-canvas: #f6efe8;
-  --nt-surface: #fbf7f2;
-  --nt-surface-muted: #f3ebe3;
-  --nt-chrome-header: #eee4d9;
-  --nt-chrome-header-border: #e0d2c4;
-  --nt-chrome-nav: #e8d8ca;
-  --nt-chrome-nav-border: #d4c0ae;
-  --nt-chrome-fg: #5c3d2e;
-  --nt-chrome-muted: #8a6a56;
+  --nt-primary: #e4c4a4;
+  --nt-primary-hover: #d4b090;
+  --nt-primary-fg: #3a2a1c;
+  --nt-primary-soft: #f8f1e9;
+  --nt-canvas: #f8f2eb;
+  --nt-surface: #fcf8f4;
+  --nt-surface-muted: #f4ece4;
+  --nt-chrome-header: #f2e8dc;
+  --nt-chrome-header-border: #e4d4c4;
+  --nt-chrome-nav: #eadcc8;
+  --nt-chrome-nav-border: #d8c4b0;
+  --nt-chrome-fg: #4a3224;
+  --nt-chrome-muted: #5c4a3c;
   --nt-text: #2a2118;
-  --nt-text-muted: #6f5e50;
-  --nt-border: #e6d8cc;
-  --nt-theme-meta: #8a4c20;
-  --nt-accent: #9a5a32;
+  --nt-text-muted: #5c4a3c;
+  --nt-border: #eadccc;
+  --nt-theme-meta: #e4c4a4;
+  --nt-accent: #b07a50;
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
-  --nt-blue-50: 247 241 234;
-  --nt-blue-100: 239 228 216;
-  --nt-blue-200: 224 204 184;
-  --nt-blue-300: 196 164 132;
-  --nt-blue-400: 176 124 80;
-  --nt-blue-500: 163 92 40;
-  --nt-blue-600: 154 86 32;
-  --nt-blue-700: 138 76 32;
-  --nt-blue-800: 112 64 28;
+  --nt-blue-50: 252 248 244;
+  --nt-blue-100: 242 232 220;
+  --nt-blue-200: 228 204 180;
+  --nt-blue-300: 212 176 144;
+  --nt-blue-400: 196 148 104;
+  --nt-blue-500: 176 122 80;
+  --nt-blue-600: 228 196 164;
+  --nt-blue-700: 176 122 80;
+  --nt-blue-800: 138 96 64;
   --nt-blue-900: 88 52 28;
 }
 
@@ -340,6 +347,7 @@ html[data-colour-pack="ember"].dark {
   --nt-border: #4a4038;
   --nt-theme-meta: #352e28;
   --nt-accent: #c4926a;
+  --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
 
   --nt-blue-50: 53 46 40;
   --nt-blue-100: 62 52 44;
@@ -356,27 +364,28 @@ html[data-colour-pack="ember"].dark {
 /*
  * Earthy — editorial cream + sage (Understanding Burnout palette).
  * Eggshell paper, muted sage, dusty terracotta, soft charcoal.
- * Desaturated and light: no forest-green fills, no kraft-tan paper.
+ * Pale sage fills with ink, not forest-green or kraft-tan chocolate.
  */
 html[data-colour-pack="earthy"] {
-  --nt-primary: #5e5a4e;
-  --nt-primary-hover: #4a473e;
-  --nt-primary-fg: #FAF8F3;
+  --nt-primary: #c5cbb8;
+  --nt-primary-hover: #b4bba6;
+  --nt-primary-fg: #2a2e24;
   --nt-primary-soft: #F7F4EC;
-  --nt-canvas: #f3efe6;
+  --nt-canvas: #f6f3ea;
   --nt-surface: #FCFAF6;
   --nt-surface-muted: #F6F1E8;
-  --nt-chrome-header: #ebe6db;
-  --nt-chrome-header-border: #ddd6c8;
-  --nt-chrome-nav: #dde3d2;
-  --nt-chrome-nav-border: #c9d0bc;
+  --nt-chrome-header: #efebe0;
+  --nt-chrome-header-border: #e0d8c8;
+  --nt-chrome-nav: #e4ead8;
+  --nt-chrome-nav-border: #d0d8c4;
   --nt-chrome-fg: #353535;
-  --nt-chrome-muted: #6b655c;
+  --nt-chrome-muted: #534e46;
   --nt-text: #353535;
-  --nt-text-muted: #7a746a;
+  --nt-text-muted: #534e46;
   --nt-border: #e4ddce;
-  --nt-theme-meta: #ebe6db;
+  --nt-theme-meta: #efebe0;
   --nt-accent: #8f7d68;
+  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
   --nt-blue-50: 250 248 243;
   --nt-blue-100: 243 240 232;
@@ -384,8 +393,8 @@ html[data-colour-pack="earthy"] {
   --nt-blue-300: 201 193 181;
   --nt-blue-400: 154 150 132;
   --nt-blue-500: 125 128 110;
-  --nt-blue-600: 94 90 78;
-  --nt-blue-700: 74 71 62;
+  --nt-blue-600: 197 203 184;
+  --nt-blue-700: 107 112 92;
   --nt-blue-800: 62 58 50;
   --nt-blue-900: 53 56 48;
 }
@@ -410,6 +419,7 @@ html[data-colour-pack="earthy"].dark {
   --nt-border: #4a4640;
   --nt-theme-meta: #32302b;
   --nt-accent: #C4A990;
+  --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
 
   --nt-blue-50: 44 42 38;
   --nt-blue-100: 55 53 47;
@@ -432,7 +442,7 @@ html[data-colour-pack="earthy"] .colour-pack-swatch {
 }
 
 /* Shell: canvas vs cards vs distinct header/nav chrome */
-html, body {
+html, body, #nt-shell {
   background-color: var(--nt-canvas);
 }
 
@@ -489,13 +499,13 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 #bottom-nav .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
   font-weight: 600;
-  background: color-mix(in srgb, #fff 8%, var(--nt-chrome-nav));
+  background: var(--nt-chrome-nav-active);
   border-radius: 999px;
   margin: 0.16rem 0.1rem;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
+  background: var(--nt-chrome-nav-active);
   box-shadow: none;
 }
 
@@ -585,13 +595,17 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 
 /* Pack-tinted CTAs — rounded, inset, drop shadow; extra canvas gap above nav */
 #locate-btn,
-#view-full-timetable-btn {
+#planner-locate-btn,
+#view-full-timetable-btn,
+#planner-search-btn {
   background-color: var(--nt-primary) !important;
   border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
 }
 #locate-btn:hover,
-#view-full-timetable-btn:hover {
+#planner-locate-btn:hover,
+#view-full-timetable-btn:hover,
+#planner-search-btn:hover {
   background-color: var(--nt-primary-hover) !important;
 }
 #view-full-timetable-btn {
@@ -987,13 +1001,13 @@ html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
   font-weight: 600;
-  background: color-mix(in srgb, #fff 8%, var(--nt-chrome-nav));
+  background: var(--nt-chrome-nav-active);
   border-radius: 999px;
   margin: 0.16rem 0.1rem;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
+  background: var(--nt-chrome-nav-active);
   box-shadow: none;
   border-radius: 999px;
   margin: 0.16rem 0.1rem;

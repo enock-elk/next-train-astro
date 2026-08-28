@@ -83,13 +83,14 @@ function paintThreadContactRow() {
     const row = document.getElementById('messages-thread-contact-row');
     const input = document.getElementById('messages-thread-contact');
     if (!row || !input) return;
+    // Always show contact + privacy lock — signed-in operators were hiding the
+    // whole row, so it looked like the field had been removed.
+    row.classList.remove('hidden');
     const signedIn = signedInContactEmail();
     if (signedIn) {
         input.value = signedIn;
-        row.classList.add('hidden');
         return;
     }
-    row.classList.remove('hidden');
     if (!input.value) {
         try { input.value = safeStorage.getItem(THREAD_CONTACT_KEY) || ''; } catch { /* ignore */ }
     }
@@ -1620,6 +1621,7 @@ export function initHub() {
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
         document.body.classList.add('overflow-hidden');
+        window.__ntInAppSheetOpen = true;
         if (overlay.dataset.sheetMode === 'map') {
             import('./ui.js').then((m) => m.setImmersiveChrome?.(true)).catch(() => {});
         }
@@ -1629,6 +1631,7 @@ export function initHub() {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
         document.body.classList.remove('overflow-hidden');
+        window.__ntInAppSheetOpen = false;
         import('./ui.js').then((m) => m.setImmersiveChrome?.(false)).catch(() => {});
         const frame = document.getElementById('nt-inapp-sheet-frame');
         // Delay blanking so users never see an empty white iframe flash.
@@ -1727,6 +1730,9 @@ export function initHub() {
             }
         } catch { /* ignore */ }
     };
+
+    // Map-tab embed calls this for the Full screen control — never from map.html boot.
+    window.__ntOpenNetworkMapSheet = () => openInAppSheet(withBase('/map.html'), 'Network Map');
 
     // Full map (regions + Network Lines). The home Map tab is the stripped
     // "where is my train" view, so this deliberately does NOT switch tabs.

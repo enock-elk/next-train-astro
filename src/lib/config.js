@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.28.3";
+export const APP_VERSION = "V8_08.28.4";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.28.4",
+        title: "Feedback contact, route pick, Mutual",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Messages:</b> Email or WhatsApp and the privacy lock stay on the Feedback Hub box.",
+            "<b>Board:</b> Pick a route before the empty board. Close stays hidden until a corridor is chosen.",
+            "<b>Map:</b> Mutual and Maitland sit on the same line."
+        ]
+    },
     {
         id: "V8_08.28.3",
         title: "Recents, Crossmoor, floating bar",

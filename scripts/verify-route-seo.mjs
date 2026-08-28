@@ -244,10 +244,18 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
 
 {
   if (!ROUTES['kzn-crossmoor']) fail('ROUTES missing kzn-crossmoor');
+  const crossKeys = Object.values(ROUTES['kzn-crossmoor'].sheetKeys || {});
+  for (const key of crossKeys) {
+    if (!MANUAL_GRID_ORDER[key]) fail(`MANUAL_GRID_ORDER missing Crossmoor sheetKey ${key}`);
+  }
+  const weekdayB = orderGridTrainIds('durbn_to_cross_weekday', ['9999', '9652']);
+  if (weekdayB[0] !== '9652') fail(`Crossmoor weekday-B should lead with 9652, got ${weekdayB[0]}`);
+  const hyphenSat = orderGridTrainIds('durbn-to-cross_sat', ['9680', '9612']);
+  if (hyphenSat[0] !== '9612') fail('hyphen Config key durbn-to-cross_sat should alias to MANUAL_GRID_ORDER');
   const bridge = ROUTES['kzn-bridgecity'];
   const dump = JSON.parse(readFileSync(new URL('../public/data/full-database.json', import.meta.url), 'utf8'));
   const sheetA = bridge?.sheetKeys?.weekday_to_a;
-  if (sheetA && MANUAL_GRID_ORDER[sheetA]) fail(`${sheetA} should have no MANUAL_GRID_ORDER`);
+  if (sheetA && !MANUAL_GRID_ORDER[sheetA]) fail(`${sheetA} should be in MANUAL_GRID_ORDER (underscore alias of Config hyphen key)`);
   const preview = bridge ? extractGridPreview(dump, bridge, 'A', 'weekday') : null;
   if (!preview?.trainIds?.length) fail('kzn-bridgecity weekday-A OG preview is empty');
   else {

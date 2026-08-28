@@ -15,11 +15,12 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 - Viewport `interactive-widget=overlays-content` so Chrome does not resize the visual viewport for the IME. Planner zoom lock strings keep that token.
 - Drop the invented 48px Android `--nt-sys-bottom` tray and `#nt-shell` padding-bottom. The pill’s `bottom` is `env(safe-area-inset-bottom)` only (0 on Android Chrome with 3-button nav). No white/black block between the oval and the system nav.
 
-## V9_08.28.8 — Train-sheet fare modal; planner zoom; attachment sniffing (28 Aug 2026)
+## V9_08.28.8 — Train-sheet fare modal; planner zoom; attachment sniffing; Crossmoor grid (28 Aug 2026)
 
 - Full train sheet **Max. Single Fare** opens the zone ticket-price modal (`openFareModalForRoute`). The chip already called that helper; live-board UI now exports it and titles the table for the train’s corridor, not the live-board pin.
 - Planner From/To (and the date sheet) lock `maximum-scale=1` on `touchstart`/`focus` and restore `maximum-scale=5` after blur so iOS does not stay zoomed. Skip `input.select()` on coarse pointers. Date field is 16px (`text-base`).
 - Uploads sniff magic bytes (JPEG/PNG/GIF/WebP/PDF only), store the sniffed extension + `contentType`, and abort the send if a file is spoofed. Lightbox / rich-text `img src` / `onclick` only allow catalog posters and Firebase Storage HTTPS. Admin inbox no longer renders arbitrary attachment URLs.
+- Grid extractor V3.5 writes both Config hyphen keys (`durbn-to-cross_weekday`) and ROUTES underscore keys (`durbn_to_cross_weekday`). Crossmoor weekday (9643 / 9652) and Saturday (9612–9681) columns are in `MANUAL_GRID_ORDER`. Admin route pickers share `listOperatorRoutes()` so Durban ↔ Crossmoor appears.
 
 ## V9_08.28.7 — Station corridors; Show all lines; Back is a button (28 Aug 2026)
 

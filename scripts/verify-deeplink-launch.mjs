@@ -84,6 +84,11 @@ const grid = readFileSync(join(ROOT, 'src/lib/grid-order.js'), 'utf8');
 ok(/^export const MANUAL_GRID_ORDER = \{/m.test(grid), 'grid-order.js exports MANUAL_GRID_ORDER');
 const extractor = readFileSync(join(ROOT, 'tools/grid-extractor/extract-grid.js'), 'utf8');
 ok(extractor.includes('export const MANUAL_GRID_ORDER'), 'extractor template writes export const');
+ok(extractor.includes('aliasSheetKeys'), 'extractor writes hyphen and underscore sheet-key aliases');
+ok(/Next\)\?Train\[_\\s-\]/.test(extractor) || extractor.includes('[_\s-]'), 'extractor accepts underscore schedule filenames');
+ok(extractor.includes('inferMissingTabs'), 'extractor auto-discovers XXX-to-YYY tabs missing from Config_GridOrder');
+ok(extractor.includes('writeGridOrderFile'), 'extractor merges without clobbering orderGridTrainIds');
+ok(extractor.includes('durbn_to_cross_weekday'), 'extractor asserts Crossmoor ROUTES.sheetKeys');
 ok(grid.includes('"0513"') && grid.includes('"0516"'), 'August GP sheet still has 0513 / 0516 columns');
 
 const layout = readFileSync(join(ROOT, 'src/layouts/Layout.astro'), 'utf8');

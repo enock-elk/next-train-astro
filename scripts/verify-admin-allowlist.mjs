@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_EMAILS, isAdminEmail } from '../src/lib/config.js';
+import { ADMIN_EMAILS, isAdminEmail, ROUTES } from '../src/lib/config.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -25,6 +25,15 @@ ok(adminJs.includes('Non-admin Firebase session ignored'), 'anonymous session is
 ok(adminJs.includes('stopTelemetryPolling'), '403 stops the 10s telemetry loop');
 ok(adminJs.includes('applyAdminAuthedChrome(true)'), 'allowlisted admin reveals operator chrome');
 ok(adminJs.includes('applyAdminAuthedChrome(false)'), 'sign-out hides operator chrome');
+ok(adminJs.includes('listOperatorRoutes'), 'admin dropdowns share listOperatorRoutes');
+ok(adminJs.includes('Admin.listOperatorRoutes(regionInfo.code)'), 'alert/incident/ban pickers use listOperatorRoutes');
+ok(ROUTES['kzn-crossmoor']?.isActive, 'kzn-crossmoor is an active ROUTES corridor');
+const kznIds = Object.values(ROUTES)
+    .filter((r) => r.region === 'KZN' && r.isActive && r.id !== 'special_event')
+    .map((r) => r.id);
+ok(kznIds.includes('kzn-crossmoor'), 'KZN operator list includes Durban <-> Crossmoor');
+ok(kznIds.includes('kzn-umlazi') && kznIds.includes('kzn-pinetown'), 'KZN operator list still has Umlazi and Pinetown');
+ok(kznIds.length >= 6, `KZN should have ≥6 active corridors, got ${kznIds.length}`);
 
 const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
 ok(bridge.includes('isAdminEmail(window.Admin?.currentUser?.email)'), 'bridge skips login only for operators');

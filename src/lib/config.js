@@ -965,7 +965,8 @@ export const CHANGELOG_DATA = [
         date: "28 Aug 2026",
         forceShow: false,
         features: [
-            "<b>Planner:</b> Tap Max. Single Fare on a full train sheet to see zone ticket prices."
+            "<b>Planner:</b> Tap Max. Single Fare on a full train sheet to see zone ticket prices.",
+            "<b>Timetable:</b> Durban to Crossmoor weekday and Saturday columns follow the published train order."
         ]
     },
     {

@@ -520,13 +520,18 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow: hidden;
       }
 
-      /* Travel Day / inline menus must paint below the trigger without clipping */
+      /* Travel Day / inline menus must paint below the trigger without clipping.
+         Keep #app-scroll as the vertical scroller — overflow:visible here is
+         what froze Trip Planner while Travel Day was open. */
       .view-section.active.dropdown-escape {
         overflow: visible !important;
       }
-      #main-content.app-shell.dropdown-escape,
-      #main-content.app-shell.dropdown-escape #app-scroll {
+      #main-content.app-shell.dropdown-escape {
         overflow: visible !important;
+      }
+      #main-content.app-shell.dropdown-escape #app-scroll {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
       }
 
       /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen. */
@@ -623,12 +628,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       #bottom-nav.bottom-nav-bar {
         flex-shrink: 0;
         position: relative;
-        padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers */
       body.nav-bottom:not(.nt-immersive) #sidenav,
       body.nav-bottom:not(.nt-immersive) #sidenav-overlay {
-        bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px) + 0.25rem);
+        bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.75rem);
         height: auto;
       }
       #bottom-nav .bottom-nav-item {

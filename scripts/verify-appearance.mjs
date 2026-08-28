@@ -28,7 +28,8 @@ assert(css.includes('--nt-chrome-nav: #0e0d0c'), 'Earthy dark nav is near-black,
 assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 41 55\)/.test(css), 'maint header must not hardcode gray-800');
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
-assert(css.includes('0 -10px 28px') || css.includes('0 -8px'), 'nav has upward shadow');
+assert(css.includes('0 6px 18px') || css.includes('0 -10px 28px') || css.includes('0 -8px'), 'nav has a drop shadow');
+assert(css.includes('border-radius: 999px'), 'bottom nav is a floating pill');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 
 ['midnight', 'contrast', 'signal', 'ember', 'earthy'].forEach((pack) => {
@@ -56,6 +57,9 @@ assert(indexPage.includes('data-admin-authed-only'), 'Map/Community are admin-ga
 assert(indexPage.includes('id="bottom-nav-grid"'), 'bottom-nav-grid id present');
 assert(/<\/div>\s*<div id="offline-wrapper"/.test(indexPage), 'offline dock sits outside #app-scroll');
 assert(indexPage.includes('You are offline.'), 'offline dock copy matches the mockup');
+assert(indexPage.includes('id="offline-refresh-btn"'), 'offline dock has Refresh');
+assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close');
+assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"') && sidenav.includes('data-admin-authed-only'), 'Account row is admin-gated');
@@ -69,6 +73,9 @@ assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CAR
 assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
 assert(layout.includes('html.nt-onboarding #bottom-nav'), 'Welcome hides the bottom bar');
 assert(layout.includes("classList.toggle('nt-onboarding'"), 'Layout stamps nt-onboarding before first paint');
+assert(layout.includes('#main-content.app-shell.dropdown-escape #app-scroll'), 'Travel Day keeps a dedicated #app-scroll overflow rule');
+assert(/dropdown-escape #app-scroll \{\s*overflow-x:\s*hidden !important;\s*overflow-y:\s*auto !important;/.test(layout), 'Travel Day does not freeze #app-scroll');
+assert(!/#main-content\.app-shell\.dropdown-escape #app-scroll \{\s*overflow:\s*visible/.test(layout), 'Travel Day no longer sets #app-scroll to overflow visible');
 
 assert(css.includes('#app-header.nt-maint-active #app-title'), 'maintenance strip keeps header title readable');
 

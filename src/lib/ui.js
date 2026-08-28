@@ -6,7 +6,7 @@
  * It is completely decoupled from business logic and routing engines.
  */
 
-import { safeStorage } from './utils.js';
+import { safeStorage, escapeHTML } from './utils.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
@@ -1755,21 +1755,22 @@ export async function checkMaintenanceStatus() {
                 return;
             }
             const placeBanner = (banner) => {
-                // Sibling above #app-scroll so the tape sits at the top of the
-                // shell without covering the Next Train title.
-                banner.style.background = 'repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #d97706 10px, #d97706 20px)';
-                banner.className = 'nt-maint-strip shrink-0 w-full text-gray-900 text-[11px] font-black uppercase tracking-widest text-center py-1.5 pointer-events-none relative z-[40]';
-                banner.innerHTML = String(customMessage).toUpperCase();
-                const mainAppNode = document.getElementById('main-content');
-                const scroll = document.getElementById('app-scroll');
+                // In-flow strip immediately above #app-header so it scrolls away
+                // with the name (not position:absolute over the title, not sticky).
+                banner.removeAttribute('style');
+                banner.className = 'nt-maint-strip';
+                banner.setAttribute('role', 'status');
+                const label = escapeHTML(String(customMessage).toUpperCase());
+                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-label">${label}</span></span>`;
                 const header = document.getElementById('app-header');
+                const mainAppNode = document.getElementById('main-content');
                 header?.classList.remove('nt-maint-active');
-                if (mainAppNode && scroll) {
-                    if (banner.parentNode !== mainAppNode || banner.nextElementSibling !== scroll) {
-                        mainAppNode.insertBefore(banner, scroll);
+                if (header && header.parentNode) {
+                    if (banner.nextElementSibling !== header) {
+                        header.parentNode.insertBefore(banner, header);
                     }
                 } else if (mainAppNode) {
-                    mainAppNode.prepend(banner);
+                    if (banner.parentNode !== mainAppNode) mainAppNode.prepend(banner);
                 } else if (!banner.parentNode) {
                     document.body.prepend(banner);
                 }

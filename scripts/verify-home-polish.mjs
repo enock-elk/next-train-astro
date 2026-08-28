@@ -11,8 +11,10 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.28.4', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.28.4' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.28.4');
+assert(APP_VERSION === 'V8_08.28.5', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.28.5' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V8_08.28.5');
+assert(CHANGELOG_DATA[1].id === 'V8_08.28.4', 'keep V8_08.28.4 as the previous What’s New card');
+assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.2–26.1 into V8_08.28.3');
 
@@ -50,7 +52,9 @@ assert(!ui.includes("oi.textContent = 'WORKING OFFLINE'"), 'offline dock keeps m
 assert(ui.includes("scheduleOfflineChrome();"), 'already-offline boot schedules the dock');
 assert(ui.includes("hideOfflineChrome({ dismissed: true })"), 'Close / auto-hide marks the dock dismissed');
 assert(ui.includes('PLANNER_INLINE_LISTS'), 'Travel Day scrim does not steal pointer events');
-assert(ui.includes("mainAppNode.insertBefore(banner, scroll)"), 'maintenance tape sits above #app-scroll');
+assert(ui.includes('header.parentNode.insertBefore(banner, header)'), 'maintenance bar sits above #app-header inside the scroller');
+assert(ui.includes('nt-maint-wrench'), 'maintenance bar uses the wrench SVG');
+assert(!ui.includes('repeating-linear-gradient'), 'maintenance bar is not hazard tape');
 
 const manifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));
 assert(manifest.posters.some((p) => p.file === 'pta-kempton-0618-0619.jpg'), 'manifest lists Kempton poster');

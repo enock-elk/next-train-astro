@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.5 — Lab chrome on main; yellow maintenance bar above header (28 Aug 2026)
+
+- Production tree is the lab app (left title, floating pill nav, no top tabs) plus V8_08.28.4.
+- Maintenance strip: peach/yellow gradient with wrench SVG; insert as previous sibling of `#app-header` inside `#app-scroll` so it scrolls away with the name.
+- Do not overlay `nt-maint-active` on the title. Do not use hazard-stripe `repeating-linear-gradient`.
+
 ## V8_08.28.4 — Feedback contact, Select Route Close, Mutual–Maitland, Map tab pane (28 Aug 2026)
 
 - Feedback Hub: `paintThreadContactRow()` always shows `#messages-thread-contact-row` and the privacy lock. Signed-in email still prefills; the row is no longer `hidden`.

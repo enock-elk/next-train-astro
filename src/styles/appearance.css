@@ -644,16 +644,47 @@ html.dark .nt-offline-strip {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
 }
 
-/* Hazard tape above #app-scroll — not overlaid on the title. */
+/* In-flow yellow bar above #app-header — scrolls with the name. */
 #maintenance-banner,
 .nt-maint-strip {
   flex-shrink: 0;
   width: 100%;
   position: relative;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  background: linear-gradient(90deg, #fecb4c 0%, #f4b45c 52%, #ee9366 100%);
+  color: #4a3728;
+  pointer-events: none;
+  box-shadow: none;
+}
+.nt-maint-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+.nt-maint-wrench {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+}
+.nt-maint-label {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Keep header chrome (menu / bell / maint) below app modals */
+/* Keep header chrome (menu / bell) below app modals */
 #app-header {
   position: relative;
   z-index: 10;
@@ -671,30 +702,6 @@ html.dark .nt-offline-strip {
 }
 .toggle-checkbox:checked + .toggle-label {
   background-color: var(--nt-primary);
-}
-
-/* Maintenance strip pinned to top of header; alerts stay above it (z-[70]) */
-#app-header.nt-maint-active {
-  /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
-  background-color: var(--nt-chrome-header) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-html.dark #app-header.nt-maint-active {
-  background-color: var(--nt-chrome-header) !important;
-}
-#app-header.nt-maint-active #app-title,
-#app-header.nt-maint-active #app-title.header-title,
-#app-header.nt-maint-active #current-day,
-#app-header.nt-maint-active #current-day span {
-  color: var(--nt-text) !important;
-}
-#app-header.nt-maint-active #current-day {
-  background: color-mix(in srgb, var(--nt-text) 10%, transparent);
-}
-#app-header.nt-maint-active #open-nav-btn,
-#app-header.nt-maint-active #notice-bell {
-  z-index: 70;
 }
 
 /* Planner notices: icon + accent bar + wash all live on the right. */
@@ -891,10 +898,6 @@ html:not([data-admin-authed="1"]) #ride-nearby-btn {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border) !important;
   color: var(--nt-text) !important;
-}
-
-html.dark #app-header.nt-maint-active {
-  background-color: var(--nt-chrome-header) !important;
 }
 
 /* Classic: white title on blue (light); pack-blue title on navy (dark).

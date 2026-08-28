@@ -328,6 +328,11 @@
         // re-smooth station sequences (fixes straight-chord hops / missing routes).
         const RAIL_SNAP_MAX_M = 900;
         const RAIL_MAX_HOPS = 14000;
+        /** Reject an OSM hop that wanders far off the station-to-station chord. */
+        const RAIL_HOP_DETOUR_RATIO = 2.8;
+        const RAIL_HOP_DETOUR_MIN_M = 900;
+        /** If a hop's rail path passes another stop on this route, it skipped the order. */
+        const RAIL_SKIP_STATION_M = 90;
 
         function railHaversineM(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -400,6 +405,40 @@
             return best;
         }
 
+        function railPathLengthM(graph, nodePath) {
+            if (!graph || !nodePath || nodePath.length < 2) return 0;
+            let sum = 0;
+            for (let i = 1; i < nodePath.length; i++) {
+                const a = graph.nodes[nodePath[i - 1]];
+                const b = graph.nodes[nodePath[i]];
+                if (!a || !b) continue;
+                sum += railHaversineM(a.lat, a.lon, b.lat, b.lon);
+            }
+            return sum;
+        }
+
+        function hopDetourTooLong(chordM, railM) {
+            if (!Number.isFinite(railM) || railM <= 0) return true;
+            if (!Number.isFinite(chordM) || chordM <= 0) return railM > RAIL_HOP_DETOUR_MIN_M;
+            return railM > Math.max(chordM * RAIL_HOP_DETOUR_RATIO, chordM + RAIL_HOP_DETOUR_MIN_M);
+        }
+
+        /** True when the hop's rail path passes a different stop on this route. */
+        function railHopSkipsRouteStop(graph, nodePath, stops, hopIndex) {
+            if (!graph || !nodePath || nodePath.length < 3 || !stops) return false;
+            for (let k = 1; k < nodePath.length - 1; k++) {
+                const n = graph.nodes[nodePath[k]];
+                if (!n) continue;
+                for (let j = 0; j < stops.length; j++) {
+                    if (j === hopIndex || j === hopIndex + 1) continue;
+                    const s = stops[j];
+                    if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
+                    if (railHaversineM(n.lat, n.lon, s.lat, s.lon) < RAIL_SKIP_STATION_M) return true;
+                }
+            }
+            return false;
+        }
+
         function shortestRailPath(graph, startId, endId) {
             if (startId === endId) return [startId];
             const dist = new Map([[startId, 0]]);
@@ -448,11 +487,16 @@
                 if (snapA != null && snapB != null) {
                     const nodePath = shortestRailPath(graph, snapA, snapB);
                     if (nodePath && nodePath.length >= 2) {
-                        const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
-                        if (!out.length) out.push(...seg);
-                        else out.push(...seg.slice(1));
-                        railHops++;
-                        continue;
+                        const chordM = railHaversineM(a.lat, a.lon, b.lat, b.lon);
+                        const railM = railPathLengthM(graph, nodePath);
+                        const skips = railHopSkipsRouteStop(graph, nodePath, stops, i);
+                        if (!skips && !hopDetourTooLong(chordM, railM)) {
+                            const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
+                            if (!out.length) out.push(...seg);
+                            else out.push(...seg.slice(1));
+                            railHops++;
+                            continue;
+                        }
                     }
                 }
                 if (!out.length) out.push([a.lat, a.lon]);
@@ -530,17 +574,38 @@
             return { byId, graph };
         }
 
-        /** Prefer graph-smoothed path; else baked LineString; else station chords. */
+        /** Baked OSM LineString may only be used if stations appear along it in list order. */
+        function pathVisitsStopsInOrder(latlngs, stops) {
+            if (!latlngs || latlngs.length < 2 || !stops || stops.length < 2) return false;
+            let last = -1;
+            for (const s of stops) {
+                if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return false;
+                const i = nearestPathIndex(latlngs, s.lat, s.lon);
+                if (i < last) return false;
+                last = i;
+            }
+            return true;
+        }
+
+        /**
+         * Strict paint rule: consecutive stations in route order.
+         * OSM may only fill the hop between station i and i+1 (no shortcuts, no skips).
+         */
         function resolveRouteLatLngs(routeObj, trackBundle) {
             const stops = routeObj.validStops || [];
-            const baked = trackBundle.byId.get(routeObj.routeId);
-            if (trackBundle.graph) {
-                const smoothed = smoothStopsOnRailGraph(trackBundle.graph, stops);
+            const chords = (stops.length > 1)
+                ? stops.map((s) => [s.lat, s.lon])
+                : (routeObj.coords || []);
+            const bundle = trackBundle || { byId: new Map(), graph: null };
+            if (bundle.graph) {
+                const smoothed = smoothStopsOnRailGraph(bundle.graph, stops);
                 if (smoothed && smoothed.length > 1) return smoothed;
             }
-            if (baked && baked.length > 1 && !pathHasLargeJumps(baked)) return baked;
-            if (baked && baked.length > 1) return baked;
-            return routeObj.coords;
+            const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
+            if (baked && baked.length > 1 && !pathHasLargeJumps(baked) && pathVisitsStopsInOrder(baked, stops)) {
+                return baked;
+            }
+            return chords;
         }
 
         // --- MAP LOGIC (Dynamic Region & DB Sync) ---
@@ -706,6 +771,37 @@
             });
         }
 
+        function bindMapLegendToggle() {
+            const wrap = document.getElementById('legend-container');
+            const btn = document.getElementById('legend-toggle-btn');
+            if (!wrap || !btn || btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleLegend();
+            });
+            document.addEventListener('click', (e) => {
+                if (!wrap.contains(e.target)) {
+                    wrap.classList.remove('is-open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        function toggleLegend() {
+            const wrap = document.getElementById('legend-container');
+            const btn = document.getElementById('legend-toggle-btn');
+            if (!wrap) return;
+            const regionPicker = document.getElementById('region-picker');
+            if (regionPicker) {
+                regionPicker.classList.remove('is-open');
+                document.getElementById('region-toggle-btn')?.setAttribute('aria-expanded', 'false');
+            }
+            const open = wrap.classList.toggle('is-open');
+            if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        window.toggleLegend = toggleLegend;
+
         function bindMapColdStartControls() {
             const panel = document.getElementById('map-cold-start');
             if (!panel || panel.dataset.bound === '1') return;
@@ -722,6 +818,7 @@
             const bootRegion = resolveMapRegion();
             syncMapChromeRegion(bootRegion);
             bindMapRegionPicker();
+            bindMapLegendToggle();
             bindMapColdStartControls();
             try {
                 await initDynamicMap();
@@ -985,6 +1082,39 @@
                 }
             }
 
+            /** Paint order is the official station list, never sheet-row scramble. */
+            function applyCanonicalStationOrder(routeId, validStops, routeCoords) {
+                const names = STATIC_ROUTE_PATHS[routeId];
+                if (!names || names.length < 2) return { validStops, routeCoords };
+                const byName = new Map();
+                for (const s of validStops || []) {
+                    if (s?.name && Number.isFinite(s.lat) && Number.isFinite(s.lon)) byName.set(s.name, s);
+                }
+                const ordered = [];
+                for (const name of names) {
+                    let s = byName.get(name);
+                    if (!s && STATION_COORDINATES[name]) {
+                        const [lat, lon] = STATION_COORDINATES[name];
+                        s = { name, lat, lon };
+                    } else if (!s && globalStations[name]) {
+                        const g = globalStations[name];
+                        s = { name, lat: g.lat, lon: g.lon };
+                    }
+                    if (s) {
+                        ordered.push({ name: s.name, lat: s.lat, lon: s.lon });
+                        if (!globalStations[s.name]) {
+                            globalStations[s.name] = { lat: s.lat, lon: s.lon, origName: s.name, routes: new Set() };
+                        }
+                        globalStations[s.name].routes.add(routeId);
+                    }
+                }
+                if (ordered.length < 2) return { validStops, routeCoords };
+                return {
+                    validStops: ordered,
+                    routeCoords: ordered.map((s) => [s.lat, s.lon])
+                };
+            }
+
             Object.values(ROUTES).forEach(route => {
                 if (route.region !== currentRegion || route.id === 'special_event') return;
 
@@ -1104,6 +1234,7 @@
                 }
 
                 if (currentRegion === 'WC') ensureMaitlandMutualAdjacency(validStops, routeCoords);
+                ({ validStops, routeCoords } = applyCanonicalStationOrder(route.id, validStops, routeCoords));
 
                 if (routeCoords.length > 1) {
                      drawnRoutes.push({
@@ -1712,20 +1843,6 @@
             map.on('zoomend', updateTooltipSize);
             updateTooltipSize(); 
         }
-
-        function toggleLegend() {
-            const wrap = document.getElementById('legend-container');
-            const btn = document.getElementById('legend-toggle-btn');
-            if (!wrap) return;
-            const regionPicker = document.getElementById('region-picker');
-            if (regionPicker) {
-                regionPicker.classList.remove('is-open');
-                document.getElementById('region-toggle-btn')?.setAttribute('aria-expanded', 'false');
-            }
-            const open = wrap.classList.toggle('is-open');
-            if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
-        window.toggleLegend = toggleLegend;
 
         // Network Lines starts closed on entry — open via the top-bar button.
     

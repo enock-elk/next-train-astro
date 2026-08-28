@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V9_08.28.2";
+export const APP_VERSION = "V9_08.28.5";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,37 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_08.28.5",
+        title: "Map lines follow the route",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Map:</b> Each line is drawn station to station in timetable order.",
+            "<b>Map:</b> Back matches the other map buttons. Network Lines is a button."
+        ]
+    },
+    {
+        id: "V9_08.28.4",
+        title: "Floating tabs",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Tabs:</b> The oval bar floats over the board. The page shows through around it.",
+            "<b>Timetable:</b> Calendar on the left, the date centred, arrow on the right."
+        ]
+    },
+    {
+        id: "V9_08.28.3",
+        title: "Tabs stay in reach",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Tabs:</b> The bar sits above the phone buttons, and is shorter on small screens. The open tab stays highlighted in every colour theme.",
+            "<b>Board:</b> Saved times open first, then refresh in the background.",
+            "<b>Planner:</b> Transfer help uses Germiston or Bellville."
+        ]
+    },
     {
         id: "V9_08.28.2",
         title: "Options stays still",

@@ -41,6 +41,104 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        var lastSys = -1;
+        var lastH = -1;
+        function markStandalone() {
+          var on = false;
+          try {
+            if (window.matchMedia('(display-mode: standalone)').matches) on = true;
+            if (window.matchMedia('(display-mode: fullscreen)').matches) on = true;
+            if (window.matchMedia('(display-mode: minimal-ui)').matches) on = true;
+          } catch (e) {}
+          if (window.navigator && window.navigator.standalone) on = true;
+          if (String(document.referrer || '').indexOf('android-app://') === 0) on = true;
+          try {
+            if (on) sessionStorage.setItem('nt_standalone', '1');
+            else if (sessionStorage.getItem('nt_standalone') === '1') on = true;
+            if (String(document.referrer || '').indexOf('android-app://') === 0) {
+              sessionStorage.setItem('nt_twa', '1');
+            }
+          } catch (e) {}
+          try { if (sessionStorage.getItem('nt_twa') === '1') on = true; } catch (e) {}
+          return on;
+        }
+        function isAndroid() {
+          return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
+        }
+        function envBottom() {
+          try {
+            var probe = document.createElement('div');
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden';
+            (document.body || root).appendChild(probe);
+            var h = probe.getBoundingClientRect().height || 0;
+            probe.parentNode.removeChild(probe);
+            return h;
+          } catch (e) {
+            return 0;
+          }
+        }
+        function navClip(visBottom) {
+          var nav = document.getElementById('bottom-nav');
+          if (!nav || nav.classList.contains('hidden')) return 0;
+          return Math.max(0, nav.getBoundingClientRect().bottom - visBottom);
+        }
+        function apply() {
+          var vv = window.visualViewport;
+          var inner = window.innerHeight || 0;
+          var vh = vv && vv.height ? vv.height : inner;
+          var off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
+          var gap = Math.max(0, inner - vh - off);
+          var keyboard = gap > 140;
+          var visBottom = off + vh;
+          var env = envBottom();
+          var clip = navClip(visBottom);
+          var h;
+          var sys;
+          var client = document.documentElement.clientHeight || inner;
+          if (keyboard) {
+            h = vh;
+            sys = lastSys >= 0 ? lastSys : env;
+          } else if (gap >= 12) {
+            h = Math.min(vh, client || vh);
+            sys = 0;
+          } else {
+            h = Math.min(inner || client, client || inner || vh);
+            sys = Math.max(env, clip);
+            if (isAndroid() && markStandalone() && sys < 8) sys = 48;
+          }
+          if (h < 240) h = inner || vh || 240;
+          if (Math.abs(h - lastH) >= 1) {
+            lastH = h;
+            root.style.setProperty('--nt-app-h', h + 'px');
+          }
+          if (Math.abs(sys - lastSys) >= 1) {
+            lastSys = sys;
+            root.style.setProperty('--nt-sys-bottom', sys + 'px');
+          }
+          root.classList.toggle('nt-standalone', markStandalone());
+          root.classList.toggle('nt-android', isAndroid());
+          try {
+            root.classList.toggle('nt-twa', sessionStorage.getItem('nt_twa') === '1');
+          } catch (e) {}
+        }
+        window.ntFitAppViewport = apply;
+        apply();
+        window.addEventListener('resize', apply, { passive: true });
+        window.addEventListener('orientationchange', function () { setTimeout(apply, 80); });
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', apply, { passive: true });
+          window.visualViewport.addEventListener('scroll', apply, { passive: true });
+        }
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') apply();
+        });
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+      })();
+    </script>
     
     <!-- SEO & Identity — SEO entity = Metrorail Next Train; short name for iOS home screen -->
     <title>{title}</title>
@@ -574,16 +672,36 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-y: auto !important;
       }
 
-      /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen. */
+      /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen.
+         --nt-app-h / --nt-sys-bottom are set by the head fitter so Android PWA/TWA
+         3-button nav does not cover the pill (env(safe-area-inset-bottom) is often 0). */
+      #nt-shell {
+        height: var(--nt-app-h, 100dvh) !important;
+        max-height: var(--nt-app-h, 100dvh) !important;
+        box-sizing: border-box;
+        padding-bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) !important;
+      }
       #main-content.app-shell {
-        height: 100dvh;
-        max-height: 100dvh;
+        height: 100%;
+        max-height: 100%;
         min-height: 0;
+        flex: 1 1 auto;
       }
       @media (min-width: 640px) {
+        #nt-shell {
+          padding-bottom: calc(1rem + var(--nt-sys-bottom, 0px)) !important;
+        }
         #main-content.app-shell {
-          height: calc(100dvh - 2rem);
-          max-height: calc(100dvh - 2rem);
+          height: 100%;
+          max-height: 100%;
+        }
+      }
+      @media (max-width: 639px) {
+        #main-content.app-shell {
+          height: 100% !important;
+          max-height: 100% !important;
+          flex: 1 1 auto;
+          min-height: 0;
         }
       }
       @media (max-width: 639px) {
@@ -676,10 +794,58 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         flex-shrink: 0;
         position: relative;
       }
+      /* Oval floats over the board canvas — no shell tray behind the pill. */
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
+        position: absolute;
+        left: 0.75rem;
+        right: 0.75rem;
+        bottom: 0.5rem;
+        margin: 0;
+        z-index: 110;
+      }
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll {
+        background-color: var(--nt-canvas);
+      }
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
+        padding-bottom: 4.75rem;
+        box-sizing: border-box;
+      }
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-map.view-section.active,
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
+        padding-bottom: 4.75rem;
+        box-sizing: border-box;
+      }
+      html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 4.5rem;
+        z-index: 111;
+        background: transparent;
+      }
+      @media (max-height: 740px) {
+        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
+          padding-bottom: 3.85rem;
+        }
+        html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
+          bottom: 0.35rem;
+        }
+        html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
+          bottom: 3.6rem;
+        }
+      }
+      @media (max-height: 620px) {
+        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
+          padding-bottom: 3.35rem;
+        }
+        html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
+          bottom: 0.25rem;
+        }
+      }
       /* Drawer sits above the bar so Options stays tappable for right-handers */
       body.nav-bottom:not(.nt-immersive) #sidenav,
       body.nav-bottom:not(.nt-immersive) #sidenav-overlay {
-        bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.75rem);
+        bottom: calc(3.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         height: auto;
       }
       #bottom-nav .bottom-nav-item {
@@ -689,7 +855,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         transform: scale(0.96);
       }
       body.nav-bottom #offline-toast {
-        bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+        bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
       }
 
       /* CleverAds is a vendor overlay. Never reserve page space for it. */
@@ -735,8 +901,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         right: 0;
         bottom: auto;
         width: 100%;
-        height: 100dvh;
-        max-height: 100dvh;
+        height: var(--nt-app-h, 100dvh);
+        max-height: var(--nt-app-h, 100dvh);
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],
@@ -814,7 +980,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
     <!-- App frame: flex centering lives here, not on body, so vendor ad
          nodes cannot sit as a second flex item beside the board. -->
-    <div id="nt-shell" class="flex items-stretch sm:items-center justify-center h-[100dvh] max-h-[100dvh] p-0 sm:p-4">
+    <div id="nt-shell" class="flex items-stretch sm:items-center justify-center p-0 sm:p-4">
     <slot />
     </div>
 

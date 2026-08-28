@@ -767,7 +767,7 @@ function ensureCheckToastEl() {
             .nt-check-toast {
                 position: fixed;
                 left: 50%;
-                bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+                bottom: calc(4.75rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
                 transform: translateX(-50%);
                 z-index: 160;
                 width: max-content;

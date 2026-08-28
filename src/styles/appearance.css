@@ -45,6 +45,9 @@
   --nt-text-muted: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
+  --nt-env-bottom: env(safe-area-inset-bottom, 0px);
+  --nt-sys-bottom: var(--nt-env-bottom);
+  --nt-app-h: 100svh;
 
   --nt-blue-50: 239 246 255;
   --nt-blue-100: 219 234 254;
@@ -462,8 +465,9 @@ html, body {
   border-radius: 999px;
   margin-left: 0.75rem;
   margin-right: 0.75rem;
-  margin-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  margin-bottom: 0.5rem;
   overflow: hidden;
+  background-clip: padding-box;
 }
 
 #bottom-nav-grid {
@@ -479,14 +483,60 @@ html[data-admin-authed="1"] #bottom-nav-grid {
 }
 
 #bottom-nav .bottom-nav-item:not(.is-active) {
-  color: var(--nt-text-muted);
+  color: var(--nt-chrome-muted) !important;
 }
 
 #bottom-nav .bottom-nav-item.is-active {
-  color: var(--nt-primary) !important;
+  color: var(--nt-chrome-fg) !important;
   font-weight: 800;
-  background: transparent;
+  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
   border-radius: 1.15rem;
+  margin: 0.28rem 0.18rem;
+}
+
+html.dark #bottom-nav .bottom-nav-item.is-active {
+  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
+}
+
+@media (max-height: 740px) {
+  #bottom-nav.bottom-nav-bar {
+    margin-bottom: 0.35rem;
+  }
+  #bottom-nav .bottom-nav-item {
+    min-height: 2.45rem !important;
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.15rem !important;
+  }
+  #bottom-nav .bottom-nav-item svg {
+    width: 1.1rem !important;
+    height: 1.1rem !important;
+  }
+  #bottom-nav .bottom-nav-item > svg,
+  #bottom-nav .bottom-nav-item > .inline-flex {
+    margin-bottom: 0.05rem !important;
+  }
+  #bottom-nav .bottom-nav-item > span {
+    font-size: 8px !important;
+  }
+  #bottom-nav .bottom-nav-item.is-active {
+    margin: 0.1rem 0.12rem;
+  }
+}
+
+@media (max-height: 620px) {
+  #bottom-nav.bottom-nav-bar {
+    margin-bottom: 0.25rem;
+  }
+  #bottom-nav .bottom-nav-item {
+    min-height: 2.15rem !important;
+    padding-top: 0.12rem !important;
+    padding-bottom: 0.08rem !important;
+  }
+  #bottom-nav .bottom-nav-item svg {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
 }
 
 #current-day {
@@ -554,7 +604,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   padding-bottom: 0.5rem;
 }
 .nt-board-footer.mt-auto {
-  padding-bottom: 1.25rem;
+  padding-bottom: 0.35rem;
 }
 .nt-board-footer:not(:has(#install-app-btn:not(.hidden), #install-app-btn-planner:not(.hidden))) {
   border-top-color: transparent;
@@ -798,7 +848,7 @@ html.dark .tab-btn.active {
   border-color: var(--nt-primary) !important;
 }
 .bottom-nav-item.is-active {
-  color: var(--nt-primary) !important;
+  color: var(--nt-chrome-fg) !important;
 }
 
 /* Cards, hub, Alerts sheet, planner modals follow pack surfaces.
@@ -932,13 +982,14 @@ html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, #fff 16%, var(--nt-chrome-nav));
   border-radius: 1.15rem;
   margin: 0.28rem 0.18rem;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: rgba(147, 197, 253, 0.16);
+  background: color-mix(in srgb, #fff 28%, var(--nt-chrome-nav));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent);
   border-radius: 1.15rem;
   margin: 0.28rem 0.18rem;
 }
@@ -947,10 +998,10 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
    Full-screen overlays (About, Welcome, map lightbox, timetable grid) skip this. */
 [id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal),
 #nt-on-train-sheet {
-  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
 [id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal) > div,
 #nt-on-train-sheet > div {
-  max-height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)) !important;
+  max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

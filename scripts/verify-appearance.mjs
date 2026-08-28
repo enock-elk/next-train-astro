@@ -109,6 +109,15 @@ assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl
 assert(mapApp.includes('ensureMaitlandMutualAdjacency'), 'WC graph inserts Maitland next to Mutual');
 assert(/"MAITLAND", "MUTUAL"/.test(mapApp), 'static WC paths list Maitland then Mutual');
 assert(!mapApp.includes('"ESPLANADE", "YSTERPLAAT", "MUTUAL"'), 'Chris Hani path no longer jumps Ysterplaat to Mutual');
+assert(mapApp.includes('function applyCanonicalStationOrder'), 'map paints from official station order');
+assert(mapApp.includes('function railHopSkipsRouteStop'), 'OSM hops cannot skip another stop on the route');
+assert(mapApp.includes('function pathVisitsStopsInOrder'), 'baked tracks must visit stations in list order');
+assert(mapApp.includes('function bindMapLegendToggle'), 'Network Lines binds as a button');
+assert(!mapApp.includes('if (baked && baked.length > 1) return baked;'), 'map does not paint unordered baked tracks');
+
+const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+assert(contentLayout.includes('window.ntCartoVoyagerUrl'), 'map layout exposes CARTO Voyager URL helper');
+assert(contentLayout.includes('PUBLIC_CARTO_API_KEY'), 'map layout reads PUBLIC_CARTO_API_KEY');
 
 const labWf = readFileSync(new URL('../.github/workflows/deploy-lab.yml', import.meta.url), 'utf8');
 assert(labWf.includes('PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}'), 'lab build passes CARTO key from secrets');
@@ -128,7 +137,11 @@ assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
 assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
 assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
-assert(css.includes('padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
+assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
+assert(css.includes('color-mix(in srgb, #fff 28%, var(--nt-chrome-nav))'), 'active tab wash uses a light mix on the nav so every pack shows the selected tab');
+assert(css.includes('box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent)'), 'dark active tab has an inset ring so Ember/Earthy stay readable');
 
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
@@ -176,6 +189,12 @@ assert(!hubModals.includes('bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:t
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 assert(mapPage.includes('map-chrome-btn-wide'), 'Network Lines uses map-chrome-btn');
+assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token');
+assert(mapPage.includes('id="map-back-link"') && mapPage.includes('class="map-chrome-btn map-chrome-btn-wide"'), 'Back uses the same chrome button as Network Lines');
+assert(!mapPage.includes('map-back-btn'), 'Back no longer has a separate padded class');
+assert(!mapPage.includes('onclick="toggleLegend()"'), 'Network Lines is a button without inline onclick');
+assert(mapPage.includes('id="legend-toggle-btn"') && mapPage.includes('aria-haspopup="true"'), 'Network Lines is a disclosure button');
+assert(mapPage.includes('.legend-container { display: block; }'), 'Network Lines button is visible before map data loads');
 assert(mapPage.includes('var(--nt-surface'), 'map chrome follows colour-pack surface');
 assert(!mapPage.includes('text-blue-700 dark:text-blue-300'), 'GP button dropped hardcoded blue');
 assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped hardcoded amber');
@@ -186,6 +205,10 @@ assert(!mapPage.includes("typeof window.parent.__ntCloseInAppSheet === 'function
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
+assert(board.includes('grid-cols-[3rem_1fr_3rem]'), 'timetable CTA is calendar | centred copy | chevron');
+assert(board.includes('items-center justify-center leading-tight text-center'), 'timetable copy is centred');
+assert(!board.includes('items-start leading-tight text-left'), 'timetable copy is no longer left-aligned');
+assert(!board.includes('absolute right-3 top-1/2'), 'timetable chevron is in the grid, not absolutely pinned');
 assert(board.includes('w-8 h-8'), 'timetable calendar spans both CTA lines');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
@@ -218,6 +241,34 @@ assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open fl
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');
 assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()'), 'flags skipped unless admin authed');
+
+assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
+assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
+assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
+assert(layout.includes('--nt-sys-bottom'), 'Layout pads the shell with --nt-sys-bottom');
+assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
+assert(layout.includes('nt-standalone'), 'standalone class is stamped on html');
+
+const recovery = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
+assert(recovery.includes('visibilityState'), 'recovery counts visible time only');
+assert(recovery.includes('overlayStillBlocking'), 'auto-lifeboat requires the loading overlay');
+assert(!recovery.includes("if (!board || !tabs) return true"), 'recovery does not treat hidden top tabs as a crash');
+assert(recovery.includes('view-trip-planner'), 'planner tab is a healthy shell');
+
+const bootLogic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+assert(bootLogic.includes('markSchedulesCoreReady'), 'cached schedules stabilize the shell immediately');
+assert(bootLogic.includes('loadBundledScheduleDump'), 'empty IDB falls back to the host dump');
+assert(bootLogic.includes('data/full-database.json'), 'bundled dump path is this repo public/data');
+
+const appUpdate = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
+assert(!appUpdate.includes('await caches.delete(name)'), 'force-update does not wipe Cache Storage');
+assert(!appUpdate.includes('await registration.unregister()'), 'force-update does not unregister every worker');
+assert(appUpdate.includes('You are offline. Using saved times'), 'offline force-update keeps the cached shell');
+assert(appUpdate.includes("New SW active — applying on next launch"), 'controllerchange keeps the session without a pending token');
+
+const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
+assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

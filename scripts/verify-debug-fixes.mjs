@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_08.28.20', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.21', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -135,6 +135,15 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(admin.includes('editedAt: Date.now()'), 'in-place edit writes editedAt');
     assert(admin.includes("method: 'PATCH'") && admin.includes('inbox/${encodeURIComponent(replyDeviceId)}'), 'edit PATCHes the inbox node');
     assert(!/setCommuterAlias[\s\S]{0,500}prompt\(/.test(admin), 'alias no longer uses window.prompt');
+    assert(admin.includes('parseAdminSignoff'), 'admin bubbles parse hyphen signoffs');
+    assert(admin.includes('formatAdminBubbleLabel'), 'admin bubbles show - Name in the header');
+    assert(!admin.includes('data-fb-edit-btn'), 'admin replies have no visible Edit control');
+    assert(admin.includes('p-3 bg-white dark:bg-gray-800 border-b border-transparent'), 'collapsed feedback headers are white');
+    assert(admin.includes('syncAdminReplyModalViewport'), 'admin reply modal pins to visualViewport');
+    const hyphenHtml = 'Sinkhole update<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>';
+    const signoffRe = /(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;|[-–—])\s*([^<]*?)\s*<\/span>\s*$/i;
+    const match = hyphenHtml.match(signoffRe);
+    assert(!!match && match[1].trim() === 'Enock', 'hyphen italic signoff parses as Enock');
 }
 
 if (failed) {

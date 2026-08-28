@@ -11,7 +11,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.20', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.21', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.28.20' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.20');

@@ -274,6 +274,7 @@ assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Them
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
+assert(hubJs.includes('fieldRect.height > availableHeight'), 'tall feedback fields align their first line inside a short scroller');
 assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');
 assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
 assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');

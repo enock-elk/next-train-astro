@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_08.28.16";
+export const APP_VERSION = "V9_08.28.17";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';

@@ -146,6 +146,11 @@ function keepFeedbackFieldVisible(field) {
     const fieldRect = field.getBoundingClientRect();
     const scrollRect = scroller.getBoundingClientRect();
     const pad = 12;
+    const availableHeight = Math.max(0, scrollRect.height - (pad * 2));
+    if (fieldRect.height > availableHeight) {
+        scroller.scrollTop += fieldRect.top - scrollRect.top - pad;
+        return;
+    }
     if (fieldRect.bottom > scrollRect.bottom - pad) {
         scroller.scrollTop += fieldRect.bottom - scrollRect.bottom + pad;
     } else if (fieldRect.top < scrollRect.top + pad) {

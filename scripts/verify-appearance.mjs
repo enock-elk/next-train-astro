@@ -190,6 +190,10 @@ assert(!mapPage.includes("typeof window.parent.__ntCloseInAppSheet === 'function
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
+assert(board.includes('grid-cols-[3rem_1fr_3rem]'), 'timetable CTA is calendar | centred copy | chevron');
+assert(board.includes('items-center justify-center leading-tight text-center'), 'timetable copy is centred');
+assert(!board.includes('items-start leading-tight text-left'), 'timetable copy is no longer left-aligned');
+assert(!board.includes('absolute right-3 top-1/2'), 'timetable chevron is in the grid, not absolutely pinned');
 assert(board.includes('w-8 h-8'), 'timetable calendar spans both CTA lines');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
@@ -223,6 +227,8 @@ const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');
 assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()'), 'flags skipped unless admin authed');
 
+assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
+assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
 assert(layout.includes('--nt-sys-bottom'), 'Layout pads the shell with --nt-sys-bottom');
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');

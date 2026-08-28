@@ -2,6 +2,11 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.4 — Floating pill nav; timetable CTA grid (28 Aug 2026)
+
+- Bottom nav: `position: absolute` over `#app-scroll` so the oval sits on `--nt-canvas` with no shell tray. Views pad `4.75rem` (compact on short screens). Offline dock sits above the pill.
+- Timetable CTA: `grid-cols-[3rem_1fr_3rem]` — calendar left, centred label + effective date, chevron right.
+
 ## V9_08.28.3 — PWA/TWA bottom nav inset; cache-first board; lock-screen recovery (28 Aug 2026)
 
 - Bottom nav: `#nt-shell` uses `--nt-app-h` (visual viewport) and `--nt-sys-bottom` (env inset, clip, or 48px Android standalone fallback when Chrome reports 0). Pill margin no longer double-counts `env(safe-area-inset-bottom)`. SEO → installed PWA / TWA (`android-app://`) keeps the standalone flag in sessionStorage.

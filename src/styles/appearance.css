@@ -467,6 +467,7 @@ html, body {
   margin-right: 0.75rem;
   margin-bottom: 0.5rem;
   overflow: hidden;
+  background-clip: padding-box;
 }
 
 #bottom-nav-grid {
@@ -603,7 +604,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   padding-bottom: 0.5rem;
 }
 .nt-board-footer.mt-auto {
-  padding-bottom: 1.25rem;
+  padding-bottom: 0.35rem;
 }
 .nt-board-footer:not(:has(#install-app-btn:not(.hidden), #install-app-btn-planner:not(.hidden))) {
   border-top-color: transparent;

@@ -11,12 +11,13 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.3', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V9_08.28.3' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.28.3');
-assert(CHANGELOG_DATA[1].id === 'V9_08.28.2', 'keep V9_08.28.2 as the previous What’s New card');
-assert(CHANGELOG_DATA[2].id === 'V9_08.28.1', 'keep V9_08.28.1 in What’s New');
-assert(CHANGELOG_DATA[3].id === 'V8_08.18.1', 'keep V8_08.18.1 in What’s New');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('phone buttons')), 'V9_08.28.3 What’s New mentions tab bar');
+assert(APP_VERSION === 'V9_08.28.4', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V9_08.28.4' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.4');
+assert(CHANGELOG_DATA[1].id === 'V9_08.28.3', 'keep V9_08.28.3 as the previous What’s New card');
+assert(CHANGELOG_DATA[2].id === 'V9_08.28.2', 'keep V9_08.28.2 in What’s New');
+assert(CHANGELOG_DATA[3].id === 'V9_08.28.1', 'keep V9_08.28.1 in What’s New');
+assert(CHANGELOG_DATA[4].id === 'V8_08.18.1', 'keep V8_08.18.1 in What’s New');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('floats over the board')), 'V9_08.28.4 What’s New mentions floating tabs');
 assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');

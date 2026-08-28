@@ -10,7 +10,7 @@ import {
     ADMIN_EMAILS, isAdminEmail,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML, formatAppDate, normalizeStationName } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName } from './utils.js';
 import { parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
@@ -68,6 +68,8 @@ export function exposeAdminGlobals() {
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
     window.formatAppDate = formatAppDate;
+    window.formatAppTime = formatAppTime;
+    window.formatThreadDateLabel = formatThreadDateLabel;
     window.parseFeedbackAlertQuote = parseFeedbackAlertQuote;
     window.showToast = showToast;
     window.openSmoothModal = openSmoothModal;

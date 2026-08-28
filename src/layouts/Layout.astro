@@ -380,6 +380,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
         // Optional ?pack= override. Default chrome is Classic.
         try {
+          var isLabBoot = document.documentElement.getAttribute('data-lab-mode') === 'true';
+          if (!isLabBoot && !localStorage.getItem('ntProdClassicPackV1')) {
+            var storedPack = localStorage.getItem('colourPack');
+            if (storedPack && storedPack !== 'classic') {
+              localStorage.setItem('colourPack', 'classic');
+            }
+            localStorage.setItem('ntProdClassicPackV1', '1');
+          }
           var params = new URLSearchParams(location.search);
           var packParam = params.get('pack') || params.get('colourPack');
           if (packParam === 'paper') packParam = 'earthy';

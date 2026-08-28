@@ -110,6 +110,22 @@ function paintThreadFileChip(fileInput) {
     }
 }
 
+function autosizeMessagesThreadInput() {
+    const el = document.getElementById('messages-thread-input');
+    if (!el) return;
+    const cs = window.getComputedStyle(el);
+    const line = parseFloat(cs.lineHeight) || 20;
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const minH = Math.max(44, line + pad);
+    const maxByRows = (10 * line) + pad;
+    const maxByVp = Math.round(window.innerHeight * 0.35);
+    const maxH = Math.max(minH, Math.min(maxByRows, maxByVp));
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, minH), maxH);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > maxH + 1 ? 'auto' : 'hidden';
+}
+
 function checkFeedbackRate() {
     return checkRateLimit(FEEDBACK_RATE_KEY, {
         windowMs: FEEDBACK_WINDOW_MS,
@@ -303,9 +319,21 @@ export function openAppHub() {
         setTimeout(() => overlay.classList.remove('opacity-0'), 10);
     }
     document.body.classList.add('sidenav-open', 'modal-active');
+    collapsePrefsAccordion();
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
     }
+}
+
+function collapsePrefsAccordion() {
+    const panel = document.getElementById('prefs-accordion-panel');
+    const toggle = document.getElementById('prefs-accordion-toggle');
+    const chevron = document.getElementById('prefs-accordion-chevron');
+    panel?.classList.add('hidden');
+    panel?.classList.remove('flex');
+    toggle?.setAttribute('aria-expanded', 'false');
+    chevron?.classList.remove('rotate-180');
+    try { localStorage.setItem('ntPrefsAccordionOpen', '0'); } catch { /* ignore */ }
 }
 
 export function resetProfile() {
@@ -964,7 +992,10 @@ export async function openMessagesThread() {
     const host = document.getElementById('messages-thread-list');
     if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
     paintThreadContactRow();
-    setTimeout(() => openSmoothModal('messages-thread-modal'), 50);
+    setTimeout(() => {
+        openSmoothModal('messages-thread-modal');
+        autosizeMessagesThreadInput();
+    }, 50);
     try {
         const list = await fetchInboxThread();
         renderMessagesThread(list);
@@ -1867,6 +1898,7 @@ export function initHub() {
             if (input) input.value = '';
             if (threadFile) threadFile.value = '';
             paintThreadFileChip(threadFile);
+            autosizeMessagesThreadInput();
             renderMessagesThread(await fetchInboxThread());
             showToast('Message sent.', 'success');
         } catch (err) {
@@ -1883,6 +1915,7 @@ export function initHub() {
         }
     });
     document.getElementById('messages-thread-input')?.addEventListener('input', () => {
+        autosizeMessagesThreadInput();
         const hint = document.getElementById('messages-thread-hint');
         const safety = checkContentSafety(document.getElementById('messages-thread-input')?.value || '', { live: true });
         if (hint && !feedbackWaitCancel) {

@@ -21,6 +21,20 @@ export function escapeHTML(str) {
 const APP_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
+ * App-wide clock: `7:19 AM` (never locale 07:19).
+ */
+export function formatAppTime(ts) {
+    if (ts == null || ts === '') return '';
+    const d = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    let hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes} ${ampm}`;
+}
+
+/**
  * App-wide calendar date: `18 Aug 2026` (never locale 18/8/2026).
  * Pass `{ withTime: true }` for `18 Aug 2026, 9:28 PM`.
  */
@@ -31,11 +45,23 @@ export function formatAppDate(ts, opts = {}) {
     if (Number.isNaN(d.getTime())) return '';
     const date = `${d.getDate()} ${APP_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
     if (!withTime) return date;
-    let hours = d.getHours();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${date}, ${hours}:${minutes} ${ampm}`;
+    return `${date}, ${formatAppTime(d)}`;
+}
+
+/**
+ * WhatsApp-style thread/alert date chip: `Today` / `Yesterday` / `25 Aug 2026`.
+ */
+export function formatThreadDateLabel(ts, now = Date.now()) {
+    if (ts == null || ts === '') return '';
+    const d = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    const today = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(today.getTime())) return formatAppDate(d);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return formatAppDate(d);
 }
 
 /**
@@ -267,6 +293,81 @@ export function normalizeStationName(name) {
         .replace(/-/g, ' ')        
         .replace(/\s+/g, ' ')      
         .trim();
+}
+
+/**
+ * Typed nicknames → canonical index keys (after normalizeStationName).
+ * Do not alias bare PARK — it collides with Kempton Park / Ellis Park / Loftus.
+ */
+export const STATION_ALIASES = Object.freeze({
+    'JOHANNESBURG PARK': 'JOHANNESBURG',
+    'JHB PARK': 'JOHANNESBURG',
+    'BOSMAN': 'PRETORIA',
+    'PRETORIA BOSMAN': 'PRETORIA',
+});
+
+/** Planner-facing labels. Index / routing keys stay the canonical names. */
+export const STATION_DISPLAY_NAMES = Object.freeze({
+    JOHANNESBURG: 'Johannesburg Park Station',
+});
+
+export function resolveStationAlias(raw) {
+    const norm = normalizeStationName(raw);
+    if (!norm) return '';
+    return STATION_ALIASES[norm] || '';
+}
+
+export function plannerStationDisplayName(canonical) {
+    const key = normalizeStationName(canonical);
+    if (STATION_DISPLAY_NAMES[key]) return STATION_DISPLAY_NAMES[key];
+    return String(canonical || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Resolve typed / shared planner text to a name present in `list` (master index keys).
+ * Accepts aliases (Bosman → PRETORIA) and unique substring matches.
+ */
+export function resolvePlannerStationInput(raw, list) {
+    if (raw == null) return '';
+    let clean = String(raw).trim();
+    if (!clean) return '';
+    try { clean = decodeURIComponent(clean); } catch { /* already decoded */ }
+    clean = clean.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
+    const listArr = Array.isArray(list) ? list : [];
+    const norm = normalizeStationName(clean);
+    if (!norm) return '';
+    const want = STATION_ALIASES[norm] || norm;
+
+    const exact = listArr.find((s) => {
+        const b = normalizeStationName(s);
+        return b === want || b === norm || String(s).toUpperCase() === clean.toUpperCase();
+    });
+    if (exact) return exact;
+
+    const matches = listArr.filter((s) => {
+        const b = normalizeStationName(s);
+        return b.includes(want) || want.includes(b);
+    });
+    if (matches.length === 1) return matches[0];
+
+    // Prefix on an alias key (BOSMA → BOSMAN). Skip short tokens like PARK.
+    if (norm.length >= 5) {
+        const canons = [...new Set(
+            Object.entries(STATION_ALIASES)
+                .filter(([k]) => k === norm || k.startsWith(norm))
+                .map(([, v]) => v)
+        )];
+        if (canons.length === 1) {
+            const hit = listArr.find((s) => normalizeStationName(s) === canons[0]);
+            if (hit) return hit;
+        }
+    }
+    return '';
+}
+
+export function masterListHasStation(name, masterList) {
+    if (!name || !Array.isArray(masterList) || masterList.length === 0) return false;
+    return !!resolvePlannerStationInput(name, masterList);
 }
 
 export function timeToSeconds(timeStr) {

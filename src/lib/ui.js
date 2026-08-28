@@ -1336,25 +1336,29 @@ export function setupSwipeNavigation() {
     if (typeof document === 'undefined') return;
     let touchStartX = 0;
     let touchStartY = 0;
+    let swipeIgnore = false;
     const contentArea = document.getElementById('main-content');
     if (!contentArea) return;
 
-    contentArea.addEventListener('touchstart', (e) => {
+    const swipeBlocked = () => {
         const mapModal = document.getElementById('map-modal');
         const tripMapModal = document.getElementById('trip-map-modal');
-        if (document.body.classList.contains('sidenav-open') ||
+        return document.body.classList.contains('sidenav-open') ||
             (mapModal && !mapModal.classList.contains('hidden')) ||
-            (tripMapModal && !tripMapModal.classList.contains('hidden'))) return;
+            (tripMapModal && !tripMapModal.classList.contains('hidden'));
+    };
+
+    contentArea.addEventListener('touchstart', (e) => {
+        if (swipeBlocked()) return;
+        const fromField = e.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+        swipeIgnore = !!fromField;
+        if (swipeIgnore) return;
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;
     }, { passive: true });
 
     contentArea.addEventListener('touchend', (e) => {
-        const mapModal = document.getElementById('map-modal');
-        const tripMapModal = document.getElementById('trip-map-modal');
-        if (document.body.classList.contains('sidenav-open') ||
-            (mapModal && !mapModal.classList.contains('hidden')) ||
-            (tripMapModal && !tripMapModal.classList.contains('hidden'))) return;
+        if (swipeIgnore || swipeBlocked()) return;
 
         const endX = e.changedTouches[0].screenX;
         const endY = e.changedTouches[0].screenY;
@@ -1373,8 +1377,16 @@ export function setupSwipeNavigation() {
             const cur = safeStorage.getItem('activeTab') || 'next-train';
             const safeCur = order.includes(cur) ? cur : 'next-train';
             const idx = Math.max(0, order.indexOf(safeCur));
-            if (diffX > 0) switchTab(order[Math.max(0, idx - 1)]);
-            else switchTab(order[Math.min(order.length - 1, idx + 1)]);
+            if (diffX > 0) {
+                switchTab(order[Math.max(0, idx - 1)]);
+                return;
+            }
+            // Commuter: swipe left on Trip Planner opens Options (side nav).
+            if (!operator && safeCur === 'trip-planner') {
+                import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
+                return;
+            }
+            switchTab(order[Math.min(order.length - 1, idx + 1)]);
         }
     }, { passive: true });
 }

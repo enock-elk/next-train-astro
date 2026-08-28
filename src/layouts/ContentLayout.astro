@@ -57,7 +57,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
 ---
 
 <!DOCTYPE html>
-<html lang="en" class={resolvedHtmlClass}>
+<html lang="en" class={resolvedHtmlClass} data-lab-mode={labNoIndex ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -116,6 +116,16 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         }
         let pack = null;
         try { pack = localStorage.getItem('colourPack'); } catch (e) {}
+        try {
+          var isLabPage = document.documentElement.getAttribute('data-lab-mode') === 'true';
+          if (!isLabPage && !localStorage.getItem('ntProdClassicPackV1')) {
+            if (pack && pack !== 'classic') {
+              localStorage.setItem('colourPack', 'classic');
+              pack = 'classic';
+            }
+            localStorage.setItem('ntProdClassicPackV1', '1');
+          }
+        } catch (e) {}
         if (pack === 'paper') { pack = 'earthy'; try { localStorage.setItem('colourPack', 'earthy'); } catch (e) {} }
         const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');

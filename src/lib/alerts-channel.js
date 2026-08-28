@@ -2,9 +2,10 @@
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
 import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake, formatAppDate } from './utils.js';
+import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId } from '../store.js';
 import {
     ALERTS_PAGE_SIZE,
@@ -117,9 +118,15 @@ export async function fetchUnionNotices(region, routeId) {
 function formatPosted(notice) {
     const ts = noticeTimestamp(notice);
     if (!ts) return '';
-    const date = new Date(ts);
-    const label = (notice.isRepost || notice.repostedAt) ? 'Reposted' : 'Posted';
-    return `${label} ${formatAppDate(date, { withTime: true })}`;
+    return formatAppTime(ts);
+}
+
+function renderDateChip(ts) {
+    const label = formatThreadDateLabel(ts);
+    if (!label) return '';
+    return `<div class="flex justify-center w-full my-3" data-alert-date-chip>
+        <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/50 dark:bg-gray-800/50 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">${escapeHTML(label)}</span>
+    </div>`;
 }
 
 function severityChrome(severity) {
@@ -219,6 +226,17 @@ function openAlertReactionPicker(notice, anchorEl) {
         sheet.innerHTML = `<div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row></div>`;
         document.body.appendChild(sheet);
         sheet.addEventListener('click', (e) => {
+            const del = e.target.closest?.('[data-alert-delete]');
+            if (del) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = del.getAttribute('data-alert-id');
+                const src = del.getAttribute('data-alert-src');
+                const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+                hideAlertReactionPicker();
+                if (target) deleteAlertForEveryone(target);
+                return;
+            }
             const btn = e.target.closest?.('[data-alert-react]');
             if (!btn) return;
             e.preventDefault();
@@ -232,14 +250,19 @@ function openAlertReactionPicker(notice, anchorEl) {
         });
     }
     const mine = mineReactionKey(notice);
-    const row = sheet.querySelector('[data-alert-picker-row]');
-    if (row) {
-        row.innerHTML = ALERT_REACTION_KEYS.map((key) => (
-            `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-xl rounded-full ${
-                mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
-            }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
-        )).join('');
-    }
+    const admin = isAdminAuthed();
+    const reactBtns = ALERT_REACTION_KEYS.map((key) => (
+        `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-xl rounded-full ${
+            mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
+        }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
+    )).join('');
+    const deleteBtn = admin
+        ? `<button type="button" data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-red-400/40 focus:outline-none">Delete for everyone</button>`
+        : '';
+    sheet.innerHTML = `<div class="flex flex-col items-center gap-1.5">
+        <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
+        ${deleteBtn}
+    </div>`;
     const rect = anchorEl.getBoundingClientRect();
     sheet.classList.remove('hidden');
     const pillW = Math.min(320, window.innerWidth - 16);
@@ -248,11 +271,49 @@ function openAlertReactionPicker(notice, anchorEl) {
     const midX = Number.isFinite(pressX) ? pressX : (rect.left + rect.width / 2);
     const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
     const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
-    let top = anchorY - 58;
-    if (top < 8) top = Math.min(window.innerHeight - 64, anchorY + 16);
+    const pickerH = admin ? 108 : 58;
+    let top = anchorY - pickerH;
+    if (top < 8) top = Math.min(window.innerHeight - (pickerH + 8), anchorY + 16);
     sheet.style.left = `${left}px`;
     sheet.style.top = `${top}px`;
     triggerHaptic();
+}
+
+async function deleteAlertForEveryone(notice) {
+    if (!notice || !isAdminAuthed()) return;
+    const ok = typeof window.confirm === 'function'
+        ? window.confirm('Delete this alert for everyone?')
+        : true;
+    if (!ok) return;
+    try {
+        const { ensureAdminLoaded } = await import('./admin-bridge.js');
+        const Admin = await ensureAdminLoaded();
+        if (!Admin?.archiveActiveNotice || !Admin.getAuthKey) {
+            showToast('Admin tools unavailable.', 'error');
+            return;
+        }
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            showToast('Sign in as admin to delete alerts.', 'error');
+            return;
+        }
+        const sourceKey = notice._sourceKey || '';
+        const archived = await Admin.archiveActiveNotice(sourceKey, secret, notice, notice.id);
+        if (!archived) {
+            showToast('Could not delete this alert.', 'error');
+            return;
+        }
+        cachedLiveNotices = cachedLiveNotices.filter((n) => !(
+            String(n.id) === String(notice.id) && String(n._sourceKey) === String(sourceKey)
+        ));
+        renderAlertsChannel(cachedLiveNotices);
+        applyBellFromNotices(cachedLiveNotices);
+        showToast('Alert deleted for everyone.', 'success');
+        triggerHaptic();
+    } catch (e) {
+        console.warn('Alert delete failed', e);
+        showToast('Could not delete this alert.', 'error');
+    }
 }
 
 function hideAlertReactionBreakdown() {
@@ -323,7 +384,7 @@ function renderPostCard(notice, opts = {}) {
     const signoff = String(notice.authorName || notice.signoff || 'Next Train Ops').replace(/^[-—–]\s*/, '').trim() || 'Next Train Ops';
     const when = formatPosted(notice);
     const ts = noticeTimestamp(notice);
-    const scope = noticeScopeLabel(notice._sourceKey);
+    const scope = isAdminAuthed() ? noticeScopeLabel(notice._sourceKey) : '';
     const cardRing = highlight
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
         : 'ring-1 ring-black/5 dark:ring-white/10';
@@ -412,7 +473,18 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
             ? `Show earlier (${page.hiddenCount})`
             : 'Show earlier';
     }
-    feed.innerHTML = page.visible.map((n) => renderPostCard(n, { highlight: highlightNoticeId })).join('');
+    let lastDay = '';
+    const parts = [];
+    page.visible.forEach((n) => {
+        const ts = noticeTimestamp(n);
+        const day = ts ? new Date(ts).toDateString() : '';
+        if (day && day !== lastDay) {
+            parts.push(renderDateChip(ts));
+            lastDay = day;
+        }
+        parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
+    });
+    feed.innerHTML = parts.join('');
     return true;
 }
 

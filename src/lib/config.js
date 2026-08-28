@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.28.1";
+export const APP_VERSION = "V8_08.28.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -932,6 +932,18 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention internal / IP work (analytics, cache, workers, NUKE, Clarity, deploy, QA).
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.28.2",
+        title: "Recents, aliases, swipe, empty board",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Planner:</b> Recent trips stay after you search. Johannesburg Park and Bosman match the right stations.",
+            "<b>Swipe:</b> From the planner, swipe left to open Options.",
+            "<b>Board:</b> When there are no more trains, the next time is not written twice.",
+            "<b>Feedback Hub:</b> Privacy is the lock icon next to your contact."
+        ]
+    },
     {
         id: "V8_08.28.1",
         title: "Travel Day scroll, offline refresh, floating bar",

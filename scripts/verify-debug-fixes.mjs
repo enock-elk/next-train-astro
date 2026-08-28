@@ -3,7 +3,7 @@
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, formatThreadDateLabel, formatAppTime, STATION_ALIASES } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V8_08.28.1', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V8_08.28.2', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -104,6 +104,22 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(map.includes('attachMapDisruptionPopup'), 'map warnings open a popup');
     assert(map.includes('Promise.all'), 'map parallelises disruptions and tracks');
     assert(!map.includes('interactive: false'), 'map warning markers are tappable');
+}
+
+{
+    const gp = ['JOHANNESBURG', 'PRETORIA', 'KEMPTON PARK', 'ELLIS PARK'];
+    assert(resolvePlannerStationInput('Johannesburg Park Station', gp) === 'JOHANNESBURG', 'Johannesburg Park Station → JOHANNESBURG');
+    assert(resolvePlannerStationInput('Bosman Station', gp) === 'PRETORIA', 'Bosman Station → PRETORIA');
+    assert(resolvePlannerStationInput('JHB Park', gp) === 'JOHANNESBURG', 'JHB Park → JOHANNESBURG');
+    assert(resolvePlannerStationInput('Park Station', gp) !== 'JOHANNESBURG', 'bare Park Station is not Johannesburg');
+    assert(STATION_ALIASES.BOSMAN === 'PRETORIA', 'Bosman alias map');
+    const stamp = new Date(2026, 7, 25, 7, 19, 0);
+    assert(formatAppTime(stamp) === '7:19 AM', `formatAppTime ${formatAppTime(stamp)}`);
+    const today = new Date(2026, 7, 28, 12, 0, 0);
+    assert(formatThreadDateLabel(today, today) === 'Today', 'thread date Today');
+    const yest = new Date(2026, 7, 27, 8, 0, 0);
+    assert(formatThreadDateLabel(yest, today) === 'Yesterday', 'thread date Yesterday');
+    assert(formatThreadDateLabel(new Date(2026, 7, 25, 8, 0, 0), today) === '25 Aug 2026', 'thread date calendar');
 }
 
 if (failed) {

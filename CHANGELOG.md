@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.2 — Alerts dates, planner recents/aliases, swipe, sidenav, feedback (28 Aug 2026)
+
+- Alerts: time-only stamps (`7:19 AM`) with Today / Yesterday / date chips; region/scope label is admin-only. Admins can long-press Delete for everyone (archives via `Admin.archiveActiveNotice`). Hold-to-react on catalog posters is unchanged.
+- Planner: `STATION_ALIASES` (Johannesburg Park → JOHANNESBURG, Bosman → PRETORIA). Recents save canonical names as soon as a plan starts; do not wipe `plannerHistory_*` to empty on a filter miss.
+- Swipe: Home → Trip Planner → Options (`openAppHub`). Skip swipe from inputs. Theme accordion always starts collapsed; subtitle follows pack + Light/Dark. Drop Earthy blurb and per-row sidenav hairlines.
+- Timetable calendar SVG spans both CTA lines. Feedback Hub privacy is lock-only; send aligns with the composer; textarea grows to ~10 rows (viewport-capped). Empty-board headlines drop the duplicated time (`No service today · first tomorrow:`).
+- Production-only one-shot `ntProdClassicPackV1`: non-classic packs remap to Classic. Keep `theme` and `next_train_device_id`. Lab packs are unchanged.
+
 ## V8_08.28.1 — Travel Day scroll, offline strip actions, floating pill nav (28 Aug 2026)
 
 - Travel Day: keep `#app-scroll` `overflow-y: auto` while `dropdown-escape` is on; planner inline scrim is `pointer-events-none` so the page can scroll; header-day-list gets a max-height.

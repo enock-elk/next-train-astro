@@ -70,6 +70,29 @@ function seedClassicDefault() {
     safeStorage.setItem(REVERT, '1');
 }
 
+function isLabRuntime() {
+    try {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_LAB_MODE === 'true') return true;
+    } catch { /* ignore */ }
+    if (typeof document !== 'undefined' && document.documentElement.getAttribute('data-lab-mode') === 'true') return true;
+    return false;
+}
+
+/**
+ * When lab packs ship to production, remap once to Classic.
+ * Keep `theme` (light/dark) and `next_train_device_id` so inbox threads still match.
+ */
+function seedProductionClassicPack() {
+    if (typeof window === 'undefined' || isLabRuntime()) return;
+    const FLAG = 'ntProdClassicPackV1';
+    if (safeStorage.getItem(FLAG)) return;
+    const pack = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
+    if (pack && pack !== COLOUR_PACKS.CLASSIC) {
+        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
+    }
+    safeStorage.setItem(FLAG, '1');
+}
+
 /** Persist light when the user has never chosen a mode (do not follow the OS). */
 function seedLightDefault() {
     if (typeof window === 'undefined') return;
@@ -80,6 +103,7 @@ function seedLightDefault() {
 
 export function getColourPack() {
     seedClassicDefault();
+    seedProductionClassicPack();
     seedLightDefault();
     const v = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
     if (VALID_PACKS.has(v)) return v;
@@ -107,6 +131,17 @@ export function syncColourPackUi(pack = getColourPack()) {
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         btn.classList.toggle('is-selected', active);
     });
+    syncPrefsAccordionSummary(pack);
+}
+
+/** Side-nav accordion subtitle: `Earthy · Dark`. */
+export function syncPrefsAccordionSummary(pack = getColourPack()) {
+    if (typeof document === 'undefined') return;
+    const sub = document.getElementById('prefs-accordion-sub');
+    if (!sub) return;
+    const packLabel = COLOUR_PACK_LABELS[pack] || COLOUR_PACK_LABELS.classic;
+    const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
+    sub.textContent = `${packLabel} · ${mode}`;
 }
 
 export function setColourPack(pack) {
@@ -164,6 +199,7 @@ export function hydratePrefs() {
     applyReturningUserChrome();
     bindColourPackControls();
     syncNotifyUi();
+    syncPrefsAccordionSummary();
 }
 
 /** Phase 8 — preference for room / delay push (FCM when VAPID configured) */
@@ -333,4 +369,5 @@ export function syncCrmRegionAnalytics(region) {
 
 if (typeof window !== 'undefined') {
     window.syncCrmRegionAnalytics = syncCrmRegionAnalytics;
+    window.syncPrefsAccordionSummary = syncPrefsAccordionSummary;
 }

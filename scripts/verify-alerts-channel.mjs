@@ -223,6 +223,11 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
     assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');
     assert(js.indexOf('nt-alert-time') < js.indexOf('nt-alert-reply'), 'timestamp precedes Reply');
+    assert(js.includes('formatAppTime'), 'alert stamps are time-only');
+    assert(js.includes('data-alert-date-chip'), 'alerts feed inserts date chips');
+    assert(js.includes('data-alert-delete'), 'admin long-press can delete for everyone');
+    assert(js.includes('isAdminAuthed() ? noticeScopeLabel'), 'region/scope is admin-only');
+    assert(!js.includes('Posted ${'), 'Posted prefix removed from alert stamps');
 
     const shareApp = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
     assert(shareApp.includes('Say Goodbye to Waiting'), 'Share App still has marketing sentence');

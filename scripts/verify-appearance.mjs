@@ -82,6 +82,9 @@ assert(css.includes('#app-header.nt-maint-active #app-title'), 'maintenance stri
 const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
 assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
 assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
+assert(prefs.includes('ntProdClassicPackV1'), 'production one-shot remaps non-classic packs');
+assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');
+assert(layout.includes('ntProdClassicPackV1'), 'Layout boot remaps production packs before first paint');
 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');
@@ -89,6 +92,8 @@ assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
+assert(plannerUi.includes('savePlannerHistory(origin, dest)'), 'recents persist when a plan starts');
+assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared station alias resolver');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
@@ -126,6 +131,11 @@ const hubModals = readFileSync(new URL('../src/components/HubModals.astro', impo
 assert(hubModals.includes('id="messages-thread-file"'), 'messages thread has attachment input');
 assert(hubModals.includes('id="messages-thread-contact"'), 'messages thread has optional contact field');
 assert(hubModals.includes('id="messages-thread-privacy"'), 'Feedback Hub contact row has Privacy Policy');
+assert(hubModals.includes('aria-label="Privacy Policy"'), 'privacy control is the lock button');
+{
+    const threadPrivacy = hubModals.match(/id="messages-thread-privacy"[\s\S]*?<\/button>/);
+    assert(!!threadPrivacy && !/>\s*Privacy Policy\s*</.test(threadPrivacy[0]), 'privacy lock has no PRIVACY POLICY text');
+}
 assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub');
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
@@ -140,7 +150,7 @@ assert(!mapPage.includes('map-chrome-btn text-amber-500'), 'theme toggle dropped
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
-assert(board.includes('flex items-center justify-center space-x-2.5'), 'timetable CTA label is a centered row');
+assert(board.includes('w-8 h-8'), 'timetable calendar spans both CTA lines');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
 assert(board.includes('VIEW FULL TIMETABLE'), 'timetable label is the production all-caps row');
@@ -153,6 +163,16 @@ const sidenavShare = readFileSync(new URL('../src/components/Sidenav.astro', imp
 assert(sidenavShare.includes('id="settings-share-btn"'), 'Share App lives in Options');
 assert(sidenavShare.includes('id="settings-feedback-btn"'), 'Feedback Hub stays in Options');
 assert(sidenavShare.includes('Feedback Hub'), 'Options row is labelled Feedback Hub');
+assert(!sidenavShare.includes('Earthy is cream paper'), 'Earthy blurb removed from Theme accordion');
+assert(sidenavShare.includes('setPrefsOpen(false, false)'), 'Theme accordion starts collapsed');
+
+const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+assert(uiJs.includes("safeCur === 'trip-planner'"), 'commuter swipe-left from planner opens Options');
+assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
+
+const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
+assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');

@@ -9,7 +9,7 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, resolvePlannerStationInput } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
@@ -1163,6 +1163,14 @@ function titleCaseStation(s) {
 /** Resolve a display/index station name to a key present in the station index. */
 function resolveIndexedStation(name) {
     const index = $globalStationIndex.get() || {};
+    const keys = Object.keys(index);
+    const fromAlias = resolvePlannerStationInput(name, keys);
+    if (fromAlias) {
+        const want = normalizeStationName(fromAlias);
+        if (index[want]) return Object.keys(index).find((k) => normalizeStationName(k) === want) || want;
+        if (index[fromAlias]) return fromAlias;
+        return fromAlias;
+    }
     const norm = normalizeStationName(name);
     if (index[norm]) return Object.keys(index).find((k) => normalizeStationName(k) === norm) || norm;
     const withSuffix = `${norm} STATION`;

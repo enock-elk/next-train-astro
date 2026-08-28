@@ -17,7 +17,8 @@ import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
-    resolveOperatingDayType, simUsesSpecificDate, formatAppDate
+    resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
+    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
@@ -87,11 +88,12 @@ const resolveTripDisruptions = (routeId, stops) => {
         : null;
     return fn ? fn(routeId, stops) : [];
 };
-const bareStationName = (name) => String(name || '').replace(/ STATION/gi, '').trim();
+const stripStationSuffix = (name) => String(name || '').replace(/ STATION/gi, '').trim();
+const bareStationName = (name) => plannerStationDisplayName(name) || stripStationSuffix(name);
 
 /** Reject sheet header / "Last Updated" rows that leaked into station lists. */
 const isSheetMetaStationName = (name) => {
-    const bare = bareStationName(name).toUpperCase();
+    const bare = stripStationSuffix(name).toUpperCase();
     if (!bare) return true;
     if (bare === 'STATION' || bare === 'COORDINATES' || bare === 'KM_MARK' || bare === 'KM MARK') return true;
     if (bare.startsWith('LAST U') || bare.startsWith('LAST UPDATED')) return true;
@@ -108,6 +110,15 @@ const getMasterStationList = () => {
     }
     return (list || []).filter((s) => !isSheetMetaStationName(s));
 };
+
+function resolveStationFromInput(inputEl, list = getMasterStationList()) {
+    if (!inputEl) return '';
+    if (inputEl.dataset.resolvedValue) {
+        return resolvePlannerStationInput(inputEl.dataset.resolvedValue, list)
+            || inputEl.dataset.resolvedValue;
+    }
+    return resolvePlannerStationInput(inputEl.value, list);
+}
 
 const getGhostStationList = () => {
     let list = [];
@@ -3080,34 +3091,17 @@ export function initPlanner() {
             const fromInputSearch = document.getElementById('planner-from-search');
             const toInputSearch = document.getElementById('planner-to-search');
 
-            const resolveStation = (inputEl) => {
-                if (!inputEl) return "";
-                if (inputEl.dataset.resolvedValue) return inputEl.dataset.resolvedValue;
-                
-                const inputVal = inputEl.value;
-                const masterList = getMasterStationList();
-                if (!inputVal || !masterList || masterList.length === 0) return "";
+            const from = resolveStationFromInput(fromInputSearch);
+            const to = resolveStationFromInput(toInputSearch);
 
-                const cleanInput = inputVal.trim().replace(/\s+/g, ' ').toUpperCase();
-                const exact = masterList.find(s => s.replace(' STATION', '').trim().toUpperCase() === cleanInput);
-                if (exact) {
-                    inputEl.dataset.resolvedValue = exact;
-                    return exact;
-                }
-
-                const matches = masterList.filter(s => s.replace(' STATION', '').trim().toUpperCase().includes(cleanInput));
-                if (matches.length === 1) {
-                    inputEl.dataset.resolvedValue = matches[0];
-                    return matches[0];
-                }
-                return "";
-            };
-
-            const from = resolveStation(fromInputSearch);
-            const to = resolveStation(toInputSearch);
-
-            if (from && fromInputSearch) fromInputSearch.value = from.replace(' STATION', '');
-            if (to && toInputSearch) toInputSearch.value = to.replace(' STATION', '');
+            if (from && fromInputSearch) {
+                fromInputSearch.value = plannerStationDisplayName(from);
+                fromInputSearch.dataset.resolvedValue = from;
+            }
+            if (to && toInputSearch) {
+                toInputSearch.value = plannerStationDisplayName(to);
+                toInputSearch.dataset.resolvedValue = to;
+            }
 
             const fromSelect = document.getElementById('planner-from');
             const toSelect = document.getElementById('planner-to');
@@ -3234,8 +3228,11 @@ function persistMergedPlannerHistory(list) {
 /** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
     if (!from || !to || typeof from !== 'string' || typeof to !== 'string') return;
-    const cleanFrom = from.replace(/ STATION/gi, '');
-    const cleanTo = to.replace(/ STATION/gi, '');
+    const masterList = getMasterStationList();
+    const canonicalFrom = resolvePlannerStationInput(from, masterList) || from;
+    const canonicalTo = resolvePlannerStationInput(to, masterList) || to;
+    const cleanFrom = String(canonicalFrom).replace(/ STATION/gi, '');
+    const cleanTo = String(canonicalTo).replace(/ STATION/gi, '');
     const routeKey = `${cleanFrom}|${cleanTo}`;
     const region = $userRegion.get() || 'GP';
     const historyKey = 'plannerHistory_' + region;
@@ -3245,8 +3242,8 @@ export function savePlannerHistory(from, to, opts = {}) {
     history.unshift({
         from: cleanFrom,
         to: cleanTo,
-        fullFrom: from,
-        fullTo: to,
+        fullFrom: canonicalFrom,
+        fullTo: canonicalTo,
         at: Date.now(),
         region,
     });
@@ -3268,18 +3265,15 @@ export function renderPlannerHistory() {
     const rawCurrent = readPlannerHistoryArray(historyKey);
     let validHistory = unionPlannerHistory();
     const masterList = getMasterStationList();
-    // History stores cleaned names (no " STATION"); master list usually includes the suffix.
-    const stationKey = (s) => String(s || '').replace(/ STATION/gi, '').toUpperCase().trim();
     const listReady = Array.isArray(masterList) && masterList.length > 0;
 
     if (listReady) {
-        const masterKeys = new Set(masterList.map(stationKey));
         validHistory = validHistory.filter((item) => {
             const itemRegion = item.region || currentRegion;
             // Other provinces stay visible even when this region's index is loaded.
             if (itemRegion !== currentRegion) return true;
-            return masterKeys.has(stationKey(item.fullFrom || item.from))
-                && masterKeys.has(stationKey(item.fullTo || item.to));
+            return masterListHasStation(item.fullFrom || item.from, masterList)
+                && masterListHasStation(item.fullTo || item.to, masterList);
         });
     }
 
@@ -3294,10 +3288,14 @@ export function renderPlannerHistory() {
         const currentFiltered = rawCurrent.filter((item) => {
             const norm = normalizePlannerHistoryItem(item, currentRegion);
             if (!norm) return false;
-            return masterKeys.has(stationKey(norm.fullFrom || norm.from))
-                && masterKeys.has(stationKey(norm.fullTo || norm.to));
+            return masterListHasStation(norm.fullFrom || norm.from, masterList)
+                && masterListHasStation(norm.fullTo || norm.to, masterList);
         });
-        if (JSON.stringify(currentFiltered) !== JSON.stringify(rawCurrent)) {
+        // Never rewrite a populated region list to empty — aliases or a half-ready
+        // index must not wipe recents the commuter just searched.
+        if (currentFiltered.length === 0 && rawCurrent.length > 0) {
+            /* keep stored history */
+        } else if (JSON.stringify(currentFiltered) !== JSON.stringify(rawCurrent)) {
             safeStorage.setItem(historyKey, JSON.stringify(currentFiltered));
         }
         persistMergedPlannerHistory(validHistory);
@@ -3319,9 +3317,9 @@ export function renderPlannerHistory() {
                 <button class="planner-history-item-btn w-full flex items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
                     data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}" data-region="${escapeHTML(item.region || '')}">
                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center min-w-0">
-                        <span class="truncate">${escapeHTML(item.from)}</span>
+                        <span class="truncate">${escapeHTML(plannerStationDisplayName(item.from))}</span>
                         <svg class="w-3 h-3 mx-1.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        <span class="truncate">${escapeHTML(item.to)}</span>
+                        <span class="truncate">${escapeHTML(plannerStationDisplayName(item.to))}</span>
                     </span>
                     <svg class="w-3 h-3 text-gray-300 group-hover:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 </button>`).join('')}
@@ -3378,7 +3376,19 @@ export function setupAutocomplete(inputId, selectId) {
             oppositeValue = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : "";
         }
 
-        let matches = val.length === 0 ? masterList : masterList.filter((s) => s.includes(val));
+        const valNorm = normalizeStationName(rawFilter);
+        const aliasCanon = new Set();
+        if (valNorm) {
+            if (STATION_ALIASES[valNorm]) aliasCanon.add(STATION_ALIASES[valNorm]);
+            if (valNorm.length >= 5) {
+                Object.entries(STATION_ALIASES).forEach(([k, v]) => {
+                    if (k === valNorm || k.startsWith(valNorm)) aliasCanon.add(v);
+                });
+            }
+        }
+        let matches = val.length === 0
+            ? masterList
+            : masterList.filter((s) => s.includes(val) || aliasCanon.has(normalizeStationName(s)));
         if (oppositeValue) matches = matches.filter((s) => s !== oppositeValue);
 
         // Ghosts only when the user is typing a name (not in the full browse list)
@@ -3556,19 +3566,8 @@ export async function applyPlannerDeepLink() {
             const list = getMasterStationList();
             if (list && list.length > 0) {
                 clearInterval(checkReady);
-                const resolveStation = (txt) => {
-                    if (!txt) return '';
-                    let clean = String(txt).trim();
-                    try { clean = decodeURIComponent(clean); } catch { /* already decoded */ }
-                    clean = clean.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
-                    const bare = (s) => String(s || '').replace(/ STATION$/i, '').toUpperCase();
-                    const exact = list.find((s) => bare(s) === clean || String(s).toUpperCase() === clean);
-                    if (exact) return exact;
-                    const partial = list.find((s) => bare(s).includes(clean) || clean.includes(bare(s)));
-                    return partial || '';
-                };
-                const fromId = resolveStation(link.from);
-                const toId = resolveStation(link.to);
+                const fromId = resolvePlannerStationInput(link.from, list);
+                const toId = resolvePlannerStationInput(link.to, list);
                 if (!fromId || !toId) {
                     showToast('Could not resolve stations for shared trip.', 'error');
                     resolve(false);
@@ -3582,11 +3581,11 @@ export async function applyPlannerDeepLink() {
                 if (fromSelect) fromSelect.value = fromId;
                 if (toSelect) toSelect.value = toId;
                 if (fromInput) {
-                    fromInput.value = fromId.replace(/ STATION$/i, '');
+                    fromInput.value = plannerStationDisplayName(fromId);
                     fromInput.dataset.resolvedValue = fromId;
                 }
                 if (toInput) {
-                    toInput.value = toId.replace(/ STATION$/i, '');
+                    toInput.value = plannerStationDisplayName(toId);
                     toInput.dataset.resolvedValue = toId;
                 }
 
@@ -3640,6 +3639,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     lastPlannerPreferredTime = preferredTime;
     plannerOrigin = origin;
     plannerDest = dest;
+    try { savePlannerHistory(origin, dest); } catch { /* ignore */ }
     const resultsContainer = document.getElementById('planner-results-list');
     if (resultsContainer) {
         resultsContainer.innerHTML = `
@@ -4249,11 +4249,11 @@ export async function restorePlannerSearch(fullFrom, fullTo, region) {
         fromSelect.value = fullFrom;
         toSelect.value = fullTo;
         if (fromInput) {
-            fromInput.value = fullFrom.replace(' STATION', '');
+            fromInput.value = plannerStationDisplayName(fullFrom);
             fromInput.dataset.resolvedValue = fullFrom;
         }
         if (toInput) {
-            toInput.value = fullTo.replace(' STATION', '');
+            toInput.value = plannerStationDisplayName(fullTo);
             toInput.dataset.resolvedValue = fullTo;
         }
 
@@ -4275,7 +4275,7 @@ export async function restorePlannerSearch(fullFrom, fullTo, region) {
             trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo, region: target || '' });
         }
 
-        // History is recorded when executeTripPlan finishes (with status)
+        // History is recorded when executeTripPlan starts (canonical names)
         executeTripPlan(fullFrom, fullTo);
     }
 }
@@ -4319,35 +4319,12 @@ export function swapPlannerResults() {
     if (tempFromResolved) toInput.dataset.resolvedValue = tempFromResolved;
     else delete toInput.dataset.resolvedValue;
 
-    const resolveStation = (inputEl) => {
-        if (!inputEl) return "";
-        if (inputEl.dataset.resolvedValue) return inputEl.dataset.resolvedValue; 
-        
-        const inputVal = inputEl.value;
-        const masterList = getMasterStationList();
-        if (!inputVal || !masterList || masterList.length === 0) return "";
-
-        const cleanInput = inputVal.trim().replace(/\s+/g, ' ').toUpperCase();
-        const exact = masterList.find(s => s.replace(' STATION', '').trim().toUpperCase() === cleanInput);
-        if (exact) {
-            inputEl.dataset.resolvedValue = exact;
-            return exact;
-        }
-
-        const matches = masterList.filter(s => s.replace(' STATION', '').trim().toUpperCase().includes(cleanInput));
-        if (matches.length === 1) {
-            inputEl.dataset.resolvedValue = matches[0];
-            return matches[0];
-        }
-        
-        return "";
-    };
-
-    const resolvedFrom = resolveStation(fromInput);
-    const resolvedTo = resolveStation(toInput);
+    const resolvedFrom = resolveStationFromInput(fromInput);
+    const resolvedTo = resolveStationFromInput(toInput);
 
     if (resolvedFrom) {
         fromInput.dataset.resolvedValue = resolvedFrom;
+        fromInput.value = plannerStationDisplayName(resolvedFrom);
         if (fromSelect) {
             if (!fromSelect.querySelector(`option[value="${resolvedFrom}"]`)) fromSelect.appendChild(new Option(resolvedFrom, resolvedFrom));
             fromSelect.value = resolvedFrom;
@@ -4358,6 +4335,7 @@ export function swapPlannerResults() {
 
     if (resolvedTo) {
         toInput.dataset.resolvedValue = resolvedTo;
+        toInput.value = plannerStationDisplayName(resolvedTo);
         if (toSelect) {
             if (!toSelect.querySelector(`option[value="${resolvedTo}"]`)) toSelect.appendChild(new Option(resolvedTo, resolvedTo));
             toSelect.value = resolvedTo;

@@ -11,8 +11,8 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.28.1', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.28.1' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V8_08.28.1');
+assert(APP_VERSION === 'V8_08.28.2', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.28.2' && CHANGELOG_DATA[0].features.length === 4, 'What’s New latest card is V8_08.28.2');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
@@ -33,6 +33,8 @@ assert(renderer.includes('warningTriangleSvg()'), 'home board uses warning SVG')
 assert(warningTriangleSvg().includes('<svg'), 'warningTriangleSvg returns svg');
 assert(renderer.includes('emptyBoardHeadline'), 'empty board uses condensed headline helper');
 assert(renderer.includes('No more trains today · first'), 'empty board one-liner copy');
+assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trailing colon, not a duplicated time');
+assert(!renderer.includes('timeBit'), 'empty board headline no longer appends the time');
 assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First train … is at: removed');
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');

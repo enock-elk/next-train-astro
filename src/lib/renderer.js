@@ -49,12 +49,11 @@ function firstTrainDayBit(dayName) {
     return name === 'Tomorrow' ? 'tomorrow' : `on ${name}`;
 }
 
-function emptyBoardHeadline(kind, dayName, departureTime) {
+function emptyBoardHeadline(kind, dayName, _departureTime) {
     const dayBit = firstTrainDayBit(dayName);
-    const timeBit = departureTime ? ` ${departureTime}` : '';
-    if (kind === 'weekend') return `No weekend service · first ${dayBit}${timeBit}`;
-    if (kind === 'noservice') return `No service today · first ${dayBit}${timeBit}`;
-    return `No more trains today · first ${dayBit}${timeBit}`;
+    if (kind === 'weekend') return `No weekend service · first ${dayBit}:`;
+    if (kind === 'noservice') return `No service today · first ${dayBit}:`;
+    return `No more trains today · first ${dayBit}:`;
 }
 
 export const Renderer = {

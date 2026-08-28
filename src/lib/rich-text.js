@@ -5,6 +5,7 @@
  * or size/font formatting silently falls back to normal text.
  */
 import { repairMojibake } from './utils.js';
+import { sanitizeAttachmentDisplayUrl, isSafeLightboxOnclick } from './attachments.js';
 
 export const RICH_TEXT_STYLE_ID = 'nt-rich-text-styles';
 
@@ -209,9 +210,9 @@ function sanitizeHref(el, attrName) {
     }
     if (attrName === 'href' && !isSafeHref(value)) el.removeAttribute(attrName);
     if (attrName === 'src') {
-        const okRemote = /^https?:/i.test(value);
-        const okPoster = /^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(value);
-        if (!okRemote && !okPoster) el.removeAttribute(attrName);
+        const safe = sanitizeAttachmentDisplayUrl(value);
+        if (safe) el.setAttribute('src', safe);
+        else el.removeAttribute(attrName);
     }
 }
 
@@ -228,8 +229,7 @@ function cleanNode(node) {
             if (attrName === 'href' || attrName === 'src') {
                 sanitizeHref(child, attrName);
             } else if (attrName === 'onclick') {
-                if (!/^window\.openLightbox\(.*\)$/.test(attr.value)
-                    && !/^Admin\.openLightbox\(.*\)$/.test(attr.value)) {
+                if (!isSafeLightboxOnclick(attr.value)) {
                     child.removeAttribute(attr.name);
                 }
             } else if (attrName === 'style') {
@@ -275,4 +275,5 @@ if (typeof window !== 'undefined') {
     window.injectRichTextStyles = injectRichTextStyles;
     window.prepareRichHtml = prepareRichHtml;
     window.sanitizeRichHtml = sanitizeRichHtml;
+    window.isSafeHref = isSafeHref;
 }

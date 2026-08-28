@@ -14,7 +14,7 @@ import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatA
 import { encodeFeedbackAlertQuote } from './feedback-quote.js';
 import { inboxReplyStillVisible } from './inbox-replies.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
+import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
@@ -35,35 +35,44 @@ import { bindColourPackControls, setColourPack, getColourPack } from './prefs.js
 import { markPendingReload } from './session-stability.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
+import {
+    sniffAttachmentFile,
+    randomAttachmentStem,
+    ATTACHMENT_MAX_FILES,
+    lightboxOnclickJs,
+    attachmentRejectMessage,
+} from './attachments.js';
 
 const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
 const FEEDBACK_WINDOW_MS = 30 * 60 * 1000;
 const FEEDBACK_MAX = 6;
 const FEEDBACK_COOLDOWN_MS = 20 * 1000;
 const THREAD_CONTACT_KEY = 'nt_feedback_contact';
-const FEEDBACK_FILE_MAX_BYTES = 5 * 1024 * 1024;
 let feedbackWaitCancel = null;
 
 async function uploadFeedbackAttachments(fileList) {
-    if (!fileList?.length || !window.firebaseStorage || !window.firebaseStorageRef) return [];
-    const files = Array.from(fileList).slice(0, 4);
-    const uploads = files.map(async (file) => {
-        try {
-            if (file.size > FEEDBACK_FILE_MAX_BYTES) return null;
-            const ext = file.name.split('.').pop();
-            const fileName = `feedback_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
-            const storageReference = window.firebaseStorageRef(window.firebaseStorage, `feedback_attachments/${fileName}`);
-            const task = window.firebaseUploadBytesResumable(storageReference, file);
-            await new Promise((resolve, reject) => {
-                task.on('state_changed', null, reject, resolve);
-            });
-            return await window.firebaseGetDownloadURL(task.snapshot.ref);
-        } catch (e) {
-            console.warn('Attachment upload failed', e);
-            return null;
-        }
-    });
-    return (await Promise.all(uploads)).filter(Boolean);
+    if (!fileList?.length) return [];
+    if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
+        throw new Error('Could not attach files. Check your connection and try again.');
+    }
+    const files = Array.from(fileList).slice(0, ATTACHMENT_MAX_FILES);
+    const sniffed = [];
+    for (const file of files) {
+        const kind = await sniffAttachmentFile(file);
+        if (!kind) throw new Error(attachmentRejectMessage());
+        sniffed.push({ file, kind });
+    }
+    const urls = [];
+    for (const { file, kind } of sniffed) {
+        const fileName = `${randomAttachmentStem('feedback')}.${kind.ext}`;
+        const storageReference = window.firebaseStorageRef(window.firebaseStorage, `feedback_attachments/${fileName}`);
+        const task = window.firebaseUploadBytesResumable(storageReference, file, { contentType: kind.mime });
+        await new Promise((resolve, reject) => {
+            task.on('state_changed', null, reject, resolve);
+        });
+        urls.push(await window.firebaseGetDownloadURL(task.snapshot.ref));
+    }
+    return urls;
 }
 
 function signedInContactEmail() {
@@ -569,7 +578,7 @@ async function submitFeedback() {
         }
 
         let attachmentUrls = [];
-        if (hasFile && window.firebaseStorage && window.firebaseStorageRef) {
+        if (hasFile) {
             if (submitText) submitText.textContent = 'Uploading Files...';
             attachmentUrls = await uploadFeedbackAttachments(fileInput.files);
         }
@@ -1080,7 +1089,7 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     if (notice.sourceName) {
         const sName = escapeHTML(notice.sourceName);
-        const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
+        const sUrl = notice.sourceUrl && isSafeHref(notice.sourceUrl) ? escapeHTML(notice.sourceUrl) : null;
         const innerCitation = sUrl
             ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
             : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
@@ -1091,10 +1100,12 @@ export function renderServiceAlertModal(notice, options = {}) {
     let mediaHtml = '';
     if (posterUrls.length) {
         const cells = posterUrls.map((path) => {
-            const src = escapeHTML(resolveAlertImageSrc(path));
-            if (!src) return '';
-            const safeJs = src.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${safeJs}')" class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
+            const href = resolveAlertImageSrc(path);
+            if (!href) return '';
+            const src = escapeHTML(href);
+            const onclick = lightboxOnclickJs(href);
+            if (!onclick) return '';
+            return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
         }).join('');
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
         mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;

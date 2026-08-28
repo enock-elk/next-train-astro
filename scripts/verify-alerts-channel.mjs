@@ -162,6 +162,7 @@ const now = 1_700_000_000_000;
 
     assert(sanitizeInlineAlertImageUrl('https://evil.example/x.png') === null, 'foreign inline image blocked');
     assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
+    assert(sanitizeInlineAlertImageUrl('https://user:pass@firebasestorage.googleapis.com/v0/b/app/o/x.png') === null, 'storage URL with credentials blocked');
 
     const laid = layoutAlertPost({
         title: 'Service recovery',

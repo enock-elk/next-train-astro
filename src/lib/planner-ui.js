@@ -79,6 +79,69 @@ function plannerIcon(name, className = 'w-4 h-4') {
     return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
+const PLANNER_VIEWPORT_DEFAULT = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover';
+const PLANNER_VIEWPORT_NO_ZOOM = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover';
+let plannerViewportUnlockTimer = 0;
+
+function plannerViewportMeta() {
+    return typeof document !== 'undefined' ? document.querySelector('meta[name="viewport"]') : null;
+}
+
+/** iOS zooms into focused fields and often never restores. Lock before focus (touchstart). */
+function lockPlannerInputZoom() {
+    const meta = plannerViewportMeta();
+    if (!meta) return;
+    if (plannerViewportUnlockTimer) {
+        clearTimeout(plannerViewportUnlockTimer);
+        plannerViewportUnlockTimer = 0;
+    }
+    meta.setAttribute('content', PLANNER_VIEWPORT_NO_ZOOM);
+}
+
+function unlockPlannerInputZoom() {
+    const meta = plannerViewportMeta();
+    if (!meta) return;
+    if (plannerViewportUnlockTimer) clearTimeout(plannerViewportUnlockTimer);
+    plannerViewportUnlockTimer = setTimeout(() => {
+        plannerViewportUnlockTimer = 0;
+        const active = typeof document !== 'undefined' ? document.activeElement : null;
+        const tag = active && active.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        meta.setAttribute('content', PLANNER_VIEWPORT_DEFAULT);
+    }, 320);
+}
+
+function bindPlannerInputZoomGuard(el) {
+    if (!el || el.dataset.ntZoomGuard === '1') return;
+    el.dataset.ntZoomGuard = '1';
+    el.addEventListener('touchstart', lockPlannerInputZoom, { passive: true });
+    el.addEventListener('focus', lockPlannerInputZoom);
+    el.addEventListener('blur', unlockPlannerInputZoom);
+}
+
+function openPlannerFareModal(routeId) {
+    const id = String(routeId || '').trim();
+    if (!id) return;
+    if (typeof window.openFareModalForRoute === 'function') {
+        window.openFareModalForRoute(id);
+        return;
+    }
+    import('./live-board-ui.js').then((m) => {
+        if (typeof m.openFareModalForRoute === 'function') m.openFareModalForRoute(id);
+    }).catch(() => {});
+}
+
+function bindPlannerTrainSheetFare() {
+    const fareEl = document.getElementById('planner-train-sheet-fare');
+    if (!fareEl || fareEl.dataset.ntFareBound === '1') return;
+    fareEl.dataset.ntFareBound = '1';
+    fareEl.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openPlannerFareModal(fareEl.dataset.routeId);
+    });
+}
+
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
@@ -905,7 +968,7 @@ function openPlannerDateSheet() {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <input type="date" id="planner-date-sheet-input" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
+                <input type="date" id="planner-date-sheet-input" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
                 <button type="button" id="planner-date-sheet-apply" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm focus:outline-none">Set travel day</button>
             </div>`;
         document.body.appendChild(modal);
@@ -927,6 +990,7 @@ function openPlannerDateSheet() {
     }
     const inp = document.getElementById('planner-date-sheet-input');
     if (inp) {
+        bindPlannerInputZoomGuard(inp);
         if (selectedPlannerDate) inp.value = selectedPlannerDate;
         else {
             const t = new Date();
@@ -1928,17 +1992,7 @@ export function openPlannerTrainSheet(routeId, trainId) {
         } else {
             fareEl.textContent = 'Fare';
         }
-        fareEl.onclick = (ev) => {
-            ev.stopPropagation();
-            const openFare = typeof window.openFareModalForRoute === 'function'
-                ? window.openFareModalForRoute
-                : null;
-            if (openFare) {
-                openFare(sheet.route.id);
-                return;
-            }
-            import('./live-board-ui.js').then((m) => m.openFareModalForRoute?.(sheet.route.id)).catch(() => {});
-        };
+        bindPlannerTrainSheetFare();
     }
     if (listEl) {
         listEl.innerHTML = sheet.stops.map((stop, i) => {
@@ -2995,6 +3049,8 @@ export function initPlanner() {
         });
     }
 
+    bindPlannerTrainSheetFare();
+
     if (!fromSelect || !toSelect) return;
 
     setupAutocomplete('planner-from-search', 'planner-from');
@@ -3486,9 +3542,13 @@ export function setupAutocomplete(inputId, selectId) {
     });
     
     input.addEventListener('focus', () => {
-        input.select();
+        lockPlannerInputZoom();
+        // iOS stays zoomed if we select() the field. Desktop still selects for quick replace.
+        const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+        if (!coarse) input.select();
         renderList('');
     });
+    bindPlannerInputZoomGuard(input);
     
     chevron.addEventListener('click', (e) => { 
         e.stopPropagation(); 

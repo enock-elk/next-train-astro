@@ -626,6 +626,10 @@ const Admin = {
 
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
     openLightbox: function(url) {
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(url)
+            : '';
+        if (!safe) return;
         window._adminLightboxOpen = true;
         history.pushState({ modal: 'admin-lightbox' }, '', '#admin-lightbox');
         if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
@@ -649,7 +653,7 @@ const Admin = {
         }
         
         const img = document.getElementById('admin-lightbox-img');
-        if (img) img.src = url;
+        if (img) img.src = safe;
         
         modal.classList.remove('hidden');
         void modal.offsetWidth; // Force Reflow
@@ -676,6 +680,70 @@ const Admin = {
             modal.classList.remove('opacity-0');
             if (img) img.src = '';
         }, 300);
+    },
+
+    prepareSafeUpload: async function(file) {
+        if (!file) throw new Error('No file selected.');
+        const maxBytes = window.ATTACHMENT_MAX_BYTES || 5242880;
+        if (file.size > maxBytes) throw new Error('File is too large. Max 5MB.');
+        if (typeof window.sniffAttachmentFile !== 'function') {
+            throw new Error('Upload safety check unavailable.');
+        }
+        const sniff = await window.sniffAttachmentFile(file);
+        if (!sniff) {
+            throw new Error(typeof window.attachmentRejectMessage === 'function'
+                ? window.attachmentRejectMessage()
+                : 'Use a JPEG, PNG, GIF, WebP photo or a PDF (max 5MB).');
+        }
+        const stem = typeof window.randomAttachmentStem === 'function'
+            ? window.randomAttachmentStem('inline')
+            : `inline_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        return {
+            sniff,
+            isPdf: sniff.ext === 'pdf',
+            fileName: `${stem}.${sniff.ext}`,
+            metadata: { contentType: sniff.mime },
+        };
+    },
+
+    inlineAttachmentHtml: function(url, isPdf) {
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(url)
+            : '';
+        if (!safe) return '';
+        const href = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
+        if (isPdf) {
+            return `&nbsp;<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
+        }
+        const js = typeof window.lightboxOnclickJs === 'function'
+            ? window.lightboxOnclickJs(safe, 'window.openLightbox')
+            : '';
+        if (!js) return '';
+        return `<br><button type="button" onclick='${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+    },
+
+    wrapLightboxImgHtml: function(srcUrl, borderClass) {
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(srcUrl)
+            : '';
+        if (!safe) return '';
+        const js = typeof window.lightboxOnclickJs === 'function'
+            ? window.lightboxOnclickJs(safe, 'Admin.openLightbox')
+            : '';
+        if (!js) return '';
+        const href = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
+        const border = borderClass || 'border-gray-200 dark:border-gray-700';
+        return `<button type="button" onclick='event.stopPropagation(); ${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border ${border} shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt=""><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+    },
+
+    safeSourceHref: function(raw) {
+        const s = String(raw || '').trim();
+        if (!s) return null;
+        const ok = typeof window.isSafeHref === 'function'
+            ? window.isSafeHref(s)
+            : /^(https?|mailto|tel):/i.test(s);
+        if (!ok) return null;
+        return typeof escapeHTML === 'function' ? escapeHTML(s) : s;
     },
 
     currentUser: null,
@@ -5659,11 +5727,12 @@ const Admin = {
                         }
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
+                        if (typeof window.sanitizeRichHtml === 'function') {
+                            parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
+                        }
 
-                        // GROWTH SPRINT PHASE 1: Retroactive Lightbox Wrapper for legacy admin inline images
                         parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-                            if (btnStart || btnEnd) return match; // Already wrapped in a button
-                            return `<button type="button" onclick="event.stopPropagation(); window.openLightbox('${srcUrl}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-slate-600 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+                            return Admin.wrapLightboxImgHtml(srcUrl, 'border-slate-600 dark:border-slate-700') || '';
                         });
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
@@ -5917,10 +5986,12 @@ const Admin = {
 
                         const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
                         const safeRouteId = secureEscape(item.routeId || 'None');
-                        const safeAttachUrl = item.attachmentUrl ? secureEscape(item.attachmentUrl) : null;
-                        const safeAttachUrls = item.attachmentUrls && Array.isArray(item.attachmentUrls)
-                            ? item.attachmentUrls.map(url => secureEscape(url))
-                            : (safeAttachUrl ? [safeAttachUrl] : []);
+                        const rawAttach = [];
+                        if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
+                        if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
+                            item.attachmentUrls.forEach((u) => { if (u) rawAttach.push(u); });
+                        }
+                        const uniqueAttach = [...new Set(rawAttach)];
 
                         // Safeguard rawText in case the replace cleared it completely
                         if (typeof rawText !== 'string') rawText = '';
@@ -5929,16 +6000,21 @@ const Admin = {
 
                         // GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
                         let attachmentHtml = '';
-                        if (safeAttachUrls.length > 0) {
-                            const gridCols = safeAttachUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
+                        if (uniqueAttach.length > 0) {
+                            const gridCols = uniqueAttach.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
                             attachmentHtml = `<div class="mt-2 grid ${gridCols} gap-2 w-full">`;
-                            safeAttachUrls.forEach((url, idx) => {
-                                const isImageExt = url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i);
-                                if (isImageExt) {
-                                    attachmentHtml += `<button type="button" onclick="event.stopPropagation(); Admin.openLightbox('${url}')" class="block focus:outline-none w-full text-left"><img src="${url}" class="w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in" alt="Attachment ${idx + 1}"></button>`;
-                                } else {
-                                    attachmentHtml += `<a href="${url}" target="_blank" onclick="event.stopPropagation();" class="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24">${Admin.icon('file', 'w-4 h-4')} View Doc ${idx + 1}</a>`;
-                                }
+                            uniqueAttach.forEach((rawUrl, idx) => {
+                                const cell = typeof window.attachmentPreviewHtml === 'function'
+                                    ? window.attachmentPreviewHtml(rawUrl, {
+                                        admin: true,
+                                        pdfLabel: `View Doc ${idx + 1}`,
+                                        fileLabel: `View Doc ${idx + 1}`,
+                                        imgClass: 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in',
+                                        buttonClass: 'block focus:outline-none w-full text-left',
+                                        linkClass: 'flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24',
+                                    })
+                                    : '';
+                                if (cell) attachmentHtml += cell;
                             });
                             attachmentHtml += `</div>`;
                         }
@@ -7450,12 +7526,15 @@ const Admin = {
 
                 if (this.files && this.files.length > 0) {
                     const file = this.files[0];
-                    if (file.size > 5242880) { // Strict 5MB limit
-                        if (typeof showToast === 'function') showToast("File is too large. Max 5MB.", "error");
+                    let prepared;
+                    try {
+                        prepared = await Admin.prepareSafeUpload(file);
+                    } catch (err) {
+                        if (typeof showToast === 'function') showToast(err.message || 'Could not use that file.', 'error');
                         this.value = '';
                         return;
                     }
-                    
+
                     if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
                         if (typeof showToast === 'function') showToast("Storage SDK not ready. Check connection.", "error");
                         this.value = '';
@@ -7465,12 +7544,11 @@ const Admin = {
                     if (typeof showToast === 'function') showToast("Uploading Attachment...", "info", 30000);
 
                     try {
-                        const fileExt = file.name.split('.').pop().toLowerCase();
-                        const isPdf = fileExt === 'pdf';
-                        const fileName = `inline_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
+                        const isPdf = prepared.isPdf;
+                        const fileName = prepared.fileName;
                         const storageReference = window.firebaseStorageRef(window.firebaseStorage, `admin_attachments/${fileName}`);
                         
-                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
+                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file, prepared.metadata);
                         const labelEl = document.getElementById('admin-reply-upload-label');
                         const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media`;
                         
@@ -7490,11 +7568,11 @@ const Admin = {
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
                                     
-                                    let htmlToInsert = '';
-                                    if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
-                                    } else {
-                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
+                                    if (!htmlToInsert) {
+                                        if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
+                                        this.value = '';
+                                        return;
                                     }
                                     
                                     if (editor) {
@@ -9567,12 +9645,15 @@ const Admin = {
 
                 if (this.files && this.files.length > 0) {
                     const file = this.files[0];
-                    if (file.size > 5242880) { // Strict 5MB limit
-                        if (typeof showToast === 'function') showToast("File is too large. Max 5MB.", "error");
+                    let prepared;
+                    try {
+                        prepared = await Admin.prepareSafeUpload(file);
+                    } catch (err) {
+                        if (typeof showToast === 'function') showToast(err.message || 'Could not use that file.', 'error');
                         this.value = '';
                         return;
                     }
-                    
+
                     if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
                         if (typeof showToast === 'function') showToast("Storage SDK not ready. Check connection.", "error");
                         this.value = '';
@@ -9582,12 +9663,11 @@ const Admin = {
                     if (typeof showToast === 'function') showToast("Uploading Attachment...", "info", 30000);
 
                     try {
-                        const fileExt = file.name.split('.').pop().toLowerCase();
-                        const isPdf = fileExt === 'pdf';
-                        const fileName = `inline_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
+                        const isPdf = prepared.isPdf;
+                        const fileName = prepared.fileName;
                         const storageReference = window.firebaseStorageRef(window.firebaseStorage, `admin_attachments/${fileName}`);
                         
-                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
+                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file, prepared.metadata);
                         const labelEl = document.getElementById('alert-upload-label');
                         const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Insert Media`;
                         
@@ -9607,11 +9687,11 @@ const Admin = {
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
                                     
-                                    let htmlToInsert = '';
-                                    if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">View Attached PDF</a>&nbsp;`;
-                                    } else {
-                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
+                                    if (!htmlToInsert) {
+                                        if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
+                                        this.value = '';
+                                        return;
                                     }
                                     
                                     if (editor) {
@@ -10084,24 +10164,20 @@ const Admin = {
             ? `<span class="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Archived${data.archiveReason ? ` - ${escapeHTML(String(data.archiveReason))}` : ''}</span>`
             : `<span class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Active</span>`;
 
-        const lb = (url) => {
-            const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            return `Admin.openLightbox('${safe}')`;
-        };
         const posterUrls = Admin.collectAlertImageUrls(data);
-        let imgHtml = posterUrls.map((src) =>
-            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-        ).join('');
+        let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
+        if (typeof window.sanitizeRichHtml === 'function') {
+            parsedMessage = window.sanitizeRichHtml(parsedMessage);
+        }
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-            if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="event.stopPropagation(); ${lb(srcUrl)}" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+            return Admin.wrapLightboxImgHtml(srcUrl) || '';
         });
 
         if (data.sourceName) {
             const sName = escapeHTML(data.sourceName);
-            const sUrl = data.sourceUrl ? escapeHTML(data.sourceUrl) : null;
+            const sUrl = Admin.safeSourceHref(data.sourceUrl);
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
@@ -10189,22 +10265,18 @@ const Admin = {
     buildNoticeBodyHtml: (data) => {
         if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
         // Admin.openLightbox (z-300) — never window.openLightbox/map-modal (z-160 under archive preview z-260)
-        const lb = (url) => {
-            const safe = String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            return `Admin.openLightbox('${safe}')`;
-        };
         const posterUrls = Admin.collectAlertImageUrls(data);
-        let imgHtml = posterUrls.map((src) =>
-            `<button type="button" onclick="event.stopPropagation(); ${lb(src)}" class="relative block w-full focus:outline-none mb-3 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${escapeHTML(src)}" class="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`
-        ).join('');
+        let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
         let parsedMessage = data.message || data.text || 'No details provided.';
+        if (typeof window.sanitizeRichHtml === 'function') {
+            parsedMessage = window.sanitizeRichHtml(parsedMessage);
+        }
         parsedMessage = parsedMessage.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-            if (btnStart || btnEnd) return match;
-            return `<button type="button" onclick="event.stopPropagation(); ${lb(srcUrl)}" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform">${imgTag}<span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+            return Admin.wrapLightboxImgHtml(srcUrl) || '';
         });
         if (data.sourceName) {
             const sName = escapeHTML(data.sourceName);
-            const sUrl = data.sourceUrl ? escapeHTML(data.sourceUrl) : null;
+            const sUrl = Admin.safeSourceHref(data.sourceUrl);
             const innerCitation = sUrl
                 ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
                 : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
@@ -10494,8 +10566,11 @@ const Admin = {
 
                 if (this.files && this.files.length > 0) {
                     const file = this.files[0];
-                    if (file.size > 5242880) {
-                        if (typeof showToast === 'function') showToast("File is too large. Max 5MB.", "error");
+                    let prepared;
+                    try {
+                        prepared = await Admin.prepareSafeUpload(file);
+                    } catch (err) {
+                        if (typeof showToast === 'function') showToast(err.message || 'Could not use that file.', 'error');
                         this.value = '';
                         return;
                     }
@@ -10509,11 +10584,10 @@ const Admin = {
                     if (typeof showToast === 'function') showToast("Uploading Attachment...", "info", 30000);
 
                     try {
-                        const fileExt = file.name.split('.').pop().toLowerCase();
-                        const isPdf = fileExt === 'pdf';
-                        const fileName = `inline_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
+                        const isPdf = prepared.isPdf;
+                        const fileName = prepared.fileName;
                         const storageReference = window.firebaseStorageRef(window.firebaseStorage, `admin_attachments/${fileName}`);
-                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file);
+                        const uploadTask = window.firebaseUploadBytesResumable(storageReference, file, prepared.metadata);
                         const labelEl = document.getElementById('disr-upload-label');
                         const originalLabel = labelEl ? labelEl.innerHTML : `${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media`;
 
@@ -10532,11 +10606,11 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    let htmlToInsert = '';
-                                    if (isPdf) {
-                                        htmlToInsert = `&nbsp;<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline font-bold px-1">View Attached PDF</a>&nbsp;`;
-                                    } else {
-                                        htmlToInsert = `<br><button type="button" onclick="window.openLightbox('${url}')" class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${url}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
+                                    if (!htmlToInsert) {
+                                        if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
+                                        this.value = '';
+                                        return;
                                     }
                                     if (editor) {
                                         editor.focus();

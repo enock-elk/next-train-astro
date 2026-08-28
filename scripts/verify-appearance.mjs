@@ -230,6 +230,11 @@ assert(hubModals.includes('#messages-thread-modal > div'), 'Feedback Hub card fi
 assert(hubModals.includes('height: 100%'), 'Feedback Hub card height matches the keyboard-safe overlay');
 assert(!hubModals.includes('h-[min(90dvh,40rem)]'), 'Feedback Hub is not a centered 40rem card');
 assert(hubModals.includes('items-end justify-center p-0'), 'Feedback Hub overlay has no inset gap');
+assert(hubModals.includes('items-center justify-center p-4'), 'Send Feedback overlay is centered in the visible viewport');
+assert(!hubModals.includes('items-end justify-center p-4 pb-0'), 'Send Feedback is not docked to the keyboard like Hub');
+assert(hubModals.includes('display: flow-root'), 'inbox message text contains floated timestamps');
+assert(/#feedback-modal \{\s*align-items: center;/.test(hubModals), 'Send Feedback CSS keeps align-items center');
+assert(/#messages-thread-modal \{\s*align-items: flex-end;/.test(hubModals), 'Feedback Hub CSS still docks with flex-end');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
@@ -293,6 +298,7 @@ assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer gro
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
 assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinned to visualViewport.top');
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
+assert(hubJs.includes("if (id === 'messages-thread-modal')"), 'only Feedback Hub card is stretched to 100%');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('fieldRect.height > availableHeight'), 'tall feedback fields align their first line inside a short scroller');
 assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');

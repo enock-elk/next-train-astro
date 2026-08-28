@@ -2,6 +2,16 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.28.21 — Admin inbox name, collapsed cards, reply modal center (28 Aug 2026)
+
+no release notes.
+
+- Admin reply bubbles put the known signoff (`- Enock`) in the name row instead of the generic `Admin` label. Hyphen signoffs are parsed; italic body signoff is stripped so it is not duplicated.
+- Visible Edit control on admin replies is gone. Long-press still opens the in-place editor.
+- Collapsed feedback thread headers are white on the gray-50 canvas so the `usr_…` / message-count row is readable.
+- Send Feedback and admin reply stay centered in `visualViewport`. Feedback Hub still docks to the keyboard (`items-end`, card `height: 100%`).
+- Image-message timestamps stay inside the bubble: `.inbox-msg-text` is `flow-root` so the floated time cannot escape `overflow: visible` tails.
+
 ## V9_08.28.20 — Planner title center; visible Tips close; Feedback Hub flush to keyboard (28 Aug 2026)
 
 - Planner info pill title is a flex-centered `h2` so Advanced Multi-Transfer Routing sits in the middle of the 46px row.

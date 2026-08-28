@@ -196,6 +196,31 @@ const Admin = {
         return raw.replace(/\s*<->\s*/g, ' \u2194 ').replace(/\s*\u2194\s*/g, ' \u2194 ').trim();
     },
 
+    /** Pull "- Enock" / em-dash signoff out of an admin reply so the header can show it. */
+    parseAdminSignoff: (html) => {
+        let body = String(html || '');
+        let name = '';
+        const patterns = [
+            /(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;|[-–—])\s*([^<]*?)\s*<\/span>\s*$/i,
+            /(?:<br\s*\/?>|\n)*\s*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;|[-–—])\s*([A-Za-z][A-Za-z .'-]{1,30})\s*$/i
+        ];
+        for (const re of patterns) {
+            const m = body.match(re);
+            if (m && String(m[1] || '').trim()) {
+                name = String(m[1]).trim();
+                body = body.replace(re, '').trim();
+                break;
+            }
+        }
+        return { name, body };
+    },
+
+    formatAdminBubbleLabel: (name) => {
+        const n = String(name || '').replace(/^[-–—]\s*/, '').trim();
+        if (!n || /^admin$/i.test(n)) return 'Admin';
+        return `- ${n}`;
+    },
+
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
     isAllowlistedAdmin: (user) => {
         const email = String(user?.email || '').trim().toLowerCase();
@@ -5644,7 +5669,7 @@ const Admin = {
 
                 // GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
                 let groupHTML = `
-                    <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 border-b border-transparent transition-colors">
+                    <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-white dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
                             <div class="text-xs font-bold text-gray-900 dark:text-white w-full min-w-0">${commuterTitle}</div>
                             <span class="text-[9px] text-gray-500 font-mono mt-1 inline-flex items-center flex-wrap gap-y-0.5">${groupItems.length} Message${groupItems.length > 1 ? 's' : ''}${contactScanBlock} <span class="opacity-40 mx-0.5">|</span> Last: ${latestDate}</span>
@@ -5721,19 +5746,12 @@ const Admin = {
                             receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         }
 
-                        // REGEX: Extract Admin Signoff Name ("- Enock")
+                        // REGEX: Extract Admin Signoff Name ("- Enock") including ASCII hyphen
                         let parsedAdminText = item.text || "";
-                        let adminName = "Admin";
                         parsedAdminText = Admin.repairMojibake(parsedAdminText);
-                        // Match em dash and legacy UTF-8 mojibake of "-"
-                        const signoffRegex = /(?:<br>|\n)*<span[^>]*>(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*(.*?)<\/span>$/i;
-                        const fallbackRegex = /(?:<br>|\n)*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;)\s*([a-zA-Z]+)$/i;
-                        
-                        let match = parsedAdminText.match(signoffRegex) || parsedAdminText.match(fallbackRegex);
-                        if (match) {
-                            adminName = match[1].trim();
-                            parsedAdminText = parsedAdminText.replace(signoffRegex, '').replace(fallbackRegex, '').trim();
-                        }
+                        const signoff = Admin.parseAdminSignoff(parsedAdminText);
+                        parsedAdminText = signoff.body;
+                        const adminName = Admin.formatAdminBubbleLabel(item.fromName || signoff.name || 'Admin');
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
                         if (typeof window.sanitizeRichHtml === 'function') {
@@ -5762,7 +5780,6 @@ const Admin = {
                                         </div>
                                         <div class="inbox-bubble-body">
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
-                                            <button type="button" data-fb-edit-btn class="text-[9px] font-bold uppercase tracking-wider opacity-70 hover:opacity-100 mt-1 focus:outline-none">Edit</button>
                                         </div>
                                     </div>
                                 </div>
@@ -6300,6 +6317,7 @@ const Admin = {
                                 feedbackId: msg.feedbackId,
                                 appVersion: msg.appVersion,
                                 routeId: msg.routeId,
+                                fromName: msg.fromName,
                                 editedAt: msg.editedAt
                             });
                         });
@@ -7557,6 +7575,33 @@ const Admin = {
         Admin.openReplyModal(feedbackId || item?.feedbackId || '', deviceId, item || { id: key, text: '' });
     },
 
+    syncAdminReplyModalViewport: () => {
+        const modal = document.getElementById('admin-reply-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        const vv = window.visualViewport;
+        const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
+        const top = Math.max(0, Math.round(vv?.offsetTop || 0));
+        modal.style.top = `${top}px`;
+        modal.style.height = `${height}px`;
+        modal.style.bottom = 'auto';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        const card = modal.firstElementChild;
+        if (card) {
+            card.style.maxHeight = `${Math.max(240, height - 32)}px`;
+            card.style.height = '';
+        }
+    },
+
+    bindAdminReplyModalViewport: () => {
+        if (Admin._adminReplyViewportBound) return;
+        Admin._adminReplyViewportBound = true;
+        const update = () => Admin.syncAdminReplyModalViewport();
+        window.addEventListener('resize', update, { passive: true });
+        window.visualViewport?.addEventListener('resize', update, { passive: true });
+        window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    },
+
     openReplyModal: (feedbackId, deviceId, editMsg) => {
         if (!deviceId) {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
@@ -7644,6 +7689,8 @@ const Admin = {
         void modal.offsetWidth; // Trigger reflow
         modal.firstElementChild.classList.remove('scale-95');
         modal.firstElementChild.classList.add('scale-100');
+        Admin.bindAdminReplyModalViewport();
+        Admin.syncAdminReplyModalViewport();
 
         const cleanup = () => {
             modal.classList.add('hidden');
@@ -7749,9 +7796,9 @@ const Admin = {
             const replyDeviceId = modal.dataset.replyDeviceId || deviceId;
             const replyFeedbackId = modal.dataset.replyFeedbackId || feedbackId;
 
+            const adminEmail = Admin.currentUser?.email || '';
+            const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
             if (!editingKey) {
-                const adminEmail = Admin.currentUser?.email || '';
-                const adminName = adminEmail.includes('enock') ? 'Enock' : (adminEmail.includes('thandeka') ? 'Thandeka' : 'Admin');
                 text += `<br><br><span style="color: #9ca3af; font-style: italic;">- ${adminName}</span>`;
             }
             
@@ -7790,6 +7837,7 @@ const Admin = {
                     timestamp: Date.now(),
                     feedbackId: replyFeedbackId,
                     read: false,
+                    fromName: adminName,
                     appVersion: (typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '')
                 };
 

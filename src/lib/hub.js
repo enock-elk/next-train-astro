@@ -172,13 +172,16 @@ function syncFeedbackModalViewport() {
         modal.style.top = `${top}px`;
         modal.style.height = `${height}px`;
         modal.style.bottom = 'auto';
-        modal.style.paddingBottom = '0px';
         const card = modal.querySelector(':scope > div');
-        if (card) {
-            card.style.maxHeight = '100%';
-            if (id === 'messages-thread-modal') {
+        if (id === 'messages-thread-modal') {
+            modal.style.paddingBottom = '0px';
+            if (card) {
+                card.style.maxHeight = '100%';
                 card.style.height = '100%';
             }
+        } else if (card) {
+            card.style.height = '';
+            card.style.maxHeight = '';
         }
     });
 }

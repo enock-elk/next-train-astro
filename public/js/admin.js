@@ -6133,19 +6133,6 @@ const Admin = {
                     listContainer.querySelectorAll('[data-fb-more-menu]').forEach((m) => m.classList.add('hidden'));
                 }
 
-                const editBtn = e.target.closest('[data-fb-edit-btn]');
-                if (editBtn && listContainer.contains(editBtn)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const row = editBtn.closest('[data-fb-msg-id]');
-                    Admin.openAdminReplyEditor(
-                        row?.getAttribute('data-fb-msg-id'),
-                        row?.getAttribute('data-fb-device-id'),
-                        row?.getAttribute('data-fb-feedback-id')
-                    );
-                    return;
-                }
-
                 // WhatsApp quote chip — data-* attrs (no fragile inline onclick)
                 const quoteBtn = e.target.closest('[data-fb-quote-jump]');
                 if (quoteBtn && listContainer.contains(quoteBtn)) {

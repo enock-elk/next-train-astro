@@ -131,6 +131,7 @@ assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trai
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
 assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
+assert(css.includes('color-mix(in srgb, #fff 28%, var(--nt-chrome-nav))'), 'active tab wash uses a light mix on the nav so every pack shows the selected tab');
 assert(css.includes('box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-chrome-fg) 40%, transparent)'), 'dark active tab has an inset ring so Ember/Earthy stay readable');
 
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');

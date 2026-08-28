@@ -90,6 +90,9 @@ assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after W
 assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
 assert(prefs.includes('ntProdClassicPackV1'), 'production one-shot remaps non-classic packs');
 assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');
+assert(prefs.includes('restoreLookPrefs'), 'look prefs restore from IndexedDB after a purge');
+assert(prefs.includes('resetLookToClassicLight'), 'Check for Updates can force Classic light');
+assert(prefs.includes('setResilientItem'), 'colour pack writes mirror to IndexedDB');
 assert(layout.includes('ntProdClassicPackV1'), 'Layout boot remaps production packs before first paint');
 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
@@ -246,6 +249,7 @@ assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Them
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
 assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');
+assert(hubJs.includes('resetLookToClassicLight'), 'Check for Updates resets look to Classic light');
 assert(hubJs.includes('window.__ntOpenNetworkMapSheet'), 'Map tab fullscreen opens the in-app sheet');
 assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open flag is set');
 assert(hubJs.includes('min-h-[2.25rem]'), 'sheet Back uses the same 2.25rem box as map chrome');

@@ -1834,6 +1834,7 @@ export async function openTripMapRenderer(routeData) {
                     isDarkNow = !isDarkNow;
                     document.documentElement.classList.toggle('dark', isDarkNow);
                     try { localStorage.setItem('theme', isDarkNow ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+                    if (typeof window.ntPersistTheme === 'function') window.ntPersistTheme(isDarkNow ? 'dark' : 'light');
                     paintThemeBtn();
                 };
             }

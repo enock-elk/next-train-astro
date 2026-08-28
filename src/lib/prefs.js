@@ -89,15 +89,17 @@ function seedProductionClassicPack() {
     const pack = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
     if (pack && pack !== COLOUR_PACKS.CLASSIC) {
         safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
+        safeStorage.setResilientItem?.(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC)?.catch?.(() => {});
     }
     safeStorage.setItem(FLAG, '1');
+    safeStorage.setResilientItem?.(FLAG, '1')?.catch?.(() => {});
 }
 
 /** Persist light when the user has never chosen a mode (do not follow the OS). */
 function seedLightDefault() {
     if (typeof window === 'undefined') return;
     if (!safeStorage.getItem(THEME_KEY)) {
-        safeStorage.setItem(THEME_KEY, 'light');
+        persistTheme('light');
     }
 }
 
@@ -148,6 +150,7 @@ export function setColourPack(pack) {
     const requested = normalizePack(pack);
     const next = VALID_PACKS.has(requested) ? requested : COLOUR_PACKS.CLASSIC;
     safeStorage.setItem(COLOUR_PACK_KEY, next);
+    safeStorage.setResilientItem?.(COLOUR_PACK_KEY, next)?.catch?.(() => {});
     if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-colour-pack', next);
         requestAnimationFrame(() => syncThemeColorMeta());
@@ -192,7 +195,52 @@ export function bindColourPackControls() {
     syncColourPackUi(getColourPack());
 }
 
+export function persistTheme(theme) {
+    const next = theme === 'dark' ? 'dark' : 'light';
+    safeStorage.setItem(THEME_KEY, next);
+    safeStorage.setResilientItem?.(THEME_KEY, next)?.catch?.(() => {});
+    return next;
+}
+
+/** Restore theme + pack from IndexedDB after a localStorage purge. */
+export async function restoreLookPrefs() {
+    if (typeof window === 'undefined') return;
+    try {
+        const flag = await safeStorage.getResilientItem?.('ntProdClassicPackV1');
+        if (flag) safeStorage.setItem('ntProdClassicPackV1', flag);
+        const theme = await safeStorage.getResilientItem?.(THEME_KEY);
+        const pack = await safeStorage.getResilientItem?.(COLOUR_PACK_KEY);
+        if (theme === 'dark' || theme === 'light') {
+            persistTheme(theme);
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+        }
+        if (pack) setColourPack(pack);
+    } catch { /* ignore */ }
+}
+
+/** Check for Updates: factory Classic light. Does not replay Welcome. */
+export function resetLookToClassicLight() {
+    persistTheme('light');
+    safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
+    safeStorage.setResilientItem?.(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC)?.catch?.(() => {});
+    safeStorage.setItem('ntProdClassicPackV1', '1');
+    safeStorage.setResilientItem?.('ntProdClassicPackV1', '1')?.catch?.(() => {});
+    try { safeStorage.removeItem('ntClassicDefaultV1'); } catch { /* ignore */ }
+    try { safeStorage.removeItem('ntLabEmberSeededV1'); } catch { /* ignore */ }
+    if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-colour-pack', COLOUR_PACKS.CLASSIC);
+    }
+}
+
 export function hydratePrefs() {
+    if (typeof window !== 'undefined') window.ntPersistTheme = persistTheme;
+    restoreLookPrefs().then(() => {
+        applyNavChrome(getNavStyle());
+        setColourPack(getColourPack());
+        syncPrefsAccordionSummary();
+        syncThemeColorMeta();
+    }).catch(() => {});
     applyAdminAuthedChrome(false);
     applyNavChrome(getNavStyle());
     setColourPack(getColourPack());

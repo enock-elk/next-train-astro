@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.11 — Map stations above lines; no LIVE badges; sheet Back height (28 Aug 2026)
+
+- Station markers use Leaflet pane `nt-stations` (z 450) and `raiseStationMarkers()` after filter so polylines cannot cover dots.
+- Remove `#map-reset-line-btn`. Isolate a corridor from Network Lines; restore with **Show all lines** in that list.
+- In-app sheet Back is `2.25rem` (`h-9`, no `py-2.5`) to match GP / sun / Network Lines. Standalone `#map-back-wrap` uses `align-items: center`.
+- Legend drops LIVE/DOWN/SOON text badges. Dot colour is the status (grey = not live; red/yellow for disruption).
+
 ## V9_08.28.10 — Park Station alias; paler Earthy/Ember light; quieter tabs (28 Aug 2026)
 
 - Exact `PARK` (Park Station) resolves to `JOHANNESBURG` in planner input. Results still display board names. Kempton Park / Ellis Park / Loftus stay unaliased.

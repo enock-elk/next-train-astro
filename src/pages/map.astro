@@ -59,7 +59,7 @@ const regionSeoSlugs = Object.fromEntries(
       html.nt-map-tab #map-fullscreen-btn { display: inline-flex; }
       #map-back-wrap {
         margin-right: auto;
-        display: flex; align-items: stretch;
+        display: flex; align-items: center;
         height: var(--map-chrome-h);
         max-height: var(--map-chrome-h);
         overflow: hidden;
@@ -117,7 +117,6 @@ const regionSeoSlugs = Object.fromEntries(
         box-sizing: border-box;
         color: var(--nt-text, #111827);
       }
-      #map-reset-line-btn[hidden] { display: none !important; }
       .region-picker, .legend-container {
         position: relative; pointer-events: auto;
       }
@@ -222,7 +221,6 @@ const regionSeoSlugs = Object.fromEntries(
         border-radius: 999px;
         flex-shrink: 0;
       }
-      .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: auto; font-weight: 800; color: white; text-transform: uppercase; }
       #map-placeholder {
         position: absolute; inset: 0; background-color: #f3f4f6;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -297,7 +295,7 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
   </noscript>
 
-  <!-- Order: Back (left) · Region · Theme · Show all lines · Network Lines (SVG) -->
+  <!-- Order: Back (left) · Region · Theme · Network Lines (SVG) -->
   <div id="map-top-controls" class="pointer-events-none">
     <div id="map-back-wrap">
       <button type="button" id="map-back-link" class="map-chrome-btn map-chrome-btn-wide" data-href={base} aria-label="Back to Next Train">
@@ -324,11 +322,6 @@ const regionSeoSlugs = Object.fromEntries(
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
       </button>
     </div>
-    <button type="button" id="map-reset-line-btn" class="map-chrome-btn" hidden aria-hidden="true" aria-label="Show all lines" title="Show all lines">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 7h16M4 12h16M4 17h16"/>
-      </svg>
-    </button>
     <div class="legend-container" id="legend-container">
       <button type="button" id="legend-toggle-btn" class="map-chrome-btn" aria-expanded="false" aria-controls="legend-panel" aria-haspopup="true" aria-label="Network Lines" title="Network Lines">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

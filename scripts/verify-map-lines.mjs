@@ -98,6 +98,10 @@ assert(mapApp.includes('function applySelectedLine'), 'Network Lines rows isolat
 assert(mapApp.includes('function setSelectedLine'), 'line filter can reset without toggling');
 assert(mapApp.includes('function fitNetworkView'), 'Show all lines restores the full network bounds');
 assert(mapApp.includes('legend-show-all'), 'legend has an explicit Show all lines row');
+assert(mapApp.includes("pane: 'nt-stations'"), 'station markers use a pane above route lines');
+assert(mapApp.includes('function raiseStationMarkers'), 'filtering brings station markers back above lines');
+assert(!mapApp.includes('status-badge'), 'Network Lines list has no LIVE text badges');
+assert(!mapApp.includes("routeStatus = 'LIVE'"), 'legend does not label corridors LIVE');
 assert(mapApp.includes("back.setAttribute('data-href'"), 'Back navigates via data-href on a button');
 assert(mapApp.includes('function stationPopupHtml'), 'station popup lists corridors under the name');
 assert(mapApp.includes('map-popup-route'), 'station popup rows use map-popup-route');

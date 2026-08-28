@@ -541,6 +541,7 @@ export function resolveZoneForRoute(routeId) {
                 let dest = "";
                 if (rest.endsWith('_weekday')) { suffix = '_weekday'; dest = rest.replace('_weekday', ''); }
                 else if (rest.endsWith('_saturday')) { suffix = '_saturday'; dest = rest.replace('_saturday', ''); }
+                else if (rest.endsWith('_sat')) { suffix = '_sat'; dest = rest.slice(0, -4); }
                 if (dest && suffix) {
                     const reverseKey = `${dest}_to_${prefix}${suffix}_zone`;
                     const reverseZone = getFullDatabase()[reverseKey];
@@ -650,6 +651,14 @@ export function getDetailedFare(sheetKey) {
         return { code: zoneCode, prices: FARE_CONFIG.zones_detailed[zoneCode] };
     }
     return null;
+}
+
+/** Ticket table for a corridor id (planner train sheet, not the live-board pin). */
+export function getDetailedFareForRoute(routeId) {
+    if (!getFullDatabase() || !routeId) return null;
+    const zoneCode = resolveZoneForRoute(routeId);
+    if (!zoneCode || !FARE_CONFIG.zones_detailed?.[zoneCode]) return null;
+    return { code: zoneCode, prices: FARE_CONFIG.zones_detailed[zoneCode] };
 }
 
 export function findNextTrains() {
@@ -1390,6 +1399,7 @@ export function attachLiveBoardGlobals() {
     window.calculateTimeDiffString = calculateTimeDiffString;
     window.getRouteFare = getRouteFare;
     window.getDetailedFare = getDetailedFare;
+    window.getDetailedFareForRoute = getDetailedFareForRoute;
     window.startSmartRefresh = startSmartRefresh;
     window.updateLastUpdatedText = updateLastUpdatedText;
     window.allStations = allStations;

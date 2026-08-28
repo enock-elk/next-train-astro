@@ -20,6 +20,7 @@ import {
     SUPPORT_EMAIL,
     SUPPORT_WHATSAPP_DISPLAY,
 } from './recovery.js';
+import { sanitizeAttachmentDisplayUrl } from './attachments.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -822,7 +823,7 @@ function resetMapImageVisibility(mapImg) {
 
 export function openLightbox(url) {
     if (typeof window === 'undefined') return;
-    const src = typeof url === 'string' ? url.trim() : '';
+    const src = sanitizeAttachmentDisplayUrl(url);
     if (!src) return;
     triggerHaptic();
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');

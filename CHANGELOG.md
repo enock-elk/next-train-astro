@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.8 — Train-sheet fare modal; planner zoom; attachment sniffing (28 Aug 2026)
+
+- Full train sheet **Max. Single Fare** opens the zone ticket-price modal (`openFareModalForRoute`). The chip already called that helper; live-board UI now exports it and titles the table for the train’s corridor, not the live-board pin.
+- Planner From/To (and the date sheet) lock `maximum-scale=1` on `touchstart`/`focus` and restore `maximum-scale=5` after blur so iOS does not stay zoomed. Skip `input.select()` on coarse pointers. Date field is 16px (`text-base`).
+- Uploads sniff magic bytes (JPEG/PNG/GIF/WebP/PDF only), store the sniffed extension + `contentType`, and abort the send if a file is spoofed. Lightbox / rich-text `img src` / `onclick` only allow catalog posters and Firebase Storage HTTPS. Admin inbox no longer renders arbitrary attachment URLs.
+
 ## V9_08.28.7 — Station corridors; Show all lines; Back is a button (28 Aug 2026)
 
 - Station popups list every drawn corridor that includes that stop, under the name (colour swatch + route label).

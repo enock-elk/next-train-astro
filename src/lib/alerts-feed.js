@@ -285,6 +285,7 @@ export function sanitizeInlineAlertImageUrl(url) {
     try {
         const u = new URL(s);
         if (u.protocol !== 'https:') return null;
+        if (u.username || u.password) return null;
         const host = u.hostname.toLowerCase();
         if (
             host === 'firebasestorage.googleapis.com'

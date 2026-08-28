@@ -37,6 +37,20 @@ import {
     SHADOW_BAN_DURATIONS,
     computeBanUntil,
 } from './trust.js';
+import {
+    sniffAttachmentFile,
+    sniffAttachmentBytes,
+    sanitizeAttachmentDisplayUrl,
+    classifyAttachmentUrl,
+    isSafeLightboxOnclick,
+    lightboxOnclickJs,
+    attachmentPreviewHtml,
+    randomAttachmentStem,
+    attachmentRejectMessage,
+    ATTACHMENT_MAX_BYTES,
+    ATTACHMENT_MAX_FILES,
+} from './attachments.js';
+import { prepareRichHtml, sanitizeRichHtml, isSafeHref } from './rich-text.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -99,6 +113,21 @@ export function exposeAdminGlobals() {
     window.trustFetchTrustScore = fetchTrustScore;
     window.SHADOW_BAN_DURATIONS = SHADOW_BAN_DURATIONS;
     window.trustComputeBanUntil = computeBanUntil;
+
+    window.sniffAttachmentFile = sniffAttachmentFile;
+    window.sniffAttachmentBytes = sniffAttachmentBytes;
+    window.sanitizeAttachmentDisplayUrl = sanitizeAttachmentDisplayUrl;
+    window.classifyAttachmentUrl = classifyAttachmentUrl;
+    window.isSafeLightboxOnclick = isSafeLightboxOnclick;
+    window.lightboxOnclickJs = lightboxOnclickJs;
+    window.attachmentPreviewHtml = attachmentPreviewHtml;
+    window.randomAttachmentStem = randomAttachmentStem;
+    window.attachmentRejectMessage = attachmentRejectMessage;
+    window.ATTACHMENT_MAX_BYTES = ATTACHMENT_MAX_BYTES;
+    window.ATTACHMENT_MAX_FILES = ATTACHMENT_MAX_FILES;
+    window.prepareRichHtml = prepareRichHtml;
+    window.sanitizeRichHtml = sanitizeRichHtml;
+    window.isSafeHref = isSafeHref;
 
     defineLive('currentRouteId', () => $currentRouteId.get(), (v) => $currentRouteId.set(v));
     defineLive('currentRegion', () => $userRegion.get() || 'GP', (v) => $userRegion.set(v));

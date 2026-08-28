@@ -938,12 +938,13 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // ride sharing, community chat, route chat.
 // Never use emoji. Never use em dashes (U+2014) or en dashes (U+2013). Use a
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
+// Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
     {
         id: "V9_08.28.7",
         title: "Station lines on the map",
         date: "28 Aug 2026",
-        forceShow: true,
+        forceShow: false,
         features: [
             "<b>Map:</b> Tap a station to see every corridor that stops there.",
             "<b>Map:</b> After you pick one line, Show all lines brings the network back."

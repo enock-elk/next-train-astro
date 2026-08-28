@@ -457,10 +457,14 @@ function openChangelog() {
     }
 }
 
-/** Auto-open What's New only when the latest entry opts in via forceShow. */
+/** Auto-open What's New only when the latest entry opts in via forceShow.
+ * Never during welcome / first-run. That screen is region+route pick only. */
 function maybeForceShowChangelog() {
     const latest = getLatestChangelog();
     if (!latest?.forceShow) return;
+    if (safeStorage.getItem('welcomeSeen') !== 'true') return;
+    const welcome = document.getElementById('welcome-modal');
+    if (welcome && !welcome.classList.contains('hidden')) return;
     const ver = getChangelogVersionId(latest) || APP_VERSION;
     const seenNorm = normalizeChangelogId(safeStorage.getItem('seen_changelog_version'));
     if (seenNorm === normalizeChangelogId(ver)) return;

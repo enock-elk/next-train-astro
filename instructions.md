@@ -65,6 +65,7 @@ Never mention:
 
 Never use emoji in What’s New (including ↔ arrows). Never use emoji on commuter buttons (SVG only).
 Never use em dashes (—) or en dashes (–) in What’s New. Use a comma, a period, or a hyphen.
+Leave `forceShow` **false**. Do not auto-open What’s New. Never open it over the welcome screen (region/route pick). Commuters open it from Options.
 
 ## How to update the Firebase dump (Windows)
 

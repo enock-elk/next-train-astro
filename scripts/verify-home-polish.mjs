@@ -12,6 +12,8 @@ function assert(cond, msg) {
 }
 
 assert(APP_VERSION === 'V9_08.28.7', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
+assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.28.7' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.28.7');
 assert(CHANGELOG_DATA[1].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
 assert(CHANGELOG_DATA[2].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
@@ -36,6 +38,9 @@ assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card 
     }
 }
 assert(readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8').includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
+const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+assert(hub.includes("welcomeSeen") && hub.includes('maybeForceShowChangelog'), 'What’s New auto-open waits until welcome is done');
+assert(hub.includes("if (!latest?.forceShow) return"), 'What’s New auto-open is opt-in via forceShow');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');

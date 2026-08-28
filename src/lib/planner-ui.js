@@ -795,15 +795,18 @@ function keepPlannerFieldVisible(field) {
     if (Math.abs(delta) > 2) scroller.scrollTop += delta;
 }
 
+function keyboardOpen() {
+    return typeof document !== 'undefined' && document.documentElement.classList.contains('nt-keyboard');
+}
+
 /** Open the planner list below the trigger, filling space down to the keyboard. */
 function positionDropdownAroundTrigger(list, trigger, maxHeight = 240) {
     if (!list || !trigger || list.classList.contains('hidden')) return;
     const vis = visibleViewportRect();
     const triggerRect = trigger.getBoundingClientRect();
     let viewportBottom = vis.bottom;
-    const keyboardOpen = typeof document !== 'undefined' && document.documentElement.classList.contains('nt-keyboard');
     const nav = document.getElementById('bottom-nav');
-    if (!keyboardOpen && nav && !nav.classList.contains('hidden')) {
+    if (!keyboardOpen() && nav && !nav.classList.contains('hidden')) {
         const navRect = nav.getBoundingClientRect();
         if (navRect.height > 0 && navRect.top > triggerRect.bottom && navRect.top < vis.bottom) {
             viewportBottom = Math.min(viewportBottom, navRect.top);
@@ -959,7 +962,7 @@ export function toggleMainDayDropdown(e) {
     const list = document.getElementById('main-day-list');
     if (list && !list.classList.contains('hidden')) {
         const trigger = list.previousElementSibling;
-        keepPlannerFieldVisible(trigger);
+        if (keyboardOpen()) keepPlannerFieldVisible(trigger);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, trigger, 256));
     }
 }

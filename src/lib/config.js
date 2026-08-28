@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V9_08.28.8";
+export const APP_VERSION = "V9_08.28.9";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -940,6 +940,15 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_08.28.9",
+        title: "Tabs stay at the bottom",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Tabs:</b> The oval bar stays at the bottom of the screen while you type a station."
+        ]
+    },
     {
         id: "V9_08.28.8",
         title: "Fares on the train sheet",

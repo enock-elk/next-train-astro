@@ -40,12 +40,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 <html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
     <script is:inline>
       (function () {
         var root = document.documentElement;
         var lastSys = -1;
         var lastH = -1;
+        var lastLayoutH = 0;
         function markStandalone() {
           var on = false;
           try {
@@ -81,36 +82,29 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             return 0;
           }
         }
-        function navClip(visBottom) {
-          var nav = document.getElementById('bottom-nav');
-          if (!nav || nav.classList.contains('hidden')) return 0;
-          return Math.max(0, nav.getBoundingClientRect().bottom - visBottom);
-        }
         function apply() {
           var vv = window.visualViewport;
           var inner = window.innerHeight || 0;
+          var client = document.documentElement.clientHeight || inner;
           var vh = vv && vv.height ? vv.height : inner;
           var off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
           var gap = Math.max(0, inner - vh - off);
           var keyboard = gap > 140;
-          var visBottom = off + vh;
           var env = envBottom();
-          var clip = navClip(visBottom);
-          var h;
-          var sys;
-          var client = document.documentElement.clientHeight || inner;
-          if (keyboard) {
-            h = vh;
-            sys = lastSys >= 0 ? lastSys : env;
-          } else if (gap >= 12) {
-            h = Math.min(vh, client || vh);
-            sys = 0;
-          } else {
-            h = Math.min(inner || client, client || inner || vh);
-            sys = Math.max(env, clip);
-            if (isAndroid() && markStandalone() && sys < 8) sys = 48;
+          // Layout height — never follow the visual viewport. Android Chrome
+          // shrinks visualViewport for the keyboard; if --nt-app-h follows it,
+          // the oval rides up and a white slab sits on the keys.
+          var h = Math.max(inner, client) || inner || vh || 240;
+          if (!keyboard) {
+            lastLayoutH = h;
+          } else if (lastLayoutH > h) {
+            h = lastLayoutH;
           }
-          if (h < 240) h = inner || vh || 240;
+          if (h < 240) h = lastLayoutH || inner || vh || 240;
+          // Only a real safe-area inset. Do not invent 48px — that pad was a
+          // white/black tray under the floating pill while the system nav
+          // already sat outside the webview.
+          var sys = env;
           if (Math.abs(h - lastH) >= 1) {
             lastH = h;
             root.style.setProperty('--nt-app-h', h + 'px');
@@ -119,6 +113,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
+          root.classList.toggle('nt-keyboard', keyboard);
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
           try {
@@ -672,14 +667,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-y: auto !important;
       }
 
+      html.nt-in-app, html.nt-in-app body {
+        height: var(--nt-app-h, 100dvh);
+        overflow: hidden;
+      }
+
       /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves the screen.
-         --nt-app-h / --nt-sys-bottom are set by the head fitter so Android PWA/TWA
-         3-button nav does not cover the pill (env(safe-area-inset-bottom) is often 0). */
+         --nt-app-h is layout height (not visualViewport) so the keyboard overlays the oval
+         instead of lifting it. Do not pad a tray under the floating pill. */
       #nt-shell {
         height: var(--nt-app-h, 100dvh) !important;
         max-height: var(--nt-app-h, 100dvh) !important;
         box-sizing: border-box;
-        padding-bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: 0 !important;
       }
       #main-content.app-shell {
         height: 100%;
@@ -799,7 +799,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: absolute;
         left: 0.75rem;
         right: 0.75rem;
-        bottom: 0.5rem;
+        bottom: max(0.35rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
         margin: 0;
         z-index: 110;
       }
@@ -828,7 +828,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.85rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: 0.35rem;
+          bottom: max(0.25rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
           bottom: 3.6rem;
@@ -839,7 +839,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.35rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: 0.25rem;
+          bottom: max(0.2rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers */

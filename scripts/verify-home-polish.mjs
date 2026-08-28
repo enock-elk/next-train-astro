@@ -11,7 +11,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.28.15', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.16', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.28.14' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card stays V9_08.28.14 (15 has no commuter notes)');
@@ -117,8 +117,10 @@ assert(!admin.includes("icon('more'"), 'Options dropped the more icon');
 assert(admin.includes('feedback-thread-chat'), 'thread wallpaper lives on feedback-thread-chat');
 assert(admin.includes('bg-[#efeae2]'), 'admin thread wallpaper is #efeae2');
 assert(admin.includes("id=\"fb-list\" class=\"space-y-3 pr-1 flex-1 min-h-0 overflow-y-auto"), 'fb-list inner-scrolls');
-assert(admin.includes('#feedback-panel #fb-list > *:not(.fb-thread-open)'), 'closed inbox cards do not flex-shrink');
-assert(admin.includes("flex: 0 0 auto"), 'closed inbox cards keep their height');
+const feedbackListCss = admin.match(/#feedback-panel #fb-list \{([\s\S]*?)\}/)?.[1] || '';
+assert(feedbackListCss.includes('overflow-y: auto'), 'feedback list stays the scroll container');
+assert(!feedbackListCss.includes('display: flex'), 'feedback cards use natural block height');
+assert(!admin.includes("header.scrollIntoView({ behavior: 'smooth', block: 'start' })"), 'opening an admin feedback thread does not auto-scroll to the top');
 assert(admin.includes("formatAlertText('link'") && admin.includes("URL ${Admin.icon('globe'"), 'WYSIWYG link control is URL + globe');
 assert(/Archived Thread[\s\S]{0,800}openReplyModal/.test(admin), 'archived feedback threads have Reply');
 assert(admin.includes('openAdminReplyEditor'), 'admin replies open the editor');

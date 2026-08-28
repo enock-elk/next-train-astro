@@ -5363,17 +5363,10 @@ const Admin = {
                     flex: 1 1 auto;
                     min-height: 0;
                     overflow-y: auto;
-                    display: flex;
-                    flex-direction: column;
-                }
-                /* overflow-hidden cards get min-height:0 in a flex column and squash to a hairline. */
-                #feedback-panel #fb-list > *:not(.fb-thread-open) {
-                    flex: 0 0 auto;
                 }
                 #feedback-panel .fb-thread-open {
                     display: flex;
                     flex-direction: column;
-                    flex: 1 1 auto;
                     min-height: 0;
                 }
                 #feedback-panel .fb-thread-open .feedback-thread-body {
@@ -6238,9 +6231,6 @@ const Admin = {
                     header.classList.remove('border-transparent');
                     const chevron = header.querySelector('.chevron-icon');
                     if (chevron) chevron.classList.add('rotate-180');
-                    
-                    // Smoothly scroll the opened thread into view to reduce manual scrolling
-                    setTimeout(() => { header.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
                 } else {
                     body.classList.add('hidden');
                     header.parentElement?.classList.remove('fb-thread-open');

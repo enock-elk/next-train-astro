@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V9_08.28.3 — PWA/TWA bottom nav inset; cache-first board; lock-screen recovery (28 Aug 2026)
+
+- Bottom nav: `#nt-shell` uses `--nt-app-h` (visual viewport) and `--nt-sys-bottom` (env inset, clip, or 48px Android standalone fallback when Chrome reports 0). Pill margin no longer double-counts `env(safe-area-inset-bottom)`. SEO → installed PWA / TWA (`android-app://`) keeps the standalone flag in sessionStorage.
+- Short screens (`max-height: 740px` / `620px`): compact pill item height, icon, and label.
+- Every colour pack: selected tab uses `--nt-chrome-fg` plus a `color-mix` wash (not transparent `--nt-primary` on a near-black bar).
+- Planner instructions: “Germiston or Bellville” (other Koedoespoort copy unchanged).
+- Boot: IndexedDB paints and `_appStabilized` immediately; same-origin `data/full-database.json` dump if IDB is empty; SW runtime cache `schedule-dump`. Force-update no longer unregisters the worker or deletes Cache Storage. No idle skipWaiting hard-reload after pocket lock.
+- Recovery: auto-lifeboat counts visible time only, and only while `#loading-overlay` still covers the board. Planner / lock-screen is not “stuck”.
+
 ## V9_08.28.2 — Options scrim lock; SEO Park Station, app header, timetable hoist (28 Aug 2026)
 
 - Options: `body.sidenav-open #app-scroll` overflow hidden; `#sidenav-overlay` `touch-action: none` so iOS does not scroll the board through the scrim. Drawer list still scrolls.

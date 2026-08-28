@@ -895,6 +895,55 @@ export async function buildGlobalStationIndexAsync(targetDB) {
     return tempIndex;
 }
 
+/**
+ * Same-origin schedule dump (`public/data/full-database.json`). Used when IndexedDB
+ * is empty so a returning PWA can still paint from the host / SW runtime cache.
+ */
+async function loadBundledScheduleDump(signal = null) {
+    if (typeof fetch === 'undefined') return null;
+    const url = withBase('data/full-database.json');
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const onAbort = () => { try { ctrl?.abort(); } catch { /* ignore */ } };
+    if (signal) {
+        if (signal.aborted) return null;
+        try { signal.addEventListener('abort', onAbort, { once: true }); } catch { /* ignore */ }
+    }
+    const timer = setTimeout(onAbort, 4000);
+    try {
+        const res = await fetch(url, {
+            signal: ctrl?.signal,
+            cache: 'force-cache',
+            headers: { Accept: 'application/json' },
+        });
+        if (!res || !res.ok) return null;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('text/html')) return null;
+        return await res.json();
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+        if (signal) {
+            try { signal.removeEventListener('abort', onAbort); } catch { /* ignore */ }
+        }
+    }
+}
+
+/** Reveal + stabilize as soon as a route has usable times. Network may still refresh. */
+function markSchedulesCoreReady() {
+    if (typeof window === 'undefined') return;
+    if (typeof window.revealAppShell === 'function') window.revealAppShell();
+    const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
+    const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
+    if (!$currentRouteId.get() || isWelcomeActive) return;
+    window._appStabilized = true;
+    try {
+        sessionStorage.removeItem('nt_safe_mode_inline');
+        sessionStorage.removeItem('nt_lifeboat_auto');
+    } catch { /* ignore */ }
+    if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
+}
+
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
 export async function loadAllSchedules(force = false) {
     if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
@@ -966,10 +1015,30 @@ export async function loadAllSchedules(force = false) {
                 usedCache = true;
                 // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
                 // do not hold the shell for the background network waterfall.
-                if (typeof window !== 'undefined' && typeof window.revealAppShell === 'function') {
-                    window.revealAppShell();
-                }
+                markSchedulesCoreReady();
             } catch(err) { console.error("🛡️ Guardian: Cached DB shadow-clone parsing failed.", err); }
+        } else {
+            const bundledDump = await loadBundledScheduleDump(fetchSignal);
+            if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+            if (bundledDump) {
+                try {
+                    const proposedDB = unwrapDatabase(bundledDump, $userRegion.get());
+                    const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                    if (currentGen !== regionSwapGeneration) return;
+                    $fullDatabase.set(proposedDB);
+                    $schedules.set(proposedSchedules);
+                    $globalStationIndex.set(proposedStationIndex);
+                    const mList = Object.keys(proposedStationIndex).sort();
+                    $masterStationList.set(mList);
+                    if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
+                    usedCache = true;
+                    markSchedulesCoreReady();
+                    try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
+                } catch (err) {
+                    console.error("🛡️ Guardian: Bundled schedule dump parse failed.", err);
+                }
+            }
         }
 
 
@@ -978,6 +1047,7 @@ export async function loadAllSchedules(force = false) {
             console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
             // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
             if (typeof window.revealAppShell === 'function') window.revealAppShell();
+            if (usedCache || $fullDatabase.get()) markSchedulesCoreReady();
             try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
@@ -1219,12 +1289,7 @@ export async function loadAllSchedules(force = false) {
         const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
         const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
         if (typeof window !== 'undefined' && $currentRouteId.get() && !isWelcomeActive) {
-            window._appStabilized = true;
-            try {
-                sessionStorage.removeItem('nt_safe_mode_inline');
-                sessionStorage.removeItem('nt_lifeboat_auto');
-            } catch { /* ignore */ }
-            if (typeof window.checkAndUnhide === 'function') window.checkAndUnhide();
+            markSchedulesCoreReady();
             const baseType = window.__ntPreOverrideDayType || window.currentDayType || currentDayType;
             maybePromptScheduleOverride(baseType).catch(() => { /* ignore */ });
             // Home-board auto notices (alerts / holidays) wait for stabilize + route.

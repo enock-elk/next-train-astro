@@ -128,7 +128,10 @@ assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
 assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
 assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
-assert(css.includes('padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
+assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg)'), 'active tab wash uses chrome foreground on every pack');
 
 const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
@@ -218,6 +221,32 @@ assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open fl
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');
 assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()'), 'flags skipped unless admin authed');
+
+assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
+assert(layout.includes('--nt-sys-bottom'), 'Layout pads the shell with --nt-sys-bottom');
+assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
+assert(layout.includes('nt-standalone'), 'standalone class is stamped on html');
+
+const recovery = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
+assert(recovery.includes('visibilityState'), 'recovery counts visible time only');
+assert(recovery.includes('overlayStillBlocking'), 'auto-lifeboat requires the loading overlay');
+assert(!recovery.includes("if (!board || !tabs) return true"), 'recovery does not treat hidden top tabs as a crash');
+assert(recovery.includes('view-trip-planner'), 'planner tab is a healthy shell');
+
+const bootLogic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+assert(bootLogic.includes('markSchedulesCoreReady'), 'cached schedules stabilize the shell immediately');
+assert(bootLogic.includes('loadBundledScheduleDump'), 'empty IDB falls back to the host dump');
+assert(bootLogic.includes('data/full-database.json'), 'bundled dump path is this repo public/data');
+
+const appUpdate = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
+assert(!appUpdate.includes('await caches.delete(name)'), 'force-update does not wipe Cache Storage');
+assert(!appUpdate.includes('await registration.unregister()'), 'force-update does not unregister every worker');
+assert(appUpdate.includes('You are offline. Using saved times'), 'offline force-update keeps the cached shell');
+assert(appUpdate.includes("New SW active — applying on next launch"), 'controllerchange keeps the session without a pending token');
+
+const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
+assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

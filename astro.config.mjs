@@ -141,6 +141,26 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
+            // Host dump for cache-miss boots. Not precached (too large for the
+            // atomic install). Stale-while-revalidate so IndexedDB can fill later.
+            urlPattern: ({ url }) =>
+              url.pathname.includes('/data/') && url.pathname.endsWith('.json'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'schedule-dump',
+              expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+              plugins: [{
+                cacheWillUpdate: async ({ response }) => {
+                  if (!response || response.status !== 200) return null;
+                  const ct = response.headers.get('content-type') || '';
+                  if (ct.includes('text/html')) return null;
+                  return response;
+                },
+              }],
+            },
+          },
+          {
             urlPattern: ({ request }) => request.destination === 'image',
             handler: 'CacheFirst',
             options: {

@@ -306,6 +306,11 @@ export function applyNavChrome(style = getNavStyle()) {
         const show = isBottom && inApp && !immersive;
         bottomNav.classList.toggle('hidden', !show);
         bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
+        if (show && typeof window.ntFitAppViewport === 'function') {
+            requestAnimationFrame(() => {
+                try { window.ntFitAppViewport(); } catch { /* ignore */ }
+            });
+        }
     }
 
     document.querySelectorAll('[data-nav-style-option]').forEach((btn) => {

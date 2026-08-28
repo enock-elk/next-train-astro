@@ -61,23 +61,27 @@ function showCrucialUpdateToast(incomingVersion) {
 }
 
 export async function handleUpdateClick(newVersion) {
-    // Defer ads immediately — cache wipe can take hundreds of ms before navigation
+    // Never wipe Cache Storage / unregister the SW here. That left returning
+    // commuters with no shell if the reload raced a lock-screen or drop.
+    // Activate a waiting worker when we can, then cache-bust navigate.
     markPendingReload('version_enforce', 5000);
+    const online = typeof navigator === 'undefined' || navigator.onLine;
+    if (!online) {
+        try {
+            showToast('You are offline. Using saved times until you reconnect.', 'error', 4000);
+        } catch { /* ignore */ }
+        return;
+    }
     try {
         if ('serviceWorker' in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (const registration of registrations) {
-                await registration.unregister();
-            }
-        }
-        if ('caches' in window) {
-            const names = await caches.keys();
-            for (const name of names) {
-                await caches.delete(name);
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg?.waiting) {
+                window.__ntPendingUpdateToken = Date.now();
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
             }
         }
     } catch (e) {
-        console.warn('Cache clear failed during update', e);
+        console.warn('SW activate failed during update', e);
     }
 
     safeStorage.setItem('app_installed_version', newVersion || APP_VERSION);
@@ -198,37 +202,21 @@ export function bindAppUpdateLifecycle(registerSW) {
 
     window.handleUpdateClick = handleUpdateClick;
 
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
 
-    // GROWTH MODE PHASE 1: Idle Update Protocol — if a waiting SW exists and the
-    // user backgrounds the app for >5 min, apply it silently (no zombie shell).
-    let appBackgroundTimestamp = null;
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            appBackgroundTimestamp = Date.now();
-            return;
-        }
-        if (!appBackgroundTimestamp) return;
-        const idleDuration = Date.now() - appBackgroundTimestamp;
-        appBackgroundTimestamp = null;
-        if (idleDuration <= 300000) return;
-        navigator.serviceWorker.getRegistration().then((reg) => {
-            if (reg?.waiting) {
-                console.log('🛡️ Guardian: App was idle for > 5 mins. Forcing silent background update.');
-                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }
-        }).catch(() => {});
-    });
-
+    // A waiting worker can activate in the background; do not skipWaiting on
+    // lock-screen / pocket idle — that used to hard-reload into a cold boot.
     let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const reloadWhenVisible = () => {
         if (refreshing) return;
-
-        // Only reload when the tab is hidden (idle skipWaiting) or a NUKE/force
-        // path asked for it. Never hijack a visible session.
-        const forceReload = !!window.__ntPendingUpdateToken;
-        if (!forceReload && typeof document !== 'undefined' && !document.hidden) {
-            console.log('🛡️ Guardian: New SW active — applying on next launch (session kept).');
+        if (!window.__ntPendingUpdateToken) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+            const once = () => {
+                if (document.visibilityState !== 'visible') return;
+                document.removeEventListener('visibilitychange', once);
+                reloadWhenVisible();
+            };
+            document.addEventListener('visibilitychange', once);
             return;
         }
 
@@ -244,6 +232,15 @@ export function bindAppUpdateLifecycle(registerSW) {
         refreshing = true;
         window.__ntPendingUpdateToken = null;
         hardReloadWithCacheBust('sw_controllerchange');
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        if (!window.__ntPendingUpdateToken) {
+            console.log('🛡️ Guardian: New SW active — applying on next launch (session kept).');
+            return;
+        }
+        reloadWhenVisible();
     });
 }
 

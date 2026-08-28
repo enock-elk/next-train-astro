@@ -97,6 +97,7 @@ assert(welcome.includes('later in Options'), 'Welcome copy points at Options, no
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+assert(plannerUi.includes('interactive-widget=overlays-content'), 'planner zoom lock keeps overlays-content on the viewport meta');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
 assert(plannerUi.includes('savePlannerHistory(origin, dest)'), 'recents persist when a plan starts');
 assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared station alias resolver');
@@ -253,7 +254,12 @@ assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthe
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
-assert(layout.includes('--nt-sys-bottom'), 'Layout pads the shell with --nt-sys-bottom');
+assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
+assert(layout.includes('interactive-widget=overlays-content'), 'keyboard overlays the layout instead of resizing it');
+assert(layout.includes('lastLayoutH'), 'keyboard keeps the last layout height');
+assert(layout.includes('classList.toggle(\'nt-keyboard\''), 'keyboard class is stamped on html');
+assert(layout.includes('padding-bottom: 0 !important'), 'in-app shell has no tray pad under the pill');
+assert(!layout.includes('sys = 48'), 'no invented 48px Android tray under the pill');
 assert(layout.includes('android-app://'), 'TWA referrer is treated as standalone');
 assert(layout.includes('nt-standalone'), 'standalone class is stamped on html');
 

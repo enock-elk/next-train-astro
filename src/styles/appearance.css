@@ -452,19 +452,44 @@ html[data-colour-pack="ember"] #view-full-timetable-btn:hover {
   background-color: #3b82f6;
 }
 
-/* Maintenance strip pinned to top of header; hamburger stays above it (z-[70]) */
-#app-header.nt-maint-active {
-  /* Kill translucent wash so the hazard strip doesn't glow through as an orange tint */
-  background-color: var(--nt-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+/* Maintenance tape: yellow→peach bar above the header, in document flow. */
+#maintenance-banner,
+.nt-maint-strip {
+  flex-shrink: 0;
+  width: 100%;
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  background: linear-gradient(90deg, #fecb4c 0%, #f4b45c 52%, #ee9366 100%);
+  color: #4a3728;
+  pointer-events: none;
+  box-shadow: none;
 }
-html.dark #app-header.nt-maint-active {
-  background-color: rgb(31 41 55) !important; /* gray-800 */
+.nt-maint-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  max-width: 100%;
 }
-#app-header.nt-maint-active #open-nav-btn,
-#app-header.nt-maint-active #notice-bell {
-  z-index: 70;
+.nt-maint-wrench {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+}
+.nt-maint-label {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Planner notices: icon + accent bar on the right. Do not pad the whole

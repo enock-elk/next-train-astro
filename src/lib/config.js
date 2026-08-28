@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.24.02";
+export const APP_VERSION = "V8_08.28.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -902,6 +902,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Never mention SEO, Google, indexing, route landing pages, or app configuration.
 // - Do not explain strategy or "we fixed". Short bullets. Detail stays in CHANGELOG.md.
 export const CHANGELOG_DATA = [
+    {
+        id: "V8_08.28.1",
+        title: "Maintenance bar",
+        date: "28 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Board:</b> When Next Train is under maintenance, a yellow bar with a wrench sits above the name.",
+            "<b>Scroll:</b> That bar leaves the screen with the header as you move down the board."
+        ]
+    },
     {
         id: "V8_08.24.02",
         title: "What's new",

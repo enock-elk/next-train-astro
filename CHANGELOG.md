@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **public commuter list** (competitors read it): only obvious in-app behaviour — no admin, SEO, Google, or configuration. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.1 — Maintenance bar restyle, scrolls with header (28 Aug 2026)
+
+- Maintenance strip is an in-flow yellow→peach gradient (`#fecb4c` → `#ee9366`) with a wrench icon and dark-brown label, immediately above `#app-header` (not `position:absolute` hazard tape over the title).
+- Placement is `header.parentNode.insertBefore(banner, header)` so the bar and header leave together when the page scrolls. Do not pin it `sticky`/`fixed` to the viewport.
+- What’s New card is commuter-only (yellow bar + wrench, scrolls with the name). No admin, Firebase, CSS, or deploy notes in `CHANGELOG_DATA`.
+
 ## V8_08.24.02 — What’s New only on the live legacy tree (24 Aug 2026)
 
 - App code is the live `V8_08.23.10` tree again. Lab chrome / bottom nav is not in this ship.

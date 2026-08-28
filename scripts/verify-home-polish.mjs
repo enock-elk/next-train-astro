@@ -11,9 +11,15 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.16.5', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.16.5' && CHANGELOG_DATA[0].features.length === 3, 'What’s New is one concise 16.5 card');
+assert(APP_VERSION === 'V8_08.28.1', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.28.1' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V8_08.28.1');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
+const changelogBan = /Dev Hub|password|Face ID|deploy|workers|NUKE|analytics|SEO|Google Search|Account|sign-in|Firebase|RTDB|operator/i;
+CHANGELOG_DATA.forEach((card) => {
+    (card.features || []).forEach((f) => {
+        assert(!changelogBan.test(String(f)), `What’s New ${card.id} stays commuter-only: ${f}`);
+    });
+});
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');
@@ -38,6 +44,14 @@ assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy remov
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');
 assert(ui.includes('document.visibilityState !== \'visible\''), 'offline chrome requires visible tab');
+assert(ui.includes("header.parentNode.insertBefore(banner, header)"), 'maintenance bar sits above the header in document flow');
+assert(ui.includes('nt-maint-wrench'), 'maintenance bar has a wrench icon');
+assert(!ui.includes('repeating-linear-gradient'), 'maintenance bar dropped hazard-stripe fill');
+assert(!ui.includes('absolute top-0 left-0 w-full z-[55]'), 'maintenance bar is not an overlay on the title');
+
+const css = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+assert(css.includes('linear-gradient(90deg, #fecb4c'), 'maintenance bar uses the yellow-to-peach gradient');
+assert(css.includes('.nt-maint-wrench'), 'maintenance wrench size is in CSS');
 
 const manifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));
 assert(manifest.posters.some((p) => p.file === 'pta-kempton-0618-0619.jpg'), 'manifest lists Kempton poster');

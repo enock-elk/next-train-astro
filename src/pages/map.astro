@@ -333,7 +333,10 @@ const regionSeoSlugs = Object.fromEntries(
       // parent window, so a parent flag cannot tell the two apart.
       function inMapTab() {
         try {
-          return new URLSearchParams(location.search).get('embed') === '1';
+          if (new URLSearchParams(location.search).get('embed') === '1') return true;
+        } catch (_) {}
+        try {
+          return document.documentElement.classList.contains('nt-map-tab');
         } catch (_) { return false; }
       }
       // Parent sheet / Map tab already has chrome — hide Back.

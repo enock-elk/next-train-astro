@@ -346,6 +346,69 @@ export function openFareModal(fareDetails) {
     openSmoothModal('fare-modal');
 }
 
+/** Shrink the upcoming-trains route line so it never wraps. */
+function fitScheduleModalRouteTitle(el) {
+    if (!el) return;
+    const box = el.parentElement;
+    if (!box) return;
+    el.style.whiteSpace = 'nowrap';
+    el.style.fontSize = '';
+    const maxPx = parseFloat(window.getComputedStyle(el).fontSize) || 18;
+    const minPx = 11;
+    const width = box.clientWidth;
+    if (width <= 0) return;
+    if (el.scrollWidth <= width + 1) return;
+    let lo = minPx;
+    let hi = maxPx;
+    let best = minPx;
+    for (let i = 0; i < 14; i += 1) {
+        const mid = (lo + hi) / 2;
+        el.style.fontSize = `${mid}px`;
+        if (el.scrollWidth <= width + 1) {
+            best = mid;
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    el.style.fontSize = `${best}px`;
+}
+
+function setScheduleModalTitle(fromStationName, destLabel, titleSuffix) {
+    const modalTitle = document.getElementById('modal-title');
+    const routeEl = document.getElementById('modal-title-route');
+    const dayEl = document.getElementById('modal-title-day');
+    const routeText = `${fromStationName} → ${destLabel}`;
+    const dayLabel = String(titleSuffix || '').replace(/^\s*\(|\)\s*$/g, '').trim();
+    if (routeEl) routeEl.textContent = routeText;
+    else if (modalTitle) modalTitle.textContent = dayLabel ? `${routeText} (${dayLabel})` : routeText;
+    if (dayEl) {
+        dayEl.textContent = dayLabel;
+        dayEl.classList.toggle('hidden', !dayLabel);
+    }
+    if (modalTitle) {
+        modalTitle.setAttribute('aria-label', dayLabel ? `${routeText} (${dayLabel})` : routeText);
+    }
+    const runFit = () => fitScheduleModalRouteTitle(routeEl);
+    requestAnimationFrame(runFit);
+    setTimeout(runFit, 80);
+    setTimeout(runFit, 360);
+}
+
+/** First explicit pick in a region with no pin becomes that region's default. */
+export function pinRouteIfRegionHasNoDefault(routeId) {
+    if (!routeId || !ROUTES[routeId] || ROUTES[routeId].isActive === false) return false;
+    const region = ROUTES[routeId].region || $userRegion.get() || 'GP';
+    const key = 'defaultRoute_' + region;
+    try {
+        if (safeStorage.getItem(key)) return false;
+        safeStorage.setItem(key, routeId);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export function updatePinUI() {
     const routeId = $currentRouteId.get();
     const region = $userRegion.get() || 'GP';
@@ -442,7 +505,6 @@ export function updateNextTrainView() {
 export function openScheduleModal(destination, dayOverride = null) {
     triggerHaptic();
     const modalList = document.getElementById('modal-list');
-    const modalTitle = document.getElementById('modal-title');
     if (!modalList) return;
 
     const routeId = $currentRouteId.get();
@@ -515,7 +577,7 @@ export function openScheduleModal(destination, dayOverride = null) {
         ? (window.Renderer?._applyUIIntercepts(selectedStation) || selectedStation.replace(/ STATION/gi, ''))
         : 'Upcoming Trains';
     const destLabel = window.Renderer?._applyUIIntercepts(destination) || destination.replace(/ STATION/gi, '');
-    if (modalTitle) modalTitle.textContent = `${fromStationName} → ${destLabel}${titleSuffix}`;
+    setScheduleModalTitle(fromStationName, destLabel, titleSuffix);
 
     const toTitleCase = (str) => {
         if (!str) return '';
@@ -827,9 +889,11 @@ export function initLiveBoardUi() {
         trackAnalyticsEvent(ROUTES[id].isActive ? 'select_route' : 'select_inactive_route', {
             route_id: id,
         });
-        // Browsing a route must never re-pin it — the pin is an explicit user
-        // action owned by #pin-route-btn (and the first-run welcome choice).
+        // First pick in a region with no pin becomes that region's default.
+        // Later browsing does not move the pin — that stays on #pin-route-btn.
         $currentRouteId.set(id);
+        pinRouteIfRegionHasNoDefault(id);
+        updatePinUI();
         // fromPopState: hide now and skip history.back(). A Back-stack pop
         // during the open animation used to restore #route and reopen this modal.
         if (typeof location !== 'undefined' && location.hash === '#route') {

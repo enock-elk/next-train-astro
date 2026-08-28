@@ -306,20 +306,14 @@ export const STATION_ALIASES = Object.freeze({
     'PRETORIA BOSMAN': 'PRETORIA',
 });
 
-/** Planner-facing labels. Index / routing keys stay the canonical names. */
-export const STATION_DISPLAY_NAMES = Object.freeze({
-    JOHANNESBURG: 'Johannesburg Park Station',
-});
-
 export function resolveStationAlias(raw) {
     const norm = normalizeStationName(raw);
     if (!norm) return '';
     return STATION_ALIASES[norm] || '';
 }
 
+/** Strip “ STATION” for labels. Aliases are for matching only — keep board caps. */
 export function plannerStationDisplayName(canonical) {
-    const key = normalizeStationName(canonical);
-    if (STATION_DISPLAY_NAMES[key]) return STATION_DISPLAY_NAMES[key];
     return String(canonical || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
 }
 

@@ -1737,7 +1737,7 @@ export function initHub() {
         closeAppHub(true);
         setTimeout(() => {
             trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
-            openInAppSheet(withBase('/map'), 'Network Map');
+            openInAppSheet(withBase('/map.html'), 'Network Map');
         }, 120);
     });
 

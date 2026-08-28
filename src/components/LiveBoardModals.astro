@@ -47,9 +47,12 @@
 <!-- UPCOMING TRAINS / SCHEDULE MODAL -->
 <div id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[125] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[95dvh] flex flex-col transform transition-transform duration-300 scale-95" id="modal-content">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl">
-            <h3 id="modal-title" class="text-lg font-bold text-gray-900 dark:text-white">Full Schedule</h3>
-            <button id="close-modal-btn" type="button" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition" aria-label="Close Schedule">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start gap-2 bg-gray-50 dark:bg-gray-900 rounded-t-xl">
+            <h3 id="modal-title" class="min-w-0 flex-1 text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                <span id="modal-title-route" class="block whitespace-nowrap overflow-hidden">Full Schedule</span>
+                <span id="modal-title-day" class="hidden block text-sm font-semibold text-gray-500 dark:text-gray-400 mt-0.5"></span>
+            </h3>
+            <button id="close-modal-btn" type="button" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition shrink-0" aria-label="Close Schedule">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>

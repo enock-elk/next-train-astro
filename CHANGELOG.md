@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin mode, Dev Hub, or internal / IP work there — only benefits commuters can see. Keep `APP_VERSION`, `CHANGELOG_DATA[0].id`, `package.json` `version`, and `public/app-version.json` aligned on each release.
 
+## V8_08.28.3 — Upcoming title, map iframe, region pin, recents caps, compressed What’s New (28 Aug 2026)
+
+- Upcoming trains modal: route line (`Devenish Street → Pienaarspoort`) is nowrap and shrink-to-fit; day suffix (`Tomorrow`) is a second row.
+- Map tab iframe loads `/map.html?embed=1` (not extensionless `/map`). Workbox `navigateFallback` denylists `/map` so the SPA shell cannot nest a second header + bottom bar. Layout bounces a nested SPA iframe to `map.html`.
+- First route pick in a region with no `defaultRoute_${region}` pins that corridor. Region swap still restores a pin without reopening Select Route.
+- Planner recents: unique from→to pair, saved as soon as a plan is viewed, newest first. Labels stay board caps (`JOHANNESBURG`); `Johannesburg Park` / Bosman remain resolve aliases only.
+- What’s New folds 28.2–26.1 into one commuter card.
+
 ## V8_08.28.2 — Alerts dates, planner recents/aliases, swipe, sidenav, feedback (28 Aug 2026)
 
 - Alerts: time-only stamps (`7:19 AM`) with Today / Yesterday / date chips; region/scope label is admin-only. Admins can long-press Delete for everyone (archives via `Admin.archiveActiveNotice`). Hold-to-react on catalog posters is unchanged.

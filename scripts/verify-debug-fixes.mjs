@@ -3,7 +3,7 @@
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, formatThreadDateLabel, formatAppTime, STATION_ALIASES } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, STATION_ALIASES } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V8_08.28.2', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V8_08.28.3', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -113,6 +113,8 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(resolvePlannerStationInput('JHB Park', gp) === 'JOHANNESBURG', 'JHB Park → JOHANNESBURG');
     assert(resolvePlannerStationInput('Park Station', gp) !== 'JOHANNESBURG', 'bare Park Station is not Johannesburg');
     assert(STATION_ALIASES.BOSMAN === 'PRETORIA', 'Bosman alias map');
+    assert(plannerStationDisplayName('JOHANNESBURG') === 'JOHANNESBURG', 'Johannesburg recents stay in caps');
+    assert(!/Park Station/i.test(plannerStationDisplayName('JOHANNESBURG')), 'Park Station is not a display label');
     const stamp = new Date(2026, 7, 25, 7, 19, 0);
     assert(formatAppTime(stamp) === '7:19 AM', `formatAppTime ${formatAppTime(stamp)}`);
     const today = new Date(2026, 7, 28, 12, 0, 0);

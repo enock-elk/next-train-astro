@@ -61,14 +61,17 @@ function nowSeconds() {
 }
 
 /**
- * Extensionless /map with a version query. `/map.html` 308s to `/map`, and the
- * old permanent `/map → /map.html` redirect stays in the browser cache, so a
- * plain `/map` request can still loop; the query bypasses that cached entry.
+ * Always load map.html. Extensionless `/map` is a document navigation that
+ * Workbox used to serve as index.html (second header + bottom bar in the tab).
+ * map.html is denylisted from navigateFallback, including on older SWs.
  */
 function mapFrameSrc() {
     const frame = frameEl();
-    const raw = frame?.getAttribute('data-map-src') || `${withBase('/map')}?embed=1`;
-    let src = String(raw).replace(/\/map\.html(\?|$)/, '/map$1');
+    const raw = frame?.getAttribute('data-map-src') || `${withBase('/map.html')}?embed=1`;
+    let src = String(raw);
+    if (!/\/map\.html(\?|$|#)/.test(src)) {
+        src = src.replace(/\/map(\?|$|#)/, '/map.html$1');
+    }
     if (!/[?&]v=/.test(src)) {
         src += (src.includes('?') ? '&' : '?') + `v=${encodeURIComponent(APP_VERSION)}`;
     }
@@ -1702,6 +1705,30 @@ export function bindMapTabUi() {
 
     const frame = frameEl();
     frame?.addEventListener('load', () => {
+        try {
+            const doc = frame.contentDocument;
+            const nestedSpa = !!(doc && (
+                doc.getElementById('bottom-nav')
+                || doc.getElementById('nt-header')
+                || doc.documentElement?.classList.contains('nt-map-iframe-escape')
+            ));
+            if (nestedSpa) {
+                let innerHref = '';
+                try { innerHref = frame.contentWindow?.location?.href || ''; } catch { innerHref = ''; }
+                const bounced = /[?&]ntMapEsc=1/.test(innerHref) || /[?&]ntMapEsc=1/.test(frame.getAttribute('src') || '');
+                if (bounced) {
+                    showFrameFallback();
+                    return;
+                }
+                const src = frame.getAttribute('src') || '';
+                if (!/\/map\.html/.test(src)) {
+                    ensureFrameSrc(true);
+                    return;
+                }
+                // Layout bounce to map.html is in flight — wait for the next load.
+                return;
+            }
+        } catch { /* cross-origin */ }
         frameLoaded = true;
         if (frameWatchdog) clearTimeout(frameWatchdog);
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');

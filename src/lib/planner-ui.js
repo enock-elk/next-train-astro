@@ -89,7 +89,13 @@ const resolveTripDisruptions = (routeId, stops) => {
     return fn ? fn(routeId, stops) : [];
 };
 const stripStationSuffix = (name) => String(name || '').replace(/ STATION/gi, '').trim();
-const bareStationName = (name) => plannerStationDisplayName(name) || stripStationSuffix(name);
+const bareStationName = (name) => stripStationSuffix(name);
+
+function plannerHistoryStationLabel(name) {
+    const masterList = getMasterStationList();
+    const resolved = resolvePlannerStationInput(name, masterList) || name;
+    return stripStationSuffix(resolved).toUpperCase();
+}
 
 /** Reject sheet header / "Last Updated" rows that leaked into station lists. */
 const isSheetMetaStationName = (name) => {
@@ -3231,14 +3237,14 @@ export function savePlannerHistory(from, to, opts = {}) {
     const masterList = getMasterStationList();
     const canonicalFrom = resolvePlannerStationInput(from, masterList) || from;
     const canonicalTo = resolvePlannerStationInput(to, masterList) || to;
-    const cleanFrom = String(canonicalFrom).replace(/ STATION/gi, '');
-    const cleanTo = String(canonicalTo).replace(/ STATION/gi, '');
-    const routeKey = `${cleanFrom}|${cleanTo}`;
+    const cleanFrom = stripStationSuffix(canonicalFrom).toUpperCase();
+    const cleanTo = stripStationSuffix(canonicalTo).toUpperCase();
+    const incomingKey = plannerHistoryDedupeKey({ from: cleanFrom, to: cleanTo });
     const region = $userRegion.get() || 'GP';
     const historyKey = 'plannerHistory_' + region;
 
     let history = readPlannerHistoryArray(historyKey);
-    history = history.filter((item) => `${item.from}|${item.to}` !== routeKey);
+    history = history.filter((item) => plannerHistoryDedupeKey(item) !== incomingKey);
     history.unshift({
         from: cleanFrom,
         to: cleanTo,
@@ -3317,9 +3323,9 @@ export function renderPlannerHistory() {
                 <button class="planner-history-item-btn w-full flex items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm hover:border-blue-50 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors group text-left focus:outline-none"
                     data-full-from="${escapeHTML(item.fullFrom)}" data-full-to="${escapeHTML(item.fullTo)}" data-region="${escapeHTML(item.region || '')}">
                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center min-w-0">
-                        <span class="truncate">${escapeHTML(plannerStationDisplayName(item.from))}</span>
+                        <span class="truncate">${escapeHTML(plannerHistoryStationLabel(item.from))}</span>
                         <svg class="w-3 h-3 mx-1.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        <span class="truncate">${escapeHTML(plannerStationDisplayName(item.to))}</span>
+                        <span class="truncate">${escapeHTML(plannerHistoryStationLabel(item.to))}</span>
                     </span>
                     <svg class="w-3 h-3 text-gray-300 group-hover:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 </button>`).join('')}

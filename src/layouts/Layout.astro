@@ -52,6 +52,29 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#1d4ed8" />
     <meta name="app-version" content={APP_VERSION} />
+    <script is:inline set:html={`
+      (function () {
+        try {
+          if (window === window.top) return;
+          var q = location.search || '';
+          var embed = /(?:^|[?&])embed=1(?:&|$)/.test(q);
+          var bounced = /(?:^|[?&])ntMapEsc=1(?:&|$)/.test(q);
+          var parentMap = false;
+          try { parentMap = !!(window.parent && window.parent.__ntMapTabEmbed); } catch (e) {}
+          if (!embed && !parentMap) return;
+          document.documentElement.classList.add('nt-map-iframe-escape');
+          var s = document.createElement('style');
+          s.textContent = 'html.nt-map-iframe-escape #nt-header,html.nt-map-iframe-escape #bottom-nav,html.nt-map-iframe-escape #nt-shell{display:none!important;visibility:hidden!important}';
+          document.documentElement.appendChild(s);
+          if (bounced) return;
+          var dest = new URL('${withBase('map.html')}', location.href);
+          dest.searchParams.set('embed', '1');
+          dest.searchParams.set('v', '${APP_VERSION}');
+          dest.searchParams.set('ntMapEsc', '1');
+          location.replace(dest.pathname + dest.search);
+        } catch (e) {}
+      })();
+    `} />
     <!-- SERP uses the first square PNG; sizes=any is for SVG, not this ICO. -->
     <link rel="icon" type="image/png" sizes="48x48" href={withBase('icons/icon-48.png')} />
     <link rel="icon" type="image/png" sizes="192x192" href={withBase('icons/icon-192.png')} />
@@ -564,6 +587,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-onboarding #bottom-nav,
       body:has(#welcome-modal:not(.hidden)) #bottom-nav {
         display: none !important;
+      }
+      /* Map tab iframe mistakenly loaded the SPA shell — hide nested chrome. */
+      html.nt-map-iframe-escape #nt-header,
+      html.nt-map-iframe-escape #bottom-nav,
+      html.nt-map-iframe-escape #nt-shell {
+        display: none !important;
+        visibility: hidden !important;
       }
 
       #app-scroll.app-scroll {

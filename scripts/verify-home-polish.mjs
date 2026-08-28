@@ -11,9 +11,10 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V8_08.28.2', `APP_VERSION ${APP_VERSION}`);
-assert(CHANGELOG_DATA[0].id === 'V8_08.28.2' && CHANGELOG_DATA[0].features.length === 4, 'What’s New latest card is V8_08.28.2');
+assert(APP_VERSION === 'V8_08.28.3', `APP_VERSION ${APP_VERSION}`);
+assert(CHANGELOG_DATA[0].id === 'V8_08.28.3' && CHANGELOG_DATA[0].features.length === 5, 'What’s New latest card is V8_08.28.3');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
+assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.2–26.1 into V8_08.28.3');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');

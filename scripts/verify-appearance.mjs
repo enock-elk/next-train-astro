@@ -94,6 +94,9 @@ const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.u
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
 assert(plannerUi.includes('savePlannerHistory(origin, dest)'), 'recents persist when a plan starts');
 assert(plannerUi.includes('resolvePlannerStationInput'), 'planner uses shared station alias resolver');
+assert(plannerUi.includes('plannerHistoryStationLabel'), 'recents labels resolve aliases then keep caps');
+assert(plannerUi.includes('plannerHistoryDedupeKey'), 'recents dedupe unique station pairs');
+assert(!plannerUi.includes('Johannesburg Park Station'), 'recents do not show Johannesburg Park Station');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
@@ -126,6 +129,21 @@ assert(ridePings.includes('syncRidePresenceRow'), 'presence row hides when nearb
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
 assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[90]'), 'upcoming trains no longer z-90 under the nav');
+assert(liveBoardModals.includes('id="modal-title-route"'), 'upcoming title has a shrink-to-fit route line');
+assert(liveBoardModals.includes('id="modal-title-day"'), 'upcoming title has a day row for Tomorrow');
+
+const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+assert(liveBoardUi.includes('fitScheduleModalRouteTitle'), 'upcoming route title shrinks to one line');
+assert(liveBoardUi.includes('pinRouteIfRegionHasNoDefault'), 'first route pick in a new region is pinned');
+
+const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
+assert(mapView.includes("withBase('/map.html')"), 'Map tab iframe loads map.html not the SPA');
+assert(!mapView.includes("withBase('/map')?embed"), 'Map tab does not use extensionless /map');
+
+const astroCfg = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
+assert(astroCfg.includes('/\\/map(?:\\.html)?(?:$|[/?#])/'), 'SW navigateFallback denylists /map');
+
+assert(layout.includes('nt-map-iframe-escape'), 'SPA in a map iframe hides nested chrome');
 
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('id="messages-thread-file"'), 'messages thread has attachment input');

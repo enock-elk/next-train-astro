@@ -82,6 +82,7 @@ export default defineConfig({
           /\/corridors\//,
           /\/regions\//,
           /guide\.html/,
+          /\/map(?:\.html)?(?:$|[/?#])/,
           /map\.html/,
           /status\.html/,
           /marketing\.html/,

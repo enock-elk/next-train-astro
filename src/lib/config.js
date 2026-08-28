@@ -12,7 +12,7 @@
  * If the calendar date changed, set MM.DD to today and reset n to 1.
  * Keep APP_VERSION, CHANGELOG_DATA[0].id, package.json, and public/app-version.json in sync.
  */
-export const APP_VERSION = "V8_08.28.2";
+export const APP_VERSION = "V8_08.28.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -933,125 +933,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // - Only list benefits commuters can see or use in the public app (board, planner, alerts, notices).
 export const CHANGELOG_DATA = [
     {
-        id: "V8_08.28.2",
-        title: "Recents, aliases, swipe, empty board",
+        id: "V8_08.28.3",
+        title: "Recents, Crossmoor, floating bar",
         date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> Recent trips stay after you search. Johannesburg Park and Bosman match the right stations.",
-            "<b>Swipe:</b> From the planner, swipe left to open Options.",
-            "<b>Board:</b> When there are no more trains, the next time is not written twice.",
-            "<b>Feedback Hub:</b> Privacy is the lock icon next to your contact."
-        ]
-    },
-    {
-        id: "V8_08.28.1",
-        title: "Travel Day scroll, offline refresh, floating bar",
-        date: "28 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> The page still scrolls when Travel Day is open.",
-            "<b>Offline:</b> The notice can Refresh or Close, and it hides itself after a few seconds.",
-            "<b>Bar:</b> The bottom tabs sit in a floating pill."
-        ]
-    },
-    {
-        id: "V8_08.27.9",
-        title: "Feedback Hub, offline banner, timetable date",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Feedback Hub:</b> Write a message, attach a photo, and open Privacy Policy from the contact row.",
-            "<b>Offline:</b> When you lose signal, a banner stays above the bottom bar until you are back online.",
-            "<b>Timetable:</b> The effective date sits on the View full timetable button."
-        ]
-    },
-    {
-        id: "V8_08.27.8",
-        title: "Shorter empty board, lists above the bar",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Board:</b> When today’s trains are done, the next one is a single line.",
-            "<b>Upcoming:</b> The train list sits above the bottom bar, not under it.",
-            "<b>Map:</b> Back, region, and Network Lines are the same height."
-        ]
-    },
-    {
-        id: "V8_08.27.7",
-        title: "Timetable button, Share in Options",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Timetable:</b> View full timetable has the calendar on the same line as the label.",
-            "<b>Share:</b> Share App is in Options, next to Messages & Feedback.",
-            "<b>Board:</b> Tap NO SVC on a timetable to see why that train is cancelled."
-        ]
-    },
-    {
-        id: "V8_08.27.6",
-        title: "Timetable icon, clearer dark",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Timetable:</b> View full timetable has the calendar icon back.",
-            "<b>Dark:</b> The page sits behind the cards, so boards and planner fields lift off the background.",
-            "<b>Alerts:</b> Notice cards sit on a darker sheet so each post is easy to pick out."
-        ]
-    },
-    {
-        id: "V8_08.27.5",
-        title: "Welcome stays clear",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Welcome:</b> Pick your route first — the bottom bar waits until you are in.",
-            "<b>Plan:</b> Trip Planner on the bottom bar uses the route icon.",
-            "<b>Alerts:</b> The bell sits on the header with a clearer unread dot."
-        ]
-    },
-    {
-        id: "V8_08.27.4",
-        title: "Trip Planner icon, quieter bar",
-        date: "27 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Plan:</b> Trip Planner on the bottom bar uses the route icon.",
-            "<b>Alerts:</b> The bell sits on the header with a clearer unread dot.",
-            "<b>Bar:</b> Home, Trip Planner, and Options along the bottom."
-        ]
-    },
-    {
-        id: "V8_08.27.3",
-        title: "Classic blue, Crossmoor, planner sheet",
-        date: "27 Aug 2026",
         forceShow: false,
         features: [
             "<b>KZN:</b> Durban ↔ Crossmoor is on the board (yellow inland line).",
-            "<b>Planner:</b> Tap a train name for the full stop list. Saturday lines without trains say so clearly.",
-            "<b>Classic:</b> Blue header and nav — white title in light, blue title on navy in dark.",
-            "<b>Colour packs</b> keep header, nav, and cards apart. Today’s line reads Thursday · Weekday Schedule."
-        ]
-    },
-    {
-        id: "V8_08.26.2",
-        title: "What's new",
-        date: "26 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>KZN:</b> Durban ↔ Crossmoor is on the board — the yellow inland line from Rossburgh out to Havenside, Bayview, Westcliff, Chatsglen and Crossmoor."
-        ]
-    },
-    {
-        id: "V8_08.26.1",
-        title: "What's new",
-        date: "26 Aug 2026",
-        forceShow: false,
-        features: [
-            "<b>Planner:</b> Saturday corridors without trains show a clear notice. Tap a train name for the full stop list. Recent Trips stay when you switch province.",
-            "<b>Offline:</b> The saved app opens even on a captive or weak wifi hotspot, then refreshes times and notices when a real connection returns.",
-            "<b>Back:</b> The phone Back button closes the screen you are looking at in one press.",
-            "<b>Shared links:</b> A timetable or trip from Facebook opens on the first tap."
+            "<b>Planner:</b> Recent trips stay after you search, newest first. Johannesburg Park and Bosman match. Tap a train for the stop list.",
+            "<b>Bar:</b> Bottom tabs sit in a floating pill. Swipe left from the planner for Options.",
+            "<b>Board:</b> When today’s trains are done, the next one is a single line.",
+            "<b>More:</b> Messages and Share App are in Options. Offline, Refresh or Close."
         ]
     },
     {

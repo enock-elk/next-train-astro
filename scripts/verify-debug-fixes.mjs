@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_08.28.12', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.28.13', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -125,6 +125,16 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const yest = new Date(2026, 7, 27, 8, 0, 0);
     assert(formatThreadDateLabel(yest, today) === 'Yesterday', 'thread date Yesterday');
     assert(formatThreadDateLabel(new Date(2026, 7, 25, 8, 0, 0), today) === '25 Aug 2026', 'thread date calendar');
+}
+
+{
+    const { readFileSync } = await import('node:fs');
+    const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(admin.includes('openAliasModal'), 'alias modal helper exists');
+    assert(admin.includes('#efeae2'), 'admin thread wallpaper is #efeae2');
+    assert(admin.includes('editedAt: Date.now()'), 'in-place edit writes editedAt');
+    assert(admin.includes("method: 'PATCH'") && admin.includes('inbox/${encodeURIComponent(replyDeviceId)}'), 'edit PATCHes the inbox node');
+    assert(!/setCommuterAlias[\s\S]{0,500}prompt\(/.test(admin), 'alias no longer uses window.prompt');
 }
 
 if (failed) {

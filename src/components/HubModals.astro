@@ -505,7 +505,8 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <style is:global>
-  #messages-thread-modal .inbox-row {
+  #messages-thread-modal .inbox-row,
+  #feedback-panel .inbox-row {
     display: flex;
     align-items: flex-start;
     width: 100%;
@@ -516,60 +517,89 @@ import { withBase } from '../lib/config.js';
     flex: 0 0 78%;
     min-width: 0;
   }
-  #messages-thread-modal .inbox-bubble {
+  #feedback-panel .inbox-bubble-wrap {
+    width: auto;
+    max-width: 85%;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  #messages-thread-modal .inbox-bubble,
+  #feedback-panel .inbox-bubble {
     position: relative;
-    width: 100%;
     box-sizing: border-box;
-    overflow: hidden;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   }
-  #messages-thread-modal .inbox-bubble-own {
+  #messages-thread-modal .inbox-bubble {
+    width: 100%;
+    overflow: hidden;
+  }
+  #feedback-panel .inbox-bubble {
+    width: auto;
+    overflow: visible;
+  }
+  #messages-thread-modal .inbox-bubble-own,
+  #feedback-panel .inbox-bubble-own {
     background: #d9fdd3;
     color: #111827;
     border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
   }
-  html.dark #messages-thread-modal .inbox-bubble-own {
+  html.dark #messages-thread-modal .inbox-bubble-own,
+  html.dark #feedback-panel .inbox-bubble-own {
     background: #005c4b;
     color: #e7f8f5;
   }
-  #messages-thread-modal .inbox-bubble-other {
+  #messages-thread-modal .inbox-bubble-other,
+  #feedback-panel .inbox-bubble-other {
     background: #ffffff;
     color: #111827;
     border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
     border: 1px solid rgba(229, 231, 235, 0.9);
   }
-  html.dark #messages-thread-modal .inbox-bubble-other {
+  html.dark #messages-thread-modal .inbox-bubble-other,
+  html.dark #feedback-panel .inbox-bubble-other {
     background: #1f2937;
     color: #f3f4f6;
     border-color: #374151;
   }
-  #messages-thread-modal .inbox-bubble-name-row {
+  #messages-thread-modal .inbox-bubble-name-row,
+  #feedback-panel .inbox-bubble-name-row {
     padding: 0.3rem 0.65rem;
     font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.2;
     background: rgba(0, 0, 0, 0.055);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
   }
-  html.dark #messages-thread-modal .inbox-bubble-name-row {
+  html.dark #messages-thread-modal .inbox-bubble-name-row,
+  html.dark #feedback-panel .inbox-bubble-name-row {
     background: rgba(255, 255, 255, 0.07);
     border-bottom-color: rgba(255, 255, 255, 0.08);
   }
-  html.dark #messages-thread-modal .inbox-bubble-own .inbox-bubble-name-row {
+  html.dark #messages-thread-modal .inbox-bubble-own .inbox-bubble-name-row,
+  html.dark #feedback-panel .inbox-bubble-own .inbox-bubble-name-row {
     background: rgba(0, 0, 0, 0.18);
   }
-  #messages-thread-modal .inbox-bubble-body {
+  #messages-thread-modal .inbox-bubble-body,
+  #feedback-panel .inbox-bubble-body {
     padding: 0.35rem 0.65rem 0.4rem;
   }
-  #messages-thread-modal .inbox-msg-text {
+  #messages-thread-modal .inbox-msg-text,
+  #feedback-panel .inbox-msg-text {
     font-size: 0.84rem;
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
   }
-  #messages-thread-modal .inbox-msg-text p { margin: 0 0 0.35rem; }
-  #messages-thread-modal .inbox-msg-text p:last-child { margin-bottom: 0; }
-  #messages-thread-modal .inbox-msg-time {
+  #messages-thread-modal .inbox-msg-text p,
+  #feedback-panel .inbox-msg-text p { margin: 0 0 0.35rem; }
+  #messages-thread-modal .inbox-msg-text p:last-child,
+  #feedback-panel .inbox-msg-text p:last-child { margin-bottom: 0; }
+  #messages-thread-modal .inbox-msg-time,
+  #feedback-panel .inbox-msg-time {
     float: right;
     margin: 0.2rem 0 0 0.55rem;
     font-size: 0.65rem;
@@ -585,6 +615,37 @@ import { withBase } from '../lib/config.js';
     border-radius: 999px;
     overflow: hidden;
     margin-top: 0.15rem;
+  }
+  /* WhatsApp-style tails on the admin inbox (commuter hub keeps overflow:hidden). */
+  #feedback-panel .inbox-bubble-own::after,
+  #feedback-panel .inbox-bubble-other::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    width: 8px;
+    height: 12px;
+  }
+  #feedback-panel .inbox-bubble-own::after {
+    right: -6px;
+    background: #d9fdd3;
+    clip-path: polygon(0 0, 0 100%, 100% 100%);
+  }
+  html.dark #feedback-panel .inbox-bubble-own::after {
+    background: #005c4b;
+  }
+  #feedback-panel .inbox-bubble-other::after {
+    left: -6px;
+    background: #ffffff;
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+  }
+  html.dark #feedback-panel .inbox-bubble-other::after {
+    background: #1f2937;
+  }
+  #feedback-panel .feedback-thread-chat {
+    background: #efeae2;
+  }
+  html.dark #feedback-panel .feedback-thread-chat {
+    background: #0b141a;
   }
 </style>
 

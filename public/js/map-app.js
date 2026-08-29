@@ -169,8 +169,11 @@
             "CRAWFORD": [-33.976372, 18.501211],
             "ATHLONE": [-33.96328, 18.50085],
             "HAZENDAL": [-33.9555, 18.4996],
+            "KENTEMADE": [-33.913554, 18.497316],
             "CENTURY CITY": [-33.901117, 18.511648],
+            "AKASIA PARK": [-33.894831, 18.528667],
             "MONTE VISTA": [-33.891667, 18.549616],
+            "DE GRENDEL": [-33.893493, 18.578750],
             "AVONDALE": [-33.897780, 18.592875],
             "OOSTERZEE": [-33.900001, 18.607403],
             "STIKLAND": [-33.8967, 18.6738],
@@ -304,7 +307,8 @@
             'ct-chrishani': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE", "NONKQUBELA", "KHAYELITSHA", "KUYASA", "CHRIS HANI"],
             'ct-kapteinsklip': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"],
             'bellville-mutual': ["BELLVILLE", "SAREPTA", "PENTECH", "UNIBELL", "BELHAR", "LAVISTOWN", "BONTEHEUWEL", "LANGA", "MUTUAL", "MAITLAND"],
-            'ct-bellv': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "BELLVILLE"],
+            // Northern Line via Century City — matches the ct_to_bellv timetable
+            'ct-bellv': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "KENTEMADE", "CENTURY CITY", "AKASIA PARK", "MONTE VISTA", "DE GRENDEL", "AVONDALE", "OOSTERZEE", "BELLVILLE"],
             
             // GUARDIAN: Western Cape Expansion Paths
             'ct-malm': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "CENTURY CITY", "MONTE VISTA", "AVONDALE", "OOSTERZEE", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN", "FISANTKRAAL", "MELLISH", "MIKPUNT", "KLIPHEUWEL", "WINTEVOGEL", "KALBASKRAAL", "ABBOTSDALE", "MALMESBURY"],
@@ -335,6 +339,12 @@
         const RAIL_SKIP_STATION_M = 90;
         /** Reject an OSM hop that leaves the station-to-station corridor. */
         const RAIL_HOP_STRAY_M = 600;
+        /** A baked line must pass this close to every station on the route. */
+        const RAIL_BAKED_COVER_M = 450;
+        /** Longest edge accepted from a baked line when rebuilding the graph. */
+        const RAIL_MAX_BAKED_EDGE_M = 6000;
+        /** Rail doubling back at a junction may nudge station order by this much. */
+        const RAIL_BAKED_ORDER_SLACK_M = 1500;
 
         function railHaversineM(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -384,8 +394,9 @@
                             const A = nodes[prev];
                             const B = nodes[id];
                             const w = railHaversineM(A.lat, A.lon, B.lat, B.lon);
-                            // Skip absurd teleport edges left over from bake-time chord fallbacks
-                            if (w > 0 && w < 2500) addEdge(prev, id, w);
+                            // Keep the bake's honest station-to-station chords (up to ~3.2 km
+                            // where OSM has no rail) but drop teleports from a stale file
+                            if (w > 0 && w < RAIL_MAX_BAKED_EDGE_M) addEdge(prev, id, w);
                         }
                         prev = id;
                     }
@@ -556,16 +567,6 @@
             return best;
         }
 
-        function pathHasLargeJumps(latlngs, maxM = 1500) {
-            if (!latlngs || latlngs.length < 2) return true;
-            for (let i = 1; i < latlngs.length; i++) {
-                const a = latlngs[i - 1];
-                const b = latlngs[i];
-                if (railHaversineM(a[0], a[1], b[0], b[1]) > maxM) return true;
-            }
-            return false;
-        }
-
         async function loadRailTrackBundle(region) {
             const byId = new Map();
             let graph = null;
@@ -608,14 +609,92 @@
         /** Baked OSM LineString may only be used if stations appear along it in list order. */
         function pathVisitsStopsInOrder(latlngs, stops) {
             if (!latlngs || latlngs.length < 2 || !stops || stops.length < 2) return false;
-            let last = -1;
-            for (const s of stops) {
-                if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return false;
-                const i = nearestPathIndex(latlngs, s.lat, s.lon);
-                if (i < last) return false;
-                last = i;
+            const along = stopsAlongPath(latlngs, stops);
+            if (!along) return false;
+            return isMonotonic(along.map((p) => p.alongM));
+        }
+
+        /** Cumulative metres to each vertex of a [lat,lon][] path. */
+        function pathCumulativeM(latlngs) {
+            const cum = [0];
+            for (let i = 1; i < latlngs.length; i++) {
+                cum.push(cum[i - 1] + railHaversineM(
+                    latlngs[i - 1][0], latlngs[i - 1][1], latlngs[i][0], latlngs[i][1]
+                ));
             }
-            return true;
+            return cum;
+        }
+
+        /**
+         * Project every stop onto the line: how far off it sits, and how far
+         * along the line it lands. Segment projection, not nearest vertex, so a
+         * long straight hop between two vertices still counts as covered.
+         */
+        function stopsAlongPath(latlngs, stops) {
+            if (!latlngs || latlngs.length < 2 || !stops || stops.length < 2) return null;
+            const cum = pathCumulativeM(latlngs);
+            const out = [];
+            for (const s of stops) {
+                if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return null;
+                let bestD = Infinity;
+                let bestAlong = 0;
+                for (let i = 1; i < latlngs.length; i++) {
+                    const a = latlngs[i - 1];
+                    const b = latlngs[i];
+                    const d = pointToSegmentM(s.lat, s.lon, a[0], a[1], b[0], b[1]);
+                    if (d < bestD) {
+                        bestD = d;
+                        const segM = cum[i] - cum[i - 1];
+                        const t = segM > 0 ? segmentFraction(s.lat, s.lon, a[0], a[1], b[0], b[1]) : 0;
+                        bestAlong = cum[i - 1] + segM * t;
+                    }
+                }
+                out.push({ name: s.name, offM: bestD, alongM: bestAlong });
+            }
+            return out;
+        }
+
+        function segmentFraction(pLat, pLon, aLat, aLon, bLat, bLon) {
+            const lat0 = ((aLat + bLat) / 2) * Math.PI / 180;
+            const toXY = (lat, lon) => [
+                lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
+                lat * Math.PI / 180 * 6371000
+            ];
+            const [pX, pY] = toXY(pLat, pLon);
+            const [aX, aY] = toXY(aLat, aLon);
+            const [bX, bY] = toXY(bLat, bLon);
+            const abx = bX - aX;
+            const aby = bY - aY;
+            const len2 = abx * abx + aby * aby;
+            if (len2 < 1) return 0;
+            const t = ((pX - aX) * abx + (pY - aY) * aby) / len2;
+            return Math.max(0, Math.min(1, t));
+        }
+
+        /** Station order may run either way along the baked line. */
+        function isMonotonic(values, slackM = RAIL_BAKED_ORDER_SLACK_M) {
+            let up = true;
+            let down = true;
+            for (let i = 1; i < values.length; i++) {
+                if (values[i] < values[i - 1] - slackM) up = false;
+                if (values[i] > values[i - 1] + slackM) down = false;
+            }
+            return up || down;
+        }
+
+        /**
+         * A baked line is paintable when it actually passes every station on the
+         * route, in order. Straight hops inside it are fine (the bake keeps the
+         * chord where OSM has no rail); a line that stops short of a terminus is
+         * not, which is what used to leave Cato Ridge unconnected.
+         */
+        function bakedLineCoversStops(latlngs, stops) {
+            const along = stopsAlongPath(latlngs, stops);
+            if (!along) return false;
+            for (const p of along) {
+                if (!(p.offM <= RAIL_BAKED_COVER_M)) return false;
+            }
+            return pathVisitsStopsInOrder(latlngs, stops);
         }
 
         /**
@@ -633,7 +712,7 @@
                 if (smoothed && smoothed.length > 1) return smoothed;
             }
             const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
-            if (baked && baked.length > 1 && !pathHasLargeJumps(baked) && pathVisitsStopsInOrder(baked, stops)) {
+            if (baked && baked.length > 1 && bakedLineCoversStops(baked, stops)) {
                 return baked;
             }
             return chords;

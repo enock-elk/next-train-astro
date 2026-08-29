@@ -2,6 +2,23 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.29.2 — Rail lines follow the tracks in every region (29 Aug 2026)
+
+Root cause of straight and truncated corridors: the bake and the map used two different station lists, and the bake wrote lines the map then had to throw away.
+
+- `scripts/build-rail-tracks.mjs` takes station order and coordinates from the timetable dump (`public/data/full-database.json`), then applies the same Maitland/Mutual adjacency and `STATIC_ROUTE_PATHS` ordering the map applies. The baked line now covers exactly the stops the board paints.
+- The bake never drops a hop. Previously a hop whose chord exceeded 2200 m was skipped, which is why `kzn-catoridge` ended 6.5 km short of Cato Ridge and `ct-malm` ended 13.5 km short of Malmesbury. Unrailed hops keep their chord, so a line stays continuous and reaches its terminus.
+- Download box is derived from the region's stations plus 0.15°. The old KZN box stopped at lon 30.65, west of kwaTandaza, Georgedale and Cato Ridge, so there was no OSM rail to snap to.
+- Yard and spur ways stay in the graph. Filtering them left Koedoespoort a 13-node island, forcing 1.8–5 km chords on `pta-pien` and `herc-koed`.
+- Each hop snaps both ends into the same connected component. Pretoria, Rhodesfield and Elandsfontein sit metres from Gautrain track, a separate network, so the plain nearest node made those hops unroutable.
+- Bake pathfinder uses a binary heap with a per-hop distance budget instead of a sorted array.
+- Client: a baked line is painted when it passes within 450 m of every stop, in order (`bakedLineCoversStops`). The old vetoes threw away good geometry: one gap over 1500 m killed `pta-pien`, and a 14-point index inversion at the Clairwood junction killed `kzn-umlazi` and `kzn-crossmoor`. Result is baked or graph geometry on all 34 corridors, none on chords.
+- `ct-bellv` is the Northern Line via Century City, matching `ct_to_bellv_weekday` and the network map. It was defined through Maitland and Mutual, so `applyCanonicalStationOrder` kept only Cape Town and Bellville and the line ran on a different corridor from the station dots.
+- 13 `STATION_COORDINATES` entries were up to 1.8 km from the timetable value (Stikland, Schuttestraat, Effingham, Bellair, Pinedene and others); synced to the timetable.
+- `verify:map-lines` now fails if a corridor is missing from a bake, if a baked line misses a stop by more than 450 m, if it does not begin and end at its termini, or if a region is straight for more than 15% of hops.
+
+Known upstream gaps that stay straight: De Wildt to Ga-Rankuwa, Bonteheuwel to Philippi on the Cape Flats, Athlone to Lansdowne, Goodwood to Thornton, Phefeni to Phomolong, Lindela to Pilot, Kalk Bay to St James. OSM has no connected rail there.
+
 ## V9_08.29.1 — Scroll-with-board ads; map chrome; WC tracks (29 Aug 2026)
 
 - Clever units that occupy space are reparented into `#nt-ad-scroll-host` (first child of `#app-scroll`) so the ad rolls in at the top and scrolls with the board. No reserved 108px footer gap. `--nt-ad-shift` stays 0 while the unit is in-flow.

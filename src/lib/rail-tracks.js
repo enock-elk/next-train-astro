@@ -8,8 +8,12 @@ import { withBase } from './config.js';
 
 const SNAP_MAX_M = 900;
 const MAX_HOPS = 14000;
-/** Ignore bake-time straight-chord teleports when merging route LineStrings into a graph. */
-const MAX_EDGE_M = 2500;
+/**
+ * Longest edge accepted from a baked line. The bake keeps a straight chord
+ * where OSM has no rail (~3.2 km at most), so those edges must stay in the
+ * graph; anything wilder is a teleport from a stale file.
+ */
+const MAX_EDGE_M = 6000;
 const HOP_DETOUR_RATIO = 2.8;
 const HOP_DETOUR_MIN_M = 900;
 const HOP_STRAY_M = 600;

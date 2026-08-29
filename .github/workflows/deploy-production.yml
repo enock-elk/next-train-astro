@@ -148,6 +148,15 @@ jobs:
           path: site
           persist-credentials: true
 
+      - name: Checkout retain helper
+        uses: actions/checkout@v4
+        with:
+          path: astro-src
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            scripts/retain-previous-astro.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Snapshot protected paths before sync
         id: protect
         working-directory: site
@@ -165,6 +174,23 @@ jobs:
             cp CNAME /tmp/live-CNAME.bak
           fi
           echo "Protected data/ has $DATA_COUNT files."
+
+      - name: Snapshot current /_astro/ before sweep
+        run: |
+          set -euo pipefail
+          # rsync --delete would otherwise 404 every in-flight tab still
+          # pointing at the last build's hashed CSS/JS. That is the FOUC.
+          if [ -d site/_astro ]; then
+            mkdir -p /tmp/prev-astro
+            cp -a site/_astro/. /tmp/prev-astro/
+            echo "Snapshotted $(find /tmp/prev-astro -type f | wc -l) hashed assets."
+          else
+            echo "No existing /_astro/ on the host (first Astro publish)."
+          fi
+          if [ -f site/astro-retained-generation.json ]; then
+            cp site/astro-retained-generation.json /tmp/astro-retained-generation.json
+            echo "Loaded previous retain manifest."
+          fi
 
       - name: Sync dist → host (protect data/ + repo metadata)
         run: |
@@ -201,6 +227,16 @@ jobs:
 
           # Always pin the production hostname (do not trust whatever was in dist)
           printf 'nexttrain.co.za\n' > site/CNAME
+
+          # Keep the previous /_astro/ generation so a tab still holding the
+          # last index.html can fetch its hashed CSS/JS. One generation only.
+          if [ -d /tmp/prev-astro ]; then
+            node astro-src/scripts/retain-previous-astro.mjs \
+              --snapshot /tmp/prev-astro \
+              --dest site/_astro \
+              --manifest /tmp/astro-retained-generation.json \
+              --out-manifest site/astro-retained-generation.json
+          fi
 
           # GitHub Pages (branch deploy) runs Jekyll unless this file exists.
           # Without it, /_astro/ is unpublished → unstyled broken site.
@@ -239,6 +275,13 @@ jobs:
           test -f site/CNAME
           test -f site/.nojekyll
           test -d site/_astro
+          DIST_ASTRO=$(find dist/_astro -type f | wc -l)
+          HOST_ASTRO=$(find site/_astro -type f | wc -l)
+          if [ "$HOST_ASTRO" -lt "$DIST_ASTRO" ]; then
+            echo "::error::host /_astro/ lost files after retain ($DIST_ASTRO built → $HOST_ASTRO on host)"
+            exit 1
+          fi
+          echo "Hashed assets: dist $DIST_ASTRO, host $HOST_ASTRO (previous generation retained when present)."
           test -f site/.well-known/assetlinks.json
           grep -q 'za.co.nexttrain.app' site/.well-known/assetlinks.json
           grep -qx 'nexttrain.co.za' site/CNAME

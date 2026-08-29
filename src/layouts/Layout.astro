@@ -2,6 +2,8 @@
 // --- METRORAIL NEXT TRAIN - ASTRO MASTER LAYOUT ---
 import '../styles/appearance.css';
 import AppFonts from '../components/AppFonts.astro';
+import RecoveryLifeline from '../components/RecoveryLifeline.astro';
+import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
 import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 const {
@@ -41,6 +43,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    <StuckUpdateGuard />
     <script is:inline>
       (function () {
         var root = document.documentElement;
@@ -1011,6 +1014,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
   </head>
 
   <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300">
+
+    <RecoveryLifeline />
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 

@@ -2,6 +2,17 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.29.3 — Stuck-update recovery (29 Aug 2026)
+
+no release notes.
+
+FORCE_UPDATE_REQUIRED stays false. That is not the FOUC fix. It only skips the red toast and `?v=` hard reload after a new shell is already running (a second cold boot on cheap phones). The FOUC is stale `index.html` pointing at hashed `/_astro/` CSS/JS that `rsync --delete` already removed.
+
+- Production publish snapshots host `/_astro/` before the sweep and copies back the previous generation only (`scripts/retain-previous-astro.mjs`, `astro-retained-generation.json`). In-flight tabs can still fetch last-build hashes.
+- Inline `StuckUpdateGuard` cache-busts the document when a hashed asset 404s. After two attempts, or when offline, it reveals `#nt-recovery-lifeline`.
+- Lifeline is the first body node (WhatsApp +27 69 647 3764, `help.html`). Hidden only by `#nt-recovery-lifeline { display: none !important; }` in the hashed CSS bundle, so it shows on the one render where that bundle failed.
+- Incoming service workers wait. After five minutes in the background they `skipWaiting` without a reload. `onNeedRefresh` no longer toasts or forces `?v=`.
+
 ## V9_08.29.2 — Rail lines follow the tracks in every region (29 Aug 2026)
 
 Root cause of straight and truncated corridors: the bake and the map used two different station lists, and the bake wrote lines the map then had to throw away.

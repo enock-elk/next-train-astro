@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_08.29.2";
+export const APP_VERSION = "V9_08.29.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -58,7 +58,13 @@ export function withBase(path = '/') {
 // GUARDIAN: Set to 'true' to force an immediate hard reload on startup.
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // Admin NUKE (killswitch.json) still wipes caches for online clients.
-export const FORCE_UPDATE_REQUIRED = true;
+//
+// Keep this false unless a build genuinely cannot be left running. By the time
+// enforceAppVersion() sees a version gap the new shell is already the one
+// executing, so the forced path only adds a red toast and a ?v= hard reload on
+// top of an update that has already landed. On a cheap handset that reload is a
+// second cold boot, and it is the flash commuters were reporting.
+export const FORCE_UPDATE_REQUIRED = false;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.

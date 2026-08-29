@@ -1,0 +1,99 @@
+---
+/**
+ * Recovers a boot where the hashed assets are gone.
+ *
+ * A deploy publishes new /_astro/ hashes and the host sweep removes the old
+ * ones, so a device rendering the previous index.html (its own HTTP cache, or a
+ * stale edge object) asks for CSS and JS that 404. Every module script dies with
+ * them, which is why nothing in the app can react: no service worker
+ * registration, no version check, no toast. The page just sits there unstyled.
+ *
+ * This has to be an inline script for that reason. It is the only code that
+ * still runs, so it re-requests the document under a URL no cache has seen and
+ * gets fresh HTML. If that does not help, it reveals the support lifeline.
+ */
+---
+
+<script is:inline>
+  /* [CDATA[ */
+  (function () {
+    var KEY = 'nt_shell_recover';
+    var MAX_ATTEMPTS = 2;
+
+    function reveal() {
+      var el = document.getElementById('nt-recovery-lifeline');
+      // The hide rule is !important because it lives in the hashed bundle, so
+      // an override has to be too.
+      if (el) el.style.setProperty('display', 'block', 'important');
+    }
+
+    function readAttempts() {
+      // No sessionStorage means no loop guard, so prefer showing the number
+      // over reloading blind.
+      try {
+        return parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0;
+      } catch (e) {
+        return MAX_ATTEMPTS;
+      }
+    }
+
+    var handled = false;
+    function recover() {
+      if (handled) return;
+      handled = true;
+
+      // Offline with nothing cached: a refetch cannot succeed.
+      if (navigator.onLine === false) {
+        reveal();
+        return;
+      }
+      var attempts = readAttempts();
+      if (attempts >= MAX_ATTEMPTS) {
+        reveal();
+        return;
+      }
+      try { sessionStorage.setItem(KEY, String(attempts + 1)); } catch (e) {}
+
+      // Keep deep-link and share-target params; only add our cache breaker.
+      var search;
+      try {
+        var params = new URLSearchParams(window.location.search);
+        params.set('nt_shell', String(Date.now()));
+        search = '?' + params.toString();
+      } catch (e) {
+        search = '?nt_shell=' + Date.now();
+      }
+      window.location.replace(window.location.pathname + search + window.location.hash);
+    }
+
+    function isAstroAsset(node) {
+      if (!node || !node.tagName || !node.getAttribute) return false;
+      var tag = node.tagName.toLowerCase();
+      if (tag !== 'link' && tag !== 'script') return false;
+      var src = node.getAttribute('href') || node.getAttribute('src') || '';
+      return src.indexOf('/_astro/') !== -1;
+    }
+
+    // Resource errors do not bubble; they are only visible in the capture phase.
+    window.addEventListener('error', function (event) {
+      if (isAstroAsset(event && event.target)) recover();
+    }, true);
+
+    window.addEventListener('load', function () {
+      var links = document.querySelectorAll('link[rel="stylesheet"][href*="/_astro/"]');
+      if (!links.length) return;
+      for (var i = 0; i < links.length; i++) {
+        // A captive portal answers 200 with its own HTML, so no error fires and
+        // the link still has no stylesheet attached.
+        if (!links[i].sheet) {
+          recover();
+          return;
+        }
+      }
+      // Shell is intact. Clear the counter so a later, unrelated failure still
+      // gets its own attempts.
+      try { sessionStorage.removeItem(KEY); } catch (e) {}
+    });
+  })();
+  /* ]] */
+</script>

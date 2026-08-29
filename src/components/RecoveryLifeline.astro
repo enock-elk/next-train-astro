@@ -1,0 +1,32 @@
+---
+/**
+ * Stuck-update lifeline.
+ *
+ * Plain markup, first child of <body>, carrying the recovery link and the
+ * support number. Hidden by `#nt-recovery-lifeline` in appearance.css, which
+ * ships inside the hashed CSS bundle — so it shows only on the render where
+ * that bundle failed to load and none of our scripts could run either.
+ *
+ * Keep it above every other node in the body: during that render the browser
+ * lays the document out in source order, so this is what the commuter reads
+ * first instead of an unstyled Options drawer.
+ */
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY, withBase } from '../lib/config.js';
+
+const helpHref = withBase('help.html');
+const waHref = `https://wa.me/${SUPPORT_WHATSAPP}`;
+const mailHref = `mailto:${SUPPORT_EMAIL}`;
+---
+
+<div id="nt-recovery-lifeline" role="status" style="box-sizing:border-box;padding:1.25rem 1rem 1.5rem;font-family:system-ui,-apple-system,sans-serif;line-height:1.45;max-width:40rem;">
+  <h1>Next Train could not finish updating</h1>
+  <p>
+    This device is holding an old copy of the app. Open
+    <a href={helpHref} rel="nofollow">Reset and Recover</a>
+    to clear it and load the current version.
+  </p>
+  <p>
+    Still stuck? WhatsApp <a href={waHref} rel="nofollow">{SUPPORT_WHATSAPP_DISPLAY}</a>
+    or email <a href={mailHref} rel="nofollow">{SUPPORT_EMAIL}</a> and we will help.
+  </p>
+</div>

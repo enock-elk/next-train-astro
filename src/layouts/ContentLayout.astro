@@ -5,6 +5,8 @@
  */
 import '../styles/appearance.css';
 import AppFonts from '../components/AppFonts.astro';
+import RecoveryLifeline from '../components/RecoveryLifeline.astro';
+import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 interface Props {
@@ -63,6 +65,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <StuckUpdateGuard />
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
@@ -254,6 +257,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <slot name="head" />
   </head>
   <body class:list={['font-[Inter,system-ui,sans-serif] antialiased text-gray-800 dark:text-gray-200 transition-colors duration-300', bodyClass]}>
+    <RecoveryLifeline />
     <slot />
   </body>
 </html>

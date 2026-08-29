@@ -1024,3 +1024,27 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Stuck-update lifeline
+   ---------------------------------------------------------------------------
+   #nt-recovery-lifeline is plain markup at the top of <body> carrying the
+   support number and a link to the recovery page. It must stay invisible in the
+   app, and loading this file is what hides it.
+
+   That is deliberate. A deploy replaces every /_astro/ hash and the host sweep
+   removes the old ones, so a device that renders the previous index.html from
+   its own HTTP cache (or a stale edge object) requests hashed CSS *and JS* that
+   no longer exist. Every one 404s, so no script of ours runs and the page is
+   inert. The only things left are the raw HTML and whatever is inline, which is
+   exactly what the commuter is looking at. Keeping the rule here, in the hashed
+   bundle rather than in an inline <style>, means the number surfaces on the one
+   render where nothing else can reach them.
+
+   Do not move this to an inline style, a `hidden` attribute, or a Tailwind
+   class: all of those survive the failure and would hide the lifeline in the
+   only situation it exists for.
+   --------------------------------------------------------------------------- */
+#nt-recovery-lifeline {
+  display: none !important;
+}

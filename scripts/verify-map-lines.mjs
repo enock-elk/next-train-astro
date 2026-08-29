@@ -107,9 +107,13 @@ assert(mapApp.includes('function stationPopupHtml'), 'station popup lists corrid
 assert(mapApp.includes('map-popup-route'), 'station popup rows use map-popup-route');
 assert(mapApp.includes('pathVisitsStopsInOrder(baked, stops)'), 'baked GeoJSON must follow station order');
 assert(mapApp.includes('return chords;'), 'fallback paint is station-to-station chords');
+assert(mapApp.includes('railHops !== stops.length - 1'), 'graph smoothing wins only when every hop succeeds');
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
+assert(railTracks.includes('railHops !== stops.length - 1'), 'planner trip map requires every hop before accepting graph smoothing');
+const wcTracks = readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8');
+assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to Bellville');
 
 function escapeMapHtml(s) {
     return String(s || '').replace(/[&<>"']/g, (c) => ({

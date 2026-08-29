@@ -1675,13 +1675,13 @@ export function initHub() {
         overlay.dataset.sheetMode = isMap ? 'map' : 'guide';
         if (chrome) {
             chrome.className = isMap
-                ? 'absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 pointer-events-none'
+                ? 'absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 pointer-events-none'
                 : 'relative shrink-0 z-10 flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm';
         }
         const closeBtn = document.getElementById('nt-inapp-sheet-close');
         if (closeBtn) {
             closeBtn.className = isMap
-                ? 'pointer-events-auto inline-flex items-center justify-center gap-1 text-sm font-bold text-gray-800 dark:text-white bg-white/95 dark:bg-gray-800/95 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg h-9 min-h-[2.25rem] max-h-[2.25rem] py-0 px-3 box-border hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'
+                ? 'pointer-events-auto inline-flex items-center justify-center gap-1 text-sm font-bold text-gray-800 dark:text-white bg-white/95 dark:bg-gray-800/95 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg h-9 min-h-[2.25rem] max-h-[2.25rem] py-0 px-3 mt-[max(0.5rem,env(safe-area-inset-top))] box-border hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'
                 : 'inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none';
         }
         if (titleEl) {

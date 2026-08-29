@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_08.29.1 — Scroll-with-board ads; map chrome; WC tracks (29 Aug 2026)
+
+- Clever units that occupy space are reparented into `#nt-ad-scroll-host` (first child of `#app-scroll`) so the ad rolls in at the top and scrolls with the board. No reserved 108px footer gap. `--nt-ad-shift` stays 0 while the unit is in-flow.
+- Standalone map chrome uses `env(safe-area-inset-top)`. In-app map sheet no longer paints a full-width safe-area slab; Close sits with `mt` inset only.
+- Network Lines panel is `min(38vh, 280px)`, tighter rows, and a see-through blur so the map stays visible. The list stays open after a tap.
+- Graph smoothing accepts a path only when every hop succeeds. WC tracks rebuilt; `ct-bellv` is in `rail-tracks-WC.geojson` (621 pts).
+
 ## V9_08.28.21 — Admin inbox name, collapsed cards, reply modal center (28 Aug 2026)
 
 no release notes.

@@ -14,6 +14,11 @@ const fail = (msg) => failures.push(msg);
 
 const layout = readFileSync(join(ROOT, 'src/layouts/Layout.astro'), 'utf8');
 const ads = readFileSync(join(ROOT, 'src/lib/clever-ads.js'), 'utf8');
+const indexPage = readFileSync(join(ROOT, 'src/pages/index.astro'), 'utf8');
+if (!indexPage.includes('id="nt-ad-scroll-host"')) fail('homepage missing #nt-ad-scroll-host before the header');
+if (!/id="app-scroll"[\s\S]{0,180}id="nt-ad-scroll-host"/.test(indexPage)) {
+    fail('#nt-ad-scroll-host must be the first child of #app-scroll');
+}
 
 if (!layout.includes('id="clever-core"')) fail('Layout missing SCRIPT#clever-core');
 if (/<div[^>]*id="clever-core"/.test(layout)) fail('Layout must not host DIV#clever-core (vendor id is a SCRIPT)');
@@ -78,6 +83,14 @@ if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app bec
 if (!ads.includes('scheduleScrollOccupancyCheck')) fail('scroll-return must trigger occupancy remasure');
 if (!ads.includes("addEventListener('scroll'")) fail('must remeasure ad occupancy on scroll (same-session gap)');
 if (!ads.includes("addEventListener('scrollend'")) fail('must remasure ads on scrollend when available');
+if (!ads.includes('reparentOccupiedAdsIntoScrollHost')) fail('filled ads must move into #nt-ad-scroll-host');
+if (!ads.includes('adScrollHost')) fail('ad scroll host helper missing');
+if (!ads.includes("getElementById('app-scroll')")) fail('must listen for scroll on #app-scroll');
+if (!layout.includes('#nt-ad-scroll-host')) fail('Layout must style #nt-ad-scroll-host');
+if (!layout.includes('#nt-ad-scroll-host:empty')) fail('empty ad host must not reserve height');
+if (layout.includes('#nt-ad-scroll-host') && /#nt-ad-scroll-host[\s\S]{0,220}min-height:\s*100px/.test(layout)) {
+    fail('ad scroll host must not reserve 100px');
+}
 if (!ads.includes('maybeStartOccupancyWatch')) fail('must watch occupancy while the board is still shifted');
 if (!ads.includes('stopOccupancyWatch')) fail('occupancy watch must stop when the board is unshifted');
 if (!ads.includes('iframeLooksAlive')) fail('discarded/blank iframes must not keep a top gap');

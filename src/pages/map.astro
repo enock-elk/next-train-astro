@@ -40,7 +40,9 @@ const regionSeoSlugs = Object.fromEntries(
       html.nt-map-embedded #map { height: 100%; min-height: 100%; }
       #map-top-controls {
         --map-chrome-h: 2.25rem;
-        position: fixed; top: 12px; left: 12px; right: 12px; z-index: 1001;
+        position: fixed;
+        top: max(0.5rem, env(safe-area-inset-top, 0px));
+        left: 12px; right: 12px; z-index: 1001;
         display: flex; align-items: center; justify-content: flex-end; gap: 0.375rem;
         pointer-events: none;
       }
@@ -137,8 +139,17 @@ const regionSeoSlugs = Object.fromEntries(
         box-sizing: border-box;
         z-index: 1100;
       }
-      /* Network lines sits further right — keep its menu right-aligned */
-      .legend-panel { left: auto; right: 0; width: min(250px, calc(100vw - 1.5rem)); padding: 0.75rem; }
+      /* Network lines sits further right — keep its menu right-aligned and compact */
+      .legend-panel {
+        left: auto;
+        right: 0;
+        width: min(220px, calc(100vw - 1.5rem));
+        padding: 0.4rem;
+        max-height: min(38vh, 280px);
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
       /* Fixed fallback when JS clamps — keeps badges inside the visual viewport */
       .region-panel.is-viewport-clamped {
         position: fixed;
@@ -147,6 +158,9 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .dark .region-panel, .dark .legend-panel {
         background: rgba(31, 41, 55, 0.96); color: #f3f4f6; border-color: #374151;
+      }
+      .dark .legend-panel {
+        background: rgba(31, 41, 55, 0.82);
       }
       .region-picker.is-open .region-panel,
       .legend-container.is-open .legend-panel { display: block; }
@@ -170,7 +184,7 @@ const regionSeoSlugs = Object.fromEntries(
       .legend-item {
         display: flex; align-items: center; gap: 0;
         width: 100%; text-align: left;
-        margin-bottom: 4px; padding: 0.4rem 0.35rem;
+        margin-bottom: 2px; padding: 0.25rem 0.3rem;
         font-size: 11px; font-weight: 600; font-family: inherit;
         color: inherit; background: transparent; border: 0;
         border-radius: 0.45rem; cursor: pointer;
@@ -182,8 +196,8 @@ const regionSeoSlugs = Object.fromEntries(
       .legend-item-all {
         font-weight: 800;
         border-bottom: 1px solid var(--nt-border, #e5e7eb);
-        margin-bottom: 0.5rem;
-        padding-bottom: 0.55rem;
+        margin-bottom: 0.3rem;
+        padding-bottom: 0.35rem;
       }
       .dark .legend-item-all { border-bottom-color: #374151; }
       .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }

@@ -5,9 +5,9 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays — their sticky-top format owns placement. When a unit fills or the
- * commuter dismisses it, ease #main-content via --nt-ad-shift / --nt-ad-flip
- * on #nt-shell. Do not transform #nt-shell itself (it wraps position:fixed overlays).
+ * overlays. Occupied units are reparented into #nt-ad-scroll-host (first child
+ * of #app-scroll) so they roll in at the top and scroll with the board.
+ * In-flow fill uses --nt-ad-flip. Do not transform #nt-shell itself.
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
  * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
@@ -121,6 +121,7 @@ function cleverOverlayNodes() {
     const add = (el) => {
         if (!el || seen.has(el) || el.id === 'clever-core' || el.id === LOADER_ID || el.tagName === 'SCRIPT') return;
         if (el.id === 'nt-shell' || el.id === 'offline-toast' || el.id === 'main-content') return;
+        if (el.id === 'nt-ad-scroll-host' || el.id === 'app-scroll') return;
         seen.add(el);
         out.push(el);
     };
@@ -242,6 +243,38 @@ function syncIdleAdNodes() {
 
 function ntShell() {
     return document.getElementById('nt-shell');
+}
+
+function adScrollHost() {
+    return document.getElementById('nt-ad-scroll-host');
+}
+
+function outermostMovableAdNode(el) {
+    let cur = el;
+    while (cur.parentElement) {
+        const p = cur.parentElement;
+        if (p === document.body || p === document.documentElement) break;
+        if (p.id === 'nt-ad-scroll-host' || p.id === 'app-scroll' || p.id === 'main-content' || p.id === 'nt-shell') break;
+        cur = p;
+    }
+    return cur;
+}
+
+/** Move a filled unit into #app-scroll so it scrolls with the board. */
+function reparentOccupiedAdsIntoScrollHost() {
+    const host = adScrollHost();
+    if (!host) return false;
+    let moved = false;
+    cleverOverlayNodes().forEach((el) => {
+        if (host.contains(el)) return;
+        if (!unitOccupiesSpace(el, { ignoreOurHide: true })) return;
+        const move = outermostMovableAdNode(el);
+        if (!move || host.contains(move) || move === host) return;
+        if (move.id === 'nt-shell' || move.id === 'main-content' || move.id === 'app-scroll') return;
+        host.appendChild(move);
+        moved = true;
+    });
+    return moved;
 }
 
 function afterPaint(fn) {
@@ -414,6 +447,7 @@ function syncAdShellMotion() {
 
     if (adEntering || shellMotionLock) return;
 
+    reparentOccupiedAdsIntoScrollHost();
     const { overlayH, inFlowH } = measureAdLayout();
     const filled = overlayH > 0 || inFlowH > 0;
 
@@ -866,7 +900,9 @@ export function initCleverAds() {
     // Same-session: vendor may discard a sticky unit while the tab stays visible.
     // Scroll back to top will not fire visibilitychange/pageshow/resume.
     window.addEventListener('scroll', scheduleScrollOccupancyCheck, { passive: true });
+    document.getElementById('app-scroll')?.addEventListener('scroll', scheduleScrollOccupancyCheck, { passive: true });
     if ('onscrollend' in window) {
         window.addEventListener('scrollend', () => requestAdShellSync(), { passive: true });
+        document.getElementById('app-scroll')?.addEventListener('scrollend', () => requestAdShellSync(), { passive: true });
     }
 }

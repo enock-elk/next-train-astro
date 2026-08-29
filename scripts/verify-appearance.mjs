@@ -248,6 +248,9 @@ const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url),
 assert(mapPage.includes('aria-label="Network Lines"'), 'Network Lines is a labelled SVG button');
 assert(!mapPage.includes('map-lines-label'), 'Network Lines dropped the wide text label');
 assert(mapPage.includes('id="map-back-wrap"') && mapPage.includes('id="map-top-controls"'), 'Back sits in the map top chrome row');
+assert(mapPage.includes('max-height: min(38vh, 280px)'), 'Network Lines panel is compact');
+assert(mapPage.includes('rgba(255, 255, 255, 0.78)'), 'Network Lines panel is see-through');
+assert(mapPage.includes('top: max(0.5rem, env(safe-area-inset-top, 0px))'), 'standalone map chrome clears the status bar');
 assert(mapPage.includes('--map-chrome-h'), 'map chrome shares one height token');
 assert(mapPage.includes('<button type="button" id="map-back-link"'), 'Back is a button like WC / sun / Network Lines');
 assert(!mapPage.includes('<a id="map-back-link"'), 'Back is not an <a> (links stay taller than the square chrome)');

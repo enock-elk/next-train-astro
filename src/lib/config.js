@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_08.28.21";
+export const APP_VERSION = "V9_08.29.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -941,6 +941,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_08.29.1",
+        title: "Lines follow the tracks",
+        date: "29 Aug 2026",
+        forceShow: false,
+        features: [
+            "<b>Map:</b> Network Lines is a smaller list. The map stays visible while you pick a corridor.",
+            "<b>Map:</b> Cape Town corridors follow the rail, not a straight cut between stations."
+        ]
+    },
     {
         id: "V9_08.28.20",
         title: "Tips close, hub on the keys",

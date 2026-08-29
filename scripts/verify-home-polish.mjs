@@ -11,10 +11,10 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_08.29.1', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_08.29.2', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_08.29.1' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_08.29.1');
+assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
 assert(CHANGELOG_DATA[1].id === 'V9_08.28.20', 'keep V9_08.28.20 as the previous What’s New card');
 assert(CHANGELOG_DATA[2].id === 'V9_08.28.19', 'keep V9_08.28.19 as the previous What’s New card');
 assert(CHANGELOG_DATA[3].id === 'V9_08.28.14', 'keep V9_08.28.14 as the previous What’s New card');
@@ -27,8 +27,9 @@ assert(CHANGELOG_DATA[9].id === 'V9_08.28.7', 'keep V9_08.28.7 as the previous W
 assert(CHANGELOG_DATA[10].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
 assert(CHANGELOG_DATA[11].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
 assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V9_08.28.3'].includes(e.id)), 'folded 28.6–28.3 out of What’s New');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('smaller list')), 'V9_08.29.1 What’s New mentions Network Lines size');
-assert(CHANGELOG_DATA[0].features.some((f) => f.includes('follow the rail')), 'V9_08.29.1 What’s New mentions Cape Town tracks');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('smaller list')), 'V9_08.29.2 What’s New mentions Network Lines size');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('follows the rail in all four regions')), 'V9_08.29.2 What’s New mentions every region following rail');
+assert(CHANGELOG_DATA[0].features.some((f) => f.includes('Cato Ridge')), 'V9_08.29.2 What’s New mentions Cato Ridge reaching its terminus');
 assert(CHANGELOG_DATA[1].features.some((f) => f.includes('sits in the middle of its row')), 'V9_08.28.20 What’s New mentions planner title center');
 assert(CHANGELOG_DATA[1].features.some((f) => f.includes('grow upward')), 'V9_08.28.20 What’s New mentions Feedback Hub growing up');
 assert(CHANGELOG_DATA[2].features.some((f) => f.includes('Station choices open at the top')), 'V9_08.28.19 What’s New mentions planner list at the top');

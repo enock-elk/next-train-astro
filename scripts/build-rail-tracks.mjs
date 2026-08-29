@@ -598,6 +598,7 @@ async function buildRegion(region, stations, paths, regionRoutes, dump) {
                 license: 'ODbL',
                 stations: plan.stops.length,
                 stationNames: plan.stops.map((s) => s.name),
+                stationCoords: plan.stops.map((s) => [+s.lat.toFixed(6), +s.lon.toFixed(6)]),
                 railHops: result.snapped,
                 chordHops: result.straight,
                 stationSource: plan.sheetKey,

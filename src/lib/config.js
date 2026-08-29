@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_08.29.1";
+export const APP_VERSION = "V9_08.29.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -942,13 +942,14 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
     {
-        id: "V9_08.29.1",
+        id: "V9_08.29.2",
         title: "Lines follow the tracks",
         date: "29 Aug 2026",
         forceShow: false,
         features: [
             "<b>Map:</b> Network Lines is a smaller list. The map stays visible while you pick a corridor.",
-            "<b>Map:</b> Cape Town corridors follow the rail, not a straight cut between stations."
+            "<b>Map:</b> Every corridor follows the rail in all four regions, not a straight cut between stations.",
+            "<b>Map:</b> Durban to Cato Ridge runs the full way to Cato Ridge, and Cape Town to Bellville runs on the Century City line."
         ]
     },
     {

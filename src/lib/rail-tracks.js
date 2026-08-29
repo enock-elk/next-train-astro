@@ -305,7 +305,7 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         out.push([b.lat, b.lon]);
     }
 
-    if (out.length < 2 || railHops === 0) return null;
+    if (out.length < 2 || railHops !== stops.length - 1) return null;
 
     // Deduplicate consecutive duplicates
     const deduped = [out[0]];

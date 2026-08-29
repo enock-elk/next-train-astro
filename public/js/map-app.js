@@ -533,7 +533,7 @@
                 if (!out.length) out.push([a.lat, a.lon]);
                 out.push([b.lat, b.lon]);
             }
-            if (out.length < 2 || railHops === 0) return null;
+            if (out.length < 2 || railHops !== stops.length - 1) return null;
             const deduped = [out[0]];
             for (let i = 1; i < out.length; i++) {
                 const p = out[i];

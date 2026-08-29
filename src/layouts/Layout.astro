@@ -962,6 +962,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0 !important;
         pointer-events: none !important;
       }
+      /* In-flow ad slot at the top of #app-scroll. No reserved height. */
+      #nt-ad-scroll-host {
+        flex-shrink: 0;
+        width: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #nt-ad-scroll-host:empty {
+        display: none;
+      }
+      #nt-ad-scroll-host > * {
+        position: static !important;
+        width: 100% !important;
+        max-width: 100%;
+        inset: auto !important;
+      }
     </style>
     <!--
       CleverAds vendor tag. Original IIFE is wrapped so Guardian can delay it

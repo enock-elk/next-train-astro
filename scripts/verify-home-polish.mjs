@@ -114,6 +114,14 @@ assert(manifest.posters.some((p) => p.file === 'pta-kempton-0618-0619.jpg'), 'ma
 assert(manifest.posters.length >= 10, `manifest has ${manifest.posters.length} posters`);
 
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+assert(admin.includes('Admin.loadAlertForReview'), 'GSM Review hydrates the notice into Compose');
+assert(admin.includes("sendBtn.textContent = 'Update Alert'"), 'Review sets Update Alert');
+assert(admin.includes('pickExpiryExtension'), 'Extend uses a picker, not a fixed +24h');
+assert(admin.includes("label: '+4 hours'") && admin.includes("label: '+7 days'"), 'Extend presets include +4h and +7d');
+assert(admin.includes('id="excl-train-grid-a"') && admin.includes('id="excl-train-grid-b"'), 'exclusions show both directions');
+assert(!admin.includes('id="excl-direction"'), 'exclusion direction dropdown removed');
+assert(admin.includes('Show NO SVC / SPL tag on export image'), 'export-only NO SVC toggle present');
+assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');
 assert(admin.includes('openAliasModal'), 'alias uses a real modal');

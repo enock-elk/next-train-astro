@@ -11529,8 +11529,8 @@ const Admin = {
             alertPanel.parentNode.appendChild(exclPanel);
         }
 
-        if (exclPanel.dataset.adminLoaded === "true") return;
-        exclPanel.dataset.adminLoaded = "true";
+        if (exclPanel.dataset.adminLoaded === "excl-both-dirs-v1") return;
+        exclPanel.dataset.adminLoaded = "excl-both-dirs-v1";
 
         exclPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
@@ -11545,29 +11545,13 @@ const Admin = {
             
             <div id="excl-body" class="hidden mt-4 space-y-3">
                 <div id="excl-review-banner" class="hidden text-[10px] leading-snug px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-200"></div>
-                <div class="flex space-x-2">
-                    <div class="relative w-2/3" id="excl-route-container">
-                        <select id="excl-route" class="hidden"></select>
-                        <div onclick="document.getElementById('excl-route-list').classList.toggle('hidden'); document.getElementById('excl-route-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                            <span id="excl-route-display" class="truncate flex items-center">Select Route...</span>
-                            <svg id="excl-route-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                        <ul id="excl-route-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
+                <div class="relative w-full" id="excl-route-container">
+                    <select id="excl-route" class="hidden"></select>
+                    <div onclick="document.getElementById('excl-route-list').classList.toggle('hidden'); document.getElementById('excl-route-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                        <span id="excl-route-display" class="truncate flex items-center">Select Route...</span>
+                        <svg id="excl-route-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </div>
-                    <div class="relative w-1/3" id="excl-direction-container">
-                        <select id="excl-direction" class="hidden">
-                            <option value="A">To Dest A</option>
-                            <option value="B">To Dest B</option>
-                        </select>
-                        <div onclick="document.getElementById('excl-direction-list').classList.toggle('hidden'); document.getElementById('excl-direction-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
-                            <span id="excl-direction-display" class="truncate">To Dest A</span>
-                            <svg id="excl-direction-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                        <ul id="excl-direction-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-hidden text-left">
-                            <li onclick="document.getElementById('excl-direction').value='A'; document.getElementById('excl-direction-display').textContent=this.textContent; document.getElementById('excl-direction-list').classList.add('hidden'); document.getElementById('excl-direction-chevron').classList.remove('rotate-180'); document.getElementById('excl-direction').dispatchEvent(new Event('change'));" id="excl-dir-opt-a" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer">To Dest A</li>
-                            <li onclick="document.getElementById('excl-direction').value='B'; document.getElementById('excl-direction-display').textContent=this.textContent; document.getElementById('excl-direction-list').classList.add('hidden'); document.getElementById('excl-direction-chevron').classList.remove('rotate-180'); document.getElementById('excl-direction').dispatchEvent(new Event('change'));" id="excl-dir-opt-b" class="px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors cursor-pointer">To Dest B</li>
-                        </ul>
-                    </div>
+                    <ul id="excl-route-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
                 </div>
 
                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -11606,16 +11590,29 @@ const Admin = {
                     <button id="excl-load-trains-btn" class="w-1/3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold rounded-lg text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors focus:outline-none">Load</button>
                 </div>
 
-                <div id="excl-train-picker" class="hidden border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-900">
-                    <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">Select Trains:</p>
-                    <div id="excl-train-grid" class="grid grid-cols-4 gap-2 text-xs max-h-40 overflow-y-auto"></div>
+                <div id="excl-train-picker" class="hidden space-y-2">
+                    <p class="text-[10px] text-gray-400 uppercase font-bold">Select trains in either direction</p>
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                        <div class="px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
+                            <p id="excl-dir-a-label" class="text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-gray-100 truncate">To Dest A</p>
+                            <span id="excl-dir-a-count" class="text-[9px] font-bold text-gray-400 uppercase shrink-0"></span>
+                        </div>
+                        <div id="excl-train-grid-a" class="grid grid-cols-4 gap-2 text-xs max-h-40 overflow-y-auto p-2"></div>
+                    </div>
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                        <div class="px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
+                            <p id="excl-dir-b-label" class="text-[11px] font-black uppercase tracking-wide text-gray-800 dark:text-gray-100 truncate">To Dest B</p>
+                            <span id="excl-dir-b-count" class="text-[9px] font-bold text-gray-400 uppercase shrink-0"></span>
+                        </div>
+                        <div id="excl-train-grid-b" class="grid grid-cols-4 gap-2 text-xs max-h-40 overflow-y-auto p-2"></div>
+                    </div>
                 </div>
                 <div id="excl-staging-bar" class="hidden mt-2 p-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-900/20">
                     <div class="flex items-center justify-between gap-2 mb-1">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">Queued for publish</p>
+                        <p class="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">Selected for publish</p>
                         <button type="button" id="excl-staging-clear" class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-400 hover:underline focus:outline-none">Clear</button>
                     </div>
-                    <p class="text-[9px] text-amber-700/80 dark:text-amber-400/80 mb-1.5">Load direction A, tick trains, then load B and tick more. One publish applies both.</p>
+                    <p class="text-[9px] text-amber-700/80 dark:text-amber-400/80 mb-1.5">Tick trains in either box. One publish applies both directions.</p>
                     <div id="excl-staging-chips" class="flex flex-wrap gap-1"></div>
                 </div>
 
@@ -11672,7 +11669,6 @@ const Admin = {
         const body = document.getElementById('excl-body');
         const chevron = document.getElementById('excl-chevron');
         const routeSelect = document.getElementById('excl-route');
-        const dirSelect = document.getElementById('excl-direction');
         
         const noticeInput = document.getElementById('excl-grid-notice');
         const noticeSaveBtn = document.getElementById('excl-save-notice-btn');
@@ -11720,14 +11716,97 @@ const Admin = {
             if (display && selected) display.textContent = selected.label;
         };
         const loadTrainsBtn = document.getElementById('excl-load-trains-btn');
-        const trainGrid = document.getElementById('excl-train-grid');
+        const trainGridA = document.getElementById('excl-train-grid-a');
+        const trainGridB = document.getElementById('excl-train-grid-b');
         const pickerContainer = document.getElementById('excl-train-picker');
         const saveBtn = document.getElementById('excl-save-btn');
         const stagingBar = document.getElementById('excl-staging-bar');
         const stagingChips = document.getElementById('excl-staging-chips');
         const stagingClearBtn = document.getElementById('excl-staging-clear');
-        /** Trains queued across direction A/B loads before a single publish. */
+        /** Trains ticked in either direction box before a single publish. */
         const exclStaging = new Set();
+        const exclTrainInputs = () => [
+            ...Array.from(trainGridA?.querySelectorAll('input') || []),
+            ...Array.from(trainGridB?.querySelectorAll('input') || []),
+        ];
+
+        const destLabel = (route, dir) => {
+            const raw = dir === 'A' ? (route?.destA || 'Dest A') : (route?.destB || 'Dest B');
+            return `To ${String(raw).replace(' STATION', '')}`;
+        };
+
+        const syncExclDirectionLabels = () => {
+            const rId = routeSelect?.value;
+            const route = (rId && typeof ROUTES !== 'undefined') ? ROUTES[rId] : null;
+            const labelA = document.getElementById('excl-dir-a-label');
+            const labelB = document.getElementById('excl-dir-b-label');
+            if (labelA) labelA.textContent = destLabel(route, 'A');
+            if (labelB) labelB.textContent = destLabel(route, 'B');
+        };
+
+        const sheetKeyForDir = (route, type, dir) => {
+            if (!route?.sheetKeys) return null;
+            if (type === 'weekday') return dir === 'A' ? route.sheetKeys.weekday_to_a : route.sheetKeys.weekday_to_b;
+            if (type === 'saturday') return dir === 'A' ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
+            if (type === 'public_holiday') {
+                return dir === 'A'
+                    ? (route.sheetKeys.pub_to_a || route.sheetKeys.saturday_to_a)
+                    : (route.sheetKeys.pub_to_b || route.sheetKeys.saturday_to_b);
+            }
+            return dir === 'A' ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
+        };
+
+        const trainsFromSheet = (sheetKey) => {
+            if (typeof fullDatabase === 'undefined' || !fullDatabase || !sheetKey) return [];
+            const rawData = fullDatabase[sheetKey];
+            if (!rawData) return [];
+            const set = new Set();
+            try {
+                rawData.forEach((row) => {
+                    Object.keys(row).forEach((k) => {
+                        if (k.match(/^\d{4}[a-zA-Z]*$/)) set.add(k);
+                    });
+                });
+            } catch (e) { console.log(e); }
+            return Array.from(set).sort();
+        };
+
+        const paintExclGrid = (gridEl, trainNumbers, countEl) => {
+            if (!gridEl) return;
+            gridEl.innerHTML = '';
+            if (countEl) countEl.textContent = trainNumbers.length ? `${trainNumbers.length} trains` : 'None';
+            if (!trainNumbers.length) {
+                gridEl.innerHTML = '<div class="col-span-4 text-gray-400">No trains found.</div>';
+                return;
+            }
+            trainNumbers.forEach((tNum) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-1 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer';
+                div.onclick = (e) => {
+                    if (e.target.tagName !== 'INPUT') {
+                        const cb = div.querySelector('input');
+                        cb.checked = !cb.checked;
+                        if (cb.checked) exclStaging.add(tNum);
+                        else exclStaging.delete(tNum);
+                        renderExclStaging();
+                    }
+                };
+                const checked = exclStaging.has(tNum) ? 'checked' : '';
+                div.innerHTML = `
+                    <input type="checkbox" value="${tNum}" ${checked} class="rounded text-blue-600 focus:ring-0 w-3 h-3 cursor-pointer">
+                    <span class="font-mono text-gray-700 dark:text-gray-300">${tNum}</span>
+                `;
+                const cb = div.querySelector('input');
+                if (cb) {
+                    cb.onchange = () => {
+                        if (cb.checked) exclStaging.add(tNum);
+                        else exclStaging.delete(tNum);
+                        renderExclStaging();
+                    };
+                }
+                gridEl.appendChild(div);
+            });
+        };
 
         const renderExclStaging = () => {
             if (!stagingBar || !stagingChips) return;
@@ -11743,18 +11822,19 @@ const Admin = {
             `).join('');
             stagingChips.querySelectorAll('[data-excl-unstaging]').forEach((btn) => {
                 btn.onclick = () => {
-                    exclStaging.delete(btn.getAttribute('data-excl-unstaging'));
-                    const cb = trainGrid?.querySelector(`input[value="${CSS.escape ? CSS.escape(btn.getAttribute('data-excl-unstaging')) : btn.getAttribute('data-excl-unstaging')}"]`);
-                    if (cb) cb.checked = false;
+                    const raw = btn.getAttribute('data-excl-unstaging');
+                    exclStaging.delete(raw);
+                    exclTrainInputs().forEach((cb) => {
+                        if (cb.value === raw) cb.checked = false;
+                    });
                     renderExclStaging();
                 };
             });
         };
 
         const harvestCheckedIntoStaging = () => {
-            if (!trainGrid) return;
-            trainGrid.querySelectorAll('input:checked').forEach((cb) => {
-                if (cb.value) exclStaging.add(cb.value);
+            exclTrainInputs().forEach((cb) => {
+                if (cb.checked && cb.value) exclStaging.add(cb.value);
             });
             renderExclStaging();
         };
@@ -11762,7 +11842,7 @@ const Admin = {
         if (stagingClearBtn) {
             stagingClearBtn.onclick = () => {
                 exclStaging.clear();
-                trainGrid?.querySelectorAll('input').forEach((cb) => { cb.checked = false; });
+                exclTrainInputs().forEach((cb) => { cb.checked = false; });
                 renderExclStaging();
             };
         }
@@ -11801,7 +11881,6 @@ const Admin = {
                         if (chev) chev.classList.remove('rotate-180');
                     }
                 };
-                checkClose('excl-direction-container', 'excl-direction-list', 'excl-direction-chevron');
                 checkClose('excl-schedule-type-container', 'excl-schedule-type-list', 'excl-schedule-type-chevron');
             });
             window._adminExceptionsDropdownsBound = true;
@@ -11927,44 +12006,9 @@ const Admin = {
                     }
                 }
                 syncExclScheduleTypeOptions();
+                syncExclDirectionLabels();
                 if (rId && ROUTES[rId]) {
-                    const r = ROUTES[rId];
-                    
-                    const optA = document.getElementById('excl-dir-opt-a');
-                    const optB = document.getElementById('excl-dir-opt-b');
-                    const display = document.getElementById('excl-direction-display');
-                    
-                    if (dirSelect && dirSelect.options.length >= 2) {
-                        const txtA = `To ${r.destA.replace(' STATION','')}`;
-                        const txtB = `To ${r.destB.replace(' STATION','')}`;
-                        
-                        dirSelect.options[0].textContent = txtA;
-                        dirSelect.options[1].textContent = txtB;
-                        
-                        if (optA) optA.textContent = txtA;
-                        if (optB) optB.textContent = txtB;
-                        
-                        if (display) {
-                            display.textContent = dirSelect.value === 'A' ? txtA : txtB;
-                        }
-                    }
                     fetchExclusions();
-                } else {
-                    const optA = document.getElementById('excl-dir-opt-a');
-                    const optB = document.getElementById('excl-dir-opt-b');
-                    const display = document.getElementById('excl-direction-display');
-
-                    if (dirSelect && dirSelect.options.length >= 2) {
-                        dirSelect.options[0].textContent = "To Dest A";
-                        dirSelect.options[1].textContent = "To Dest B";
-                        
-                        if (optA) optA.textContent = "To Dest A";
-                        if (optB) optB.textContent = "To Dest B";
-
-                        if (display) {
-                            display.textContent = dirSelect.value === 'A' ? "To Dest A" : "To Dest B";
-                        }
-                    }
                 }
             });
             
@@ -11972,6 +12016,7 @@ const Admin = {
             routeSelect.dispatchEvent(new Event('change'));
         } else {
             syncExclScheduleTypeOptions();
+            syncExclDirectionLabels();
         }
 
         const days = ['S','M','T','W','T','F','S'];
@@ -11988,90 +12033,35 @@ const Admin = {
         function getSelectedDays() { return Array.from(daysContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value)); }
 
         loadTrainsBtn.onclick = () => {
-            // Keep picks from the previous direction when loading the other side
             harvestCheckedIntoStaging();
 
             const rId = routeSelect.value;
             const type = schedTypeSelect.value;
-            const dir = dirSelect.value;
 
             if (!rId) { if (typeof showToast === 'function') showToast("Select a route first", "error"); return; }
             const route = ROUTES[rId];
             if (!route) return;
 
-            let sheetKey = null;
-            if (type === 'weekday') {
-                sheetKey = (dir === 'A') ? route.sheetKeys.weekday_to_a : route.sheetKeys.weekday_to_b;
-            } else if (type === 'saturday') {
-                sheetKey = (dir === 'A') ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
-            } else if (type === 'public_holiday') {
-                // WC dedicated *_pub sheets; fall back to saturday if a pub key is missing.
-                sheetKey = (dir === 'A')
-                    ? (route.sheetKeys.pub_to_a || route.sheetKeys.saturday_to_a)
-                    : (route.sheetKeys.pub_to_b || route.sheetKeys.saturday_to_b);
-            } else if (type === 'sunday') {
-                sheetKey = (dir === 'A') ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
-            }
-            
             if (typeof fullDatabase === 'undefined' || !fullDatabase) {
                 if (typeof showToast === 'function') showToast("Database not ready. Refresh app.", "error");
                 return;
             }
 
-            const rawData = fullDatabase[sheetKey];
-            if (!rawData) {
+            const trainsA = trainsFromSheet(sheetKeyForDir(route, type, 'A'));
+            const trainsB = trainsFromSheet(sheetKeyForDir(route, type, 'B'));
+            if (!trainsA.length && !trainsB.length) {
                 if (typeof showToast === 'function') showToast(`No data found for ${type}`, "error");
                 return;
             }
 
-            let trainNumbersSet = new Set();
-            try {
-                rawData.forEach(row => {
-                    Object.keys(row).forEach(k => {
-                        if (k.match(/^\d{4}[a-zA-Z]*$/)) trainNumbersSet.add(k);
-                    });
-                });
-            } catch(e) { console.log(e); }
-            
-            let trainNumbers = Array.from(trainNumbersSet).sort();
-
-            trainGrid.innerHTML = '';
-            if (trainNumbers.length === 0) {
-                trainGrid.innerHTML = '<div class="col-span-4 text-gray-400">No trains found.</div>';
-            } else {
-                trainNumbers.forEach(tNum => {
-                    const div = document.createElement('div');
-                    div.className = "flex items-center space-x-1 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer";
-                    div.onclick = (e) => {
-                        if (e.target.tagName !== 'INPUT') {
-                            const cb = div.querySelector('input');
-                            cb.checked = !cb.checked;
-                            if (cb.checked) exclStaging.add(tNum);
-                            else exclStaging.delete(tNum);
-                            renderExclStaging();
-                        }
-                    };
-                    const checked = exclStaging.has(tNum) ? 'checked' : '';
-                    div.innerHTML = `
-                        <input type="checkbox" value="${tNum}" ${checked} class="rounded text-blue-600 focus:ring-0 w-3 h-3 cursor-pointer">
-                        <span class="font-mono text-gray-700 dark:text-gray-300">${tNum}</span>
-                    `;
-                    const cb = div.querySelector('input');
-                    if (cb) {
-                        cb.onchange = () => {
-                            if (cb.checked) exclStaging.add(tNum);
-                            else exclStaging.delete(tNum);
-                            renderExclStaging();
-                        };
-                    }
-                    trainGrid.appendChild(div);
-                });
-            }
+            syncExclDirectionLabels();
+            paintExclGrid(trainGridA, trainsA, document.getElementById('excl-dir-a-count'));
+            paintExclGrid(trainGridB, trainsB, document.getElementById('excl-dir-b-count'));
             pickerContainer.classList.remove('hidden');
             document.getElementById('excl-train-manual')?.classList.remove('hidden');
             renderExclStaging();
             if (typeof showToast === 'function') {
-                showToast(`Loaded ${dir === 'A' ? 'direction A' : 'direction B'}. Queued: ${exclStaging.size}.`, 'info', 1800);
+                showToast(`Loaded ${trainsA.length} + ${trainsB.length} trains. Selected: ${exclStaging.size}.`, 'info', 1800);
             }
         };
 
@@ -12250,7 +12240,7 @@ const Admin = {
             const manualTrain = document.getElementById('excl-train-manual').value.trim();
             const selectedTrains = Array.from(new Set([
                 ...Array.from(exclStaging),
-                ...Array.from(trainGrid.querySelectorAll('input:checked')).map(cb => cb.value),
+                ...exclTrainInputs().filter((cb) => cb.checked).map((cb) => cb.value),
                 ...(manualTrain ? [manualTrain] : []),
             ].filter(Boolean)));
 
@@ -12298,7 +12288,7 @@ const Admin = {
                 if (typeof showToast === 'function') showToast(`Updated ${selectedTrains.length} exceptions!`, "success");
                 exclStaging.clear();
                 renderExclStaging();
-                trainGrid.querySelectorAll('input').forEach(cb => cb.checked = false);
+                exclTrainInputs().forEach((cb) => { cb.checked = false; });
                 document.getElementById('excl-train-manual').value = '';
                 document.getElementById('excl-expiry').value = ''; 
                 fetchExclusions();

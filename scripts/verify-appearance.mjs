@@ -53,7 +53,8 @@ assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Servic
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
 assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
-assert(!css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'Earthy/Ember no longer wash the bell into the header');
+assert(!css.includes('background-color: var(--nt-surface) !important;\n  color: var(--nt-chrome-fg) !important;'), 'Earthy/Ember no longer wash the bell into the header');
+assert(css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'paper packs keep a stronger bell ring');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');

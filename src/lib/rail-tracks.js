@@ -18,8 +18,10 @@ const HOP_DETOUR_RATIO = 2.8;
 const HOP_DETOUR_MIN_M = 900;
 const HOP_STRAY_M = 600;
 const SKIP_STATION_M = 90;
-/** Reject a hop that walks forward then back along the station chord (A>C>B). */
+/** Reject a hop that still folds after unfold (A>C>B). */
 const HOP_BACKTRACK_M = 80;
+/** Strip yard scribbles that only reverse a few dozen metres. */
+const HOP_UNFOLD_M = 25;
 const cache = new Map(); // region -> { features, graph } | null
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -252,6 +254,29 @@ export function hopBacktracksAlongChord(points, a, b, slackM = HOP_BACKTRACK_M) 
     return false;
 }
 
+/** Drop yard scribbles and overshoot-past-B loops. Keep the advancing rail. */
+export function unfoldHop(seg, a, b, slackM = HOP_UNFOLD_M) {
+    if (!seg || seg.length < 2 || !a || !b) return seg;
+    const target = chordProgressM(b.lat, b.lon, a.lat, a.lon, b.lat, b.lon);
+    const out = [seg[0]];
+    let prev = chordProgressM(seg[0][0], seg[0][1], a.lat, a.lon, b.lat, b.lon);
+    for (let i = 1; i < seg.length; i++) {
+        const p = seg[i];
+        const prog = chordProgressM(p[0], p[1], a.lat, a.lon, b.lat, b.lon);
+        if (prog < prev - slackM) continue;
+        if (prog > target + slackM) {
+            out.push([b.lat, b.lon]);
+            break;
+        }
+        if (prog > prev) prev = prog;
+        out.push(p);
+        if (prog >= target - 15) break;
+    }
+    const last = out[out.length - 1];
+    if (haversineM(last[0], last[1], b.lat, b.lon) > 50) out.push([b.lat, b.lon]);
+    return out.length >= 2 ? out : [[a.lat, a.lon], [b.lat, b.lon]];
+}
+
 function featureLines(feature) {
     const geom = feature?.geometry;
     if (!geom) return [];
@@ -330,6 +355,11 @@ function hopSegmentAllowed(seg, a, b, stops, hopIndex) {
     return true;
 }
 
+function finalizeHop(seg, a, b, stops, hopIndex) {
+    const clean = unfoldHop(seg, a, b);
+    return hopSegmentAllowed(clean, a, b, stops, hopIndex) ? clean : null;
+}
+
 function appendHop(out, seg) {
     if (!seg || seg.length < 2) return;
     if (!out.length) out.push(...seg);
@@ -356,8 +386,8 @@ function bakedHopSegment(features, a, b, stops, hopIndex, preferredIds) {
     }
     for (const f of preferred.concat(rest)) {
         for (const line of featureLines(f)) {
-            const seg = slicePathBetween(line, a, b);
-            if (hopSegmentAllowed(seg, a, b, stops, hopIndex)) return seg;
+            const seg = finalizeHop(slicePathBetween(line, a, b), a, b, stops, hopIndex);
+            if (seg) return seg;
         }
     }
     return null;
@@ -374,10 +404,9 @@ function graphHopSegment(graph, a, b, stops, hopIndex) {
         const n = graph.nodes[id];
         return /** @type {[number, number]} */ ([n.lat, n.lon]);
     });
-    if (!hopSegmentAllowed(seg, a, b, stops, hopIndex)) return null;
     if (hopSkipsRouteStop(graph, nodePath, stops, hopIndex)) return null;
     if (hopStraysFromChord(graph, nodePath, a, b)) return null;
-    return seg;
+    return finalizeHop(seg, a, b, stops, hopIndex);
 }
 
 async function loadRegionBundle(region) {

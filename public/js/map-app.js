@@ -346,8 +346,10 @@
         const RAIL_MAX_BAKED_EDGE_M = 6000;
         /** Rail doubling back at a junction may nudge station order by this much. */
         const RAIL_BAKED_ORDER_SLACK_M = 1500;
-        /** Reject a hop that walks forward then back along the station chord (A>C>B). */
+        /** Reject a hop that still folds after unfold (A>C>B). */
         const RAIL_HOP_BACKTRACK_M = 80;
+        /** Strip yard scribbles that only reverse a few dozen metres. */
+        const RAIL_HOP_UNFOLD_M = 25;
 
         function railHaversineM(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -513,6 +515,28 @@
             return false;
         }
 
+        function unfoldHop(seg, a, b, slackM = RAIL_HOP_UNFOLD_M) {
+            if (!seg || seg.length < 2 || !a || !b) return seg;
+            const target = chordProgressM(b.lat, b.lon, a.lat, a.lon, b.lat, b.lon);
+            const out = [seg[0]];
+            let prev = chordProgressM(seg[0][0], seg[0][1], a.lat, a.lon, b.lat, b.lon);
+            for (let i = 1; i < seg.length; i++) {
+                const p = seg[i];
+                const prog = chordProgressM(p[0], p[1], a.lat, a.lon, b.lat, b.lon);
+                if (prog < prev - slackM) continue;
+                if (prog > target + slackM) {
+                    out.push([b.lat, b.lon]);
+                    break;
+                }
+                if (prog > prev) prev = prog;
+                out.push(p);
+                if (prog >= target - 15) break;
+            }
+            const last = out[out.length - 1];
+            if (railHaversineM(last[0], last[1], b.lat, b.lon) > 50) out.push([b.lat, b.lon]);
+            return out.length >= 2 ? out : [[a.lat, a.lon], [b.lat, b.lon]];
+        }
+
         function latlngsLengthM(latlngs) {
             if (!latlngs || latlngs.length < 2) return 0;
             let sum = 0;
@@ -564,6 +588,11 @@
             if (hopSkipsRouteStopOnLatLngs(seg, stops, hopIndex)) return false;
             if (hopBacktracksAlongChord(seg, a, b)) return false;
             return true;
+        }
+
+        function finalizeHop(seg, a, b, stops, hopIndex) {
+            const clean = unfoldHop(seg, a, b);
+            return hopSegmentAllowed(clean, a, b, stops, hopIndex) ? clean : null;
         }
 
         function slicePathBetween(latlngs, a, b) {
@@ -644,8 +673,9 @@
                         const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
                         const skips = railHopSkipsRouteStop(graph, nodePath, stops, i);
                         const strays = railHopStraysFromChord(graph, nodePath, a, b);
-                        if (!skips && !strays && hopSegmentAllowed(seg, a, b, stops, i)) {
-                            appendHop(out, seg);
+                        const clean = (!skips && !strays) ? finalizeHop(seg, a, b, stops, i) : null;
+                        if (clean) {
+                            appendHop(out, clean);
                             usedRail = true;
                         }
                     }
@@ -816,8 +846,8 @@
                 const a = stops[i];
                 const b = stops[i + 1];
                 if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
-                const bakedSeg = baked ? slicePathBetween(baked, a, b) : null;
-                if (hopSegmentAllowed(bakedSeg, a, b, stops, i)) {
+                const bakedSeg = finalizeHop(baked ? slicePathBetween(baked, a, b) : null, a, b, stops, i);
+                if (bakedSeg) {
                     appendHop(out, bakedSeg);
                     continue;
                 }
@@ -831,8 +861,9 @@
                             const seg = nodePath.map((id) => [bundle.graph.nodes[id].lat, bundle.graph.nodes[id].lon]);
                             const skips = railHopSkipsRouteStop(bundle.graph, nodePath, stops, i);
                             const strays = railHopStraysFromChord(bundle.graph, nodePath, a, b);
-                            if (!skips && !strays && hopSegmentAllowed(seg, a, b, stops, i)) {
-                                appendHop(out, seg);
+                            const clean = (!skips && !strays) ? finalizeHop(seg, a, b, stops, i) : null;
+                            if (clean) {
+                                appendHop(out, clean);
                                 usedRail = true;
                             }
                         }

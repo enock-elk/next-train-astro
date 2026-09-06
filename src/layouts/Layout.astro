@@ -57,6 +57,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var lastSys = -1;
         var lastH = -1;
         var lastLayoutH = 0;
+        var lastFullLayoutH = 0;
         function markStandalone() {
           var on = false;
           try {
@@ -117,9 +118,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // would push #nt-shell (and the oval) below the screen (S9+).
           var h = inner || client || vh || 240;
           if (client > 0) h = Math.min(h, client);
-          if (editing && lastLayoutH && h < lastLayoutH - 80) {
+          var full = lastFullLayoutH || lastLayoutH || h;
+          // visualViewport shrinks first on Android. Do not treat that as the
+          // new full-screen height or the oval rides up with the IME.
+          if (editing && vv && vv.height && (full - vv.height) > 140) {
             keyboard = true;
-            h = lastLayoutH;
+          }
+          if (editing && full && h < full - 80) {
+            keyboard = true;
           }
           if (!keyboard) {
             if (vv && vv.height) {
@@ -127,10 +133,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               if (vis >= 240) h = Math.min(h, vis);
             }
             lastLayoutH = h;
-          } else if (lastLayoutH > h) {
-            h = lastLayoutH;
+            lastFullLayoutH = h;
+          } else {
+            h = full;
+            lastLayoutH = full;
           }
-          if (h < 240) h = lastLayoutH || inner || vh || 240;
+          if (h < 240) h = lastFullLayoutH || lastLayoutH || inner || vh || 240;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
@@ -872,6 +880,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
         padding-bottom: 4.75rem;
         box-sizing: border-box;
+      }
+      /* Community composer lifts above the IME. The oval stays at layout bottom. */
+      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
+        padding-bottom: max(0.5rem, calc(var(--nt-app-h, 100dvh) - var(--nt-vv-h, 100dvh)));
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

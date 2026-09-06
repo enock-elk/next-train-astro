@@ -1394,7 +1394,7 @@ export function extractTripCoordinates(tripIndex) {
     const validStops = []; 
     const globalStationIndex = $globalStationIndex.get();
 
-    const addStops = (stopsArray) => {
+    const addStops = (stopsArray, routeId) => {
         if (!stopsArray) return;
         stopsArray.forEach(stop => {
             if (stop.time === "---") return;
@@ -1404,6 +1404,7 @@ export function extractTripCoordinates(tripIndex) {
             if (stationNames.length > 0 && stationNames[stationNames.length - 1] === name) {
                 const last = validStops[validStops.length - 1];
                 if (last && stop.time) last.timeOut = stop.time;
+                if (last && routeId && !last.routeId) last.routeId = routeId;
                 return;
             }
 
@@ -1418,23 +1419,24 @@ export function extractTripCoordinates(tripIndex) {
                     lat: coord[0],
                     lon: coord[1],
                     time: stop.time || null,
-                    timeOut: null
+                    timeOut: null,
+                    routeId: routeId || null
                 });
             }
         });
     };
 
     if (trip.type === 'DIRECT') {
-        addStops(trip.stops);
+        addStops(trip.stops, trip.route?.id);
     } else if (trip.type === 'TRANSFER') {
-        addStops(trip.leg1.stops);
-        addStops(trip.leg2.stops);
+        addStops(trip.leg1.stops, trip.leg1.route?.id);
+        addStops(trip.leg2.stops, trip.leg2.route?.id);
     } else if (trip.type === 'DOUBLE_TRANSFER') {
-        addStops(trip.leg1.stops);
-        addStops(trip.leg2.stops);
-        addStops(trip.leg3.stops);
+        addStops(trip.leg1.stops, trip.leg1.route?.id);
+        addStops(trip.leg2.stops, trip.leg2.route?.id);
+        addStops(trip.leg3.stops, trip.leg3.route?.id);
     } else if (trip.type === 'MULTI_TRANSFER' || trip.legs) {
-        trip.legs.forEach(leg => addStops(leg.stops));
+        trip.legs.forEach(leg => addStops(leg.stops, leg.route?.id));
     }
 
     if (coordinates.length === 0) {

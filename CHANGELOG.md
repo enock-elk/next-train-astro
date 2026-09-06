@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.11 — Planner rails + Community keyboard nav (6 Sep 2026)
+
+no release notes.
+
+- Trip Planner map slices the same baked corridor as the network map per hop. Off-track stations stub onto the rail. One failed hop no longer forces the whole journey to straight chords. `map-app.js` is unchanged.
+- Bottom nav keeps the last full-screen layout height while the IME is open so the oval stays at the physical bottom. Community composer uses the visual-viewport gap as padding.
+
 ## V9_09.06.10 — Lenz hop, exclusion edit, Feedback Hub keyboard (6 Sep 2026)
 
 no release notes.

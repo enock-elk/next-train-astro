@@ -7,7 +7,11 @@
 import { withBase } from './config.js';
 
 const SNAP_MAX_M = 900;
-const MAX_HOPS = 14000;
+const MAX_HOPS = 80000;
+/** Station coords may sit off the rail; still slice the bake within this. */
+const BAKED_COVER_M = 900;
+/** Draw a short stub from an off-track station onto the rail. */
+const STUB_MIN_M = 20;
 /**
  * Longest edge accepted from a baked line. The bake keeps a straight chord
  * where OSM has no rail (~3.2 km at most), so those edges must stay in the
@@ -249,7 +253,12 @@ async function loadRegionBundle(region) {
             return null;
         }
         const graph = buildGraph(features);
-        const bundle = { features, graph };
+        const byId = new Map();
+        for (const f of features) {
+            const id = f?.properties?.routeId;
+            if (id) byId.set(id, f);
+        }
+        const bundle = { features, graph, byId };
         cache.set(key, bundle);
         return bundle;
     } catch {
@@ -258,11 +267,83 @@ async function loadRegionBundle(region) {
     }
 }
 
+function featureLatLngs(feature) {
+    const coords = feature?.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    return coords
+        .map((pair) => (pair && pair.length >= 2 ? [pair[1], pair[0]] : null))
+        .filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+}
+
+function nearestPathIndexM(path, lat, lon, maxM = BAKED_COVER_M) {
+    if (!path?.length) return -1;
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < path.length; i++) {
+        const d = haversineM(path[i][0], path[i][1], lat, lon);
+        if (d < bestD) {
+            bestD = d;
+            best = i;
+        }
+    }
+    return bestD <= maxM ? best : -1;
+}
+
+/** Slice a baked corridor between two stops. Stations may sit off the rail. */
+function sliceBakedHop(feature, a, b) {
+    const latlngs = featureLatLngs(feature);
+    if (!latlngs || latlngs.length < 2 || !a || !b) return null;
+    const i1 = nearestPathIndexM(latlngs, a.lat, a.lon);
+    const i2 = nearestPathIndexM(latlngs, b.lat, b.lon);
+    if (i1 < 0 || i2 < 0) return null;
+    if (i1 === i2) return null;
+    const seg = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
+    return seg.length > 1 ? seg : null;
+}
+
+function appendPoint(out, lat, lon) {
+    const last = out[out.length - 1];
+    if (last && last[0] === lat && last[1] === lon) return;
+    out.push([lat, lon]);
+}
+
+function appendSeg(out, seg, fromStop, toStop) {
+    if (!seg || seg.length < 2) return;
+    if (fromStop && haversineM(fromStop.lat, fromStop.lon, seg[0][0], seg[0][1]) >= STUB_MIN_M) {
+        appendPoint(out, fromStop.lat, fromStop.lon);
+    }
+    if (!out.length) out.push(...seg);
+    else out.push(...seg.slice(1));
+    const end = seg[seg.length - 1];
+    if (toStop && haversineM(toStop.lat, toStop.lon, end[0], end[1]) >= STUB_MIN_M) {
+        appendPoint(out, toStop.lat, toStop.lon);
+    }
+}
+
+function graphHop(graph, a, b, stops, hopIndex) {
+    const snapA = nearestNode(graph, a.lat, a.lon);
+    const snapB = nearestNode(graph, b.lat, b.lon);
+    if (snapA == null || snapB == null) return null;
+    const nodePath = shortestPath(graph, snapA, snapB);
+    if (!nodePath || nodePath.length < 2) return null;
+    const chordM = haversineM(a.lat, a.lon, b.lat, b.lon);
+    const railM = pathLengthM(graph, nodePath);
+    if (hopSkipsRouteStop(graph, nodePath, stops, hopIndex)) return null;
+    if (hopStraysFromChord(graph, nodePath, a, b)) return null;
+    if (hopDetourTooLong(chordM, railM)) return null;
+    return nodePath.map((id) => {
+        const n = graph.nodes[id];
+        return /** @type {[number, number]} */ ([n.lat, n.lon]);
+    });
+}
+
 /**
  * Snap an ordered list of stop coords onto OSM rails → dense [lat, lon][] path.
- * Returns null if tracks unavailable or pathfinding fails completely.
+ * Uses the baked corridor for each hop when routeId is known. Off-track
+ * stations get a short stub onto the rail; a hop that cannot snap stays a
+ * chord so the rest of the journey can still follow the tracks.
  *
- * @param {Array<{ lat: number, lon: number }>} stops
+ * @param {Array<{ lat: number, lon: number, routeId?: string }>} stops
  * @param {string} [region]
  * @returns {Promise<Array<[number, number]>|null>}
  */
@@ -271,7 +352,7 @@ export async function smoothPathFromStops(stops, region = 'GP') {
     const bundle = await loadRegionBundle(region);
     if (!bundle?.graph) return null;
 
-    const { graph } = bundle;
+    const { graph, byId } = bundle;
     /** @type {Array<[number, number]>} */
     const out = [];
     let railHops = 0;
@@ -281,37 +362,28 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         const b = stops[i + 1];
         if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
 
-        const snapA = nearestNode(graph, a.lat, a.lon);
-        const snapB = nearestNode(graph, b.lat, b.lon);
-
-        if (snapA != null && snapB != null) {
-            const nodePath = shortestPath(graph, snapA, snapB);
-            if (nodePath && nodePath.length >= 2) {
-                const chordM = haversineM(a.lat, a.lon, b.lat, b.lon);
-                const railM = pathLengthM(graph, nodePath);
-                const skips = hopSkipsRouteStop(graph, nodePath, stops, i);
-                const strays = hopStraysFromChord(graph, nodePath, a, b);
-                if (!skips && !strays && !hopDetourTooLong(chordM, railM)) {
-                    const seg = nodePath.map((id) => {
-                        const n = graph.nodes[id];
-                        return /** @type {[number, number]} */ ([n.lat, n.lon]);
-                    });
-                    if (!out.length) out.push(...seg);
-                    else out.push(...seg.slice(1));
-                    railHops++;
-                    continue;
-                }
-            }
+        const routeId = a.routeId || b.routeId;
+        const baked = routeId && byId ? byId.get(routeId) : null;
+        const bakedSeg = baked ? sliceBakedHop(baked, a, b) : null;
+        if (bakedSeg) {
+            appendSeg(out, bakedSeg, a, b);
+            railHops++;
+            continue;
         }
 
-        // Chord fallback for this hop only
-        if (!out.length) out.push([a.lat, a.lon]);
-        out.push([b.lat, b.lon]);
+        const graphSeg = graphHop(graph, a, b, stops, i);
+        if (graphSeg) {
+            appendSeg(out, graphSeg, a, b);
+            railHops++;
+            continue;
+        }
+
+        appendPoint(out, a.lat, a.lon);
+        appendPoint(out, b.lat, b.lon);
     }
 
-    if (out.length < 2 || railHops !== stops.length - 1) return null;
+    if (out.length < 2) return null;
 
-    // Deduplicate consecutive duplicates
     const deduped = [out[0]];
     for (let i = 1; i < out.length; i++) {
         const p = out[i];

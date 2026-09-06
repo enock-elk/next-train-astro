@@ -365,6 +365,8 @@ assert(layout.includes('var(--nt-feedback-vv-height, var(--nt-vv-h'), 'Feedback 
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
+assert(layout.includes('lastFullLayoutH'), 'keyboard does not overwrite the full-screen layout height');
+assert(layout.includes('#view-community.view-section.active'), 'Community composer lifts above the IME');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');

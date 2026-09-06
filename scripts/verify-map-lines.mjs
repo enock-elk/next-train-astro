@@ -87,6 +87,10 @@ assert(
     'Ndabeni→Pinelands hop that does not pass Hazendal is kept'
 );
 
+const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+assert(plannerUi.includes('routeId: routeId || null'), 'planner trip stops carry a corridor id for the bake slice');
+assert(plannerUi.includes('addStops(trip.stops, trip.route?.id)'), 'direct trips pass the route id into the trip map');
+
 const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
 assert(!mapView.includes('Share my location'), 'Map tab has no Share my location control');
 assert(!mapView.includes('map-tab-contribute-btn'), 'Map tab dropped the share-location button');
@@ -251,7 +255,36 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
-assert(railTracks.includes('railHops !== stops.length - 1'), 'planner trip map requires every hop before accepting graph smoothing');
+assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked corridor per hop');
+assert(railTracks.includes('STUB_MIN_M'), 'off-track planner stations stub onto the rail');
+assert(!railTracks.includes('railHops !== stops.length - 1'), 'planner keeps rail hops when one station sits off the track');
+assert(mapApp.includes('railHops !== stops.length - 1'), 'network map paint rule is unchanged');
+
+{
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const belle = gp.features.find((f) => f.properties?.routeId === 'mab-belle');
+    const coords = belle?.geometry?.coordinates || [];
+    const stops = belle?.properties?.stationCoords || [];
+    let hopPts = 0;
+    for (let i = 0; i < stops.length - 1; i++) {
+        const [aLat, aLon] = stops[i];
+        const [bLat, bLon] = stops[i + 1];
+        let i1 = -1;
+        let i2 = -1;
+        let d1 = Infinity;
+        let d2 = Infinity;
+        for (let k = 0; k < coords.length; k++) {
+            const [lon, lat] = coords[k];
+            const da = haversineM(lat, lon, aLat, aLon);
+            const db = haversineM(lat, lon, bLat, bLon);
+            if (da < d1) { d1 = da; i1 = k; }
+            if (db < d2) { d2 = db; i2 = k; }
+        }
+        assert(d1 <= 900 && d2 <= 900, `mab-belle hop ${i} is farther than 900m from the bake`);
+        hopPts += Math.abs(i2 - i1);
+    }
+    assert(hopPts > (stops.length - 1) * 4, `mab-belle planner hops should be rail-dense, got ${hopPts} pts over ${stops.length - 1} hops`);
+}
 const wcTracks = readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8');
 assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to Bellville');
 

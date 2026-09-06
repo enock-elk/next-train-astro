@@ -93,22 +93,26 @@ export function paintHeaderDayLabel(opts = {}) {
     bindHeaderDayFit();
 }
 
-/** Match #current-day to the Next Train title, then shrink that day's string to the brand width. */
+/** Fit #current-day under Next Train. Cap well below the title so it stays a subtitle. */
 export function fitHeaderDayLabel() {
     if (typeof document === 'undefined') return;
     const el = document.getElementById('current-day');
     const title = document.getElementById('app-title');
     if (!el) return;
     const titleSize = title ? parseFloat(getComputedStyle(title).fontSize) : 0;
-    const maxPx = Number.isFinite(titleSize) && titleSize > 8 ? titleSize : 32;
-    const minPx = Math.max(11, maxPx * 0.4);
+    const titlePx = Number.isFinite(titleSize) && titleSize > 8 ? titleSize : 32;
+    const maxPx = Math.min(titlePx * 0.55, 22);
+    const minPx = 12;
     const host = el.closest('.header-brand-block') || el.parentElement || el;
     const avail = host.clientWidth || 0;
-    if (avail < 16) return;
     el.style.whiteSpace = 'nowrap';
     el.style.maxWidth = '100%';
     el.style.display = 'block';
     el.style.boxSizing = 'border-box';
+    if (avail < 16) {
+        el.style.fontSize = `${maxPx}px`;
+        return;
+    }
     let lo = minPx;
     let hi = maxPx;
     let best = minPx;

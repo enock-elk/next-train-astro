@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.3 — Day subtitle + Feedback Hub keyboard (6 Sep 2026)
+
+no release notes.
+
+- `#current-day` is a subtitle again (about 55% of the Next Train title, max 22px, weight 700). Same chrome color for the whole line, including No Service. First paint is `1.05rem`, not a second `2.55rem` title.
+- Feedback Hub / Send Feedback size to `--nt-vv-h` (visual viewport) with `!important`, so `--nt-app-h` cannot keep the composer behind the Android keyboard. Hub JS also sets `maxHeight` and retries on focus.
+
 ## V9_09.06.2 — Header day line, nav pin, planner toolbar (6 Sep 2026)
 
 no release notes.

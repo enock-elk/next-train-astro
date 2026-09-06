@@ -559,31 +559,32 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 }
 #current-day,
 #current-day.header-day-label {
-  font-weight: 900;
-  letter-spacing: -0.035em;
-  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   max-width: 100%;
   color: var(--nt-chrome-fg);
-  /* Same face as #app-title until JS fits that day's string. */
-  font-size: 2.55rem;
+  /* Subtitle under Next Train — never a second 2.55rem title. */
+  font-size: 1.05rem;
 }
 @media (min-width: 640px) {
   #current-day,
   #current-day.header-day-label {
-    font-size: 2.75rem;
+    font-size: 1.15rem;
   }
 }
 .chrome-compact #current-day,
 .chrome-compact #current-day.header-day-label,
 body.chrome-compact #current-day,
 body.chrome-compact #current-day.header-day-label {
-  font-size: 2rem;
+  font-size: 1rem;
 }
 #current-day span {
   font-weight: inherit;
   letter-spacing: inherit;
+  color: inherit;
 }
 
 /* Brand-left header: solid pack primary (Ember → amber/orange) */
@@ -1099,12 +1100,12 @@ html:not([data-colour-pack]) #current-day span {
 }
 html[data-colour-pack="classic"] #current-day span.text-red-600,
 html:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: #fecaca !important;
+  color: inherit !important;
 }
 html.dark[data-colour-pack="classic"] #current-day span.text-red-600,
 html.dark[data-colour-pack="classic"] #current-day span.dark\:text-red-400,
 html.dark:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: #fca5a5 !important;
+  color: inherit !important;
 }
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),

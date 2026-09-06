@@ -41,8 +41,10 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
-assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales to the title then the brand width');
-assert(logic.includes('el.scrollWidth <= avail + 0.75'), 'day line fit measures overflow against the brand column');
+assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales as a subtitle under the title');
+assert(logic.includes('titlePx * 0.55'), 'day line stays at most 55% of the Next Train title');
+assert(css.includes('font-size: 1.05rem') && css.includes('#current-day'), 'day line CSS default is a subtitle, not 2.55rem');
+assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
@@ -317,6 +319,7 @@ assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinn
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
 assert(hubJs.includes("if (id === 'messages-thread-modal')"), 'only Feedback Hub card is stretched to 100%');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
+assert(hubJs.includes('modal.style.maxHeight'), 'Feedback Hub maxHeight follows the keyboard');
 assert(hubJs.includes('fieldRect.height > availableHeight'), 'tall feedback fields align their first line inside a short scroller');
 assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');
 assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
@@ -340,6 +343,8 @@ assert(layout.includes('--nt-nav-lift'), 'nav lift token pulls the oval up when 
 assert(layout.includes('0.5rem + var(--nt-sys-bottom'), 'oval sits inset from the frame edge so the curve is not clipped');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
+assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
+assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');

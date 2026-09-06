@@ -37,7 +37,7 @@ const ctaLabel =
       </p>
     </a>
     <div class="header-meta mt-1 min-w-0 w-full">
-      <p id="current-day" class="header-day-label font-black leading-none">Getting schedules…</p>
+      <p id="current-day" class="header-day-label font-bold leading-snug">Getting schedules…</p>
     </div>
   </div>
   <a
@@ -64,14 +64,16 @@ const ctaLabel =
       if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();
       else {
         var title = document.getElementById('app-title');
-        var maxPx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 40;
-        if (!isFinite(maxPx) || maxPx < 12) maxPx = 32;
+        var titlePx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 32;
+        if (!isFinite(titlePx) || titlePx < 12) titlePx = 32;
+        var maxPx = Math.min(titlePx * 0.55, 22);
         var host = el.closest('.header-brand-block') || el.parentElement || el;
         var avail = host.clientWidth || 0;
-        if (avail > 8) {
-          el.style.whiteSpace = 'nowrap';
-          el.style.maxWidth = '100%';
-          var lo = Math.max(11, maxPx * 0.4), hi = maxPx, best = lo;
+        el.style.whiteSpace = 'nowrap';
+        el.style.maxWidth = '100%';
+        if (avail <= 8) { el.style.fontSize = maxPx + 'px'; }
+        else {
+          var lo = 12, hi = maxPx, best = 12;
           for (var i = 0; i < 16; i++) {
             var mid = (lo + hi) / 2;
             el.style.fontSize = mid + 'px';

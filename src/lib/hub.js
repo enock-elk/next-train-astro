@@ -190,7 +190,9 @@ let feedbackViewportBound = false;
 
 function keepFeedbackFieldVisible(field) {
     if (!field?.closest?.('#feedback-modal, #messages-thread-modal')) return;
-    const scroller = field.closest('[data-feedback-scroll]');
+    const scroller = field.closest('[data-feedback-scroll]')
+        || field.closest('#messages-thread-modal > div')
+        || field.closest('#feedback-modal > div');
     if (!scroller) return;
     const fieldRect = field.getBoundingClientRect();
     const scrollRect = scroller.getBoundingClientRect();
@@ -220,6 +222,7 @@ function syncFeedbackModalViewport() {
         modal.style.setProperty('--nt-feedback-vv-top', `${top}px`);
         modal.style.top = `${top}px`;
         modal.style.height = `${height}px`;
+        modal.style.maxHeight = `${height}px`;
         modal.style.bottom = 'auto';
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
@@ -251,7 +254,12 @@ function bindFeedbackViewportHandling() {
     document.addEventListener('focusin', (event) => {
         if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal')) return;
         syncFeedbackModalViewport();
-        setTimeout(() => keepFeedbackFieldVisible(event.target), 80);
+        [80, 220, 450].forEach((ms) => {
+            setTimeout(() => {
+                syncFeedbackModalViewport();
+                keepFeedbackFieldVisible(event.target);
+            }, ms);
+        });
     });
     syncFeedbackModalViewport();
 }

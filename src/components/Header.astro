@@ -10,7 +10,7 @@
             Next Train
         </h1>
         <div class="header-meta mt-1 min-w-0 w-full">
-            <p id="current-day" class="header-day-label font-black leading-none">Getting schedules…</p>
+            <p id="current-day" class="header-day-label font-bold leading-snug">Getting schedules…</p>
             <!-- Sim clock only — diagnostic, shown by logic.js when $isSimMode -->
             <p id="current-time" class="hidden mt-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400 tabular-nums" aria-hidden="true"></p>
             <p id="last-updated-date-hidden" class="hidden text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-0.5"></p>
@@ -45,14 +45,16 @@
         if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();
         else {
           var title = document.getElementById('app-title');
-          var maxPx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 40;
-          if (!isFinite(maxPx) || maxPx < 12) maxPx = 32;
+          var titlePx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 32;
+          if (!isFinite(titlePx) || titlePx < 12) titlePx = 32;
+          var maxPx = Math.min(titlePx * 0.55, 22);
           var host = el.closest('.header-brand-block') || el.parentElement || el;
           var avail = host.clientWidth || 0;
-          if (avail > 8) {
-            el.style.whiteSpace = 'nowrap';
-            el.style.maxWidth = '100%';
-            var lo = Math.max(11, maxPx * 0.4), hi = maxPx, best = lo;
+          el.style.whiteSpace = 'nowrap';
+          el.style.maxWidth = '100%';
+          if (avail <= 8) { el.style.fontSize = maxPx + 'px'; }
+          else {
+            var lo = 12, hi = maxPx, best = 12;
             for (var i = 0; i < 16; i++) {
               var mid = (lo + hi) / 2;
               el.style.fontSize = mid + 'px';

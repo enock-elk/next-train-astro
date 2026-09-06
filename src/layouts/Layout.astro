@@ -151,6 +151,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
+          var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 240));
+          if (vvH < 240) vvH = 240;
+          root.style.setProperty('--nt-vv-h', vvH + 'px');
+          root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
           root.classList.toggle('nt-keyboard', keyboard);
           requestAnimationFrame(function () { pinBottomNav(keyboard, vv, off); });
           root.classList.toggle('nt-standalone', markStandalone());
@@ -980,6 +984,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         width: 100%;
         height: var(--nt-app-h, 100dvh);
         max-height: var(--nt-app-h, 100dvh);
+      }
+      /* Feedback Hub / Send Feedback follow the keyboard, not --nt-app-h. */
+      #nt-shell #messages-thread-modal.fixed,
+      #nt-shell #feedback-modal.fixed {
+        top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
+        height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+        max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+        bottom: auto !important;
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],

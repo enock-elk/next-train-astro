@@ -110,6 +110,10 @@ const requiredIds = [
     'excl-train-grid-b',
     'disr-expiry',
     'maint-expires',
+    'exp-features-header',
+    'exp-map-enabled',
+    'exp-community-enabled',
+    'exp-features-save',
 ];
 for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);

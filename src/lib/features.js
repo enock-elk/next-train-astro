@@ -5,10 +5,14 @@
  * {
  *   communityRealtime: { enabled: true, routeIds: ["pta-pien"] | ["*"] },
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
- *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] }
+ *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
+ *   mapTab:            { enabled: true, routeIds: ["pta-kempton"] },
+ *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] }
  * }
  *
- * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config → all on.
+ * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
+ * realtime / delay / push / ride-checkin on. Map and Community tabs stay off
+ * until config/features lists pinned routes.
  * Production: missing config → all off (safe merge).
  */
 import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
@@ -18,6 +22,8 @@ export const FEATURE_KEYS = {
     DELAY_REPORTS_UI: 'delayReportsUi',
     PUSH_NOTIFY: 'pushNotify',
     RIDE_CHECKIN: 'rideCheckIn',
+    MAP_TAB: 'mapTab',
+    COMMUNITY_TAB: 'communityTab',
 };
 
 export { PILOT_ROUTE_IDS };
@@ -35,6 +41,8 @@ const LAB_DEFAULTS = {
     delayReportsUi: { enabled: true, routeIds: ['*'] },
     pushNotify: { enabled: true, routeIds: ['*'] },
     rideCheckIn: { enabled: true, routeIds: ['*'] },
+    mapTab: { enabled: false, routeIds: [] },
+    communityTab: { enabled: false, routeIds: [] },
 };
 
 /** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
@@ -43,6 +51,8 @@ const PROD_DEFAULTS = {
     delayReportsUi: { enabled: false, routeIds: [] },
     pushNotify: { enabled: false, routeIds: [] },
     rideCheckIn: { enabled: false, routeIds: [] },
+    mapTab: { enabled: false, routeIds: [] },
+    communityTab: { enabled: false, routeIds: [] },
 };
 
 /** Suggested first production allow-list (paste into RTDB config/features). */
@@ -51,6 +61,8 @@ export const PILOT_FEATURES_SEED = {
     delayReportsUi: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     pushNotify: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
+    mapTab: { enabled: false, routeIds: [] },
+    communityTab: { enabled: false, routeIds: [] },
 };
 
 /**

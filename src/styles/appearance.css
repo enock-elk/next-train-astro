@@ -495,6 +495,19 @@ html[data-admin-authed="1"] #bottom-nav-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   max-width: 32rem;
 }
+html[data-pilot-map="1"][data-pilot-community="1"] #bottom-nav-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  max-width: 32rem;
+}
+html[data-pilot-map="1"]:not([data-pilot-community="1"]) #bottom-nav-grid,
+html[data-pilot-community="1"]:not([data-pilot-map="1"]) #bottom-nav-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 30rem;
+}
+
+.nt-excl-col {
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.28);
+}
 
 #bottom-nav .bottom-nav-item:not(.is-active) {
   color: var(--nt-chrome-muted) !important;

@@ -285,7 +285,7 @@ const faqLd = {
         bindMaintenanceBanner
     } from '../lib/ui.js';
     import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
-    import { isAdminAuthed } from '../lib/admin-chrome.js';
+    import { canAccessPilotSurface, applyPilotChrome } from '../lib/admin-chrome.js';
     import { fetchFeatures } from '../lib/features.js';
     import {
         prepareDeeplinkIntents,
@@ -333,8 +333,22 @@ const faqLd = {
             }
         }
     } catch (e) { /* ignore */ }
+    const intendedPilotTab = (() => {
+        try {
+            const bootHash = location.hash;
+            if (bootHash === '#map') return 'map';
+            if (bootHash === '#community') return 'community';
+            const lastTab = safeStorage.getItem('activeTab');
+            if (lastTab === 'map' || lastTab === 'community') return lastTab;
+        } catch { /* ignore */ }
+        return null;
+    })();
     // Corridor feature flags (chat realtime / delay UI / push) — non-blocking
     fetchFeatures().then(() => {
+        applyPilotChrome();
+        if (intendedPilotTab && canAccessPilotSurface(intendedPilotTab)) {
+            switchTab(intendedPilotTab);
+        }
         import('../lib/push-notify.js').then((m) => m.hydratePushNotifications?.()).catch(() => {});
     }).catch(() => {});
     startClock();
@@ -358,12 +372,12 @@ const faqLd = {
         switchTab('trip-planner');
     });
     document.getElementById('bottom-nav-map')?.addEventListener('click', () => {
-        if (!isAdminAuthed()) return;
+        if (!canAccessPilotSurface('map')) return;
         window.triggerHaptic?.();
         switchTab('map');
     });
     document.getElementById('bottom-nav-community')?.addEventListener('click', () => {
-        if (!isAdminAuthed()) return;
+        if (!canAccessPilotSurface('community')) return;
         window.triggerHaptic?.();
         switchTab('community');
     });
@@ -381,19 +395,19 @@ const faqLd = {
     if (hash === '#planner' || hash === '#planner-results') {
         switchTab('trip-planner');
     } else if (hash === '#community') {
-        if (isAdminAuthed()) switchTab('community');
+        if (canAccessPilotSurface('community')) switchTab('community');
         else switchTab('next-train');
     } else if (hash === '#alerts') {
         switchTab('next-train');
         setTimeout(() => window.openAlertsChannel?.(), 400);
     } else if (hash === '#map') {
-        if (isAdminAuthed()) switchTab('map');
+        if (canAccessPilotSurface('map')) switchTab('map');
         else switchTab('next-train');
     } else {
         const lastTab = safeStorage.getItem('activeTab');
         if (lastTab === 'trip-planner') switchTab('trip-planner');
-        else if (lastTab === 'map' && isAdminAuthed()) switchTab('map');
-        else if (lastTab === 'community' && isAdminAuthed()) switchTab('community');
+        else if (lastTab === 'map' && canAccessPilotSurface('map')) switchTab('map');
+        else if (lastTab === 'community' && canAccessPilotSurface('community')) switchTab('community');
         else switchTab('next-train');
     }
 

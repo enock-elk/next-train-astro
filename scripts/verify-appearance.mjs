@@ -312,7 +312,8 @@ assert(!sidenavShare.includes('Earthy is cream paper'), 'Earthy blurb removed fr
 assert(sidenavShare.includes('setPrefsOpen(false, false)'), 'Theme accordion starts collapsed');
 
 const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
-assert(uiJs.includes("safeCur === 'trip-planner'"), 'commuter swipe-left from planner opens Options');
+assert(uiJs.includes('safeCur === lastTab'), 'last content tab swipe-left opens Options');
+assert(uiJs.includes('canAccessPilotSurface'), 'swipe and hash restore respect pin-gated Map/Community');
 assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
 assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 
@@ -388,6 +389,26 @@ assert(appUpdate.includes("New SW active — applying on next launch"), 'control
 
 assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
 assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
+
+assert(css.includes('.nt-excl-col'), 'banned grid columns have a clickable inset hint');
+assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
+assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');
+
+const adminChrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
+assert(adminChrome.includes('getPinnedRouteIds'), 'pilot chrome reads pinned routes');
+assert(adminChrome.includes("safeStorage.getItem('defaultRoute_' + region)"), 'pilot access uses pin keys, not the viewed corridor');
+assert(adminChrome.includes('FEATURE_KEYS.MAP_TAB'), 'Map tab is a pin-gated feature');
+assert(adminChrome.includes('FEATURE_KEYS.COMMUNITY_TAB'), 'Community tab is a pin-gated feature');
+
+const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
+assert(liveBoard.includes('isAdminAuthed() && rule && rule.expiresAt'), 'exclusion Until line is admin-only');
+assert(liveBoard.includes("timeEl.classList.add('hidden')"), 'commuters do not see exclusion expiry');
+
+const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
+assert(adminJs.includes('id="exp-map-enabled"') && adminJs.includes('id="exp-community-enabled"'), 'experimental Map and Community toggles exist');
+assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');
+assert(adminJs.includes('mapTab:') && adminJs.includes('communityTab:'), 'save merges mapTab and communityTab without wiping other flags');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

@@ -24,6 +24,7 @@ import {
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+import { isAdminAuthed } from './admin-chrome.js';
 export { stopsForTrain, expectedPosition, scoreTrainForFix } from './train-ghosts.js';
 
 // --- Store-backed globals (SPA parity shims) ---
@@ -307,10 +308,12 @@ export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
     }
     if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
     if (timeEl) {
-        if (rule && rule.expiresAt) {
+        if (isAdminAuthed() && rule && rule.expiresAt) {
             timeEl.textContent = `Until: ${formatAppDate(rule.expiresAt, { withTime: true })}`;
+            timeEl.classList.remove('hidden');
         } else {
             timeEl.textContent = '';
+            timeEl.classList.add('hidden');
         }
     }
     const replyBtn = typeof document !== 'undefined' ? document.getElementById('disruption-modal-reply-btn') : null;
@@ -1392,6 +1395,26 @@ export function attachLiveBoardGlobals() {
     window.isTrainExcluded = isTrainExcluded;
     window.getTrainExclusionRule = getTrainExclusionRule;
     window.openTrainExclusionSheet = openTrainExclusionSheet;
+    if (!window.__ntExclGridBound) {
+        window.__ntExclGridBound = true;
+        const openFromGrid = (el) => {
+            if (!el || typeof window.openTrainExclusionSheet !== 'function') return;
+            window.openTrainExclusionSheet(el.getAttribute('data-excl-route'), el.getAttribute('data-excl-train'), Number(el.getAttribute('data-excl-day')));
+        };
+        document.addEventListener('click', (e) => {
+            const hit = e.target?.closest?.('[data-excl-open="1"]');
+            if (!hit || !hit.closest('#grid-container')) return;
+            e.preventDefault();
+            openFromGrid(hit);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const hit = e.target?.closest?.('[data-excl-open="1"]');
+            if (!hit || !hit.closest('#grid-container')) return;
+            e.preventDefault();
+            openFromGrid(hit);
+        });
+    }
     window.findNextTrains = findNextTrains;
     window.currentScheduleData = currentScheduleData;
     window.populateStationList = populateStationList;

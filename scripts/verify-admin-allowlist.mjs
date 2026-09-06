@@ -25,6 +25,8 @@ ok(adminJs.includes('Non-admin Firebase session ignored'), 'anonymous session is
 ok(adminJs.includes('stopTelemetryPolling'), '403 stops the 10s telemetry loop');
 ok(adminJs.includes('applyAdminAuthedChrome(true)'), 'allowlisted admin reveals operator chrome');
 ok(adminJs.includes('applyAdminAuthedChrome(false)'), 'sign-out hides operator chrome');
+ok(adminJs.includes('id="exp-features-header"'), 'System Controls exposes Experimental features');
+ok(adminJs.includes('id="exp-features-save"'), 'experimental features can be saved');
 ok(adminJs.includes('listOperatorRoutes'), 'admin dropdowns share listOperatorRoutes');
 ok(adminJs.includes('Admin.listOperatorRoutes(regionInfo.code)'), 'alert/incident/ban pickers use listOperatorRoutes');
 ok(ROUTES['kzn-crossmoor']?.isActive, 'kzn-crossmoor is an active ROUTES corridor');

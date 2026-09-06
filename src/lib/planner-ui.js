@@ -1287,7 +1287,10 @@ export function openSaturdayServiceModal(routeId = 'herc-koed') {
         badgeEl.innerHTML = `${plannerIcon('circle', 'w-2.5 h-2.5 inline-block mr-1.5 align-[-1px] text-red-500')} ${escapeHTML(copy.badge)}`;
         if (iconEl) iconEl.setAttribute('class', 'w-5 h-5 mr-2 text-red-500');
     }
-    if (timeEl) timeEl.textContent = 'Timetable: Saturday / public holiday';
+    if (timeEl) {
+        timeEl.textContent = 'Timetable: Saturday / public holiday';
+        timeEl.classList.remove('hidden');
+    }
     bindAdvisoryReplyButton({
         snippet: copy.quote,
         rawMsg: copy.quote,
@@ -1365,6 +1368,7 @@ export function openDisruptionModal(id) {
         } else {
             timeEl.textContent = "Posted: Recently";
         }
+        timeEl.classList.remove('hidden');
     }
 
     const shortLocation = locationText.replace(/<[^>]*>?/gm, '');

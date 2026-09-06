@@ -14602,7 +14602,7 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn') || !document.getElementById('exp-features-header'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
@@ -14699,6 +14699,36 @@ const Admin = {
                         <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
+                    </div>
+                </div>
+
+                <!-- Experimental features (pin-gated Map / Community) -->
+                <div class="bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-200 dark:border-teal-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="exp-features-header" class="w-full px-3 py-3 bg-teal-100/50 dark:bg-teal-900/40 text-left text-[10px] font-black text-teal-800 dark:text-teal-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-teal-200/50 dark:hover:bg-teal-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-teal-600 dark:text-teal-300">${Admin.icon('activity', 'w-4 h-4')}</span> Experimental features
+                        </span>
+                        <svg id="exp-features-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="exp-features-body" class="hidden p-4 space-y-4">
+                        <p class="text-[10px] text-teal-700 dark:text-teal-300 leading-snug">Show Map or Community to commuters who have a selected route pinned. Those testers can also open Account to create a Next Train login. Viewing another corridor does not unlock the tabs.</p>
+                        <div class="space-y-2">
+                            <label class="flex items-center justify-between gap-3">
+                                <span class="text-sm font-bold text-teal-900 dark:text-teal-100">Map tab</span>
+                                <input type="checkbox" id="exp-map-enabled" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
+                            </label>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Pinned routes for Map</p>
+                            <div id="exp-map-routes" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="flex items-center justify-between gap-3">
+                                <span class="text-sm font-bold text-teal-900 dark:text-teal-100">Community tab</span>
+                                <input type="checkbox" id="exp-community-enabled" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
+                            </label>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Pinned routes for Community</p>
+                            <div id="exp-community-routes" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
+                        </div>
+                        <button type="button" id="exp-features-save" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save experimental features</button>
                     </div>
                 </div>
 
@@ -15097,6 +15127,73 @@ const Admin = {
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const expFeaturesHeader = document.getElementById('exp-features-header');
+        const expFeaturesBody = document.getElementById('exp-features-body');
+        const expFeaturesChevron = document.getElementById('exp-features-chevron');
+        const expMapEnabled = document.getElementById('exp-map-enabled');
+        const expCommunityEnabled = document.getElementById('exp-community-enabled');
+        const expMapRoutes = document.getElementById('exp-map-routes');
+        const expCommunityRoutes = document.getElementById('exp-community-routes');
+        const expFeaturesSave = document.getElementById('exp-features-save');
+        const expMapSelected = new Set();
+        const expCommunitySelected = new Set();
+
+        const listExpRoutes = () => {
+            const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+            return Object.values(routesObj)
+                .filter((r) => r && r.id && r.id !== 'special_event')
+                .sort((a, b) => String(a.region || '').localeCompare(String(b.region || '')) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+        };
+
+        const paintExpRouteBox = (box, selected) => {
+            if (!box) return;
+            const esc = (typeof escapeHTML === 'function')
+                ? escapeHTML
+                : (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            box.innerHTML = listExpRoutes().map((r) => {
+                const label = Admin.formatRouteLabelPlain
+                    ? Admin.formatRouteLabelPlain(r.name || r.id)
+                    : (r.name || r.id);
+                const checked = selected.has(r.id) ? 'checked' : '';
+                return `<label class="flex items-start gap-2 text-[10px] text-teal-900 dark:text-teal-100 cursor-pointer py-0.5">
+                    <input type="checkbox" class="exp-route-cb mt-0.5 rounded border-teal-300 text-teal-600 focus:ring-teal-500" value="${esc(r.id)}" ${checked}>
+                    <span><span class="font-black text-teal-600 dark:text-teal-300">${esc(r.region || '')}</span> · ${esc(label)}</span>
+                </label>`;
+            }).join('') || '<p class="text-[10px] text-teal-500 italic">No routes loaded.</p>';
+            box.querySelectorAll('.exp-route-cb').forEach((cb) => {
+                cb.onchange = () => {
+                    if (cb.checked) selected.add(cb.value);
+                    else selected.delete(cb.value);
+                };
+            });
+        };
+
+        const applyExpFeaturesToForm = (cfg) => {
+            const map = cfg?.mapTab || {};
+            const community = cfg?.communityTab || {};
+            if (expMapEnabled) expMapEnabled.checked = !!map.enabled;
+            if (expCommunityEnabled) expCommunityEnabled.checked = !!community.enabled;
+            expMapSelected.clear();
+            expCommunitySelected.clear();
+            (Array.isArray(map.routeIds) ? map.routeIds : []).forEach((id) => {
+                if (id && id !== '*') expMapSelected.add(String(id));
+            });
+            (Array.isArray(community.routeIds) ? community.routeIds : []).forEach((id) => {
+                if (id && id !== '*') expCommunitySelected.add(String(id));
+            });
+            paintExpRouteBox(expMapRoutes, expMapSelected);
+            paintExpRouteBox(expCommunityRoutes, expCommunitySelected);
+        };
+
+        if (expFeaturesHeader && expFeaturesBody) {
+            expFeaturesHeader.onclick = () => {
+                expFeaturesBody.classList.toggle('hidden');
+                if (expFeaturesBody.classList.contains('hidden')) expFeaturesChevron?.classList.add('-rotate-90');
+                else expFeaturesChevron?.classList.remove('-rotate-90');
+            };
+        }
+        paintExpRouteBox(expMapRoutes, expMapSelected);
+        paintExpRouteBox(expCommunityRoutes, expCommunitySelected);
         const SCHED_DAY_TYPES_WC = [
             { value: 'public_holiday', label: 'Public Holiday sheets' },
             { value: 'saturday', label: 'Saturday sheets' },
@@ -15289,6 +15386,16 @@ const Admin = {
                     }
                 } catch (se) { /* optional config */ }
 
+                try {
+                    const resFeat = await fetch(`${dynamicEndpoint}config/features.json`);
+                    if (resFeat.ok) {
+                        const featCfg = await resFeat.json();
+                        if (featCfg && typeof featCfg === 'object' && !featCfg.error) {
+                            applyExpFeaturesToForm(featCfg);
+                        }
+                    }
+                } catch (fe) { /* optional config */ }
+
                 } catch(e) { console.warn("Failed to check system status"); }
         }
         checkStatus();
@@ -15317,6 +15424,51 @@ const Admin = {
                     if (typeof showToast === 'function') showToast(`Shadow-ban default: ${mode}`, 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save ban mode.', 'error');
+                }
+            };
+        }
+
+        if (expFeaturesSave) {
+            expFeaturesSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    let existing = {};
+                    try {
+                        const cur = await fetch(`${dynamicEndpoint}config/features.json`);
+                        if (cur.ok) {
+                            const data = await cur.json();
+                            if (data && typeof data === 'object' && !data.error) existing = data;
+                        }
+                    } catch { /* start from empty */ }
+                    const payload = {
+                        ...existing,
+                        mapTab: {
+                            enabled: !!expMapEnabled?.checked,
+                            routeIds: [...expMapSelected],
+                        },
+                        communityTab: {
+                            enabled: !!expCommunityEnabled?.checked,
+                            routeIds: [...expCommunitySelected],
+                        },
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/features.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    if (typeof showToast === 'function') showToast('Experimental features saved', 'success');
+                    if (typeof window.fetchFeatures === 'function') {
+                        try { await window.fetchFeatures(true); } catch { /* ignore */ }
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save experimental features.', 'error');
                 }
             };
         }

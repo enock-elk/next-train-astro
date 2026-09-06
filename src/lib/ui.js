@@ -7,7 +7,7 @@
  */
 
 import { safeStorage, escapeHTML } from './utils.js';
-import { isAdminAuthed } from './admin-chrome.js';
+import { isAdminAuthed, canAccessPilotSurface } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
@@ -481,11 +481,11 @@ export function bindHistoryBackNavigation() {
                 try { window.restorePlannerResultsView(); } catch { /* ignore */ }
             }
         } else if (hash === '#community') {
-            if (isAdminAuthed() && safeStorage.getItem('activeTab') !== 'community') switchTab('community');
-            else if (!isAdminAuthed()) switchTab('next-train');
+            if (canAccessPilotSurface('community') && safeStorage.getItem('activeTab') !== 'community') switchTab('community');
+            else if (!canAccessPilotSurface('community')) switchTab('next-train');
         } else if (hash === '#map') {
-            if (isAdminAuthed() && safeStorage.getItem('activeTab') !== 'map') switchTab('map');
-            else if (!isAdminAuthed()) switchTab('next-train');
+            if (canAccessPilotSurface('map') && safeStorage.getItem('activeTab') !== 'map') switchTab('map');
+            else if (!canAccessPilotSurface('map')) switchTab('next-train');
         }
     });
 }
@@ -1248,7 +1248,7 @@ export function switchTab(tab, opts = null) {
 
     const allowHiddenTabs = !!(opts && opts.allowHiddenTabs);
     if ((tab === 'map' || tab === 'community') && !isAdminAuthed() && !allowHiddenTabs) {
-        tab = 'next-train';
+        if (!canAccessPilotSurface(tab)) tab = 'next-train';
     }
 
     if (document.body.classList.contains('sidenav-open') && typeof window.closeAppHub === 'function') {
@@ -1383,14 +1383,11 @@ export function setupSwipeNavigation() {
         const diffY = endY - touchStartY;
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
             // Include Map; Community when the top tab is visible (lab).
-            const communityTab = document.getElementById('tab-community');
-            const communityVisible = !!(communityTab && !communityTab.classList.contains('hidden'));
-            const operator = isAdminAuthed();
-            const order = operator
-                ? (communityVisible
-                    ? ['next-train', 'trip-planner', 'map', 'community']
-                    : ['next-train', 'trip-planner', 'map'])
-                : ['next-train', 'trip-planner'];
+            const order = ['next-train', 'trip-planner'];
+            const mapBtn = document.getElementById('bottom-nav-map');
+            const communityBtn = document.getElementById('bottom-nav-community');
+            if (mapBtn && !mapBtn.classList.contains('hidden')) order.push('map');
+            if (communityBtn && !communityBtn.classList.contains('hidden')) order.push('community');
             const cur = safeStorage.getItem('activeTab') || 'next-train';
             const safeCur = order.includes(cur) ? cur : 'next-train';
             const idx = Math.max(0, order.indexOf(safeCur));

@@ -7,6 +7,7 @@ import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTim
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { applyPilotChrome } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import {
     simulateNextActiveService,
@@ -451,6 +452,7 @@ export function updatePinUI() {
     if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), routeId);
     }
+    try { applyPilotChrome(); } catch { /* ignore */ }
 }
 
 export function selectProfile(profileType) {

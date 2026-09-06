@@ -4,6 +4,7 @@
  */
 import {
     parseNoticeBucket,
+    isNoticeRecord,
     mergeUnionNotices,
     noticeScopeKeys,
     isNoticeLive,
@@ -59,6 +60,13 @@ const now = 1_700_000_000_000;
     }, 'all_GP', now);
     assert(map.length === 2 && map.every((n) => n.id !== 'b'), `expired dropped: ${map.map((n) => n.id)}`);
     assert(map.every((n) => n._sourceKey === 'all_GP'), 'child notices keep source key');
+
+    const imageOnly = parseNoticeBucket({
+        poster: { id: 'p1', imageUrls: ['/images/alerts/a.png'], postedAt: 1, expiresAt: now + 1 },
+        empty: { id: 'skip' },
+    }, 'all', now);
+    assert(imageOnly.length === 1 && imageOnly[0].id === 'p1', `image-only child is kept: ${imageOnly.map((n) => n.id)}`);
+    assert(isNoticeRecord({ imageUrls: ['/images/alerts/a.png'] }), 'imageUrls counts as a notice');
 }
 
 {

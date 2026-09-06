@@ -50,7 +50,7 @@ export function isNoticeLive(notice, now = Date.now()) {
 }
 
 export function isNoticeRecord(node) {
-    return !!(node && typeof node === 'object' && (node.message || node.text || node.severity || node.id));
+    return !!(node && typeof node === 'object' && (node.message || node.text || node.severity || node.id || node.imageUrls || node.imageUrl));
 }
 
 /** Route ∪ region ∪ global. Pass routeId only when that corridor is real. */
@@ -94,13 +94,13 @@ export function parseNoticeBucket(raw, sourceKey, now = Date.now()) {
     const children = [];
     Object.entries(raw).forEach(([key, val]) => {
         if (key === 'reactions') return;
-        if (val && typeof val === 'object' && (val.message || val.text || val.severity)) {
+        if (val && typeof val === 'object' && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)) {
             const row = stamp(val, val.id || key);
             if (row && isNoticeLive(row, now)) children.push(row);
         }
     });
 
-    const rootLooksLikeNotice = !!(raw.message || raw.text);
+    const rootLooksLikeNotice = !!(raw.message || raw.text || raw.imageUrls || raw.imageUrl);
     if (children.length) {
         if (rootLooksLikeNotice && raw.id) {
             const root = stamp(raw, raw.id);
@@ -387,12 +387,12 @@ export function listNoticesInTarget(node) {
     const children = [];
     Object.entries(node).forEach(([key, val]) => {
         if (key === 'reactions') return;
-        if (val && typeof val === 'object' && (val.message || val.text || val.severity)) {
+        if (val && typeof val === 'object' && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)) {
             children.push({ ...val, _key: val.id || key });
         }
     });
     if (children.length) return children;
-    if (node.message || node.text || node.id) return [{ ...node, _key: node.id || 'legacy' }];
+    if (node.message || node.text || node.id || node.imageUrls || node.imageUrl) return [{ ...node, _key: node.id || 'legacy' }];
     return [];
 }
 
@@ -403,6 +403,6 @@ export function isLegacySingleNotice(node) {
         key !== 'reactions'
         && val
         && typeof val === 'object'
-        && (val.message || val.text || val.severity)
+        && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)
     ));
 }

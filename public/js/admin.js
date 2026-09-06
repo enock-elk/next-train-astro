@@ -3312,7 +3312,8 @@ const Admin = {
         if (!opt) return;
 
         if (selectId === 'alert-target') {
-            Admin.setSelectedAlertTargets([routeId]);
+            // Review hydrate must not be wiped by a live-count fetch that nulls existingAlertId
+            Admin.setSelectedAlertTargets([routeId], { fetch: !Admin._pendingReviewItemId });
             return;
         }
 
@@ -3432,13 +3433,11 @@ const Admin = {
 
         // GSM Review for Alerts must hydrate the posted notice into Compose (not just the target chip)
         if (panelId === 'alert-panel' && itemId) {
-            const hydrate = () => {
+            setTimeout(() => {
                 if (typeof Admin.loadAlertForReview === 'function') {
                     Admin.loadAlertForReview(routeId, itemId);
                 }
-            };
-            setTimeout(hydrate, 350);
-            setTimeout(hydrate, 900);
+            }, 400);
         }
     },
 
@@ -8536,12 +8535,12 @@ const Admin = {
         const children = [];
         Object.entries(node).forEach(([key, val]) => {
             if (key === 'reactions') return;
-            if (val && typeof val === 'object' && (val.message || val.text || val.severity)) {
+            if (val && typeof val === 'object' && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)) {
                 children.push({ ...val, _key: val.id || key });
             }
         });
         if (children.length) return children;
-        if (node.message || node.text || node.id) return [{ ...node, _key: node.id || 'legacy' }];
+        if (node.message || node.text || node.id || node.imageUrls || node.imageUrl) return [{ ...node, _key: node.id || 'legacy' }];
         return [];
     },
 
@@ -8755,10 +8754,18 @@ const Admin = {
 
     getSelectedAlertPosters: () => (Array.isArray(Admin._alertPosterPaths) ? Admin._alertPosterPaths.slice(0, 2) : []),
 
+    alertComposeHasBody: (html) => {
+        const text = String(html || '')
+            .replace(/<br\s*\/?>/gi, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return text.length > 0;
+    },
+
     alertPosterCatalog: () => {
         const fallback = [
-            { file: 'service-update.svg', label: 'Service update' },
-            { file: 'safety-notice.svg', label: 'Safety notice' },
             { file: '2025-fare-adjustment.jpg', label: 'Fare adjustment' },
             { file: 'avoid_trouble_travel_ticket.jpg', label: 'Avoid trouble — travel with a ticket' },
             { file: 'be-rail-smart-pea.jpg', label: 'Be rail smart' },
@@ -8927,11 +8934,14 @@ const Admin = {
             }, 10000);
             if (!put.ok) throw new Error('Failed to publish alert');
         } else {
-            const put = await window.guardianFetch(`${dynamicEndpoint}notices/${target}/${id}.json?auth=${secret}`, {
-                method: 'PUT',
+            const alreadyLive = listed.some((n) => String(n.id || n._key) === id)
+                || !!(existing && typeof existing === 'object' && existing[id] && typeof existing[id] === 'object');
+            const method = alreadyLive ? 'PATCH' : 'PUT';
+            const write = await window.guardianFetch(`${dynamicEndpoint}notices/${target}/${id}.json?auth=${secret}`, {
+                method,
                 body: JSON.stringify(payload),
             }, 10000);
-            if (!put.ok) throw new Error('Failed to publish alert');
+            if (!write.ok) throw new Error('Failed to publish alert');
         }
         const nextList = listed.filter((n) => String(n.id || n._key) !== id).concat([payload]);
         await Admin.writeNoticesMeta(target, secret, nextList);
@@ -9868,7 +9878,9 @@ const Admin = {
             const freqEl = document.getElementById('alert-schedule-freq');
             let msg = (alertMsg?.innerHTML || '').trim();
             const targets = Admin.getSelectedAlertTargets();
-            if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast('Fill the alert message first.', 'error'); return; }
+            const hasBody = Admin.alertComposeHasBody(msg);
+            const posters = Admin.getSelectedAlertPosters();
+            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast('Add a message or a poster.', 'error'); return; }
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : NaN;
             if (!Number.isFinite(firstMs)) { if (typeof showToast === 'function') showToast('Set a valid first-run time.', 'error'); return; }
@@ -9884,8 +9896,8 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast('Authentication required.', 'error'); return; }
 
             const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
-            msg = Admin.repairMojibake(msg);
-            if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
+            msg = hasBody ? Admin.repairMojibake(msg) : '';
+            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
                 msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
             const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
@@ -9940,6 +9952,7 @@ const Admin = {
             if (!item) return;
             const mode = opts.mode || 'repost'; // 'repost' | 'review'
             Admin._skipAlertFetchOnce = true;
+            Admin._reviewPostedAt = mode === 'review' ? (item.postedAt || item.timestamp || null) : null;
             setAlertTab('compose');
             body?.classList.remove('hidden');
             chevron?.classList.remove('-rotate-90');
@@ -10028,6 +10041,7 @@ const Admin = {
                     || (data && String(data.id) === String(noticeId) ? data : null)
                     || (data && data[noticeId] ? { ...data[noticeId], id: noticeId } : null);
                 if (!hit) {
+                    Admin._reviewedAlertKey = reviewKey;
                     if (typeof showToast === 'function') showToast('Could not load that alert for review.', 'error');
                     return;
                 }
@@ -10039,6 +10053,7 @@ const Admin = {
                 Admin._reviewedAlertKey = reviewKey;
                 if (typeof showToast === 'function') showToast('Alert loaded for review.', 'success');
             } catch (e) {
+                Admin._reviewedAlertKey = reviewKey;
                 if (typeof showToast === 'function') showToast('Failed to load alert for review.', 'error');
             } finally {
                 Admin._loadingAlertReviewId = null;
@@ -10187,6 +10202,7 @@ const Admin = {
                 Admin._skipAlertFetchOnce = false;
                 return;
             }
+            if (Admin._pendingReviewItemId) return;
             existingAlertId = null;
             const list = Admin.dedupeAlertTargets(targets || Admin.getSelectedAlertTargets());
             const countEl = document.getElementById('alert-live-count');
@@ -10331,12 +10347,14 @@ const Admin = {
             
             const secret = await Admin.getAuthKey();
             
-            if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast("Message required!", "error"); return; }
+            const hasBody = Admin.alertComposeHasBody(msg);
+            const posters = Admin.getSelectedAlertPosters();
+            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast("Add a message or a poster.", "error"); return; }
             if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
-            msg = Admin.repairMojibake(msg);
-            if (!/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
+            msg = hasBody ? Admin.repairMojibake(msg) : '';
+            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
                 msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
 
@@ -10346,13 +10364,14 @@ const Admin = {
                 ? (pollOptC.value.trim() || null)
                 : null;
             const isRepost = !!Admin._alertRepostDraft;
+            const isUpdate = !!existingAlertId && !isRepost;
             const nowTs = Date.now();
             const payload = {
                 id: existingAlertId || nowTs.toString(),
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
-                postedAt: nowTs,
+                postedAt: isUpdate && Admin._reviewPostedAt ? Admin._reviewPostedAt : nowTs,
                 expiresAt: expiresAtVal,
                 severity: severity,
                 imageUrls: Admin.getSelectedAlertPosters(),
@@ -10375,7 +10394,7 @@ const Admin = {
 
             const publishAssembled = async () => {
                 try {
-                    sendBtn.textContent = isRepost ? "Reposting..." : "Posting...";
+                    sendBtn.textContent = isUpdate ? "Updating..." : (isRepost ? "Reposting..." : "Posting...");
                     sendBtn.disabled = true;
                     let ok = 0;
                     const errors = [];
@@ -10389,11 +10408,13 @@ const Admin = {
                     }
                     existingAlertId = null;
                     Admin._alertRepostDraft = false;
+                    Admin._pendingReviewItemId = null;
+                    Admin._reviewPostedAt = null;
                     Admin.setSelectedAlertPosters([]);
                     if (alertMsg) alertMsg.innerHTML = '';
                     if (ok && typeof showToast === 'function') {
                         const label = ok === 1 ? Admin.alertTargetLabel(targets[0]) : `${ok} targets`;
-                        showToast(isRepost ? `Alert reposted to ${label}` : `Alert posted to ${label}`, 'success');
+                        showToast(isUpdate ? `Alert updated on ${label}` : (isRepost ? `Alert reposted to ${label}` : `Alert posted to ${label}`), 'success');
                     }
                     if (errors.length && typeof showToast === 'function') {
                         showToast(errors[0], 'error');

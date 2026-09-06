@@ -1438,12 +1438,24 @@ export function extractTripCoordinates(tripIndex) {
         return;
     }
 
+    const routeIds = [];
+    if (trip.route?.id) routeIds.push(trip.route.id);
+    if (trip.leg1?.route?.id) routeIds.push(trip.leg1.route.id);
+    if (trip.leg2?.route?.id) routeIds.push(trip.leg2.route.id);
+    if (trip.leg3?.route?.id) routeIds.push(trip.leg3.route.id);
+    if (Array.isArray(trip.legs)) {
+        for (const leg of trip.legs) {
+            if (leg?.route?.id) routeIds.push(leg.route.id);
+        }
+    }
+
     const routeData = {
         origin: normalizeStationName(trip.from),
         destination: normalizeStationName(trip.to),
         path: coordinates,        
         stationNames: stationNames, 
-        validStops: validStops,   
+        validStops: validStops,
+        routeIds,
         globalDisruptions: $globalDisruptions.get() || {} 
     };
 
@@ -1654,11 +1666,10 @@ export async function openTripMapRenderer(routeData) {
             let drawPath = stationPath;
             try {
                 const stops = routeData.validStops || [];
-                const smoothed = await smoothPathFromStops(stops, region);
+                const smoothed = await smoothPathFromStops(stops, region, { routeIds: routeData.routeIds });
                 if (smoothed && smoothed.length > 1) {
                     drawPath = smoothed;
                 } else if (stops.length > 1) {
-                    // Retry once with a slightly looser mental model: already handled in rail-tracks snap.
                     console.warn('Guardian: trip map rail snap returned null — drawing station chords.');
                 }
             } catch (e) {

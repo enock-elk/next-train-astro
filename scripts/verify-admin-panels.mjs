@@ -22,6 +22,10 @@ this.ntAdminDeleteAlertSource = ntAdminDeleteAlertSource;
 this.ntAdminMatchAlertSource = ntAdminMatchAlertSource;
 this.ntAdminNormalizeRoadmapText = ntAdminNormalizeRoadmapText;
 this.ntAdminParseRoadmapSource = ntAdminParseRoadmapSource;
+this.ntAdminDevPanelIdFromHash = ntAdminDevPanelIdFromHash;
+this.ntAdminPushDrillPanel = ntAdminPushDrillPanel;
+this.ntAdminTrimDrillStackTo = ntAdminTrimDrillStackTo;
+this.ntAdminDrillBackAction = ntAdminDrillBackAction;
 `).call(helpers);
 
 let failed = 0;
@@ -125,6 +129,40 @@ assert(admin.includes('Include NO SVC / SPL tag on downloaded PNG'), 'train-tag 
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
 assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()'), 'publish still sends sourceUrl');
+assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-panel', 'drill hash maps to the panel id');
+assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a panel');
+assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
+
+const stacked = helpers.ntAdminPushDrillPanel(['roadmap-panel'], 'feedback-panel');
+assert(stacked.join(',') === 'roadmap-panel,feedback-panel', 'opening original pushes onto the drill stack');
+assert(helpers.ntAdminPushDrillPanel(stacked, 'feedback-panel').join(',') === 'roadmap-panel,feedback-panel', 'same panel is not pushed twice');
+
+const trimmed = helpers.ntAdminTrimDrillStackTo(stacked, 'roadmap-panel');
+assert(trimmed.join(',') === 'roadmap-panel', 'back to roadmap trims the stack');
+
+const fromOrig = helpers.ntAdminDrillBackAction(['roadmap-panel', 'feedback-panel'], 'roadmap-panel', true);
+assert(fromOrig.action === 'panel' && fromOrig.panelId === 'roadmap-panel', 'popstate from original feedback restores roadmap');
+const fromGsm = helpers.ntAdminDrillBackAction(['action-required-panel', 'alert-panel'], 'action-required-panel', true);
+assert(fromGsm.action === 'panel' && fromGsm.panelId === 'action-required-panel', 'popstate from a GSM review restores Global State Monitor');
+const fromGrid = helpers.ntAdminDrillBackAction(['roadmap-panel'], '', true);
+assert(fromGrid.action === 'grid', 'popstate to #dev returns to the Dev Mode grid');
+const btnBack = helpers.ntAdminDrillBackAction(['action-required-panel', 'exclusion-panel'], 'exclusion-panel', false);
+assert(btnBack.action === 'history-back' && btnBack.panelId === 'action-required-panel', '← pops history to the previous panel');
+const btnGrid = helpers.ntAdminDrillBackAction(['roadmap-panel'], 'roadmap-panel', false);
+assert(btnGrid.action === 'grid', '← on the first panel returns to the grid');
+
+assert(admin.includes('stepDrillBack'), 'admin exposes stepDrillBack');
+assert(admin.includes('syncDrillFromHash'), 'admin exposes syncDrillFromHash');
+assert(admin.includes('history.pushState(state, \'\', url)'), 'panel-to-panel deep links push history');
+assert(!admin.includes("history.replaceState({ adminPanel: targetPanel.id }, '', `#dev-${targetPanel.id}`)"), 'deep link no longer replaceStates over the previous panel');
+assert(admin.includes("closeSmoothModal('admin-ticket-view-modal', true)"), 'opening original does not pop the roadmap ticket hash');
+assert(admin.includes("window._actionRequiredWasOpen = true; Admin.deepLinkToPanel"), 'GSM cards mark the monitor as the return target');
+
+const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+assert(ui.includes("'admin-ticket-view-modal': '#roadmap-ticket'"), 'ticket view has its own history hash');
+assert(ui.includes('Admin.syncDrillFromHash'), 'popstate restores the drilled panel from the hash');
+assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not always the grid');
+
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');

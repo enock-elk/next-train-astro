@@ -218,6 +218,51 @@ function ntAdminParseRoadmapSource(ticket) {
     return { kind: 'none', label: '', canOpen: false, sourceId: '', deviceId, tab: '' };
 }
 
+/** Panel id from a Dev Mode drill hash (`#dev-feedback-panel` → `feedback-panel`). */
+function ntAdminDevPanelIdFromHash(hash) {
+    const h = String(hash || '');
+    if (h.startsWith('#dev-') && h !== '#dev') return h.slice(5);
+    return '';
+}
+
+/** Push a drilled admin panel onto the in-memory stack (no duplicate of the current top). */
+function ntAdminPushDrillPanel(stack, panelId) {
+    const id = String(panelId || '');
+    const s = Array.isArray(stack) ? stack.filter(Boolean) : [];
+    if (!id) return s;
+    if (s[s.length - 1] === id) return s;
+    return s.concat([id]);
+}
+
+/** Trim the drill stack so `panelId` is the current top. */
+function ntAdminTrimDrillStackTo(stack, panelId) {
+    const s = Array.isArray(stack) ? stack.filter(Boolean) : [];
+    const idx = s.lastIndexOf(panelId);
+    if (idx >= 0) return s.slice(0, idx + 1);
+    return panelId ? [panelId] : [];
+}
+
+/**
+ * Decide what Back should do inside Dev Mode.
+ * `fromPopState`: the hash already moved; restore that panel or the grid.
+ * Button press: pop history when a previous panel exists, otherwise return to the grid.
+ */
+function ntAdminDrillBackAction(stack, hashPanelId, fromPopState) {
+    const s = Array.isArray(stack) ? stack.filter(Boolean) : [];
+    const hashId = String(hashPanelId || '');
+    if (fromPopState) {
+        if (hashId) {
+            return { action: 'panel', panelId: hashId, stack: ntAdminTrimDrillStackTo(s, hashId) };
+        }
+        return { action: 'grid', stack: [] };
+    }
+    if (s.length > 1) {
+        const next = s.slice(0, -1);
+        return { action: 'history-back', panelId: next[next.length - 1], stack: next };
+    }
+    return { action: 'grid', stack: [] };
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -751,7 +796,7 @@ const Admin = {
             if (typeof showToast === 'function') showToast('No original item is linked to this ticket.', 'info');
             return;
         }
-        try { closeSmoothModal('admin-ticket-view-modal'); } catch { /* ignore */ }
+        try { closeSmoothModal('admin-ticket-view-modal', true); } catch { /* ignore */ }
         if (src.kind === 'feedback') {
             Admin._pendingFeedbackOpen = { feedbackId: src.sourceId, deviceId: src.deviceId, tab: src.tab };
             if (src.tab) Admin.currentFeedbackTab = src.tab;
@@ -1083,6 +1128,7 @@ const Admin = {
     isGridMode: true,
     gridCols: 3,
     _modulesRendered: false,
+    _drillStack: [],
 
     /**
      * Leave a drilled admin panel and restore the Dev Mode grid.
@@ -1095,6 +1141,7 @@ const Admin = {
             return true;
         }
         if (Admin.isGridMode) return false;
+        Admin._drillStack = [];
 
         const container = document.getElementById('admin-modules-container');
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6')
@@ -1202,7 +1249,10 @@ const Admin = {
         // Never arm _adminDrillBackLock BEFORE closeSmoothModal — that guard
         // early-returns and leaves #dev-modal open (X turns grey, modal stays).
         window._adminDrillBackLock = false;
-        if (force) Admin.isGridMode = true;
+        if (force) {
+            Admin.isGridMode = true;
+            Admin._drillStack = [];
+        }
         if (typeof closeSmoothModal === 'function') closeSmoothModal('dev-modal', true);
         else document.getElementById('dev-modal')?.classList.add('hidden');
         try { history.replaceState({ view: 'home' }, '', '#home'); } catch (_) {}
@@ -3036,7 +3086,7 @@ const Admin = {
             ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Extend</button>`
             : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Extend</button>`;
         return `
-            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${safePanel}', '${safeRoute}', '${safeId}')">
+            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${safePanel}', '${safeRoute}', '${safeId}')">
                 <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
                     <div class="min-w-0 shrink">${Admin.gsmRegionBadge(item.routeId)}</div>
                     <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
@@ -3622,6 +3672,157 @@ const Admin = {
         }
     },
 
+    panelIdFromDevHash: (hash) => ntAdminDevPanelIdFromHash(hash),
+
+    currentDrillPanelId: () => {
+        const stack = Admin._drillStack || [];
+        if (stack.length) return stack[stack.length - 1];
+        return ntAdminDevPanelIdFromHash(location.hash);
+    },
+
+    /** Paint a drilled admin panel and bind ← to one history step (not always the grid). */
+    showDrilledPanel: (panelId, opts = {}) => {
+        const targetPanel = document.getElementById(panelId);
+        const container = document.getElementById('admin-modules-container');
+        if (!targetPanel || !container) return false;
+        const quiet = !!opts.quiet;
+
+        Admin.isGridMode = false;
+        container.classList.remove('admin-grid-view');
+        container.style.gridTemplateColumns = '';
+
+        const signoutContainer = document.getElementById('admin-signout-container');
+        if (signoutContainer) signoutContainer.style.display = 'none';
+
+        Array.from(container.children).forEach((child) => {
+            const isTarget = child === targetPanel;
+            child.style.display = isTarget ? '' : 'none';
+            if (!isTarget) {
+                if (child.dataset.originalClasses) child.className = child.dataset.originalClasses;
+                return;
+            }
+            if (!child.dataset.originalClasses) child.dataset.originalClasses = child.className;
+            child.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800', 'overflow-hidden');
+            child.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-gray-50', 'dark:bg-gray-900', 'overflow-visible');
+            const body = child.querySelector('[id$="-body"]');
+            if (body) body.classList.remove('hidden');
+            const chev = child.querySelector('[id$="-chevron"]');
+            if (chev) chev.classList.remove('-rotate-90');
+            const internalHeader = child.querySelector('[id$="-header-btn"]');
+            if (internalHeader) internalHeader.style.setProperty('display', 'none', 'important');
+        });
+
+        const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6')
+            || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
+        const toggleBtn = document.getElementById('grid-view-toggle');
+        if (toggleBtn) toggleBtn.style.display = 'none';
+
+        if (devHeaderRow) {
+            devHeaderRow.classList.remove('pb-4', 'mb-6');
+            devHeaderRow.classList.add('pb-2', 'mb-3');
+            const titleH3 = devHeaderRow.querySelector('h3');
+            if (titleH3) {
+                if (!devHeaderRow.dataset.originalHtml) devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
+                const headerSpan = targetPanel.querySelector('[id$="-header-btn"] > span');
+                let cardTitle = panelId;
+                if (headerSpan) {
+                    const titleClone = headerSpan.cloneNode(true);
+                    titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach((el) => el.remove());
+                    cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim() || panelId;
+                }
+                titleH3.innerHTML = `
+                    <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <span class="truncate flex-grow text-lg min-w-0" style="font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif"></span>
+                `;
+                const titleSpan = titleH3.querySelector('span.truncate');
+                if (titleSpan) titleSpan.textContent = cardTitle;
+                const newDrillBack = document.getElementById('drill-back-btn');
+                if (newDrillBack) {
+                    newDrillBack.onclick = (evt) => {
+                        evt.stopPropagation();
+                        Admin.stepDrillBack();
+                    };
+                }
+            }
+        }
+
+        if (panelId === 'action-required-panel') {
+            const banner = document.getElementById('action-required-panel');
+            if (banner && typeof Admin.renderGlobalStateMonitor === 'function') {
+                Admin.renderGlobalStateMonitor(banner, Admin._gsmItems || [], { keepOpen: true });
+            }
+        }
+        if (quiet) return true;
+        if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
+        if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
+        if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
+        if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
+        if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
+            if (!quiet) {
+                Admin._deSortMode = 'count';
+                const sortBtn = document.getElementById('de-sort-btn');
+                if (sortBtn) sortBtn.textContent = 'Sort: Count';
+            }
+            Admin.fetchDeadEnds();
+        }
+        if (panelId === 'crashes-panel' && typeof Admin.fetchCrashes === 'function') Admin.fetchCrashes();
+        if (panelId === 'roadmap-panel' && typeof Admin.fetchRoadmap === 'function') Admin.fetchRoadmap();
+        if (panelId === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+        if (!quiet && panelId === 'maint-panel') {
+            document.getElementById('maint-mode-body')?.classList.add('hidden');
+            document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+        }
+        if (!quiet && panelId === 'alert-panel') {
+            if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
+                Admin.setAlertManagerTab('compose');
+            }
+            Admin.applyPendingAdminRoute('alert-panel');
+            const targetEl = document.getElementById('alert-target');
+            if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
+                Admin.fetchCurrentAlertsForTargets();
+            }
+        }
+        return true;
+    },
+
+    /** Back/←: previous drilled panel when there is one, otherwise the Dev Mode grid. */
+    stepDrillBack: (opts = {}) => {
+        const fromPopState = !!opts.fromPopState;
+        if (window._adminLightboxOpen && typeof Admin.closeLightbox === 'function') {
+            Admin.closeLightbox();
+            return true;
+        }
+        const hashPanel = ntAdminDevPanelIdFromHash(location.hash);
+        const decision = ntAdminDrillBackAction(Admin._drillStack, hashPanel, fromPopState);
+        if (decision.action === 'history-back') {
+            try {
+                history.back();
+                return true;
+            } catch (_) {
+                Admin._drillStack = decision.stack;
+                return Admin.showDrilledPanel(decision.panelId, { quiet: true });
+            }
+        }
+        if (decision.action === 'panel') {
+            Admin._drillStack = decision.stack;
+            return Admin.showDrilledPanel(decision.panelId, { quiet: true });
+        }
+        return Admin.exitDrillToGrid(opts);
+    },
+
+    /** Restore the drilled panel that matches the current `#dev-*` hash (or the grid). */
+    syncDrillFromHash: (opts = {}) => {
+        const panelId = ntAdminDevPanelIdFromHash(location.hash);
+        if (panelId && document.getElementById(panelId)) {
+            Admin._drillStack = ntAdminTrimDrillStackTo(Admin._drillStack, panelId);
+            if (!Admin._drillStack.length) Admin._drillStack = [panelId];
+            return Admin.showDrilledPanel(panelId, { quiet: true });
+        }
+        return Admin.exitDrillToGrid({ fromPopState: !!opts.fromPopState });
+    },
+
     deepLinkToPanel: (panelId, routeId, itemId = null) => {
         const targetPanel = document.getElementById(panelId);
         if (!targetPanel) return;
@@ -3637,71 +3838,35 @@ const Admin = {
         Admin._pendingReviewItemId = itemId || null;
         Admin._reviewedAlertKey = null;
 
-        // If we are currently in Grid Mode, we can just click it naturally
-        if (Admin.isGridMode) {
-            targetPanel.click();
+        const currentId = Admin.currentDrillPanelId();
+        const hashPanel = ntAdminDevPanelIdFromHash(location.hash);
+        const overlayHash = !hashPanel && location.hash && location.hash !== '#dev';
+        if (currentId === 'action-required-panel' || panelId !== 'action-required-panel' && window._actionRequiredWasOpen) {
+            window._actionRequiredWasOpen = true;
+        }
+
+        if (currentId === panelId && !Admin.isGridMode && !overlayHash) {
+            // Already on this panel — keep the existing history entry.
         } else {
-            // We are already drilled down into another panel (Action Required)
-            // Seamlessly swap the panels without triggering history.back() race conditions
-
-            // Hide all children
-            Array.from(container.children).forEach(child => {
-                child.style.display = 'none'; 
-            });
-
-            // Show target panel and its body
-            targetPanel.style.display = '';
-            const body = targetPanel.querySelector('[id$="-body"]');
-            if (body) body.classList.remove('hidden');
-            const chev = targetPanel.querySelector('[id$="-chevron"]');
-            if (chev) chev.classList.remove('-rotate-90');
-
-            // GUARDIAN UX FIX: Hide redundant internal accordion header during full-screen drill-down
-            const internalHeader = targetPanel.querySelector('[id$="-header-btn"]');
-            if (internalHeader) internalHeader.style.setProperty('display', 'none', 'important');
-
-            // Update Header Title
-            const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6') || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
-            if (devHeaderRow) {
-                devHeaderRow.classList.remove('pb-4', 'mb-6');
-                devHeaderRow.classList.add('pb-2', 'mb-3'); // GUARDIAN UX: Slim header padding
-
-                const titleH3 = devHeaderRow.querySelector('h3');
-                if (titleH3) {
-                    let titleClone = targetPanel.querySelector('[id$="-header-btn"] > span').cloneNode(true);
-                    titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
-                    const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
-
-                    titleH3.innerHTML = `
-                        <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                        </button>
-                        <span class="truncate flex-grow text-lg min-w-0" style="font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif"></span>
-                    `;
-                    const titleSpan = titleH3.querySelector('span.truncate');
-                    if (titleSpan) titleSpan.textContent = cardTitle;
-
-                    // Rebind the drill-back button to the master logic
-                    const newDrillBack = document.getElementById('drill-back-btn');
-                    if (newDrillBack) {
-                        newDrillBack.onclick = (evt) => {
-                            evt.stopPropagation();
-                            Admin.exitDrillToGrid();
-                        };
-                    }
-                }
+            let nextStack = Admin._drillStack && Admin._drillStack.length
+                ? Admin._drillStack.slice()
+                : (currentId && !Admin.isGridMode ? [currentId] : []);
+            if (Admin.isGridMode && window._actionRequiredWasOpen && panelId !== 'action-required-panel') {
+                nextStack = ntAdminPushDrillPanel(['action-required-panel'], panelId);
+                try {
+                    history.pushState({ adminPanel: 'action-required-panel', drillStack: ['action-required-panel'] }, '', '#dev-action-required-panel');
+                } catch (_) { /* ignore */ }
+            } else {
+                nextStack = ntAdminPushDrillPanel(nextStack, panelId);
             }
-
-            // Replace Router State safely
-            history.replaceState({ adminPanel: targetPanel.id }, '', `#dev-${targetPanel.id}`);
-
-            // Auto-Fetch data upon drill-down
-            if (targetPanel.id === 'feedback-panel') Admin.fetchFeedback();
-            if (targetPanel.id === 'delay-reports-panel') Admin.fetchDelayReports();
-            if (targetPanel.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
-            if (targetPanel.id === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
-            if (targetPanel.id === 'deadends-panel') Admin.fetchDeadEnds();
-            if (targetPanel.id === 'crashes-panel') Admin.fetchCrashes();
+            Admin._drillStack = nextStack;
+            const state = { adminPanel: targetPanel.id, drillStack: nextStack.slice() };
+            const url = `#dev-${targetPanel.id}`;
+            try {
+                if (overlayHash) history.replaceState(state, '', url);
+                else history.pushState(state, '', url);
+            } catch (_) { /* ignore */ }
+            Admin.showDrilledPanel(panelId);
         }
 
         // Review → Service Alerts must open Compose (not sticky Schedule/Archive)
@@ -4613,95 +4778,13 @@ const Admin = {
                 const card = e.target.closest('.admin-grid-view > div');
                 if (!card) return;
                 
-                // Trigger Drill Down
-                Admin.isGridMode = false;
-                container.classList.remove('admin-grid-view');
-                container.style.gridTemplateColumns = ''; // Clear inline styles
-                
-                // GUARDIAN UX FIX: Edge-to-Edge Expansion
-                // Strip padding, borders, and margins so the module touches the exact edge of the screen
-                card.dataset.originalClasses = card.className;
-                card.classList.remove('rounded-xl', 'border', 'shadow-md', 'p-4', 'mb-4', 'border-gray-200', 'dark:border-gray-700', 'bg-white', 'dark:bg-gray-800', 'overflow-hidden');
-                card.classList.add('!border-none', '!shadow-none', '!rounded-none', '!p-0', '!mb-0', 'bg-gray-50', 'dark:bg-gray-900', 'overflow-visible');
-                
-                // GUARDIAN UX FIX: Hide Sign Out container to maximize panel airspace
-                const signoutContainer = document.getElementById('admin-signout-container');
-                if (signoutContainer) signoutContainer.style.display = 'none';
-                
-                // GUARDIAN PHASE 11: Admin Router Bug Fix
-                history.pushState({ adminPanel: card.id }, '', `#dev-${card.id}`);
-                
-                // Hide sibling cards
-                Array.from(container.children).forEach(child => {
-                    if (child !== card) {
-                        child.style.display = 'none';
-                    }
-                });
-                
-                // Expand targeted body
-                const body = card.querySelector('[id$="-body"]');
-                if (body) body.classList.remove('hidden');
-                const chev = card.querySelector('[id$="-chevron"]');
-                if (chev) chev.classList.remove('-rotate-90');
-
-                // GUARDIAN UX FIX: Force hide the inner header to prevent duplicates
-                const innerHeader = card.querySelector('[id$="-header-btn"]');
-                if (innerHeader) innerHeader.style.setProperty('display', 'none', 'important');
-                
-                // Morph Modal Header
-                const titleH3 = devHeaderRow.querySelector('h3');
-                devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
-                
-                // Keep native emoji in drill title (stop stripping - was causing broken headers)
-                let titleClone = card.querySelector('[id$="-header-btn"] > span').cloneNode(true);
-                titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach(el => el.remove());
-                const cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
-                
-                titleH3.innerHTML = `
-                    <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                    </button>
-                    <span class="truncate flex-grow text-lg min-w-0" style="font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif"></span>
-                `;
-                const titleSpan = titleH3.querySelector('span.truncate');
-                if (titleSpan) titleSpan.textContent = cardTitle;
-                
-                toggleBtn.style.display = 'none';
-                
-                // Bind the Drill Back Action (replaceState — no history.back race)
-                document.getElementById('drill-back-btn').onclick = (evt) => {
-                    evt.stopPropagation();
-                    Admin.exitDrillToGrid();
-                };
-                
-                // Auto-Fetch data upon drill-down
-                if (card.id === 'feedback-panel') Admin.fetchFeedback();
-                if (card.id === 'delay-reports-panel') Admin.fetchDelayReports();
-                if (card.id === 'moderation-queue-panel') Admin.fetchModerationQueue();
-                if (card.id === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
-                if (card.id === 'deadends-panel') {
-                    Admin._deSortMode = 'count';
-                    const sortBtn = document.getElementById('de-sort-btn');
-                    if (sortBtn) sortBtn.textContent = 'Sort: Count';
-                    Admin.fetchDeadEnds();
-                }
-                if (card.id === 'crashes-panel') Admin.fetchCrashes(); // GUARDIAN PHASE 7
-                if (card.id === 'roadmap-panel') Admin.fetchRoadmap(); // GUARDIAN PHASE 14
-                if (card.id === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
-                if (card.id === 'maint-panel') {
-                    document.getElementById('maint-mode-body')?.classList.add('hidden');
-                    document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
-                }
-                if (card.id === 'alert-panel') {
-                    if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
-                        Admin.setAlertManagerTab('compose');
-                    }
-                    Admin.applyPendingAdminRoute('alert-panel');
-                    const targetEl = document.getElementById('alert-target');
-                    if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
-                        Admin.fetchCurrentAlertsForTargets();
-                    }
-                }
+                // Trigger Drill Down (push a history entry so Back can return to the grid)
+                Admin._drillStack = [card.id];
+                if (card.id === 'action-required-panel') window._actionRequiredWasOpen = true;
+                try {
+                    history.pushState({ adminPanel: card.id, drillStack: [card.id] }, '', `#dev-${card.id}`);
+                } catch (_) { /* ignore */ }
+                Admin.showDrilledPanel(card.id);
             });
 
             // Engage

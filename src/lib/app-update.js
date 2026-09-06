@@ -11,6 +11,52 @@ import { markPendingReload } from './session-stability.js';
 /** If the incoming SW is not fully installed by then, keep the cached shell. */
 const INCOMING_UPDATE_FALLBACK_MS = 30000;
 
+/** Background the tab this long, then let a waiting worker activate in place. */
+const QUIET_SKIP_WAITING_HIDDEN_MS = 5 * 60 * 1000;
+
+/**
+ * Activate a waiting service worker without reloading this tab.
+ * Does not set __ntPendingUpdateToken, so controllerchange keeps the session.
+ */
+function armQuietSkipWaiting(getRegistration) {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    if (window.__ntQuietSkipArmed) return;
+    window.__ntQuietSkipArmed = true;
+
+    let hiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
+    let timer = null;
+    const clear = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+    const trySkip = async () => {
+        if (document.visibilityState !== 'hidden') return;
+        try {
+            const reg = typeof getRegistration === 'function' ? getRegistration() : getRegistration;
+            const waiting = reg && reg.waiting;
+            if (!waiting) return;
+            waiting.postMessage({ type: 'SKIP_WAITING' });
+            console.log('🛡️ Guardian: Idle skipWaiting — new SW applies without a reload.');
+        } catch (e) {
+            console.warn('🛡️ Guardian: Idle skipWaiting failed', e);
+        }
+    };
+    const schedule = () => {
+        clear();
+        if (document.visibilityState !== 'hidden') {
+            hiddenAt = 0;
+            return;
+        }
+        hiddenAt = hiddenAt || Date.now();
+        const wait = Math.max(0, QUIET_SKIP_WAITING_HIDDEN_MS - (Date.now() - hiddenAt));
+        timer = setTimeout(trySkip, wait);
+    };
+    document.addEventListener('visibilitychange', schedule);
+    schedule();
+}
+
 function hardReloadWithCacheBust(reason = 'force_update') {
     markPendingReload(reason, 800);
     const path = window.location.pathname || withBase('/');
@@ -125,38 +171,20 @@ export function bindAppUpdateLifecycle(registerSW) {
     api.updateSW = registerSW({
         immediate: true,
         async onNeedRefresh() {
-            // New SW is waiting (precached). Toast the incoming version, then
-            // skipWaiting. Do not wipe caches. If it does not take over in 30s,
-            // keep the cached shell — never hard-reload a half-downloaded build.
+            // New SW is waiting (precached). Do not toast and do not
+            // skipWaiting while this tab is in the foreground — that used to
+            // fire a red "Crucial system update" banner and a ?v= reload on
+            // top of a shell that was already running. The waiting worker
+            // activates after a stretch of background time (below) or on the
+            // next cold launch. FORCE_UPDATE_REQUIRED is a separate, last-resort
+            // path in enforceAppVersion(); it is not how FOUC is fixed.
             const incomingVersion = await peekIncomingVersion();
-            console.log('GUARDIAN: Incoming update waiting →', incomingVersion);
-            showCrucialUpdateToast(incomingVersion);
-
-            const token = Date.now();
-            window.__ntPendingUpdateToken = token;
-            markPendingReload('sw_incoming_ready', INCOMING_UPDATE_FALLBACK_MS);
-            try {
-                await Promise.race([
-                    api.updateSW(false),
-                    new Promise((_, reject) => {
-                        setTimeout(() => reject(new Error('incoming_not_ready')), INCOMING_UPDATE_FALLBACK_MS);
-                    }),
-                ]);
-            } catch (e) {
-                window.__ntPendingUpdateToken = null;
-                console.warn('🛡️ Guardian: Incoming update not ready in 30s — keeping cached version.', e);
-                return;
-            }
-            setTimeout(() => {
-                if (window.__ntPendingUpdateToken === token) {
-                    window.__ntPendingUpdateToken = null;
-                    console.warn('🛡️ Guardian: Incoming SW did not activate in 30s — keeping cached version.');
-                }
-            }, INCOMING_UPDATE_FALLBACK_MS);
+            console.log('GUARDIAN: Incoming update waiting (quiet) →', incomingVersion);
         },
         onRegisteredSW(swUrl, registration) {
             console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
             if (!registration) return;
+            armQuietSkipWaiting(() => registration);
             const checkForWaitingSw = () => {
                 if (typeof navigator === 'undefined' || !navigator.onLine) return;
                 const update = registration.update();

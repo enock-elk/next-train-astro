@@ -4,14 +4,14 @@
  */
 import { readFileSync } from 'node:fs';
 import { warningTriangleSvg } from '../src/lib/utils.js';
-import { APP_VERSION, CHANGELOG_DATA } from '../src/lib/config.js';
+import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG } from '../src/lib/config.js';
 
 const failures = [];
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.16', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.17', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -102,6 +102,11 @@ assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy remov
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('finalPrice = Math.floor(finalPrice)'), 'fare button floors to the lower rand');
+assert(FARE_CONFIG.zones_detailed.Z1.monthly === 180, 'Z1 monthly is the V5 R180');
+assert(FARE_CONFIG.zones_detailed.Z2.monthly === 220, 'Z2 monthly is the V5 R220');
+assert(FARE_CONFIG.zones_detailed.Z3.monthly === 250, 'Z3 monthly is the V5 R250');
+assert(FARE_CONFIG.zones_detailed.Z4.monthly === 280, 'Z4 monthly is the V5 R280');
+assert(FARE_CONFIG.zones.Z1 === 10 && FARE_CONFIG.zones.Z2 === 12 && FARE_CONFIG.zones.Z3 === 14 && FARE_CONFIG.zones.Z4 === 15, 'peak singles are unchanged');
 assert(liveBoard.includes('!quietPaint && typeof paintHeaderDayLabel'), 'quiet minute tick skips rewriting the day label');
 
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');

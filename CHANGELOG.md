@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.17 — Restore V5 monthly ticket prices (6 Sep 2026)
+
+no release notes.
+
+- Monthly pass amounts are the V5 zone table again: Z1 R180, Z2 R220, Z3 R250, Z4 R280. Singles, returns, and weeklies are unchanged.
+- Zone Distance Audit shows those monthlies in the legend, per-route rows, and JSON export.
+
 ## V9_09.06.16 — Admin Back restores the previous panel (6 Sep 2026)
 
 no release notes.

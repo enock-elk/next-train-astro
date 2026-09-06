@@ -307,6 +307,9 @@ export function runZoneDistanceAudit(db, region, opts = {}) {
                 fare: assignedZone && FARE_CONFIG.zones[assignedZone]
                     ? FARE_CONFIG.zones[assignedZone]
                     : null,
+                monthly: assignedZone && FARE_CONFIG.zones_detailed?.[assignedZone]?.monthly != null
+                    ? FARE_CONFIG.zones_detailed[assignedZone].monthly
+                    : null,
             });
         }
 
@@ -376,5 +379,6 @@ export function runZoneDistanceAudit(db, region, opts = {}) {
             directionThinCoords: thinCoordsCount,
         },
         bands,
+        ticketTable: FARE_CONFIG.zones_detailed || {},
     };
 }

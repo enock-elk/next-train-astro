@@ -959,11 +959,11 @@ export const Renderer = {
                             } else if (paintExclusion) {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
-                                    bgClass = 'export-banned-col relative';
-                                    headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center;">${banIcon} NO SVC</span>${h}`;
+                                    bgClass = 'export-banned-col relative nt-excl-head';
+                                    headerContent = `${h}<span style="position:absolute; bottom:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center; text-decoration:underline dotted; text-underline-offset:2px;">${banIcon} NO SVC</span>`;
                                 } else {
-                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative cursor-pointer nt-excl-col';
-                                    headerContent = `<button type="button" class="nt-excl-hit absolute inset-0 z-10 focus:outline-none" data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" aria-label="Why train ${escapeHTML(String(h))} has no service"></button><span class="relative z-0 pointer-events-none flex flex-col items-center pt-0.5"><span class="text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-red-400/70 underline-offset-2">${banIcon} NO SVC</span><span>${h}</span></span>`;
+                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative nt-excl-head';
+                                    headerContent = `${h}<button type="button" class="nt-excl-hit absolute left-0 right-0 bottom-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center focus:outline-none" data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" aria-label="Why train ${escapeHTML(String(h))} has no service">${banIcon} NO SVC</button>`;
                                 }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
@@ -1024,7 +1024,7 @@ export const Renderer = {
                                 else cellClass += " text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 opacity-95 font-bold";
                             } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
-                                else cellClass += " text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 opacity-50 font-normal cursor-pointer nt-excl-col";
+                                else cellClass += " text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 opacity-50 font-normal";
                             } else {
                                 if (!isExport) {
                                     cellClass += " text-gray-900 dark:text-gray-200";
@@ -1037,19 +1037,15 @@ export const Renderer = {
                                 else cellClass += " bg-green-50 dark:bg-green-900/10";
                             } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
-                                else cellClass += " bg-red-50 dark:bg-red-900/10 cursor-pointer nt-excl-col";
+                                else cellClass += " bg-red-50 dark:bg-red-900/10";
                             } else if (!isExport) {
                                 cellClass += " text-gray-300 dark:text-gray-700"; 
                             }
                         }
                         
                         if (isExport && val === "-") val = "";
-
-                        const exclAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
-                            ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}" role="button" tabindex="0" aria-label="Why train ${escapeHTML(String(col))} has no service"`
-                            : '';
                         
-                        return `<td class="${cellClass}"${exclAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}">${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col sticky right-0 z-10 ${currentStickyCellClass || (isExport ? '' : 'bg-gray-50 dark:bg-gray-800/80')} ${paddingClass} border-l ${borderClass} border-b font-mono font-bold text-center shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-gray-500 dark:text-gray-400 text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
@@ -1425,7 +1421,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         });
         t.querySelectorAll('th.export-banned-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#fef2f2'; 
-            headerCell.style.color = '#991b1b'; 
+            headerCell.style.color = '#991b1b';
+            headerCell.style.paddingBottom = isCompact ? '16px' : '18px';
         });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {
             td.style.backgroundColor = '#f0fdf4';

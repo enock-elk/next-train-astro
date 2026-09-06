@@ -41,6 +41,10 @@ assert(guard.includes('/_astro/'), 'guard only recovers hashed Astro assets');
 assert(guard.includes('nt_shell'), 'guard cache-busts with nt_shell');
 assert(guard.includes("setProperty('display', 'block', 'important')"), 'guard can reveal the lifeline');
 assert(guard.includes('navigator.onLine === false'), 'offline boot reveals the number instead of looping');
+assert(!guard.includes('.sheet'), 'guard does not infer failure from a null stylesheet handle');
+
+const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+assert(ui.includes('!hasReloaded && !onboardingVisible'), 'visible Welcome skips the silent runtime-error reload');
 
 const css = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
 assert(/#nt-recovery-lifeline \{\s*display: none !important;/.test(css), 'hashed CSS is what hides the lifeline');

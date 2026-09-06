@@ -80,18 +80,9 @@
     }, true);
 
     window.addEventListener('load', function () {
-      var links = document.querySelectorAll('link[rel="stylesheet"][href*="/_astro/"]');
-      if (!links.length) return;
-      for (var i = 0; i < links.length; i++) {
-        // A captive portal answers 200 with its own HTML, so no error fires and
-        // the link still has no stylesheet attached.
-        if (!links[i].sheet) {
-          recover();
-          return;
-        }
-      }
-      // Shell is intact. Clear the counter so a later, unrelated failure still
-      // gets its own attempts.
+      // Resource errors above are the recovery signal. A null CSSStyleSheet can
+      // also mean the browser has not exposed a cross-origin sheet, so it must
+      // not trigger a load-time reload.
       try { sessionStorage.removeItem(KEY); } catch (e) {}
     });
   })();

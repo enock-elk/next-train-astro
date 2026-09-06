@@ -318,14 +318,26 @@ export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
     }
     const replyBtn = typeof document !== 'undefined' ? document.getElementById('disruption-modal-reply-btn') : null;
     if (replyBtn) {
-        replyBtn.onclick = (e) => {
+        replyBtn.onclick = async (e) => {
             e.preventDefault();
-            if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
-            setTimeout(() => {
+            const reason = (rule && rule.reason) ? String(rule.reason) : 'No service on this day';
+            const snippet = `Train ${trainLabel}: ${reason}`;
+            const replyOptions = {
+                label: 'Replying to Advisory:',
+                snippet,
+                rawMsg: snippet,
+                alertId: `exclusion-${String(routeId || 'route')}-${trainLabel}`,
+                alertKind: 'disruption',
+            };
+            try {
+                const { openFeedbackReplyFromOverlay } = await import('./hub.js');
+                openFeedbackReplyFromOverlay('disruption-modal', replyOptions);
+            } catch {
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
                 if (typeof window.openFeedbackModal === 'function') {
                     window.openFeedbackModal({ location: 'grid_exclusion_reply' });
                 }
-            }, 350);
+            }
         };
     }
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');

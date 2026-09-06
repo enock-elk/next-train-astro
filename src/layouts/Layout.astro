@@ -85,21 +85,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             return 0;
           }
         }
-        function pinBottomNav(keyboard, vv, off) {
-          var nav = document.getElementById('bottom-nav');
-          if (!nav || keyboard || nav.classList.contains('hidden')) {
-            root.style.setProperty('--nt-nav-lift', '0px');
-            return;
-          }
-          var screenBottom = (vv && vv.height) ? (off + vv.height) : (window.innerHeight || 0);
-          var rect = nav.getBoundingClientRect();
-          if (!rect || !rect.height || !screenBottom) {
-            root.style.setProperty('--nt-nav-lift', '0px');
-            return;
-          }
-          var overflow = rect.bottom - screenBottom;
-          root.style.setProperty('--nt-nav-lift', (overflow > 0.5 ? overflow : 0) + 'px');
-        }
         function apply() {
           var vv = window.visualViewport;
           var inner = window.innerHeight || 0;
@@ -156,7 +141,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           root.style.setProperty('--nt-vv-h', vvH + 'px');
           root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
           root.classList.toggle('nt-keyboard', keyboard);
-          requestAnimationFrame(function () { pinBottomNav(keyboard, vv, off); });
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
           try {
@@ -856,16 +840,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         flex-shrink: 0;
         position: relative;
       }
-      /* Oval floats over the board canvas — no shell tray behind the pill.
-         --nt-nav-lift pulls it up if a late height glitch would paint it
-         below the visible frame (Galaxy S9+ / short Chrome viewports). */
+      /* Oval floats over the board canvas — no shell tray behind the pill. */
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
         position: absolute;
         left: 0.75rem;
         right: 0.75rem;
-        /* Keep the pill inside the frame — flush bottom:0 clips the curve
-           under overflow:hidden on short Chrome viewports (S9+). */
-        bottom: calc(0.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
+        bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
         margin: 0;
         z-index: 110;
       }
@@ -898,9 +878,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
           padding-bottom: 3.85rem;
         }
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: calc(0.35rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
-        }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
           bottom: 3.6rem;
         }
@@ -908,9 +885,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       @media (max-height: 620px) {
         html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
           padding-bottom: 3.35rem;
-        }
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: calc(0.35rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers.

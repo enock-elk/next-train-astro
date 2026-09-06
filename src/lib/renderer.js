@@ -959,10 +959,10 @@ export const Renderer = {
                             } else if (paintExclusion) {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
-                                    bgClass = 'export-banned-col relative nt-excl-head';
+                                    bgClass = 'export-banned-col relative';
                                     headerContent = `${h}<span style="position:absolute; bottom:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center; text-decoration:underline dotted; text-underline-offset:2px;">${banIcon} NO SVC</span>`;
                                 } else {
-                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative nt-excl-head';
+                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
                                     headerContent = `${h}<button type="button" class="nt-excl-hit absolute left-0 right-0 bottom-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center focus:outline-none" data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" aria-label="Why train ${escapeHTML(String(h))} has no service">${banIcon} NO SVC</button>`;
                                 }
                             } else if (!isExport && isHighlight) {
@@ -1422,7 +1422,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         t.querySelectorAll('th.export-banned-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#fef2f2'; 
             headerCell.style.color = '#991b1b';
-            headerCell.style.paddingBottom = isCompact ? '16px' : '18px';
         });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {
             td.style.backgroundColor = '#f0fdf4';

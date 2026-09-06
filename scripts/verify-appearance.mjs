@@ -344,9 +344,9 @@ assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #botto
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
-assert(layout.includes('pinBottomNav'), 'visible-frame pin keeps the oval on screen');
-assert(layout.includes('--nt-nav-lift'), 'nav lift token pulls the oval up when it would overflow');
-assert(layout.includes('0.5rem + var(--nt-sys-bottom'), 'oval sits inset from the frame edge so the curve is not clipped');
+assert(!layout.includes('pinBottomNav'), 'bottom nav has no synthetic geometry pin');
+assert(!layout.includes('--nt-nav-lift'), 'bottom nav has no synthetic lift token');
+assert(layout.includes('bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'oval uses only the measured system inset');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
@@ -390,7 +390,7 @@ assert(appUpdate.includes("New SW active — applying on next launch"), 'control
 assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
 assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
 
-assert(css.includes('th.nt-excl-head'), 'NO SVC headers keep extra room under the train number');
+assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train number with extra padding');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
 assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');
 

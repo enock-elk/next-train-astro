@@ -505,11 +505,6 @@ html[data-pilot-community="1"]:not([data-pilot-map="1"]) #bottom-nav-grid {
   max-width: 30rem;
 }
 
-th.nt-excl-head {
-  padding-bottom: 1.15rem !important;
-  vertical-align: middle;
-}
-
 #bottom-nav .bottom-nav-item:not(.is-active) {
   color: var(--nt-chrome-muted) !important;
 }

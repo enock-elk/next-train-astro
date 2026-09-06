@@ -1027,15 +1027,22 @@ export function initGlobalErrorHandler() {
         
         const overlay = document.getElementById('loading-overlay');
         const content = document.getElementById('main-content');
+        const welcome = document.getElementById('welcome-modal');
+        const onboardingVisible = !!(welcome && !welcome.classList.contains('hidden'));
         
         if (overlay) overlay.style.display = 'none';
-        if (content) content.style.display = 'block';
+        if (content) {
+            content.style.display = '';
+            content.style.visibility = '';
+        }
         
         // Strike 1: Silent Recovery
         let hasReloaded = false;
         try { hasReloaded = sessionStorage.getItem('error_reloaded'); } catch(e) {}
 
-        if (!hasReloaded) {
+        // Do not refresh a visibly active Welcome flow. Fall through to the
+        // surfaced recovery path so onboarding state is not silently discarded.
+        if (!hasReloaded && !onboardingVisible) {
             try { sessionStorage.setItem('error_reloaded', 'true'); } catch(e) {}
             markPendingReload('error_recovery', 1000);
             setTimeout(() => window.location.reload(), 1000);

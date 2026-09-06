@@ -994,9 +994,16 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   box-shadow: 0 0 0 1px color-mix(in srgb, #000 16%, transparent), 0 1px 2px color-mix(in srgb, #000 12%, transparent);
 }
 html.dark #notice-bell.nt-bell-info {
-  background-color: #f1f5f9 !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, #fff 28%, transparent), 0 1px 2px color-mix(in srgb, #000 40%, transparent);
+}
+html[data-colour-pack="midnight"] #notice-bell.nt-bell-info,
+html[data-colour-pack="contrast"] #notice-bell.nt-bell-info,
+html[data-colour-pack="signal"] #notice-bell.nt-bell-info,
+html[data-colour-pack="ember"] #notice-bell.nt-bell-info,
+html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, #000 26%, transparent), 0 1px 3px color-mix(in srgb, #000 14%, transparent);
 }
 
 .nt-planner-map-btn {

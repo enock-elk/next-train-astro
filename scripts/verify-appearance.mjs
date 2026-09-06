@@ -52,7 +52,7 @@ assert(css.includes('#current-day span.text-red-600 {\n  color: #dc2626 !importa
 assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
-assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #f1f5f9 !important;'), 'dark info bell keeps a light disc');
+assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
 assert(!css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'Earthy/Ember no longer wash the bell into the header');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
@@ -382,7 +382,8 @@ assert(!layout.includes('#app-scroll:has(#view-community.active)'), 'Community #
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;'), 'Community keyboard pad is a small gap, not shell minus visual');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
-assert(layout.includes('border-top-width: 0 !important'), 'phone in-app drops the top card hairline');
+assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
+assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');

@@ -826,11 +826,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           max-width: 28rem;
           box-shadow: none;
         }
-        /* Phone in-app: drop the top hairline so Classic blue (theme-color
-           + header) reads as one bar. --nt-border on the card edge painted
-           a white line under the status / URL chrome. */
+        /* Phone in-app: no card hairline. --nt-border on the frame painted
+           a white line under the status / URL chrome and a pale edge down
+           the sides. Classic blue (theme-color + header) should read as
+           one bar. */
         html.nt-in-app #main-content.app-shell {
-          border-top-width: 0 !important;
+          border-width: 0 !important;
+        }
+        html.nt-in-app[data-colour-pack="classic"] #nt-shell,
+        html.nt-in-app:not([data-colour-pack]) #nt-shell {
+          background-color: var(--nt-chrome-header);
         }
       }
       html.nt-onboarding #bottom-nav,

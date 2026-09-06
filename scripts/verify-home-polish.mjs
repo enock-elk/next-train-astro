@@ -5,13 +5,18 @@
 import { readFileSync } from 'node:fs';
 import { warningTriangleSvg } from '../src/lib/utils.js';
 import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG } from '../src/lib/config.js';
+import {
+    collectHubOnwardOptions,
+    resolveTransferHubName,
+    routeAllowsDualHubOptions,
+} from '../src/lib/transfer-card.js';
 
 const failures = [];
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.17', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.18', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -89,8 +94,11 @@ assert(renderer.includes('data-nt-countdown'), 'countdown node is stamped for qu
 assert(renderer.includes('stampLiveBoardCard'), 'board cards carry a stable key');
 assert(renderer.includes('data-nt-deptime'), 'departure clock is stamped for quiet paint');
 assert(renderer.includes('liveBoardStaticKey'), 'empty and no-service cards use static board keys');
-assert(renderer.includes('font-bold break-words w-full">To ${connDest}'), 'connect destination wraps instead of truncating');
-assert(renderer.includes('font-bold break-words w-full px-1" title="To ${displayDest}'), 'shuttle destination wraps instead of truncating');
+assert(renderer.includes('At ${hubLabel}'), 'transfer card names the hub from the journey');
+assert(renderer.includes('collectHubOnwardOptions'), 'transfer card uses shared onward-option helper');
+assert(renderer.includes('To ${hubLabel}'), 'shuttle line names the change station');
+assert(!renderer.includes('Connect Train ${conn.train}'), 'old Connect Train heading is gone');
+assert(!renderer.includes('italic text-gray-500 dark:text-gray-500 border-t'), 'terminus option is not an italic footnote');
 assert(!renderer.includes('text-gray-400 font-bold truncate w-full">To ${connDest}'), 'connect line no longer uses truncate');
 assert(renderer.includes('No more trains today · first'), 'empty board one-liner copy');
 assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trailing colon, not a duplicated time');
@@ -198,6 +206,32 @@ const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
 assert(agents.includes('No unsolicited changes'), 'agent instructions forbid unsolicited changes');
 assert(agents.includes('Changelog is optional'), 'agent instructions allow shipping without changelog');
 assert(agents.includes('no release notes'), 'agent instructions allow no release notes');
+
+assert(routeAllowsDualHubOptions('pta-pien'), 'Pienaarspoort may list two hub options');
+assert(!routeAllowsDualHubOptions('jhb-rand'), 'Randfontein does not get a dual hub list');
+assert(!routeAllowsDualHubOptions('pta-kempton'), 'direct corridors do not get a dual hub list');
+{
+    const journey = {
+        train1: { terminationStation: 'NEW HUB STATION' },
+        connection: {
+            train: '1103',
+            departureTime: '05:05:00',
+            actualDestination: 'MAMELODI GARDENS STATION',
+            connectionStation: 'NEW HUB STATION',
+        },
+        nextFullJourney: {
+            train: '1105',
+            departureTime: '05:45:00',
+            actualDestination: 'PIENAARSPOORT STATION',
+        },
+    };
+    assert(resolveTransferHubName(journey) === 'NEW HUB STATION', 'hub label follows the journey station, not a painted name');
+    const pien = collectHubOnwardOptions(journey, 'pta-pien');
+    assert(pien.length === 2 && pien[0].train === '1103' && pien[1].train === '1105', 'pta-pien keeps short-turn and terminus options');
+    const rand = collectHubOnwardOptions(journey, 'jhb-rand');
+    assert(rand.length === 1 && rand[0].train === '1103', 'other shuttle routes keep only the earliest onward train');
+}
+assert(liveBoard.includes('routeAllowsDualHubOptions(routeId)'), 'findConnections only builds a second hub option on the allow-list');
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

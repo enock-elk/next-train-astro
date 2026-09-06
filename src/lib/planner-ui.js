@@ -2438,7 +2438,7 @@ export const PlannerRenderer = {
                     <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 pl-1 border-b border-gray-100 dark:border-gray-800 pb-1">Journey Timeline</p>
                     ${PlannerRenderer.renderTimeline(step)}
                 </div>
-                <button onclick="if(typeof window.extractTripCoordinates === 'function') window.extractTripCoordinates(${selectedIndex})" class="w-full bg-blue-50/50 hover:bg-blue-100 hover:shadow-md active:scale-[0.99] dark:bg-gray-800 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 font-bold py-3 text-xs rounded-lg transition-colors flex items-center justify-center focus:outline-none mt-2 uppercase tracking-wide border border-blue-200 dark:border-gray-600 shadow-sm">
+                <button onclick="if(typeof window.extractTripCoordinates === 'function') window.extractTripCoordinates(${selectedIndex})" class="nt-planner-map-btn w-full bg-blue-50/50 hover:bg-blue-100 hover:shadow-md active:scale-[0.99] dark:bg-gray-800 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 font-bold py-3 text-xs rounded-lg transition-colors flex items-center justify-center focus:outline-none mt-2 uppercase tracking-wide border border-blue-200 dark:border-gray-600 shadow-sm">
                     <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
                     View Trip Plan on Map
                 </button>
@@ -4540,7 +4540,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
             spacer.className = "planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end"; 
             const shareBtn = document.createElement("button");
             shareBtn.type = "button";
-            shareBtn.className = "inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none h-8";
+            shareBtn.className = "inline-flex items-center text-xs font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none h-8";
             shareBtn.title = "Share Trip Plan";
             
             shareBtn.onclick = async () => {

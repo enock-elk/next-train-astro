@@ -388,11 +388,12 @@ function renderPostCard(notice, opts = {}) {
     const cardRing = highlight
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
         : 'ring-1 ring-black/5 dark:ring-white/10';
-    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-4 select-none">
-        <div class="flex items-start justify-between gap-2 mb-2">
+    return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
+        <div class="nt-alert-strip flex items-start justify-between gap-2 px-4 py-2.5">
             <span class="nt-alert-signoff text-[13px] font-semibold text-gray-800 dark:text-gray-100 leading-tight">${escapeHTML(signoff)}</span>
             <span class="nt-alert-chip inline-flex items-center shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
         </div>
+        <div class="px-4 pt-3 pb-4">
         ${titleHtml}
         ${mediaHtml}
         ${bodyHtml}
@@ -403,7 +404,8 @@ function renderPostCard(notice, opts = {}) {
             ${scope ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)}</span>` : '<span></span>'}
             ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
         </p>
-        <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold text-blue-600 dark:text-blue-400 py-2 rounded-lg border border-blue-100 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}">Reply</button>
+        <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold py-2 rounded-lg focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}">Reply</button>
+        </div>
     </article>`;
 }
 
@@ -565,7 +567,7 @@ export function applyBellFromNotices(notices) {
         bellClass += 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800';
         dotClass += 'bg-yellow-500';
     } else {
-        bellClass += 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800';
+        bellClass += 'nt-bell-info bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800';
         dotClass += 'bg-blue-600';
     }
     bellBtn.className = bellClass;

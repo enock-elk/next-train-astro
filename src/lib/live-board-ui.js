@@ -477,9 +477,9 @@ export function updateNextTrainView() {
         title.innerHTML = labelHtml;
         title.title = labelPlain;
         if (route?.colorClass) {
-            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight`;
+            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight`;
         } else {
-            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight';
+            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight';
         }
         try {
             if (route?.name) safeStorage.setItem('nt_last_route_label', labelPlain);

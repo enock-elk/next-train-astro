@@ -956,6 +956,70 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   border-color: var(--nt-border);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 22%, transparent), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
 }
+.nt-alert-strip {
+  background-color: var(--nt-surface-muted) !important;
+  border-bottom: 1px solid var(--nt-border);
+}
+.nt-alert-reply {
+  background-color: var(--nt-primary) !important;
+  color: var(--nt-primary-fg) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
+}
+
+/* Idle/info bell: readable ink on a real disc. Critical/warning stay red/amber. */
+#notice-bell.nt-bell-info {
+  background-color: var(--nt-primary-soft) !important;
+  color: var(--nt-text) !important;
+}
+html[data-colour-pack="earthy"] #notice-bell.nt-bell-info,
+html[data-colour-pack="ember"] #notice-bell.nt-bell-info {
+  background-color: var(--nt-surface) !important;
+  color: var(--nt-chrome-fg) !important;
+  box-shadow: 0 0 0 1px var(--nt-border);
+}
+
+.nt-planner-map-btn {
+  background-color: var(--nt-surface) !important;
+  color: var(--nt-text) !important;
+  border-color: var(--nt-border) !important;
+}
+
+#planner-back-btn,
+#planner-header-badge,
+.planner-share-slot > button {
+  color: rgb(var(--nt-blue-800)) !important;
+}
+html.dark #planner-back-btn,
+html.dark #planner-header-badge,
+html.dark .planner-share-slot > button {
+  color: rgb(var(--nt-blue-300)) !important;
+}
+
+/* Phone-only shell scale. Do not change html rem (admin, ads, overlays). */
+@media (max-width: 480px) {
+  #nt-shell,
+  #main-content {
+    --nt-ui-scale: clamp(0.90, calc(100vw / 390), 1.06);
+  }
+  #route-subtitle-text {
+    font-size: clamp(0.82rem, calc(0.95rem * var(--nt-ui-scale, 1)), 1.05rem);
+    line-height: 1.2;
+  }
+  #view-full-timetable-btn .nt-timetable-label {
+    font-size: clamp(0.68rem, calc(0.78rem * var(--nt-ui-scale, 1)), 0.88rem);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  #planner-results-section > .grid {
+    gap: calc(0.5rem * var(--nt-ui-scale, 1));
+  }
+  #planner-back-btn,
+  #planner-header-badge,
+  .planner-share-slot > button {
+    height: calc(2rem * var(--nt-ui-scale, 1));
+    font-size: calc(0.75rem * var(--nt-ui-scale, 1));
+  }
+}
 
 .nt-train-flag {
   display: none !important;

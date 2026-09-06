@@ -1038,11 +1038,11 @@ html.dark .planner-share-slot > button {
    #nt-shell (ads / fixed overlays). Planner toolbar stays 2rem / text-xs. */
 @media (max-width: 639px) {
   html {
-    font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px);
+    font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px);
   }
   #nt-shell,
   #main-content {
-    --nt-ui-scale: clamp(0.82, calc(100vw / 390), 1);
+    --nt-ui-scale: clamp(0.82, 100vw / 390px, 1);
   }
   #route-subtitle-text {
     line-height: 1.2;

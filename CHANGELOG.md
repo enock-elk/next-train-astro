@@ -6,7 +6,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 
 no release notes.
 
-- Phones (`max-width: 639px`) set `html` rem to `clamp(13.12px, 16px * 100vw / 390, 16px)` so Tailwind rem, icons, and `3rem` grid tracks shrink together. Floor is iPhone SE (320). Do not transform `#nt-shell`.
+- Phones (`max-width: 639px`) set `html` rem to `clamp(13.12px, 100vw * 16 / 390, 16px)` so Tailwind rem, icons, and `3rem` grid tracks shrink together. Floor is iPhone SE (320). Do not transform `#nt-shell`.
 - `#main-content` keeps `max-width: 28rem` on phones (no `max-width: none`), so tablets/desktop do not stretch past the existing card.
 - Board shuttle/connect lines wrap (`break-words`) instead of `truncate`. Title report labels wrap the same way.
 - Route pill / station / locate / planner matching rows use rem heights (`2.875rem` / `3.375rem`) so they follow the phone scale.

@@ -89,9 +89,9 @@ assert(/dropdown-escape #app-scroll \{\s*overflow-x:\s*hidden !important;\s*over
 assert(!/#main-content\.app-shell\.dropdown-escape #app-scroll \{\s*overflow:\s*visible/.test(layout), 'Travel Day no longer sets #app-scroll to overflow visible');
 assert(layout.includes('body.sidenav-open #app-scroll'), 'Options open freezes #app-scroll');
 assert(/#sidenav-overlay \{\s*touch-action:\s*none;/.test(layout), 'Options scrim does not scroll-chain on iOS');
-assert(layout.includes('font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px)'), 'Layout first-paint scales html rem on phones');
+assert(layout.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'Layout first-paint scales html rem on phones');
 const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
-assert(contentLayout.includes('font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px)'), 'map layout first-paint scales html rem on phones');
+assert(contentLayout.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'map layout first-paint scales html rem on phones');
 assert(layout.includes('max-width: 28rem'), 'phone shell keeps the 28rem max stretch');
 assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone shell no longer drops max-width');
 
@@ -119,8 +119,8 @@ const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.u
 assert(css.includes('height: 2rem') && css.includes('#planner-header-badge > div'), 'planner Back, day, and Share share the old 2rem box');
 assert(!/#planner-back-btn,[\s\S]{0,400}min-height: 2.5rem/.test(css), 'planner toolbar is not the taller 2.5rem lock');
 assert(!/#planner-back-btn,[\s\S]{0,360}font-size: calc\(0.8rem \* var\(--nt-ui-scale/.test(css), 'planner toolbar is not scaled down on phones');
-assert(css.includes('font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px)'), 'phones scale html rem from viewport width');
-assert(css.includes('--nt-ui-scale: clamp(0.82, calc(100vw / 390), 1)'), 'phone scale floor is 320/390');
+assert(css.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'phones scale html rem from viewport width');
+assert(css.includes('--nt-ui-scale: clamp(0.82, 100vw / 390px, 1)'), 'phone scale floor is 320/390');
 assert(!css.includes('clamp(0.90, calc(100vw / 390), 1.06)'), 'phone scale no longer floors at 0.90');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');

@@ -78,7 +78,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <style is:inline>
       @media (max-width: 639px) {
-        html { font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px); }
+        html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
     </style>
     <StuckUpdateGuard />

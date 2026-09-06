@@ -47,7 +47,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       /* Phone width scale before the hashed bundle. Design 390. Floor 320 (SE).
          Tablets/desktop keep 16px rem; the shell stays max-w-md (28rem). */
       @media (max-width: 639px) {
-        html { font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px); }
+        html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
     </style>
     <StuckUpdateGuard />

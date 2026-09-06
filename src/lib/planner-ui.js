@@ -1442,24 +1442,12 @@ export function extractTripCoordinates(tripIndex) {
         return;
     }
 
-    const routeIds = [];
-    if (trip.route?.id) routeIds.push(trip.route.id);
-    if (trip.leg1?.route?.id) routeIds.push(trip.leg1.route.id);
-    if (trip.leg2?.route?.id) routeIds.push(trip.leg2.route.id);
-    if (trip.leg3?.route?.id) routeIds.push(trip.leg3.route.id);
-    if (Array.isArray(trip.legs)) {
-        for (const leg of trip.legs) {
-            if (leg?.route?.id) routeIds.push(leg.route.id);
-        }
-    }
-
     const routeData = {
         origin: normalizeStationName(trip.from),
         destination: normalizeStationName(trip.to),
         path: coordinates,        
         stationNames: stationNames, 
-        validStops: validStops,
-        routeIds,
+        validStops: validStops,   
         globalDisruptions: $globalDisruptions.get() || {} 
     };
 
@@ -1670,7 +1658,7 @@ export async function openTripMapRenderer(routeData) {
             let drawPath = stationPath;
             try {
                 const stops = routeData.validStops || [];
-                const smoothed = await smoothPathFromStops(stops, region, { routeIds: routeData.routeIds });
+                const smoothed = await smoothPathFromStops(stops, region);
                 if (smoothed && smoothed.length > 1) {
                     drawPath = smoothed;
                 } else if (stops.length > 1) {

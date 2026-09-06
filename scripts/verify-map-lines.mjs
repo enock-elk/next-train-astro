@@ -78,96 +78,6 @@ assert(
     railHopSkipsRouteStop(skipPath, stops, 0),
     'Ndabeni→Pinelands hop that passes Hazendal is a skip'
 );
-
-function hopBacktracksAlongChord(points, a, b, slackM = 80) {
-    const lat0 = ((a.lat + b.lat) / 2) * Math.PI / 180;
-    const toXY = (lat, lon) => [
-        lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
-        lat * Math.PI / 180 * 6371000
-    ];
-    const [aX, aY] = toXY(a.lat, a.lon);
-    const [bX, bY] = toXY(b.lat, b.lon);
-    const abx = bX - aX;
-    const aby = bY - aY;
-    const len = Math.hypot(abx, aby);
-    let prev = -Infinity;
-    for (const p of points) {
-        const [pX, pY] = toXY(p.lat, p.lon);
-        const prog = len < 1 ? 0 : ((pX - aX) * abx + (pY - aY) * aby) / len;
-        if (prev !== -Infinity && prog < prev - slackM) return true;
-        if (prog > prev) prev = prog;
-    }
-    return false;
-}
-const fold = [
-    { lat: 0, lon: 0 },
-    { lat: 0, lon: 0.02 },
-    { lat: 0, lon: 0.01 }
-];
-assert(
-    hopBacktracksAlongChord(fold, { lat: 0, lon: 0 }, { lat: 0, lon: 0.01 }),
-    'A>C>B fold along the chord is a backtrack'
-);
-assert(
-    !hopBacktracksAlongChord(
-        [{ lat: 0, lon: 0 }, { lat: 0, lon: 0.005 }, { lat: 0, lon: 0.01 }],
-        { lat: 0, lon: 0 },
-        { lat: 0, lon: 0.01 }
-    ),
-    'monotonic A>B hop is not a backtrack'
-);
-
-function unfoldHop(seg, a, b, slackM = 25) {
-    const lat0 = ((a.lat + b.lat) / 2) * Math.PI / 180;
-    const toXY = (lat, lon) => [
-        lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
-        lat * Math.PI / 180 * 6371000
-    ];
-    const [aX, aY] = toXY(a.lat, a.lon);
-    const [bX, bY] = toXY(b.lat, b.lon);
-    const abx = bX - aX;
-    const aby = bY - aY;
-    const len = Math.hypot(abx, aby);
-    const progOf = (p) => {
-        const [pX, pY] = toXY(p[0], p[1]);
-        return len < 1 ? 0 : ((pX - aX) * abx + (pY - aY) * aby) / len;
-    };
-    const target = progOf([b.lat, b.lon]);
-    const out = [seg[0]];
-    let prev = progOf(seg[0]);
-    for (let i = 1; i < seg.length; i++) {
-        const prog = progOf(seg[i]);
-        if (prog < prev - slackM) continue;
-        if (prog > target + slackM) {
-            out.push([b.lat, b.lon]);
-            break;
-        }
-        if (prog > prev) prev = prog;
-        out.push(seg[i]);
-        if (prog >= target - 15) break;
-    }
-    return out;
-}
-const scribbled = [
-    [0, 0],
-    [0, 0.005],
-    [0, 0.01],
-    [0, 0.004],
-    [0, 0.015]
-];
-const unfolded = unfoldHop(scribbled, { lat: 0, lon: 0 }, { lat: 0, lon: 0.015 });
-assert(
-    unfolded.length === 4 && unfolded[2][1] === 0.01 && unfolded[3][1] === 0.015,
-    'unfold keeps the advancing rail and drops the A>C>B scribble'
-);
-assert(
-    !hopBacktracksAlongChord(
-        unfolded.map(([lat, lon]) => ({ lat, lon })),
-        { lat: 0, lon: 0 },
-        { lat: 0, lon: 0.015 }
-    ),
-    'unfolded hop is monotonic'
-);
 assert(
     !railHopSkipsRouteStop(
         [{ lat: 0, lon: 0 }, { lat: 0.001, lon: 0.005 }, { lat: 0, lon: 0.01 }],
@@ -199,11 +109,8 @@ assert(mapApp.includes('function stationPopupHtml'), 'station popup lists corrid
 assert(mapApp.includes('map-popup-route'), 'station popup rows use map-popup-route');
 assert(mapApp.includes('pathVisitsStopsInOrder(latlngs, stops)'), 'baked GeoJSON must follow station order');
 assert(mapApp.includes('return chords;'), 'fallback paint is station-to-station chords');
-assert(mapApp.includes('hopBacktracksAlongChord'), 'OSM hops that double back A>C>B are rejected');
-assert(mapApp.includes('function unfoldHop'), 'yard scribbles are unfolded before paint');
-assert(mapApp.includes('finalizeHop(baked ? slicePathBetween(baked, a, b)'), 'network map paints baked rail one hop at a time');
-assert(mapApp.includes('if (!usedRail) appendHop(out, [[a.lat, a.lon], [b.lat, b.lon]])'), 'each hop falls back to a straight chord');
-assert(mapApp.includes('function bakedLineCoversStops'), 'baked line cover helper remains for tests');
+assert(mapApp.includes('railHops !== stops.length - 1'), 'graph smoothing wins only when every hop succeeds');
+assert(mapApp.includes('bakedLineCoversStops(baked, stops)'), 'baked line must pass every station before it is painted');
 assert(
     mapApp.includes('"CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "KENTEMADE", "CENTURY CITY"'),
     'Cape Town to Bellville is the Northern Line via Century City'
@@ -335,10 +242,7 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
-assert(railTracks.includes('hopBacktracksAlongChord'), 'planner trip map rejects A>C>B backtracks');
-assert(railTracks.includes('export function unfoldHop'), 'planner unfolds yard scribbles on baked rails');
-assert(railTracks.includes('bakedHopSegment'), 'planner uses the same baked rail paths as the network map');
-assert(railTracks.includes('appendHop(out, [[a.lat, a.lon], [b.lat, b.lon]])'), 'planner falls back to a straight chord per hop');
+assert(railTracks.includes('railHops !== stops.length - 1'), 'planner trip map requires every hop before accepting graph smoothing');
 const wcTracks = readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8');
 assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to Bellville');
 

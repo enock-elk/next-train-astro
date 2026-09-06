@@ -18,10 +18,6 @@ const HOP_DETOUR_RATIO = 2.8;
 const HOP_DETOUR_MIN_M = 900;
 const HOP_STRAY_M = 600;
 const SKIP_STATION_M = 90;
-/** Reject a hop that still folds after unfold (A>C>B). */
-const HOP_BACKTRACK_M = 80;
-/** Strip yard scribbles that only reverse a few dozen metres. */
-const HOP_UNFOLD_M = 25;
 const cache = new Map(); // region -> { features, graph } | null
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -174,6 +170,18 @@ function shortestPath(graph, startId, endId) {
     return path;
 }
 
+function pathLengthM(graph, nodePath) {
+    if (!graph || !nodePath || nodePath.length < 2) return 0;
+    let sum = 0;
+    for (let i = 1; i < nodePath.length; i++) {
+        const a = graph.nodes[nodePath[i - 1]];
+        const b = graph.nodes[nodePath[i]];
+        if (!a || !b) continue;
+        sum += haversineM(a.lat, a.lon, b.lat, b.lon);
+    }
+    return sum;
+}
+
 function hopDetourTooLong(chordM, railM) {
     if (!Number.isFinite(railM) || railM <= 0) return true;
     if (!Number.isFinite(chordM) || chordM <= 0) return railM > HOP_DETOUR_MIN_M;
@@ -223,192 +231,6 @@ function hopSkipsRouteStop(graph, nodePath, stops, hopIndex, skipM = SKIP_STATIO
     return false;
 }
 
-function chordProgressM(pLat, pLon, aLat, aLon, bLat, bLon) {
-    const lat0 = ((aLat + bLat) / 2) * Math.PI / 180;
-    const toXY = (lat, lon) => [
-        lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
-        lat * Math.PI / 180 * 6371000
-    ];
-    const [pX, pY] = toXY(pLat, pLon);
-    const [aX, aY] = toXY(aLat, aLon);
-    const [bX, bY] = toXY(bLat, bLon);
-    const abx = bX - aX;
-    const aby = bY - aY;
-    const len = Math.hypot(abx, aby);
-    if (len < 1) return 0;
-    return ((pX - aX) * abx + (pY - aY) * aby) / len;
-}
-
-/** True when a hop walks forward then doubles back (A > C > B). */
-export function hopBacktracksAlongChord(points, a, b, slackM = HOP_BACKTRACK_M) {
-    if (!points || points.length < 3 || !a || !b) return false;
-    let prev = -Infinity;
-    for (const p of points) {
-        const lat = Array.isArray(p) ? p[0] : p.lat;
-        const lon = Array.isArray(p) ? p[1] : p.lon;
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        const prog = chordProgressM(lat, lon, a.lat, a.lon, b.lat, b.lon);
-        if (prev !== -Infinity && prog < prev - slackM) return true;
-        if (prog > prev) prev = prog;
-    }
-    return false;
-}
-
-/** Drop yard scribbles and overshoot-past-B loops. Keep the advancing rail. */
-export function unfoldHop(seg, a, b, slackM = HOP_UNFOLD_M) {
-    if (!seg || seg.length < 2 || !a || !b) return seg;
-    const target = chordProgressM(b.lat, b.lon, a.lat, a.lon, b.lat, b.lon);
-    const out = [seg[0]];
-    let prev = chordProgressM(seg[0][0], seg[0][1], a.lat, a.lon, b.lat, b.lon);
-    for (let i = 1; i < seg.length; i++) {
-        const p = seg[i];
-        const prog = chordProgressM(p[0], p[1], a.lat, a.lon, b.lat, b.lon);
-        if (prog < prev - slackM) continue;
-        if (prog > target + slackM) {
-            out.push([b.lat, b.lon]);
-            break;
-        }
-        if (prog > prev) prev = prog;
-        out.push(p);
-        if (prog >= target - 15) break;
-    }
-    const last = out[out.length - 1];
-    if (haversineM(last[0], last[1], b.lat, b.lon) > 50) out.push([b.lat, b.lon]);
-    return out.length >= 2 ? out : [[a.lat, a.lon], [b.lat, b.lon]];
-}
-
-function featureLines(feature) {
-    const geom = feature?.geometry;
-    if (!geom) return [];
-    const toLatLngs = (line) => (line || [])
-        .filter((pair) => pair && pair.length >= 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
-        .map(([lon, lat]) => /** @type {[number, number]} */ ([lat, lon]));
-    if (geom.type === 'LineString') return [toLatLngs(geom.coordinates)];
-    if (geom.type === 'MultiLineString') return (geom.coordinates || []).map(toLatLngs);
-    return [];
-}
-
-function latlngsLengthM(latlngs) {
-    if (!latlngs || latlngs.length < 2) return 0;
-    let sum = 0;
-    for (let i = 1; i < latlngs.length; i++) {
-        sum += haversineM(latlngs[i - 1][0], latlngs[i - 1][1], latlngs[i][0], latlngs[i][1]);
-    }
-    return sum;
-}
-
-function nearestPathIndexM(path, lat, lon, maxM = SNAP_MAX_M) {
-    if (!path?.length) return -1;
-    let best = -1;
-    let bestD = Infinity;
-    for (let i = 0; i < path.length; i++) {
-        const d = haversineM(path[i][0], path[i][1], lat, lon);
-        if (d < bestD) {
-            bestD = d;
-            best = i;
-        }
-    }
-    return bestD <= maxM ? best : -1;
-}
-
-function hopSkipsRouteStopOnLatLngs(latlngs, stops, hopIndex, skipM = SKIP_STATION_M) {
-    if (!latlngs || latlngs.length < 3 || !stops) return false;
-    for (let k = 1; k < latlngs.length - 1; k++) {
-        const n = latlngs[k];
-        for (let j = 0; j < stops.length; j++) {
-            if (j === hopIndex || j === hopIndex + 1) continue;
-            const s = stops[j];
-            if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
-            if (haversineM(n[0], n[1], s.lat, s.lon) < skipM) return true;
-        }
-    }
-    return false;
-}
-
-function hopStraysFromLatLngs(latlngs, a, b, maxM = HOP_STRAY_M) {
-    if (!latlngs || latlngs.length < 3 || !a || !b) return false;
-    for (let k = 1; k < latlngs.length - 1; k++) {
-        const n = latlngs[k];
-        if (pointToSegmentM(n[0], n[1], a.lat, a.lon, b.lat, b.lon) > maxM) return true;
-    }
-    return false;
-}
-
-function slicePathBetween(latlngs, a, b) {
-    if (!latlngs || latlngs.length < 2 || !a || !b) return null;
-    const i1 = nearestPathIndexM(latlngs, a.lat, a.lon);
-    const i2 = nearestPathIndexM(latlngs, b.lat, b.lon);
-    if (i1 < 0 || i2 < 0) return null;
-    if (i1 === i2) return [[a.lat, a.lon], [b.lat, b.lon]];
-    const seg = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
-    return seg.length > 1 ? seg : null;
-}
-
-function hopSegmentAllowed(seg, a, b, stops, hopIndex) {
-    if (!seg || seg.length < 2) return false;
-    const chordM = haversineM(a.lat, a.lon, b.lat, b.lon);
-    const railM = latlngsLengthM(seg);
-    if (hopDetourTooLong(chordM, railM)) return false;
-    if (hopStraysFromLatLngs(seg, a, b)) return false;
-    if (hopSkipsRouteStopOnLatLngs(seg, stops, hopIndex)) return false;
-    if (hopBacktracksAlongChord(seg, a, b)) return false;
-    return true;
-}
-
-function finalizeHop(seg, a, b, stops, hopIndex) {
-    const clean = unfoldHop(seg, a, b);
-    return hopSegmentAllowed(clean, a, b, stops, hopIndex) ? clean : null;
-}
-
-function appendHop(out, seg) {
-    if (!seg || seg.length < 2) return;
-    if (!out.length) out.push(...seg);
-    else out.push(...seg.slice(1));
-}
-
-function dedupeLatLngs(out) {
-    if (!out.length) return out;
-    const deduped = [out[0]];
-    for (let i = 1; i < out.length; i++) {
-        const p = out[i];
-        const prev = deduped[deduped.length - 1];
-        if (p[0] !== prev[0] || p[1] !== prev[1]) deduped.push(p);
-    }
-    return deduped;
-}
-
-function bakedHopSegment(features, a, b, stops, hopIndex, preferredIds) {
-    if (!features?.length) return null;
-    const preferred = [];
-    const rest = [];
-    for (const f of features) {
-        (preferredIds?.has(f?.properties?.routeId) ? preferred : rest).push(f);
-    }
-    for (const f of preferred.concat(rest)) {
-        for (const line of featureLines(f)) {
-            const seg = finalizeHop(slicePathBetween(line, a, b), a, b, stops, hopIndex);
-            if (seg) return seg;
-        }
-    }
-    return null;
-}
-
-function graphHopSegment(graph, a, b, stops, hopIndex) {
-    if (!graph) return null;
-    const snapA = nearestNode(graph, a.lat, a.lon);
-    const snapB = nearestNode(graph, b.lat, b.lon);
-    if (snapA == null || snapB == null) return null;
-    const nodePath = shortestPath(graph, snapA, snapB);
-    if (!nodePath || nodePath.length < 2) return null;
-    const seg = nodePath.map((id) => {
-        const n = graph.nodes[id];
-        return /** @type {[number, number]} */ ([n.lat, n.lon]);
-    });
-    if (hopSkipsRouteStop(graph, nodePath, stops, hopIndex)) return null;
-    if (hopStraysFromChord(graph, nodePath, a, b)) return null;
-    return finalizeHop(seg, a, b, stops, hopIndex);
-}
-
 async function loadRegionBundle(region) {
     const key = String(region || 'GP').toUpperCase();
     if (cache.has(key)) return cache.get(key);
@@ -437,43 +259,65 @@ async function loadRegionBundle(region) {
 }
 
 /**
- * Snap an ordered list of stop coords onto baked OSM rails, then the rail
- * graph. Each hop falls back to a straight station chord when no smooth path
- * exists. Never connects stations out of list order (A>C>B>D).
+ * Snap an ordered list of stop coords onto OSM rails → dense [lat, lon][] path.
+ * Returns null if tracks unavailable or pathfinding fails completely.
  *
  * @param {Array<{ lat: number, lon: number }>} stops
  * @param {string} [region]
- * @param {{ routeIds?: string[] }} [opts]
  * @returns {Promise<Array<[number, number]>|null>}
  */
-export async function smoothPathFromStops(stops, region = 'GP', opts = {}) {
+export async function smoothPathFromStops(stops, region = 'GP') {
     if (!Array.isArray(stops) || stops.length < 2) return null;
     const bundle = await loadRegionBundle(region);
-    if (!bundle) return null;
+    if (!bundle?.graph) return null;
 
-    const preferredIds = new Set((opts.routeIds || []).filter(Boolean));
+    const { graph } = bundle;
     /** @type {Array<[number, number]>} */
     const out = [];
+    let railHops = 0;
 
     for (let i = 0; i < stops.length - 1; i++) {
         const a = stops[i];
         const b = stops[i + 1];
         if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
 
-        const baked = bakedHopSegment(bundle.features, a, b, stops, i, preferredIds);
-        if (baked) {
-            appendHop(out, baked);
-            continue;
+        const snapA = nearestNode(graph, a.lat, a.lon);
+        const snapB = nearestNode(graph, b.lat, b.lon);
+
+        if (snapA != null && snapB != null) {
+            const nodePath = shortestPath(graph, snapA, snapB);
+            if (nodePath && nodePath.length >= 2) {
+                const chordM = haversineM(a.lat, a.lon, b.lat, b.lon);
+                const railM = pathLengthM(graph, nodePath);
+                const skips = hopSkipsRouteStop(graph, nodePath, stops, i);
+                const strays = hopStraysFromChord(graph, nodePath, a, b);
+                if (!skips && !strays && !hopDetourTooLong(chordM, railM)) {
+                    const seg = nodePath.map((id) => {
+                        const n = graph.nodes[id];
+                        return /** @type {[number, number]} */ ([n.lat, n.lon]);
+                    });
+                    if (!out.length) out.push(...seg);
+                    else out.push(...seg.slice(1));
+                    railHops++;
+                    continue;
+                }
+            }
         }
-        const rail = graphHopSegment(bundle.graph, a, b, stops, i);
-        if (rail) {
-            appendHop(out, rail);
-            continue;
-        }
-        appendHop(out, [[a.lat, a.lon], [b.lat, b.lon]]);
+
+        // Chord fallback for this hop only
+        if (!out.length) out.push([a.lat, a.lon]);
+        out.push([b.lat, b.lon]);
     }
 
-    const deduped = dedupeLatLngs(out);
+    if (out.length < 2 || railHops !== stops.length - 1) return null;
+
+    // Deduplicate consecutive duplicates
+    const deduped = [out[0]];
+    for (let i = 1; i < out.length; i++) {
+        const p = out[i];
+        const prev = deduped[deduped.length - 1];
+        if (p[0] !== prev[0] || p[1] !== prev[1]) deduped.push(p);
+    }
     return deduped.length > 1 ? deduped : null;
 }
 

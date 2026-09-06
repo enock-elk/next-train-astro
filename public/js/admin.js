@@ -130,6 +130,94 @@ function ntAdminMatchAlertSource(list, name, url) {
     ) || null;
 }
 
+/** Unwrap hard line-breaks so roadmap descriptions sit left and read as prose. */
+function ntAdminNormalizeRoadmapText(str) {
+    if (str == null) return '';
+    let s = String(str).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    s = s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+    const lines = s.split('\n');
+    const out = [];
+    lines.forEach((raw) => {
+        const line = String(raw || '').replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
+        if (!out.length) {
+            out.push(line);
+            return;
+        }
+        const prev = out[out.length - 1];
+        if (line === '') {
+            if (prev !== '') out.push('');
+            return;
+        }
+        const prevEnds = /[.!?:]"?\s*$/.test(prev) || prev === '';
+        const nextIsHeading = /^[A-Z][A-Z0-9 _/-]{1,24}:$/.test(line) || /^(DISTRESS|BLACK BOX|ERROR|WARN)\b/i.test(line);
+        if (!prevEnds && !nextIsHeading && prev.length > 0 && prev.length < 88) {
+            out[out.length - 1] = `${prev} ${line}`.replace(/[ \t]{2,}/g, ' ');
+        } else {
+            out.push(line);
+        }
+    });
+    return out.join('\n').trim();
+}
+
+function ntAdminParseRoadmapSource(ticket) {
+    if (!ticket || typeof ticket !== 'object') {
+        return { kind: 'none', label: '', canOpen: false, sourceId: '', deviceId: '', tab: '' };
+    }
+    const kindIn = String(ticket.sourceKind || '').toLowerCase();
+    const source = String(ticket.source || '');
+    const title = String(ticket.title || '');
+    const deviceId = String(ticket.deviceId || ticket.sourceDeviceId || '').trim();
+    const sourceIdIn = String(ticket.sourceId || '').trim();
+
+    const feedbackId = sourceIdIn || ((source.match(/Feedback\s+(\S+)/i) || [])[1] || '');
+    const crashId = sourceIdIn || ((source.match(/Crash\s+(\S+)/i) || [])[1] || '');
+
+    if (kindIn === 'feedback' || /^Feedback\s+/i.test(source) || /^Feedback from\b/i.test(title)) {
+        return {
+            kind: 'feedback',
+            label: 'Feedback',
+            canOpen: !!(feedbackId || deviceId),
+            sourceId: feedbackId,
+            deviceId,
+            tab: ticket.sourceTab === 'archive' ? 'archive' : (ticket.sourceTab || ''),
+        };
+    }
+    if (kindIn === 'distress' || /^Distress\b/i.test(title) || /\bDISTRESS\b/i.test(source) || /\bDISTRESS\b/i.test(title)) {
+        return {
+            kind: 'distress',
+            label: 'Distress',
+            canOpen: !!(crashId || deviceId),
+            sourceId: crashId,
+            deviceId,
+            tab: 'distress',
+        };
+    }
+    if (kindIn === 'crash' || /^Crash\s+/i.test(source) || /^Crash on\b/i.test(title) || /^Black Box\b/i.test(title)) {
+        return {
+            kind: 'crash',
+            label: 'Crash log',
+            canOpen: !!(crashId || deviceId),
+            sourceId: crashId,
+            deviceId,
+            tab: ticket.sourceTab === 'archive' ? 'archive' : (ticket.sourceTab === 'distress' ? 'distress' : (ticket.sourceTab || '')),
+        };
+    }
+    if (kindIn === 'deadend' || kindIn === 'telemetry' || /^Telemetry\b/i.test(source) || /^Routing Fail\b/i.test(title)) {
+        return {
+            kind: 'deadend',
+            label: 'Planner telemetry',
+            canOpen: true,
+            sourceId: sourceIdIn,
+            deviceId,
+            tab: 'fails',
+        };
+    }
+    if (source.trim()) {
+        return { kind: 'other', label: source.trim(), canOpen: false, sourceId: sourceIdIn, deviceId, tab: '' };
+    }
+    return { kind: 'none', label: '', canOpen: false, sourceId: '', deviceId, tab: '' };
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -577,6 +665,114 @@ const Admin = {
         } catch (e) {
             console.error(e);
             if (typeof showToast === 'function') showToast('Could not open ticket form', 'error');
+        }
+    },
+
+    parseRoadmapSource: (ticket) => ntAdminParseRoadmapSource(ticket),
+    normalizeRoadmapText: (str) => ntAdminNormalizeRoadmapText(str),
+
+    consumePendingFeedbackOpen: () => {
+        const pending = Admin._pendingFeedbackOpen;
+        if (!pending) return false;
+        const list = document.getElementById('fb-list');
+        if (!list) return false;
+        const wantId = String(pending.feedbackId || '');
+        const wantDid = String(pending.deviceId || '');
+        let match = null;
+        list.querySelectorAll('[data-fb-device]').forEach((card) => {
+            if (match) return;
+            const ids = String(card.getAttribute('data-fb-ids') || '').split(',').filter(Boolean);
+            const did = card.getAttribute('data-fb-device') || '';
+            if ((wantId && ids.includes(wantId)) || (wantDid && did === wantDid)) match = card;
+        });
+        if (match) {
+            const header = match.querySelector('.feedback-group-header');
+            const body = match.querySelector('.feedback-thread-body');
+            if (body && body.classList.contains('hidden')) header?.click();
+            match.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            match.classList.add('ring-2', 'ring-blue-400');
+            setTimeout(() => match.classList.remove('ring-2', 'ring-blue-400'), 2800);
+            Admin._pendingFeedbackOpen = null;
+            return true;
+        }
+        if (!pending._tried) pending._tried = {};
+        pending._tried[Admin.currentFeedbackTab || 'inbox'] = true;
+        const nextFb = ['inbox', 'archive'].find((t) => !pending._tried[t]);
+        if (nextFb) {
+            document.getElementById(nextFb === 'archive' ? 'fb-tab-archive' : 'fb-tab-inbox')?.click();
+            return false;
+        }
+        Admin._pendingFeedbackOpen = null;
+        if (typeof showToast === 'function') showToast('Original feedback not found in inbox or archive.', 'info');
+        return false;
+    },
+
+    consumePendingCrashOpen: () => {
+        const pending = Admin._pendingCrashOpen;
+        if (!pending) return false;
+        const list = document.getElementById('crash-list');
+        if (!list) return false;
+        const wantId = String(pending.crashId || '').replace(/"/g, '');
+        const wantDid = String(pending.deviceId || '').replace(/"/g, '');
+        let row = wantId ? list.querySelector(`[data-crash-id="${wantId}"]`) : null;
+        if (!row && wantDid) {
+            const group = list.querySelector(`[data-crash-device="${wantDid}"]`);
+            row = group?.querySelector('[data-crash-id]') || group;
+        }
+        if (row) {
+            const group = row.closest('[data-crash-device]') || row;
+            const header = group.querySelector('[data-crash-group-toggle]');
+            const body = header?.nextElementSibling;
+            if (body && body.classList.contains('hidden')) header?.click();
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('ring-2', 'ring-rose-400', 'rounded-lg');
+            setTimeout(() => row.classList.remove('ring-2', 'ring-rose-400', 'rounded-lg'), 2800);
+            Admin._pendingCrashOpen = null;
+            return true;
+        }
+        if (!pending._tried) pending._tried = {};
+        pending._tried[Admin.currentCrashTab || 'inbox'] = true;
+        const nextCrash = ['inbox', 'distress', 'archive'].find((t) => !pending._tried[t]);
+        if (nextCrash) {
+            document.getElementById(`crash-tab-${nextCrash}`)?.click();
+            return false;
+        }
+        Admin._pendingCrashOpen = null;
+        if (typeof showToast === 'function') showToast('Original crash log not found.', 'info');
+        return false;
+    },
+
+    openRoadmapOriginal: (ticketOrId) => {
+        const ticket = typeof ticketOrId === 'object' && ticketOrId
+            ? ticketOrId
+            : (Admin.cachedRoadmapData || []).find((t) => t.id === ticketOrId);
+        const src = ntAdminParseRoadmapSource(ticket);
+        if (!src.canOpen) {
+            if (typeof showToast === 'function') showToast('No original item is linked to this ticket.', 'info');
+            return;
+        }
+        try { closeSmoothModal('admin-ticket-view-modal'); } catch { /* ignore */ }
+        if (src.kind === 'feedback') {
+            Admin._pendingFeedbackOpen = { feedbackId: src.sourceId, deviceId: src.deviceId, tab: src.tab };
+            if (src.tab) Admin.currentFeedbackTab = src.tab;
+            Admin.deepLinkToPanel('feedback-panel');
+            setTimeout(() => Admin.consumePendingFeedbackOpen(), 450);
+            return;
+        }
+        if (src.kind === 'crash' || src.kind === 'distress') {
+            Admin._pendingCrashOpen = { crashId: src.sourceId, deviceId: src.deviceId, tab: src.tab || src.kind };
+            if (src.tab) Admin.currentCrashTab = src.tab;
+            Admin.deepLinkToPanel('crashes-panel');
+            setTimeout(() => {
+                const tabBtn = document.getElementById(`crash-tab-${src.tab || (src.kind === 'distress' ? 'distress' : 'inbox')}`);
+                tabBtn?.click();
+                setTimeout(() => Admin.consumePendingCrashOpen(), 200);
+            }, 400);
+            return;
+        }
+        if (src.kind === 'deadend') {
+            Admin.deepLinkToPanel('deadends-panel');
+            setTimeout(() => document.getElementById('de-tab-fails')?.click(), 350);
         }
     },
 
@@ -3831,6 +4027,7 @@ const Admin = {
                 const groupCrashes = groups[rawDid];
                 const groupCard = document.createElement('div');
                 groupCard.className = "bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-3";
+                groupCard.setAttribute('data-crash-device', String(rawDid || ''));
                 
                 const latestDate = Admin.formatDate(groupCrashes[0].timestamp);
                 
@@ -3844,7 +4041,7 @@ const Admin = {
                     : '';
 
                 let groupHTML = `
-                    <div class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
+                    <div data-crash-group-toggle class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
                         <div class="flex flex-col items-start min-w-0 pr-2">
                             <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full inline-flex items-center">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span>${Admin.userIdJoinHintHtml(rawDid)}</span>
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
@@ -3926,7 +4123,11 @@ const Admin = {
                         description: ticketDesc,
                         source: crash.blobPath
                             ? `Crash ${crash.id || ''} · blob ${crash.blobPath}`
-                            : `Crash ${crash.id || ''}`
+                            : `Crash ${crash.id || ''}`,
+                        sourceKind: isDistress ? 'distress' : 'crash',
+                        sourceId: crash.id || '',
+                        deviceId: rawDid !== 'Anonymous / Legacy' ? rawDid : '',
+                        sourceTab: isDistress ? 'distress' : (Admin.currentCrashTab === 'archive' ? 'archive' : 'inbox'),
                     });
                     // Preview only in memory — Copy Log lazy-loads full text
                     if (!Admin._crashRawById) Admin._crashRawById = {};
@@ -3983,7 +4184,7 @@ const Admin = {
 
                     const appLabel = String(safeAppVersion || '').split(' - ')[0];
                     groupHTML += `
-                        <div class="p-2.5 flex flex-col">
+                        <div class="p-2.5 flex flex-col" data-crash-id="${secureEscape(crash.id || '')}">
                             <div class="flex justify-between items-start mb-1.5">
                                 <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${kindBadgeClass}">${kindLabel}</span>
                                 <span class="text-[9px] text-gray-400 font-mono">${dateStr}</span>
@@ -4015,6 +4216,9 @@ const Admin = {
                 groupCard.innerHTML = groupHTML;
                 listDiv.appendChild(groupCard);
             });
+            if (Admin._pendingCrashOpen) {
+                setTimeout(() => Admin.consumePendingCrashOpen(), 40);
+            }
             } catch (renderErr) {
                 console.error('renderCrashList failed', renderErr);
                 listDiv.innerHTML = `<div class="text-xs text-red-500 text-center py-4">Failed to render crash list.<br><span class="text-[9px] text-gray-500 font-mono">${String(renderErr?.message || renderErr).replace(/</g, '&lt;').slice(0, 180)}</span></div>`;
@@ -4932,7 +5136,10 @@ const Admin = {
                         severity: 'medium',
                         title: `Routing Fail: ${item.origin} to ${item.dest}`,
                         description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users.`,
-                        source: 'Telemetry Data'
+                        source: 'Telemetry Data',
+                        sourceKind: 'deadend',
+                        sourceId: `${item.origin || ''}|${item.dest || ''}|${item.reason || ''}`,
+                        sourceTab: 'fails',
                     });
 
                     card.innerHTML = `
@@ -5768,6 +5975,8 @@ const Admin = {
 
                 const groupCard = document.createElement('div');
                 groupCard.className = "bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-3 transition-colors hover:border-blue-300 dark:hover:border-blue-500";
+                groupCard.setAttribute('data-fb-device', String(did || ''));
+                groupCard.setAttribute('data-fb-ids', groupItems.map((i) => i.id || i.feedbackId).filter(Boolean).join(','));
                 
                 const latestDate = formatNiceDateTime(groupItems[groupItems.length - 1].timestamp);
                 
@@ -5829,7 +6038,11 @@ const Admin = {
                     severity: 'medium',
                     title: `Feedback from ${String(did).substring(0, 8)}`,
                     description: String(latestCommuterMsg.text || 'No description').slice(0, 400),
-                    source: `Feedback ${feedbackId}`
+                    source: `Feedback ${feedbackId}`,
+                    sourceKind: 'feedback',
+                    sourceId: String(feedbackId || ''),
+                    deviceId: did !== 'Anonymous / Legacy' ? String(did) : '',
+                    sourceTab: Admin.currentFeedbackTab === 'archive' ? 'archive' : 'inbox',
                 });
 
                 let contactHtml = '';
@@ -6300,6 +6513,9 @@ const Admin = {
                 groupCard.innerHTML = groupHTML;
                 listContainer.appendChild(groupCard);
             });
+            if (Admin._pendingFeedbackOpen) {
+                setTimeout(() => Admin.consumePendingFeedbackOpen(), 40);
+            }
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
@@ -15539,8 +15755,8 @@ const Admin = {
             adminContainer.appendChild(roadmapPanel);
         }
 
-        if (roadmapPanel.dataset.adminLoaded === "true") return;
-        roadmapPanel.dataset.adminLoaded = "true";
+        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v1") return;
+        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v1";
 
         Admin.cachedRoadmapData = [];
 
@@ -15554,9 +15770,9 @@ const Admin = {
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="roadmap-body" class="hidden mt-4 flex flex-col space-y-3">
+            <div id="roadmap-body" class="hidden mt-4 flex flex-col space-y-3 rounded-xl bg-slate-100 dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
                 <!-- Controls Header -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 dark:bg-gray-900 p-3 rounded-xl border border-gray-300 dark:border-gray-700 shadow-inner">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <div class="flex items-center gap-2 w-full sm:w-auto">
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1" id="roadmap-status-display">Syncing Board...</span>
                     </div>
@@ -15589,8 +15805,8 @@ const Admin = {
                     <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-gray-300 dark:border-gray-700 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-gray-300 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-slate-200/70 dark:bg-slate-900/80 rounded-xl border border-slate-300 dark:border-slate-700 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-sm"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">To-Do / Backlog</h2>
@@ -15606,8 +15822,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: In Progress -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-blue-300 dark:border-blue-800 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-blue-300 dark:border-blue-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-blue-50/80 dark:bg-slate-900/80 rounded-xl border border-blue-200 dark:border-blue-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-blue-200 dark:border-blue-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200 dark:ring-blue-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">In Progress</h2>
@@ -15623,8 +15839,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: Completed -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-gray-100 dark:bg-gray-900 rounded-xl border border-green-300 dark:border-green-800 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-green-300 dark:border-green-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
+                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-emerald-50/80 dark:bg-slate-900/80 rounded-xl border border-emerald-200 dark:border-emerald-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                            <div class="p-3 border-b border-emerald-200 dark:border-emerald-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-200 dark:ring-green-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-green-800 dark:text-green-300">Completed</h2>
@@ -15694,18 +15910,29 @@ const Admin = {
 
             const getPriorityStyles = (priority) => {
                 const styles = {
-                    low: { bg: 'bg-gray-100 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-600', text: 'text-gray-600 dark:text-gray-300', icon: 'M19 14l-7 7m0 0l-7-7m7 7V3' }, // Arrow down
-                    medium: { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700/50', text: 'text-blue-700 dark:text-blue-300', icon: 'M20 12H4' }, // Minus
-                    high: { bg: 'bg-orange-50 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-700/50', text: 'text-orange-700 dark:text-orange-300', icon: 'M5 10l7-7m0 0l7 7m-7-7v18' }, // Arrow up
-                    critical: { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-700/50', text: 'text-red-700 dark:text-red-400', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' } // Fire
+                    low: { bg: 'bg-slate-100 dark:bg-slate-800', border: 'border-slate-300 dark:border-slate-600', text: 'text-slate-700 dark:text-slate-200', stripe: 'border-l-slate-400', icon: 'M19 14l-7 7m0 0l-7-7m7 7V3' },
+                    medium: { bg: 'bg-blue-100 dark:bg-blue-900/40', border: 'border-blue-300 dark:border-blue-700', text: 'text-blue-800 dark:text-blue-200', stripe: 'border-l-blue-500', icon: 'M20 12H4' },
+                    high: { bg: 'bg-orange-100 dark:bg-orange-900/40', border: 'border-orange-300 dark:border-orange-700', text: 'text-orange-800 dark:text-orange-200', stripe: 'border-l-orange-500', icon: 'M5 10l7-7m0 0l7 7m-7-7v18' },
+                    critical: { bg: 'bg-red-100 dark:bg-red-900/40', border: 'border-red-300 dark:border-red-700', text: 'text-red-800 dark:text-red-200', stripe: 'border-l-red-600', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' }
                 };
                 return styles[priority] || styles.medium;
+            };
+            const getSourceStyles = (kind) => {
+                const styles = {
+                    feedback: { bg: 'bg-teal-100 dark:bg-teal-900/40', text: 'text-teal-800 dark:text-teal-200', label: 'Feedback' },
+                    crash: { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-800 dark:text-rose-200', label: 'Crash log' },
+                    distress: { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-800 dark:text-amber-200', label: 'Distress' },
+                    deadend: { bg: 'bg-indigo-100 dark:bg-indigo-900/40', text: 'text-indigo-800 dark:text-indigo-200', label: 'Planner' },
+                    other: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-200', label: 'Source' },
+                    none: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400', label: 'Manual' },
+                };
+                return styles[kind] || styles.none;
             };
 
             Admin.cachedRoadmapData.forEach(ticket => {
                 // Search filtering
                 if (searchTerm) {
-                    const searchableText = `${ticket.title} ${ticket.description || ''} ${ticket.source || ''}`.toLowerCase();
+                    const searchableText = `${ticket.title} ${ticket.description || ''} ${ticket.source || ''} ${ticket.sourceKind || ''}`.toLowerCase();
                     if (!searchableText.includes(searchTerm)) return; // Skip if no match
                 }
                 if (dateCutoff > 0) {
@@ -15720,23 +15947,20 @@ const Admin = {
 
                 const dateStr = Admin.formatDate(ticket.timestamp);
                 const safeTitle = safeHTML(ticket.title || 'Untitled');
-                let shortDesc = safeHTML(ticket.description || 'No description provided.');
-                
-                // Truncate description for card view
-                if (shortDesc.length > 80) shortDesc = shortDesc.substring(0, 80) + '...';
+                const normalizedDesc = ntAdminNormalizeRoadmapText(ticket.description || 'No description provided.');
+                let shortDesc = safeHTML(normalizedDesc);
+                if (shortDesc.length > 160) shortDesc = shortDesc.substring(0, 160) + '…';
                 
                 const pStyles = getPriorityStyles(ticket.severity || 'medium');
-                
-                let sourceBadge = '';
-                if (ticket.source) {
-                    sourceBadge = `<div class="mt-1 text-[9px] text-blue-500 dark:text-blue-400 font-mono truncate">Ref: ${safeHTML(ticket.source)}</div>`;
-                }
+                const srcMeta = ntAdminParseRoadmapSource(ticket);
+                const sStyles = getSourceStyles(srcMeta.kind);
+                const safeTicketId = String(ticket.id || '').replace(/'/g, "\\'");
                 
                 let typeIconName = 'pin';
                 if (ticket.type === 'bug') typeIconName = 'bug';
                 else if (ticket.type === 'feature') typeIconName = 'rocket';
                 else if (ticket.type === 'route') typeIconName = 'map';
-                const typeIcon = `<span class="inline-flex text-gray-500 dark:text-gray-400 shrink-0 mt-0.5" title="${ticket.type || 'task'}">${Admin.icon(typeIconName, 'w-3.5 h-3.5')}</span>`;
+                const typeIcon = `<span class="inline-flex text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" title="${ticket.type || 'task'}">${Admin.icon(typeIconName, 'w-3.5 h-3.5')}</span>`;
 
                 // Native SVG icons replacing FontAwesome
                 const editIcon = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
@@ -15757,32 +15981,32 @@ const Admin = {
                     moveControls = `<button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.updateTicketStatus('${ticket.id}', 'progress')" title="Move to Progress">${leftArrowIcon}</button>`;
                 }
 
-                const cardHtml = `
-                    <div class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-3 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 relative overflow-hidden" onclick="Admin.openViewModal('${ticket.id}')">
-                        <div class="flex items-start min-w-0 gap-1.5">
-                            ${typeIcon}
-                            <h4 class="font-bold text-gray-900 dark:text-gray-200 text-sm leading-tight line-clamp-2 break-words min-w-0 flex-1">${safeTitle}</h4>
-                        </div>
+                const sourceBtn = srcMeta.canOpen
+                    ? `<button type="button" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text} hover:underline focus:outline-none" onclick="event.stopPropagation(); Admin.openRoadmapOriginal('${safeTicketId}')">${safeHTML(sStyles.label)}</button>`
+                    : `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text}">${safeHTML(sStyles.label)}</span>`;
 
-                        <div class="relative flex flex-col gap-1 min-h-[2.5rem]">
-                            <p class="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pr-16">${shortDesc}</p>
-                            ${sourceBadge}
-                            <span class="absolute bottom-0 right-0 text-[9px] text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">
-                                ${dateStr.split(',')[0]}
-                            </span>
-                        </div>
-                        
-                        <div class="flex items-center justify-between gap-2 mt-0.5 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider flex items-center shrink-0 ${pStyles.bg} ${pStyles.border} ${pStyles.text}">
+                const cardHtml = `
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 border-l-4 ${pStyles.stripe} p-3 rounded-xl shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 text-left overflow-hidden" onclick="Admin.openViewModal('${safeTicketId}')">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider inline-flex items-center shrink-0 ${pStyles.bg} ${pStyles.border} ${pStyles.text}">
                                 ${prioritySvg} ${(ticket.severity || 'medium')}
                             </span>
+                            ${sourceBtn}
+                        </div>
+                        <div class="flex items-start min-w-0 gap-1.5">
+                            ${typeIcon}
+                            <h4 class="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug break-words text-left min-w-0 flex-1">${safeTitle}</h4>
+                        </div>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-300 text-left break-words whitespace-normal leading-relaxed line-clamp-3">${shortDesc}</p>
+                        <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                            <span class="text-[9px] text-slate-400 font-medium">${dateStr.split(',')[0]}</span>
                             <div class="flex items-center gap-0.5 shrink-0">
                                 ${moveControls}
-                                <div class="w-px h-4 bg-gray-200 dark:bg-gray-600 my-auto mx-0.5"></div>
-                                <button class="text-gray-400 hover:text-blue-500 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${ticket.id}')" title="Edit Ticket">
+                                <div class="w-px h-4 bg-slate-200 dark:bg-slate-600 my-auto mx-0.5"></div>
+                                <button class="text-slate-400 hover:text-blue-500 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.openTicketModal('${safeTicketId}')" title="Edit Ticket">
                                     ${editIcon}
                                 </button>
-                                <button class="text-gray-400 hover:text-red-500 p-2 rounded hover:bg-red-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.deleteTicket('${ticket.id}')" title="Delete Ticket">
+                                <button class="text-slate-400 hover:text-red-500 p-2 rounded hover:bg-red-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" onclick="event.stopPropagation(); Admin.deleteTicket('${safeTicketId}')" title="Delete Ticket">
                                     ${trashIcon}
                                 </button>
                             </div>
@@ -15914,10 +16138,10 @@ const Admin = {
 
             const getPriorityStyles = (priority) => {
                 const styles = {
-                    low: { bg: 'bg-gray-100 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-600', text: 'text-gray-600 dark:text-gray-300', icon: 'M19 14l-7 7m0 0l-7-7m7 7V3' },
-                    medium: { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700/50', text: 'text-blue-700 dark:text-blue-300', icon: 'M20 12H4' },
-                    high: { bg: 'bg-orange-50 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-700/50', text: 'text-orange-700 dark:text-orange-300', icon: 'M5 10l7-7m0 0l7 7m-7-7v18' },
-                    critical: { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-700/50', text: 'text-red-700 dark:text-red-400', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' }
+                    low: { bg: 'bg-slate-100 dark:bg-slate-800', border: 'border-slate-300 dark:border-slate-600', text: 'text-slate-700 dark:text-slate-200', icon: 'M19 14l-7 7m0 0l-7-7m7 7V3' },
+                    medium: { bg: 'bg-blue-100 dark:bg-blue-900/40', border: 'border-blue-300 dark:border-blue-700', text: 'text-blue-800 dark:text-blue-200', icon: 'M20 12H4' },
+                    high: { bg: 'bg-orange-100 dark:bg-orange-900/40', border: 'border-orange-300 dark:border-orange-700', text: 'text-orange-800 dark:text-orange-200', icon: 'M5 10l7-7m0 0l7 7m-7-7v18' },
+                    critical: { bg: 'bg-red-100 dark:bg-red-900/40', border: 'border-red-300 dark:border-red-700', text: 'text-red-800 dark:text-red-200', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' }
                 };
                 return styles[priority] || styles.medium;
             };
@@ -15930,10 +16154,15 @@ const Admin = {
             };
 
             const pStyles = getPriorityStyles(ticket.severity || 'medium');
+            const srcMeta = ntAdminParseRoadmapSource(ticket);
             const statusMap = { backlog: 'To-Do / Backlog', progress: 'In Progress', done: 'Completed' };
             const statusText = statusMap[ticket.status || 'backlog'];
             const safeTitle = safeHTML(ticket.title);
-            const safeDesc = safeHTML(ticket.description || 'No description provided.');
+            const safeDesc = safeHTML(ntAdminNormalizeRoadmapText(ticket.description || 'No description provided.'));
+            const safeTicketId = String(ticket.id || '').replace(/'/g, "\\'");
+            const originalBtn = srcMeta.canOpen
+                ? `<button type="button" id="roadmap-open-original" class="mt-3 w-full text-left px-3 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 focus:outline-none">Open original ${safeHTML(srcMeta.label)}</button>`
+                : '';
 
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
@@ -15964,11 +16193,10 @@ const Admin = {
                         </div>
                     </div>
                     
-                    <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar">
-                        <h4 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Description</h4>
-                        <div class="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-[150px]">
-                            ${safeDesc}
-                        </div>
+                    <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar text-left">
+                        <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 text-left">Description</h4>
+                        <div id="roadmap-ticket-desc" class="text-left text-sm leading-relaxed text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-pre-wrap break-words">${safeDesc}</div>
+                        ${originalBtn}
                     </div>
                 </div>
             `;
@@ -15985,6 +16213,16 @@ const Admin = {
                 // Ensure array format for compatibility with the export engine
                 Admin.exportColumn(null, [ticket], `ticket-${ticket.id}`);
             };
+            const openOrig = document.getElementById('roadmap-open-original');
+            if (openOrig) {
+                openOrig.onclick = () => Admin.openRoadmapOriginal(safeTicketId);
+                const descEl = document.getElementById('roadmap-ticket-desc');
+                if (descEl && srcMeta.kind === 'feedback') {
+                    descEl.classList.add('cursor-pointer', 'hover:border-blue-400');
+                    descEl.title = 'Open original feedback';
+                    descEl.onclick = () => Admin.openRoadmapOriginal(safeTicketId);
+                }
+            }
         };
 
         // Ticket Editor Modal UI
@@ -16116,15 +16354,25 @@ const Admin = {
                 const secret = await Admin.getAuthKey();
                 if (!secret) return;
 
+                const sourceVal = document.getElementById('tkt-source').value.trim();
+                const inferred = ntAdminParseRoadmapSource({
+                    ...ticket,
+                    title,
+                    source: sourceVal,
+                });
                 const payload = {
                     title: title,
                     description: desc,
                     type: document.getElementById('tkt-type').value,
                     severity: document.getElementById('tkt-severity').value,
-                    source: document.getElementById('tkt-source').value.trim(),
+                    source: sourceVal,
                     status: document.getElementById('tkt-status').value,
                     timestamp: ticketId ? ticket.timestamp : Date.now(),
-                    updatedAt: Date.now()
+                    updatedAt: Date.now(),
+                    sourceKind: ticket.sourceKind || inferred.kind || '',
+                    sourceId: ticket.sourceId || inferred.sourceId || '',
+                    deviceId: ticket.deviceId || inferred.deviceId || '',
+                    sourceTab: ticket.sourceTab || inferred.tab || '',
                 };
 
                 const targetId = ticketId || Date.now().toString();

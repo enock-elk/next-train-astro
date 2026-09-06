@@ -20,6 +20,8 @@ this.ntAdminNormalizeAlertSources = ntAdminNormalizeAlertSources;
 this.ntAdminUpsertAlertSource = ntAdminUpsertAlertSource;
 this.ntAdminDeleteAlertSource = ntAdminDeleteAlertSource;
 this.ntAdminMatchAlertSource = ntAdminMatchAlertSource;
+this.ntAdminNormalizeRoadmapText = ntAdminNormalizeRoadmapText;
+this.ntAdminParseRoadmapSource = ntAdminParseRoadmapSource;
 `).call(helpers);
 
 let failed = 0;
@@ -71,6 +73,23 @@ assert(matched && matched.url === 'https://www.metrorail.co.za', 'match finds a 
 const removed = helpers.ntAdminDeleteAlertSource(second.list, second.source.id);
 assert(removed.length === 1 && removed[0].name === 'prasa', 'delete removes only the selected source');
 
+const wrapped = helpers.ntAdminNormalizeRoadmapText('The\n    southern line has trains that stop at\nFishhoek');
+assert(wrapped === 'The southern line has trains that stop at Fishhoek', `unwraps hard wraps, got ${JSON.stringify(wrapped)}`);
+const distressBlock = helpers.ntAdminNormalizeRoadmapText('DISTRESS:\nbroken_install · contact 0634876448');
+assert(distressBlock.includes('DISTRESS:') && distressBlock.includes('broken_install'), 'keeps distress heading on its own line');
+assert(helpers.ntAdminNormalizeRoadmapText('   We ween to inject fares and distances now   ') === 'We ween to inject fares and distances now', 'trims padded one-liners');
+
+const fbSrc = helpers.ntAdminParseRoadmapSource({ source: 'Feedback abc123', title: 'Feedback from usr_z5wq', sourceKind: 'feedback', deviceId: 'usr_z5wq' });
+assert(fbSrc.kind === 'feedback' && fbSrc.canOpen && fbSrc.sourceId === 'abc123', 'feedback source is openable');
+const crashSrc = helpers.ntAdminParseRoadmapSource({ source: 'Crash crash_99', title: 'Crash on GP' });
+assert(crashSrc.kind === 'crash' && crashSrc.canOpen && crashSrc.sourceId === 'crash_99', 'crash source is openable');
+const distressSrc = helpers.ntAdminParseRoadmapSource({ title: 'Distress - 0634876448 - broken_install', source: 'Crash d1' });
+assert(distressSrc.kind === 'distress' && distressSrc.canOpen, 'distress title maps to distress');
+const telSrc = helpers.ntAdminParseRoadmapSource({ title: 'Routing Fail: A to B', source: 'Telemetry Data' });
+assert(telSrc.kind === 'deadend' && telSrc.canOpen, 'planner telemetry is openable');
+const manualSrc = helpers.ntAdminParseRoadmapSource({ title: 'Planner Fares and distance estimation', description: 'We ween to inject fares' });
+assert(manualSrc.kind === 'none' && manualSrc.canOpen === false, 'manual tickets have no original link');
+
 const requiredIds = [
     'alert-source-saved',
     'alert-source-name',
@@ -106,6 +125,12 @@ assert(admin.includes('Include NO SVC / SPL tag on downloaded PNG'), 'train-tag 
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
 assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()'), 'publish still sends sourceUrl');
+assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
+assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
+assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
+assert(admin.includes('roadmap-refine-v1'), 'roadmap panel rebuilds after the card redesign');
+assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
+assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

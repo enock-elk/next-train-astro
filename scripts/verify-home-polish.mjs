@@ -135,6 +135,8 @@ assert(admin.includes('alerts-refine-v2'), 'alert panel rebuild key');
 assert(admin.includes('excl-refine-v2'), 'exclusion panel rebuild key');
 assert(admin.includes('id="alert-force-popup"') && admin.includes('id="alert-poll-toggle"'), 'force popup and poll toggles remain');
 assert(admin.includes('id="excl-grid-notice-export"') && admin.includes('id="excl-export-toggle"'), 'banner and train-tag export checkboxes remain');
+assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
+assert(admin.includes('roadmap-refine-v1'), 'roadmap card redesign is loaded');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');

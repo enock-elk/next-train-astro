@@ -114,7 +114,7 @@ function resolveThreadContact() {
     return readStoredContact();
 }
 
-function paintContactField(input, { toast = false, persist = false } = {}) {
+function paintContactField(input, { toast = false, persist = false, showError = true } = {}) {
     if (!input) return { ok: true, value: '' };
     const hint = document.getElementById(contactHintId(input));
     if (signedInContactEmail() && input.id === 'messages-thread-contact') {
@@ -124,9 +124,11 @@ function paintContactField(input, { toast = false, persist = false } = {}) {
         return { ok: true, value: signedInContactEmail() };
     }
     const result = validateFeedbackContact(input.value);
-    input.classList.toggle('nt-contact-invalid', !result.ok);
-    input.setAttribute('aria-invalid', result.ok ? 'false' : 'true');
-    if (hint) hint.textContent = result.ok ? '' : contactHintMessage(result.reason);
+    const show = showError && !result.ok;
+    input.classList.toggle('nt-contact-invalid', show);
+    if (show) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+    if (hint) hint.textContent = show ? contactHintMessage(result.reason) : '';
     if (!result.ok) {
         if (toast) showToast(contactHintMessage(result.reason), 'error');
         return result;
@@ -145,11 +147,11 @@ function paintThreadContactRow() {
     const signedIn = signedInContactEmail();
     if (signedIn) {
         input.value = signedIn;
-        paintContactField(input);
+        paintContactField(input, { showError: false });
         return;
     }
     if (!input.value) input.value = readStoredContact();
-    paintContactField(input);
+    paintContactField(input, { showError: false });
 }
 
 function paintThreadFileChip(fileInput) {
@@ -2087,11 +2089,11 @@ export function initHub() {
         }
     });
     document.getElementById('feedback-email')?.addEventListener('input', () => {
-        paintContactField(document.getElementById('feedback-email'));
+        paintContactField(document.getElementById('feedback-email'), { showError: false });
     });
-    document.getElementById('feedback-email')?.addEventListener('change', () => {
+    document.getElementById('feedback-email')?.addEventListener('blur', () => {
         const el = document.getElementById('feedback-email');
-        paintContactField(el, { persist: !!el?.value?.trim() });
+        paintContactField(el, { persist: !!el?.value?.trim(), showError: true });
     });
     document.getElementById('messages-thread-input')?.addEventListener('input', () => {
         autosizeMessagesThreadInput();
@@ -2158,10 +2160,10 @@ export function initHub() {
         paintThreadFileChip(threadFileInput);
     });
     document.getElementById('messages-thread-contact')?.addEventListener('input', () => {
-        paintContactField(document.getElementById('messages-thread-contact'));
+        paintContactField(document.getElementById('messages-thread-contact'), { showError: false });
     });
-    document.getElementById('messages-thread-contact')?.addEventListener('change', () => {
-        paintContactField(document.getElementById('messages-thread-contact'), { persist: true });
+    document.getElementById('messages-thread-contact')?.addEventListener('blur', () => {
+        paintContactField(document.getElementById('messages-thread-contact'), { persist: true, showError: true });
     });
 
     // Legal in sidenav

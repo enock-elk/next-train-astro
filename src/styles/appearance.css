@@ -553,8 +553,37 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
   }
 }
 
-#current-day {
-  letter-spacing: 0.01em;
+.header-brand-block {
+  min-width: 0;
+  overflow: hidden;
+}
+#current-day,
+#current-day.header-day-label {
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--nt-chrome-fg);
+  /* Same face as #app-title until JS fits that day's string. */
+  font-size: 2.55rem;
+}
+@media (min-width: 640px) {
+  #current-day,
+  #current-day.header-day-label {
+    font-size: 2.75rem;
+  }
+}
+.chrome-compact #current-day,
+.chrome-compact #current-day.header-day-label,
+body.chrome-compact #current-day,
+body.chrome-compact #current-day.header-day-label {
+  font-size: 2rem;
+}
+#current-day span {
+  font-weight: inherit;
+  letter-spacing: inherit;
 }
 
 /* Brand-left header: solid pack primary (Ember → amber/orange) */
@@ -987,6 +1016,11 @@ html[data-colour-pack="ember"] #notice-bell.nt-bell-info {
   border-color: var(--nt-border) !important;
 }
 
+/* One 2rem row for Back, weekday, and Share. Same text-xs / weight / box
+   so phones do not paint the pill shorter or squeeze the labels. */
+#planner-results-section h4 {
+  line-height: 0;
+}
 #planner-back-btn,
 #planner-header-badge,
 .planner-share-slot > button {
@@ -994,10 +1028,20 @@ html[data-colour-pack="ember"] #notice-bell.nt-bell-info {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-height: 2.5rem;
-  padding: 0.5rem 0.75rem;
-  line-height: 1.25;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   color: rgb(var(--nt-blue-800)) !important;
+}
+#planner-header-badge > div {
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  line-height: 1;
 }
 html.dark #planner-back-btn,
 html.dark #planner-header-badge,
@@ -1005,7 +1049,8 @@ html.dark .planner-share-slot > button {
   color: rgb(var(--nt-blue-300)) !important;
 }
 
-/* Phone-only shell scale. Do not change html rem (admin, ads, overlays). */
+/* Phone-only shell scale. Do not change html rem (admin, ads, overlays).
+   Planner toolbar stays 2rem / 12px so S9+ does not squeeze the row. */
 @media (max-width: 480px) {
   #nt-shell,
   #main-content {
@@ -1019,16 +1064,6 @@ html.dark .planner-share-slot > button {
     font-size: clamp(0.68rem, calc(0.78rem * var(--nt-ui-scale, 1)), 0.88rem);
     letter-spacing: 0.04em;
     white-space: nowrap;
-  }
-  #planner-results-section > .grid {
-    gap: calc(0.5rem * var(--nt-ui-scale, 1));
-  }
-  #planner-back-btn,
-  #planner-header-badge,
-  .planner-share-slot > button {
-    min-height: calc(2.5rem * var(--nt-ui-scale, 1));
-    padding: calc(0.5rem * var(--nt-ui-scale, 1)) calc(0.75rem * var(--nt-ui-scale, 1));
-    font-size: calc(0.8rem * var(--nt-ui-scale, 1));
   }
 }
 
@@ -1055,11 +1090,12 @@ html:not([data-admin-authed="1"]) #ride-nearby-btn {
    Nav items must not stay slate/gray on a blue bar. */
 html[data-colour-pack="classic"] #current-day,
 html:not([data-colour-pack]) #current-day {
-  color: var(--nt-chrome-muted) !important;
+  color: var(--nt-chrome-fg) !important;
 }
 html[data-colour-pack="classic"] #current-day span,
 html:not([data-colour-pack]) #current-day span {
-  color: var(--nt-chrome-muted) !important;
+  color: inherit !important;
+  font-weight: inherit;
 }
 html[data-colour-pack="classic"] #current-day span.text-red-600,
 html:not([data-colour-pack]) #current-day span.text-red-600 {

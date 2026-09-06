@@ -89,10 +89,63 @@ export function paintHeaderDayLabel(opts = {}) {
         ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
     el.innerHTML = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
+    fitHeaderDayLabel();
+    bindHeaderDayFit();
+}
+
+/** Match #current-day to the Next Train title, then shrink that day's string to the brand width. */
+export function fitHeaderDayLabel() {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('current-day');
+    const title = document.getElementById('app-title');
+    if (!el) return;
+    const titleSize = title ? parseFloat(getComputedStyle(title).fontSize) : 0;
+    const maxPx = Number.isFinite(titleSize) && titleSize > 8 ? titleSize : 32;
+    const minPx = Math.max(11, maxPx * 0.4);
+    const host = el.closest('.header-brand-block') || el.parentElement || el;
+    const avail = host.clientWidth || 0;
+    if (avail < 16) return;
+    el.style.whiteSpace = 'nowrap';
+    el.style.maxWidth = '100%';
+    el.style.display = 'block';
+    el.style.boxSizing = 'border-box';
+    let lo = minPx;
+    let hi = maxPx;
+    let best = minPx;
+    for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        el.style.fontSize = `${mid}px`;
+        if (el.scrollWidth <= avail + 0.75) {
+            best = mid;
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    el.style.fontSize = `${best}px`;
+}
+
+function bindHeaderDayFit() {
+    if (typeof window === 'undefined' || window.__ntHeaderDayFitBound) return;
+    window.__ntHeaderDayFitBound = true;
+    const run = () => fitHeaderDayLabel();
+    window.addEventListener('resize', run, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(run, 80));
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', run, { passive: true });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+        const header = document.getElementById('app-header');
+        if (header) new ResizeObserver(run).observe(header);
+    }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(run).catch(() => {});
+    }
 }
 
 if (typeof window !== 'undefined') {
     window.paintHeaderDayLabel = paintHeaderDayLabel;
+    window.fitHeaderDayLabel = fitHeaderDayLabel;
 }
 
 export let refreshTimer = null;

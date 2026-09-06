@@ -85,6 +85,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             return 0;
           }
         }
+        function pinBottomNav(keyboard, vv, off) {
+          var nav = document.getElementById('bottom-nav');
+          if (!nav || keyboard || nav.classList.contains('hidden')) {
+            root.style.setProperty('--nt-nav-lift', '0px');
+            return;
+          }
+          var screenBottom = (vv && vv.height) ? (off + vv.height) : (window.innerHeight || 0);
+          var rect = nav.getBoundingClientRect();
+          if (!rect || !rect.height || !screenBottom) {
+            root.style.setProperty('--nt-nav-lift', '0px');
+            return;
+          }
+          var overflow = rect.bottom - screenBottom;
+          root.style.setProperty('--nt-nav-lift', (overflow > 0.5 ? overflow : 0) + 'px');
+        }
         function apply() {
           var vv = window.visualViewport;
           var inner = window.innerHeight || 0;
@@ -102,16 +117,23 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             ae.isContentEditable
           ));
           var env = envBottom();
-          // Layout height never follows visualViewport. Android Chrome shrinks
-          // visualViewport for the keyboard; if --nt-app-h follows it, the oval
-          // rides up and a slab sits on the keys. Overlays (planner list,
-          // Feedback Hub) read visualViewport themselves.
-          var h = Math.max(inner, client) || inner || vh || 240;
+          // Layout height never follows visualViewport while the keyboard is
+          // open. Android Chrome shrinks visualViewport for the IME; if
+          // --nt-app-h follows it, the oval rides up and a slab sits on the
+          // keys. Overlays (planner list, Feedback Hub) read visualViewport
+          // themselves. Never use Math.max(inner, client): a tall document
+          // would push #nt-shell (and the oval) below the screen (S9+).
+          var h = inner || client || vh || 240;
+          if (client > 0) h = Math.min(h, client);
           if (editing && lastLayoutH && h < lastLayoutH - 80) {
             keyboard = true;
             h = lastLayoutH;
           }
           if (!keyboard) {
+            if (vv && vv.height) {
+              var vis = Math.round(vv.height + off);
+              if (vis >= 240) h = Math.min(h, vis);
+            }
             lastLayoutH = h;
           } else if (lastLayoutH > h) {
             h = lastLayoutH;
@@ -130,6 +152,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
           root.classList.toggle('nt-keyboard', keyboard);
+          requestAnimationFrame(function () { pinBottomNav(keyboard, vv, off); });
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
           try {
@@ -702,20 +725,23 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
 
       html.nt-in-app, html.nt-in-app body {
-        height: var(--nt-app-h, 100dvh);
+        height: var(--nt-app-h, 100svh);
         overflow: hidden;
       }
 
       /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves
          the screen. --nt-app-h is layout height (not visualViewport) so the
          keyboard overlays the oval instead of lifting it. Do not pad a tray
-         under the floating pill. */
+         under the floating pill. 100svh fallback keeps first paint on-screen
+         before JS measures the visible frame. */
       #nt-shell {
-        height: var(--nt-app-h, 100dvh) !important;
-        max-height: var(--nt-app-h, 100dvh) !important;
+        height: var(--nt-app-h, 100svh) !important;
+        max-height: var(--nt-app-h, 100svh) !important;
         box-sizing: border-box;
         padding-bottom: 0 !important;
         background-color: var(--nt-canvas);
+        overflow: hidden;
+        position: relative;
       }
       #main-content.app-shell {
         height: 100%;
@@ -821,21 +847,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         font-size: 2rem !important;
         letter-spacing: -0.035em !important;
       }
-      .chrome-compact .header-meta #current-day,
-      body.chrome-compact .header-meta #current-day {
-        font-size: 0.65rem !important;
-      }
 
       #bottom-nav.bottom-nav-bar {
         flex-shrink: 0;
         position: relative;
       }
-      /* Oval floats over the board canvas — no shell tray behind the pill. */
+      /* Oval floats over the board canvas — no shell tray behind the pill.
+         --nt-nav-lift pulls it up if a late height glitch would paint it
+         below the visible frame (Galaxy S9+ / short Chrome viewports). */
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
         position: absolute;
         left: 0.75rem;
         right: 0.75rem;
-        bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+        bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         margin: 0;
         z-index: 110;
       }
@@ -869,7 +893,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.85rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+          bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
           bottom: 3.6rem;
@@ -880,7 +904,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.35rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+          bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers.

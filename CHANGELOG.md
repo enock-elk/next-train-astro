@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.2 — Header day line, nav pin, planner toolbar (6 Sep 2026)
+
+no release notes.
+
+- `#current-day` starts at the same face as `Next Train` (weight, tracking, chrome foreground). `fitHeaderDayLabel()` then shrinks that day's string to the brand column so Wednesday · Weekday Schedule still fits beside the bell.
+- `--nt-app-h` uses the visible frame (`min(inner, client, visualViewport)` when the keyboard is closed), never `Math.max(inner, client)`. `#nt-shell` first-paint fallback is `100svh`. `pinBottomNav()` sets `--nt-nav-lift` if the oval would paint below the visual viewport (Galaxy S9+ / short Chrome frames).
+- Planner Back / weekday / Share revert to the old shared 2rem `text-xs` pills. Phone `--nt-ui-scale` no longer changes their height or type size.
+
 ## V9_09.06.1 — Stuck-update recovery (6 Sep 2026)
 
 no release notes.

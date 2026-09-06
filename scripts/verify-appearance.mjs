@@ -41,12 +41,16 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
+assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales to the title then the brand width');
+assert(logic.includes('el.scrollWidth <= avail + 0.75'), 'day line fit measures overflow against the brand column');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
+assert(header.includes('header-day-label'), 'Header day line uses the title-sized label class');
+assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
 assert(css.includes('#bottom-nav-grid'), 'bottom nav uses #bottom-nav-grid');
 assert(css.includes('html[data-admin-authed="1"] #bottom-nav-grid'), 'admin auth expands bottom nav to 5 columns');
@@ -100,9 +104,9 @@ assert(welcome.includes('later in Options'), 'Welcome copy points at Options, no
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
-assert(css.includes('min-height: 2.5rem'), 'planner toolbar pills are taller than the squeezed 2rem lock');
-assert(!/#planner-back-btn,[\s\S]{0,280}max-height: 2rem/.test(css), 'planner toolbar no longer caps height at 2rem');
-assert(!/#planner-back-btn,[\s\S]{0,280}padding-top: 0/.test(css), 'planner toolbar keeps vertical padding');
+assert(css.includes('height: 2rem') && css.includes('#planner-header-badge > div'), 'planner Back, day, and Share share the old 2rem box');
+assert(!/#planner-back-btn,[\s\S]{0,400}min-height: 2.5rem/.test(css), 'planner toolbar is not the taller 2.5rem lock');
+assert(!/#planner-back-btn,[\s\S]{0,360}font-size: calc\(0.8rem \* var\(--nt-ui-scale/.test(css), 'planner toolbar is not scaled down on phones');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
@@ -127,6 +131,9 @@ assert(planner.includes('id="planner-from-chevron"') && planner.includes('absolu
 assert(!planner.includes('planner-schedule-phantom'), 'planner dropped the phantom Schedule updated spacer');
 assert(planner.includes('min-h-[46px]'), 'planner info pill matches board route pill min-height');
 assert(planner.includes('flex items-center justify-center w-full h-full min-w-0'), 'Advanced Multi-Transfer Routing is vertically centered');
+assert(planner.includes('id="planner-back-btn"') && planner.includes('h-8'), 'planner Back uses the old 2rem pill');
+assert(planner.includes('min-h-[32px]'), 'planner results toolbar row is the old 32px line');
+assert(plannerUi.includes('h-8') && plannerUi.includes('text-xs font-bold'), 'planner weekday and Share use the same 2rem text-xs pill');
 
 const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
 assert(plannerModals.includes('id="close-help-btn"') && plannerModals.includes('text-gray-700 dark:text-gray-200'), 'Tips close uses ink on a chip');
@@ -328,6 +335,11 @@ assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #botto
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
+assert(layout.includes('pinBottomNav'), 'visible-frame pin keeps the oval on screen');
+assert(layout.includes('--nt-nav-lift'), 'nav lift token pulls the oval up when it would overflow');
+assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
+assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
+assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');

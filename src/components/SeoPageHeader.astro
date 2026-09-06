@@ -26,7 +26,7 @@ const ctaLabel =
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 z-30 relative flex items-start justify-between gap-2 border-b">
-  <div class="min-w-0 shrink header-brand-block">
+  <div class="min-w-0 flex-1 header-brand-block">
     <a
       href={homeHref}
       class="block rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
@@ -36,8 +36,8 @@ const ctaLabel =
         Next Train
       </p>
     </a>
-    <div class="header-meta mt-1.5 min-w-0">
-      <p id="current-day" class="text-[11px] sm:text-xs font-medium leading-tight truncate">Getting schedules…</p>
+    <div class="header-meta mt-1 min-w-0 w-full">
+      <p id="current-day" class="header-day-label font-black leading-none">Getting schedules…</p>
     </div>
   </div>
   <a
@@ -61,6 +61,26 @@ const ctaLabel =
         ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
       el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';
+      if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();
+      else {
+        var title = document.getElementById('app-title');
+        var maxPx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 40;
+        if (!isFinite(maxPx) || maxPx < 12) maxPx = 32;
+        var host = el.closest('.header-brand-block') || el.parentElement || el;
+        var avail = host.clientWidth || 0;
+        if (avail > 8) {
+          el.style.whiteSpace = 'nowrap';
+          el.style.maxWidth = '100%';
+          var lo = Math.max(11, maxPx * 0.4), hi = maxPx, best = lo;
+          for (var i = 0; i < 16; i++) {
+            var mid = (lo + hi) / 2;
+            el.style.fontSize = mid + 'px';
+            if (el.scrollWidth <= avail + 0.75) { best = mid; lo = mid; }
+            else hi = mid;
+          }
+          el.style.fontSize = best + 'px';
+        }
+      }
     } catch (e) { /* keep Getting schedules… */ }
   })();
 </script>

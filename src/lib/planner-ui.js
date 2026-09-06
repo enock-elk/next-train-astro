@@ -3726,7 +3726,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     }
     const shareSlot = document.querySelector('#planner-results-section .planner-share-slot');
     if (shareSlot) {
-        shareSlot.className = 'planner-share-slot justify-self-end min-h-10 flex items-center justify-end';
+        shareSlot.className = 'planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end';
         shareSlot.innerHTML = '';
     }
 
@@ -4497,7 +4497,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         
         const badge = document.createElement("div");
         badge.id = "planner-header-badge";
-        badge.className = "relative bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm flex items-center transition-colors cursor-pointer group min-h-10"; 
+        badge.className = "relative bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-800 shadow-sm flex items-center transition-colors cursor-pointer group h-8"; 
         
         let selDay = selectedPlannerDay || getCurrentDayType();
         const holiday = getPlannerHolidayContext();
@@ -4515,8 +4515,8 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
             : '';
 
         badge.innerHTML = `
-            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full flex items-center justify-center px-1 relative min-w-[5.75rem]">
-                <span id="header-day-display" class="truncate font-bold pr-1">${selText}</span>
+            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-2 relative min-w-[4.75rem]">
+                <span id="header-day-display" class="truncate font-bold text-xs pr-1">${selText}</span>
                 <svg id="header-day-chevron" class="w-3.5 h-3.5 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 
                 <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-y-auto max-h-[min(40vh,16rem)] custom-scrollbar z-[200] text-left">
@@ -4537,10 +4537,10 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         if (spacer instanceof HTMLElement) spacer.style.display = 'flex'; 
         
         if (showShare) {
-            spacer.className = "planner-share-slot justify-self-end min-h-10 flex items-center justify-end"; 
+            spacer.className = "planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end"; 
             const shareBtn = document.createElement("button");
             shareBtn.type = "button";
-            shareBtn.className = "inline-flex items-center text-xs font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none min-h-10";
+            shareBtn.className = "inline-flex items-center text-xs font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors group flex-none whitespace-nowrap shadow-sm border border-blue-100 dark:border-blue-800 focus:outline-none h-8";
             shareBtn.title = "Share Trip Plan";
             
             shareBtn.onclick = async () => {
@@ -4607,7 +4607,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
             
             spacer.appendChild(shareBtn);
         } else {
-            spacer.className = "planner-share-slot justify-self-end min-h-10 flex items-center justify-end invisible";
+            spacer.className = "planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end invisible";
             spacer.innerHTML = `<div class="w-14" aria-hidden="true"></div>`;
         }
     }

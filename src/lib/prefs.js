@@ -393,6 +393,11 @@ export function applyReturningUserChrome() {
     document.body?.classList.toggle('chrome-compact', seen);
     const main = document.getElementById('main-content');
     main?.classList.toggle('chrome-compact', seen);
+    if (typeof window !== 'undefined' && typeof window.fitHeaderDayLabel === 'function') {
+        requestAnimationFrame(() => {
+            try { window.fitHeaderDayLabel(); } catch { /* ignore */ }
+        });
+    }
 }
 
 /** After Welcome closes (or a share link skips it): show the in-app bottom bar. */

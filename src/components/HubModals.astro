@@ -58,7 +58,8 @@ import { withBase } from '../lib/config.js';
             </details>
             <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 tracking-wider">WhatsApp / Email (Optional)</label>
-                <input type="text" id="feedback-email" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-inner" placeholder="Leave your number or email for a reply">
+                <input type="text" id="feedback-email" maxlength="64" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-inner" placeholder="Leave your number or email for a reply">
+                <p id="feedback-email-hint" class="mt-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 empty:hidden" aria-live="polite"></p>
                 <p class="text-[9px] text-gray-400 mt-1.5 leading-snug">
                     We will only use this to reply to your specific feedback.
                 </p>
@@ -477,11 +478,12 @@ import { withBase } from '../lib/config.js';
         <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
             <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 empty:hidden" aria-live="polite"></p>
             <div id="messages-thread-contact-row" class="relative">
-                <input type="text" id="messages-thread-contact" autocomplete="email" class="w-full pl-3 pr-10 py-2 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Email or WhatsApp if you want a reply">
+                <input type="text" id="messages-thread-contact" maxlength="64" autocomplete="email" class="w-full pl-3 pr-10 py-2 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Email or WhatsApp if you want a reply">
                 <button type="button" id="messages-thread-privacy" class="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-200/70 dark:hover:bg-gray-700 focus:outline-none" aria-label="Privacy Policy">
                     <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                 </button>
             </div>
+            <p id="messages-thread-contact-hint" class="text-[11px] font-semibold text-red-600 dark:text-red-400 empty:hidden" aria-live="polite"></p>
             <div id="messages-thread-file-chip" class="hidden flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50">
                 <span id="messages-thread-file-name" class="text-[11px] font-bold text-blue-800 dark:text-blue-300 truncate">filename.jpg</span>
                 <button type="button" id="messages-thread-file-remove" class="text-gray-400 hover:text-red-500 transition-colors focus:outline-none shrink-0 p-0.5" aria-label="Remove attachment">
@@ -523,7 +525,7 @@ import { withBase } from '../lib/config.js';
   }
   #messages-thread-modal {
     align-items: flex-end;
-    justify-content: flex-end;
+    justify-content: center;
     padding: 0;
     padding-bottom: 0;
     padding-left: 0;
@@ -538,6 +540,11 @@ import { withBase } from '../lib/config.js';
   }
   #messages-thread-form {
     flex-shrink: 0;
+  }
+  #messages-thread-contact.nt-contact-invalid,
+  #feedback-email.nt-contact-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 1px #dc2626;
   }
   #messages-thread-modal .inbox-row,
   #feedback-panel .inbox-row {

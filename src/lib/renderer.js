@@ -43,6 +43,15 @@ const getCurrentDayType = () => typeof window !== 'undefined' && window.currentD
 const getCurrentDayIndex = () => typeof window !== 'undefined' && window.currentDayIndex !== undefined ? window.currentDayIndex : 1;
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
 const isTrainExcluded = (train, route, day) => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day) : false;
+/** Ban/special still applies live; export tags honour showOnExport (default true). */
+const exclusionShowsOnExport = (train, route, day) => {
+    if (typeof window === 'undefined') return false;
+    const rule = typeof window.getTrainExclusionRule === 'function'
+        ? window.getTrainExclusionRule(train, route, day)
+        : null;
+    if (!rule) return false;
+    return rule.showOnExport !== false;
+};
 
 function firstTrainDayBit(dayName) {
     const name = String(dayName || 'Tomorrow');
@@ -932,11 +941,13 @@ export const Renderer = {
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx);
+                            // Live board always tags bans; export image honours showOnExport.
+                            const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
                             let headerContent = h;
                             
-                            if (exclusionType === 'special') {
+                            if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
                                 if (isExport) {
                                     bgClass = 'export-spl-col relative';
@@ -945,7 +956,7 @@ export const Renderer = {
                                     bgClass = 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 opacity-95 relative';
                                     headerContent = `<span class="absolute top-[2px] left-0 w-full text-[8px] text-green-600 dark:text-green-500 font-black tracking-tight leading-none flex justify-center items-center">${splIcon} SPL</span>${h}`;
                                 }
-                            } else if (exclusionType) {
+                            } else if (paintExclusion) {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
                                     bgClass = 'export-banned-col relative';
@@ -1004,15 +1015,16 @@ export const Renderer = {
 
                         const isHighlight = i === activeColIndex;
                         const exclusionType = isTrainExcluded(col, routeId, dayIdx);
+                        const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(col, routeId, dayIdx));
 
                         let cellClass = `${paddingClass} text-center border-r ${borderClass} border-b`;
                         
                         if (val !== "" && val !== "-") {
                             cellClass += " font-mono font-medium";
-                            if (exclusionType === 'special') {
+                            if (paintExclusion && exclusionType === 'special') {
                                 if (isExport) cellClass += " export-spl-cell";
                                 else cellClass += " text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 opacity-95 font-bold";
-                            } else if (exclusionType) {
+                            } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
                                 else cellClass += " text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 opacity-50 font-normal";
                             } else {
@@ -1022,10 +1034,10 @@ export const Renderer = {
                                 }
                             }
                         } else { 
-                            if (exclusionType === 'special') {
+                            if (paintExclusion && exclusionType === 'special') {
                                 if (isExport) cellClass += " export-spl-cell";
                                 else cellClass += " bg-green-50 dark:bg-green-900/10";
-                            } else if (exclusionType) {
+                            } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
                                 else cellClass += " bg-red-50 dark:bg-red-900/10";
                             } else if (!isExport) {
@@ -1257,7 +1269,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         if (!sched || !sched.headers) return;
         const trainCols = sched.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
         for (const t of trainCols) {
-            if (isTrainExcluded(t, activeRouteId, dummyDayIdx)) {
+            if (exclusionShowsOnExport(t, activeRouteId, dummyDayIdx)) {
                 hasExceptions = true;
                 break;
             }
@@ -1298,8 +1310,9 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     let exportGridNoticeHtml = '';
     const globalExclData = $globalExclusions.get();
     if (globalExclData && globalExclData[activeRouteId] && globalExclData[activeRouteId]['_grid_notice']) {
-        const noticeText = globalExclData[activeRouteId]['_grid_notice'].text;
-        if (noticeText && noticeText.trim() !== '') {
+        const noticeNode = globalExclData[activeRouteId]['_grid_notice'];
+        const noticeText = noticeNode.text;
+        if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
                 <div style="background-color: #eff6ff; border-left: 5px solid ${accentColor}; padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #1e3a8a; border-radius: 0 6px 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: flex-start;">

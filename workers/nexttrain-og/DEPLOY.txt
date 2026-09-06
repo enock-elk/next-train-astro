@@ -11,13 +11,14 @@ Code + routes are ready. Two fixes remain on YOUR side after redeploy:
    npm run deploy
 
 Then check:
-   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa6
-   → full sheet (all trains × stations) as a dense grid
+   https://nexttrain.co.za/og/timetable.png?rt=pta-pien&dir=A&d=wd&v=wa9
+   → full sheet (all trains × stations) in MANUAL_GRID_ORDER (same as in-app #grid)
+   → dir=A title/stations: Pienaarspoort → Pretoria (toward destA)
    → PNG is 3000×1575 for sharper WhatsApp rich previews (keep under ~600KB)
 
    https://nexttrain.co.za/og/share?rt=pta-pien&v=g&d=wd
-   → HTML with og:title like "Pretoria → Pienaarspoort · Weekday"
-   → og:image URL includes &v=wa6 (cache bust)
+   → HTML with og:title like "Pienaarspoort → Pretoria · Weekday"
+   → og:image URL includes &v=wa9 (cache bust)
    → og:image:width/height = 3000 / 1575
    → twitter:card = summary_large_image
    → View Page Source (not the live app) to confirm

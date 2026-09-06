@@ -4,7 +4,8 @@
  *
  * ## ADMIN ISLAND ROADMAP (for future AI / ops)
  * Current stage: SHORT-TERM isolation via src/lib/admin-bridge.js
- *   - admin.js is NOT loaded on commuter boot; 5-tap title unlock lazy-fetches it.
+ *   - admin.js is NOT loaded on commuter boot; 5-tap opens login only.
+ *   - Bundle fetches only after allowlisted Firebase sign-in (or existing allowlisted session).
  *   - Excluded from the service-worker precache (astro globIgnores for admin.js).
  *   - window.__ntAdminSessionActive lets global crash reporting skip admin noise.
  *   - Admin init failures must never take down the trip planner / live board.
@@ -2735,11 +2736,16 @@ const Admin = {
         const isPermanent = !item.expiresAt;
         const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
         const timeBadge = isPermanent ? 'Permanent' : `Expires: in ${hrsLeft} hrs`;
+        const esc = (v) => String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const safeType = esc(item.type);
+        const safeId = esc(item.id);
+        const safeRoute = esc(item.routeId);
+        const safePanel = esc(item.panelId);
         const extendBtnHtml = isPermanent
-            ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`
-            : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> +24 Hrs</button>`;
+            ? `<button disabled class="flex-1 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-xs font-bold py-1.5 rounded-lg border border-transparent shadow-sm flex items-center justify-center cursor-not-allowed"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Extend</button>`
+            : `<button onclick="event.stopPropagation(); Admin.extendActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm transition-colors focus:outline-none flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Extend</button>`;
         return `
-            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')">
+            <div class="flex flex-col bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2 transition-colors hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer relative" onclick="Admin.deepLinkToPanel('${safePanel}', '${safeRoute}', '${safeId}')">
                 <div class="flex items-center justify-between gap-2 mb-1.5 w-full min-w-0">
                     <div class="min-w-0 shrink">${Admin.gsmRegionBadge(item.routeId)}</div>
                     <div class="flex items-center text-[10px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
@@ -2752,11 +2758,11 @@ const Admin = {
                     ${item.label}
                 </span>
                 <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
-                    <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${item.type}', '${item.id}', '${item.routeId}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                    <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
                     </button>
                     ${extendBtnHtml}
-                    <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${item.panelId}', '${item.routeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
+                    <button onclick="event.stopPropagation(); window._actionRequiredWasOpen = true; Admin.deepLinkToPanel('${safePanel}', '${safeRoute}', '${safeId}')" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         Review &rarr;
                     </button>
                 </div>
@@ -3067,6 +3073,72 @@ const Admin = {
         }
     },
 
+    /** GSM Extend picker: relative deltas or a custom absolute expiry. Returns new expiresAt ms, or null if cancelled. */
+    pickExpiryExtension: (currentExpiresAt) => {
+        return new Promise((resolve) => {
+            const modalId = 'admin-extend-expiry';
+            let modal = document.getElementById(modalId);
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+                document.body.appendChild(modal);
+            }
+            const base = Math.max(Number(currentExpiresAt) || Date.now(), Date.now());
+            const toLocalInput = (ts) => {
+                const d = new Date(ts);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                return d.toISOString().slice(0, 16);
+            };
+            const presets = [
+                { label: '+4 hours', ms: 4 * 3600000 },
+                { label: '+12 hours', ms: 12 * 3600000 },
+                { label: '+24 hours', ms: 86400000 },
+                { label: '+3 days', ms: 3 * 86400000 },
+                { label: '+7 days', ms: 7 * 86400000 },
+            ];
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700">
+                    <h3 class="text-base font-black text-gray-900 dark:text-white mb-1 tracking-tight">Extend expiry</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">Add time from the current expiry, or set an exact date and time.</p>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        ${presets.map((p, i) => `<button type="button" data-ext-preset="${i}" class="px-2 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-900 text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none">${p.label}</button>`).join('')}
+                    </div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Exact expiry</label>
+                    <input type="datetime-local" id="admin-extend-custom" class="w-full h-10 px-3 mb-4 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none" value="${toLocalInput(base + 86400000)}">
+                    <div class="flex gap-2">
+                        <button type="button" id="admin-extend-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-xl text-sm focus:outline-none">Cancel</button>
+                        <button type="button" id="admin-extend-apply-custom" class="flex-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-sm focus:outline-none">Set exact</button>
+                    </div>
+                </div>`;
+            modal.classList.remove('hidden');
+            const finish = (val) => {
+                modal.classList.add('hidden');
+                resolve(val);
+            };
+            modal.querySelector('#admin-extend-cancel').onclick = () => finish(null);
+            modal.querySelectorAll('[data-ext-preset]').forEach((btn) => {
+                btn.onclick = () => {
+                    const idx = Number(btn.getAttribute('data-ext-preset'));
+                    finish(base + presets[idx].ms);
+                };
+            });
+            modal.querySelector('#admin-extend-apply-custom').onclick = () => {
+                const raw = document.getElementById('admin-extend-custom')?.value;
+                if (!raw) {
+                    if (typeof showToast === 'function') showToast('Pick a date and time.', 'error');
+                    return;
+                }
+                const ts = new Date(raw).getTime();
+                if (!Number.isFinite(ts) || ts <= Date.now()) {
+                    if (typeof showToast === 'function') showToast('Expiry must be in the future.', 'error');
+                    return;
+                }
+                finish(ts);
+            };
+        });
+    },
+
     extendActionRequired: async (type, id, routeId) => {
         if (typeof triggerHaptic === 'function') triggerHaptic();
         const secret = await Admin.getAuthKey();
@@ -3075,6 +3147,7 @@ const Admin = {
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             let url = '';
+            let currentExpiresAt = null;
 
             if (type === 'Maintenance') {
                 const maintUrl = `${dynamicEndpoint}config/maintenance.json?auth=${secret}`;
@@ -3091,12 +3164,13 @@ const Admin = {
                         if (typeof showToast === 'function') showToast('Item has no expiry to extend.', 'warning');
                         return;
                     }
-                    const newExpiry = Number(maintData.expiresAt) + 86400000;
+                    const newExpiry = await Admin.pickExpiryExtension(maintData.expiresAt);
+                    if (!newExpiry) return;
                     await fetch(maintUrl, {
                         method: 'PATCH',
                         body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
                     });
-                    if (typeof showToast === 'function') showToast('Extended by +24 Hours!', 'success');
+                    if (typeof showToast === 'function') showToast('Expiry updated.', 'success');
                     Admin.fetchActionRequired();
                     return;
                 }
@@ -3105,7 +3179,8 @@ const Admin = {
                     if (typeof showToast === 'function') showToast('Item has no expiry to extend.', 'warning');
                     return;
                 }
-                const newExpiry = Number(item.expiresAt) + 86400000;
+                const newExpiry = await Admin.pickExpiryExtension(item.expiresAt);
+                if (!newExpiry) return;
                 await fetch(`${dynamicEndpoint}config/maintenance/items/${encodeURIComponent(id)}.json?auth=${secret}`, {
                     method: 'PATCH',
                     body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
@@ -3117,7 +3192,7 @@ const Admin = {
                         body: JSON.stringify({ expiresAt: newExpiry, updatedAt: Date.now() }),
                     });
                 }
-                if (typeof showToast === 'function') showToast('Extended by +24 Hours!', 'success');
+                if (typeof showToast === 'function') showToast('Expiry updated.', 'success');
                 Admin.fetchActionRequired();
                 return;
             }
@@ -3138,19 +3213,27 @@ const Admin = {
             if (type === 'Alert' && data && !data.id && data[id]) {
                 url = `${dynamicEndpoint}notices/${routeId}/${id}.json?auth=${secret}`;
                 const nestedData = data[id];
-                if (nestedData.expiresAt) {
-                    const newExpiry = nestedData.expiresAt + 86400000;
-                    await fetch(url, { method: 'PATCH', body: JSON.stringify({ expiresAt: newExpiry }) });
-                }
+                currentExpiresAt = nestedData?.expiresAt || null;
             } else if (data && data.expiresAt) {
-                const newExpiry = data.expiresAt + 86400000;
-                await fetch(url, { method: 'PATCH', body: JSON.stringify({ expiresAt: newExpiry }) });
-            } else {
+                currentExpiresAt = data.expiresAt;
+            } else if (type === 'Alert' && data) {
+                const listed = Admin.listNoticesInTarget(data);
+                const hit = listed.find((n) => String(n.id || n._key) === String(id));
+                currentExpiresAt = hit?.expiresAt || null;
+                if (hit) url = `${dynamicEndpoint}notices/${routeId}/${encodeURIComponent(hit.id || hit._key || id)}.json?auth=${secret}`;
+            }
+
+            if (!currentExpiresAt) {
                 if (typeof showToast === 'function') showToast("Item has no expiry to extend.", "warning");
                 return;
             }
 
-            if (typeof showToast === 'function') showToast("Extended by +24 Hours!", "success");
+            const newExpiry = await Admin.pickExpiryExtension(currentExpiresAt);
+            if (!newExpiry) return;
+
+            await fetch(url, { method: 'PATCH', body: JSON.stringify({ expiresAt: newExpiry }) });
+
+            if (typeof showToast === 'function') showToast("Expiry updated.", "success");
             Admin.fetchActionRequired(); 
         } catch (e) {
             if (typeof showToast === 'function') showToast("Failed to extend time.", "error");
@@ -3247,7 +3330,7 @@ const Admin = {
         }
     },
 
-    deepLinkToPanel: (panelId, routeId) => {
+    deepLinkToPanel: (panelId, routeId, itemId = null) => {
         const targetPanel = document.getElementById(panelId);
         if (!targetPanel) return;
 
@@ -3259,6 +3342,8 @@ const Admin = {
             Admin._pendingAdminRoute = routeId;
             Admin._adminRouteDeepLinkActive = true;
         }
+        Admin._pendingReviewItemId = itemId || null;
+        Admin._reviewedAlertKey = null;
 
         // If we are currently in Grid Mode, we can just click it naturally
         if (Admin.isGridMode) {
@@ -3343,6 +3428,17 @@ const Admin = {
             setTimeout(() => Admin.applyPendingAdminRoute(panelId), 80);
             setTimeout(() => Admin.applyPendingAdminRoute(panelId), 280);
             setTimeout(() => Admin.applyPendingAdminRoute(panelId), 700);
+        }
+
+        // GSM Review for Alerts must hydrate the posted notice into Compose (not just the target chip)
+        if (panelId === 'alert-panel' && itemId) {
+            const hydrate = () => {
+                if (typeof Admin.loadAlertForReview === 'function') {
+                    Admin.loadAlertForReview(routeId, itemId);
+                }
+            };
+            setTimeout(hydrate, 350);
+            setTimeout(hydrate, 900);
         }
     },
 
@@ -6750,7 +6846,7 @@ const Admin = {
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports (message / user). Hide posts or shadow-ban without schema rewrites.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports and held feedback. Approve held feedback into the Feedback Hub, or hide / shadow-ban community posts.</p>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -6777,6 +6873,85 @@ const Admin = {
         };
         refreshBtn.onclick = () => Admin.fetchModerationQueue();
 
+        /** Migrate a held feedback AUTO_HOLD into feedback/ + inbox/. */
+        Admin.approveHeldFeedback = async (report) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const pub = report?.publish?.payload;
+            if (!pub || typeof pub !== 'object' || !String(pub.text || '').trim()) {
+                throw new Error('Missing held feedback payload');
+            }
+            const reportId = report.reportId || report._key;
+            const deviceId = String(pub.deviceId || report.deviceId || report.reportedByDeviceId || '').trim();
+            const feedbackPayload = {
+                type: pub.type || 'general',
+                text: String(pub.text),
+                email: pub.email || report.contact || '',
+                attachmentUrl: pub.attachmentUrl || null,
+                attachmentUrls: pub.attachmentUrls || null,
+                status: 'unread',
+                appVersion: pub.appVersion || report.appVersion || '',
+                routeId: pub.routeId || report.routeId || 'none',
+                region: pub.region || 'GP',
+                timestamp: pub.timestamp || Date.now(),
+                userAgent: pub.userAgent || '',
+                deviceId: deviceId || 'unknown',
+                isPWA: !!pub.isPWA,
+                moderationApprovedAt: Date.now(),
+                moderationReportId: reportId || null,
+            };
+            const postRes = await fetch(`${dynamicEndpoint}feedback.json?auth=${secret}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(feedbackPayload),
+            });
+            if (!postRes.ok) throw new Error(`Feedback POST failed (${postRes.status})`);
+            const postJson = await postRes.json().catch(() => ({}));
+            const feedbackId = postJson?.name || null;
+
+            if (deviceId && deviceId !== 'unknown' && feedbackId) {
+                const msgId = `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+                const inboxPayload = {
+                    from: 'commuter',
+                    deviceId,
+                    message: String(pub.text).slice(0, 2000),
+                    timestamp: pub.timestamp || Date.now(),
+                    type: pub.type || 'general',
+                    read: true,
+                    feedbackId,
+                };
+                try {
+                    await fetch(
+                        `${dynamicEndpoint}inbox/${encodeURIComponent(deviceId)}/${msgId}.json?auth=${secret}`,
+                        {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(inboxPayload),
+                        }
+                    );
+                } catch (e) { /* inbox copy best-effort */ }
+            }
+
+            const patch = {
+                status: 'approved',
+                resolution: 'approved',
+                approvedAt: Date.now(),
+                approvedFeedbackId: feedbackId || null,
+            };
+            const markRes = await fetch(`${dynamicEndpoint}moderation_queue/${reportId}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!markRes.ok) {
+                await fetch(`${dynamicEndpoint}moderation_queue/${reportId}/status.json?auth=${secret}`, {
+                    method: 'PUT', body: JSON.stringify('approved'),
+                });
+            }
+            return { feedbackId };
+        };
+
         Admin.fetchModerationQueue = async () => {
             const list = document.getElementById('mq-list');
             if (!list) return;
@@ -6791,6 +6966,7 @@ const Admin = {
                 const items = data
                     ? Object.entries(data).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
                     : [];
+                Admin._mqCache = Object.fromEntries(items.map((r) => [r.reportId || r._key, r]));
 
                 if (typeof safeStorage !== 'undefined') safeStorage.setItem('mq_last_checked', String(Date.now()));
                 try {
@@ -6812,21 +6988,35 @@ const Admin = {
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-                    const closed = status === 'closed' || status === 'resolved';
+                    const closed = status === 'closed' || status === 'resolved' || status === 'approved';
+                    const isFeedbackHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
+                        && (r.publish?.kind === 'feedback' || r.source === 'feedback' || r.source === 'feedback_thread');
+                    const deviceId = r.deviceId || r.reportedByDeviceId || r.publish?.payload?.deviceId || '';
+                    const contact = r.contact || r.publish?.payload?.email || '';
+                    const sourceLabel = r.source || (isFeedbackHold ? 'feedback' : 'report');
+                    const metaLine = isFeedbackHold
+                        ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${(deviceId || '-').toString().slice(0, 22)} · contact: ${(contact || '-').toString().slice(0, 24)}`
+                        : `target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
+                    const statusLabel = status === 'approved' ? 'Approved to Feedback Hub' : (closed ? 'Closed' : '');
+                    const actions = closed ? `<span class="text-[10px] text-gray-400">${statusLabel}</span>` : (isFeedbackHold ? `
+                            <div class="flex flex-wrap gap-2 mt-1">
+                                <button type="button" class="mq-approve-feedback text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
+                                <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
+                            </div>` : `
+                            <div class="flex flex-wrap gap-2 mt-1">
+                                <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
+                                ${r.targetUid ? `<button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>` : ''}
+                                <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
+                            </div>`);
                     return `
                         <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
                             <div class="flex justify-between gap-2 mb-1">
                                 <p class="text-xs font-black text-gray-900 dark:text-white">${type} - ${r.routeId || '-'}</p>
                                 <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1">target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}</p>
+                            <p class="text-[10px] text-gray-500 font-mono mb-1 break-all">${metaLine}</p>
                             ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">"${snippet}"</p>` : ''}
-                            ${closed ? '<span class="text-[10px] text-gray-400">Closed</span>' : `
-                            <div class="flex flex-wrap gap-2 mt-1">
-                                <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
-                                <button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>
-                                <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
-                            </div>`}
+                            ${actions}
                         </div>`;
                 }).join('');
 
@@ -6845,6 +7035,28 @@ const Admin = {
                             Admin.fetchModerationQueue();
                         } catch (e) {
                             if (typeof showToast === 'function') showToast('Could not close', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-approve-feedback').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        const report = Admin._mqCache?.[id];
+                        if (!report) {
+                            if (typeof showToast === 'function') showToast('Hold expired — refresh', 'error');
+                            return;
+                        }
+                        btn.disabled = true;
+                        try {
+                            await Admin.approveHeldFeedback(report);
+                            if (typeof showToast === 'function') showToast('Approved - moved to Feedback Hub', 'success');
+                            Admin.fetchModerationQueue();
+                            try { if (typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback(); } catch (e) { /* optional */ }
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast(e?.message || 'Approve failed', 'error');
                             btn.disabled = false;
                         }
                     };
@@ -9724,32 +9936,23 @@ const Admin = {
             }
         });
 
-        Admin.reviveArchivedAlert = (item) => {
+        const fillAlertComposeFromItem = (item, opts = {}) => {
             if (!item) return;
-            if (item.kind === 'disruption') {
-                if (typeof showToast === 'function') showToast('Use Transit Incident Manager to revive incidents.', 'info');
-                return;
-            }
-            const target = item.clearedFrom || item.target || 'all';
-            Admin._alertRepostDraft = true;
+            const mode = opts.mode || 'repost'; // 'repost' | 'review'
             Admin._skipAlertFetchOnce = true;
             setAlertTab('compose');
             body?.classList.remove('hidden');
             chevron?.classList.remove('-rotate-90');
             header?.classList.add('mb-4');
 
-            if (alertTarget) {
-                Admin.setSelectedAlertTargets([target], { fetch: false });
-            }
-
-            existingAlertId = null;
             let cleanedMsg = Admin.repairMojibake(item.message || '');
             cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
             cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
             if (alertMsg) alertMsg.innerHTML = cleanedMsg.trim();
 
             if (item.expiresAt && dateInput) {
-                const expiryDate = new Date(Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000));
+                const floor = mode === 'review' ? item.expiresAt : Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000);
+                const expiryDate = new Date(floor);
                 expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset());
                 dateInput.value = expiryDate.toISOString().slice(0, 16);
             }
@@ -9784,9 +9987,62 @@ const Admin = {
                 pollContainer?.classList.add('hidden');
             }
 
+            composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        Admin.reviveArchivedAlert = (item) => {
+            if (!item) return;
+            if (item.kind === 'disruption') {
+                if (typeof showToast === 'function') showToast('Use Transit Incident Manager to revive incidents.', 'info');
+                return;
+            }
+            const target = item.clearedFrom || item.target || 'all';
+            Admin._alertRepostDraft = true;
+            if (alertTarget) {
+                Admin.setSelectedAlertTargets([target], { fetch: false });
+            }
+            existingAlertId = null;
+            fillAlertComposeFromItem(item, { mode: 'repost' });
             if (sendBtn) sendBtn.textContent = 'Repost Alert';
             if (typeof showToast === 'function') showToast('Draft ready - review and tap Repost Alert.', 'success');
-            composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        /** GSM Review: open Compose with the live notice content (keeps id for update). */
+        Admin.loadAlertForReview = async (target, noticeId) => {
+            if (!target || !noticeId) return;
+            const reviewKey = `${target}:${noticeId}`;
+            if (Admin._reviewedAlertKey === reviewKey || Admin._loadingAlertReviewId === reviewKey) return;
+            Admin._loadingAlertReviewId = reviewKey;
+            try {
+                Admin._skipAlertFetchOnce = true;
+                Admin._alertRepostDraft = false;
+                if (typeof Admin.setSelectedAlertTargets === 'function') {
+                    Admin.setSelectedAlertTargets([target], { fetch: false });
+                }
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 8000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const listed = Admin.listNoticesInTarget(data);
+                const hit = listed.find((n) => String(n.id || n._key) === String(noticeId))
+                    || (data && String(data.id) === String(noticeId) ? data : null)
+                    || (data && data[noticeId] ? { ...data[noticeId], id: noticeId } : null);
+                if (!hit) {
+                    if (typeof showToast === 'function') showToast('Could not load that alert for review.', 'error');
+                    return;
+                }
+                existingAlertId = String(hit.id || hit._key || noticeId);
+                fillAlertComposeFromItem(hit, { mode: 'review' });
+                if (sendBtn) sendBtn.textContent = 'Update Alert';
+                const countEl = document.getElementById('alert-live-count');
+                if (countEl) countEl.textContent = `Reviewing live post ${existingAlertId} on ${Admin.alertTargetLabel(target)}.`;
+                Admin._reviewedAlertKey = reviewKey;
+                if (typeof showToast === 'function') showToast('Alert loaded for review.', 'success');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Failed to load alert for review.', 'error');
+            } finally {
+                Admin._loadingAlertReviewId = null;
+            }
         };
 
         if (pollAddCBtn && pollOptCWrap) {
@@ -11307,7 +11563,7 @@ const Admin = {
                         </div>
                         <label class="flex items-center cursor-pointer mt-3">
                             <input type="checkbox" id="excl-grid-notice-export" checked class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
-                            <span class="text-[9px] font-bold text-blue-800 dark:text-blue-300 ml-1.5 uppercase tracking-wide">Show on Export</span>
+                            <span class="text-[9px] font-bold text-blue-800 dark:text-blue-300 ml-1.5 uppercase tracking-wide">Show on download image</span>
                         </label>
                     </div>
                     <p class="text-[9px] text-blue-600 dark:text-blue-400 mt-2 border-t border-blue-200 dark:border-blue-800/50 pt-1.5">Displays a banner directly inside the full timetable grid.</p>
@@ -11333,6 +11589,14 @@ const Admin = {
                     <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">Select Trains:</p>
                     <div id="excl-train-grid" class="grid grid-cols-4 gap-2 text-xs max-h-40 overflow-y-auto"></div>
                 </div>
+                <div id="excl-staging-bar" class="hidden mt-2 p-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-900/20">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">Queued for publish</p>
+                        <button type="button" id="excl-staging-clear" class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-400 hover:underline focus:outline-none">Clear</button>
+                    </div>
+                    <p class="text-[9px] text-amber-700/80 dark:text-amber-400/80 mb-1.5">Load direction A, tick trains, then load B and tick more. One publish applies both.</p>
+                    <div id="excl-staging-chips" class="flex flex-wrap gap-1"></div>
+                </div>
 
                 <input id="excl-train-manual" type="text" placeholder="Or type manually (e.g. 4401)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none hidden">
                 
@@ -11354,15 +11618,22 @@ const Admin = {
 
                 <input id="excl-reason" type="text" placeholder="Reason (e.g. Testing, Easter)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                 
-                <div class="mt-2 mb-3">
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
-                    <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
-                    <p class="text-[9px] text-gray-400 mt-1 mb-2">If set, the train will automatically reappear on the schedule after this date.</p>
-                    <!-- GUARDIAN PHASE 1: Export Visibility Toggle -->
-                    <label class="flex items-center cursor-pointer bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
-                        <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
-                        <span class="text-[10px] font-bold text-gray-600 dark:text-gray-300 ml-2 uppercase tracking-wide leading-none">Show "NO SVC" Tag on Export Image</span>
-                    </label>
+                <div class="mt-2 mb-3 space-y-2">
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-gray-50 dark:bg-gray-900">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Live board</p>
+                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Ban / Special always hides or marks the train in the app board and planner for the days you pick.</p>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
+                        <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
+                        <p class="text-[9px] text-gray-400 mt-1">If set, the train automatically returns after this date.</p>
+                    </div>
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 bg-white dark:bg-gray-800">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-1">Downloaded grid image</p>
+                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Separate from the live board. Only controls the red NO SVC (or SPL) tag on the PNG you download.</p>
+                        <label class="flex items-start cursor-pointer gap-2">
+                            <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                            <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">Show NO SVC / SPL tag on export image</span>
+                        </label>
+                    </div>
                 </div>
                 
                 <button id="excl-save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide focus:outline-none">
@@ -11431,6 +11702,57 @@ const Admin = {
         const trainGrid = document.getElementById('excl-train-grid');
         const pickerContainer = document.getElementById('excl-train-picker');
         const saveBtn = document.getElementById('excl-save-btn');
+        const stagingBar = document.getElementById('excl-staging-bar');
+        const stagingChips = document.getElementById('excl-staging-chips');
+        const stagingClearBtn = document.getElementById('excl-staging-clear');
+        /** Trains queued across direction A/B loads before a single publish. */
+        const exclStaging = new Set();
+
+        const renderExclStaging = () => {
+            if (!stagingBar || !stagingChips) return;
+            const list = Array.from(exclStaging).sort();
+            if (!list.length) {
+                stagingBar.classList.add('hidden');
+                stagingChips.innerHTML = '';
+                return;
+            }
+            stagingBar.classList.remove('hidden');
+            stagingChips.innerHTML = list.map((t) => `
+                <button type="button" data-excl-unstaging="${t}" class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-[10px] font-mono font-bold border border-amber-300 dark:border-amber-700 focus:outline-none" title="Remove from queue">${t} ×</button>
+            `).join('');
+            stagingChips.querySelectorAll('[data-excl-unstaging]').forEach((btn) => {
+                btn.onclick = () => {
+                    exclStaging.delete(btn.getAttribute('data-excl-unstaging'));
+                    const cb = trainGrid?.querySelector(`input[value="${CSS.escape ? CSS.escape(btn.getAttribute('data-excl-unstaging')) : btn.getAttribute('data-excl-unstaging')}"]`);
+                    if (cb) cb.checked = false;
+                    renderExclStaging();
+                };
+            });
+        };
+
+        const harvestCheckedIntoStaging = () => {
+            if (!trainGrid) return;
+            trainGrid.querySelectorAll('input:checked').forEach((cb) => {
+                if (cb.value) exclStaging.add(cb.value);
+            });
+            renderExclStaging();
+        };
+
+        if (stagingClearBtn) {
+            stagingClearBtn.onclick = () => {
+                exclStaging.clear();
+                trainGrid?.querySelectorAll('input').forEach((cb) => { cb.checked = false; });
+                renderExclStaging();
+            };
+        }
+
+        // Clear staging when the route changes
+        if (routeSelect) {
+            routeSelect.addEventListener('change', () => {
+                exclStaging.clear();
+                renderExclStaging();
+            });
+        }
         const listDiv = document.getElementById('excl-list');
         const daysContainer = document.getElementById('excl-days-container');
 
@@ -11645,6 +11967,9 @@ const Admin = {
         function getSelectedDays() { return Array.from(daysContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value)); }
 
         loadTrainsBtn.onclick = () => {
+            // Keep picks from the previous direction when loading the other side
+            harvestCheckedIntoStaging();
+
             const rId = routeSelect.value;
             const type = schedTypeSelect.value;
             const dir = dirSelect.value;
@@ -11700,16 +12025,33 @@ const Admin = {
                         if (e.target.tagName !== 'INPUT') {
                             const cb = div.querySelector('input');
                             cb.checked = !cb.checked;
+                            if (cb.checked) exclStaging.add(tNum);
+                            else exclStaging.delete(tNum);
+                            renderExclStaging();
                         }
                     };
+                    const checked = exclStaging.has(tNum) ? 'checked' : '';
                     div.innerHTML = `
-                        <input type="checkbox" value="${tNum}" class="rounded text-blue-600 focus:ring-0 w-3 h-3 cursor-pointer">
+                        <input type="checkbox" value="${tNum}" ${checked} class="rounded text-blue-600 focus:ring-0 w-3 h-3 cursor-pointer">
                         <span class="font-mono text-gray-700 dark:text-gray-300">${tNum}</span>
                     `;
+                    const cb = div.querySelector('input');
+                    if (cb) {
+                        cb.onchange = () => {
+                            if (cb.checked) exclStaging.add(tNum);
+                            else exclStaging.delete(tNum);
+                            renderExclStaging();
+                        };
+                    }
                     trainGrid.appendChild(div);
                 });
             }
             pickerContainer.classList.remove('hidden');
+            document.getElementById('excl-train-manual')?.classList.remove('hidden');
+            renderExclStaging();
+            if (typeof showToast === 'function') {
+                showToast(`Loaded ${dir === 'A' ? 'direction A' : 'direction B'}. Queued: ${exclStaging.size}.`, 'info', 1800);
+            }
         };
 
         // GUARDIAN Phase 3: Added Notice Save Button Logic
@@ -11884,9 +12226,12 @@ const Admin = {
             
             const secret = await Admin.getAuthKey(); 
             
-            const selectedTrains = Array.from(trainGrid.querySelectorAll('input:checked')).map(cb => cb.value);
             const manualTrain = document.getElementById('excl-train-manual').value.trim();
-            if (manualTrain) selectedTrains.push(manualTrain);
+            const selectedTrains = Array.from(new Set([
+                ...Array.from(exclStaging),
+                ...Array.from(trainGrid.querySelectorAll('input:checked')).map(cb => cb.value),
+                ...(manualTrain ? [manualTrain] : []),
+            ].filter(Boolean)));
 
             if (selectedTrains.length === 0 || selectedDays.length === 0) {
                 if (typeof showToast === 'function') showToast("Select trains and days.", "error");
@@ -11930,6 +12275,8 @@ const Admin = {
                 } catch(pe) { console.warn("Purge failed", pe); }
 
                 if (typeof showToast === 'function') showToast(`Updated ${selectedTrains.length} exceptions!`, "success");
+                exclStaging.clear();
+                renderExclStaging();
                 trainGrid.querySelectorAll('input').forEach(cb => cb.checked = false);
                 document.getElementById('excl-train-manual').value = '';
                 document.getElementById('excl-expiry').value = ''; 
@@ -13509,16 +13856,33 @@ const Admin = {
         const tabApproved = document.getElementById('holiday-tab-approved');
         let holidayTab = 'pending';
 
-        const HOLIDAY_DAY_TYPES = [
-            { value: 'public_holiday', label: 'Public Holiday' },
-            { value: 'saturday', label: 'Saturday' },
-            { value: 'weekday', label: 'Weekday' },
+        const HOLIDAY_DAY_TYPES_WC = [
+            { value: 'public_holiday', label: 'Public Holiday sheets' },
+            { value: 'saturday', label: 'Saturday sheets' },
+            { value: 'weekday', label: 'Weekday sheets' },
             { value: 'sunday', label: 'Sunday (no service)' },
         ];
-
-        const dayTypeOptions = (selected) => HOLIDAY_DAY_TYPES
-            .map((t) => `<option value="${t.value}"${t.value === selected ? ' selected' : ''}>${t.label}</option>`)
-            .join('');
+        // Only WC has dedicated *_pub schedules; other regions run Saturday sheets on holidays.
+        const HOLIDAY_DAY_TYPES_OTHER = [
+            { value: 'saturday', label: 'Saturday sheets (holiday default)' },
+            { value: 'weekday', label: 'Weekday sheets' },
+            { value: 'sunday', label: 'Sunday (no service)' },
+        ];
+        const holidayDayTypesForRegion = (code) => (code === 'WC' ? HOLIDAY_DAY_TYPES_WC : HOLIDAY_DAY_TYPES_OTHER);
+        const dayTypeLabel = (code, value) => {
+            const hit = holidayDayTypesForRegion(code).find((t) => t.value === value);
+            if (hit) return hit.label;
+            if (value === 'public_holiday' && code !== 'WC') return 'Saturday sheets (legacy PH value)';
+            return value || '-';
+        };
+        const dayTypeOptions = (code, selected) => {
+            let sel = selected || (code === 'WC' ? 'public_holiday' : 'saturday');
+            // Legacy non-WC public_holiday → saturday (same sheets in the app)
+            if (code !== 'WC' && sel === 'public_holiday') sel = 'saturday';
+            return holidayDayTypesForRegion(code)
+                .map((t) => `<option value="${t.value}"${t.value === sel ? ' selected' : ''}>${t.label}</option>`)
+                .join('');
+        };
 
         const pad2 = (n) => String(n).padStart(2, '0');
         const names = (typeof HOLIDAY_NAMES !== 'undefined' && HOLIDAY_NAMES) ? HOLIDAY_NAMES : {};
@@ -13618,7 +13982,7 @@ const Admin = {
                                     <div class="holiday-region-row flex items-center gap-2" data-region="${code}">
                                         <span class="text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase w-9 shrink-0">${code}</span>
                                         <select class="holiday-region-day flex-1 min-w-0 h-8 px-2 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
-                                            ${dayTypeOptions(row.dayType || h.defaultDayType)}
+                                            ${dayTypeOptions(code, row.dayType || (code === 'WC' ? h.defaultDayType : (h.defaultDayType === 'public_holiday' ? 'saturday' : h.defaultDayType)))}
                                         </select>
                                         <button type="button" class="holiday-region-approve shrink-0 w-8 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center focus:outline-none" data-region="${code}" title="Approve ${code}" aria-label="Approve ${code}">${Admin.icon('check', 'w-4 h-4')}</button>
                                         <button type="button" class="holiday-region-reject shrink-0 w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/40 text-gray-700 dark:text-gray-200 flex items-center justify-center focus:outline-none" data-region="${code}" title="Defer ${code}" aria-label="Defer ${code}">${Admin.icon('x', 'w-4 h-4')}</button>
@@ -13635,7 +13999,7 @@ const Admin = {
                             <div class="min-w-0">
                                 <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} - ${escapeHTML(code)}</p>
                                 <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(holiday.name)}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(HOLIDAY_DAY_TYPES.find((t) => t.value === row.dayType)?.label || row.dayType || '-')}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(dayTypeLabel(code, row.dayType))}</p>
                             </div>
                             <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">Approved</span>
                         </div>
@@ -13700,7 +14064,7 @@ const Admin = {
                         const card = btn.closest('.holiday-approval-card');
                         const code = btn.dataset.region;
                         const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
-                        const dayType = sel?.value || 'public_holiday';
+                        const dayType = sel?.value || (code === 'WC' ? 'public_holiday' : 'saturday');
                         btn.disabled = true;
                         try {
                             await saveRegion(card, code, 'approved', dayType);
@@ -13718,7 +14082,7 @@ const Admin = {
                         const card = btn.closest('.holiday-approval-card');
                         const code = btn.dataset.region;
                         const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
-                        const dayType = sel?.value || 'public_holiday';
+                        const dayType = sel?.value || (code === 'WC' ? 'public_holiday' : 'saturday');
                         btn.disabled = true;
                         try {
                             await saveRegion(card, code, 'rejected', dayType);
@@ -14279,12 +14643,18 @@ const Admin = {
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
-        const SCHED_DAY_TYPES = [
-            { value: 'public_holiday', label: 'Public Holiday' },
-            { value: 'saturday', label: 'Saturday' },
-            { value: 'weekday', label: 'Weekday' },
+        const SCHED_DAY_TYPES_WC = [
+            { value: 'public_holiday', label: 'Public Holiday sheets' },
+            { value: 'saturday', label: 'Saturday sheets' },
+            { value: 'weekday', label: 'Weekday sheets' },
             { value: 'sunday', label: 'Sunday (no service)' },
         ];
+        const SCHED_DAY_TYPES_OTHER = [
+            { value: 'saturday', label: 'Saturday sheets (holiday default)' },
+            { value: 'weekday', label: 'Weekday sheets' },
+            { value: 'sunday', label: 'Sunday (no service)' },
+        ];
+        const schedDayTypesForRegion = (code) => (code === 'WC' ? SCHED_DAY_TYPES_WC : SCHED_DAY_TYPES_OTHER);
 
         if (schedOverrideRegions) {
             schedOverrideRegions.innerHTML = SCHED_OVERRIDE_REGIONS.map((code) => `
@@ -14297,7 +14667,7 @@ const Admin = {
                         </label>
                     </div>
                     <select class="sched-override-day w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
-                        ${SCHED_DAY_TYPES.map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
+                        ${schedDayTypesForRegion(code).map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
                     </select>
                     <input type="text" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
                     <textarea class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
@@ -14454,7 +14824,11 @@ const Admin = {
                             const titleEl = schedOverrideRegions?.querySelector(`.sched-override-title[data-region="${code}"]`);
                             const bodyEl = schedOverrideRegions?.querySelector(`.sched-override-body[data-region="${code}"]`);
                             if (activeEl) activeEl.checked = !!r.active;
-                            if (dayEl && r.dayType) dayEl.value = r.dayType;
+                            if (dayEl && r.dayType) {
+                                let dayVal = r.dayType;
+                                if (code !== 'WC' && dayVal === 'public_holiday') dayVal = 'saturday';
+                                dayEl.value = dayVal;
+                            }
                             if (titleEl) titleEl.value = r.title || '';
                             if (bodyEl) bodyEl.value = r.body || '';
                         });
@@ -14506,7 +14880,8 @@ const Admin = {
                     SCHED_OVERRIDE_REGIONS.forEach((code) => {
                         regions[code] = {
                             active: !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked,
-                            dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value || 'public_holiday',
+                            dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value
+                                || (code === 'WC' ? 'public_holiday' : 'saturday'),
                             title: (schedOverrideRegions.querySelector(`.sched-override-title[data-region="${code}"]`)?.value || '').trim(),
                             body: (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim(),
                             updatedAt: Date.now(),

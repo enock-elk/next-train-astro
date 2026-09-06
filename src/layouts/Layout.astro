@@ -40,7 +40,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 <html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
     <script is:inline>
       (function () {
         var root = document.documentElement;
@@ -90,12 +90,24 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
           var gap = Math.max(0, inner - vh - off);
           var keyboard = gap > 140;
+          // Some Android builds shrink layout height with the keyboard (gap≈0).
+          // If an editable is focused and the frame collapsed, keep the last full height.
+          var ae = document.activeElement;
+          var editing = !!(ae && (
+            ae.tagName === 'TEXTAREA' ||
+            ae.tagName === 'INPUT' ||
+            ae.isContentEditable
+          ));
           var env = envBottom();
           // Layout height never follows visualViewport. Android Chrome shrinks
           // visualViewport for the keyboard; if --nt-app-h follows it, the oval
           // rides up and a slab sits on the keys. Overlays (planner list,
           // Feedback Hub) read visualViewport themselves.
           var h = Math.max(inner, client) || inner || vh || 240;
+          if (editing && lastLayoutH && h < lastLayoutH - 80) {
+            keyboard = true;
+            h = lastLayoutH;
+          }
           if (!keyboard) {
             lastLayoutH = h;
           } else if (lastLayoutH > h) {
@@ -125,6 +137,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         apply();
         window.addEventListener('resize', apply, { passive: true });
         window.addEventListener('orientationchange', function () { setTimeout(apply, 80); });
+        document.addEventListener('focusin', apply, { passive: true });
+        document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', apply, { passive: true });
           window.visualViewport.addEventListener('scroll', apply, { passive: true });
@@ -821,6 +835,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
         margin: 0;
         z-index: 110;
+      }
+      /* Keyboard open: keep the oval at the layout bottom (under the keys), never ride up. */
+      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
+        visibility: hidden;
+        pointer-events: none;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll {
         background-color: var(--nt-canvas);

@@ -578,13 +578,12 @@ export function getRouteFare(sheetKey) {
 
     // Off-peak 09:30–14:30 on weekdays only (unless FARE_CONFIG.offPeakEveryDay).
     // Scholar 50% is profile.base — not gated on this window.
+    // Calendar day wins: Sunday / Saturday must never inherit weekday off-peak
+    // just because the fare table sheetKey contains "weekday".
     const applyOffPeakEveryDay = FARE_CONFIG.offPeakEveryDay === true;
-    let isWeekdaySheet = usesWeekdayScheduleSheet(getCurrentDayType());
-    if (sheetKey) {
-        isWeekdaySheet = sheetKey.includes('weekday');
-    }
+    const dayAllowsOffPeak = applyOffPeakEveryDay || usesWeekdayScheduleSheet(getCurrentDayType());
 
-    if (applyOffPeakEveryDay || isWeekdaySheet) {
+    if (dayAllowsOffPeak) {
         let checkH, checkM;
 
         // GUARDIAN PHASE 2A: Decouple Off-Peak pricing from individual train departures.
@@ -1001,7 +1000,7 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
 
     for (const train of trainHeaders) {
         if (!train || train === "") continue;
-        if (isTrainExcluded(train, routeId, targetDayIdx)) continue; 
+        const exclusionType = isTrainExcluded(train, routeId, targetDayIdx);
 
         const fromRow = schedule.rows.find(row => {
             const val = row[stationCol];
@@ -1037,6 +1036,7 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
                     departureTime: departureTime,
                     arrivalTime: actualArrivalTime,
                     actualDestination: actualLastStop,
+                    ...(exclusionType ? { exclusionType, isExcluded: true } : {}),
                 });
             }
         }

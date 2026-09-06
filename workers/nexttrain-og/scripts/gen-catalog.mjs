@@ -4,11 +4,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../../..');
-const mod = await import(path.join(root, 'src/lib/config.js'));
+const configPath = path.join(root, 'src/lib/config.js');
+// Windows needs file:// URLs for dynamic import (bare C:\… is not a valid ESM scheme).
+const mod = await import(pathToFileURL(configPath).href);
 const catalog = {};
 for (const [id, r] of Object.entries(mod.ROUTES || {})) {
   if (!r || !r.isActive || id === 'special_event') continue;

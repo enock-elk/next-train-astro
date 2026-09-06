@@ -2002,7 +2002,7 @@
                     }
                     return;
                 }
-                if (data.type === 'nt-map-contribute' && typeof data.lat === 'number') {
+                if (data.type === 'nt-map-contribute' && Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                     const ll = L.latLng(data.lat, data.lng);
                     applyUserLocation(ll, 40);
                     renderRidePingMarkers([{
@@ -2013,7 +2013,7 @@
                     return;
                 }
                 if (data.type !== 'nt-map-locate') return;
-                if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+                if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                     const ll = L.latLng(data.lat, data.lng);
                     applyUserLocation(ll, data.accuracy);
                     map.flyTo(ll, 15, { duration: 1.2 });

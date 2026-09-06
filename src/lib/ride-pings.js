@@ -681,6 +681,10 @@ export async function startPresenceShare({
     skipVolunteer = false,
     openNearby = true,
 } = {}) {
+    const { LIVE_LOCATION_SHARE_UI_ENABLED } = await import('./map-tab.js');
+    if (!LIVE_LOCATION_SHARE_UI_ENABLED) {
+        return { ok: false, disabled: true };
+    }
     triggerHaptic();
     const routeId = $currentRouteId.get();
     if (!routeId) {

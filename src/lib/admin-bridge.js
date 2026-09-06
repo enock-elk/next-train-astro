@@ -1,9 +1,10 @@
 /**
- * Admin bridge — SHORT-TERM isolation (lazy unlock).
+ * Admin bridge — login-first isolation.
  *
- * Commuters never download public/js/admin.js. The classic Admin module is
- * fetched only after the 5-tap title unlock (or an explicit ensureAdminLoaded call).
- * See the ROADMAP block at the top of public/js/admin.js for medium/long-term plans.
+ * Commuters never download public/js/admin.js on 5-tap alone. The classic Admin
+ * module is fetched only after a successful allowlisted operator sign-in
+ * (or when an allowlisted session is already active). See the ROADMAP block
+ * at the top of public/js/admin.js for medium/long-term plans.
  */
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
@@ -27,6 +28,7 @@ import {
 } from './zone-distance-audit.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
+import { applyAdminAuthedChrome } from './admin-chrome.js';
 import {
     isShadowBanned,
     localBlockList,
@@ -207,11 +209,17 @@ function stampAdminChrome() {
     bindAdminPasswordPreview();
 }
 
+/** Expose globals + stamp login/dev chrome without downloading admin.js. */
+function prepareAdminShell() {
+    stampAdminChrome();
+    exposeAdminGlobals();
+}
+
 let _adminLoadPromise = null;
 
 /**
- * Lazy-load + init Admin once. Safe to call repeatedly.
- * Sets window.__ntAdminSessionActive so global crash reporting can quarantine admin noise.
+ * Lazy-load + init Admin once. Call only after allowlisted operator auth
+ * (or when an allowlisted session is already active).
  */
 export function ensureAdminLoaded() {
     if (typeof window === 'undefined') return Promise.resolve(null);
@@ -221,8 +229,7 @@ export function ensureAdminLoaded() {
     _adminLoadPromise = (async () => {
         try {
             window.__ntAdminSessionActive = true;
-            stampAdminChrome();
-            exposeAdminGlobals();
+            prepareAdminShell();
             await bootFirebase();
             await loadClassicAdminScript();
             if (window.Admin?.init && !window.__ntAdminInited) {
@@ -230,7 +237,7 @@ export function ensureAdminLoaded() {
                 window.__ntAdminInited = true;
             }
             window.__ntAdminReady = true;
-            console.log('🛡️ Guardian: Admin island loaded (lazy unlock)');
+            console.log('🛡️ Guardian: Admin island loaded (post-auth)');
             return window.Admin;
         } catch (e) {
             console.warn('🛡️ Guardian: Admin island failed to load — commuter app unaffected.', e);
@@ -242,43 +249,144 @@ export function ensureAdminLoaded() {
     return _adminLoadPromise;
 }
 
-function openAdminEntryUi() {
-    const loginModal = document.getElementById('login-modal');
+function currentAllowlistedUser() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user?.email) return null;
+    if (user.isAnonymous) return null;
+    return isAdminEmail(user.email) ? user : null;
+}
+
+function openDevHubUi() {
     const devModal = document.getElementById('dev-modal');
+    if (!devModal) return;
+    try {
+        if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
+    } catch { /* ignore */ }
+    openSmoothModal('dev-modal');
+    try { window.Admin?.renderAdminModules?.(); } catch (e) { console.warn(e); }
+    try { window.Admin?.initAutoSim?.(); } catch (e) { console.warn(e); }
+}
+
+async function openAdminEntryAfterAuth() {
+    const admin = await ensureAdminLoaded();
+    if (!admin) {
+        showToast('Admin tools unavailable', 'error', 2500);
+        return false;
+    }
+    applyAdminAuthedChrome(true);
+    openDevHubUi();
+    showToast('Developer Session Active', 'info');
+    return true;
+}
+
+function openLoginModal() {
+    const loginModal = document.getElementById('login-modal');
     const emailInput = document.getElementById('admin-email');
+    if (!loginModal) return;
+    try {
+        if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
+    } catch { /* ignore */ }
+    openSmoothModal('login-modal');
+    const loginBtn = document.getElementById('admin-login-btn');
+    const spinner = document.getElementById('admin-login-spinner');
+    if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    if (spinner) spinner.classList.add('hidden');
+    if (emailInput) setTimeout(() => emailInput.focus(), 150);
+    fillAdminPasswordFromDevice();
+}
 
-    if ((typeof window.isAdminEmail === 'function' && window.isAdminEmail(window.Admin?.currentUser?.email)) || window.isSimMode) {
-        if (devModal) {
-            try {
-                if (location.hash !== '#dev') history.pushState({ modal: 'dev' }, '', '#dev');
-            } catch (e) { /* ignore */ }
-            openSmoothModal('dev-modal');
-            try { window.Admin.renderAdminModules?.(); } catch (e) { console.warn(e); }
-            try { window.Admin.initAutoSim?.(); } catch (e) { console.warn(e); }
-        }
-        showToast('Developer Session Active', 'info');
-        return;
+let _bridgeLoginBound = false;
+
+/**
+ * Wire login/cancel on the stamped modal before admin.js exists.
+ */
+function bindBridgeLoginControls() {
+    if (_bridgeLoginBound) return;
+    const loginBtn = document.getElementById('admin-login-btn');
+    const cancelBtn = document.getElementById('admin-cancel-btn');
+    const emailInput = document.getElementById('admin-email');
+    const passInput = document.getElementById('admin-password');
+    const spinner = document.getElementById('admin-login-spinner');
+    if (!loginBtn || !passInput) return;
+    _bridgeLoginBound = true;
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            if (location.hash === '#login') history.back();
+            else closeSmoothModal('login-modal');
+        });
     }
 
-    if (loginModal) {
+    passInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loginBtn.click();
+    });
+
+    loginBtn.addEventListener('click', async () => {
+        // After Admin.init, classic setupLoginAccess owns the button.
+        if (window.__ntAdminInited) return;
+
+        const email = (emailInput?.value || '').trim();
+        const password = passInput.value || '';
+        if (!email || !password) {
+            showToast('Enter email and password', 'error');
+            return;
+        }
+        if (!navigator.onLine || window.isLieFi) {
+            showToast('Network disconnected. Cannot authenticate.', 'error');
+            return;
+        }
+
+        spinner?.classList.remove('hidden');
+        loginBtn.disabled = true;
+
         try {
-            if (location.hash !== '#login') history.pushState({ modal: 'login' }, '', '#login');
-        } catch (e) { /* ignore */ }
-        openSmoothModal('login-modal');
-        const loginBtn = document.getElementById('admin-login-btn');
-        const spinner = document.getElementById('admin-login-spinner');
-        if (loginBtn) {
+            await bootFirebase();
+            if (typeof window.firebaseSignIn !== 'function' || !window.firebaseAuth) {
+                showToast('Authentication Failed', 'error');
+                return;
+            }
+            const cred = await window.firebaseSignIn(window.firebaseAuth, email, password);
+            const signedEmail = cred?.user?.email || email;
+            if (!isAdminEmail(signedEmail)) {
+                try { await window.firebaseSignOut?.(window.firebaseAuth); } catch { /* ignore */ }
+                applyAdminAuthedChrome(false);
+                showToast('Not an operator account', 'error');
+                return;
+            }
+
+            closeSmoothModal('login-modal', true);
+            passInput.value = '';
+
+            const ok = await openAdminEntryAfterAuth();
+            if (!ok) return;
+
+            try {
+                if (window.PasswordCredential && navigator.credentials?.store) {
+                    navigator.credentials.store(new window.PasswordCredential({
+                        id: email,
+                        password,
+                        name: email,
+                    })).catch(() => {});
+                }
+            } catch { /* Credential Management optional */ }
+            showToast('Welcome back!', 'success');
+        } catch (error) {
+            const code = error?.code || 'unknown';
+            showToast(`Authentication Failed (${code})`, 'error');
+            console.error('Guardian Login Error:', error);
+        } finally {
+            spinner?.classList.add('hidden');
             loginBtn.disabled = false;
-            loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
-        if (spinner) spinner.classList.add('hidden');
-        if (emailInput) setTimeout(() => emailInput.focus(), 150);
-        fillAdminPasswordFromDevice();
-    }
+    });
 }
 
 /**
- * Arms the 5-tap title unlock. Does NOT fetch admin.js until unlocked.
+ * Arms the 5-tap title unlock. Opens login chrome only — does NOT fetch admin.js
+ * until allowlisted credentials succeed (or an allowlisted session already exists).
  */
 function armAdminUnlock() {
     const appTitle = document.getElementById('app-title');
@@ -303,15 +411,18 @@ function armAdminUnlock() {
         clickCount = 0;
 
         triggerHaptic?.();
-        showToast('Loading admin tools…', 'info', 1500);
-        const admin = await ensureAdminLoaded();
-        if (!admin) {
-            showToast('Admin tools unavailable', 'error', 2500);
+        prepareAdminShell();
+        await bootFirebase();
+
+        if ($isSimMode.get() || currentAllowlistedUser()) {
+            showToast('Loading admin tools…', 'info', 1500);
+            await openAdminEntryAfterAuth();
             return;
         }
-        // Hand off to Admin's own title listener for future taps.
-        appTitle.removeEventListener('click', onUnlockTap);
-        openAdminEntryUi();
+
+        bindBridgeLoginControls();
+        showToast('Operator sign-in', 'info', 1500);
+        openLoginModal();
     };
 
     appTitle.addEventListener('click', onUnlockTap);
@@ -324,5 +435,5 @@ export function initAdminBridge() {
     if (typeof window === 'undefined') return;
     window.ensureAdminLoaded = ensureAdminLoaded;
     armAdminUnlock();
-    // Silent until the 5-tap title backdoor loads admin.js
+    // Silent until 5-tap; admin.js only after allowlisted sign-in
 }

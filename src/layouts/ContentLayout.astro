@@ -23,6 +23,12 @@ interface Props {
   bodyClass?: string;
   htmlClass?: string;
   robots?: string;
+  /** GA4 / Clarity SEO dimensions (corridor, route, region, index, …). */
+  seoPageType?: string;
+  seoSlug?: string;
+  seoRegion?: string;
+  seoCorridor?: string;
+  seoRouteId?: string;
 }
 
 const base = normalizeBase(import.meta.env.BASE_URL);
@@ -42,6 +48,11 @@ const {
   bodyClass = '',
   htmlClass = '',
   robots = 'index, follow',
+  seoPageType = '',
+  seoSlug = '',
+  seoRegion = '',
+  seoCorridor = '',
+  seoRouteId = '',
 } = Astro.props;
 
 const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
@@ -156,7 +167,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     </script>
 
     <!-- Device identity is not required on SEO pages; idle-defer GA4 so LCP keeps the pipe -->
-    <script is:inline>
+    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId }}>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       var gaConfig = {};
@@ -169,7 +180,21 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       } catch(e) {}
       if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
       gaConfig['user_properties'] = { crm_region: userRegion };
+      // Stable SEO dimensions on every page_view for this document.
+      if (seoPageType) gaConfig['seo_page_type'] = String(seoPageType);
+      if (seoSlug) gaConfig['seo_slug'] = String(seoSlug);
+      if (seoRegion) gaConfig['seo_region'] = String(seoRegion);
+      else gaConfig['seo_region'] = userRegion;
+      if (seoCorridor) gaConfig['seo_corridor'] = String(seoCorridor);
+      if (seoRouteId) gaConfig['seo_route_id'] = String(seoRouteId);
       window.__ntGaConfig = gaConfig;
+      window.__ntSeoAnalytics = {
+        seo_page_type: seoPageType || '',
+        seo_slug: seoSlug || '',
+        seo_region: seoRegion || userRegion,
+        seo_corridor: seoCorridor || '',
+        seo_route_id: seoRouteId || ''
+      };
       var bootGa = function () {
         if (window.__ntGaBooted) return;
         window.__ntGaBooted = true;
@@ -179,6 +204,11 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         s.onload = function () {
           window.__ntGaReady = true;
           try { window.dispatchEvent(new Event('nt-ga-ready')); } catch (e) {}
+          try {
+            if (seoPageType && typeof gtag === 'function') {
+              gtag('event', 'seo_page_view', window.__ntSeoAnalytics || {});
+            }
+          } catch (e) {}
         };
         s.onerror = function () { window.__ntGaBooted = false; };
         document.head.appendChild(s);
@@ -190,7 +220,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     </script>
 
     <!-- Microsoft Clarity — same idle deferral as GA4 (timeout 4s) -->
-    <script is:inline>
+    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId }}>
       var bootClarity = function () {
         if (window.__ntClarityBooted) return;
         window.__ntClarityBooted = true;
@@ -208,6 +238,14 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           if (id && typeof clarity === 'function') {
             clarity('identify', id);
             clarity('set', 'custom_id', id);
+          }
+          if (typeof clarity === 'function') {
+            if (seoPageType) clarity('set', 'seo_page_type', String(seoPageType));
+            if (seoSlug) clarity('set', 'seo_slug', String(seoSlug));
+            if (seoRegion) clarity('set', 'seo_region', String(seoRegion));
+            if (seoCorridor) clarity('set', 'seo_corridor', String(seoCorridor));
+            if (seoRouteId) clarity('set', 'seo_route_id', String(seoRouteId));
+            if (seoPageType) clarity('event', 'seo_page_view');
           }
         } catch (e) {}
       };

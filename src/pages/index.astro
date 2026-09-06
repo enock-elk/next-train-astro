@@ -161,30 +161,16 @@ const faqLd = {
         <div id="nt-ad-scroll-host" aria-hidden="true"></div>
         <Header />
 
-        <!-- Production: Next Train + Trip Planner only. Lab: Community top tab visible for testing. -->
-        <div id="app-top-tabs" class="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-30 relative" role="tablist" aria-label="Primary">
-            <button id="tab-next-train" class="tab-btn active" type="button" role="tab" aria-selected="true">
-                Next Train
-            </button>
-            <button id="tab-trip-planner" class="tab-btn" type="button" role="tab" aria-selected="false">
-                Trip Planner
-            </button>
-            <button id="tab-map" class="tab-btn" type="button" role="tab" aria-selected="false">
-                Map
-            </button>
-            <button
-                id="tab-community"
-                class:list={['tab-btn', { hidden: import.meta.env.PUBLIC_LAB_MODE !== 'true' }]}
-                type="button"
-                role="tab"
-                tabindex={import.meta.env.PUBLIC_LAB_MODE === 'true' ? 0 : -1}
-                aria-hidden={import.meta.env.PUBLIC_LAB_MODE === 'true' ? 'false' : 'true'}
-                aria-selected="false"
-            >
+        <!-- Legacy top tabs: kept in DOM for switchTab/aria only. Product chrome is bottom-nav. -->
+        <div id="app-top-tabs" class="hidden" hidden aria-hidden="true" role="tablist" aria-label="Primary">
+            <button id="tab-next-train" class="tab-btn active" type="button" role="tab" tabindex="-1" aria-selected="true">Next Train</button>
+            <button id="tab-trip-planner" class="tab-btn" type="button" role="tab" tabindex="-1" aria-selected="false">Trip Planner</button>
+            <button id="tab-map" class="tab-btn" type="button" role="tab" tabindex="-1" aria-selected="false">Map</button>
+            <button id="tab-community" class="tab-btn hidden" type="button" role="tab" tabindex="-1" aria-hidden="true" aria-selected="false">
                 Community
                 <span id="community-unread-badge-top" class="hidden">0</span>
             </button>
-            <div id="tab-sliding-indicator" class="absolute bottom-0 h-0.5 bg-blue-600 dark:bg-blue-400 transition-all duration-300 ease-out z-10 w-1/2 left-0"></div>
+            <div id="tab-sliding-indicator" class="hidden" aria-hidden="true"></div>
         </div>
 
         <div id="developer-reply-banner" class="hidden bg-gray-900 dark:bg-black text-white w-full shadow-md z-20 shrink-0 relative transition-all duration-300">

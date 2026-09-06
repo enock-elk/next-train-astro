@@ -1,5 +1,6 @@
 /**
  * Fetch regional schedule sheets and extract a compact grid preview.
+ * Column order must match the in-app full grid (orderGridTrainIds / MANUAL_GRID_ORDER).
  */
 
 import { orderGridTrainIds } from '../../../src/lib/grid-order.js';
@@ -10,6 +11,9 @@ const REGION_NODE = {
   KZN: 'schedules/kzn.json',
   EC: 'schedules/easterncape.json',
 };
+
+/** Same train-id filter as renderer.js full grid. */
+const TRAIN_COL_RE = /^\d{4}[a-zA-Z]*$/;
 
 function compactTime(t) {
   const s = String(t || '').trim();
@@ -54,12 +58,18 @@ function getSheet(db, key) {
   return null;
 }
 
-function unionTrainIds(dataRows) {
+/**
+ * Train columns the same way as the in-app grid: every 4-digit id present on the sheet.
+ * (Do not invent an alternate earliest-time order — orderGridTrainIds owns sequence.)
+ */
+function collectTrainIds(dataRows) {
   const ids = new Set();
   for (const row of dataRows) {
     if (!row || typeof row !== 'object') continue;
     for (const k of Object.keys(row)) {
-      if (!IGNORE_KEYS.has(k)) ids.add(k);
+      if (IGNORE_KEYS.has(k)) continue;
+      const id = String(k).trim();
+      if (TRAIN_COL_RE.test(id)) ids.add(id);
     }
   }
   return [...ids];
@@ -73,7 +83,8 @@ function rowHasClock(row, trainIds) {
 }
 
 /**
- * Full-sheet preview for OG art (all trains × all stations by default).
+ * Full-sheet preview for OG art — all trains × all stations by default,
+ * columns in MANUAL_GRID_ORDER (same as #grid).
  * @returns {{ stations: string[], trainIds: string[], cells: string[][], meta: string|null } | null}
  */
 export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStations = 0) {
@@ -87,19 +98,19 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStatio
   const dataRows = rows.filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)));
   if (!dataRows.length) return null;
 
-  const orderedIds = orderGridTrainIds(key, unionTrainIds(dataRows), dataRows);
+  const orderedIds = orderGridTrainIds(key, collectTrainIds(dataRows), dataRows);
   const totalTrains = orderedIds.length;
   const clockRows = dataRows.filter((row) => rowHasClock(row, orderedIds));
   const totalStations = clockRows.length;
-  const trainCap = maxTrains > 0 ? maxTrains : 48;
-  const stationCap = maxStations > 0 ? maxStations : 40;
-  const trainIds = orderedIds.slice(0, trainCap);
+  // 0 = unlimited (product: dense OG cards may show every train on the sheet).
+  const trainIds = maxTrains > 0 ? orderedIds.slice(0, maxTrains) : orderedIds;
   if (!trainIds.length) return null;
 
+  const stationLimit = maxStations > 0 ? maxStations : Number.POSITIVE_INFINITY;
   const stations = [];
   const cells = [];
   for (const row of clockRows) {
-    if (stations.length >= stationCap) break;
+    if (stations.length >= stationLimit) break;
     const name = String(row.STATION || '')
       .replace(/\s+STATION$/i, '')
       .replace(/\s+/g, ' ')

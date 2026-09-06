@@ -583,11 +583,16 @@ async function submitFeedback() {
         return;
     }
     if (safety.verdict === 'review') {
+        const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
+        const hasFile = !!(fileInput?.files?.length);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone;
         await queueAutoModeration({
             source: 'feedback',
             reason: safety.reason,
             body: text,
             routeId: $currentRouteId.get() || null,
+            deviceId,
+            contact: email || null,
             publish: {
                 kind: 'feedback',
                 payload: {
@@ -599,14 +604,22 @@ async function submitFeedback() {
                     routeId: $currentRouteId.get() || 'none',
                     region: $userRegion.get() || 'GP',
                     timestamp: Date.now(),
-                    deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
+                    userAgent: navigator.userAgent,
+                    deviceId,
+                    isPWA: isStandalone,
+                    // Held messages are text-only for v1 (attachments not uploaded on hold).
+                    attachmentsHeld: hasFile,
                 },
             },
         });
         recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
         showToast(safety.message, 'info');
         const hint = document.getElementById('feedback-mod-hint');
-        if (hint) hint.textContent = safety.message;
+        if (hint) {
+            hint.textContent = hasFile
+                ? `${safety.message} (Attachments were not held — resend them after approval if needed.)`
+                : safety.message;
+        }
         return;
     }
 
@@ -1927,11 +1940,15 @@ export function initHub() {
             return;
         }
         if (safety.verdict === 'review') {
+            const deviceId = getThreadDeviceId() || 'unknown';
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone;
             await queueAutoModeration({
                 source: 'feedback_thread',
                 reason: safety.reason,
                 body: text,
                 routeId: $currentRouteId.get() || null,
+                deviceId,
+                contact: email || null,
                 publish: {
                     kind: 'feedback',
                     payload: {
@@ -1943,7 +1960,10 @@ export function initHub() {
                         routeId: $currentRouteId.get() || 'none',
                         region: $userRegion.get() || 'GP',
                         timestamp: Date.now(),
-                        deviceId: getThreadDeviceId() || 'unknown',
+                        userAgent: navigator.userAgent,
+                        deviceId,
+                        isPWA: isStandalone,
+                        attachmentsHeld: hasFile,
                     },
                 },
             });
@@ -1951,7 +1971,11 @@ export function initHub() {
             if (input) input.value = '';
             showToast(safety.message, 'info');
             const hint = document.getElementById('messages-thread-hint');
-            if (hint) hint.textContent = safety.message;
+            if (hint) {
+                hint.textContent = hasFile
+                    ? `${safety.message} (Attachments were not held — resend them after approval if needed.)`
+                    : safety.message;
+            }
             return;
         }
         if (sendBtn) sendBtn.disabled = true;

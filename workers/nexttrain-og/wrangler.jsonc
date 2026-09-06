@@ -8,10 +8,11 @@
     { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true },
     { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
   ],
-  "workers_dev": true,
+  "workers_dev": false,
   // Production host: nexttrain.co.za (orange-cloud → GitHub Pages / metrorail-app).
   // Human traffic uses fetch(request) → Cloudflare origin (no ORIGIN_URL loop).
   // ORIGIN_URL is kept as documentation of the live Pages project only.
+  // workers_dev left off — deploy uses zone routes below; no *.workers.dev needed.
   "vars": {
     "PUBLIC_SITE": "https://nexttrain.co.za",
     "ORIGIN_URL": "https://enock-elk.github.io/metrorail-app",

@@ -76,12 +76,11 @@ function getRouteFare(sheetKey) {
 
     // Off-peak 09:30–14:30 on weekdays only (unless FARE_CONFIG.offPeakEveryDay).
     const applyOffPeakEveryDay = FARE_CONFIG.offPeakEveryDay === true;
-    let isWeekdaySheet = (currentDayType === 'weekday' || currentDayType === 'monday');
-    if (sheetKey) {
-        isWeekdaySheet = sheetKey.includes('weekday');
-    }
+    // Calendar day wins — Sunday must not inherit weekday off-peak via sheetKey.
+    let dayAllowsOffPeak = applyOffPeakEveryDay
+        || (currentDayType === 'weekday' || currentDayType === 'monday');
 
-    if (applyOffPeakEveryDay || isWeekdaySheet) {
+    if (dayAllowsOffPeak) {
         let checkH, checkM;
 
         // GUARDIAN PHASE 2A: Decouple Off-Peak pricing from individual train departures.

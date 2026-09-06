@@ -210,9 +210,11 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
     const validJourneys = allJourneys.filter((j) => isRealTime(j.departureTime || j.train1?.departureTime));
     if (destination) currentScheduleData[destination] = validJourneys;
     const nowInSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
-    const remaining = validJourneys.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
+    // Cancelled / no-service columns still appear in Upcoming; live board skips them.
+    const runnable = validJourneys.filter((j) => !j.isExcluded && !j.exclusionType);
+    const remaining = runnable.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
     const nextJourney = remaining[0] || null;
-    const firstTrainName = validJourneys.length > 0 ? (validJourneys[0].train || validJourneys[0].train1.train) : null;
+    const firstTrainName = runnable.length > 0 ? (runnable[0].train || runnable[0].train1.train) : null;
 
     if (nextJourney && window.Renderer) {
         const journeyTrainName = nextJourney.train || nextJourney.train1.train;
@@ -222,7 +224,7 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         window.Renderer.renderJourney(element, nextJourney, destination);
         import('./delay-reports.js').then((m) => m.hydrateTrainReportSlots(element)).catch(() => {});
         import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
-    } else if (validJourneys.length === 0) {
+    } else if (runnable.length === 0 && validJourneys.length === 0) {
         const dayType = (typeof window !== 'undefined' && window.currentDayType) ? window.currentDayType : 'weekday';
         if (dayType === 'saturday' && !routeHasSaturdayService() && typeof window.renderNoWeekendService === 'function') {
             window.renderNoWeekendService(element, destination);
@@ -479,6 +481,10 @@ export function updateNextTrainView() {
         } else {
             title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight';
         }
+        try {
+            if (route?.name) safeStorage.setItem('nt_last_route_label', labelPlain);
+            else safeStorage.removeItem('nt_last_route_label');
+        } catch { /* ignore */ }
     }
 
     // Parent corridor under home route pill (all regions)
@@ -619,18 +625,25 @@ export function openScheduleModal(destination, dayOverride = null) {
         const dep = j.departureTime || j.train1?.departureTime;
         const trainName = j.train || j.train1?.train;
         const type = j.type === 'transfer' ? 'Transfer' : 'Direct';
+        const exclusionType = j.exclusionType || (j.isExcluded ? 'banned' : null);
         const depSeconds = timeToSeconds(dep);
         let isPassed = false;
         if (!dayOverride) isPassed = depSeconds < nowSeconds;
 
         let divClass = 'p-3 rounded shadow-sm flex justify-between items-center transition-opacity duration-300';
-        divClass += isPassed
-            ? ' bg-gray-50 dark:bg-gray-800 opacity-50 grayscale'
-            : ' bg-white dark:bg-gray-700';
+        if (exclusionType && exclusionType !== 'special') {
+            divClass += ' bg-red-50 dark:bg-red-900/20 opacity-90';
+        } else if (exclusionType === 'special') {
+            divClass += ' bg-green-50 dark:bg-green-900/20 opacity-95';
+        } else {
+            divClass += isPassed
+                ? ' bg-gray-50 dark:bg-gray-800 opacity-50 grayscale'
+                : ' bg-white dark:bg-gray-700';
+        }
 
         const div = document.createElement('div');
         div.className = divClass;
-        if (!isPassed && !firstNextTrainFound && !dayOverride) {
+        if (!exclusionType && !isPassed && !firstNextTrainFound && !dayOverride) {
             div.id = 'next-train-marker';
             firstNextTrainFound = true;
         }
@@ -661,7 +674,11 @@ export function openScheduleModal(destination, dayOverride = null) {
             }
         }
 
-        if (sharedTag) {
+        if (exclusionType === 'special') {
+            rightPillHTML = '<span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">Special</span>';
+        } else if (exclusionType) {
+            rightPillHTML = '<span class="text-[10px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap border border-red-200 dark:border-red-800">No service</span>';
+        } else if (sharedTag) {
             rightPillHTML = sharedTag;
         } else if (type === 'Direct') {
             rightPillHTML = isShortTrip
@@ -679,19 +696,43 @@ export function openScheduleModal(destination, dayOverride = null) {
             rightPillHTML = `<span class="text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase text-right leading-tight whitespace-nowrap">${escapeHTML(transferLabel)}</span>`;
         }
 
-        if (j.isLastTrain) {
+        if (!exclusionType && j.isLastTrain) {
             rightPillHTML += ' <span class="text-[10px] font-bold text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-900 px-2 py-0.5 rounded-full uppercase border border-red-200 dark:border-red-800 ml-1">LAST TRAIN</span>';
         }
 
+        const trainLabelClass = exclusionType && exclusionType !== 'special'
+            ? 'text-xs text-red-600 dark:text-red-400'
+            : 'text-xs text-gray-500 dark:text-gray-400';
+        const depClass = exclusionType && exclusionType !== 'special'
+            ? 'text-lg font-bold text-red-700 dark:text-red-300 line-through decoration-red-400/80'
+            : 'text-lg font-bold text-gray-900 dark:text-white';
+
         div.innerHTML = `
             <div>
-                <span class="text-lg font-bold text-gray-900 dark:text-white">${escapeHTML(formattedDep)}</span>
-                <div class="text-xs text-gray-500 dark:text-gray-400">Train ${escapeHTML(String(trainName || ''))}</div>
+                <span class="${depClass}">${escapeHTML(formattedDep)}</span>
+                <div class="${trainLabelClass}">Train ${escapeHTML(String(trainName || ''))}</div>
             </div>
             <div class="flex flex-col items-end gap-1 text-right shrink-0">
                 ${rightPillHTML}
             </div>
         `;
+        if (exclusionType && exclusionType !== 'special') {
+            div.setAttribute('role', 'button');
+            div.tabIndex = 0;
+            div.setAttribute('aria-label', `Why train ${trainName} has no service`);
+            const openExcl = () => {
+                if (typeof window.openTrainExclusionSheet === 'function') {
+                    window.openTrainExclusionSheet(routeId, String(trainName || ''), targetDayIdx);
+                }
+            };
+            div.addEventListener('click', openExcl);
+            div.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openExcl();
+                }
+            });
+        }
         modalList.appendChild(div);
     });
 
@@ -804,7 +845,6 @@ export function initLiveBoardUi() {
                 trackAnalyticsEvent('click_pin_route', { action: 'pin', route_id: routeId });
                 showToast('Route pinned!', 'success', 2000);
                 updatePinUI();
-                import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
             }
         });
     }

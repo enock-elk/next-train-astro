@@ -783,23 +783,14 @@ function visibleViewportRect() {
     return { top, height, bottom: top + height };
 }
 
-/** Scroll a planner field to the top of the visible viewport so its list can open downward. */
-function keepPlannerFieldVisible(field) {
-    if (!field || typeof document === 'undefined') return;
-    const scroller = document.getElementById('app-scroll');
-    if (!scroller) return;
-    const vis = visibleViewportRect();
-    const targetTop = vis.top + 8;
-    const rect = field.getBoundingClientRect();
-    const delta = rect.top - targetTop;
-    if (Math.abs(delta) > 2) scroller.scrollTop += delta;
-}
-
 function keyboardOpen() {
     return typeof document !== 'undefined' && document.documentElement.classList.contains('nt-keyboard');
 }
 
-/** Open the planner list below the trigger, filling space down to the keyboard. */
+/**
+ * Size the open list under the field (legacy SPA behaviour).
+ * Do not scroll #app-scroll / the focused input — that jump was confusing on mobile.
+ */
 function positionDropdownAroundTrigger(list, trigger, maxHeight = 240) {
     if (!list || !trigger || list.classList.contains('hidden')) return;
     const vis = visibleViewportRect();
@@ -962,7 +953,6 @@ export function toggleMainDayDropdown(e) {
     const list = document.getElementById('main-day-list');
     if (list && !list.classList.contains('hidden')) {
         const trigger = list.previousElementSibling;
-        if (keyboardOpen()) keepPlannerFieldVisible(trigger);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, trigger, 256));
     }
 }
@@ -1163,28 +1153,19 @@ export function hidePlannerResults() {
     try { renderPlannerHistory(); } catch { /* ignore */ }
 }
 
-/** Open network map in-app (never hard-nav to /map.html) so Back restores planner results. */
+/** Open GPS map tab in-app (never hard-nav to /map.html) so Back restores planner results. */
 export function openPlannerNetworkMap() {
     if (typeof triggerHaptic === 'function') triggerHaptic();
     const resultsSection = document.getElementById('planner-results-section');
     if (resultsSection) resultsSection.classList.remove('hidden');
-    // Ensure results hash is under the map entry
     if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#map') {
         try { history.pushState({ view: 'planner-results' }, '', '#planner-results'); } catch { /* ignore */ }
     }
     try {
         sessionStorage.setItem('nt_map_from_planner', '1');
     } catch { /* ignore */ }
-    const closeBtn2 = document.getElementById('close-map-btn-2');
-    if (closeBtn2 && !closeBtn2.dataset.plannerReturnLabel) {
-        closeBtn2.dataset.plannerReturnLabel = closeBtn2.textContent || 'Close Map';
-        closeBtn2.textContent = 'Back to trip';
-    }
-    if (typeof openSmoothModal === 'function') openSmoothModal('map-modal');
-    else if (typeof window.setupMapLogic === 'function') {
-        window.setupMapLogic();
-        document.getElementById('view-map-btn')?.click();
-    }
+    // GPS Leaflet map (#view-map) — allowed from planner even when Map nav is operator-only.
+    switchTab('map', { allowHiddenTabs: true });
 }
 
 function capturePlannerSnapshot(extra = {}) {
@@ -3553,7 +3534,6 @@ export function setupAutocomplete(inputId, selectId) {
         }
 
         list.classList.remove('hidden');
-        keepPlannerFieldVisible(input);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     };
 
@@ -3565,13 +3545,11 @@ export function setupAutocomplete(inputId, selectId) {
     
     input.addEventListener('focus', () => {
         input.select();
-        keepPlannerFieldVisible(input);
         requestAnimationFrame(() => renderList(''));
     });
 
     window.visualViewport?.addEventListener('resize', () => {
         if (list.classList.contains('hidden')) return;
-        keepPlannerFieldVisible(input);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     }, { passive: true });
     
@@ -4289,8 +4267,38 @@ export async function shareCurrentGrid() {
 export function executeManualRollover(origin, dest) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
 
-    // GUARDIAN PHASE 2: Silent DOM Sync for Dropdown (SPA parity)
-    if (typeof window.getLookaheadDayInfo === 'function') {
+    // Weekend / no-service sheets: land on the next weekday with trains, not
+    // "tomorrow" (often still Saturday/Sunday), which re-shows the same error.
+    const day = selectedPlannerDay || getCurrentDayType();
+    const weekendish = day === 'saturday' || day === 'public_holiday' || day === 'sunday'
+        || currentPlannerStatus === 'ERR_NO_SATURDAY_SERVICE';
+
+    let rolloverOffset = 1;
+    if (weekendish && typeof window.getLookaheadDayInfo === 'function') {
+        // Keep dayType aligned with "today" so planUnifiedTrip does not treat
+        // weekday as an explicit override (which freezes the search day).
+        selectedPlannerDay = getCurrentDayType();
+        if (selectedPlannerDay === 'sunday') selectedPlannerDay = 'weekday';
+        const display = document.getElementById('main-day-display');
+        if (display) display.textContent = 'Weekday (Mon-Fri)';
+        const mList = document.getElementById('main-day-list');
+        if (mList) {
+            mList.querySelectorAll('li').forEach((li) => {
+                li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                if ((li.textContent || '').includes('Weekday')) {
+                    li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                }
+            });
+        }
+        for (let i = 1; i <= 7; i++) {
+            const info = window.getLookaheadDayInfo(i);
+            if (info && info.type === 'weekday') {
+                rolloverOffset = i;
+                break;
+            }
+        }
+    } else if (typeof window.getLookaheadDayInfo === 'function') {
+        // GUARDIAN PHASE 2: Silent DOM Sync for Dropdown (SPA parity)
         const nextDayInfo = window.getLookaheadDayInfo(1);
         if (nextDayInfo) {
             selectedPlannerDay = nextDayInfo.type;
@@ -4313,6 +4321,7 @@ export function executeManualRollover(origin, dest) {
     }
 
     window._forceManualRollover = true;
+    window._plannerRolloverOffset = rolloverOffset;
     executeTripPlan(origin, dest);
 }
 

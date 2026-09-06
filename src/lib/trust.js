@@ -317,23 +317,36 @@ export function checkContentSafety(text, opts = {}) {
 
 /**
  * Hold unsure text for an admin. Not shown publicly until approved.
- * @param {{ source: string, reason?: string, body: string, routeId?: string, targetUid?: string, publish?: object }} opts
+ * @param {{ source: string, reason?: string, body: string, routeId?: string, targetUid?: string, deviceId?: string, contact?: string, publish?: object }} opts
  */
 export async function queueAutoModeration(opts = {}) {
     const reportId = `mq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const pubPayload = opts.publish?.payload && typeof opts.publish.payload === 'object'
+        ? opts.publish.payload
+        : null;
+    const deviceId = opts.deviceId
+        || pubPayload?.deviceId
+        || $deviceId.get()
+        || safeStorage.getItem('next_train_device_id')
+        || null;
+    const contact = opts.contact
+        || pubPayload?.email
+        || null;
     const payload = {
         reportId,
         type: 'auto_hold',
         source: opts.source || 'unknown',
         reason: opts.reason || 'unsure',
-        routeId: opts.routeId || null,
+        routeId: opts.routeId || pubPayload?.routeId || null,
         targetUid: opts.targetUid || null,
-        targetPostId: opts.publish?.payload?.postId || opts.publish?.payload?.replyId || null,
+        targetPostId: pubPayload?.postId || pubPayload?.replyId || null,
+        deviceId: deviceId || null,
+        contact: contact ? String(contact).slice(0, 120) : null,
         snippet: String(opts.body || '').slice(0, 280),
         body: String(opts.body || '').slice(0, 800),
         publish: opts.publish || null,
         reportedByUid: opts.targetUid || null,
-        reportedByDeviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || null,
+        reportedByDeviceId: deviceId || null,
         timestamp: Date.now(),
         status: 'open',
         appVersion: APP_VERSION,

@@ -275,22 +275,8 @@ export function maybeNotifyVerifiedDelay(agg, ctx = {}) {
 }
 
 export async function maybeOfferCorridorAlerts() {
-    if (getNotifyPref()) return false;
-    if (typeof window === 'undefined') return false;
-    try {
-        const { promptOnTrainSheet } = await import('./map-tab.js');
-        const pick = await promptOnTrainSheet({
-            title: 'Alerts for this corridor?',
-            body: 'Get a ping for official notices and confirmed delays. We won’t notify when someone just shares a location.',
-            primary: 'Turn on alerts',
-            secondary: 'Not now',
-        });
-        if (pick !== 'primary') return false;
-        await enablePushNotifications();
-        return true;
-    } catch {
-        return false;
-    }
+    // Hidden until corridor push alerts ship to commuters.
+    return false;
 }
 
 if (typeof window !== 'undefined') {

@@ -105,6 +105,11 @@ const related = [
   ogImageWidth="3000"
   ogImageHeight="1575"
   twitterCard="summary_large_image"
+  seoPageType="route"
+  seoSlug={seed.slug}
+  seoRegion={route.region}
+  seoCorridor={lineLabel || ''}
+  seoRouteId={route.id}
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoPageHeader region={route.region} regionLabel={province} ctaHref={liveBoardHref} />

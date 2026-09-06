@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa7';
+const OG_IMAGE_CACHE_BUST = 'wa9';
 
 function esc(s) {
   return String(s ?? '')
@@ -60,8 +60,9 @@ function withImageCacheBust(imgUrl) {
 }
 
 export function buildRouteOgMeta(route, intent, site, grid = null) {
-  const origin = stationLabel(intent.dir === 'B' ? route.destB : route.destA);
-  const dest = stationLabel(intent.dir === 'B' ? route.destA : route.destB);
+  // dir A = toward destA (sheet *_to_a). Title must match travel direction.
+  const origin = stationLabel(intent.dir === 'B' ? route.destA : route.destB);
+  const dest = stationLabel(intent.dir === 'B' ? route.destB : route.destA);
   const day = dayLabel(intent.day);
   // Keep title short — WhatsApp truncates aggressively in the compact card.
   const title = `${origin} → ${dest} · ${day}`;

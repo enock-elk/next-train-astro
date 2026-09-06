@@ -47,6 +47,9 @@ const jsonLd = {
   canonicalPath={canonicalPath}
   themeColor="#1d4ed8"
   forceLight={true}
+  seoPageType="region"
+  seoSlug={entry.slug}
+  seoRegion={entry.region}
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoPageHeader region={entry.region} regionLabel={entry.regionLabel} />

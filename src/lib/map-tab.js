@@ -18,6 +18,12 @@ import { trainGoingLabel, trainGoingFullLabel } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 
 /**
+ * Map / board “Share my location” UI. Off until the feature ships to commuters.
+ * Flip to true (and re-show MapView / nearby controls) when releasing.
+ */
+export const LIVE_LOCATION_SHARE_UI_ENABLED = false;
+
+/**
  * A train stays linkable for 30 minutes either side of its scheduled time —
  * Metrorail delays routinely run that long, so a tighter window would reject
  * the riders who are most worth hearing from.
@@ -1404,6 +1410,7 @@ function stopPingsPolling() {
 }
 
 export function openContributePicker() {
+    if (!LIVE_LOCATION_SHARE_UI_ENABLED) return;
     import('./ride-pings.js').then((m) => m.startPresenceShare({ source: 'map_presence' })).catch(() => {
         triggerHaptic();
         showContributeSheet();
@@ -1649,7 +1656,7 @@ export function activateMapTab() {
     ensureFrameSrc();
     setStatus(lastCoords
         ? `Located · ±${Math.round(lastCoords.accuracy || 0)} m`
-        : 'People sharing on this corridor');
+        : 'Network overview');
     if (frameLoaded) {
         postToMap({ type: 'nt-map-locate' });
         syncRidePingsToMap();
@@ -1666,6 +1673,17 @@ export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
     exposeEmbedBridge();
+
+    // Hide share controls until LIVE_LOCATION_SHARE_UI_ENABLED ships.
+    if (!LIVE_LOCATION_SHARE_UI_ENABLED) {
+        ['map-tab-contribute-btn', 'map-tab-share-btn', 'map-contribute-sheet', 'nt-nearby-presence'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.add('hidden');
+            el.setAttribute('hidden', '');
+            el.setAttribute('aria-hidden', 'true');
+        });
+    }
 
     document.getElementById('map-tab-contribute-btn')?.addEventListener('click', () => {
         openContributePicker();
@@ -1685,6 +1703,7 @@ export function bindMapTabUi() {
         if (e.target?.id === 'nt-nearby-trains-modal') hideNearbyTrainsModal();
     });
     document.getElementById('nt-nearby-presence')?.addEventListener('click', async () => {
+        if (!LIVE_LOCATION_SHARE_UI_ENABLED) return;
         hideNearbyTrainsModal();
         const { getActiveShare, startPresenceShare } = await import('./ride-pings.js');
         if (getActiveShare()) return;

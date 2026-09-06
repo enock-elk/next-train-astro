@@ -16,7 +16,7 @@
 
             <button type="button" id="route-selector-btn" class="flex flex-col items-center justify-center w-full h-full px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none group min-w-0">
                 <h2 id="route-subtitle-text" class="text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate w-full text-center leading-tight">
-                    Choose a route
+                    …
                 </h2>
                 <span id="route-corridor-label" class="hidden text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate w-full text-center leading-none mt-0.5"></span>
             </button>
@@ -134,3 +134,18 @@
         <!-- Terms / Privacy / copyright now live at the bottom of About & Legal (sidenav). -->
     </div>
 </div>
+
+<script is:inline>
+  // Early route label so returning users never flash "Choose a route"
+  (function () {
+    try {
+      var el = document.getElementById('route-subtitle-text');
+      if (!el) return;
+      var label = localStorage.getItem('nt_last_route_label');
+      if (label && label.trim()) {
+        el.textContent = label.trim();
+        el.title = label.trim();
+      }
+    } catch (e) { /* keep ellipsis */ }
+  })();
+</script>

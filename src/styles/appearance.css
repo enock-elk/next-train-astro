@@ -460,9 +460,13 @@ html, body, #nt-shell {
   -webkit-backdrop-filter: none;
 }
 
-#app-top-tabs {
-  background-color: var(--nt-chrome-header);
-  border-color: var(--nt-chrome-header-border);
+#app-top-tabs,
+#app-top-tabs[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }
 
 #bottom-nav.bottom-nav-bar {

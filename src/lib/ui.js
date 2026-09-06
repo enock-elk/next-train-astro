@@ -1243,10 +1243,11 @@ export function setImmersiveChrome(on) {
     bottomNav.setAttribute('aria-hidden', 'false');
 }
 
-export function switchTab(tab) {
+export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
 
-    if ((tab === 'map' || tab === 'community') && !isAdminAuthed()) {
+    const allowHiddenTabs = !!(opts && opts.allowHiddenTabs);
+    if ((tab === 'map' || tab === 'community') && !isAdminAuthed() && !allowHiddenTabs) {
         tab = 'next-train';
     }
 
@@ -1397,8 +1398,10 @@ export function setupSwipeNavigation() {
                 switchTab(order[Math.max(0, idx - 1)]);
                 return;
             }
-            // Commuter: swipe left on Trip Planner opens Options (side nav).
-            if (!operator && safeCur === 'trip-planner') {
+            // Last content tab: swipe forward opens Options (side nav).
+            // Commuter last tab is Trip Planner; operator last tab is Community (or Map).
+            const lastTab = order[order.length - 1];
+            if (safeCur === lastTab) {
                 import('./hub.js').then((m) => m.openAppHub?.()).catch(() => {});
                 return;
             }

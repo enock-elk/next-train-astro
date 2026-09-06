@@ -55,10 +55,10 @@ async function handleOgTimetable(url, env, ctx) {
   const wantSvg = url.searchParams.get('format') === 'svg';
 
   const origin = route
-    ? stationLabel(dir === 'B' ? route.destB : route.destA)
+    ? stationLabel(dir === 'B' ? route.destA : route.destB)
     : 'Metrorail';
   const dest = route
-    ? stationLabel(dir === 'B' ? route.destA : route.destB)
+    ? stationLabel(dir === 'B' ? route.destB : route.destA)
     : 'Next Train';
 
   let grid = null;

@@ -846,7 +846,7 @@ import { withBase } from '../lib/config.js';
         <div id="nt-nearby-list" class="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-2 min-h-[8rem]"></div>
         <p id="nt-nearby-empty" class="hidden px-5 py-6 text-sm font-semibold text-gray-500 dark:text-gray-400 text-center">No trains in the next 30 minutes on this corridor.</p>
         <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
-            <button type="button" id="nt-nearby-presence" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Just show where I am</button>
+            <button type="button" id="nt-nearby-presence" hidden inert aria-hidden="true" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Just show where I am</button>
             <button type="button" id="nt-nearby-dismiss" class="w-full py-2.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Close</button>
         </div>
     </div>

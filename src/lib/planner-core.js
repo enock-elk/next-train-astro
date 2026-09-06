@@ -1292,9 +1292,11 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
     let startOffset = 0;
 
     if (typeof window !== 'undefined' && window._forceManualRollover) {
-        console.log("[GUARDIAN] Manual Rollover Intercepted. Pushing startOffset to 1.");
-        startOffset = 1;
-        window._forceManualRollover = false; 
+        const forced = Number(window._plannerRolloverOffset);
+        startOffset = Number.isFinite(forced) && forced > 0 ? forced : 1;
+        console.log("[GUARDIAN] Manual Rollover Intercepted. Pushing startOffset to", startOffset);
+        window._forceManualRollover = false;
+        window._plannerRolloverOffset = 0;
     }
 
     const isExplicitOverride = (dayType === 'weekday' || dayType === 'saturday' || dayType === 'public_holiday') && dayType !== getCurrentDayType();
@@ -1326,7 +1328,9 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
 
     const satClass = classifySaturdayPlaceholderTrip(origin, dest, dayType, $fullDatabase.get());
 
-    if (satClass?.kind === 'NO_SERVICE') {
+    // Manual "See next day" already advanced past the closed weekend sheet — do not
+    // re-trap on ERR_NO_SATURDAY_SERVICE before the weekday search runs.
+    if (satClass?.kind === 'NO_SERVICE' && startOffset === 0) {
         return {
             status: 'ERR_NO_SATURDAY_SERVICE',
             errorPayload: saturdayNoServicePayload(satClass.routeId, origin, dest),

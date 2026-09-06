@@ -66,10 +66,10 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
   const totalStations = Number(grid?.totalStations || stationCount);
   const trainBit = totalTrains > trainCount
     ? `Showing ${trainCount} of ${totalTrains} trains`
-    : `${trainCount} trains`;
+    : `${trainCount} ${trainCount === 1 ? 'train' : 'trains'}`;
   const stationBit = totalStations > stationCount
     ? `${stationCount} of ${totalStations} stations`
-    : `${stationCount} stations`;
+    : `${stationCount} ${stationCount === 1 ? 'station' : 'stations'}`;
   const subtitle =
     trainCount && stationCount
       ? `${day} timetable · ${trainBit} · ${stationBit}`
@@ -77,26 +77,26 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
 
   let gridBody = '';
   if (grid && grid.stations?.length && grid.trainIds?.length) {
-    const padX = 14;
+    const padX = 10;
     const trains = grid.trainIds;
     const stations = grid.stations;
     // Slim station col so many train columns fit; density is the point.
-    const stationW = trains.length >= 24 ? 88 : trains.length >= 16 ? 110 : 150;
+    const stationW = trains.length >= 28 ? 72 : trains.length >= 18 ? 96 : trains.length >= 12 ? 120 : 150;
     const tableInnerW = W - padX * 2;
-    const colW = Math.max(10, Math.floor((tableInnerW - stationW) / trains.length));
+    const colW = Math.max(8, Math.floor((tableInnerW - stationW) / trains.length));
     const tableW = stationW + trains.length * colW;
     const left = Math.round((W - tableW) / 2);
     const top = 118;
     const footerTop = 598;
     const availH = footerTop - top;
-    const rowH = Math.max(14, Math.floor(availH / (1 + stations.length)));
+    const rowH = Math.max(12, Math.floor(availH / (1 + stations.length)));
     const tableH = rowH * (1 + stations.length);
     const textY = Math.round(rowH * 0.72);
     // Tiny type on purpose — users should see the grid fabric, not read every cell.
-    const timeFont = colW >= 36 ? 11 : colW >= 24 ? 9 : colW >= 16 ? 7 : 6;
-    const stationFont = Math.min(12, Math.max(7, rowH - 4));
-    const headFont = Math.min(timeFont, 9);
-    const stationChars = stationW >= 140 ? 16 : stationW >= 100 ? 12 : 9;
+    const timeFont = colW >= 36 ? 11 : colW >= 24 ? 9 : colW >= 16 ? 7 : colW >= 12 ? 6 : 5;
+    const stationFont = Math.min(12, Math.max(6, rowH - 4));
+    const headFont = Math.min(timeFont + 1, 9);
+    const stationChars = stationW >= 140 ? 16 : stationW >= 100 ? 12 : stationW >= 80 ? 10 : 8;
 
     // Row bands (not per-cell rects) — cheaper SVG + smaller PNG for dense sheets.
     let bands = `<rect x="${left}" y="${top}" width="${tableW}" height="${rowH}" fill="#1e3a8a"/>`;
@@ -105,17 +105,19 @@ export function buildTimetableSvg({ origin, dest, day, grid }) {
       bands += `<rect x="${left}" y="${y}" width="${tableW}" height="${rowH}" fill="${ri % 2 === 0 ? '#f8fafc' : '#e2e8f0'}"/>`;
     });
 
-    let headerText = `<text x="${left + 6}" y="${top + textY}" fill="#93c5fd" font-size="${headFont}" font-family="${FONT}" font-weight="700">STN</text>`;
+    let headerText = `<text x="${left + 4}" y="${top + textY}" fill="#93c5fd" font-size="${headFont}" font-family="${FONT}" font-weight="700">STN</text>`;
     trains.forEach((id, i) => {
       const x = left + stationW + i * colW + colW / 2;
-      const label = colW >= 22 ? String(id).slice(-4) : String(id).slice(-3);
+      // Always prefer full 4-digit id so OG matches the in-app grid headers.
+      const raw = String(id);
+      const label = colW >= 14 ? raw.slice(0, 4) : raw.slice(-3);
       headerText += `<text x="${x}" y="${top + textY}" fill="#dbeafe" font-size="${headFont}" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(label)}</text>`;
     });
 
     let bodyText = '';
     stations.forEach((st, ri) => {
       const y = top + rowH + ri * rowH + textY;
-      bodyText += `<text x="${left + 5}" y="${y}" fill="#0f172a" font-size="${stationFont}" font-family="${FONT}" font-weight="700">${esc(truncate(st, stationChars))}</text>`;
+      bodyText += `<text x="${left + 4}" y="${y}" fill="#0f172a" font-size="${stationFont}" font-family="${FONT}" font-weight="700">${esc(truncate(st, stationChars))}</text>`;
       (grid.cells[ri] || []).forEach((t, ci) => {
         if (ci >= trains.length) return;
         const x = left + stationW + ci * colW + colW / 2;

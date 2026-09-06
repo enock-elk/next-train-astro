@@ -8,11 +8,28 @@ import { DYNAMIC_BASE_URL, SPECIAL_DATES } from './config.js';
 export const HOLIDAY_APPROVAL_ENFORCE_FROM = '2026-08-11';
 
 export const HOLIDAY_DAY_TYPE_OPTIONS = [
-    { value: 'public_holiday', label: 'Public Holiday' },
-    { value: 'saturday', label: 'Saturday' },
-    { value: 'weekday', label: 'Weekday' },
+    { value: 'public_holiday', label: 'Public Holiday sheets (WC)' },
+    { value: 'saturday', label: 'Saturday sheets' },
+    { value: 'weekday', label: 'Weekday sheets' },
     { value: 'sunday', label: 'Sunday (no service)' },
 ];
+
+/** Per-region options matching schedule sheet reality (only WC has *_pub). */
+export function holidayDayTypeOptionsForRegion(regionCode) {
+    if (regionCode === 'WC') {
+        return [
+            { value: 'public_holiday', label: 'Public Holiday sheets' },
+            { value: 'saturday', label: 'Saturday sheets' },
+            { value: 'weekday', label: 'Weekday sheets' },
+            { value: 'sunday', label: 'Sunday (no service)' },
+        ];
+    }
+    return [
+        { value: 'saturday', label: 'Saturday sheets (holiday default)' },
+        { value: 'weekday', label: 'Weekday sheets' },
+        { value: 'sunday', label: 'Sunday (no service)' },
+    ];
+}
 
 let cachedApprovals = null;
 let loadPromise = null;

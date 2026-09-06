@@ -346,8 +346,10 @@ export function applyNavChrome(style = getNavStyle()) {
     const topTabs = document.getElementById('app-top-tabs');
     const bottomNav = document.getElementById('bottom-nav');
     if (topTabs) {
-        topTabs.classList.toggle('hidden', isBottom);
-        topTabs.setAttribute('aria-hidden', isBottom ? 'true' : 'false');
+        // Product chrome is bottom-only — never flash the legacy top tab strip.
+        topTabs.classList.add('hidden');
+        topTabs.setAttribute('hidden', '');
+        topTabs.setAttribute('aria-hidden', 'true');
     }
     if (bottomNav) {
         const immersive = document.body?.classList.contains('nt-immersive');

@@ -18,7 +18,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
         <div class="shrink-0 px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between gap-2">
             <div class="min-w-0">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Network map</p>
-                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">You and other riders sharing right now</p>
+                <p id="map-tab-status" class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">Network overview</p>
             </div>
             <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                 <button
@@ -32,7 +32,10 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                 <button
                     type="button"
                     id="map-tab-contribute-btn"
-                    class="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    hidden
+                    inert
+                    aria-hidden="true"
+                    class="hidden inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     title="Share a rough location for 10 minutes"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>

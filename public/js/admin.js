@@ -59,6 +59,77 @@
  * * GUARDIAN PHASE 14 [09 Jul 2026]: Resolved a malformed URL typo inside 'viewContextAlert' that threw unhandled exceptions during the disruption graveyard sweep.
  * * GUARDIAN PHASE 15 [10 Jul 2026]: Appended standard route-status cues directly to the drop-down selectors by cross-referencing live Firebase payloads.
 */
+
+/** Local datetime-local value for that calendar day at 23:59 (admin expiry default). */
+function ntAdminEndOfTodayLocalValue(now) {
+    const d = now instanceof Date ? now : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}T23:59`;
+}
+
+/** Format a timestamp as a local datetime-local value (YYYY-MM-DDTHH:mm). */
+function ntAdminToLocalDatetimeValue(ms) {
+    if (ms == null || ms === '') return '';
+    const d = new Date(Number(ms));
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}:${mi}`;
+}
+
+function ntAdminNormalizeAlertSources(parsed) {
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item, i) => ({
+        id: String(item && item.id ? item.id : `src_${i}`).replace(/[^a-zA-Z0-9_-]/g, '') || `src_${i}`,
+        name: String(item && item.name != null ? item.name : '').trim(),
+        url: String(item && item.url != null ? item.url : '').trim(),
+    })).filter((item) => item.name);
+}
+
+function ntAdminUpsertAlertSource(list, name, url, existingId) {
+    const cleanName = String(name || '').trim();
+    const cleanUrl = String(url || '').trim();
+    const next = Array.isArray(list) ? list.slice() : [];
+    if (!cleanName) return { ok: false, list: next, source: null };
+    const byId = existingId ? next.find((s) => s.id === existingId) : null;
+    const byName = next.find((s) => s.name.toLowerCase() === cleanName.toLowerCase());
+    const target = byId || byName;
+    if (target) {
+        target.name = cleanName;
+        target.url = cleanUrl;
+        return { ok: true, list: next, source: target };
+    }
+    let id = `src_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    while (next.some((s) => s.id === id)) {
+        id = `src_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+    const source = {
+        id,
+        name: cleanName,
+        url: cleanUrl,
+    };
+    next.push(source);
+    return { ok: true, list: next, source };
+}
+
+function ntAdminDeleteAlertSource(list, id) {
+    return (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
+}
+
+function ntAdminMatchAlertSource(list, name, url) {
+    const n = String(name || '').trim().toLowerCase();
+    const u = String(url || '').trim();
+    if (!n && !u) return null;
+    return (Array.isArray(list) ? list : []).find((s) =>
+        (n && s.name.toLowerCase() === n) || (u && s.url && s.url === u)
+    ) || null;
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -102,6 +173,30 @@ const Admin = {
         }
         return s;
     },
+
+    endOfTodayLocalValue: (now) => ntAdminEndOfTodayLocalValue(now),
+    toLocalDatetimeValue: (ms) => ntAdminToLocalDatetimeValue(ms),
+    ALERT_SOURCES_KEY: 'nt_admin_alert_sources',
+    loadSavedAlertSources: () => {
+        try {
+            const raw = localStorage.getItem(Admin.ALERT_SOURCES_KEY);
+            return ntAdminNormalizeAlertSources(raw ? JSON.parse(raw) : []);
+        } catch {
+            return [];
+        }
+    },
+    persistSavedAlertSources: (list) => {
+        const next = ntAdminNormalizeAlertSources(list);
+        try { localStorage.setItem(Admin.ALERT_SOURCES_KEY, JSON.stringify(next)); } catch { /* quota */ }
+        return next;
+    },
+    upsertSavedAlertSource: (name, url, existingId) => {
+        const result = ntAdminUpsertAlertSource(Admin.loadSavedAlertSources(), name, url, existingId);
+        if (result.ok) Admin.persistSavedAlertSources(result.list);
+        return result;
+    },
+    deleteSavedAlertSource: (id) => Admin.persistSavedAlertSources(ntAdminDeleteAlertSource(Admin.loadSavedAlertSources(), id)),
+    matchSavedAlertSource: (name, url) => ntAdminMatchAlertSource(Admin.loadSavedAlertSources(), name, url),
 
     /** SVG bidirectional arrow for route labels (matches app formatRouteLabelHtml). */
     routeArrowSvg: (className = 'inline-block w-3.5 h-3.5 mx-0.5 align-middle text-current shrink-0') =>
@@ -9382,6 +9477,7 @@ const Admin = {
                 checkClose('alert-target-container', 'alert-target-panel', 'alert-target-chevron');
                 checkClose('alert-severity-container', 'alert-severity-list', 'alert-severity-chevron');
                 checkClose('alert-poster-container', 'alert-poster-list', 'alert-poster-chevron');
+                checkClose('alert-source-saved-container', 'alert-source-saved-list', 'alert-source-saved-chevron');
                 document.querySelectorAll('[data-nt-font-select]').forEach((wrap) => {
                     if (!wrap.contains(e.target)) wrap.querySelector('ul')?.classList.add('hidden');
                 });
@@ -9399,13 +9495,14 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
+        const ALERT_PANEL_REV = 'alerts-refine-v2';
         if (
-            alertPanel.dataset.adminLoaded === "true"
-            && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]'))
+            alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
+            && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
         ) {
             delete alertPanel.dataset.adminLoaded;
         }
-        if (alertPanel.dataset.adminLoaded === "true" && !alertShellEmpty) {
+        if (alertPanel.dataset.adminLoaded === ALERT_PANEL_REV && !alertShellEmpty) {
             return;
         }
         // Rebuild tile chrome — mark loaded only after HTML lands (prevents permanent blank grid card)
@@ -9427,7 +9524,9 @@ const Admin = {
                     <button type="button" id="alert-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Archive</button>
                 </div>
 
-                <div id="alert-compose-pane" class="space-y-4">
+                <div id="alert-compose-pane" class="space-y-3">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">1. Audience</p>
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Target audience</label>
                     <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2 leading-snug">Pick any mix of the whole network, regions, and routes. The same alert is posted to each.</p>
@@ -9467,18 +9566,10 @@ const Admin = {
                         <input type="text" id="alert-signoff" class="w-full h-10 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. Next Train Ops" value="Next Train Ops">
                     </div>
                 </div>
-
-                <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-200 dark:border-blue-800">
-                    <div>
-                        <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force Popup Alert</span>
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens the Alerts channel once</p>
-                    </div>
-                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                        <input type="checkbox" id="alert-force-popup" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
-                        <label for="alert-force-popup" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                    </div>
                 </div>
 
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">2. Message</p>
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
@@ -9503,39 +9594,34 @@ const Admin = {
                     </div>
                     <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
-
-
-                <!-- SUPERCHARGED: Data Source (HIDDEN IN ADVANCED TOGGLE) -->
-                <div class="mt-2 border-t border-gray-100 dark:border-gray-700 pt-3">
-                    <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between focus:outline-none">
-                        <span class="inline-flex items-center gap-1.5">${Admin.icon('note', 'w-3.5 h-3.5')} Add Data Source (Advanced)</span>
-                        <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="alert-source-body" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-inner">
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Source Name</label>
-                            <input type="text" id="alert-source-name" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="e.g. PRASA Official Twitter">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Source URL (Optional)</label>
-                            <input type="text" id="alert-source-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://...">
-                        </div>
-                    </div>
                 </div>
 
-                <!-- SUPERCHARGED: Interactive Poll Manager -->
-                <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 mt-2">
-                    <div>
-                        <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
-                        <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Add commuter voting buttons</p>
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">3. Options</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-200 dark:border-blue-800">
+                            <div>
+                                <span class="font-bold text-blue-800 dark:text-blue-200 text-sm">Force Popup Alert</span>
+                                <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Auto-opens the Alerts channel once</p>
+                            </div>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" id="alert-force-popup" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                                <label for="alert-force-popup" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                            <div>
+                                <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
+                                <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Add commuter voting buttons</p>
+                            </div>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" id="alert-poll-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                                <label for="alert-poll-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                        <input type="checkbox" id="alert-poll-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
-                        <label for="alert-poll-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                    </div>
-                </div>
 
-                <div id="alert-poll-container" class="hidden space-y-3 bg-purple-50/50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/50 mt-2">
+                <div id="alert-poll-container" class="hidden space-y-3 bg-purple-50/50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/50">
                     <div>
                         <label class="block text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase mb-1">Poll Question</label>
                         <input type="text" id="alert-poll-question" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Would you use a Dark Mode feature?">
@@ -9566,14 +9652,54 @@ const Admin = {
                         </div>
                     </div>
                 </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Time</label>
-                    <input type="datetime-local" id="alert-duration-custom" class="w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
-                    <p class="text-[9px] text-gray-400 mt-1">For one-shot posts: when this live notice expires. Recurring jobs use the duration below instead.</p>
                 </div>
 
-                <div class="mt-1 border border-indigo-200 dark:border-indigo-800 rounded-xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-900/10">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <button type="button" id="alert-source-toggle-btn" class="w-full text-left text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center justify-between focus:outline-none">
+                        <span class="inline-flex items-center gap-1.5">${Admin.icon('note', 'w-3.5 h-3.5')} 4. Add Data Source (Advanced)</span>
+                        <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="alert-source-body" class="space-y-3">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Pick a saved name and link, or type a new one and tap Save source. Saved on this device only.</p>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Saved sources</label>
+                            <div class="relative" id="alert-source-saved-container">
+                                <select id="alert-source-saved" class="hidden">
+                                    <option value="">New source…</option>
+                                </select>
+                                <button type="button" id="alert-source-saved-toggle" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
+                                    <span id="alert-source-saved-display" class="truncate text-left">New source…</span>
+                                    <svg id="alert-source-saved-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <ul id="alert-source-saved-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-48 overflow-y-auto custom-scrollbar text-left"></ul>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Source Name</label>
+                                <input type="text" id="alert-source-name" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="e.g. PRASA Official Twitter">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Source URL (Optional)</label>
+                                <input type="text" id="alert-source-url" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="https://...">
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" id="alert-source-save-btn" class="flex-1 h-9 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider focus:outline-none">Save source</button>
+                            <button type="button" id="alert-source-delete-btn" class="h-9 px-3 rounded-lg bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-[10px] font-black uppercase tracking-wider focus:outline-none">Remove saved</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">5. Timing</p>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Time</label>
+                    <input type="datetime-local" id="alert-duration-custom" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                    <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. For one-shot posts: when this live notice expires. Recurring jobs use the duration below instead.</p>
+                </div>
+
+                <div class="border border-indigo-200 dark:border-indigo-800 rounded-xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-900/10">
                     <button type="button" id="alert-recur-toggle-btn" class="w-full px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 flex items-center justify-between focus:outline-none">
                         <span>Recurring schedule (optional)</span>
                         <svg id="alert-recur-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -9611,6 +9737,7 @@ const Admin = {
                         <p id="alert-schedule-preview" class="text-[10px] font-medium text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-2.5 py-2 border border-indigo-100 dark:border-indigo-900/40 leading-snug">Set first run &amp; duration to preview.</p>
                         <button type="button" id="alert-schedule-save-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md focus:outline-none">Add to Schedule</button>
                     </div>
+                </div>
                 </div>
 
                 <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -9724,7 +9851,7 @@ const Admin = {
         delete alertPanel.dataset.adminShell;
         alertPanel.removeAttribute('aria-hidden');
         alertPanel.classList.remove('hidden');
-        alertPanel.dataset.adminLoaded = "true";
+        alertPanel.dataset.adminLoaded = "alerts-refine-v2";
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -9752,6 +9879,106 @@ const Admin = {
         const srcChevron = document.getElementById('alert-source-chevron');
         const sourceNameInput = document.getElementById('alert-source-name');
         const sourceUrlInput = document.getElementById('alert-source-url');
+        const sourceSavedSelect = document.getElementById('alert-source-saved');
+        const sourceSavedDisplay = document.getElementById('alert-source-saved-display');
+        const sourceSavedList = document.getElementById('alert-source-saved-list');
+        const sourceSavedToggle = document.getElementById('alert-source-saved-toggle');
+        const sourceSavedChevron = document.getElementById('alert-source-saved-chevron');
+        const sourceSaveBtn = document.getElementById('alert-source-save-btn');
+        const sourceDeleteBtn = document.getElementById('alert-source-delete-btn');
+
+        const applySavedSourceToFields = (id) => {
+            const src = Admin.loadSavedAlertSources().find((s) => s.id === id);
+            if (src) {
+                if (sourceNameInput) sourceNameInput.value = src.name;
+                if (sourceUrlInput) sourceUrlInput.value = src.url;
+            }
+        };
+
+        const renderSavedSourceDropdown = (selectedId) => {
+            const sources = Admin.loadSavedAlertSources();
+            const wanted = selectedId != null ? selectedId : (sourceSavedSelect ? sourceSavedSelect.value : '');
+            const sel = sources.some((s) => s.id === wanted) ? wanted : '';
+            if (sourceSavedSelect) {
+                sourceSavedSelect.innerHTML = '';
+                const newOpt = document.createElement('option');
+                newOpt.value = '';
+                newOpt.textContent = 'New source…';
+                sourceSavedSelect.appendChild(newOpt);
+                sources.forEach((s) => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.name;
+                    sourceSavedSelect.appendChild(opt);
+                });
+                sourceSavedSelect.value = sel;
+            }
+            if (sourceSavedDisplay) {
+                const current = sources.find((s) => s.id === sel);
+                sourceSavedDisplay.textContent = current ? current.name : 'New source…';
+            }
+            if (sourceSavedList) {
+                sourceSavedList.innerHTML = '';
+                const addItem = (id, label) => {
+                    const li = document.createElement('li');
+                    li.setAttribute('data-src-id', id);
+                    li.className = 'px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer';
+                    li.textContent = label;
+                    li.addEventListener('click', () => {
+                        if (sourceSavedSelect) sourceSavedSelect.value = id;
+                        if (id) applySavedSourceToFields(id);
+                        renderSavedSourceDropdown(id);
+                        sourceSavedList.classList.add('hidden');
+                        sourceSavedChevron?.classList.remove('rotate-180');
+                    });
+                    sourceSavedList.appendChild(li);
+                };
+                addItem('', 'New source…');
+                sources.forEach((s) => addItem(s.id, s.name));
+            }
+        };
+
+        const syncSourceDropdownFromFields = () => {
+            const match = Admin.matchSavedAlertSource(sourceNameInput?.value, sourceUrlInput?.value);
+            renderSavedSourceDropdown(match ? match.id : '');
+        };
+
+        renderSavedSourceDropdown('');
+        if (sourceSavedToggle && sourceSavedToggle.dataset.bound !== '1') {
+            sourceSavedToggle.dataset.bound = '1';
+            sourceSavedToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = sourceSavedList && sourceSavedList.classList.toggle('hidden') === false;
+                sourceSavedChevron?.classList.toggle('rotate-180', !!open);
+            });
+        }
+        if (sourceSaveBtn) {
+            sourceSaveBtn.onclick = () => {
+                const result = Admin.upsertSavedAlertSource(
+                    sourceNameInput ? sourceNameInput.value : '',
+                    sourceUrlInput ? sourceUrlInput.value : '',
+                    sourceSavedSelect ? sourceSavedSelect.value : ''
+                );
+                if (!result.ok) {
+                    if (typeof showToast === 'function') showToast('Add a source name before saving.', 'error');
+                    return;
+                }
+                renderSavedSourceDropdown(result.source ? result.source.id : '');
+                if (typeof showToast === 'function') showToast('Source saved on this device.', 'success');
+            };
+        }
+        if (sourceDeleteBtn) {
+            sourceDeleteBtn.onclick = () => {
+                const id = sourceSavedSelect ? sourceSavedSelect.value : '';
+                if (!id) {
+                    if (typeof showToast === 'function') showToast('Pick a saved source to remove.', 'info');
+                    return;
+                }
+                Admin.deleteSavedAlertSource(id);
+                renderSavedSourceDropdown('');
+                if (typeof showToast === 'function') showToast('Removed saved source.', 'info');
+            };
+        }
 
         const pollToggle = document.getElementById('alert-poll-toggle');
         const pollContainer = document.getElementById('alert-poll-container');
@@ -9965,9 +10192,7 @@ const Admin = {
 
             if (item.expiresAt && dateInput) {
                 const floor = mode === 'review' ? item.expiresAt : Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000);
-                const expiryDate = new Date(floor);
-                expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset());
-                dateInput.value = expiryDate.toISOString().slice(0, 16);
+                dateInput.value = Admin.toLocalDatetimeValue(floor);
             }
             if (severitySelect) {
                 severitySelect.value = item.severity || 'info';
@@ -9980,6 +10205,11 @@ const Admin = {
             if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
             if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
             if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
+            syncSourceDropdownFromFields();
+            if ((item.sourceName || item.sourceUrl) && srcBody) {
+                srcBody.classList.remove('hidden');
+                srcChevron?.classList.remove('-rotate-90');
+            }
 
             Admin.setSelectedAlertPosters(Admin.collectAlertImageUrls(item));
 
@@ -10332,10 +10562,7 @@ const Admin = {
             Admin.addAlertPoster(path);
         });
 
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
-        if(dateInput) dateInput.value = now.toISOString().slice(0, 16);
+        if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 
         sendBtn.onclick = async () => {
             let msg = alertMsg.innerHTML.trim();
@@ -10358,7 +10585,7 @@ const Admin = {
                 msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
 
-            let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : Date.now() + (2 * 3600 * 1000);
+            let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : new Date(Admin.endOfTodayLocalValue()).getTime();
 
             const optCVal = pollToggle.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
                 ? (pollOptC.value.trim() || null)
@@ -10412,6 +10639,10 @@ const Admin = {
                     Admin._reviewPostedAt = null;
                     Admin.setSelectedAlertPosters([]);
                     if (alertMsg) alertMsg.innerHTML = '';
+                    if (sourceNameInput) sourceNameInput.value = '';
+                    if (sourceUrlInput) sourceUrlInput.value = '';
+                    renderSavedSourceDropdown('');
+                    if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
                     if (ok && typeof showToast === 'function') {
                         const label = ok === 1 ? Admin.alertTargetLabel(targets[0]) : `${ok} targets`;
                         showToast(isUpdate ? `Alert updated on ${label}` : (isRepost ? `Alert reposted to ${label}` : `Alert posted to ${label}`), 'success');
@@ -10478,6 +10709,10 @@ const Admin = {
                 existingAlertId = null;
                 alertMsg.innerHTML = "";
                 signoffInput.value = "Next Train Ops";
+                if (sourceNameInput) sourceNameInput.value = '';
+                if (sourceUrlInput) sourceUrlInput.value = '';
+                renderSavedSourceDropdown('');
+                if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
                 forcePopupToggle.checked = false;
                 pollToggle.checked = false;
                 pollContainer.classList.add('hidden');
@@ -11302,11 +11537,7 @@ const Admin = {
         }
         populateStations();
 
-        // Default Expiry (48 hours)
-        const now = new Date();
-        now.setHours(now.getHours() + 48);
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
-        expiryInput.value = now.toISOString().slice(0, 16);
+        if (expiryInput) expiryInput.value = Admin.endOfTodayLocalValue();
 
         Admin.fetchDisruptions = async (rId) => {
             if (!rId) return;
@@ -11456,10 +11687,7 @@ const Admin = {
                             const reviveEditor = document.getElementById('disr-msg');
                             if (reviveEditor) reviveEditor.innerHTML = data.message || data.longExplanation || '';
                             
-                            const now = new Date();
-                            now.setHours(now.getHours() + 48);
-                            now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
-                            document.getElementById('disr-expiry').value = now.toISOString().slice(0, 16);
+                            document.getElementById('disr-expiry').value = Admin.endOfTodayLocalValue();
                             
                             document.getElementById('disr-body').scrollIntoView({ behavior: 'smooth', block: 'start' });
                             if (typeof showToast === 'function') showToast("Ready to deploy. Review details and click Deploy.", "success");
@@ -11529,8 +11757,8 @@ const Admin = {
             alertPanel.parentNode.appendChild(exclPanel);
         }
 
-        if (exclPanel.dataset.adminLoaded === "excl-both-dirs-v1") return;
-        exclPanel.dataset.adminLoaded = "excl-both-dirs-v1";
+        if (exclPanel.dataset.adminLoaded === "excl-refine-v2") return;
+        exclPanel.dataset.adminLoaded = "excl-refine-v2";
 
         exclPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
@@ -11545,6 +11773,8 @@ const Admin = {
             
             <div id="excl-body" class="hidden mt-4 space-y-3">
                 <div id="excl-review-banner" class="hidden text-[10px] leading-snug px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-200"></div>
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">1. Route</p>
                 <div class="relative w-full" id="excl-route-container">
                     <select id="excl-route" class="hidden"></select>
                     <div onclick="document.getElementById('excl-route-list').classList.toggle('hidden'); document.getElementById('excl-route-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
@@ -11553,28 +11783,30 @@ const Admin = {
                     </div>
                     <ul id="excl-route-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
                 </div>
+                </div>
 
-                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Route-Wide Grid Notice</label>
+                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300">2. Timetable grid banner</p>
+                    <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
+                    <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner text</label>
                     <div class="flex space-x-2">
                         <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
-                    <!-- GUARDIAN PHASE 1: Ephemerality & Export Controls for Grid Notices -->
-                    <div class="flex items-center justify-between mt-2">
-                        <div class="flex-1 pr-2">
-                            <label class="block text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Expiry Date (Optional)</label>
-                            <input type="datetime-local" id="excl-grid-notice-expiry" class="w-full h-8 px-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded text-xs text-gray-900 dark:text-white outline-none">
-                        </div>
-                        <label class="flex items-center cursor-pointer mt-3">
-                            <input type="checkbox" id="excl-grid-notice-export" checked class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0">
-                            <span class="text-[9px] font-bold text-blue-800 dark:text-blue-300 ml-1.5 uppercase tracking-wide">Show on download image</span>
-                        </label>
+                    <div>
+                        <label class="block text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner expiry</label>
+                        <input type="datetime-local" id="excl-grid-notice-expiry" class="w-full h-10 px-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
+                        <p class="text-[9px] text-blue-600 dark:text-blue-400 mt-1">Defaults to today at 23:59. Clear the field for no auto-expiry.</p>
                     </div>
-                    <p class="text-[9px] text-blue-600 dark:text-blue-400 mt-2 border-t border-blue-200 dark:border-blue-800/50 pt-1.5">Displays a banner directly inside the full timetable grid.</p>
+                    <label class="flex items-start cursor-pointer gap-2 pt-1 border-t border-blue-200 dark:border-blue-800/50">
+                        <input type="checkbox" id="excl-grid-notice-export" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Include banner on downloaded PNG</span>
+                    </label>
                 </div>
 
-                <div class="flex space-x-2 mt-2">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">3. Train exceptions</p>
+                <div class="flex space-x-2">
                     <div class="relative w-2/3" id="excl-schedule-type-container">
                         <select id="excl-schedule-type" class="hidden">
                             <option value="weekday">Weekday Schedule</option>
@@ -11635,21 +11867,23 @@ const Admin = {
                 </div>
 
                 <input id="excl-reason" type="text" placeholder="Reason (e.g. Testing, Easter)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
+                </div>
                 
-                <div class="mt-2 mb-3 space-y-2">
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-gray-50 dark:bg-gray-900">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">4. How this exception appears</p>
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-white dark:bg-gray-800">
                         <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Live board</p>
                         <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Ban / Special always hides or marks the train in the app board and planner for the days you pick.</p>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Date & Time (Optional)</label>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Live expiry</label>
                         <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
-                        <p class="text-[9px] text-gray-400 mt-1">If set, the train automatically returns after this date.</p>
+                        <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. If set, the train automatically returns after this date. Clear the field for no auto-return.</p>
                     </div>
                     <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 bg-white dark:bg-gray-800">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-1">Downloaded grid image</p>
-                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Separate from the live board. Only controls the red NO SVC (or SPL) tag on the PNG you download.</p>
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-1">Downloaded PNG train tag</p>
+                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Not the timetable banner above. This only stamps the red NO SVC or green SPL tag on that train in the PNG you download.</p>
                         <label class="flex items-start cursor-pointer gap-2">
                             <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
-                            <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">Show NO SVC / SPL tag on export image</span>
+                            <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">Include NO SVC / SPL tag on downloaded PNG</span>
                         </label>
                     </div>
                 </div>
@@ -11672,6 +11906,10 @@ const Admin = {
         
         const noticeInput = document.getElementById('excl-grid-notice');
         const noticeSaveBtn = document.getElementById('excl-save-notice-btn');
+        const exclExpiryInputInit = document.getElementById('excl-expiry');
+        const exclNoticeExpiryInit = document.getElementById('excl-grid-notice-expiry');
+        if (exclExpiryInputInit) exclExpiryInputInit.value = Admin.endOfTodayLocalValue();
+        if (exclNoticeExpiryInit) exclNoticeExpiryInit.value = Admin.endOfTodayLocalValue();
 
         const schedTypeSelect = document.getElementById('excl-schedule-type');
 
@@ -12140,11 +12378,9 @@ const Admin = {
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
                     if (noticeExpiryInput) {
                         if (data._grid_notice.expiresAt) {
-                            const ed = new Date(data._grid_notice.expiresAt);
-                            ed.setMinutes(ed.getMinutes() - ed.getTimezoneOffset());
-                            noticeExpiryInput.value = ed.toISOString().slice(0, 16);
+                            noticeExpiryInput.value = Admin.toLocalDatetimeValue(data._grid_notice.expiresAt);
                         } else {
-                            noticeExpiryInput.value = "";
+                            noticeExpiryInput.value = Admin.endOfTodayLocalValue();
                         }
                     }
                     
@@ -12156,11 +12392,7 @@ const Admin = {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
                     if (noticeExpiryInput) {
-                        // GUARDIAN PHASE 1: 24-Hour Default Time-Bomb
-                        const defaultExpiry = new Date();
-                        defaultExpiry.setHours(defaultExpiry.getHours() + 24);
-                        defaultExpiry.setMinutes(defaultExpiry.getMinutes() - defaultExpiry.getTimezoneOffset());
-                        noticeExpiryInput.value = defaultExpiry.toISOString().slice(0, 16);
+                        noticeExpiryInput.value = Admin.endOfTodayLocalValue();
                     }
                     const noticeExportToggle = document.getElementById('excl-grid-notice-export');
                     if (noticeExportToggle) noticeExportToggle.checked = true;
@@ -12290,7 +12522,7 @@ const Admin = {
                 renderExclStaging();
                 exclTrainInputs().forEach((cb) => { cb.checked = false; });
                 document.getElementById('excl-train-manual').value = '';
-                document.getElementById('excl-expiry').value = ''; 
+                document.getElementById('excl-expiry').value = Admin.endOfTodayLocalValue(); 
                 fetchExclusions();
                 if (typeof loadAllSchedules === 'function') loadAllSchedules();
             } catch (e) {
@@ -14387,12 +14619,7 @@ const Admin = {
             return d.toISOString().slice(0, 16);
         };
 
-        const defaultMaintExpiryValue = () => {
-            const now = new Date();
-            now.setHours(23, 59, 0, 0);
-            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-            return now.toISOString().slice(0, 16);
-        };
+        const defaultMaintExpiryValue = () => Admin.endOfTodayLocalValue();
 
         const resetMaintComposer = () => {
             if (maintMsg) maintMsg.value = '';

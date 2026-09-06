@@ -88,6 +88,8 @@ assert(
 );
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+assert(mapApp.includes('"MIDWAY", "LENZ"'), 'JHB Midway/Lenz static path continues Midway then Lenz');
+assert(mapApp.includes('"LENZ": [-26.319519733948702, 27.82296719973482]'), 'Lenz has timetable coordinates');
 assert(mapApp.includes('"NDABENI", "PINELANDS", "HAZENDAL"'), 'Cape Flats static path is Ndabeni then Pinelands then Hazendal');
 assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line is Avoca then Duff\'s Road');
 assert(!mapApp.includes('"AVOCA", "TEMPLE"'), 'Avoca is not followed by Temple');
@@ -228,6 +230,14 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
         regionHops > 0 && regionChords / regionHops <= MAX_REGION_CHORD_SHARE,
         `${region} is straight for ${regionChords} of ${regionHops} hops; the bake is not following rail`
     );
+}
+
+{
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const midway = gp.features.find((f) => f.properties?.routeId === 'jhb-midway');
+    const names = midway?.properties?.stationNames || [];
+    assert(names.includes('MIDWAY') && names.includes('LENZ'), 'jhb-midway bake includes Midway and Lenz');
+    assert(names[names.length - 1] === 'LENZ', 'jhb-midway bake ends at Lenz');
 }
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');

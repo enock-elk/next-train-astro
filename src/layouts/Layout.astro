@@ -758,9 +758,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
          the screen. --nt-app-h is layout height (not visualViewport) so html
          and body fill the layout (no white slab). --nt-shell-* pin the frame
          to the visible hole so NEXT TRAIN sits below the URL bar and the
-         oval sits on the visual bottom. Do not pad a tray under the floating
-         pill. 100svh fallback keeps first paint on-screen before JS measures
-         the visible frame. Do not transform #nt-shell. */
+         oval sits on the visual bottom. While the IME is open those tokens
+         follow the live visual hole so Community sits on the keys. Do not
+         pad a tray under the floating pill. 100svh fallback keeps first
+         paint on-screen before JS measures. Do not transform #nt-shell. */
       #nt-shell {
         top: var(--nt-shell-top, 0px);
         height: var(--nt-shell-h, var(--nt-app-h, 100svh)) !important;

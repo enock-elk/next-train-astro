@@ -5,12 +5,12 @@
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-start justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
 
-    <div class="min-w-0 flex-1 header-brand-block">
+    <div class="min-w-0 shrink-0 header-brand-block">
         <h1 id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black text-blue-600 dark:text-blue-400 select-none cursor-pointer tracking-[-0.035em] leading-none">
             Next Train
         </h1>
-        <div class="header-meta mt-1 min-w-0 w-full">
-            <p id="current-day" class="header-day-label font-bold leading-snug">Getting schedules…</p>
+        <div class="header-meta mt-1.5 min-w-0">
+            <p id="current-day" class="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 leading-tight">Getting schedules…</p>
             <!-- Sim clock only — diagnostic, shown by logic.js when $isSimMode -->
             <p id="current-time" class="hidden mt-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400 tabular-nums" aria-hidden="true"></p>
             <p id="last-updated-date-hidden" class="hidden text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mt-0.5"></p>
@@ -45,23 +45,22 @@
         if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();
         else {
           var title = document.getElementById('app-title');
-          var titlePx = title ? parseFloat(window.getComputedStyle(title).fontSize) : 32;
-          if (!isFinite(titlePx) || titlePx < 12) titlePx = 32;
-          var maxPx = Math.min(titlePx * 0.55, 22);
-          var host = el.closest('.header-brand-block') || el.parentElement || el;
-          var avail = host.clientWidth || 0;
+          var avail = title ? title.scrollWidth : 0;
+          var sm = window.matchMedia && window.matchMedia('(min-width: 640px)').matches;
+          var basePx = sm ? 12 : 11;
+          var maxPx = sm ? 13 : 12;
           el.style.whiteSpace = 'nowrap';
-          el.style.maxWidth = '100%';
-          if (avail <= 8) { el.style.fontSize = maxPx + 'px'; }
+          el.style.fontWeight = '';
+          if (avail <= 8) { el.style.fontSize = basePx + 'px'; }
           else {
-            var lo = 12, hi = maxPx, best = 12;
+            var lo = 10, hi = maxPx, best = 10;
             for (var i = 0; i < 16; i++) {
               var mid = (lo + hi) / 2;
               el.style.fontSize = mid + 'px';
               if (el.scrollWidth <= avail + 0.75) { best = mid; lo = mid; }
               else hi = mid;
             }
-            el.style.fontSize = best + 'px';
+            el.style.fontSize = Math.max(10, Math.min(best, maxPx)) + 'px';
           }
         }
       } catch (e) { /* keep Getting schedules… */ }

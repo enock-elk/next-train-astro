@@ -93,24 +93,26 @@ export function paintHeaderDayLabel(opts = {}) {
     bindHeaderDayFit();
 }
 
-/** Fit #current-day under Next Train. Cap well below the title so it stays a subtitle. */
+/** Fit #current-day to the Next Train title width. Keep the old subtitle face. */
 export function fitHeaderDayLabel() {
     if (typeof document === 'undefined') return;
     const el = document.getElementById('current-day');
     const title = document.getElementById('app-title');
     if (!el) return;
-    const titleSize = title ? parseFloat(getComputedStyle(title).fontSize) : 0;
-    const titlePx = Number.isFinite(titleSize) && titleSize > 8 ? titleSize : 32;
-    const maxPx = Math.min(titlePx * 0.55, 22);
-    const minPx = 12;
-    const host = el.closest('.header-brand-block') || el.parentElement || el;
-    const avail = host.clientWidth || 0;
+    const sm = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches;
+    const basePx = sm ? 12 : 11;
+    const maxPx = sm ? 13 : 12;
+    const minPx = 10;
+    const titleW = title ? title.scrollWidth : 0;
+    const avail = titleW > 8 ? titleW : (el.closest('.header-brand-block')?.clientWidth || 0);
     el.style.whiteSpace = 'nowrap';
-    el.style.maxWidth = '100%';
+    el.style.maxWidth = 'none';
     el.style.display = 'block';
     el.style.boxSizing = 'border-box';
+    el.style.fontWeight = '';
+    el.style.color = '';
     if (avail < 16) {
-        el.style.fontSize = `${maxPx}px`;
+        el.style.fontSize = `${basePx}px`;
         return;
     }
     let lo = minPx;
@@ -126,7 +128,7 @@ export function fitHeaderDayLabel() {
             hi = mid;
         }
     }
-    el.style.fontSize = `${best}px`;
+    el.style.fontSize = `${Math.max(minPx, Math.min(best, maxPx))}px`;
 }
 
 function bindHeaderDayFit() {

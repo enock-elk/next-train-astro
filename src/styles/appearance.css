@@ -555,36 +555,10 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 
 .header-brand-block {
   min-width: 0;
-  overflow: hidden;
 }
-#current-day,
-#current-day.header-day-label {
-  font-weight: 700;
+
+#current-day {
   letter-spacing: 0.01em;
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  max-width: 100%;
-  color: var(--nt-chrome-fg);
-  /* Subtitle under Next Train — never a second 2.55rem title. */
-  font-size: 1.05rem;
-}
-@media (min-width: 640px) {
-  #current-day,
-  #current-day.header-day-label {
-    font-size: 1.15rem;
-  }
-}
-.chrome-compact #current-day,
-.chrome-compact #current-day.header-day-label,
-body.chrome-compact #current-day,
-body.chrome-compact #current-day.header-day-label {
-  font-size: 1rem;
-}
-#current-day span {
-  font-weight: inherit;
-  letter-spacing: inherit;
-  color: inherit;
 }
 
 /* Brand-left header: solid pack primary (Ember → amber/orange) */
@@ -1091,21 +1065,20 @@ html:not([data-admin-authed="1"]) #ride-nearby-btn {
    Nav items must not stay slate/gray on a blue bar. */
 html[data-colour-pack="classic"] #current-day,
 html:not([data-colour-pack]) #current-day {
-  color: var(--nt-chrome-fg) !important;
+  color: var(--nt-chrome-muted) !important;
 }
 html[data-colour-pack="classic"] #current-day span,
 html:not([data-colour-pack]) #current-day span {
-  color: inherit !important;
-  font-weight: inherit;
+  color: var(--nt-chrome-muted) !important;
 }
 html[data-colour-pack="classic"] #current-day span.text-red-600,
 html:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: inherit !important;
+  color: #fecaca !important;
 }
 html.dark[data-colour-pack="classic"] #current-day span.text-red-600,
 html.dark[data-colour-pack="classic"] #current-day span.dark\:text-red-400,
 html.dark:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: inherit !important;
+  color: #fca5a5 !important;
 }
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),

@@ -41,17 +41,22 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
-assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales as a subtitle under the title');
-assert(logic.includes('titlePx * 0.55'), 'day line stays at most 55% of the Next Train title');
-assert(css.includes('font-size: 1.05rem') && css.includes('#current-day'), 'day line CSS default is a subtitle, not 2.55rem');
+assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales to the Next Train title width');
+assert(logic.includes('title.scrollWidth'), 'day line measures the Next Train title width');
+assert(logic.includes('sm ? 12 : 11'), 'day line stays the old 11px / 12px subtitle size');
+assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second headline');
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
+assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
+assert(css.includes('color: #fecaca !important'), 'Classic No Service stays peach-red');
+assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
-assert(header.includes('header-day-label'), 'Header day line uses the title-sized label class');
+assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
+assert(!header.includes('header-day-label'), 'Header day line is not a second bold title');
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
 assert(css.includes('#bottom-nav-grid'), 'bottom nav uses #bottom-nav-grid');
@@ -345,6 +350,7 @@ assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
+assert(layout.includes('var(--nt-vv-h, var(--nt-feedback-vv-height'), 'Feedback Hub height prefers live --nt-vv-h');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');

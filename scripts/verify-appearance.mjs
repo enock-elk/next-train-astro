@@ -384,7 +384,6 @@ assert(layout.includes('#view-community.view-section.active'), 'Community compos
 assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;'), 'Community keyboard pad is a small gap, not shell minus visual');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
-assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');

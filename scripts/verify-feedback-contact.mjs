@@ -12,6 +12,7 @@ import {
     isValidRsaPhone,
     FEEDBACK_CONTACT_MAX,
 } from '../src/lib/feedback-contact.js';
+import { commuterFeedbackText, encodeFeedbackAlertQuote } from '../src/lib/feedback-quote.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -67,6 +68,18 @@ assert(contactHintMessage('email').includes('name@example.com'), 'email hint sho
 assert(!/9 to 15|digits/i.test(contactHintMessage('phone')), 'phone hint does not mention a digit range');
 assert(contactHintMessage('both').includes('one contact'), 'both hint asks for one contact');
 
+{
+    const header = encodeFeedbackAlertQuote({
+        alertId: '1788689160543',
+        kind: 'notice',
+        snippet: 'Take note - Next Train Ops',
+    });
+    const raw = `${header}\nMy name is bad contact`;
+    assert(commuterFeedbackText(raw) === 'My name is bad contact', 'Feedback Hub hides the ALERT prefix');
+    assert(!commuterFeedbackText(raw).includes('[ALERT:'), 'commuter text has no ALERT token');
+    assert(commuterFeedbackText('Just a normal note') === 'Just a normal note', 'plain messages stay intact');
+}
+
 const hub = readFileSync(join(ROOT, 'src/lib/hub.js'), 'utf8');
 assert(hub.includes("from './feedback-contact.js'"), 'hub imports contact validation');
 assert(hub.includes('paintContactField'), 'hub paints contact validity');
@@ -78,6 +91,7 @@ assert(hub.includes('nt-contact-invalid'), 'hub toggles the invalid class');
 assert(hub.includes("safeStorage.setItem(THREAD_CONTACT_KEY"), 'valid contact can still be stored');
 assert(hub.includes('looksLikeContactOnlyMessage'), 'hub can hint when the message is only a number or email');
 assert(hub.includes('put it in the contact field'), 'contact-only hint does not rewrite the message');
+assert(hub.includes('commuterFeedbackText'), 'Feedback Hub strips diagnostic ALERT prefixes for commuters');
 
 const modals = readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8');
 assert(modals.includes('id="messages-thread-contact-hint"'), 'Hub has a contact hint');

@@ -27,3 +27,11 @@ export function parseFeedbackAlertQuote(text) {
         body: String(m[4] || ''),
     };
 }
+
+/** Commuter Feedback Hub: drop the [ALERT:…] prefix. Admin still parses the raw text. */
+export function commuterFeedbackText(text) {
+    const raw = String(text || '');
+    const parsed = parseFeedbackAlertQuote(raw);
+    if (parsed) return String(parsed.body || '').trim();
+    return raw.replace(/^\[ALERT:[^\]]*\]\s*/i, '').trim();
+}

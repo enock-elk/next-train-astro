@@ -11,7 +11,7 @@ import {
     normalizeChangelogId,
 } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate } from './utils.js';
-import { encodeFeedbackAlertQuote } from './feedback-quote.js';
+import { encodeFeedbackAlertQuote, commuterFeedbackText } from './feedback-quote.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -1086,7 +1086,9 @@ function renderMessagesThread(list) {
     host.innerHTML = list.map((m) => {
         const mine = isCommuterInboxMsg(m);
         const raw = m.message || m.text || '';
-        const body = mine ? escapeHTML(raw) : sanitizeHTML(stripAdminSignoff(raw));
+        const body = mine
+            ? escapeHTML(commuterFeedbackText(raw))
+            : sanitizeHTML(stripAdminSignoff(raw));
         const clock = inboxClock(m.timestamp);
         const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
         const avatar = mine

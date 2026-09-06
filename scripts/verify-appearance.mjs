@@ -390,7 +390,7 @@ assert(appUpdate.includes("New SW active — applying on next launch"), 'control
 assert(plannerModals.includes('Germiston or Bellville'), 'planner instructions use Bellville as the WC hub example');
 assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructions dropped Koedoespoort example');
 
-assert(css.includes('.nt-excl-col'), 'banned grid columns have a clickable inset hint');
+assert(css.includes('th.nt-excl-head'), 'NO SVC headers keep extra room under the train number');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
 assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');
 

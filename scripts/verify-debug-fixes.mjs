@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_09.06.5', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.6', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -98,8 +98,10 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
     assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
     const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
-    assert(renderer.includes('data-excl-open="1"'), 'in-app NO SVC column opens the exclusion sheet');
-    assert(board.includes('[data-excl-open="1"]'), 'grid taps on a banned column open the advisory');
+    assert(renderer.includes('data-excl-open="1"'), 'in-app NO SVC header opens the exclusion sheet');
+    assert(renderer.includes('decoration-dotted'), 'NO SVC uses a dotted underline');
+    assert(!renderer.includes('nt-excl-col'), 'banned time cells are not a second hit target');
+    assert(board.includes('[data-excl-open="1"]'), 'NO SVC header taps open the advisory');
     assert(renderer.includes('export-banned-col relative'), 'PNG export NO SVC stays a static span');
     const map = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
     assert(map.includes('attachMapDisruptionPopup'), 'map warnings open a popup');

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.16 — Admin Back restores the previous panel (6 Sep 2026)
+
+no release notes.
+
+- Dev Mode Back / ← restores the previous drilled panel (Roadmap original, GSM Review) instead of always jumping to the Dev grid. X still returns to the grid. Ticket view uses `#roadmap-ticket` so Close does not pop the drill stack.
+
 ## V9_09.06.15 — No Service colour, quiet boards, fare floor (6 Sep 2026)
 
 no release notes.

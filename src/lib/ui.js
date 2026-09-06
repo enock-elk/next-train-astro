@@ -117,6 +117,7 @@ const MODAL_HASH = {
     'account-modal': '#account',
     'login-modal': '#login',
     'dev-modal': '#dev',
+    'admin-ticket-view-modal': '#roadmap-ticket',
     'changelog-modal': '#changelog',
     'welcome-modal': '#welcome',
     'trip-map-modal': '#trip-map',
@@ -178,8 +179,12 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         }
     }
 
-    // Drilled Dev Mode: never close the whole modal — step back to the grid first
+    // Drilled Dev Mode: step back one panel (or to the grid) — never close the whole modal
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
+        if (typeof window.Admin.stepDrillBack === 'function') {
+            window.Admin.stepDrillBack({ fromPopState });
+            return;
+        }
         if (typeof window.Admin.exitDrillToGrid === 'function') {
             window.Admin.exitDrillToGrid({ fromPopState });
             return;
@@ -421,9 +426,20 @@ export function bindHistoryBackNavigation() {
             }
         }
 
-        // Drilled admin panel: Back/← returns to the Dev grid only (not home)
+        // Drilled admin hash: restore that panel (Roadmap ← Feedback, GSM ← Review)
+        const adminPanelId = window.Admin && typeof window.Admin.panelIdFromDevHash === 'function'
+            ? window.Admin.panelIdFromDevHash(hashNow)
+            : '';
+        if (adminPanelId && window.Admin && typeof window.Admin.syncDrillFromHash === 'function') {
+            window.Admin.syncDrillFromHash({ fromPopState: true });
+            return;
+        }
+
+        // Drilled admin panel with no panel hash: step back (previous panel or grid, not home)
         if (window.Admin && window.Admin.isGridMode === false) {
-            if (typeof window.Admin.exitDrillToGrid === 'function') {
+            if (typeof window.Admin.stepDrillBack === 'function') {
+                window.Admin.stepDrillBack({ fromPopState: true });
+            } else if (typeof window.Admin.exitDrillToGrid === 'function') {
                 window.Admin.exitDrillToGrid({ fromPopState: true });
             }
             return;

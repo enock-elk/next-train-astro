@@ -154,8 +154,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             lastShellH = shellH;
           } else {
             // Keep html/body at the last full layout so the page does not
-            // collapse under the IME. Other tabs pin #nt-shell to the live
-            // visual hole. Community must not: the Next Train header stays
+            // collapse under the IME. Pin #nt-shell to the LIVE visual hole
+            // on other tabs. Community must not: the Next Train header stays
             // in #app-scroll so the browser can raise the composer.
             layoutH = full;
             lastLayoutH = full;

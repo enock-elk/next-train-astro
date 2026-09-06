@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.9 — Live map tracks, no map share (6 Sep 2026)
+
+no release notes.
+
+- `public/tracks/rail-tracks-GP.geojson` and `STATION_COORDINATES` / `STATIC_ROUTE_PATHS` match live nexttrain.co.za (29 Aug bake). The extra Midway→Lenz hop is gone.
+- Map tab no longer has Share my location or the contribute sheet.
+
 ## V9_09.06.8 — Phone-width shell scale (6 Sep 2026)
 
 no release notes.

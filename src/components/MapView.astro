@@ -1,7 +1,6 @@
 ---
 /**
  * Interactive network map as a primary tab (Leaflet via /map embed).
- * Share location = coarse GPS for ~10 minutes (train optional).
  * Behaviour: src/lib/map-tab.js
  */
 import { withBase, APP_VERSION } from '../lib/config.js';
@@ -29,40 +28,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                 >
                     Trains near you
                 </button>
-                <button
-                    type="button"
-                    id="map-tab-contribute-btn"
-                    hidden
-                    inert
-                    aria-hidden="true"
-                    class="hidden inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Share a rough location for 10 minutes"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                    Share my location
-                </button>
             </div>
-        </div>
-
-        <!-- Train picker for trip-tied contribution -->
-        <div id="map-contribute-sheet" class="hidden shrink-0 border-b border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5">
-            <div class="flex items-start justify-between gap-2 mb-2">
-                <div class="min-w-0">
-                    <p class="text-[11px] font-black text-gray-900 dark:text-white">I’m on a train</p>
-                    <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">We’ll check you’re near the tracks for 30 seconds, then attach you to that train for 10 minutes.</p>
-                </div>
-                <button type="button" id="map-contribute-cancel" class="shrink-0 p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 focus:outline-none" aria-label="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-            <div id="map-vet-progress" class="hidden mb-2">
-                <p id="map-vet-label" class="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">Checking location…</p>
-                <div class="h-1.5 rounded-full bg-amber-200/80 dark:bg-amber-900/50 overflow-hidden">
-                    <div id="map-vet-bar" class="h-full w-0 bg-amber-600 dark:bg-amber-400 transition-[width] duration-300"></div>
-                </div>
-            </div>
-            <ul id="map-contribute-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar"></ul>
-            <p id="map-contribute-empty" class="hidden text-[11px] font-semibold text-gray-500 dark:text-gray-400 py-1">No trains within 30 minutes on this board. Pick a route and station first, or open a trip in Plan.</p>
         </div>
 
         <div class="relative flex-1 min-h-0 bg-gray-100 dark:bg-gray-950">

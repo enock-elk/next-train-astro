@@ -97,7 +97,6 @@
             "KLIPTOWN": [-26.272809958189928, 27.887633494308975],
             "TSHIAWELO": [-26.288947777153577, 27.87068768853021],
             "MIDWAY": [-26.292695060119772, 27.851230923913732],
-            "LENZ": [-26.319519733948702, 27.82296719973482],
             "MARAISBURG": [-26.179451103586576, 27.939930801976423],
             "UNIFIED": [-26.17934640087511, 27.926554891892838],
             "FLORIDA": [-26.176752716611063, 27.91426358618772],
@@ -301,7 +300,7 @@
             'jhb-germiston': ["JOHANNESBURG", "DOORNFONTEIN", "ELLIS PARK", "JEPPE", "GEORGE GOCH", "DENVER", "TOORONGA", "CLEVELAND", "GELDENHUIS", "DRIEHOEK", "PRESIDENT", "GERMISTON"],
             'jhb-rand': ["JOHANNESBURG", "BRAAMFONTEIN", "MAYFAIR", "GROSVENOR", "LANGLAAGTE", "MARAISBURG", "UNIFIED", "FLORIDA", "HAMBERG", "GEORGINIA", "ROODEPOORT", "HORISON", "PRINCESS", "WITPOORTJIE", "LUIPAARDSVLEI", "KRUGERSDORP", "WESRAND", "MILLSITE", "ROBINSON", "HOMELAKE", "RANDFONTEIN"],
             'jhb-soweto': ["LANGLAAGTE", "LONGDALE", "NEW CANADA", "MZIMHLOPE", "PHOMOLONG", "PHEFENI", "DUBE", "IKWEZI", "INHLAZANE", "MERAFE", "NALEDI"],
-            'jhb-midway': ["JOHANNESBURG", "BRAAMFONTEIN", "MAYFAIR", "GROSVENOR", "LANGLAAGTE", "CROESUS", "LONGDALE", "NEW CANADA", "MLAMLANKUNZI", "ORLANDO", "NANCEFIELD", "KLIPTOWN", "TSHIAWELO", "MIDWAY", "LENZ"],
+            'jhb-midway': ["JOHANNESBURG", "BRAAMFONTEIN", "MAYFAIR", "GROSVENOR", "LANGLAAGTE", "CROESUS", "LONGDALE", "NEW CANADA", "MLAMLANKUNZI", "ORLANDO", "NANCEFIELD", "KLIPTOWN", "TSHIAWELO", "MIDWAY"],
             
             // --- WESTERN CAPE (GUARDIAN CORRECTED PATHS) ---
             // Mainline: Cape Town → Koeberg Rd → Maitland → Mutual, then split.
@@ -2024,38 +2023,6 @@
                 else if (locateIcon) locateIcon.classList.add('animate-spin');
             });
 
-            // Standalone /map: Share opens parent presence sheet when embedded.
-            const shareBtn = document.getElementById('custom-share-location-btn');
-            if (shareBtn) {
-                shareBtn.onclick = async (e) => {
-                    e.stopPropagation();
-                    try {
-                        if (window.parent && window.parent !== window) {
-                            if (typeof window.parent.startPresenceShare === 'function') {
-                                window.parent.startPresenceShare({ source: 'map_presence' });
-                                return;
-                            }
-                            if (typeof window.parent.openContributePicker === 'function') {
-                                window.parent.openContributePicker();
-                                return;
-                            }
-                            if (typeof window.parent.shareMyLocation === 'function') {
-                                await window.parent.shareMyLocation();
-                                return;
-                            }
-                        }
-                    } catch (_) {}
-                    if (locateIcon) locateIcon.classList.add('animate-spin');
-                    map.once('locationfound', function (ev) {
-                        applyUserLocation(ev.latlng, ev.accuracy);
-                        alert('Open Next Train → Map → Share my location so others can see you for 10 minutes.');
-                    });
-                    if (!lastKnownLatLng) map.locate({ setView: true, maxZoom: 15, enableHighAccuracy: true });
-                    else {
-                        alert('Open Next Train → Map → Share my location so others can see you for 10 minutes.');
-                    }
-                };
-            }
 
             // --- DYNAMIC TEXT RESIZING & PROGRESSIVE DISCLOSURE ---
             function updateTooltipSize() {

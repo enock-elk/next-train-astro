@@ -4516,7 +4516,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
 
         badge.innerHTML = `
             <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-3 relative min-w-[5.5rem]">
-                <span id="header-day-display" class="truncate font-bold text-[12px] pr-1">${selText}</span>
+                <span id="header-day-display" class="truncate font-bold pr-1">${selText}</span>
                 <svg id="header-day-chevron" class="w-3.5 h-3.5 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 
                 <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-y-auto max-h-[min(40vh,16rem)] custom-scrollbar z-[200] text-left">

@@ -984,10 +984,31 @@ html[data-colour-pack="ember"] #notice-bell.nt-bell-info {
   border-color: var(--nt-border) !important;
 }
 
+/* One box for Back, weekday pill, and Share. Phones were painting the
+   badge shorter than the buttons (h4 line-height + py-1.5 min-content). */
+#planner-results-section h4 {
+  line-height: 0;
+}
 #planner-back-btn,
 #planner-header-badge,
 .planner-share-slot > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 2rem;
+  min-height: 2rem;
+  max-height: 2rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
   color: rgb(var(--nt-blue-800)) !important;
+}
+#planner-header-badge > div {
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  line-height: 1;
 }
 html.dark #planner-back-btn,
 html.dark #planner-header-badge,
@@ -1017,6 +1038,10 @@ html.dark .planner-share-slot > button {
   #planner-header-badge,
   .planner-share-slot > button {
     height: calc(2rem * var(--nt-ui-scale, 1));
+    min-height: calc(2rem * var(--nt-ui-scale, 1));
+    max-height: calc(2rem * var(--nt-ui-scale, 1));
+    padding-top: 0;
+    padding-bottom: 0;
     font-size: calc(0.75rem * var(--nt-ui-scale, 1));
   }
 }

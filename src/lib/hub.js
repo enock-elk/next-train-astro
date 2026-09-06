@@ -12,6 +12,11 @@ import {
 } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate } from './utils.js';
 import { encodeFeedbackAlertQuote } from './feedback-quote.js';
+import {
+    validateFeedbackContact,
+    looksLikeContactOnlyMessage,
+    contactHintMessage,
+} from './feedback-contact.js';
 import { inboxReplyStillVisible } from './inbox-replies.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
@@ -80,12 +85,54 @@ function signedInContactEmail() {
     return (email && !window.firebaseAuth.currentUser.isAnonymous) ? String(email).trim() : '';
 }
 
+function contactHintId(input) {
+    return input?.id === 'messages-thread-contact' ? 'messages-thread-contact-hint' : 'feedback-email-hint';
+}
+
+function persistValidContact(value) {
+    try {
+        if (value) safeStorage.setItem(THREAD_CONTACT_KEY, value);
+        else safeStorage.removeItem(THREAD_CONTACT_KEY);
+    } catch { /* ignore */ }
+}
+
+function readStoredContact() {
+    try {
+        const stored = validateFeedbackContact(safeStorage.getItem(THREAD_CONTACT_KEY) || '');
+        return stored.ok ? stored.value : '';
+    } catch {
+        return '';
+    }
+}
+
 function resolveThreadContact() {
     const signedIn = signedInContactEmail();
     if (signedIn) return signedIn;
-    const field = document.getElementById('messages-thread-contact')?.value?.trim() || '';
-    if (field) return field;
-    try { return safeStorage.getItem(THREAD_CONTACT_KEY) || ''; } catch { return ''; }
+    const field = validateFeedbackContact(document.getElementById('messages-thread-contact')?.value || '');
+    if (!field.ok) return '';
+    if (field.value) return field.value;
+    return readStoredContact();
+}
+
+function paintContactField(input, { toast = false, persist = false } = {}) {
+    if (!input) return { ok: true, value: '' };
+    const hint = document.getElementById(contactHintId(input));
+    if (signedInContactEmail() && input.id === 'messages-thread-contact') {
+        input.classList.remove('nt-contact-invalid');
+        input.removeAttribute('aria-invalid');
+        if (hint) hint.textContent = '';
+        return { ok: true, value: signedInContactEmail() };
+    }
+    const result = validateFeedbackContact(input.value);
+    input.classList.toggle('nt-contact-invalid', !result.ok);
+    input.setAttribute('aria-invalid', result.ok ? 'false' : 'true');
+    if (hint) hint.textContent = result.ok ? '' : contactHintMessage(result.reason);
+    if (!result.ok) {
+        if (toast) showToast(contactHintMessage(result.reason), 'error');
+        return result;
+    }
+    if (persist && !signedInContactEmail()) persistValidContact(result.value);
+    return result;
 }
 
 function paintThreadContactRow() {
@@ -98,11 +145,11 @@ function paintThreadContactRow() {
     const signedIn = signedInContactEmail();
     if (signedIn) {
         input.value = signedIn;
+        paintContactField(input);
         return;
     }
-    if (!input.value) {
-        try { input.value = safeStorage.getItem(THREAD_CONTACT_KEY) || ''; } catch { /* ignore */ }
-    }
+    if (!input.value) input.value = readStoredContact();
+    paintContactField(input);
 }
 
 function paintThreadFileChip(fileInput) {
@@ -557,7 +604,6 @@ function maybeForceShowChangelog() {
 async function submitFeedback() {
     const type = document.getElementById('feedback-type')?.value;
     let text = document.getElementById('feedback-text')?.value.trim() || '';
-    const email = document.getElementById('feedback-email')?.value.trim() || '';
     const fileInput = document.getElementById('feedback-file');
     const submitBtn = document.getElementById('feedback-submit-btn');
     const submitText = document.getElementById('feedback-submit-text');
@@ -567,6 +613,10 @@ async function submitFeedback() {
         showToast('Please provide more details (at least 5 characters).', 'error');
         return;
     }
+    const emailInput = document.getElementById('feedback-email');
+    const contactField = paintContactField(emailInput, { toast: true, persist: !!emailInput?.value?.trim() });
+    if (!contactField.ok) return;
+    const email = contactField.value;
 
     const limit = checkFeedbackRate();
     if (!limit.ok) {
@@ -1925,7 +1975,9 @@ export function initHub() {
             showToast('Please write a bit more (at least 5 characters).', 'error');
             return;
         }
-        const email = resolveThreadContact();
+        const contactField = paintContactField(document.getElementById('messages-thread-contact'), { toast: true, persist: true });
+        if (!contactField.ok) return;
+        const email = signedInContactEmail() || contactField.value || resolveThreadContact();
         const limit = checkFeedbackRate();
         if (!limit.ok) {
             showToast(limit.message, 'error');
@@ -2013,9 +2065,7 @@ export function initHub() {
             });
             if (!res.ok) throw new Error(`Failed (${res.status})`);
             recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
-            if (email && !signedInContactEmail()) {
-                try { safeStorage.setItem(THREAD_CONTACT_KEY, email); } catch { /* ignore */ }
-            }
+            if (!signedInContactEmail()) persistValidContact(email);
             await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
             if (input) input.value = '';
             if (threadFile) threadFile.value = '';
@@ -2036,13 +2086,27 @@ export function initHub() {
             hint.textContent = safety.verdict === 'block' ? safety.message : '';
         }
     });
+    document.getElementById('feedback-email')?.addEventListener('input', () => {
+        paintContactField(document.getElementById('feedback-email'));
+    });
+    document.getElementById('feedback-email')?.addEventListener('change', () => {
+        const el = document.getElementById('feedback-email');
+        paintContactField(el, { persist: !!el?.value?.trim() });
+    });
     document.getElementById('messages-thread-input')?.addEventListener('input', () => {
         autosizeMessagesThreadInput();
         const hint = document.getElementById('messages-thread-hint');
         const safety = checkContentSafety(document.getElementById('messages-thread-input')?.value || '', { live: true });
-        if (hint && !feedbackWaitCancel) {
-            hint.textContent = safety.verdict === 'block' ? safety.message : '';
+        if (!hint || feedbackWaitCancel) return;
+        if (safety.verdict === 'block') {
+            hint.textContent = safety.message;
+            return;
         }
+        const contactVal = document.getElementById('messages-thread-contact')?.value || '';
+        const msg = document.getElementById('messages-thread-input')?.value || '';
+        hint.textContent = (!contactVal.trim() && looksLikeContactOnlyMessage(msg))
+            ? 'If this is your number or email, put it in the contact field and write your message below.'
+            : '';
     });
     document.getElementById('feedback-submit-btn')?.addEventListener('click', submitFeedback);
     // Clear reply mode when modal is cancelled/closed via footer/X
@@ -2093,11 +2157,11 @@ export function initHub() {
         if (threadFileInput) threadFileInput.value = '';
         paintThreadFileChip(threadFileInput);
     });
+    document.getElementById('messages-thread-contact')?.addEventListener('input', () => {
+        paintContactField(document.getElementById('messages-thread-contact'));
+    });
     document.getElementById('messages-thread-contact')?.addEventListener('change', () => {
-        const val = document.getElementById('messages-thread-contact')?.value?.trim() || '';
-        if (val) {
-            try { safeStorage.setItem(THREAD_CONTACT_KEY, val); } catch { /* ignore */ }
-        }
+        paintContactField(document.getElementById('messages-thread-contact'), { persist: true });
     });
 
     // Legal in sidenav

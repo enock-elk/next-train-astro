@@ -100,6 +100,10 @@ assert(welcome.includes('later in Options'), 'Welcome copy points at Options, no
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+assert(!plannerUi.includes('text-[12px]'), 'weekday pill inherits text-xs instead of a nested 12px size');
+assert(css.includes('#planner-results-section h4'), 'planner heading line-height is locked so the pill can match Back');
+assert(css.includes('min-height: 2rem') && css.includes('max-height: 2rem'), 'planner toolbar pills share a 2rem box');
+assert(css.includes('#planner-header-badge > div'), 'weekday pill inner hit area fills the 2rem box');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
@@ -235,6 +239,10 @@ assert(!hubModals.includes('items-end justify-center p-4 pb-0'), 'Send Feedback 
 assert(hubModals.includes('display: flow-root'), 'inbox message text contains floated timestamps');
 assert(/#feedback-modal \{\s*align-items: center;/.test(hubModals), 'Send Feedback CSS keeps align-items center');
 assert(/#messages-thread-modal \{\s*align-items: flex-end;/.test(hubModals), 'Feedback Hub CSS still docks with flex-end');
+assert(/#messages-thread-modal \{\s*align-items: flex-end;\s*justify-content: center;/.test(hubModals), 'Feedback Hub CSS centers the sheet horizontally');
+assert(!/#messages-thread-modal \{\s*align-items: flex-end;\s*justify-content: flex-end;/.test(hubModals), 'Feedback Hub CSS no longer uses justify-content flex-end');
+assert(hubModals.includes('id="messages-thread-contact-hint"'), 'Feedback Hub contact hint is present');
+assert(hubModals.includes('#messages-thread-contact.nt-contact-invalid'), 'invalid contact uses a red border');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
 assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100'), 'About unofficial pill uses readable surface contrast');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');

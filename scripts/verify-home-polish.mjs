@@ -64,6 +64,8 @@ assert(readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8').
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hub.includes("welcomeSeen") && hub.includes('maybeForceShowChangelog'), 'What’s New auto-open waits until welcome is done');
 assert(hub.includes("if (!latest?.forceShow) return"), 'What’s New auto-open is opt-in via forceShow');
+assert(hub.includes("from './feedback-contact.js'"), 'hub validates optional contact');
+assert(hub.includes('paintContactField'), 'hub paints contact validity on input and submit');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');

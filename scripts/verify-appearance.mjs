@@ -100,10 +100,9 @@ assert(welcome.includes('later in Options'), 'Welcome copy points at Options, no
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
-assert(!plannerUi.includes('text-[12px]'), 'weekday pill inherits text-xs instead of a nested 12px size');
-assert(css.includes('#planner-results-section h4'), 'planner heading line-height is locked so the pill can match Back');
-assert(css.includes('min-height: 2rem') && css.includes('max-height: 2rem'), 'planner toolbar pills share a 2rem box');
-assert(css.includes('#planner-header-badge > div'), 'weekday pill inner hit area fills the 2rem box');
+assert(css.includes('min-height: 2.5rem'), 'planner toolbar pills are taller than the squeezed 2rem lock');
+assert(!/#planner-back-btn,[\s\S]{0,280}max-height: 2rem/.test(css), 'planner toolbar no longer caps height at 2rem');
+assert(!/#planner-back-btn,[\s\S]{0,280}padding-top: 0/.test(css), 'planner toolbar keeps vertical padding');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');

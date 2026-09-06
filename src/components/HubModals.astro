@@ -461,7 +461,7 @@ import { withBase } from '../lib/config.js';
 </template>
 
 <!-- MESSAGES THREAD (commuter POV — WhatsApp-style Feedback Hub) -->
-<div id="messages-thread-modal" class="fixed inset-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
+<div id="messages-thread-modal" class="fixed left-0 right-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md h-full flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0">
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div>
@@ -511,8 +511,8 @@ import { withBase } from '../lib/config.js';
   #messages-thread-modal {
     top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px));
     bottom: auto;
-    height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
-    max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
+    height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh));
+    max-height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh));
   }
   /* Send Feedback stays centered in the visible viewport. Do not dock it like Hub. */
   #feedback-modal {

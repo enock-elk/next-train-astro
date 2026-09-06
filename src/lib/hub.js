@@ -213,7 +213,12 @@ function keepFeedbackFieldVisible(field) {
 function syncFeedbackModalViewport() {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
-    const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
+    const cssVv = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nt-vv-h')) || 0;
+    const height = Math.max(240, Math.round(Math.min(
+        cssVv || Infinity,
+        vv?.height || Infinity,
+        window.innerHeight || Infinity,
+    ) || cssVv || vv?.height || window.innerHeight || 240));
     const top = Math.max(0, Math.round(vv?.offsetTop || 0));
     COMMUTER_FEEDBACK_MODAL_IDS.forEach((id) => {
         const modal = document.getElementById(id);

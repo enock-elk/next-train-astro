@@ -988,10 +988,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       /* Feedback Hub / Send Feedback follow the keyboard, not --nt-app-h. */
       #nt-shell #messages-thread-modal.fixed,
       #nt-shell #feedback-modal.fixed {
+        inset: unset !important;
         top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
-        height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
-        max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+        left: 0 !important;
+        right: 0 !important;
         bottom: auto !important;
+        height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh)) !important;
+        max-height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh)) !important;
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],

@@ -58,6 +58,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var lastH = -1;
         var lastLayoutH = 0;
         var lastFullLayoutH = 0;
+        var lastShellTop = 0;
+        var lastShellH = 0;
         function markStandalone() {
           var on = false;
           try {
@@ -116,28 +118,43 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // keys. Overlays (planner list, Feedback Hub) read visualViewport
           // themselves. Never use Math.max(inner, client): a tall document
           // would push #nt-shell (and the oval) below the screen (S9+).
-          var h = inner || client || vh || 240;
-          if (client > 0) h = Math.min(h, client);
-          var full = lastFullLayoutH || lastLayoutH || h;
+          var layoutH = inner || client || vh || 240;
+          if (client > 0) layoutH = Math.min(layoutH, client);
+          var full = lastFullLayoutH || lastLayoutH || layoutH;
           // visualViewport shrinks first on Android. Do not treat that as the
           // new full-screen height or the oval rides up with the IME.
           if (editing && vv && vv.height && (full - vv.height) > 140) {
             keyboard = true;
           }
-          if (editing && full && h < full - 80) {
+          if (editing && full && layoutH < full - 80) {
             keyboard = true;
           }
+          var shellTop = Math.max(0, off);
+          var shellH = Math.round(vh || layoutH);
+          if (shellH < 240) shellH = lastShellH || lastFullLayoutH || layoutH || 240;
           if (!keyboard) {
-            if (vv && vv.height) {
-              var vis = Math.round(vv.height + off);
-              if (vis >= 240) h = Math.min(h, vis);
+            // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
+            // visualViewport while leaving the shell at top:0 put NEXT TRAIN
+            // under the URL bar and left a white slab under the oval.
+            // Chrome often reports offsetTop=0 while the URL bar still
+            // overlays the top of the layout; the missing strip is then
+            // layout minus visual height.
+            if (shellTop < 1 && layoutH > shellH + 8) {
+              var missing = Math.round(layoutH - shellH);
+              if (missing < 180) shellTop = missing;
             }
-            lastLayoutH = h;
-            lastFullLayoutH = h;
+            lastLayoutH = layoutH;
+            lastFullLayoutH = layoutH;
+            lastShellTop = shellTop;
+            lastShellH = shellH;
           } else {
-            h = full;
+            layoutH = full;
             lastLayoutH = full;
+            shellTop = lastShellTop;
+            shellH = lastShellH || full;
           }
+          var h = layoutH;
+          if (shellTop + shellH > h) h = shellTop + shellH;
           if (h < 240) h = lastFullLayoutH || lastLayoutH || inner || vh || 240;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
@@ -147,6 +164,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             lastH = h;
             root.style.setProperty('--nt-app-h', h + 'px');
           }
+          root.style.setProperty('--nt-shell-top', shellTop + 'px');
+          root.style.setProperty('--nt-shell-h', shellH + 'px');
           if (Math.abs(sys - lastSys) >= 1) {
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
@@ -733,13 +752,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
 
       /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves
-         the screen. --nt-app-h is layout height (not visualViewport) so the
-         keyboard overlays the oval instead of lifting it. Do not pad a tray
-         under the floating pill. 100svh fallback keeps first paint on-screen
-         before JS measures the visible frame. */
+         the screen. --nt-app-h is layout height (not visualViewport) so html
+         and body fill the layout (no white slab). --nt-shell-* pin the frame
+         to the visible hole so NEXT TRAIN sits below the URL bar and the
+         oval sits on the visual bottom. Do not pad a tray under the floating
+         pill. 100svh fallback keeps first paint on-screen before JS measures
+         the visible frame. Do not transform #nt-shell. */
       #nt-shell {
-        height: var(--nt-app-h, 100svh) !important;
-        max-height: var(--nt-app-h, 100svh) !important;
+        top: var(--nt-shell-top, 0px);
+        height: var(--nt-shell-h, var(--nt-app-h, 100svh)) !important;
+        max-height: var(--nt-shell-h, var(--nt-app-h, 100svh)) !important;
         box-sizing: border-box;
         padding-bottom: 0 !important;
         background-color: var(--nt-canvas);
@@ -883,7 +905,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       /* Community composer lifts above the IME. The oval stays at layout bottom. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
-        padding-bottom: max(0.5rem, calc(var(--nt-app-h, 100dvh) - var(--nt-vv-h, 100dvh)));
+        padding-bottom: max(0.5rem, calc(var(--nt-shell-h, var(--nt-app-h, 100dvh)) - var(--nt-vv-h, 100dvh)));
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

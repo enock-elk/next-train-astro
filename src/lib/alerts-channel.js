@@ -389,9 +389,9 @@ function renderPostCard(notice, opts = {}) {
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
         : 'ring-1 ring-black/5 dark:ring-white/10';
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
-        <div class="nt-alert-strip flex items-start justify-between gap-2 px-4 py-2.5">
-            <span class="nt-alert-signoff text-[13px] font-semibold text-gray-800 dark:text-gray-100 leading-tight">${escapeHTML(signoff)}</span>
-            <span class="nt-alert-chip inline-flex items-center shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${chrome.chip}">${chrome.label}</span>
+        <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1">
+            <span class="nt-alert-signoff text-xs font-semibold text-gray-800 dark:text-gray-100 leading-none">${escapeHTML(signoff)}</span>
+            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.label}</span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}

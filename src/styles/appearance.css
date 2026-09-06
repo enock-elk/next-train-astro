@@ -959,6 +959,9 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 .nt-alert-strip {
   background-color: var(--nt-surface-muted) !important;
   border-bottom: 1px solid var(--nt-border);
+  min-height: 0;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 .nt-alert-reply {
   background-color: var(--nt-primary) !important;

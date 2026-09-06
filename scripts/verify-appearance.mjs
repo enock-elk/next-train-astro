@@ -337,6 +337,7 @@ assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewp
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
 assert(layout.includes('pinBottomNav'), 'visible-frame pin keeps the oval on screen');
 assert(layout.includes('--nt-nav-lift'), 'nav lift token pulls the oval up when it would overflow');
+assert(layout.includes('0.5rem + var(--nt-sys-bottom'), 'oval sits inset from the frame edge so the curve is not clipped');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');

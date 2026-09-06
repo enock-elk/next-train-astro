@@ -859,7 +859,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: absolute;
         left: 0.75rem;
         right: 0.75rem;
-        bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
+        /* Keep the pill inside the frame — flush bottom:0 clips the curve
+           under overflow:hidden on short Chrome viewports (S9+). */
+        bottom: calc(0.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         margin: 0;
         z-index: 110;
       }
@@ -893,7 +895,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.85rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
+          bottom: calc(0.35rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
           bottom: 3.6rem;
@@ -904,7 +906,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           padding-bottom: 3.35rem;
         }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-          bottom: calc(var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
+          bottom: calc(0.35rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + var(--nt-nav-lift, 0px));
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers.

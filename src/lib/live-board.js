@@ -626,6 +626,7 @@ export function getRouteFare(sheetKey) {
     const multiplier = useOffPeakRate ? profile.offPeak : profile.base;
     let finalPrice = basePrice * multiplier;
     finalPrice = Math.ceil(finalPrice * 2) / 2;
+    finalPrice = Math.floor(finalPrice);
 
     // GUARDIAN FIX: Mutually exclusive Promo vs OffPeak flags to prevent UI collisions
     if (getUserProfile() === "Adult") {
@@ -642,7 +643,7 @@ export function getRouteFare(sheetKey) {
     }
 
     return {
-        price: finalPrice.toFixed(2),
+        price: String(finalPrice),
         isOffPeak: useOffPeakRate, 
         isPromo: isPromo,
         discountLabel: discountLabel 
@@ -676,7 +677,8 @@ export function getDetailedFareForRoute(routeId) {
 }
 
 export function findNextTrains() {
-    if (typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
+    const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
+    if (!quietPaint && typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
 
     const selectedStation = (stationSelectEl() && stationSelectEl().value);
@@ -717,7 +719,6 @@ export function findNextTrains() {
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
     if (!quietPaint) {
         if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
         if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";

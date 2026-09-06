@@ -2,6 +2,16 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.15 — No Service colour, quiet boards, fare floor (6 Sep 2026)
+
+no release notes.
+
+- Light-mode No Service on `#current-day` uses the same `#f87171` as dark (Classic blue vs red-600 was hard to read).
+- Minute tick quiet-paints the Next Train cards by identity (ignore first/last flips) and patches countdown / clock text. Empty / no-service / weekend cards stamp keys and skip fade remounts. `findNextTrains` does not rewrite the day label while quiet.
+- Admin feedback bubble header is `Enock`, not `-Enock`.
+- Service Alerts Manager tabs: New Alert, Active Alerts, Scheduled, Archived. Active list edits keep `postedAt` / notice `id` so the unseen badge does not reset.
+- Live-board fare chip floors to the lower rand (`R7.5` → `R7`). Ticket table stays the official amounts.
+
 ## V9_09.06.11 — Planner rails + Community keyboard nav (6 Sep 2026)
 
 no release notes.

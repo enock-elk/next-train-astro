@@ -25,6 +25,7 @@ import {
     currentScheduleData,
     routeHasSaturdayService
 } from './live-board.js';
+import { isQuietBoardPaint, liveBoardStaticKey, stampLiveBoardCard } from './live-board-paint.js';
 import {
     renderFullScheduleGrid,
     applyRouteDeepLink,
@@ -199,7 +200,10 @@ export function renderNextAvailableTrain(element, destination) {
     const selectedStation = document.getElementById('station-select')?.value || "";
     const simResult = simulateNextActiveService(selectedStation, destination);
     if (!simResult) {
+        const emptyKey = liveBoardStaticKey('empty', destination, 'none');
+        if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === emptyKey) return;
         element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No upcoming trains.</div>`;
+        stampLiveBoardCard(element, emptyKey);
         return;
     }
     window.Renderer.renderNextAvailableTrain(element, destination, simResult.train, simResult.dayInfo.name, simResult.dayInfo.type, simResult.daysAhead);
@@ -230,7 +234,10 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         if (dayType === 'saturday' && !routeHasSaturdayService() && typeof window.renderNoWeekendService === 'function') {
             window.renderNoWeekendService(element, destination);
         } else {
+            const emptyKey = liveBoardStaticKey('empty', destination, 'nosched');
+            if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === emptyKey) return;
             element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No scheduled trains.</div>`;
+            stampLiveBoardCard(element, emptyKey);
         }
     } else {
         renderNextAvailableTrain(element, destination);

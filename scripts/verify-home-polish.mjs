@@ -11,7 +11,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.14', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.15', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -87,6 +87,8 @@ assert(renderer.includes('emptyBoardHeadline'), 'empty board uses condensed head
 assert(renderer.includes('tryPatchLiveBoardCountdown'), 'minute tick patches countdown text instead of remounting');
 assert(renderer.includes('data-nt-countdown'), 'countdown node is stamped for quiet paint');
 assert(renderer.includes('stampLiveBoardCard'), 'board cards carry a stable key');
+assert(renderer.includes('data-nt-deptime'), 'departure clock is stamped for quiet paint');
+assert(renderer.includes('liveBoardStaticKey'), 'empty and no-service cards use static board keys');
 assert(renderer.includes('font-bold break-words w-full">To ${connDest}'), 'connect destination wraps instead of truncating');
 assert(renderer.includes('font-bold break-words w-full px-1" title="To ${displayDest}'), 'shuttle destination wraps instead of truncating');
 assert(!renderer.includes('text-gray-400 font-bold truncate w-full">To ${connDest}'), 'connect line no longer uses truncate');
@@ -97,6 +99,10 @@ assert(!renderer.includes('First train ${dayText} is at:'), 'two-line First trai
 assert(!renderer.includes('>No more trains today</div>'), 'standalone No more trains today title removed');
 assert(renderer.includes('Saved to gallery'), 'save toast has no emoji in the message');
 assert(!renderer.includes('Image saved to gallery'), 'old emoji toast copy removed');
+
+const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
+assert(liveBoard.includes('finalPrice = Math.floor(finalPrice)'), 'fare button floors to the lower rand');
+assert(liveBoard.includes('!quietPaint && typeof paintHeaderDayLabel'), 'quiet minute tick skips rewriting the day label');
 
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(logic.includes('window.__ntQuietBoardPaint = true'), 'minute tick sets quiet board paint before findNextTrains');
@@ -134,7 +140,11 @@ assert(admin.includes('id="alert-source-name"') && admin.includes('id="alert-sou
 assert(admin.includes('id="alert-source-save-btn"'), 'save source control');
 assert(admin.includes('nt_admin_alert_sources'), 'sources persist in localStorage');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
-assert(admin.includes('alerts-refine-v2'), 'alert panel rebuild key');
+assert(admin.includes('alerts-active-v1'), 'alert panel rebuild key');
+assert(admin.includes('alert-tab-active'), 'Active alerts tab exists');
+assert(admin.includes('Active Alerts'), 'Active alerts tab label');
+assert(admin.includes('fetchActiveAlerts'), 'Active alerts list loader');
+assert(admin.includes('Admin._reviewPostedAt'), 'alert edit keeps the original postedAt');
 assert(admin.includes('excl-refine-v3'), 'exclusion panel rebuild key');
 assert(admin.includes('Admin.loadExclusionForEdit'), 'admins can open a banned train into the editor');
 assert(admin.includes('data-excl-edit'), 'active exception rows are clickable for edit');

@@ -4,7 +4,9 @@
  */
 import {
     liveBoardJourneyKey,
+    liveBoardJourneyIdentity,
     liveBoardNextAvailKey,
+    boardPaintIdentity,
     normalizeCountdownLabel,
     tryPatchLiveBoardCountdown,
 } from '../src/lib/live-board-paint.js';
@@ -23,6 +25,14 @@ function assert(cond, msg) {
         isLastTrain: false,
     }, 'PRETORIA');
     assert(key === 'direct|0618|06:18:00|PRETORIA|1|0', `journey key ${key}`);
+    assert(liveBoardJourneyIdentity({
+        type: 'direct',
+        train: '0618',
+        departureTime: '06:18:00',
+        isFirstTrain: true,
+        isLastTrain: false,
+    }, 'PRETORIA') === 'direct|0618|06:18:00|PRETORIA', 'identity drops first/last');
+    assert(boardPaintIdentity(key) === 'direct|0618|06:18:00|PRETORIA', 'paint identity ignores first/last');
     const next = liveBoardNextAvailKey('KEMPTON PARK', '05:10:00', 1);
     assert(next === 'nextavail|KEMPTON PARK|05:10:00|1', `nextavail key ${next}`);
 }
@@ -43,6 +53,8 @@ function assert(cond, msg) {
     globalThis.window = { __ntQuietBoardPaint: true };
     assert(tryPatchLiveBoardCountdown(el, el.attrs['data-nt-board-key'], '(in 3 min)'), 'quiet same-key patches');
     assert(el.node.textContent === '(in 3 min)', 'countdown text updated');
+    assert(tryPatchLiveBoardCountdown(el, 'direct|0618|06:18:00|PRETORIA|0|1', '(in 2 min)'), 'first/last flip still patches');
+    assert(el.node.textContent === '(in 2 min)', 'identity match updates countdown');
     assert(!tryPatchLiveBoardCountdown(el, 'direct|0619|06:19:00|PRETORIA|1|0', '(in 9 min)'), 'different train remounts');
     delete globalThis.window;
 }

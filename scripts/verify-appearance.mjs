@@ -48,7 +48,9 @@ assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second he
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
-assert(css.includes('#current-day span.text-red-600 {\n  color: #dc2626 !important;'), 'No Service uses the same red-600 on every pack');
+assert(css.includes('#current-day span.text-red-600'), 'No Service targets the red-600 span');
+assert(css.includes('color: #f87171 !important;'), 'No Service uses dark-mode red-400 in light and dark');
+assert(!css.includes('color: #dc2626 !important;'), 'No Service no longer uses red-600 on Classic light');
 assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');

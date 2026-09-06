@@ -1094,11 +1094,9 @@ html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\
 html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-/* Same No Service red on every pack and light/dark. Classic used peach
-   (#fecaca / #fca5a5) that washed out on the blue header. */
-#current-day span.text-red-600 {
-  color: #dc2626 !important;
-}
+/* Same No Service red in light and dark. Classic light used red-600
+   (#dc2626) that fought the blue header; match dark red-400 (#f87171). */
+#current-day span.text-red-600,
 html.dark #current-day span.text-red-600,
 html.dark #current-day span.dark\:text-red-400 {
   color: #f87171 !important;

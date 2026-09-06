@@ -402,7 +402,7 @@ const Admin = {
     formatAdminBubbleLabel: (name) => {
         const n = String(name || '').replace(/^[-–—]\s*/, '').trim();
         if (!n || /^admin$/i.test(n)) return 'Admin';
-        return `- ${n}`;
+        return n;
     },
 
     // --- 0.1 GLOBAL AUTH KEY HELPER (GUARDIAN PHASE 9) ---
@@ -9711,7 +9711,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-refine-v2';
+        const ALERT_PANEL_REV = 'alerts-active-v1';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -9735,9 +9735,10 @@ const Admin = {
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
                 <div id="alert-tabs-swipe" class="flex border-b border-gray-200 dark:border-gray-700 touch-pan-y">
-                    <button type="button" id="alert-tab-compose" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">New Alert</button>
-                    <button type="button" id="alert-tab-schedule" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Schedule</button>
-                    <button type="button" id="alert-tab-archive" class="flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Archive</button>
+                    <button type="button" id="alert-tab-compose" class="flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider">New Alert</button>
+                    <button type="button" id="alert-tab-active" class="flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Active Alerts</button>
+                    <button type="button" id="alert-tab-schedule" class="flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Scheduled</button>
+                    <button type="button" id="alert-tab-archive" class="flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider">Archived</button>
                 </div>
 
                 <div id="alert-compose-pane" class="space-y-3">
@@ -10007,6 +10008,19 @@ const Admin = {
                 </div>
                 </div>
 
+                <div id="alert-active-pane" class="hidden space-y-3">
+                    <div class="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <p class="text-[10px] text-emerald-800 dark:text-emerald-300 font-medium leading-snug">
+                            Live channel posts. Edit keeps the original posted time so commuters who already saw it do not get a new unseen badge.
+                        </p>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase" id="alert-active-status">Idle</span>
+                        <button type="button" id="alert-active-refresh-btn" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-2 py-1 text-[10px] font-bold focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="alert-active-list" class="space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar"></div>
+                </div>
+
                 <div id="alert-schedule-pane" class="hidden space-y-3">
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
                         <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
@@ -10067,7 +10081,7 @@ const Admin = {
         delete alertPanel.dataset.adminShell;
         alertPanel.removeAttribute('aria-hidden');
         alertPanel.classList.remove('hidden');
-        alertPanel.dataset.adminLoaded = "alerts-refine-v2";
+        alertPanel.dataset.adminLoaded = ALERT_PANEL_REV;
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -10080,12 +10094,15 @@ const Admin = {
         const clearBtn = document.getElementById('alert-clear-btn');
         const severitySelect = document.getElementById('alert-severity');
         const tabCompose = document.getElementById('alert-tab-compose');
+        const tabActive = document.getElementById('alert-tab-active');
         const tabSchedule = document.getElementById('alert-tab-schedule');
         const tabArchive = document.getElementById('alert-tab-archive');
         const composePane = document.getElementById('alert-compose-pane');
+        const activePane = document.getElementById('alert-active-pane');
         const schedulePane = document.getElementById('alert-schedule-pane');
         const archivePane = document.getElementById('alert-archive-pane');
         const archiveRefreshBtn = document.getElementById('alert-archive-refresh-btn');
+        const activeRefreshBtn = document.getElementById('alert-active-refresh-btn');
         
         const signoffInput = document.getElementById('alert-signoff');
         const forcePopupToggle = document.getElementById('alert-force-popup');
@@ -10211,24 +10228,30 @@ const Admin = {
 
         Admin.currentAlertManagerTab = 'compose';
         const setAlertTab = (tab) => {
-            const next = (tab === 'schedule' || tab === 'archive') ? tab : 'compose';
+            const allowed = { compose: 1, active: 1, schedule: 1, archive: 1 };
+            const next = allowed[tab] ? tab : 'compose';
             Admin.currentAlertManagerTab = next;
             if (composePane) composePane.classList.toggle('hidden', next !== 'compose');
+            if (activePane) activePane.classList.toggle('hidden', next !== 'active');
             if (schedulePane) schedulePane.classList.toggle('hidden', next !== 'schedule');
             if (archivePane) archivePane.classList.toggle('hidden', next !== 'archive');
-            const activeTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider';
-            const idleTabCls = 'flex-1 py-2 text-[10px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider';
+            const activeTabCls = 'flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none tracking-wider';
+            const idleTabCls = 'flex-1 py-2 px-0.5 text-[9px] uppercase font-black border-b-2 border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none tracking-wider';
             if (tabCompose) tabCompose.className = next === 'compose' ? activeTabCls : idleTabCls;
+            if (tabActive) tabActive.className = next === 'active' ? activeTabCls : idleTabCls;
             if (tabSchedule) tabSchedule.className = next === 'schedule' ? activeTabCls : idleTabCls;
             if (tabArchive) tabArchive.className = next === 'archive' ? activeTabCls : idleTabCls;
             if (next === 'archive') Admin.fetchAlertArchive();
             if (next === 'schedule') Admin.refreshScheduledAlerts();
+            if (next === 'active') Admin.fetchActiveAlerts();
         };
         Admin.setAlertManagerTab = setAlertTab;
         if (tabCompose) tabCompose.onclick = () => setAlertTab('compose');
+        if (tabActive) tabActive.onclick = () => setAlertTab('active');
         if (tabSchedule) tabSchedule.onclick = () => setAlertTab('schedule');
         if (tabArchive) tabArchive.onclick = () => setAlertTab('archive');
         if (archiveRefreshBtn) archiveRefreshBtn.onclick = () => Admin.fetchAlertArchive();
+        if (activeRefreshBtn) activeRefreshBtn.onclick = () => Admin.fetchActiveAlerts();
 
         document.getElementById('alert-archive-filters-toggle')?.addEventListener('click', () => {
             const bodyEl = document.getElementById('alert-archive-filters-body');
@@ -10259,7 +10282,7 @@ const Admin = {
             if (!el || el.dataset.alertSwipeBound === '1') return;
             el.dataset.alertSwipeBound = '1';
             let startX = 0;
-            const order = ['compose', 'schedule', 'archive'];
+            const order = ['compose', 'active', 'schedule', 'archive'];
             el.addEventListener('touchstart', (e) => { startX = e.changedTouches?.[0]?.screenX || 0; }, { passive: true });
             el.addEventListener('touchend', (e) => {
                 const diffX = (e.changedTouches?.[0]?.screenX || 0) - startX;
@@ -10814,7 +10837,6 @@ const Admin = {
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
-                postedAt: isUpdate && Admin._reviewPostedAt ? Admin._reviewPostedAt : nowTs,
                 expiresAt: expiresAtVal,
                 severity: severity,
                 imageUrls: Admin.getSelectedAlertPosters(),
@@ -10824,15 +10846,20 @@ const Admin = {
                 sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                 sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                 isRepost: isRepost || false,
-                repostedAt: isRepost ? nowTs : null,
-                poll: {
-                    active: pollToggle.checked,
-                    question: pollToggle.checked ? pollQuestion.value.trim() : null,
-                    optionA: pollToggle.checked ? pollOptA.value.trim() : null,
-                    optionB: pollToggle.checked ? pollOptB.value.trim() : null,
-                    optionC: optCVal,
-                    showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
-                }
+            };
+            if (isUpdate && Admin._reviewPostedAt) {
+                payload.postedAt = Admin._reviewPostedAt;
+            } else if (!isUpdate) {
+                payload.postedAt = nowTs;
+            }
+            if (isRepost) payload.repostedAt = nowTs;
+            payload.poll = {
+                active: pollToggle.checked,
+                question: pollToggle.checked ? pollQuestion.value.trim() : null,
+                optionA: pollToggle.checked ? pollOptA.value.trim() : null,
+                optionB: pollToggle.checked ? pollOptB.value.trim() : null,
+                optionC: optCVal,
+                showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
             };
 
             const publishAssembled = async () => {
@@ -10853,6 +10880,8 @@ const Admin = {
                     Admin._alertRepostDraft = false;
                     Admin._pendingReviewItemId = null;
                     Admin._reviewPostedAt = null;
+                    const returnToActive = !!Admin._alertEditFromActive && isUpdate;
+                    Admin._alertEditFromActive = false;
                     Admin.setSelectedAlertPosters([]);
                     if (alertMsg) alertMsg.innerHTML = '';
                     if (sourceNameInput) sourceNameInput.value = '';
@@ -10867,7 +10896,11 @@ const Admin = {
                         showToast(errors[0], 'error');
                     }
                     if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
-                    fetchCurrentAlertsForTargets(targets);
+                    if (returnToActive) {
+                        setAlertTab('active');
+                    } else {
+                        fetchCurrentAlertsForTargets(targets);
+                    }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast(e.message || "Failed. Check Session.", "error");
                 } finally {
@@ -10946,6 +10979,95 @@ const Admin = {
                 if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
             } catch (e) { if (typeof showToast === 'function') showToast(e.message || "Failed to clear alert.", "error"); }
         };
+    },
+
+    fetchActiveAlerts: async () => {
+        const statusEl = document.getElementById('alert-active-status');
+        const listEl = document.getElementById('alert-active-list');
+        if (!listEl) return;
+        if (statusEl) statusEl.textContent = 'Loading...';
+        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading active alerts...</div>`;
+        try {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const res = await window.guardianFetch(`${dynamicEndpoint}notices.json?t=${Date.now()}`, {}, 10000);
+            const data = res.ok ? await res.json() : null;
+            const now = Date.now();
+            const items = [];
+            if (data && typeof data === 'object') {
+                for (const [target, node] of Object.entries(data)) {
+                    Admin.listNoticesInTarget(node).forEach((n) => {
+                        if (!n) return;
+                        const exp = Number(n.expiresAt || 0);
+                        if (exp && exp <= now) return;
+                        items.push({
+                            ...n,
+                            target,
+                            id: n.id || n._key,
+                        });
+                    });
+                }
+            }
+            items.sort((a, b) => Number(b.postedAt || b.timestamp || 0) - Number(a.postedAt || a.timestamp || 0));
+            Admin._cachedActiveAlerts = items;
+            Admin.renderActiveAlertsList(items);
+            if (statusEl) statusEl.textContent = items.length ? `${items.length} live` : 'None live';
+        } catch (e) {
+            console.warn('fetchActiveAlerts failed', e);
+            if (statusEl) statusEl.textContent = 'Failed';
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-red-500">Could not load active alerts.</div>`;
+        }
+    },
+
+    renderActiveAlertsList: (items) => {
+        const listEl = document.getElementById('alert-active-list');
+        if (!listEl) return;
+        const rows = Array.isArray(items) ? items : (Admin._cachedActiveAlerts || []);
+        Admin._cachedActiveAlerts = rows;
+        if (!rows.length) {
+            listEl.innerHTML = `<div class="text-center py-8 text-xs text-gray-400">No active alerts.</div>`;
+            return;
+        }
+        listEl.innerHTML = rows.map((item, idx) => {
+            const sev = String(item.severity || 'info').toLowerCase();
+            const sevCls = sev === 'critical'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                : sev === 'warning'
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+            const sevLabel = sev === 'critical' ? 'Critical' : sev === 'warning' ? 'Warning' : 'Info';
+            const when = item.postedAt || item.timestamp;
+            const whenStr = when ? Admin.formatDate(when) : '-';
+            const plain = (() => {
+                try {
+                    const d = document.createElement('div');
+                    d.innerHTML = item.message || item.text || '';
+                    return (d.textContent || '').trim().slice(0, 140) || '(no message)';
+                } catch { return '(no message)'; }
+            })();
+            const scope = escapeHTML(Admin.alertTargetLabel(item.target || item.clearedFrom || '-'));
+            const idSafe = escapeHTML(String(item.id || item._key || idx));
+            return `
+                <div class="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm" data-active-idx="${idx}">
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevLabel}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${scope}</span>
+                    </div>
+                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-2">${escapeHTML(plain)}</p>
+                    <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
+                        <span class="truncate">${idSafe} - ${escapeHTML(whenStr)}</span>
+                        <button type="button" class="alert-active-edit text-blue-600 dark:text-blue-400 font-black uppercase tracking-wider focus:outline-none" data-active-idx="${idx}">Edit</button>
+                    </div>
+                </div>`;
+        }).join('');
+        listEl.querySelectorAll('.alert-active-edit').forEach((btn) => {
+            btn.onclick = () => {
+                const idx = Number(btn.getAttribute('data-active-idx'));
+                const item = rows[idx];
+                if (!item || !item.target || !(item.id || item._key)) return;
+                Admin._alertEditFromActive = true;
+                Admin.loadAlertForReview(item.target, item.id || item._key);
+            };
+        });
     },
 
     fetchAlertArchive: async () => {

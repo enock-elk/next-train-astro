@@ -33,9 +33,11 @@ import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
 import {
     liveBoardJourneyKey,
     liveBoardNextAvailKey,
+    liveBoardStaticKey,
     normalizeCountdownLabel,
     tryPatchLiveBoardCountdown,
     stampLiveBoardCard,
+    isQuietBoardPaint,
 } from './live-board-paint.js';
 
 // --- Astro MPA Migration Shims ---
@@ -345,6 +347,8 @@ export const Renderer = {
 
     renderAtDestination: (element) => {
         if (!element) return;
+        const hereKey = liveBoardStaticKey('here');
+        if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === hereKey) return;
         element.innerHTML = `
             <div class="h-24 flex flex-col justify-center items-center gap-1.5">
                 <svg class="w-7 h-7 text-blue-500 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -353,10 +357,12 @@ export const Renderer = {
                 <div class="text-sm font-bold text-gray-900 dark:text-white">You're here</div>
             </div>
         `;
+        stampLiveBoardCard(element, hereKey);
     },
 
     renderNoWeekendService: (element, destination, firstNextTrain, dayOffset) => {
         let timeHTML = 'N/A';
+        let timeDiffStr = '';
         const nextDayInfo = typeof window.getLookaheadDayInfo === 'function'
             ? window.getLookaheadDayInfo(dayOffset || 1)
             : { name: 'Monday', type: 'weekday' };
@@ -364,11 +370,11 @@ export const Renderer = {
         if (firstNextTrain) {
             const rawTime = firstNextTrain.departureTime || firstNextTrain.train1.departureTime;
             const departureTime = formatTimeDisplay(rawTime);
-            let timeDiffStr = (typeof window.calculateTimeDiffString === 'function')
+            timeDiffStr = (typeof window.calculateTimeDiffString === 'function')
                 ? window.calculateTimeDiffString(rawTime, dayOffset)
                 : "";
-            if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
-            timeHTML = `<div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div><div class="text-xs text-gray-700 dark:text-gray-300 font-medium">${timeDiffStr}</div>`;
+            if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
+            timeHTML = `<div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div><div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>`;
         } else {
             timeHTML = `<div class="text-lg font-bold text-gray-500">No Data</div>`;
         }
@@ -380,9 +386,12 @@ export const Renderer = {
             ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
             : '';
         const headline = emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
+        const weekendKey = liveBoardStaticKey('weekend', destination, firstTime);
+        if (tryPatchLiveBoardCountdown(element, weekendKey, timeDiffStr)) return;
 
+        const weekendAnim = isQuietBoardPaint() ? '' : ' animate-fade-in-up';
         element.innerHTML = `
-            <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
+            <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700${weekendAnim}">
                 <div class="text-sm font-bold text-red-600 dark:text-red-400 text-center px-2 leading-snug">${headline}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">This route does not run on Saturdays</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
@@ -391,10 +400,12 @@ export const Renderer = {
                 ${buttonHTML}
             </div>
         `;
+        stampLiveBoardCard(element, weekendKey);
     },
 
     renderNoService: (element, destination, firstNextTrain, dayOffset, openModalCallback) => {
         let timeHTML = 'N/A';
+        let timeDiffStr = '';
         
         const nextDayInfo = typeof window.getLookaheadDayInfo === 'function' 
             ? window.getLookaheadDayInfo(dayOffset || 1) 
@@ -403,13 +414,13 @@ export const Renderer = {
         if (firstNextTrain) {
             const rawTime = firstNextTrain.departureTime || firstNextTrain.train1.departureTime;
             const departureTime = formatTimeDisplay(rawTime);
-            let timeDiffStr = (typeof window.calculateTimeDiffString === 'function') 
+            timeDiffStr = (typeof window.calculateTimeDiffString === 'function') 
                 ? window.calculateTimeDiffString(rawTime, dayOffset) 
                 : ""; 
             
-            if (timeDiffStr) timeDiffStr = timeDiffStr.replace(/(\d+)h\s(\d+)m/, '$1 hr $2 min').replace(/(\d+)m\)/, '$1 min)');
+            if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
             
-            timeHTML = `<div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div><div class="text-xs text-gray-700 dark:text-gray-300 font-medium">${timeDiffStr}</div>`;
+            timeHTML = `<div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div><div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>`;
         } else {
             timeHTML = `<div class="text-lg font-bold text-gray-500">No Data</div>`;
         }
@@ -421,6 +432,8 @@ export const Renderer = {
             ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
             : '';
         const headline = emptyBoardHeadline('noservice', nextDayInfo.name, firstTime);
+        const nosvcKey = liveBoardStaticKey('noservice', destination, firstTime);
+        if (tryPatchLiveBoardCountdown(element, nosvcKey, timeDiffStr)) return;
 
         // --- GUARDIAN PHASE 4: CROSS-CORRIDOR LIVE BOARD DISRUPTION EVALUATOR ---
         let disruptionHtml = '';
@@ -466,8 +479,9 @@ export const Renderer = {
             }
         }
 
+        const nosvcAnim = isQuietBoardPaint() ? '' : ' animate-fade-in-up';
         element.innerHTML = `
-            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in-up">
+            <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700${nosvcAnim}">
                 <div class="text-sm font-bold text-gray-600 dark:text-gray-400 text-center px-2 leading-snug">${headline}</div>
                 ${disruptionHtml}
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
@@ -476,6 +490,7 @@ export const Renderer = {
                 ${buttonHTML}
             </div>
         `;
+        stampLiveBoardCard(element, nosvcKey);
     },
 
     renderNextAvailableTrain: (element, destination, firstTrain, dayName, dayType, dayOffset) => {
@@ -487,7 +502,7 @@ export const Renderer = {
         
         if (timeDiffStr) timeDiffStr = normalizeCountdownLabel(timeDiffStr);
         const nextKey = liveBoardNextAvailKey(destination, rawTime, dayOffset);
-        if (tryPatchLiveBoardCountdown(element, nextKey, timeDiffStr)) return;
+        if (tryPatchLiveBoardCountdown(element, nextKey, timeDiffStr, { clockTime: departureTime })) return;
         
         const safeDest = escapeHTML(destination);
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'");
@@ -542,7 +557,7 @@ export const Renderer = {
                 <div class="text-sm font-bold text-gray-600 dark:text-gray-400 text-center px-2 leading-snug">${headline}</div>
                 ${disruptionHtml}
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
-                    <div class="text-xl font-bold text-gray-900 dark:text-white">${departureTime}</div>
+                    <div class="text-xl font-bold text-gray-900 dark:text-white" data-nt-deptime>${departureTime}</div>
                     <div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>
                 </div>
                 <button onclick="window.openScheduleModal('${safeDestForClick}', '${dayType}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${dayName} Schedule</button>
@@ -584,7 +599,7 @@ export const Renderer = {
             : '';
         const onTrainHtml = '';
         const boardKey = liveBoardJourneyKey(journey, destination);
-        if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr)) return;
+        if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr, { clockTime: safeDepTime })) return;
         element.innerHTML = "";
         
         const safeDestForClick = safeDest.replace(/&#39;/g, "\\'"); 
@@ -733,7 +748,7 @@ export const Renderer = {
                 <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
-                        <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
+                        <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight" data-nt-deptime>${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${liveHintHtml}
                         ${schedNote}
@@ -816,7 +831,7 @@ export const Renderer = {
                 <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
                     <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
-                        <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight">${safeDepTime}</div>
+                        <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight" data-nt-deptime>${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${liveHintHtml}
                         ${schedNote}

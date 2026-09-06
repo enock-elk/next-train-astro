@@ -118,6 +118,8 @@ const now = 1_700_000_000_000;
 {
     const key = seenStorageKey({ id: '0619', _sourceKey: 'pta-kempton' });
     assert(key === 'seen_notice_pta-kempton_0619', `seen key ${key}`);
+    const afterEdit = seenStorageKey({ id: '0619', _sourceKey: 'pta-kempton', postedAt: 99, message: 'edited' });
+    assert(afterEdit === key, 'edit keeps the same unseen key');
 }
 
 {

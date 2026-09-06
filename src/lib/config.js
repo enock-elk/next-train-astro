@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_09.06.16";
+export const APP_VERSION = "V9_09.06.17";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -897,12 +897,12 @@ export const FARE_CONFIG = {
         "Z4": 15.00
     },
 
-    // Detailed ticket table (new fares from Aug 2025 announcement)
+    // Detailed ticket table. Monthly amounts are the V5 zone table.
     zones_detailed: {
-        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 240.00 },
-        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 300.00 },
-        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 320.00 },
-        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 350.00 }
+        "Z1": { single: 10.00, return: 20.00, weekly_mon_fri: 60.00, weekly_mon_sat: 75.00, monthly: 180.00 },
+        "Z2": { single: 12.00, return: 24.00, weekly_mon_fri: 70.00, weekly_mon_sat: 80.00, monthly: 220.00 },
+        "Z3": { single: 14.00, return: 28.00, weekly_mon_fri: 80.00, weekly_mon_sat: 100.00, monthly: 250.00 },
+        "Z4": { single: 15.00, return: 30.00, weekly_mon_fri: 90.00, weekly_mon_sat: 120.00, monthly: 280.00 }
     },
 
     profiles: {

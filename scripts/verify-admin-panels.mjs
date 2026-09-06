@@ -167,6 +167,10 @@ assert(ui.includes("'admin-ticket-view-modal': '#roadmap-ticket'"), 'ticket view
 assert(ui.includes('Admin.syncDrillFromHash'), 'popstate restores the drilled panel from the hash');
 assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not always the grid');
 
+assert(admin.includes('zone-audit-monthly-legend'), 'zone audit shows a monthly ticket legend');
+assert(admin.includes('formatZoneMonthlyLegend'), 'zone audit legend reads FARE_CONFIG monthlies');
+assert(admin.includes('monthly R${Number(d.monthly)}'), 'zone audit direction rows show monthly');
+
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');

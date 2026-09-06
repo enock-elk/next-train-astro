@@ -13314,6 +13314,9 @@ const Admin = {
                             and checks the assigned fare zone against PRASA Aug 2025 travel distances:
                             Z1 1-15 - Z2 16-40 - Z3 41-135 - Z4 &gt;135 km.
                         </p>
+                        <p id="zone-audit-monthly-legend" class="text-[9px] text-emerald-800 dark:text-emerald-400 font-medium leading-snug">
+                            Monthly tickets: Z1 R180 - Z2 R220 - Z3 R250 - Z4 R280.
+                        </p>
 
                         <div>
                             <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Data Source</label>
@@ -13504,6 +13507,23 @@ const Admin = {
         if (z2Input) z2Input.value = defaultBands.Z2;
         if (z3Input) z3Input.value = defaultBands.Z3;
 
+        const zoneMonthlyTable = () => {
+            if (typeof FARE_CONFIG !== 'undefined' && FARE_CONFIG.zones_detailed) return FARE_CONFIG.zones_detailed;
+            return {};
+        };
+        const formatZoneMonthlyLegend = (table) => {
+            const src = table && Object.keys(table).length ? table : zoneMonthlyTable();
+            const bits = ['Z1', 'Z2', 'Z3', 'Z4'].map((z) => {
+                const m = src[z]?.monthly;
+                return m != null ? `${z} R${Number(m)}` : null;
+            }).filter(Boolean);
+            return bits.length
+                ? `Monthly tickets: ${bits.join(' - ')}.`
+                : 'Monthly tickets: Z1 R180 - Z2 R220 - Z3 R250 - Z4 R280.';
+        };
+        const zoneAuditMonthlyLegend = document.getElementById('zone-audit-monthly-legend');
+        if (zoneAuditMonthlyLegend) zoneAuditMonthlyLegend.textContent = formatZoneMonthlyLegend();
+
         if (zoneAuditHeader && zoneAuditBody) {
             zoneAuditHeader.onclick = () => {
                 zoneAuditBody.classList.toggle('hidden');
@@ -13572,7 +13592,8 @@ const Admin = {
 
         const renderZoneAuditReport = (report) => {
             lastZoneAuditReport = report;
-            const { summary, routes, bands } = report;
+            const { summary, routes, bands, ticketTable } = report;
+            if (zoneAuditMonthlyLegend) zoneAuditMonthlyLegend.textContent = formatZoneMonthlyLegend(ticketTable);
             const esc = (typeof escapeHTML === 'function')
                 ? escapeHTML
                 : (t) => String(t).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -13600,6 +13621,9 @@ const Admin = {
                     </div>
                     <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1.5 text-center">
                         PRASA bands: Z1 1-${bands.Z1} - Z2 ${bands.Z1 + 1}-${bands.Z2} - Z3 ${bands.Z2 + 1}-${bands.Z3} - Z4 &gt;${bands.Z3} km
+                    </p>
+                    <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-0.5 text-center">
+                        ${esc(formatZoneMonthlyLegend(ticketTable))}
                     </p>
                 `;
             }
@@ -13629,6 +13653,7 @@ const Admin = {
                     : '';
                 const assigned = p?.assignedZone || (r.zones?.[0] || '-');
                 const suggested = p?.suggestedZone || '-';
+                const assignedMonthly = p?.monthly != null ? ` · R${Number(p.monthly)}/mo` : '';
                 const rangeLabels = (typeof ZONE_KM_RANGE_LABELS !== 'undefined' && ZONE_KM_RANGE_LABELS) ? ZONE_KM_RANGE_LABELS : {};
                 const suggestedRange = suggested !== '-' && rangeLabels[suggested] ? ` (${rangeLabels[suggested]})` : '';
                 const routeBit = Admin.formatRouteLabelHtml(r.routeName);
@@ -13643,6 +13668,7 @@ const Admin = {
 
                 const dirRows = (r.directions || []).map((d) => {
                     const m = d.measure || {};
+                    const monthlyBit = d.monthly != null ? ` monthly R${Number(d.monthly)}` : '';
                     const segPreview = (m.segments || [])
                         .filter((s) => s.km != null)
                         .slice(0, 8)
@@ -13653,7 +13679,7 @@ const Admin = {
                         <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
                             <div class="flex justify-between gap-2 font-mono text-[9px]">
                                 <span class="truncate">${esc(d.dayDir)} - ${esc(d.sheetKey)}</span>
-                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '-')}/${esc(d.suggestedZone || '-')}${d.mismatch ? ' !' : ''}</span>
+                                <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '-')}/${esc(d.suggestedZone || '-')}${monthlyBit}${d.mismatch ? ' !' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
                                 path ${m.pathKm != null ? m.pathKm + ' km' : '-'}
@@ -13672,7 +13698,7 @@ const Admin = {
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5 mb-0.5">
                                     <span class="font-black uppercase tracking-wider text-[9px] opacity-80">${statusLabel}</span>
-                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} -> ${esc(suggested)}${esc(suggestedRange)}</span>
+                                    <span class="font-mono text-[9px] opacity-60">${esc(assigned)} -> ${esc(suggested)}${esc(suggestedRange)}${esc(assignedMonthly)}</span>
                                 </div>
                                 <div class="font-semibold truncate">${routeBit}</div>
                                 <div class="text-[9px] opacity-70 mt-0.5">${esc(r.destA || '')} - ${esc(r.destB || '')}</div>

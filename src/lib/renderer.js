@@ -742,9 +742,9 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="flex-1 min-w-0 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden self-stretch">
+                    <div class="flex-1 min-w-0 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg self-stretch">
                         <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${titleBtn}</div>
-                        <div class="text-[10px] ${detailColor} leading-tight truncate w-full px-1 min-w-0" title="${detailLine}">
+                        <div class="text-[10px] ${detailColor} leading-tight break-words w-full px-1 min-w-0" title="${detailLine}">
                             ${detailLine}
                         </div>
                         ${disruptionHtml}
@@ -796,9 +796,9 @@ export const Renderer = {
                     <div class="text-[9px] leading-tight w-full space-y-1 min-w-0">
                         <div class="mb-1">
                              ${connectBtn}
-                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
+                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
                         </div>
-                        <div class="italic text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 truncate w-full" title="${finalDestTitle}: Train ${nextTrain} from ${nextDep}">
+                        <div class="italic text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 break-words w-full" title="${finalDestTitle}: Train ${nextTrain} from ${nextDep}">
                             ${finalDestTitle}: Train ${nextTrain} from ${nextDep}
                         </div>
                     </div>
@@ -807,7 +807,7 @@ export const Renderer = {
                 bottomBlock = `
                     <div class="text-[10px] leading-tight w-full min-w-0">
                         ${connectBtn}
-                        <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
+                        <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
                     </div>
                 `;
             }
@@ -825,10 +825,10 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] overflow-hidden self-stretch">
+                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
                         <div class="border-b border-gray-200 dark:border-gray-700 pb-2 mb-2 w-full min-w-0">
                             <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${shuttleBtn}</div>
-                            <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold truncate w-full px-1" title="To ${displayDest} (Arr ${arrivalAtTransfer})">To ${displayDest} <span class="font-normal opacity-80">(Arr ${arrivalAtTransfer})</span></div>
+                            <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full px-1" title="To ${displayDest} (Arr ${arrivalAtTransfer})">To ${displayDest} <span class="font-normal opacity-80">(Arr ${arrivalAtTransfer})</span></div>
                         </div>
                         ${bottomBlock}
                         ${disruptionHtml}

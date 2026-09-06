@@ -461,7 +461,7 @@ export function buildTrainTitleReportButton({
     className = '',
 }) {
     if (!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()) {
-        return `<span class="${className}"><span class="truncate">${escapeHTML(label)}</span></span>`;
+        return `<span class="${className}"><span class="min-w-0 break-words">${escapeHTML(label)}</span></span>`;
     }
     const attrs = [
         `data-open-train-report`,
@@ -473,7 +473,7 @@ export function buildTrainTitleReportButton({
         `data-dest="${escapeHTML(destination || '')}"`,
     ].join(' ');
     return `<button type="button" class="${className}" ${attrs} title="Train ${escapeHTML(String(trainId || ''))} - status and I’m on it">
-      <span class="truncate">${escapeHTML(label)}</span>
+      <span class="min-w-0 break-words">${escapeHTML(label)}</span>
       ${flagSvgHtml(null)}
     </button>`;
 }

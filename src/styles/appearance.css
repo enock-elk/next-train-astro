@@ -1033,19 +1033,21 @@ html.dark .planner-share-slot > button {
   color: rgb(var(--nt-blue-300)) !important;
 }
 
-/* Phone-only shell scale. Do not change html rem (admin, ads, overlays).
-   Planner toolbar stays 2rem / 12px so S9+ does not squeeze the row. */
-@media (max-width: 480px) {
+/* Phone width scale. Design 390. Floor 320 (SE). Do not raise rem on
+   tablets/desktop — #main-content stays max-w-md (28rem). Do not transform
+   #nt-shell (ads / fixed overlays). Planner toolbar stays 2rem / text-xs. */
+@media (max-width: 639px) {
+  html {
+    font-size: clamp(13.12px, calc(16px * 100vw / 390), 16px);
+  }
   #nt-shell,
   #main-content {
-    --nt-ui-scale: clamp(0.90, calc(100vw / 390), 1.06);
+    --nt-ui-scale: clamp(0.82, calc(100vw / 390), 1);
   }
   #route-subtitle-text {
-    font-size: clamp(0.82rem, calc(0.95rem * var(--nt-ui-scale, 1)), 1.05rem);
     line-height: 1.2;
   }
   #view-full-timetable-btn .nt-timetable-label {
-    font-size: clamp(0.68rem, calc(0.78rem * var(--nt-ui-scale, 1)), 0.88rem);
     letter-spacing: 0.04em;
     white-space: nowrap;
   }

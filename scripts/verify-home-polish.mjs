@@ -11,7 +11,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.7', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.8', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -87,6 +87,9 @@ assert(renderer.includes('emptyBoardHeadline'), 'empty board uses condensed head
 assert(renderer.includes('tryPatchLiveBoardCountdown'), 'minute tick patches countdown text instead of remounting');
 assert(renderer.includes('data-nt-countdown'), 'countdown node is stamped for quiet paint');
 assert(renderer.includes('stampLiveBoardCard'), 'board cards carry a stable key');
+assert(renderer.includes('font-bold break-words w-full">To ${connDest}'), 'connect destination wraps instead of truncating');
+assert(renderer.includes('font-bold break-words w-full px-1" title="To ${displayDest}'), 'shuttle destination wraps instead of truncating');
+assert(!renderer.includes('text-gray-400 font-bold truncate w-full">To ${connDest}'), 'connect line no longer uses truncate');
 assert(renderer.includes('No more trains today · first'), 'empty board one-liner copy');
 assert(renderer.includes('first ${dayBit}:'), 'empty board headline uses a trailing colon, not a duplicated time');
 assert(!renderer.includes('timeBit'), 'empty board headline no longer appends the time');

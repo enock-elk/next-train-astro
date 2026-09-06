@@ -6,7 +6,7 @@
 
     <!-- ROUTE PIN & TITLE -->
     <div class="text-center mb-3 flex flex-col justify-center items-center w-full">
-        <div id="route-selector-pill" class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 min-h-[46px] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
+        <div id="route-selector-pill" class="w-full grid grid-cols-[3rem_1fr_3rem] items-stretch bg-white dark:bg-gray-800 min-h-[2.875rem] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
 
             <button id="pin-route-btn" class="relative flex items-center justify-center w-full h-full text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none group cursor-pointer" title="Pin this route" aria-label="Pin Route">
                 <svg id="pin-outline" class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
@@ -47,13 +47,13 @@
                 <select id="station-select" class="hidden w-full p-4 rounded-xl bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-lg font-medium text-gray-900 dark:text-white shadow-sm focus:border-blue-50 focus:ring-blue-500 transition-colors">
                     <option value="">Loading stations...</option>
                 </select>
-                <input type="text" readonly id="station-search-input" placeholder="Select Station..." class="block w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl shadow-sm p-3 text-lg font-medium focus:ring-blue-500 focus:border-blue-500 transition-colors h-[54px] appearance-none pr-12 cursor-pointer select-none truncate">
+                <input type="text" readonly id="station-search-input" placeholder="Select Station..." class="block w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl shadow-sm p-3 text-lg font-medium focus:ring-blue-500 focus:border-blue-500 transition-colors h-[3.375rem] appearance-none pr-12 cursor-pointer select-none truncate">
                 <div id="next-train-chevron" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer p-2 hover:text-blue-500 z-10 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
             </div>
-            <button id="locate-btn" type="button" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl shadow-md transition-colors flex-shrink-0 h-[54px] w-[54px] flex items-center justify-center focus:outline-none" title="Find my nearest station" aria-label="Find Nearest Station">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+            <button id="locate-btn" type="button" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl shadow-md transition-colors flex-shrink-0 h-[3.375rem] w-[3.375rem] flex items-center justify-center focus:outline-none" title="Find my nearest station" aria-label="Find Nearest Station">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
             </button>
         </div>
         <!-- Live presence (gated via config/features rideCheckIn) -->

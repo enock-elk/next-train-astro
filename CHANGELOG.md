@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.8 — Phone-width shell scale (6 Sep 2026)
+
+no release notes.
+
+- Phones (`max-width: 639px`) set `html` rem to `clamp(13.12px, 16px * 100vw / 390, 16px)` so Tailwind rem, icons, and `3rem` grid tracks shrink together. Floor is iPhone SE (320). Do not transform `#nt-shell`.
+- `#main-content` keeps `max-width: 28rem` on phones (no `max-width: none`), so tablets/desktop do not stretch past the existing card.
+- Board shuttle/connect lines wrap (`break-words`) instead of `truncate`. Title report labels wrap the same way.
+- Route pill / station / locate / planner matching rows use rem heights (`2.875rem` / `3.375rem`) so they follow the phone scale.
+
 ## V9_09.06.3 — Day subtitle + Feedback Hub keyboard (6 Sep 2026)
 
 no release notes.

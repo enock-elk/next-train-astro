@@ -366,11 +366,14 @@ assert(!layout.includes('header-meta #current-day') || !/header-meta #current-da
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
 assert(layout.includes('lastFullLayoutH'), 'keyboard does not overwrite the full-screen layout height');
-assert(layout.includes('lastShellH'), 'keyboard freezes the last visible shell box');
+assert(layout.includes('lastShellH'), 'keyboard keeps a last-visible shell fallback');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
-assert(layout.includes('#view-community.view-section.active'), 'Community composer lifts above the IME');
+assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
+assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
+assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;'), 'Community keyboard pad is a small gap, not shell minus visual');
+assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');

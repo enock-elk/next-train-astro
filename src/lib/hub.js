@@ -214,11 +214,18 @@ function syncFeedbackModalViewport() {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
     const cssVv = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nt-vv-h')) || 0;
-    const height = Math.max(240, Math.round(Math.min(
-        cssVv || Infinity,
-        vv?.height || Infinity,
-        window.innerHeight || Infinity,
-    ) || cssVv || vv?.height || window.innerHeight || 240));
+    const editing = !!document.activeElement?.closest?.('#feedback-modal, #messages-thread-modal');
+    // Prefer the live visual viewport while typing. --nt-vv-h can stay tall if
+    // the IME overlays instead of resizing layout.
+    const height = Math.max(240, Math.round(
+        (editing && vv?.height) ? vv.height : (
+            Math.min(
+                cssVv || Infinity,
+                vv?.height || Infinity,
+                window.innerHeight || Infinity,
+            ) || cssVv || vv?.height || window.innerHeight || 240
+        )
+    ));
     const top = Math.max(0, Math.round(vv?.offsetTop || 0));
     COMMUTER_FEEDBACK_MODAL_IDS.forEach((id) => {
         const modal = document.getElementById(id);

@@ -11973,8 +11973,8 @@ const Admin = {
             alertPanel.parentNode.appendChild(exclPanel);
         }
 
-        if (exclPanel.dataset.adminLoaded === "excl-refine-v2") return;
-        exclPanel.dataset.adminLoaded = "excl-refine-v2";
+        if (exclPanel.dataset.adminLoaded === "excl-refine-v3") return;
+        exclPanel.dataset.adminLoaded = "excl-refine-v3";
 
         exclPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
@@ -12110,6 +12110,7 @@ const Admin = {
 
                 <div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
                     <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">Active Exceptions:</p>
+                    <p class="text-[9px] text-gray-400 mb-2">Tap a banned or special train to edit its details. The X still removes it.</p>
                     <div id="excl-list" class="space-y-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar"></div>
                 </div>
             </div>
@@ -12579,6 +12580,47 @@ const Admin = {
             }
         };
 
+        let exclCache = {};
+
+        const fillExclusionEditor = (trainNum, item) => {
+            if (!item || trainNum === '_grid_notice') return;
+            const tNum = String(trainNum);
+            const manual = document.getElementById('excl-train-manual');
+            if (manual) {
+                manual.value = tNum;
+                manual.classList.remove('hidden');
+            }
+            exclStaging.clear();
+            exclStaging.add(tNum);
+            exclTrainInputs().forEach((cb) => { cb.checked = cb.value === tNum; });
+            renderExclStaging();
+            daysContainer.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+                cb.checked = Array.isArray(item.days) && item.days.includes(parseInt(cb.value, 10));
+            });
+            const type = item.type === 'special' ? 'special' : 'banned';
+            document.querySelectorAll('input[name="excl-type"]').forEach((r) => {
+                r.checked = r.value === type;
+            });
+            const reasonEl = document.getElementById('excl-reason');
+            if (reasonEl) reasonEl.value = item.reason || '';
+            const expiry = document.getElementById('excl-expiry');
+            if (expiry) {
+                expiry.value = item.expiresAt ? Admin.toLocalDatetimeValue(item.expiresAt) : '';
+            }
+            const exportToggle = document.getElementById('excl-export-toggle');
+            if (exportToggle) exportToggle.checked = item.showOnExport !== false;
+            if (saveBtn) saveBtn.textContent = 'Update Exception';
+            reasonEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            if (typeof showToast === 'function') showToast(`Editing #${tNum}`, 'info', 1400);
+        };
+
+        Admin.loadExclusionForEdit = (trainNum, item) => {
+            const cached = item || exclCache[String(trainNum)];
+            if (!cached) return false;
+            fillExclusionEditor(trainNum, cached);
+            return true;
+        };
+
         async function fetchExclusions() {
             const rId = routeSelect.value;
             listDiv.innerHTML = '<div class="text-xs text-gray-400 italic">Loading...</div>';
@@ -12615,6 +12657,7 @@ const Admin = {
                 }
 
                 listDiv.innerHTML = '';
+                exclCache = {};
                 if (!data || (Object.keys(data).length === 1 && data._grid_notice)) {
                     listDiv.innerHTML = '<div class="text-xs text-gray-400 italic">No active exceptions.</div>';
                     return;
@@ -12624,7 +12667,8 @@ const Admin = {
                     if (trainNum === '_grid_notice') return; // Skip rendering the grid notice block here
                     
                     const item = data[trainNum];
-                    const dayLabels = item.days.map(d => days[d]).join('');
+                    exclCache[String(trainNum)] = item;
+                    const dayLabels = (item.days || []).map(d => days[d]).join('');
                     
                     const isSpecial = item.type === 'special';
                     
@@ -12650,7 +12694,10 @@ const Admin = {
                         : '<span class="bg-red-100 text-red-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">BAN</span>';
 
                     const row = document.createElement('div');
-                    row.className = `flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs border border-gray-100 dark:border-gray-700 mt-1 ${rowOpacityClass}`;
+                    row.className = `flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs border border-gray-100 dark:border-gray-700 mt-1 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 ${rowOpacityClass}`;
+                    row.setAttribute('data-excl-edit', trainNum);
+                    row.setAttribute('role', 'button');
+                    row.setAttribute('tabindex', '0');
                     row.innerHTML = `
                         <div>
                             ${badgeHtml}
@@ -12660,10 +12707,25 @@ const Admin = {
                             <div class="text-[9px] text-gray-400 mt-0.5">${item.reason || 'No reason specified'}</div>
                             ${expiryHtml}
                         </div>
-                        <button class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')" aria-label="Delete">${Admin.icon('x', 'w-4 h-4')}</button>
+                        <button type="button" class="text-gray-400 hover:text-white hover:bg-red-500 rounded px-1.5 py-0.5 transition-colors font-bold focus:outline-none" onclick="Admin.deleteExclusion('${rId}', '${trainNum}')" aria-label="Delete">${Admin.icon('x', 'w-4 h-4')}</button>
                     `;
+                    const openEditor = () => fillExclusionEditor(trainNum, item);
+                    row.addEventListener('click', (e) => {
+                        if (e.target.closest('button')) return;
+                        openEditor();
+                    });
+                    row.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openEditor();
+                        }
+                    });
                     listDiv.appendChild(row);
                 });
+                const pendingId = Admin._pendingReviewItemId;
+                if (pendingId && pendingId !== '_grid_notice' && exclCache[String(pendingId)]) {
+                    fillExclusionEditor(pendingId, exclCache[String(pendingId)]);
+                }
             } catch(e) {
                 listDiv.innerHTML = `<div class="text-xs text-red-500">Error loading list.</div>`;
             }

@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.06.10 — Lenz hop, exclusion edit, Feedback Hub keyboard (6 Sep 2026)
+
+no release notes.
+
+- GP `jhb-midway` bake keeps the 29 Aug geometry and appends only the Midway→Lenz hop (102 points). Other GP features are unchanged.
+- Schedule Exceptions: tap an active banned/special train to load its details into the editor. Delete still uses the X.
+- Feedback Hub: drop `interactive-widget=overlays-content` and size the modal from the live visual viewport / `--nt-feedback-vv-height` so the composer sits above the keyboard.
+
 ## V9_09.06.9 — Live map tracks, no map share (6 Sep 2026)
 
 no release notes.

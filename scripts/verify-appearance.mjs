@@ -334,6 +334,7 @@ assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinn
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
 assert(hubJs.includes("if (id === 'messages-thread-modal')"), 'only Feedback Hub card is stretched to 100%');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
+assert(hubJs.includes('editing && vv?.height'), 'Feedback Hub uses live visualViewport height while typing');
 assert(hubJs.includes('modal.style.maxHeight'), 'Feedback Hub maxHeight follows the keyboard');
 assert(hubJs.includes('fieldRect.height > availableHeight'), 'tall feedback fields align their first line inside a short scroller');
 assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'feedback composer growth uses visible height');
@@ -360,7 +361,7 @@ assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
-assert(layout.includes('var(--nt-vv-h, var(--nt-feedback-vv-height'), 'Feedback Hub height prefers live --nt-vv-h');
+assert(layout.includes('var(--nt-feedback-vv-height, var(--nt-vv-h'), 'Feedback Hub height prefers the JS keyboard height');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');

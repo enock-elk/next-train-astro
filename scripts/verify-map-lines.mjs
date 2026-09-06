@@ -93,8 +93,8 @@ assert(!mapView.includes('map-tab-contribute-btn'), 'Map tab dropped the share-l
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 assert(!mapApp.includes('Share my location'), 'map-app does not prompt Share my location');
-assert(mapApp.includes('"TSHIAWELO", "MIDWAY"'), 'JHB Midway static path ends at Midway, matching live nexttrain.co.za');
-assert(!mapApp.includes('"LENZ":'), 'map station dictionary matches live and does not add Lenz');
+assert(mapApp.includes('"TSHIAWELO", "MIDWAY", "LENZ"'), 'JHB Midway static path continues from Midway to Lenz');
+assert(mapApp.includes('"LENZ": [-26.319519733948702, 27.82296719973482]'), 'map station dictionary includes Lenz');
 assert(mapApp.includes('"NDABENI", "PINELANDS", "HAZENDAL"'), 'Cape Flats static path is Ndabeni then Pinelands then Hazendal');
 assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line is Avoca then Duff\'s Road');
 assert(!mapApp.includes('"AVOCA", "TEMPLE"'), 'Avoca is not followed by Temple');
@@ -241,9 +241,12 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
     const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
     const midway = gp.features.find((f) => f.properties?.routeId === 'jhb-midway');
     const names = midway?.properties?.stationNames || [];
-    assert(names.includes('MIDWAY') && names[names.length - 1] === 'MIDWAY', 'jhb-midway bake matches live and ends at Midway');
-    assert(!names.includes('LENZ'), 'jhb-midway bake does not add a Lenz hop');
-    assert(gp.properties?.generatedAt === '2026-08-29T01:37:44.682Z', 'GP tracks match the live 29 Aug bake');
+    assert(names.includes('MIDWAY') && names[names.length - 1] === 'LENZ', 'jhb-midway bake continues from Midway to Lenz');
+    assert(names.includes('LENZ'), 'jhb-midway bake includes a Lenz hop');
+    assert((midway?.geometry?.coordinates || []).length === 823, 'jhb-midway bake is the 29 Aug line plus the Midway-Lenz hop');
+    assert(gp.properties?.generatedAt === '2026-08-29T01:37:44.682Z', 'GP tracks keep the live 29 Aug bake timestamp');
+    const soweto = gp.features.find((f) => f.properties?.routeId === 'jhb-soweto');
+    assert((soweto?.geometry?.coordinates || []).length === 517, 'other GP lines were not rebaked');
 }
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');

@@ -42,7 +42,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 <html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
     <style is:inline>
       /* Phone width scale before the hashed bundle. Design 390. Floor 320 (SE).
          Tablets/desktop keep 16px rem; the shell stays max-w-md (28rem). */
@@ -974,8 +974,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         left: 0 !important;
         right: 0 !important;
         bottom: auto !important;
-        height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh)) !important;
-        max-height: var(--nt-vv-h, var(--nt-feedback-vv-height, 100dvh)) !important;
+        height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+        max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],

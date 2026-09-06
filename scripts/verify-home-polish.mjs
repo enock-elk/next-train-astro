@@ -11,7 +11,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.9', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.06.10', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -135,7 +135,9 @@ assert(admin.includes('id="alert-source-save-btn"'), 'save source control');
 assert(admin.includes('nt_admin_alert_sources'), 'sources persist in localStorage');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
 assert(admin.includes('alerts-refine-v2'), 'alert panel rebuild key');
-assert(admin.includes('excl-refine-v2'), 'exclusion panel rebuild key');
+assert(admin.includes('excl-refine-v3'), 'exclusion panel rebuild key');
+assert(admin.includes('Admin.loadExclusionForEdit'), 'admins can open a banned train into the editor');
+assert(admin.includes('data-excl-edit'), 'active exception rows are clickable for edit');
 assert(admin.includes('id="alert-force-popup"') && admin.includes('id="alert-poll-toggle"'), 'force popup and poll toggles remain');
 assert(admin.includes('id="excl-grid-notice-export"') && admin.includes('id="excl-export-toggle"'), 'banner and train-tag export checkboxes remain');
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');

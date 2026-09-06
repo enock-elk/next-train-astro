@@ -984,16 +984,19 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
 }
 
-/* Idle/info bell: readable ink on a real disc. Critical/warning stay red/amber. */
+/* Idle/info bell: a real disc on every pack. Classic dark used
+   --nt-primary-soft navy on a navy header so the circle vanished.
+   Earthy/Ember used --nt-surface on a matching header. Light disc +
+   dark ink matches Classic light. Critical/warning stay red/amber. */
 #notice-bell.nt-bell-info {
-  background-color: var(--nt-primary-soft) !important;
-  color: var(--nt-text) !important;
+  background-color: #ffffff !important;
+  color: #1e3a5f !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #000 16%, transparent), 0 1px 2px color-mix(in srgb, #000 12%, transparent);
 }
-html[data-colour-pack="earthy"] #notice-bell.nt-bell-info,
-html[data-colour-pack="ember"] #notice-bell.nt-bell-info {
-  background-color: var(--nt-surface) !important;
-  color: var(--nt-chrome-fg) !important;
-  box-shadow: 0 0 0 1px var(--nt-border);
+html.dark #notice-bell.nt-bell-info {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 28%, transparent), 0 1px 2px color-mix(in srgb, #000 40%, transparent);
 }
 
 .nt-planner-map-btn {
@@ -1080,18 +1083,18 @@ html[data-colour-pack="classic"] #current-day,
 html:not([data-colour-pack]) #current-day {
   color: var(--nt-chrome-muted) !important;
 }
-html[data-colour-pack="classic"] #current-day span,
-html:not([data-colour-pack]) #current-day span {
+html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\:text-red-400),
+html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-html[data-colour-pack="classic"] #current-day span.text-red-600,
-html:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: #fecaca !important;
+/* Same No Service red on every pack and light/dark. Classic used peach
+   (#fecaca / #fca5a5) that washed out on the blue header. */
+#current-day span.text-red-600 {
+  color: #dc2626 !important;
 }
-html.dark[data-colour-pack="classic"] #current-day span.text-red-600,
-html.dark[data-colour-pack="classic"] #current-day span.dark\:text-red-400,
-html.dark:not([data-colour-pack]) #current-day span.text-red-600 {
-  color: #fca5a5 !important;
+html.dark #current-day span.text-red-600,
+html.dark #current-day span.dark\:text-red-400 {
+  color: #f87171 !important;
 }
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),

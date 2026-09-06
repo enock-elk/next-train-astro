@@ -47,8 +47,13 @@ assert(logic.includes('sm ? 12 : 11'), 'day line stays the old 11px / 12px subti
 assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second headline');
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
-assert(css.includes('color: #fecaca !important'), 'Classic No Service stays peach-red');
+assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
+assert(css.includes('#current-day span.text-red-600 {\n  color: #dc2626 !important;'), 'No Service uses the same red-600 on every pack');
+assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
+assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
+assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #f1f5f9 !important;'), 'dark info bell keeps a light disc');
+assert(!css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'Earthy/Ember no longer wash the bell into the header');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
 assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
@@ -371,9 +376,13 @@ assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome'
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
 assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
+assert(layout.includes('communityOn'), 'Community keyboard does not pin the Next Train header');
+assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
+assert(!layout.includes('#app-scroll:has(#view-community.active)'), 'Community #app-scroll stays free like Trip Planner');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;'), 'Community keyboard pad is a small gap, not shell minus visual');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
+assert(layout.includes('border-top-width: 0 !important'), 'phone in-app drops the top card hairline');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');
 assert(layout.includes('body.modal-active #dev-modal > div'), 'admin canvas grows with its lists');
 assert(layout.includes('background-color: #f9fafb'), 'admin overlay canvas is gray-50, not black');

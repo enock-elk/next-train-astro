@@ -172,7 +172,6 @@ assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line paints Avoca 
 assert(!mapApp.includes('"AVOCA", "TEMPLE", "KENVILLE", "EFFINGHAM", "DUFF\'S ROAD"'), 'Bridge City path no longer loops Avoca via Effingham');
 assert(!mapApp.includes('if (baked && baked.length > 1) return baked;'), 'map does not paint unordered baked tracks');
 
-const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
 assert(contentLayout.includes('window.ntCartoVoyagerUrl'), 'map layout exposes CARTO Voyager URL helper');
 assert(contentLayout.includes('PUBLIC_CARTO_API_KEY'), 'map layout reads PUBLIC_CARTO_API_KEY');
 

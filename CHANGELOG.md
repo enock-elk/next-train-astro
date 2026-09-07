@@ -2,6 +2,25 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.07.2 — Center hub onward rows (7 Sep 2026)
+
+no release notes.
+
+- Onward trains stay centered and grow from the middle. Names still shorten only when the row would wrap.
+
+## V9_09.07.1 — Onward hub rows stay on one line (7 Sep 2026)
+
+no release notes.
+
+- Transfer description block uses the full column (less padding, nowrap rows). Station names stay full unless that row would wrap, then the last word clips (Mamelodi Gard, Pienaarsp).
+
+## V9_09.06.18 — Shuttle cards list onward trains at the hub (6 Sep 2026)
+
+no release notes.
+
+- Transfer cards name the change station from the journey hub (ROUTES transfer/relay), then list each onward train as destination, Train id, hub leave time.
+- A second (terminus) option at the hub is computed only for `pta-pien`. Other shuttle corridors keep a single onward train.
+
 ## V9_09.06.17 — Restore V5 monthly ticket prices (6 Sep 2026)
 
 no release notes.

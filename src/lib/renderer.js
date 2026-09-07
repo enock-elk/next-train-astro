@@ -31,6 +31,11 @@ import { showToast, triggerHaptic } from './ui.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
 import {
+    collectHubOnwardOptions,
+    fitOnwardRowLabels,
+    resolveTransferHubName,
+} from './transfer-card.js';
+import {
     liveBoardJourneyKey,
     liveBoardNextAvailKey,
     liveBoardStaticKey,
@@ -769,17 +774,10 @@ export const Renderer = {
                 </div>
             `;
         } else if (journey.type === 'transfer') {
-            const conn = journey.connection; 
-            const nextFull = journey.nextFullJourney; 
-            
-            const rawDest = journey.train1.headboardDestination || journey.train1.terminationStation;
-            const displayDest = Renderer._applyUIIntercepts(escapeHTML(rawDest));
+            const hubRaw = resolveTransferHubName(journey);
+            const hubLabel = Renderer._applyUIIntercepts(escapeHTML(hubRaw));
             const arrivalAtTransfer = escapeHTML(formatTimeDisplay(journey.train1.arrivalAtTransfer));
-            
-            const connTrain = escapeHTML(conn.train);
-            const connDest = Renderer._applyUIIntercepts(escapeHTML(conn.actualDestination));
-            const connDep = escapeHTML(formatTimeDisplay(conn.departureTime));
-            const finalDestTitle = Renderer._applyUIIntercepts(escapeHTML(destination));
+            const onwardOptions = collectHubOnwardOptions(journey, reportRouteId);
 
             let titleColor = "text-gray-900 dark:text-white";
             if (journey.isLastTrain) titleColor = "text-red-600 dark:text-red-400";
@@ -790,47 +788,42 @@ export const Renderer = {
                 ...reportCtx,
                 className: `inline-flex items-center justify-center max-w-full text-[11px] font-black ${titleColor} uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80`,
             });
-            const connectBtn = buildTrainTitleReportButton({
-                label: `Connect Train ${conn.train}`,
-                routeId: reportRouteId,
-                trainId: conn.train,
-                scheduledTime: conn.departureTime,
-                arrivalTime: '',
-                station: reportStation,
-                destination: conn.actualDestination || destination || '',
-                className: 'inline-flex items-center justify-center max-w-full text-[11px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5 focus:outline-none hover:opacity-80',
-            });
-            
-            let bottomBlock = "";
-            
-            if (nextFull) {
-                const nextTrain = escapeHTML(nextFull.train);
-                const nextDep = escapeHTML(formatTimeDisplay(nextFull.departureTime));
-                
-                bottomBlock = `
-                    <div class="text-[9px] leading-tight w-full space-y-1 min-w-0">
-                        <div class="mb-1">
-                             ${connectBtn}
-                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
-                        </div>
-                        <div class="italic text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 break-words w-full" title="${finalDestTitle}: Train ${nextTrain} from ${nextDep}">
-                            ${finalDestTitle}: Train ${nextTrain} from ${nextDep}
-                        </div>
+
+            const onwardRows = onwardOptions.map((opt) => {
+                const destLabel = Renderer._applyUIIntercepts(opt.actualDestination || '');
+                const destSafe = escapeHTML(destLabel);
+                const depLabel = escapeHTML(formatTimeDisplay(opt.departureTime));
+                const trainBtn = buildTrainTitleReportButton({
+                    label: `Train ${opt.train}`,
+                    routeId: reportRouteId,
+                    trainId: opt.train,
+                    scheduledTime: opt.departureTime,
+                    arrivalTime: opt.arrivalTime || '',
+                    station: reportStation,
+                    destination: opt.actualDestination || destination || '',
+                    className: 'shrink-0 inline-flex items-baseline text-[9px] font-black text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
+                });
+                return `
+                    <div data-nt-onward-row class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
+                        <span data-nt-onward-dest data-full-name="${destSafe}" class="font-bold min-w-0" title="${destSafe}">${destSafe}</span>
+                        <span class="font-normal opacity-70 shrink-0">&nbsp;·&nbsp;</span>
+                        ${trainBtn}
+                        <span class="font-normal opacity-80 shrink-0">&nbsp;·&nbsp;${depLabel}</span>
                     </div>
                 `;
-            } else {
-                bottomBlock = `
-                    <div class="text-[10px] leading-tight w-full min-w-0">
-                        ${connectBtn}
-                        <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full">To ${connDest} <span class="font-normal opacity-80">(From ${connDep})</span></div>
-                    </div>
-                `;
-            }
+            }).join('');
+
+            const bottomBlock = `
+                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-center">
+                    <div class="text-[9px] font-black uppercase tracking-wide text-gray-500 dark:text-gray-400">At ${hubLabel}</div>
+                    ${onwardRows}
+                </div>
+            `;
             
             element.innerHTML = `
-                <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
+                <div class="flex flex-row items-stretch w-full gap-1.5">
                     <!-- TIME BOX -->
-                    <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div class="relative w-[38%] min-w-[6.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight" data-nt-deptime>${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
                         ${liveHintHtml}
@@ -840,10 +833,10 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
-                        <div class="border-b border-gray-200 dark:border-gray-700 pb-2 mb-2 w-full min-w-0">
+                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center px-1 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
+                        <div class="border-b border-gray-200 dark:border-gray-700 pb-1.5 mb-1.5 w-full min-w-0">
                             <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${shuttleBtn}</div>
-                            <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full px-1" title="To ${displayDest} (Arr ${arrivalAtTransfer})">To ${displayDest} <span class="font-normal opacity-80">(Arr ${arrivalAtTransfer})</span></div>
+                            <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full" title="To ${hubLabel} · Arr ${arrivalAtTransfer}">To ${hubLabel} <span class="font-normal opacity-80">· Arr ${arrivalAtTransfer}</span></div>
                         </div>
                         ${bottomBlock}
                         ${disruptionHtml}
@@ -852,6 +845,9 @@ export const Renderer = {
                     </div>
                 </div>
             `;
+            const fitRows = () => fitOnwardRowLabels(element);
+            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fitRows);
+            else fitRows();
         }
         stampLiveBoardCard(element, boardKey);
     },

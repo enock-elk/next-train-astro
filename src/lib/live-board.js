@@ -22,6 +22,7 @@ import {
     loadAllSchedules, guardianFetch, paintHeaderDayLabel
 } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
@@ -1165,7 +1166,10 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
     possibleConnections.sort((a, b) => timeToSeconds(a.departureTime) - timeToSeconds(b.departureTime));
     const earliestConnection = possibleConnections[0];
     let earliestFullJourneyConnection = null;
-    if (normalizeStationName(earliestConnection.actualDestination) !== normalizeStationName(finalDestination)) {
+    if (
+        routeAllowsDualHubOptions(routeId)
+        && normalizeStationName(earliestConnection.actualDestination) !== normalizeStationName(finalDestination)
+    ) {
         earliestFullJourneyConnection = possibleConnections.find(conn => normalizeStationName(conn.actualDestination) === normalizeStationName(finalDestination)) || null; 
     }
     return { earliest: earliestConnection, fullJourney: earliestFullJourneyConnection };

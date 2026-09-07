@@ -2,8 +2,8 @@
  * METRORAIL NEXT TRAIN - GRID ORDER CONFIG
  * ---------------------------------------------------
  * This file defines the explicit column order for the Full Schedule Grid.
- * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-16 Aug.xlsx, NextTrain KZN-Schedules - 28 Aug.xlsx, NextTrain WC-Schedules - 03 July.xlsx
- * Date: 2026-08-28
+ * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-16 Aug.xlsx, NextTrain KZN-Schedules - 07 Sept.xlsx, NextTrain WC-Schedules - 03 July.xlsx
+ * Date: 2026-09-07
  */
 
 export const MANUAL_GRID_ORDER = {
@@ -1791,7 +1791,10 @@ export const MANUAL_GRID_ORDER = {
         "9230",
         "9240",
         "9244",
-        "9250"
+        "9250",
+        "9254",
+        "9264",
+        "9274"
     ],
     "durbn_to_umlaz_weekday": [
         "9110",
@@ -1807,7 +1810,10 @@ export const MANUAL_GRID_ORDER = {
         "9230",
         "9240",
         "9244",
-        "9250"
+        "9250",
+        "9254",
+        "9264",
+        "9274"
     ],
     "umlaz-to-durbn_weekday": [
         "9113",
@@ -1851,6 +1857,7 @@ export const MANUAL_GRID_ORDER = {
     ],
     "durbn-to-umlaz_sat": [
         "9130",
+        "9140",
         "9150",
         "9170",
         "9204",
@@ -1861,6 +1868,7 @@ export const MANUAL_GRID_ORDER = {
     ],
     "durbn_to_umlaz_sat": [
         "9130",
+        "9140",
         "9150",
         "9170",
         "9204",
@@ -1873,6 +1881,7 @@ export const MANUAL_GRID_ORDER = {
         "9129",
         "9139",
         "9149",
+        "9159",
         "9179",
         "9209",
         "9239",
@@ -1883,6 +1892,7 @@ export const MANUAL_GRID_ORDER = {
         "9129",
         "9139",
         "9149",
+        "9159",
         "9179",
         "9209",
         "9239",
@@ -1910,8 +1920,8 @@ export const MANUAL_GRID_ORDER = {
         "9767",
         "9423",
         "9771",
-        "9775",
         "9433",
+        "9775",
         "9443",
         "9779",
         "9453",
@@ -1942,8 +1952,8 @@ export const MANUAL_GRID_ORDER = {
         "9767",
         "9423",
         "9771",
-        "9775",
         "9433",
+        "9775",
         "9443",
         "9779",
         "9453",
@@ -2168,76 +2178,64 @@ export const MANUAL_GRID_ORDER = {
         "0791"
     ],
     "durbn-to-winkl_sat": [
-        "0712",
+        "0708",
         "0720",
         "0728",
-        "0738",
-        "0756",
-        "0768",
-        "0778",
-        "0790"
+        "0752",
+        "0774",
+        "0782"
     ],
     "durbn_to_winkl_sat": [
-        "0712",
+        "0708",
         "0720",
         "0728",
-        "0738",
-        "0756",
-        "0768",
-        "0778",
-        "0790"
+        "0752",
+        "0774",
+        "0782"
     ],
     "winkl-to-durbn_sat": [
-        "0711",
         "0715",
+        "0717",
         "0727",
-        "0735",
-        "0743",
-        "0761",
-        "0767",
+        "0739",
+        "0759",
         "0779"
     ],
     "winkl_to_durbn_sat": [
-        "0711",
         "0715",
+        "0717",
         "0727",
-        "0735",
-        "0743",
-        "0761",
-        "0767",
+        "0739",
+        "0759",
         "0779"
     ],
     "durbn-to-cator_weekday": [
-        "1022",
         "1052",
         "1062",
-        "1078",
+        "1072",
         "1082",
         "1092"
     ],
     "durbn_to_cator_weekday": [
-        "1022",
         "1052",
         "1062",
-        "1078",
+        "1072",
         "1082",
         "1092"
     ],
     "cator-to-durbn_weekday": [
-        "1009",
         "1013",
         "1019",
         "1023",
-        "1027",
-        "1031"
+        "1031",
+        "1033"
     ],
     "cator_to_durbn_weekday": [
-        "1009",
         "1013",
         "1019",
         "1023",
-        "1027",
-        "1031"
+        "1031",
+        "1033"
     ],
     "durbn-to-cator_sat": [
         "1062",
@@ -2312,16 +2310,44 @@ export const MANUAL_GRID_ORDER = {
         "0079"
     ],
     "durbn-to-cross_weekday": [
-        "9652"
+        "9612",
+        "9620",
+        "9628",
+        "9656",
+        "9664",
+        "9672",
+        "9680",
+        "9688"
     ],
     "durbn_to_cross_weekday": [
-        "9652"
+        "9612",
+        "9620",
+        "9628",
+        "9656",
+        "9664",
+        "9672",
+        "9680",
+        "9688"
     ],
     "cross-to-durbn_weekday": [
-        "9643"
+        "9613",
+        "9621",
+        "9629",
+        "9637",
+        "9665",
+        "9673",
+        "9681",
+        "9689"
     ],
     "cross_to_durbn_weekday": [
-        "9643"
+        "9613",
+        "9621",
+        "9629",
+        "9637",
+        "9665",
+        "9673",
+        "9681",
+        "9689"
     ],
     "durbn-to-cross_sat": [
         "9612",

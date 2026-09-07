@@ -383,7 +383,8 @@ assert(layout.includes('communityOn'), 'Community keyboard does not pin the Next
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(!layout.includes('#app-scroll:has(#view-community.active)'), 'Community #app-scroll stays free like Trip Planner');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
-assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;'), 'Community keyboard pad is a small gap, not shell minus visual');
+assert(layout.includes('#view-community .community-pane {\n        flex: 1 1 auto;'), 'Community pane fills leftover height like Feedback Hub');
+assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        flex: 0 0 auto;\n        min-height: min-content;\n        overflow: visible;\n        padding-bottom: 0.5rem;'), 'Community keyboard shrinks to content with a small pad, not shell minus visual');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');

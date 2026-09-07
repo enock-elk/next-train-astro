@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.07.3', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.07.4', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -208,6 +208,7 @@ assert(!presence.includes('Room online'), 'Room online presence copy is gone');
 assert(presence.includes("count <= 1 ? 'Just you here'"), 'solo room still says Just you here');
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
+assert(communityView.includes('id="community-feed-empty" class="hidden flex-1'), 'empty community feed grows into leftover height');
 const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
 assert(agents.includes('No unsolicited changes'), 'agent instructions forbid unsolicited changes');
 assert(agents.includes('Changelog is optional'), 'agent instructions allow shipping without changelog');

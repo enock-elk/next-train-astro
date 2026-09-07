@@ -722,9 +722,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         min-height: min-content;
       }
 
-      /* Map fills the scrollport and keeps chrome still. Community scrolls
-         with #app-scroll like Trip Planner so the Next Train header can
-         leave when the browser raises the composer. */
+      /* Map fills the scrollport and keeps chrome still. Community fills
+         leftover height like Feedback Hub (composer on the oval, feed grows)
+         so the tab does not open with a blank slab under Post. */
       #view-map.view-section.active {
         display: flex;
         flex-direction: column;
@@ -738,11 +738,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       #view-community.view-section.active {
         display: flex;
         flex-direction: column;
-        flex: 0 0 auto;
-        min-height: min-content;
+        flex: 1 1 auto;
+        min-height: 0;
         height: auto;
         max-height: none;
-        overflow: visible;
+        overflow: hidden;
         padding: 0;
       }
       #view-map .map-tab-pane {
@@ -751,9 +751,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         height: 100%;
       }
       #view-community .community-pane {
-        flex: 0 0 auto;
+        flex: 1 1 auto;
         min-height: 0;
-        height: auto;
+        height: 100%;
       }
       #app-scroll:has(#view-map.active) {
         overflow: hidden;
@@ -943,11 +943,18 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 4.75rem;
         box-sizing: border-box;
       }
-      /* Community composer sits on the live visual hole. The oval stays hidden
-         at the layout bottom (under the keys). Do not pad by shellH - vvH —
-         that band sat above Gboard. */
+      /* Keyboard: shrink to content so #app-scroll can still carry the Next
+         Train header off-screen. Do not pad by shellH - vvH — that band sat
+         above Gboard. The oval stays hidden at the layout bottom. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
+        flex: 0 0 auto;
+        min-height: min-content;
+        overflow: visible;
         padding-bottom: 0.5rem;
+      }
+      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane {
+        flex: 0 0 auto;
+        height: auto;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

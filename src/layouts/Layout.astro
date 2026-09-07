@@ -129,11 +129,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           if (editing && full && layoutH < full - 80) {
             keyboard = true;
           }
-          var communityOn = false;
-          try {
-            var cv = document.getElementById('view-community');
-            communityOn = !!(cv && cv.classList.contains('active'));
-          } catch (e) {}
           var shellTop = Math.max(0, off);
           var shellH = Math.round(vh || layoutH);
           if (shellH < 240) shellH = lastShellH || lastFullLayoutH || layoutH || 240;
@@ -155,14 +150,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           } else {
             // Keep html/body at the last full layout so the page does not
             // collapse under the IME. Pin #nt-shell to the LIVE visual hole
-            // on other tabs. Community must not: the Next Train header stays
-            // in #app-scroll so the browser can raise the composer.
+            // so the focused composer sits directly above the keyboard.
             layoutH = full;
             lastLayoutH = full;
-            if (communityOn) {
-              shellTop = lastShellTop;
-              shellH = lastShellH || full;
-            } else if (shellH < 240) {
+            if (shellH < 240) {
               shellH = lastShellH || full;
             }
           }
@@ -783,10 +774,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
          and body fill the layout (no white slab). --nt-shell-* pin the frame
          to the visible hole so NEXT TRAIN sits below the URL bar and the
          oval sits on the visual bottom. While the IME is open those tokens
-         follow the live visual hole except on Community, where the header
-         stays free in #app-scroll. Do not pad a tray under the floating
-         pill. 100svh fallback keeps first paint on-screen before JS
-         measures. Do not transform #nt-shell. */
+         follow the live visual hole so focused fields sit above the keyboard.
+         Do not pad a tray under the floating pill. 100svh fallback keeps
+         first paint on-screen before JS measures. Do not transform #nt-shell. */
       #nt-shell {
         top: var(--nt-shell-top, 0px);
         height: var(--nt-shell-h, var(--nt-app-h, 100svh)) !important;
@@ -943,18 +933,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 4.75rem;
         box-sizing: border-box;
       }
-      /* Keyboard: shrink to content so #app-scroll can still carry the Next
-         Train header off-screen. Do not pad by shellH - vvH — that band sat
-         above Gboard. The oval stays hidden at the layout bottom. */
+      /* Let the live visual viewport resize Community above the keyboard.
+         Keep only a small breathing gap; the oval stays hidden under the keys. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
-        flex: 0 0 auto;
-        min-height: min-content;
-        overflow: visible;
         padding-bottom: 0.5rem;
-      }
-      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane {
-        flex: 0 0 auto;
-        height: auto;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

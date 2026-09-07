@@ -379,12 +379,13 @@ assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome'
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
 assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
-assert(layout.includes('communityOn'), 'Community keyboard does not pin the Next Train header');
+assert(!layout.includes('communityOn'), 'Community uses the live visual viewport while the keyboard is open');
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(!layout.includes('#app-scroll:has(#view-community.active)'), 'Community #app-scroll stays free like Trip Planner');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(layout.includes('#view-community .community-pane {\n        flex: 1 1 auto;'), 'Community pane fills leftover height like Feedback Hub');
-assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        flex: 0 0 auto;\n        min-height: min-content;\n        overflow: visible;\n        padding-bottom: 0.5rem;'), 'Community keyboard shrinks to content with a small pad, not shell minus visual');
+assert(layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {\n        padding-bottom: 0.5rem;\n      }'), 'Community keyboard keeps only a small pad above the IME');
+assert(!layout.includes('html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane'), 'Community pane has no keyboard-specific geometry override');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');

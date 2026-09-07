@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.07.1', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.07.2', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -100,6 +100,8 @@ assert(renderer.includes('At ${hubLabel}'), 'transfer card names the hub from th
 assert(renderer.includes('collectHubOnwardOptions'), 'transfer card uses shared onward-option helper');
 assert(renderer.includes('fitOnwardRowLabels'), 'onward dest names shrink only when the row wraps');
 assert(renderer.includes('data-nt-onward-row'), 'onward trains are one nowrap row');
+assert(renderer.includes('justify-center w-full min-w-0 whitespace-nowrap text-center'), 'onward rows stay centered');
+assert(!/data-nt-onward-row class="[^"]*text-left/.test(renderer), 'onward rows are not left-aligned');
 assert(renderer.includes('To ${hubLabel}'), 'shuttle line names the change station');
 assert(!renderer.includes('Connect Train ${conn.train}'), 'old Connect Train heading is gone');
 assert(!renderer.includes('italic text-gray-500 dark:text-gray-500 border-t'), 'terminus option is not an italic footnote');

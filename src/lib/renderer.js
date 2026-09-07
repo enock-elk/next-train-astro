@@ -804,7 +804,7 @@ export const Renderer = {
                     className: 'shrink-0 inline-flex items-baseline text-[9px] font-black text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
                 });
                 return `
-                    <div data-nt-onward-row class="flex items-baseline w-full min-w-0 whitespace-nowrap text-left text-[9px] text-gray-600 dark:text-gray-400 leading-none">
+                    <div data-nt-onward-row class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
                         <span data-nt-onward-dest data-full-name="${destSafe}" class="font-bold min-w-0" title="${destSafe}">${destSafe}</span>
                         <span class="font-normal opacity-70 shrink-0">&nbsp;·&nbsp;</span>
                         ${trainBtn}
@@ -814,7 +814,7 @@ export const Renderer = {
             }).join('');
 
             const bottomBlock = `
-                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-left">
+                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-center">
                     <div class="text-[9px] font-black uppercase tracking-wide text-gray-500 dark:text-gray-400">At ${hubLabel}</div>
                     ${onwardRows}
                 </div>
@@ -833,7 +833,7 @@ export const Renderer = {
                     </div>
                     
                     <!-- DESCRIPTION BOX -->
-                    <div class="flex-1 min-w-0 flex flex-col justify-center items-stretch text-center px-1 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
+                    <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center px-1 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
                         <div class="border-b border-gray-200 dark:border-gray-700 pb-1.5 mb-1.5 w-full min-w-0">
                             <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${shuttleBtn}</div>
                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full" title="To ${hubLabel} · Arr ${arrivalAtTransfer}">To ${hubLabel} <span class="font-normal opacity-80">· Arr ${arrivalAtTransfer}</span></div>

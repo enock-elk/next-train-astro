@@ -26,6 +26,20 @@ this.ntAdminDevPanelIdFromHash = ntAdminDevPanelIdFromHash;
 this.ntAdminPushDrillPanel = ntAdminPushDrillPanel;
 this.ntAdminTrimDrillStackTo = ntAdminTrimDrillStackTo;
 this.ntAdminDrillBackAction = ntAdminDrillBackAction;
+this.ntAdminNormalizeWeekdays = ntAdminNormalizeWeekdays;
+this.ntAdminOrdinal = ntAdminOrdinal;
+this.ntAdminNextWeeklyRun = ntAdminNextWeeklyRun;
+this.ntAdminNextMonthlyRun = ntAdminNextMonthlyRun;
+this.ntAdminCapScheduleRun = ntAdminCapScheduleRun;
+this.ntAdminComputeJobNextRun = ntAdminComputeJobNextRun;
+this.ntAdminNoticeExpiresAt = ntAdminNoticeExpiresAt;
+this.ntAdminEndOfLocalDayMs = ntAdminEndOfLocalDayMs;
+this.ntAdminEndOfLocalMonthMs = ntAdminEndOfLocalMonthMs;
+this.ntAdminBuildScheduleJobMeta = ntAdminBuildScheduleJobMeta;
+this.ntAdminFormatScheduleSummary = ntAdminFormatScheduleSummary;
+this.ntAdminSchedulePreviewText = ntAdminSchedulePreviewText;
+this.ntAdminAddDaysDateValue = ntAdminAddDaysDateValue;
+this.ntAdminTomorrowMorningLocalValue = ntAdminTomorrowMorningLocalValue;
 `).call(helpers);
 
 let failed = 0;
@@ -105,6 +119,13 @@ const requiredIds = [
     'alert-poll-toggle',
     'alert-poll-question',
     'alert-schedule-first',
+    'alert-weekly-days',
+    'alert-weekly-time',
+    'alert-weekly-until',
+    'alert-monthly-day',
+    'alert-monthly-time',
+    'alert-monthly-until',
+    'alert-when-modes',
     'excl-grid-notice',
     'excl-grid-notice-expiry',
     'excl-grid-notice-export',
@@ -166,6 +187,96 @@ const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes("'admin-ticket-view-modal': '#roadmap-ticket'"), 'ticket view has its own history hash');
 assert(ui.includes('Admin.syncDrillFromHash'), 'popstate restores the drilled panel from the hash');
 assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not always the grid');
+
+assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
+assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
+assert(admin.includes('alerts-sched-v2'), 'alert panel rebuilds after schedule UX');
+assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
+assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
+
+const sun = new Date(2026, 8, 6, 10, 0, 0); // Sunday 6 Sep 2026
+const monFri = helpers.ntAdminNextWeeklyRun(sun.getTime(), [1, 5], '06:00');
+const monFriDate = new Date(monFri);
+assert(monFriDate.getDay() === 1 && monFriDate.getHours() === 6, `Kempton Mon+Fri next from Sunday is Monday 06:00, got ${monFriDate}`);
+
+const tueMorning = new Date(2026, 8, 8, 7, 0, 0); // Tuesday after Monday 06:00
+const nextFri = helpers.ntAdminNextWeeklyRun(tueMorning.getTime(), [1, 5], '06:00');
+assert(new Date(nextFri).getDay() === 5, `next after Tuesday is Friday, got ${new Date(nextFri)}`);
+
+const afterUntil = helpers.ntAdminCapScheduleRun(nextFri, '2026-09-07');
+assert(afterUntil === 0, 'weekly run after the until date is dropped');
+
+const sep7 = new Date(2026, 8, 7, 12, 0, 0);
+const monthStart = helpers.ntAdminNextMonthlyRun(sep7.getTime(), 25, '08:00');
+const monthStartD = new Date(monthStart);
+assert(monthStartD.getDate() === 25 && monthStartD.getMonth() === 8 && monthStartD.getHours() === 8, `next monthly from 7 Sep is 25 Sep 08:00, got ${monthStartD}`);
+
+const sep26 = new Date(2026, 8, 26, 9, 0, 0);
+const oct25 = helpers.ntAdminNextMonthlyRun(sep26.getTime(), 25, '08:00');
+assert(new Date(oct25).getMonth() === 9 && new Date(oct25).getDate() === 25, 'after the 25th, monthly rolls to next month');
+
+const febFrom = new Date(2026, 1, 1, 9, 0, 0);
+const feb31 = helpers.ntAdminNextMonthlyRun(febFrom.getTime(), 31, '08:00');
+assert(new Date(feb31).getMonth() === 1 && new Date(feb31).getDate() === 28, `31st clamps to Feb 28 2026, got ${new Date(feb31)}`);
+
+const monthEnd = helpers.ntAdminEndOfLocalMonthMs(new Date(2026, 8, 25, 8, 0, 0).getTime());
+const monthEndD = new Date(monthEnd);
+assert(monthEndD.getDate() === 30 && monthEndD.getHours() === 23 && monthEndD.getMinutes() === 59, `Sep month-end is 30 Sep 23:59, got ${monthEndD}`);
+
+const weeklyJob = {
+    frequency: 'weekly',
+    weekdays: [1, 5],
+    timeOfDay: '06:00',
+    untilAt: '2026-12-31',
+    expireMode: 'end_of_day',
+};
+const afterMon = helpers.ntAdminComputeJobNextRun(weeklyJob, new Date(2026, 8, 7, 6, 1, 0).getTime());
+assert(new Date(afterMon).getDay() === 5, 'after a Monday run, weekly job lands on Friday');
+
+const monthlyJob = {
+    frequency: 'monthly',
+    monthDay: 25,
+    timeOfDay: '08:00',
+    untilAt: '2026-10-20',
+    expireMode: 'month_end',
+};
+const afterSep25 = helpers.ntAdminComputeJobNextRun(monthlyJob, new Date(2026, 8, 25, 8, 1, 0).getTime());
+assert(afterSep25 === 0, 'monthly job stops when the next 25th is after until');
+
+const expires = helpers.ntAdminNoticeExpiresAt(new Date(2026, 8, 25, 8, 0, 0).getTime(), monthlyJob);
+assert(new Date(expires).getDate() === 30, 'monthly ticket reminder expires at month end');
+
+const weeklyMeta = helpers.ntAdminBuildScheduleJobMeta({
+    mode: 'weekly',
+    weekdays: [1, 5],
+    timeOfDay: '06:00',
+    untilAt: '2026-12-31',
+    expireMode: 'end_of_day',
+}, new Date(2026, 8, 6, 10, 0, 0).getTime());
+assert(weeklyMeta.ok && weeklyMeta.frequency === 'weekly' && weeklyMeta.weekdays.join(',') === '1,5', 'weekly meta keeps Mon+Fri');
+assert(helpers.ntAdminFormatScheduleSummary(weeklyMeta).includes('Mon, Fri'), `weekly summary names days, got ${helpers.ntAdminFormatScheduleSummary(weeklyMeta)}`);
+
+const laterBad = helpers.ntAdminBuildScheduleJobMeta({
+    mode: 'later',
+    firstMs: new Date(2026, 8, 8, 6, 0, 0).getTime(),
+    expiresAt: new Date(2026, 8, 8, 5, 0, 0).getTime(),
+}, Date.now());
+assert(!laterBad.ok, 'later rejects expiry before post time');
+
+const laterOk = helpers.ntAdminBuildScheduleJobMeta({
+    mode: 'later',
+    firstMs: new Date(2026, 8, 8, 6, 0, 0).getTime(),
+    expiresAt: new Date(2026, 8, 8, 23, 59, 0).getTime(),
+}, Date.now());
+assert(laterOk.ok && laterOk.frequency === 'once' && laterOk.expiresInMs > 0, 'later one-shot stores duration from post to expiry');
+
+assert(helpers.ntAdminNormalizeWeekdays([1, 5, 1, 'x', 9]).join(',') === '1,5', 'weekday list is unique and 0-6');
+assert(helpers.ntAdminOrdinal(25) === '25th' && helpers.ntAdminOrdinal(1) === '1st', 'ordinals for month day');
+assert(helpers.ntAdminAddDaysDateValue(new Date(2026, 8, 7), 84) === '2026-11-30', 'weekly default until is +12 weeks');
+assert(helpers.ntAdminTomorrowMorningLocalValue(new Date(2026, 8, 7, 22, 0, 0)) === '2026-09-08T06:00', 'later default is tomorrow 06:00');
+
+const legacyHourly = helpers.ntAdminComputeJobNextRun({ frequency: 'hourly' }, new Date(2026, 8, 7, 6, 0, 0).getTime());
+assert(legacyHourly === new Date(2026, 8, 7, 7, 0, 0).getTime(), 'legacy hourly jobs still advance one hour');
 
 assert(admin.includes('zone-audit-monthly-legend'), 'zone audit shows a monthly ticket legend');
 assert(admin.includes('formatZoneMonthlyLegend'), 'zone audit legend reads FARE_CONFIG monthlies');

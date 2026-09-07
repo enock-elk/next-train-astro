@@ -263,6 +263,280 @@ function ntAdminDrillBackAction(stack, hashPanelId, fromPopState) {
     return { action: 'grid', stack: [] };
 }
 
+const NT_ADMIN_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function ntAdminParseTimeOfDay(hhmm) {
+    const parts = String(hhmm || '06:00').split(':');
+    const hh = Math.max(0, Math.min(23, parseInt(parts[0], 10) || 0));
+    const mm = Math.max(0, Math.min(59, parseInt(parts[1], 10) || 0));
+    return { hh, mm };
+}
+
+function ntAdminNormalizeWeekdays(days) {
+    const out = [];
+    const seen = new Set();
+    (Array.isArray(days) ? days : []).forEach((d) => {
+        const n = Number(d);
+        if (!Number.isInteger(n) || n < 0 || n > 6 || seen.has(n)) return;
+        seen.add(n);
+        out.push(n);
+    });
+    return out.sort((a, b) => a - b);
+}
+
+function ntAdminOrdinal(n) {
+    const x = Math.max(1, parseInt(n, 10) || 1);
+    const v = x % 100;
+    if (v >= 11 && v <= 13) return `${x}th`;
+    const last = x % 10;
+    if (last === 1) return `${x}st`;
+    if (last === 2) return `${x}nd`;
+    if (last === 3) return `${x}rd`;
+    return `${x}th`;
+}
+
+function ntAdminUntilEndMs(untilAt) {
+    if (untilAt == null || untilAt === '') return 0;
+    if (typeof untilAt === 'number') {
+        const n = Number(untilAt);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    const raw = String(untilAt).trim();
+    if (!raw) return 0;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const d = new Date(`${raw}T23:59:59.999`);
+        return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function ntAdminCapScheduleRun(nextTs, untilAt) {
+    const next = Number(nextTs) || 0;
+    if (!next) return 0;
+    const cap = ntAdminUntilEndMs(untilAt);
+    if (cap && next > cap) return 0;
+    return next;
+}
+
+function ntAdminNextWeeklyRun(fromTs, weekdays, timeHHMM) {
+    const days = ntAdminNormalizeWeekdays(weekdays);
+    if (!days.length) return 0;
+    const { hh, mm } = ntAdminParseTimeOfDay(timeHHMM);
+    const from = Number(fromTs) || Date.now();
+    for (let i = 0; i < 8; i++) {
+        const d = new Date(from);
+        d.setDate(d.getDate() + i);
+        d.setHours(hh, mm, 0, 0);
+        if (!days.includes(d.getDay())) continue;
+        if (d.getTime() > from) return d.getTime();
+    }
+    return 0;
+}
+
+function ntAdminDaysInMonth(year, monthIndex) {
+    return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function ntAdminNextMonthlyRun(fromTs, monthDay, timeHHMM) {
+    const day = Math.max(1, Math.min(31, parseInt(monthDay, 10) || 1));
+    const { hh, mm } = ntAdminParseTimeOfDay(timeHHMM);
+    const from = Number(fromTs) || Date.now();
+    const start = new Date(from);
+    for (let i = 0; i < 14; i++) {
+        const cursor = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const dim = ntAdminDaysInMonth(cursor.getFullYear(), cursor.getMonth());
+        cursor.setDate(Math.min(day, dim));
+        cursor.setHours(hh, mm, 0, 0);
+        if (cursor.getTime() > from) return cursor.getTime();
+    }
+    return 0;
+}
+
+function ntAdminEndOfLocalDayMs(ts) {
+    const d = new Date(Number(ts) || Date.now());
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+}
+
+function ntAdminEndOfLocalMonthMs(ts) {
+    const d = new Date(Number(ts) || Date.now());
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    last.setHours(23, 59, 59, 999);
+    return last.getTime();
+}
+
+function ntAdminNoticeExpiresAt(runAt, job) {
+    const when = Number(runAt) || Date.now();
+    const notice = job && job.notice && typeof job.notice === 'object' ? job.notice : {};
+    const mode = job && job.expireMode;
+    if (mode === 'month_end') return ntAdminEndOfLocalMonthMs(when);
+    if (mode === 'end_of_day') return ntAdminEndOfLocalDayMs(when);
+    if (mode === 'absolute') {
+        const abs = Number(notice.expiresAt || job.expiresAt || 0);
+        if (abs) return abs;
+    }
+    const ms = Number(notice.expiresInMs != null ? notice.expiresInMs : job && job.expiresInMs) || 0;
+    if (ms > 0) return when + ms;
+    return ntAdminEndOfLocalDayMs(when);
+}
+
+function ntAdminLegacyNextScheduleRun(freq, fromTs) {
+    const base = Number(fromTs) || Date.now();
+    if (freq === 'once') return 0;
+    if (freq === 'hourly') return base + 3600 * 1000;
+    if (freq === 'daily') return base + 24 * 3600 * 1000;
+    if (freq === 'weekly') return base + 7 * 24 * 3600 * 1000;
+    if (freq === 'weekdays') {
+        let next = base + 24 * 3600 * 1000;
+        for (let i = 0; i < 10; i++) {
+            const day = new Date(next).getDay();
+            if (day !== 0 && day !== 6) return next;
+            next += 24 * 3600 * 1000;
+        }
+        return next;
+    }
+    return 0;
+}
+
+function ntAdminComputeJobNextRun(job, fromTs) {
+    if (!job) return 0;
+    const freq = job.frequency || 'once';
+    const from = Number(fromTs) || Date.now();
+    if (freq === 'weekly' && Array.isArray(job.weekdays) && job.weekdays.length) {
+        return ntAdminCapScheduleRun(
+            ntAdminNextWeeklyRun(from, job.weekdays, job.timeOfDay || '06:00'),
+            job.untilAt
+        );
+    }
+    if (freq === 'monthly') {
+        return ntAdminCapScheduleRun(
+            ntAdminNextMonthlyRun(from, job.monthDay, job.timeOfDay || '08:00'),
+            job.untilAt
+        );
+    }
+    if (freq === 'once') return 0;
+    return ntAdminCapScheduleRun(ntAdminLegacyNextScheduleRun(freq, from), job.untilAt);
+}
+
+function ntAdminFormatWeekdaysLabel(days) {
+    return ntAdminNormalizeWeekdays(days).map((d) => NT_ADMIN_WEEKDAY_LABELS[d]).join(', ');
+}
+
+function ntAdminAddDaysDateValue(now, days) {
+    const d = now instanceof Date ? new Date(now.getTime()) : new Date();
+    d.setDate(d.getDate() + (Number(days) || 0));
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function ntAdminTomorrowMorningLocalValue(now) {
+    const d = now instanceof Date ? new Date(now.getTime()) : new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(6, 0, 0, 0);
+    return ntAdminToLocalDatetimeValue(d.getTime());
+}
+
+function ntAdminBuildScheduleJobMeta(input, fromTs) {
+    const mode = input && input.mode;
+    const from = Number(fromTs) || Date.now();
+    if (mode === 'later') {
+        const nextRunAt = Number(input.firstMs);
+        if (!nextRunAt) return { ok: false, error: 'Set when this alert should post.' };
+        const expiresAt = Number(input.expiresAt);
+        if (!expiresAt || expiresAt <= nextRunAt) return { ok: false, error: 'Expiry must be after the post time.' };
+        return {
+            ok: true,
+            frequency: 'once',
+            nextRunAt,
+            expireMode: 'duration',
+            expiresInMs: expiresAt - nextRunAt,
+            timeOfDay: null,
+            weekdays: [],
+            monthDay: null,
+            untilAt: null,
+        };
+    }
+    if (mode === 'weekly') {
+        const weekdays = ntAdminNormalizeWeekdays(input.weekdays);
+        if (!weekdays.length) return { ok: false, error: 'Pick at least one weekday.' };
+        const untilAt = input.untilAt || '';
+        if (!ntAdminUntilEndMs(untilAt)) return { ok: false, error: 'Set a last date for this weekly alert.' };
+        const timeOfDay = input.timeOfDay || '06:00';
+        const nextRunAt = ntAdminCapScheduleRun(ntAdminNextWeeklyRun(from, weekdays, timeOfDay), untilAt);
+        if (!nextRunAt) return { ok: false, error: 'No remaining weekday before the end date.' };
+        const liveHours = Number(input.liveHours);
+        const endOfDay = input.expireMode === 'end_of_day' || !liveHours;
+        return {
+            ok: true,
+            frequency: 'weekly',
+            nextRunAt,
+            weekdays,
+            timeOfDay,
+            untilAt,
+            expireMode: endOfDay ? 'end_of_day' : 'duration',
+            expiresInMs: endOfDay ? 0 : Math.max(5 * 60 * 1000, Math.round(liveHours * 3600 * 1000)),
+            monthDay: null,
+        };
+    }
+    if (mode === 'monthly') {
+        const monthDay = Math.max(1, Math.min(31, parseInt(input.monthDay, 10) || 0));
+        if (!monthDay) return { ok: false, error: 'Set the day of the month this starts.' };
+        const untilAt = input.untilAt || '';
+        if (!ntAdminUntilEndMs(untilAt)) return { ok: false, error: 'Set a last month for this reminder.' };
+        const timeOfDay = input.timeOfDay || '08:00';
+        const nextRunAt = ntAdminCapScheduleRun(ntAdminNextMonthlyRun(from, monthDay, timeOfDay), untilAt);
+        if (!nextRunAt) return { ok: false, error: 'No remaining month before the end date.' };
+        return {
+            ok: true,
+            frequency: 'monthly',
+            nextRunAt,
+            monthDay,
+            timeOfDay,
+            untilAt,
+            expireMode: 'month_end',
+            expiresInMs: 0,
+            weekdays: [],
+        };
+    }
+    return { ok: false, error: 'Pick Later, Weekly, or Monthly.' };
+}
+
+function ntAdminFormatScheduleSummary(job) {
+    if (!job) return '';
+    const freq = job.frequency || 'once';
+    const time = job.timeOfDay || '';
+    const until = job.untilAt ? ` until ${String(job.untilAt).slice(0, 10)}` : '';
+    if (freq === 'weekly' && Array.isArray(job.weekdays) && job.weekdays.length) {
+        const days = ntAdminFormatWeekdaysLabel(job.weekdays);
+        return time ? `${days} at ${time}${until}` : `${days}${until}`;
+    }
+    if (freq === 'monthly') {
+        const day = ntAdminOrdinal(job.monthDay || 1);
+        return time ? `From the ${day} each month at ${time}${until}` : `From the ${day} each month${until}`;
+    }
+    if (freq === 'once') return 'One-shot';
+    return String(freq);
+}
+
+function ntAdminSchedulePreviewText(meta) {
+    if (!meta || !meta.ok) return (meta && meta.error) || 'Choose when this alert should post.';
+    if (meta.frequency === 'once') {
+        return `Posts once. Stays live for the time you set.`;
+    }
+    if (meta.frequency === 'weekly') {
+        const days = ntAdminFormatWeekdaysLabel(meta.weekdays);
+        const live = meta.expireMode === 'end_of_day' ? 'until the end of that day' : `for ${meta.expiresInMs / (3600 * 1000)} hr`;
+        return `Posts every ${days} at ${meta.timeOfDay}, ${live}. Stops after ${String(meta.untilAt).slice(0, 10)}.`;
+    }
+    if (meta.frequency === 'monthly') {
+        return `Posts from the ${ntAdminOrdinal(meta.monthDay)} of each month at ${meta.timeOfDay}. Stays live until month end. Stops after ${String(meta.untilAt).slice(0, 10)}.`;
+    }
+    return ntAdminFormatScheduleSummary(meta);
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -9563,22 +9837,11 @@ const Admin = {
     },
 
     computeNextScheduleRun: (freq, fromTs) => {
-        const base = Number(fromTs) || Date.now();
-        if (freq === 'once') return null;
-        if (freq === 'hourly') return base + 3600 * 1000;
-        if (freq === 'daily') return base + 24 * 3600 * 1000;
-        if (freq === 'weekly') return base + 7 * 24 * 3600 * 1000;
-        if (freq === 'weekdays') {
-            let next = base + 24 * 3600 * 1000;
-            for (let i = 0; i < 10; i++) {
-                const day = new Date(next).getDay();
-                if (day !== 0 && day !== 6) return next;
-                next += 24 * 3600 * 1000;
-            }
-            return next;
-        }
-        return base + 24 * 3600 * 1000;
+        const next = ntAdminLegacyNextScheduleRun(freq, fromTs);
+        return next || null;
     },
+
+    computeJobNextRun: (job, fromTs) => ntAdminComputeJobNextRun(job, fromTs),
 
     publishDueScheduledAlerts: async (secret) => {
         if (!secret) secret = await Admin.getAuthKey();
@@ -9603,13 +9866,12 @@ const Admin = {
                 if (!nextRun || nextRun > now) continue;
                 try {
                     const notice = { ...job.notice };
-                    const expiresInMs = Number(notice.expiresInMs) || (2 * 3600 * 1000);
                     delete notice.expiresInMs;
                     const payload = {
                         ...notice,
                         id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
                         postedAt: Date.now(),
-                        expiresAt: Date.now() + expiresInMs,
+                        expiresAt: ntAdminNoticeExpiresAt(now, job),
                     };
                     try {
                         for (const t of jobTargets) {
@@ -9619,8 +9881,8 @@ const Admin = {
                         continue;
                     }
                     published++;
-                    const next = Admin.computeNextScheduleRun(job.frequency || 'once', Math.max(nextRun, now));
-                    if (next == null || job.frequency === 'once') {
+                    const next = ntAdminComputeJobNextRun(job, Math.max(nextRun, now));
+                    if (!next || job.frequency === 'once') {
                         await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, { method: 'DELETE' });
                     } else {
                         await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, {
@@ -9671,13 +9933,17 @@ const Admin = {
         if (!listEl) return;
         const rows = Array.isArray(items) ? items : [];
         if (!rows.length) {
-            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400">No scheduled alerts. Add one under New Alert ? Recurring schedule.</div>`;
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400">No scheduled alerts. On New Alert, pick Later, Weekly, or Monthly.</div>`;
             return;
         }
         listEl.innerHTML = rows.map((job) => {
             const nextStr = job.nextRunAt ? Admin.formatDate(job.nextRunAt) : '-';
             const lastStr = job.lastRunAt ? Admin.formatDate(job.lastRunAt) : 'never';
-            const liveFor = Admin.formatScheduleDurationLabel(job.notice?.expiresInMs || 2 * 3600 * 1000);
+            const liveFor = job.expireMode === 'month_end'
+                ? 'to month end'
+                : (job.expireMode === 'end_of_day'
+                    ? 'to end of day'
+                    : Admin.formatScheduleDurationLabel(job.notice?.expiresInMs || 2 * 3600 * 1000));
             const paused = job.enabled === false;
             const plain = (() => {
                 try {
@@ -9686,7 +9952,11 @@ const Admin = {
                     return (d.textContent || '').trim().slice(0, 100) || '(empty)';
                 } catch { return '(empty)'; }
             })();
-            const freq = escapeHTML(String(job.frequency || 'once'));
+            const freqKey = job.frequency === 'weekly' && job.weekdays && job.weekdays.length
+                ? 'Weekly'
+                : (job.frequency === 'monthly' ? 'Monthly' : (job.frequency === 'once' ? 'Later' : String(job.frequency || 'once')));
+            const freq = escapeHTML(freqKey);
+            const summary = escapeHTML(ntAdminFormatScheduleSummary(job));
             const targetList = typeof Admin.dedupeAlertTargets === 'function'
                 ? Admin.dedupeAlertTargets(Array.isArray(job.targets) && job.targets.length ? job.targets : (job.target ? [job.target] : []))
                 : (job.target ? [job.target] : []);
@@ -9700,6 +9970,7 @@ const Admin = {
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Live ${escapeHTML(liveFor)}</span>
                         ${paused ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-700">Paused</span>' : ''}
                     </div>
+                    ${summary ? `<p class="text-[10px] text-indigo-700 dark:text-indigo-300 font-medium mb-1">${summary}</p>` : ''}
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
                     <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
                         <span>Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</span>
@@ -9792,7 +10063,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-active-v1';
+        const ALERT_PANEL_REV = 'alerts-sched-v2';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -9990,52 +10261,82 @@ const Admin = {
                 </div>
 
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">5. Timing</p>
-                <div>
-                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Time</label>
-                    <input type="datetime-local" id="alert-duration-custom" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
-                    <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. For one-shot posts: when this live notice expires. Recurring jobs use the duration below instead.</p>
-                </div>
+                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">5. When to post</p>
+                    <div id="alert-when-modes" class="grid grid-cols-4 gap-1 p-0.5 rounded-xl bg-gray-100 dark:bg-gray-800" role="tablist">
+                        <button type="button" data-alert-when="now" class="alert-when-mode h-9 rounded-lg text-[10px] font-black uppercase tracking-wider focus:outline-none bg-blue-600 text-white">Now</button>
+                        <button type="button" data-alert-when="later" class="alert-when-mode h-9 rounded-lg text-[10px] font-black uppercase tracking-wider focus:outline-none text-gray-600 dark:text-gray-300">Later</button>
+                        <button type="button" data-alert-when="weekly" class="alert-when-mode h-9 rounded-lg text-[10px] font-black uppercase tracking-wider focus:outline-none text-gray-600 dark:text-gray-300">Weekly</button>
+                        <button type="button" data-alert-when="monthly" class="alert-when-mode h-9 rounded-lg text-[10px] font-black uppercase tracking-wider focus:outline-none text-gray-600 dark:text-gray-300">Monthly</button>
+                    </div>
 
-                <div class="border border-indigo-200 dark:border-indigo-800 rounded-xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-900/10">
-                    <button type="button" id="alert-recur-toggle-btn" class="w-full px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 flex items-center justify-between focus:outline-none">
-                        <span>Recurring schedule (optional)</span>
-                        <svg id="alert-recur-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="alert-recur-body" class="hidden px-3 pb-3 space-y-2 border-t border-indigo-100 dark:border-indigo-900/50">
-                        <p class="text-[10px] text-indigo-800/80 dark:text-indigo-300/80 leading-snug pt-2">Saves a recipe to the <b>Schedule</b> tab. Due jobs publish when an admin opens Schedule or taps Refresh.</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="col-span-2 sm:col-span-1">
-                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">First run</label>
-                                <input type="datetime-local" id="alert-schedule-first" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none" />
-                            </div>
-                            <div class="col-span-2 sm:col-span-1">
-                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Frequency</label>
-                                <select id="alert-schedule-freq" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
-                                    <option value="once">Once</option>
-                                    <option value="hourly">Hourly</option>
-                                    <option value="daily">Daily</option>
-                                    <option value="weekdays">Weekdays (Mon-Fri)</option>
-                                    <option value="weekly">Weekly</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Live for</label>
-                                <input type="number" id="alert-schedule-duration-val" min="1" max="999" value="2" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none" />
-                            </div>
-                            <div>
-                                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Duration unit</label>
-                                <select id="alert-schedule-duration-unit" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs outline-none">
-                                    <option value="minutes">Minutes</option>
-                                    <option value="hours" selected>Hours</option>
-                                    <option value="days">Days</option>
-                                </select>
+                    <div id="alert-when-later-fields" class="hidden space-y-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Post at</label>
+                            <input type="datetime-local" id="alert-schedule-first" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div id="alert-when-weekly-fields" class="hidden space-y-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Days</label>
+                            <div id="alert-weekly-days" class="grid grid-cols-7 gap-1">
+                                <button type="button" data-wd="0" class="alert-wd-chip h-9 rounded-lg text-[10px] font-black uppercase border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 focus:outline-none" aria-pressed="false">Sun</button>
+                                <button type="button" data-wd="1" class="alert-wd-chip is-on h-9 rounded-lg text-[10px] font-black uppercase border border-indigo-500 bg-indigo-600 text-white focus:outline-none" aria-pressed="true">Mon</button>
+                                <button type="button" data-wd="2" class="alert-wd-chip h-9 rounded-lg text-[10px] font-black uppercase border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 focus:outline-none" aria-pressed="false">Tue</button>
+                                <button type="button" data-wd="3" class="alert-wd-chip h-9 rounded-lg text-[10px] font-black uppercase border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 focus:outline-none" aria-pressed="false">Wed</button>
+                                <button type="button" data-wd="4" class="alert-wd-chip h-9 rounded-lg text-[10px] font-black uppercase border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 focus:outline-none" aria-pressed="false">Thu</button>
+                                <button type="button" data-wd="5" class="alert-wd-chip is-on h-9 rounded-lg text-[10px] font-black uppercase border border-indigo-500 bg-indigo-600 text-white focus:outline-none" aria-pressed="true">Fri</button>
+                                <button type="button" data-wd="6" class="alert-wd-chip h-9 rounded-lg text-[10px] font-black uppercase border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 focus:outline-none" aria-pressed="false">Sat</button>
                             </div>
                         </div>
-                        <p id="alert-schedule-preview" class="text-[10px] font-medium text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-2.5 py-2 border border-indigo-100 dark:border-indigo-900/40 leading-snug">Set first run &amp; duration to preview.</p>
-                        <button type="button" id="alert-schedule-save-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md focus:outline-none">Add to Schedule</button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Time</label>
+                                <input type="time" id="alert-weekly-time" value="06:00" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Repeat until</label>
+                                <input type="date" id="alert-weekly-until" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Each post stays live</label>
+                            <select id="alert-weekly-live" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="end_of_day" selected>Until the end of that day</option>
+                                <option value="6">6 hours</option>
+                                <option value="12">12 hours</option>
+                                <option value="24">24 hours</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
+
+                    <div id="alert-when-monthly-fields" class="hidden space-y-2">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Posts on the start day, then stays up until the last day of that month. Use this for monthly ticket reminders.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">From day</label>
+                                <input type="number" id="alert-monthly-day" min="1" max="31" value="25" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Time</label>
+                                <input type="time" id="alert-monthly-time" value="08:00" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Repeat until</label>
+                            <input type="date" id="alert-monthly-until" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div id="alert-when-expiry-fields">
+                        <label id="alert-duration-label" class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Expiry Time</label>
+                        <input type="datetime-local" id="alert-duration-custom" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p id="alert-duration-hint-now" class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59.</p>
+                        <p id="alert-duration-hint-later" class="hidden text-[9px] text-gray-400 mt-1">When this one-shot notice comes down. Must be after the post time.</p>
+                    </div>
+
+                    <p id="alert-schedule-preview" class="hidden text-[10px] font-medium text-indigo-900 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-900/20 rounded-lg px-2.5 py-2 border border-indigo-100 dark:border-indigo-900/40 leading-snug"></p>
+                    <button type="button" id="alert-schedule-save-btn" class="hidden w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md focus:outline-none">Save schedule</button>
                 </div>
 
                 <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -10105,7 +10406,7 @@ const Admin = {
                 <div id="alert-schedule-pane" class="hidden space-y-3">
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
                         <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
-                            Live queue of scheduled alerts. Create recipes under <b>New Alert ? Recurring schedule</b>. Refresh publishes any that are due.
+                            Live queue of scheduled alerts. Create them under <b>New Alert</b> with Later, Weekly, or Monthly. Refresh publishes any that are due.
                         </p>
                     </div>
                     <div class="flex justify-between items-center">
@@ -10377,67 +10678,145 @@ const Admin = {
 
         document.getElementById('alert-schedule-refresh-btn')?.addEventListener('click', () => Admin.refreshScheduledAlerts());
 
-        const recurToggleBtn = document.getElementById('alert-recur-toggle-btn');
-        const recurBody = document.getElementById('alert-recur-body');
-        const recurChevron = document.getElementById('alert-recur-chevron');
-        if (recurToggleBtn && recurBody) {
-            recurToggleBtn.onclick = () => {
-                const open = recurBody.classList.toggle('hidden') === false;
-                recurChevron?.classList.toggle('-rotate-90', !open);
-            };
-        }
+        const readAlertWhenMode = () => {
+            return document.querySelector('.alert-when-mode.is-active')?.getAttribute('data-alert-when')
+                || document.querySelector('.alert-when-mode.bg-blue-600')?.getAttribute('data-alert-when')
+                || 'now';
+        };
+
+        const selectedWeekdays = () => Array.from(document.querySelectorAll('.alert-wd-chip.is-on'))
+            .map((btn) => Number(btn.getAttribute('data-wd')))
+            .filter((n) => Number.isInteger(n));
+
+        const styleWhenModeBtns = (mode) => {
+            document.querySelectorAll('.alert-when-mode').forEach((btn) => {
+                const on = btn.getAttribute('data-alert-when') === mode;
+                btn.classList.toggle('is-active', on);
+                btn.classList.toggle('bg-blue-600', on);
+                btn.classList.toggle('text-white', on);
+                btn.classList.toggle('text-gray-600', !on);
+                btn.classList.toggle('dark:text-gray-300', !on);
+            });
+        };
+
+        const styleWeekdayChip = (btn) => {
+            const on = btn.classList.contains('is-on');
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.classList.toggle('border-indigo-500', on);
+            btn.classList.toggle('bg-indigo-600', on);
+            btn.classList.toggle('text-white', on);
+            btn.classList.toggle('border-gray-300', !on);
+            btn.classList.toggle('dark:border-gray-600', !on);
+            btn.classList.toggle('text-gray-600', !on);
+            btn.classList.toggle('dark:text-gray-300', !on);
+        };
+
+        const readComposeScheduleMeta = () => {
+            const mode = readAlertWhenMode();
+            const firstEl = document.getElementById('alert-schedule-first');
+            const liveEl = document.getElementById('alert-weekly-live');
+            const liveVal = liveEl?.value || 'end_of_day';
+            return ntAdminBuildScheduleJobMeta({
+                mode,
+                firstMs: firstEl?.value ? new Date(firstEl.value).getTime() : NaN,
+                expiresAt: dateInput?.value ? new Date(dateInput.value).getTime() : NaN,
+                weekdays: selectedWeekdays(),
+                timeOfDay: mode === 'monthly'
+                    ? (document.getElementById('alert-monthly-time')?.value || '08:00')
+                    : (document.getElementById('alert-weekly-time')?.value || '06:00'),
+                untilAt: mode === 'monthly'
+                    ? (document.getElementById('alert-monthly-until')?.value || '')
+                    : (document.getElementById('alert-weekly-until')?.value || ''),
+                expireMode: liveVal === 'end_of_day' ? 'end_of_day' : 'duration',
+                liveHours: liveVal === 'end_of_day' ? 0 : Number(liveVal),
+                monthDay: document.getElementById('alert-monthly-day')?.value,
+            }, Date.now());
+        };
 
         const updateSchedulePreview = () => {
             const preview = document.getElementById('alert-schedule-preview');
             if (!preview) return;
-            const firstEl = document.getElementById('alert-schedule-first');
-            const freqEl = document.getElementById('alert-schedule-freq');
-            const durVal = parseFloat(document.getElementById('alert-schedule-duration-val')?.value || '0');
-            const durUnit = document.getElementById('alert-schedule-duration-unit')?.value || 'hours';
-            const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : NaN;
-            if (!Number.isFinite(firstMs) || !durVal || durVal <= 0) {
-                preview.textContent = 'Set first run & duration to preview.';
+            const mode = readAlertWhenMode();
+            if (mode === 'now') {
+                preview.classList.add('hidden');
+                preview.textContent = '';
                 return;
             }
-            let mult = 3600 * 1000;
-            if (durUnit === 'minutes') mult = 60 * 1000;
-            else if (durUnit === 'days') mult = 24 * 3600 * 1000;
-            const liveMs = Math.max(5 * 60 * 1000, Math.round(durVal * mult));
-            const freq = freqEl?.value || 'once';
-            const freqLabel = ({
-                once: 'once',
-                hourly: 'every hour',
-                daily: 'every day',
-                weekdays: 'on weekdays (Mon-Fri)',
-                weekly: 'every week',
-            })[freq] || freq;
-            const when = Admin.formatDate(firstMs);
-            preview.textContent = `Starts ${when}, repeats ${freqLabel}. Each published alert stays live for ${Admin.formatScheduleDurationLabel(liveMs)}.`;
+            const meta = readComposeScheduleMeta();
+            preview.classList.remove('hidden');
+            preview.textContent = ntAdminSchedulePreviewText(meta);
         };
-        ['alert-schedule-first', 'alert-schedule-freq', 'alert-schedule-duration-val', 'alert-schedule-duration-unit'].forEach((id) => {
+
+        const syncAlertWhenMode = (nextMode) => {
+            const mode = nextMode || readAlertWhenMode();
+            styleWhenModeBtns(mode);
+            document.getElementById('alert-when-later-fields')?.classList.toggle('hidden', mode !== 'later');
+            document.getElementById('alert-when-weekly-fields')?.classList.toggle('hidden', mode !== 'weekly');
+            document.getElementById('alert-when-monthly-fields')?.classList.toggle('hidden', mode !== 'monthly');
+            document.getElementById('alert-when-expiry-fields')?.classList.toggle('hidden', mode !== 'now' && mode !== 'later');
+            document.getElementById('alert-duration-hint-now')?.classList.toggle('hidden', mode !== 'now');
+            document.getElementById('alert-duration-hint-later')?.classList.toggle('hidden', mode !== 'later');
+            const durationLabel = document.getElementById('alert-duration-label');
+            if (durationLabel) durationLabel.textContent = mode === 'later' ? 'This notice expires' : 'Expiry Time';
+            document.getElementById('alert-schedule-save-btn')?.classList.toggle('hidden', mode === 'now');
+            if (mode === 'later') {
+                const firstEl = document.getElementById('alert-schedule-first');
+                if (firstEl && !firstEl.value) firstEl.value = ntAdminTomorrowMorningLocalValue();
+                if (dateInput && firstEl?.value) {
+                    const firstMs = new Date(firstEl.value).getTime();
+                    const expMs = dateInput.value ? new Date(dateInput.value).getTime() : NaN;
+                    if (!Number.isFinite(expMs) || expMs <= firstMs) {
+                        dateInput.value = ntAdminEndOfTodayLocalValue(new Date(firstMs));
+                    }
+                }
+            }
+            if (mode === 'weekly') {
+                const untilEl = document.getElementById('alert-weekly-until');
+                if (untilEl && !untilEl.value) untilEl.value = ntAdminAddDaysDateValue(new Date(), 84);
+            }
+            if (mode === 'monthly') {
+                const untilEl = document.getElementById('alert-monthly-until');
+                if (untilEl && !untilEl.value) untilEl.value = ntAdminAddDaysDateValue(new Date(), 180);
+            }
+            updateSchedulePreview();
+        };
+
+        document.querySelectorAll('.alert-when-mode').forEach((btn) => {
+            btn.addEventListener('click', () => syncAlertWhenMode(btn.getAttribute('data-alert-when')));
+        });
+        document.querySelectorAll('.alert-wd-chip').forEach((btn) => {
+            styleWeekdayChip(btn);
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('is-on');
+                styleWeekdayChip(btn);
+                updateSchedulePreview();
+            });
+        });
+        ['alert-schedule-first', 'alert-duration-custom', 'alert-weekly-time', 'alert-weekly-until', 'alert-weekly-live', 'alert-monthly-day', 'alert-monthly-time', 'alert-monthly-until'].forEach((id) => {
             document.getElementById(id)?.addEventListener('input', updateSchedulePreview);
             document.getElementById(id)?.addEventListener('change', updateSchedulePreview);
         });
-        updateSchedulePreview();
+        document.getElementById('alert-schedule-first')?.addEventListener('change', () => {
+            if (readAlertWhenMode() !== 'later' || !dateInput) return;
+            const firstEl = document.getElementById('alert-schedule-first');
+            const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : NaN;
+            const expMs = dateInput.value ? new Date(dateInput.value).getTime() : NaN;
+            if (Number.isFinite(firstMs) && (!Number.isFinite(expMs) || expMs <= firstMs)) {
+                dateInput.value = ntAdminEndOfTodayLocalValue(new Date(firstMs));
+                updateSchedulePreview();
+            }
+        });
+        syncAlertWhenMode('now');
 
         document.getElementById('alert-schedule-save-btn')?.addEventListener('click', async () => {
-            const firstEl = document.getElementById('alert-schedule-first');
-            const freqEl = document.getElementById('alert-schedule-freq');
             let msg = (alertMsg?.innerHTML || '').trim();
             const targets = Admin.getSelectedAlertTargets();
             const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
             if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast('Add a message or a poster.', 'error'); return; }
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
-            const firstMs = firstEl?.value ? new Date(firstEl.value).getTime() : NaN;
-            if (!Number.isFinite(firstMs)) { if (typeof showToast === 'function') showToast('Set a valid first-run time.', 'error'); return; }
-            const durVal = parseFloat(document.getElementById('alert-schedule-duration-val')?.value || '0');
-            const durUnit = document.getElementById('alert-schedule-duration-unit')?.value || 'hours';
-            if (!durVal || durVal <= 0) { if (typeof showToast === 'function') showToast('Set how long each alert stays live.', 'error'); return; }
-            let mult = 3600 * 1000;
-            if (durUnit === 'minutes') mult = 60 * 1000;
-            else if (durUnit === 'days') mult = 24 * 3600 * 1000;
-            const expiresInMs = Math.max(5 * 60 * 1000, Math.round(durVal * mult));
+            const meta = readComposeScheduleMeta();
+            if (!meta.ok) { if (typeof showToast === 'function') showToast(meta.error, 'error'); return; }
 
             const secret = await Admin.getAuthKey();
             if (!secret) { if (typeof showToast === 'function') showToast('Authentication required.', 'error'); return; }
@@ -10454,10 +10833,15 @@ const Admin = {
                 id: schedId,
                 target: targets[0],
                 targets,
-                frequency: freqEl?.value || 'once',
-                nextRunAt: firstMs,
+                frequency: meta.frequency,
+                nextRunAt: meta.nextRunAt,
                 createdAt: Date.now(),
                 enabled: true,
+                expireMode: meta.expireMode,
+                timeOfDay: meta.timeOfDay,
+                weekdays: meta.weekdays,
+                monthDay: meta.monthDay,
+                untilAt: meta.untilAt,
                 notice: {
                     message: msg,
                     authorName: signoff,
@@ -10469,7 +10853,7 @@ const Admin = {
                     ctaText: null,
                     sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                     sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
-                    expiresInMs,
+                    expiresInMs: meta.expiresInMs || 0,
                     poll: {
                         active: !!(pollToggle && pollToggle.checked),
                         question: pollToggle?.checked ? pollQuestion.value.trim() : null,
@@ -10487,7 +10871,7 @@ const Admin = {
                     body: JSON.stringify(job),
                 });
                 if (!res.ok) throw new Error('Save failed');
-                if (typeof showToast === 'function') showToast('Added to Schedule.', 'success');
+                if (typeof showToast === 'function') showToast('Saved to Scheduled.', 'success');
                 setAlertTab('schedule');
                 Admin.refreshScheduledAlerts();
             } catch (e) {

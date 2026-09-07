@@ -7,8 +7,10 @@ import { warningTriangleSvg } from '../src/lib/utils.js';
 import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
+    fitStationLabel,
     resolveTransferHubName,
     routeAllowsDualHubOptions,
+    shortenStationLabel,
 } from '../src/lib/transfer-card.js';
 
 const failures = [];
@@ -16,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.06.18', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.07.1', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -96,6 +98,8 @@ assert(renderer.includes('data-nt-deptime'), 'departure clock is stamped for qui
 assert(renderer.includes('liveBoardStaticKey'), 'empty and no-service cards use static board keys');
 assert(renderer.includes('At ${hubLabel}'), 'transfer card names the hub from the journey');
 assert(renderer.includes('collectHubOnwardOptions'), 'transfer card uses shared onward-option helper');
+assert(renderer.includes('fitOnwardRowLabels'), 'onward dest names shrink only when the row wraps');
+assert(renderer.includes('data-nt-onward-row'), 'onward trains are one nowrap row');
 assert(renderer.includes('To ${hubLabel}'), 'shuttle line names the change station');
 assert(!renderer.includes('Connect Train ${conn.train}'), 'old Connect Train heading is gone');
 assert(!renderer.includes('italic text-gray-500 dark:text-gray-500 border-t'), 'terminus option is not an italic footnote');
@@ -231,6 +235,11 @@ assert(!routeAllowsDualHubOptions('pta-kempton'), 'direct corridors do not get a
     const rand = collectHubOnwardOptions(journey, 'jhb-rand');
     assert(rand.length === 1 && rand[0].train === '1103', 'other shuttle routes keep only the earliest onward train');
 }
+assert(shortenStationLabel('Mamelodi Gardens') === 'Mamelodi Gard', 'multi-word dest clips the last word first');
+assert(shortenStationLabel('Pienaarspoort') === 'Pienaarsp', 'one-word dest drops the last four letters');
+assert(fitStationLabel('Mamelodi Gardens', () => false) === 'Mamelodi Gardens', 'full dest stays when the row fits');
+assert(fitStationLabel('Mamelodi Gardens', (s) => s === 'Mamelodi Gardens') === 'Mamelodi Gard', 'dest shortens only after a wrap');
+assert(fitStationLabel('Pienaarspoort', (s) => s === 'Pienaarspoort') === 'Pienaarsp', 'one-word dest shortens only after a wrap');
 assert(liveBoard.includes('routeAllowsDualHubOptions(routeId)'), 'findConnections only builds a second hub option on the allow-list');
 
 if (failures.length) {

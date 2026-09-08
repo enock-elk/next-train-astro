@@ -190,7 +190,7 @@ assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not al
 
 assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
 assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
-assert(admin.includes('alerts-sched-v2'), 'alert panel rebuilds after schedule UX');
+assert(admin.includes('alerts-sched-v3'), 'alert panel rebuilds after schedule UX');
 assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
 assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
 
@@ -288,6 +288,13 @@ assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
 assert(admin.includes('roadmap-refine-v1'), 'roadmap panel rebuilds after the card redesign');
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
+
+assert(admin.includes('listIncidentStations'), 'incident picker lists sheet stations including inactive');
+assert(admin.includes('Inactive stops are listed'), 'incident picker still includes inactive geometry stops');
+assert(admin.includes('alert-active-delete'), 'active alerts have a Delete action');
+assert(admin.includes('alert-sched-edit'), 'scheduled alerts have Edit');
+assert(/alert-sched-delete[^>]*>Delete</.test(admin), 'scheduled delete label is Delete');
+assert(!/alert-sched-delete[^>]*>Clear</.test(admin), 'scheduled Clear label is gone');
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

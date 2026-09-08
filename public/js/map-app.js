@@ -1156,8 +1156,16 @@
                 'text-red-500': '#ef4444'
             };
 
-            const globalStations = {}; // { name: {lat, lon, origName, routes: Set()} }
+            const globalStations = {}; // { name: {lat, lon, origName, routes: Set()} } — active boarding stops only
+            const geometryStations = {}; // coords for inactive / ghost stops used only in disruption paths
             const drawnRoutes = []; // { routeId, name, color, isActive, coords: [], validStops: [] }
+
+            function isGhostStationName(name) {
+                const idx = (typeof window !== 'undefined' && window.GHOST_STATION_INDEX)
+                    ? window.GHOST_STATION_INDEX
+                    : null;
+                return !!(idx && name && idx[name]);
+            }
             const hubs = new Set();
             const ends = new Set();
             let selectedRouteId = null;
@@ -1236,7 +1244,11 @@
                 for (const name of names) {
                     const s = byName.get(name);
                     if (!s) continue;
-                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon });
+                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon, inactive: !!s.inactive });
+                    if (s.inactive) {
+                        geometryStations[s.name] = { lat: s.lat, lon: s.lon };
+                        continue;
+                    }
                     if (!globalStations[s.name]) {
                         globalStations[s.name] = { lat: s.lat, lon: s.lon, origName: s.name, routes: new Set() };
                     }
@@ -1300,9 +1312,7 @@
                         const sNameOrig = String(row[stationKey]).trim();
                         if (sNameOrig.toLowerCase().includes('last updated') || sNameOrig.toLowerCase().includes('inter-station')) continue;
 
-                        // 🛡️ GUARDIAN FIX: Ghost Row Pruning
                         const hasData = Object.keys(row).some(k => k !== stationKey && k !== coordKey && k !== 'KM_MARK' && k !== 'row_index' && row[k] && String(row[k]).trim() !== "" && String(row[k]).trim() !== "-");
-                        if (!hasData) continue;
 
                         const sName = sNameOrig.replace(/ STATION/gi, '').toUpperCase();
 
@@ -1327,11 +1337,15 @@
 
                         if (lat !== null && lon !== null) {
                             routeCoords.push([lat, lon]);
-                            validStops.push({ name: sName, lat: lat, lon: lon });
-                            if (!globalStations[sName]) {
-                                globalStations[sName] = { lat, lon, origName: sNameOrig, routes: new Set() };
+                            validStops.push({ name: sName, lat: lat, lon: lon, inactive: !hasData });
+                            if (hasData) {
+                                if (!globalStations[sName]) {
+                                    globalStations[sName] = { lat, lon, origName: sNameOrig, routes: new Set() };
+                                }
+                                globalStations[sName].routes.add(route.id);
+                            } else {
+                                geometryStations[sName] = { lat, lon };
                             }
-                            globalStations[sName].routes.add(route.id);
                         }
                     }
                     
@@ -1356,12 +1370,18 @@
                             }
 
                             if (lat !== null && lon !== null) {
+                                const alreadyLive = !!globalStations[sName];
+                                const ghostOnly = isGhostStationName(sName) && !alreadyLive;
                                 routeCoords.push([lat, lon]);
-                                validStops.push({ name: sName, lat: lat, lon: lon });
-                                if (!globalStations[sName]) {
-                                    globalStations[sName] = { lat, lon, origName: sName, routes: new Set() };
+                                validStops.push({ name: sName, lat: lat, lon: lon, inactive: ghostOnly });
+                                if (ghostOnly) {
+                                    geometryStations[sName] = { lat, lon };
+                                } else {
+                                    if (!globalStations[sName]) {
+                                        globalStations[sName] = { lat, lon, origName: sName, routes: new Set() };
+                                    }
+                                    globalStations[sName].routes.add(route.id);
                                 }
-                                globalStations[sName].routes.add(route.id);
                             }
                         });
                     }
@@ -1505,16 +1525,27 @@
                             }
                         } else {
                             const normStations = d.stations.map((s) => s.replace(/ STATION/gi, '').trim().toUpperCase());
-                            const routeStationNames = currentValidStops.map((s) => s.name);
+                            const resolvePathStop = (normName) => {
+                                const live = (currentValidStops || []).find((s) => s.name === normName);
+                                if (live) return live;
+                                const geo = geometryStations[normName];
+                                if (geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lon)) {
+                                    return { name: normName, lat: geo.lat, lon: geo.lon };
+                                }
+                                const gs = globalStations[normName];
+                                if (gs && Number.isFinite(gs.lat) && Number.isFinite(gs.lon)) {
+                                    return { name: normName, lat: gs.lat, lon: gs.lon };
+                                }
+                                const dict = STATION_COORDINATES[normName];
+                                if (dict) return { name: normName, lat: dict[0], lon: dict[1] };
+                                return null;
+                            };
 
                             if (normStations.length >= 2) {
-                                if (routeStationNames.includes(normStations[0]) && routeStationNames.includes(normStations[1])) {
-                                    const idx1 = routeStationNames.indexOf(normStations[0]);
-                                    const idx2 = routeStationNames.indexOf(normStations[1]);
-                                    const s1 = currentValidStops[idx1];
-                                    const s2 = currentValidStops[idx2];
-                                    if (!s1 || !s2) return;
-
+                                const s1 = resolvePathStop(normStations[0]);
+                                const s2 = resolvePathStop(normStations[1]);
+                                const names = (currentValidStops || []).map((s) => s.name);
+                                if (s1 && s2 && names.includes(normStations[0]) && names.includes(normStations[1])) {
                                     drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
                                     const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
                                     const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);
@@ -1535,10 +1566,11 @@
                                     }
                                 }
                             } else if (normStations.length === 1) {
-                                if (routeStationNames.includes(normStations[0])) {
-                                    const idx1 = routeStationNames.indexOf(normStations[0]);
+                                const names = (currentValidStops || []).map((s) => s.name);
+                                if (names.includes(normStations[0])) {
+                                    const s1 = resolvePathStop(normStations[0]);
+                                    if (!s1) return;
                                     drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
-                                    const s1 = currentValidStops[idx1];
                                     addWarning([s1.lat, s1.lon], `<b>${isCritical ? 'STATION INCIDENT' : 'STATION DELAYS'}</b>`, {
                                         permanent: true, direction: 'top', offset: [0, -12], className: 'font-bold text-[10px] text-gray-900 z-50 tooltip-dynamic tooltip-halo'
                                     });
@@ -1679,6 +1711,9 @@
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
+                // Inactive / ghost stops keep coords for incident cuts, never a name label.
+                if (isGhostStationName(name)) return;
+
                 // Important = corridor terminals + designated transfer/relay hubs only
                 // (multi-route intermediates like Mayfair stay small)
                 const isHub = hubs.has(name);

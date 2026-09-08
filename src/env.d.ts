@@ -32,6 +32,7 @@ interface Window {
   _suppressReloads?: boolean;
   MASTER_STATION_LIST?: string[];
   GHOST_STATION_LIST?: string[];
+  GHOST_STATION_INDEX?: Record<string, { lat?: number | null; lon?: number | null; routes?: string[] }>;
   switchTab?: (tab: string) => void;
   syncBottomNavActive?: (tab?: string) => void;
   setImmersiveChrome?: (on: boolean) => void;

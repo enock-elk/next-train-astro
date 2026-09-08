@@ -232,6 +232,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
     assert(js.includes('nt-alert-chip'), 'card has severity chip class');
     assert(js.includes('nt-alert-strip flex items-center justify-between gap-2 px-3 py-1'), 'Ops/INFO strip is a single compact row');
+    assert(js.includes('nt-alert-strip-info'), 'info strip uses the blue severity class');
+    assert(js.includes('🔵'), 'info chip keeps the blue emoji');
     assert(!js.includes('nt-alert-strip flex items-start justify-between gap-2 px-4 py-2.5'), 'Ops/INFO strip dropped the taller py-2.5 padding');
     assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
     assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');

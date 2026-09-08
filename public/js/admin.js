@@ -699,6 +699,106 @@ const Admin = {
         return raw.replace(/\s*<->\s*/g, ' \u2194 ').replace(/\s*\u2194\s*/g, ' \u2194 ').trim();
     },
 
+    /**
+     * Stations on a corridor for incident segments, including inactive / ghost
+     * rows (geometry only). Commuter boarding lists stay on the active index.
+     */
+    listIncidentStations: (rId) => {
+        const out = [];
+        const seen = new Set();
+        const add = (raw, inactive) => {
+            const name = String(raw || '').trim();
+            if (!name) return;
+            const lower = name.toLowerCase();
+            if (lower.includes('updated') || lower.includes('inter-station')) return;
+            const norm = (typeof normalizeStationName === 'function')
+                ? normalizeStationName(name)
+                : name.replace(/ STATION$/i, '').trim().toUpperCase();
+            if (!norm) return;
+            if (seen.has(norm)) {
+                if (!inactive) {
+                    const hit = out.find((s) => s.norm === norm);
+                    if (hit) hit.inactive = false;
+                }
+                return;
+            }
+            seen.add(norm);
+            const label = name.replace(/ STATION/gi, '').trim();
+            out.push({
+                value: name,
+                label,
+                inactive: !!inactive,
+                norm,
+            });
+        };
+
+        const rowHasService = (row) => {
+            const ignored = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+            return Object.keys(row || {}).some((k) => {
+                if (ignored.has(k)) return false;
+                const v = row[k];
+                if (v == null) return false;
+                const s = String(v).trim();
+                return s !== '' && s !== '-';
+            });
+        };
+
+        const walkSheet = (raw) => {
+            let rows = raw;
+            if (typeof parseJSONSchedule === 'function') {
+                try {
+                    const parsed = parseJSONSchedule(raw);
+                    if (parsed?.rows?.length) rows = parsed.rows;
+                } catch { /* keep raw */ }
+            }
+            if (!Array.isArray(rows) && raw && typeof raw === 'object') {
+                rows = Object.keys(raw)
+                    .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+                    .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+                    .map((k) => raw[k])
+                    .filter((r) => r && typeof r === 'object');
+            }
+            if (!Array.isArray(rows)) return;
+            rows.forEach((row) => {
+                if (row?.STATION) add(row.STATION, !rowHasService(row));
+            });
+        };
+
+        const route = (typeof ROUTES !== 'undefined' && rId) ? ROUTES[rId] : null;
+        const db = (typeof fullDatabase !== 'undefined') ? fullDatabase : null;
+        if (route?.sheetKeys && db) {
+            const keys = [
+                route.sheetKeys.weekday_to_b,
+                route.sheetKeys.weekday_to_a,
+                route.sheetKeys.saturday_to_b,
+                route.sheetKeys.saturday_to_a,
+            ].filter(Boolean);
+            keys.forEach((k) => { if (db[k]) walkSheet(db[k]); });
+        }
+
+        const idx = (typeof globalStationIndex !== 'undefined' && globalStationIndex) ? globalStationIndex : {};
+        Object.entries(idx).forEach(([stName, stData]) => {
+            const routes = stData?.routes;
+            let on = false;
+            try {
+                if (routes && typeof routes.has === 'function') on = routes.has(rId);
+                else if (Array.isArray(routes)) on = routes.includes(rId);
+            } catch { on = false; }
+            if (on) add(stName, false);
+        });
+
+        const ghosts = (typeof window !== 'undefined' && window.GHOST_STATION_INDEX) ? window.GHOST_STATION_INDEX : {};
+        Object.entries(ghosts).forEach(([stName, stData]) => {
+            const routes = stData?.routes;
+            let on = false;
+            if (routes && typeof routes.has === 'function') on = routes.has(rId);
+            else if (Array.isArray(routes)) on = routes.includes(rId);
+            if (on) add(stName, true);
+        });
+
+        return out;
+    },
+
     /** Pull "- Enock" / em-dash signoff out of an admin reply so the header can show it. */
     parseAdminSignoff: (html) => {
         let body = String(html || '');
@@ -9972,20 +10072,27 @@ const Admin = {
                     </div>
                     ${summary ? `<p class="text-[10px] text-indigo-700 dark:text-indigo-300 font-medium mb-1">${summary}</p>` : ''}
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
-                    <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
-                        <span>Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</span>
-                        <span class="flex gap-2 shrink-0">
-                            <button type="button" class="alert-sched-toggle font-bold uppercase tracking-wider focus:outline-none ${paused ? 'text-emerald-600' : 'text-amber-600'}" data-sched-id="${idSafe}" data-enabled="${paused ? '1' : '0'}">${paused ? 'Resume' : 'Pause'}</button>
-                            <button type="button" class="alert-sched-delete text-red-500 hover:text-red-700 font-bold uppercase tracking-wider focus:outline-none" data-sched-id="${idSafe}">Clear</button>
-                        </span>
+                    <p class="text-[9px] font-mono text-gray-400 mb-2">Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" class="alert-sched-edit min-h-[44px] px-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 focus:outline-none" data-sched-id="${idSafe}">Edit</button>
+                        <button type="button" class="alert-sched-toggle min-h-[44px] px-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[11px] font-black uppercase tracking-wider border border-amber-200 dark:border-amber-800 focus:outline-none" data-sched-id="${idSafe}" data-enabled="${paused ? '1' : '0'}">${paused ? 'Resume' : 'Pause'}</button>
+                        <button type="button" class="alert-sched-delete min-h-[44px] px-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[11px] font-black uppercase tracking-wider border border-red-200 dark:border-red-800 focus:outline-none" data-sched-id="${idSafe}">Delete</button>
                     </div>
                 </div>`;
         }).join('');
+        listEl.querySelectorAll('.alert-sched-edit').forEach((btn) => {
+            btn.onclick = () => {
+                const id = btn.getAttribute('data-sched-id');
+                const job = rows.find((j) => String(j.id) === String(id));
+                if (!job || typeof Admin.loadScheduledAlertForEdit !== 'function') return;
+                Admin.loadScheduledAlertForEdit(job);
+            };
+        });
         listEl.querySelectorAll('.alert-sched-delete').forEach((btn) => {
             btn.onclick = async () => {
                 const id = btn.getAttribute('data-sched-id');
                 if (!id) return;
-                const ok = await Admin.secureConfirm('Clear schedule', 'Remove this automated alert?');
+                const ok = await Admin.secureConfirm('Delete schedule', 'Remove this automated alert?');
                 if (!ok) return;
                 const secret = await Admin.getAuthKey();
                 if (!secret) return;
@@ -10063,7 +10170,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-sched-v2';
+        const ALERT_PANEL_REV = 'alerts-sched-v3';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -10628,7 +10735,13 @@ const Admin = {
             if (next === 'active') Admin.fetchActiveAlerts();
         };
         Admin.setAlertManagerTab = setAlertTab;
-        if (tabCompose) tabCompose.onclick = () => setAlertTab('compose');
+        if (tabCompose) tabCompose.onclick = () => {
+            Admin._editingSchedId = null;
+            Admin._editingSchedCreatedAt = null;
+            const saveSchedBtn = document.getElementById('alert-schedule-save-btn');
+            if (saveSchedBtn) saveSchedBtn.textContent = 'Save schedule';
+            setAlertTab('compose');
+        };
         if (tabActive) tabActive.onclick = () => setAlertTab('active');
         if (tabSchedule) tabSchedule.onclick = () => setAlertTab('schedule');
         if (tabArchive) tabArchive.onclick = () => setAlertTab('archive');
@@ -10828,14 +10941,14 @@ const Admin = {
             }
             const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
                 ? (pollOptC.value.trim() || null) : null;
-            const schedId = `sched_${Date.now()}`;
+            const schedId = Admin._editingSchedId || `sched_${Date.now()}`;
             const job = {
                 id: schedId,
                 target: targets[0],
                 targets,
                 frequency: meta.frequency,
                 nextRunAt: meta.nextRunAt,
-                createdAt: Date.now(),
+                createdAt: Admin._editingSchedCreatedAt || Date.now(),
                 enabled: true,
                 expireMode: meta.expireMode,
                 timeOfDay: meta.timeOfDay,
@@ -10871,6 +10984,10 @@ const Admin = {
                     body: JSON.stringify(job),
                 });
                 if (!res.ok) throw new Error('Save failed');
+                Admin._editingSchedId = null;
+                Admin._editingSchedCreatedAt = null;
+                const saveSchedBtn = document.getElementById('alert-schedule-save-btn');
+                if (saveSchedBtn) saveSchedBtn.textContent = 'Save schedule';
                 if (typeof showToast === 'function') showToast('Saved to Scheduled.', 'success');
                 setAlertTab('schedule');
                 Admin.refreshScheduledAlerts();
@@ -10935,6 +11052,60 @@ const Admin = {
             }
 
             composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        Admin.loadScheduledAlertForEdit = (job) => {
+            if (!job || !job.notice) {
+                if (typeof showToast === 'function') showToast('Could not load that schedule.', 'error');
+                return;
+            }
+            Admin._editingSchedId = job.id;
+            Admin._editingSchedCreatedAt = job.createdAt || Date.now();
+            const targets = Array.isArray(job.targets) && job.targets.length
+                ? job.targets
+                : (job.target ? [job.target] : []);
+            if (typeof Admin.setSelectedAlertTargets === 'function' && targets.length) {
+                Admin.setSelectedAlertTargets(targets, { fetch: false });
+            }
+            fillAlertComposeFromItem(job.notice, { mode: 'repost' });
+            const freq = job.frequency || 'once';
+            const mode = freq === 'weekly' ? 'weekly' : (freq === 'monthly' ? 'monthly' : 'later');
+            syncAlertWhenMode(mode);
+            if (mode === 'later' && job.nextRunAt) {
+                const firstEl = document.getElementById('alert-schedule-first');
+                if (firstEl) firstEl.value = Admin.toLocalDatetimeValue(job.nextRunAt);
+                if (dateInput && job.notice.expiresInMs) {
+                    dateInput.value = Admin.toLocalDatetimeValue(Number(job.nextRunAt) + Number(job.notice.expiresInMs || 0));
+                }
+            }
+            if (mode === 'weekly') {
+                const wanted = new Set((job.weekdays || []).map(Number));
+                document.querySelectorAll('.alert-wd-chip').forEach((chip) => {
+                    const on = wanted.has(Number(chip.getAttribute('data-wd')));
+                    chip.classList.toggle('is-on', on);
+                    styleWeekdayChip(chip);
+                });
+                const timeEl = document.getElementById('alert-weekly-time');
+                if (timeEl && job.timeOfDay) timeEl.value = job.timeOfDay;
+                const untilEl = document.getElementById('alert-weekly-until');
+                if (untilEl && job.untilAt) untilEl.value = String(job.untilAt).slice(0, 10);
+                const liveEl = document.getElementById('alert-weekly-live');
+                if (liveEl) {
+                    liveEl.value = job.expireMode === 'end_of_day' ? 'end_of_day' : String((job.notice?.expiresInMs || 0) / 3600000 || '2');
+                }
+            }
+            if (mode === 'monthly') {
+                const dayEl = document.getElementById('alert-monthly-day');
+                if (dayEl && job.monthDay) dayEl.value = String(job.monthDay);
+                const timeEl = document.getElementById('alert-monthly-time');
+                if (timeEl && job.timeOfDay) timeEl.value = job.timeOfDay;
+                const untilEl = document.getElementById('alert-monthly-until');
+                if (untilEl && job.untilAt) untilEl.value = String(job.untilAt).slice(0, 10);
+            }
+            const saveSchedBtn = document.getElementById('alert-schedule-save-btn');
+            if (saveSchedBtn) saveSchedBtn.textContent = 'Update schedule';
+            updateSchedulePreview();
+            if (typeof showToast === 'function') showToast('Schedule loaded for edit.', 'success');
         };
 
         Admin.reviveArchivedAlert = (item) => {
@@ -11518,9 +11689,10 @@ const Admin = {
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${scope}</span>
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-2">${escapeHTML(plain)}</p>
-                    <div class="flex justify-between items-center gap-2 text-[9px] font-mono text-gray-400">
-                        <span class="truncate">${idSafe} - ${escapeHTML(whenStr)}</span>
-                        <button type="button" class="alert-active-edit text-blue-600 dark:text-blue-400 font-black uppercase tracking-wider focus:outline-none" data-active-idx="${idx}">Edit</button>
+                    <p class="text-[9px] font-mono text-gray-400 mb-2 truncate">${idSafe} - ${escapeHTML(whenStr)}</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" class="alert-active-edit min-h-[44px] px-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 focus:outline-none" data-active-idx="${idx}">Edit</button>
+                        <button type="button" class="alert-active-delete min-h-[44px] px-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[11px] font-black uppercase tracking-wider border border-red-200 dark:border-red-800 focus:outline-none" data-active-idx="${idx}">Delete</button>
                     </div>
                 </div>`;
         }).join('');
@@ -11531,6 +11703,29 @@ const Admin = {
                 if (!item || !item.target || !(item.id || item._key)) return;
                 Admin._alertEditFromActive = true;
                 Admin.loadAlertForReview(item.target, item.id || item._key);
+            };
+        });
+        listEl.querySelectorAll('.alert-active-delete').forEach((btn) => {
+            btn.onclick = async () => {
+                const idx = Number(btn.getAttribute('data-active-idx'));
+                const item = rows[idx];
+                if (!item || !item.target || !(item.id || item._key)) return;
+                const ok = await Admin.secureConfirm('Delete alert', 'Delete this live alert for everyone?');
+                if (!ok) return;
+                const secret = await Admin.getAuthKey();
+                if (!secret) return;
+                try {
+                    const archived = await Admin.archiveActiveNotice(item.target, secret, item, item.id || item._key);
+                    if (!archived) {
+                        if (typeof showToast === 'function') showToast('Could not delete this alert.', 'error');
+                        return;
+                    }
+                    if (typeof showToast === 'function') showToast('Alert deleted.', 'success');
+                    Admin.fetchActiveAlerts();
+                    if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 400);
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Could not delete this alert.', 'error');
+                }
             };
         });
     },
@@ -11947,8 +12142,8 @@ const Admin = {
             alertPanel.parentNode.insertBefore(disrPanel, alertPanel.nextSibling);
         }
 
-        if (disrPanel.dataset.adminLoaded === "true") return;
-        disrPanel.dataset.adminLoaded = "true";
+        if (disrPanel.dataset.adminLoaded === "disr-stations-v2") return;
+        disrPanel.dataset.adminLoaded = "disr-stations-v2";
 
         disrPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
@@ -12023,6 +12218,7 @@ const Admin = {
                         </div>
                     </div>
                 </div>
+                <p class="text-[9px] text-gray-400 leading-snug">Pick Station A and Station B for a segment. Inactive stops are listed so the map can draw the cut. Shared stretches apply to every corridor that uses them (Pretoria-Sportpark on Irene also marks Kempton Park).</p>
 
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Badge Button Text</label>
@@ -12158,6 +12354,7 @@ const Admin = {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
                 Admin.fetchDisruptions(routeSelect.value);
+                populateStations();
             }
         };
 
@@ -12268,11 +12465,11 @@ const Admin = {
         };
         Admin.populateDisruptionRoutes();
 
-        // Populate Stations strictly bound to the selected route using globalStationIndex
+        // Populate stations from the route sheet (active + inactive) so segment bans work.
         const populateStations = () => {
             const rId = routeSelect.value;
-            statASelect.innerHTML = '<option value="">Route-Wide Advisory</option>';
-            statBSelect.innerHTML = '<option value="">None (Single Station/Route)</option>';
+            statASelect.innerHTML = '';
+            statBSelect.innerHTML = '';
             
             const listA = document.getElementById('disr-station-a-list');
             const listB = document.getElementById('disr-station-b-list');
@@ -12282,7 +12479,7 @@ const Admin = {
             if (listA) listA.innerHTML = '';
             if (listB) listB.innerHTML = '';
             
-            const addStationOpt = (selectEl, listEl, displayEl, value, text, chevronId, isA = true) => {
+            const addStationOpt = (selectEl, listEl, displayEl, value, text, chevronId, isA = true, htmlText = text) => {
                 const opt = document.createElement('option');
                 opt.value = value;
                 opt.textContent = text;
@@ -12291,15 +12488,14 @@ const Admin = {
                 if (listEl) {
                     const li = document.createElement('li');
                     li.className = "px-3 py-2.5 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 cursor-pointer";
-                    li.textContent = text;
+                    li.innerHTML = htmlText;
                     li.onclick = () => {
                         selectEl.value = value;
-                        if (displayEl) displayEl.textContent = text;
+                        if (displayEl) displayEl.innerHTML = htmlText;
                         listEl.classList.add('hidden');
                         const chevron = document.getElementById(chevronId);
                         if (chevron) chevron.classList.remove('rotate-180');
                         
-                        // Sync display if A is cleared
                         if (isA && value === "") {
                             statBSelect.value = "";
                             if (displayB) displayB.textContent = "None (Single Station/Route)";
@@ -12315,20 +12511,15 @@ const Admin = {
             if (displayA) displayA.textContent = "Route-Wide Advisory";
             if (displayB) displayB.textContent = "None (Single Station/Route)";
 
-            if (!rId || typeof globalStationIndex === 'undefined') return;
+            if (!rId) return;
 
-            const stations = [];
-            for (const [stName, stData] of Object.entries(globalStationIndex)) {
-                if (stData.routes && stData.routes.has(rId)) {
-                    stations.push(stName);
-                }
-            }
-            stations.sort();
+            const stations = typeof Admin.listIncidentStations === 'function'
+                ? Admin.listIncidentStations(rId)
+                : [];
 
-            stations.forEach(st => {
-                const cleanName = st.replace(' STATION', '');
-                addStationOpt(statASelect, listA, displayA, st, cleanName, 'disr-station-a-chevron', true);
-                addStationOpt(statBSelect, listB, displayB, st, cleanName, 'disr-station-b-chevron', false);
+            stations.forEach((st) => {
+                addStationOpt(statASelect, listA, displayA, st.value, st.label, 'disr-station-a-chevron', true);
+                addStationOpt(statBSelect, listB, displayB, st.value, st.label, 'disr-station-b-chevron', false);
             });
         };
 

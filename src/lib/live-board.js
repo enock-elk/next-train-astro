@@ -344,6 +344,66 @@ export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
 
+function unwrapSheetRows(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'object') {
+        if (Array.isArray(raw.rows)) return raw.rows;
+        return Object.keys(raw)
+            .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+            .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+            .map((k) => raw[k])
+            .filter((r) => r && typeof r === 'object');
+    }
+    return [];
+}
+
+/**
+ * Geographic station order for a corridor, including inactive / ghost rows.
+ * Ghosts are geometry only (map path + shared-corridor cuts), never boarding.
+ */
+export function routeGeometryStations(rId) {
+    if (!rId || !getFullDatabase() || !ROUTES[rId]) return [];
+    const route = ROUTES[rId];
+    const keys = [
+        route.sheetKeys?.weekday_to_b,
+        route.sheetKeys?.weekday_to_a,
+        route.sheetKeys?.saturday_to_b,
+        route.sheetKeys?.saturday_to_a,
+    ].filter(Boolean);
+    const names = [];
+    const seen = new Set();
+    const pushName = (raw) => {
+        if (!raw) return;
+        const lower = String(raw).toLowerCase();
+        if (lower.includes('updated') || lower.includes('inter-station')) return;
+        const norm = normalizeStationName(raw);
+        if (!norm || seen.has(norm)) return;
+        seen.add(norm);
+        names.push(norm);
+    };
+    for (const key of keys) {
+        const rows = unwrapSheetRows(getFullDatabase()[key]);
+        const before = names.length;
+        rows.forEach((r) => pushName(r.STATION));
+        if (names.length > before) break;
+    }
+    return names;
+}
+
+function tripOverlapsSegment(master, tripA, tripB, zoneA, zoneB) {
+    const iA = master.indexOf(normalizeStationName(tripA));
+    const iB = master.indexOf(normalizeStationName(tripB));
+    const zA = master.indexOf(normalizeStationName(zoneA));
+    const zB = master.indexOf(normalizeStationName(zoneB));
+    if (iA < 0 || iB < 0 || zA < 0 || zB < 0) return false;
+    const tMin = Math.min(iA, iB);
+    const tMax = Math.max(iA, iB);
+    const zMin = Math.min(zA, zB);
+    const zMax = Math.max(zA, zB);
+    return tMax >= zMin && tMin <= zMax;
+}
+
 // --- GUARDIAN PHASE 3: CROSS-CORRIDOR TIERED INCIDENT MANAGEMENT HELPERS ---
 export function checkDisruption(routeId, stationA, stationB) {
     if (!getGlobalDisruptions()) return null;
@@ -351,6 +411,7 @@ export function checkDisruption(routeId, stationA, stationB) {
     let highestDisruption = null;
     const normA = normalizeStationName(stationA);
     const normB = normalizeStationName(stationB);
+    const master = routeGeometryStations(routeId);
 
     const prioritizeDisruption = (current, incoming) => {
         if (!current) return incoming;
@@ -376,15 +437,18 @@ export function checkDisruption(routeId, stationA, stationB) {
 
             const normDisruptedStations = d.stations.map(s => normalizeStationName(s));
 
-            // Segment block (e.g., Centurion to Irene) - APPLIES UNIVERSALLY to any route crossing it
+            // Segment block (e.g., Pretoria to Sportpark) — any corridor that shares that stretch
             if (normDisruptedStations.length >= 2) {
-                if (normDisruptedStations.includes(normA) && normDisruptedStations.includes(normB)) {
+                if (tripOverlapsSegment(master, normA, normB, normDisruptedStations[0], normDisruptedStations[1])) {
                     highestDisruption = prioritizeDisruption(highestDisruption, d);
                 }
             } 
-            // Single station block - APPLIES UNIVERSALLY to any route touching it
+            // Single station block — any corridor whose geometry includes that stop
             else if (normDisruptedStations.length === 1) {
-                if (normDisruptedStations.includes(normA) || normDisruptedStations.includes(normB)) {
+                const target = normDisruptedStations[0];
+                if (master.includes(target)
+                    && (normA === target || normB === target
+                        || tripOverlapsSegment(master, normA, normB, target, target))) {
                     highestDisruption = prioritizeDisruption(highestDisruption, d);
                 }
             }
@@ -399,21 +463,10 @@ export function getTripDisruptions(routeId, stopsArray) {
     
     const hits = [];
     const seenIds = new Set();
-    
-    // Helper: Extract the physical geometry (Master Station List) for this specific route.
-    const getRouteMasterStations = (rId) => {
-        if (!rId || !getFullDatabase() || !ROUTES[rId]) return [];
-        const route = ROUTES[rId];
-        // Prefer B-direction (outbound) to establish a consistent geographical array
-        const key = route.sheetKeys.weekday_to_b || route.sheetKeys.weekday_to_a;
-        if (!getFullDatabase()[key]) return [];
-        return getFullDatabase()[key]
-            .filter(r => r.STATION && !r.STATION.toLowerCase().includes('updated'))
-            .map(r => normalizeStationName(r.STATION));
-    };
 
-    // The Master Geography for the current route being evaluated
-    const currentRouteMasterStations = getRouteMasterStations(routeId);
+    // Master geography includes inactive / ghost rows so shared-corridor cuts
+    // (Pretoria–Sportpark on Irene) also hit Kempton Park.
+    const currentRouteMasterStations = routeGeometryStations(routeId);
 
     // Scan ALL active disruptions across the network (Cross-Corridor Scan)
     for (const dRouteId in getGlobalDisruptions()) {
@@ -1409,6 +1462,7 @@ export function attachLiveBoardGlobals() {
     window.simulateNextActiveService = simulateNextActiveService;
     window.checkDisruption = checkDisruption;
     window.getTripDisruptions = getTripDisruptions;
+    window.routeGeometryStations = routeGeometryStations;
     window.isTrainExcluded = isTrainExcluded;
     window.getTrainExclusionRule = getTrainExclusionRule;
     window.openTrainExclusionSheet = openTrainExclusionSheet;

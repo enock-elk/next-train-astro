@@ -829,7 +829,10 @@ export async function buildGlobalStationIndexAsync(targetDB) {
     const ghostCandidates = {};
     if (!targetDB) {
         $ghostStationList.set([]);
-        if (typeof window !== 'undefined') window.GHOST_STATION_LIST = [];
+        if (typeof window !== 'undefined') {
+            window.GHOST_STATION_LIST = [];
+            window.GHOST_STATION_INDEX = {};
+        }
         return tempIndex;
     }
 
@@ -872,10 +875,18 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         if (isSheetMetaStationName(stationName)) return;
         const coords = parseRowCoords(row, coordKey);
         if (!hasActiveService(row, stationKey, coordKey)) {
-            if (!ghostCandidates[stationName]) ghostCandidates[stationName] = coords;
-            else if (ghostCandidates[stationName].lat == null && coords.lat != null) {
-                ghostCandidates[stationName] = coords;
+            if (!ghostCandidates[stationName]) {
+                ghostCandidates[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };
+            } else {
+                if (ghostCandidates[stationName].lat == null && coords.lat != null) {
+                    ghostCandidates[stationName].lat = coords.lat;
+                    ghostCandidates[stationName].lon = coords.lon;
+                }
+                if (!(ghostCandidates[stationName].routes instanceof Set)) {
+                    ghostCandidates[stationName].routes = new Set();
+                }
             }
+            ghostCandidates[stationName].routes.add(routeId);
             return;
         }
         if (!tempIndex[stationName]) {
@@ -944,12 +955,25 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         });
     }
 
-    // Ghosts = timetable rows with no service times that never gained active service elsewhere
+    // Ghosts = timetable rows with no service times that never gained active service elsewhere.
+    // Keep names for planner (do not board). Index + coords are for admin bans and map geometry.
+    const ghostIndex = {};
     const ghosts = Object.keys(ghostCandidates)
         .filter((name) => !tempIndex[name] && !isSheetMetaStationName(name))
         .sort();
+    ghosts.forEach((name) => {
+        const g = ghostCandidates[name] || {};
+        ghostIndex[name] = {
+            lat: g.lat ?? null,
+            lon: g.lon ?? null,
+            routes: Array.from(g.routes instanceof Set ? g.routes : []),
+        };
+    });
     $ghostStationList.set(ghosts);
-    if (typeof window !== 'undefined') window.GHOST_STATION_LIST = ghosts;
+    if (typeof window !== 'undefined') {
+        window.GHOST_STATION_LIST = ghosts;
+        window.GHOST_STATION_INDEX = ghostIndex;
+    }
 
     return tempIndex;
 }
@@ -1382,6 +1406,7 @@ export function ensureRoutePinnedForRegion(region) {
         if (typeof window !== 'undefined') {
             window.MASTER_STATION_LIST = [];
             window.GHOST_STATION_LIST = [];
+            window.GHOST_STATION_INDEX = {};
         }
         currentScheduleData = {};
         lastTrackedOD = null;
@@ -1424,10 +1449,11 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     $globalStationIndex.set({}); 
     $masterStationList.set([]);
     $ghostStationList.set([]);
-    if (typeof window !== 'undefined') {
-        window.MASTER_STATION_LIST = [];
-        window.GHOST_STATION_LIST = [];
-    }
+        if (typeof window !== 'undefined') {
+            window.MASTER_STATION_LIST = [];
+            window.GHOST_STATION_LIST = [];
+            window.GHOST_STATION_INDEX = {};
+        }
     currentScheduleData = {};
     lastTrackedOD = null;
     $currentRouteId.set(null);

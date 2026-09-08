@@ -2,8 +2,8 @@
  * METRORAIL NEXT TRAIN - GRID ORDER CONFIG
  * ---------------------------------------------------
  * This file defines the explicit column order for the Full Schedule Grid.
- * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-16 Aug.xlsx, NextTrain KZN-Schedules - 07 Sept.xlsx, NextTrain WC-Schedules - 03 July.xlsx
- * Date: 2026-09-07
+ * Generated from: NextTrain EC-Schedules - 12 May.xlsx, NextTrain GP-Schedules-20 Aug.xlsx, NextTrain KZN-Schedules - 08 Sept.xlsx, NextTrain WC-Schedules - 03 July.xlsx
+ * Date: 2026-09-08
  */
 
 export const MANUAL_GRID_ORDER = {
@@ -995,8 +995,7 @@ export const MANUAL_GRID_ORDER = {
         "7620",
         "7632",
         "7622",
-        "7626",
-        "7628"
+        "7626"
     ],
     "kwesi-to-germ_weekday": [
         "7600",
@@ -1012,8 +1011,7 @@ export const MANUAL_GRID_ORDER = {
         "7620",
         "7632",
         "7622",
-        "7626",
-        "7628"
+        "7626"
     ],
     "germ_to_kwesi_sat": [
         "7603",
@@ -2178,35 +2176,43 @@ export const MANUAL_GRID_ORDER = {
         "0791"
     ],
     "durbn-to-winkl_sat": [
-        "0708",
+        "0712",
         "0720",
         "0728",
-        "0752",
-        "0774",
-        "0782"
+        "0738",
+        "0756",
+        "0768",
+        "0778",
+        "0790"
     ],
     "durbn_to_winkl_sat": [
-        "0708",
+        "0712",
         "0720",
         "0728",
-        "0752",
-        "0774",
-        "0782"
+        "0738",
+        "0756",
+        "0768",
+        "0778",
+        "0790"
     ],
     "winkl-to-durbn_sat": [
+        "0711",
         "0715",
-        "0717",
         "0727",
-        "0739",
-        "0759",
+        "0735",
+        "0743",
+        "0761",
+        "0767",
         "0779"
     ],
     "winkl_to_durbn_sat": [
+        "0711",
         "0715",
-        "0717",
         "0727",
-        "0739",
-        "0759",
+        "0735",
+        "0743",
+        "0761",
+        "0767",
         "0779"
     ],
     "durbn-to-cator_weekday": [

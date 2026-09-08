@@ -1221,25 +1221,35 @@ export function renderServiceAlertModal(notice, options = {}) {
         else modalCard.classList.add('border-blue-500');
     }
 
+    const strip = document.getElementById('notice-modal-strip');
+    const signoffEl = document.getElementById('notice-modal-signoff');
+    const chipEl = document.getElementById('notice-modal-sev-chip');
+    const stripCls = severity === 'critical'
+        ? 'nt-alert-strip-critical bg-red-600 text-white'
+        : severity === 'warning'
+            ? 'nt-alert-strip-warning bg-amber-500 text-gray-900'
+            : 'nt-alert-strip-info bg-blue-600 text-white';
+    if (strip) {
+        strip.className = `nt-alert-strip flex items-center justify-between gap-2 px-4 py-2 shrink-0 ${stripCls}`;
+    }
+    const signoff = String(notice.authorName || notice.signoff || 'Next Train Ops').replace(/^[-—–]\s*/, '').trim() || 'Next Train Ops';
+    if (signoffEl) signoffEl.textContent = signoff;
+    if (chipEl) {
+        chipEl.textContent = severity === 'critical'
+            ? '🔴 Critical'
+            : severity === 'warning'
+                ? '🟡 Warning'
+                : '🔵 Info';
+    }
+
     const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
     if (modalHeader) {
-        const headerContainer = modalHeader.parentElement;
-        if (headerContainer) {
-            const existingIcon = headerContainer.querySelector('svg');
-            if (existingIcon) existingIcon.remove();
-            headerContainer.className = `flex items-center shrink-0 ${
-                severity === 'critical'
-                    ? 'text-red-600 dark:text-red-400'
-                    : severity === 'warning'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-blue-600 dark:text-blue-400'
-            }`;
-        }
         modalHeader.textContent = severity === 'critical'
-            ? '🔴 CRITICAL ADVISORY'
+            ? 'Critical advisory'
             : severity === 'warning'
-              ? '🟡 SERVICE WARNING'
-              : '🔵 SERVICE INFO';
+                ? 'Service warning'
+                : 'Service info';
+        modalHeader.classList.add('sr-only');
     }
 
     const layout = layoutAlertPost(notice);
@@ -1443,7 +1453,9 @@ export function renderServiceAlertModal(notice, options = {}) {
         content.parentNode?.appendChild(btnContainer);
     }
 
-    const topCloseBtn = modal.querySelector('button.text-gray-400');
+    const topCloseBtn = document.getElementById('notice-modal-x')
+        || modal.querySelector('#notice-modal-strip button')
+        || modal.querySelector('button.text-gray-400');
     if (topCloseBtn) {
         topCloseBtn.onclick = (e) => {
             e.preventDefault();

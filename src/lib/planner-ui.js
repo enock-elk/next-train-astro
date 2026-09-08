@@ -1761,8 +1761,23 @@ export async function openTripMapRenderer(routeData) {
                         const color = isCritical ? '#ef4444' : '#eab308';
 
                         if (normStations.length >= 2) {
-                            const s1 = currentValidStops.find((vs) => normalizeStationName(vs.name) === normStations[0]);
-                            const s2 = currentValidStops.find((vs) => normalizeStationName(vs.name) === normStations[1]);
+                            const resolveStop = (normName) => {
+                                const live = currentValidStops.find((vs) => normalizeStationName(vs.name) === normName);
+                                if (live) return live;
+                                const idx = $globalStationIndex.get()?.[normName];
+                                if (idx && Number.isFinite(idx.lat) && Number.isFinite(idx.lon)) {
+                                    return { name: normName, lat: idx.lat, lon: idx.lon };
+                                }
+                                const ghost = (typeof window !== 'undefined' && window.GHOST_STATION_INDEX)
+                                    ? window.GHOST_STATION_INDEX[normName]
+                                    : null;
+                                if (ghost && Number.isFinite(ghost.lat) && Number.isFinite(ghost.lon)) {
+                                    return { name: normName, lat: ghost.lat, lon: ghost.lon };
+                                }
+                                return null;
+                            };
+                            const s1 = resolveStop(normStations[0]);
+                            const s2 = resolveStop(normStations[1]);
                             if (!s1 || !s2) return;
                             drawnIds.add(d.id);
                             const i1 = nearestPathIndex(currentPath, s1.lat, s1.lon);

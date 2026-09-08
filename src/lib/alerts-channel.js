@@ -133,20 +133,26 @@ function severityChrome(severity) {
     if (severity === 'critical') {
         return {
             bar: 'border-red-500',
-            chip: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+            strip: 'nt-alert-strip-critical bg-red-600 text-white',
+            chip: 'text-white',
+            emoji: '🔴',
             label: 'Critical',
         };
     }
     if (severity === 'warning') {
         return {
             bar: 'border-amber-500',
-            chip: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300',
+            strip: 'nt-alert-strip-warning bg-amber-500 text-gray-900',
+            chip: 'text-gray-900',
+            emoji: '🟡',
             label: 'Warning',
         };
     }
     return {
         bar: 'border-blue-500',
-        chip: 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+        strip: 'nt-alert-strip-info bg-blue-600 text-white',
+        chip: 'text-white',
+        emoji: '🔵',
         label: 'Info',
     };
 }
@@ -389,9 +395,9 @@ function renderPostCard(notice, opts = {}) {
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
         : 'ring-1 ring-black/5 dark:ring-white/10';
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
-        <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1">
-            <span class="nt-alert-signoff text-xs font-semibold text-gray-800 dark:text-gray-100 leading-none">${escapeHTML(signoff)}</span>
-            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.label}</span>
+        <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
+            <span class="nt-alert-signoff text-xs font-semibold leading-none">${escapeHTML(signoff)}</span>
+            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}

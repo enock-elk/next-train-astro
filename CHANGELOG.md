@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.08.2 — Community fills leftover height (8 Sep 2026)
+
+no release notes.
+
+- Community tab grows into leftover `#app-scroll` like Feedback Hub so Post sits on the oval. The app shell follows the live visual viewport while the keyboard is open, with only an 8px pad above the IME.
+
 ## V9_09.08.1 — Incident segments, inactive stations, alert actions (8 Sep 2026)
 
 no release notes.

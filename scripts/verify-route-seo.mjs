@@ -99,14 +99,29 @@ const featured = listFeaturedSeoRoutes();
 if (featured.length < 6) fail(`expected ≥6 featured SEO routes, found ${featured.length}`);
 if (!featured.some((e) => e.route.id === 'jhb-soweto')) fail('featured list must include Naledi (jhb-soweto)');
 
-if (stationLabel('JOHANNESBURG STATION') !== 'Johannesburg Park Station') {
+if (stationLabel('JOHANNESBURG STATION') !== 'Johannesburg') {
   fail(`stationLabel JOHANNESBURG STATION is "${stationLabel('JOHANNESBURG STATION')}"`);
 }
-if (stationLabel('JOHANNESBURG') !== 'Johannesburg Park Station') {
+if (stationLabel('JOHANNESBURG') !== 'Johannesburg') {
   fail(`stationLabel JOHANNESBURG is "${stationLabel('JOHANNESBURG')}"`);
+}
+if (stationLabel('JOHANNESBURG PARK STATION') !== 'Johannesburg') {
+  fail(`stationLabel JOHANNESBURG PARK STATION is "${stationLabel('JOHANNESBURG PARK STATION')}"`);
 }
 if (slugifyStation('JOHANNESBURG STATION') !== 'johannesburg') {
   fail(`slugifyStation must stay johannesburg, got "${slugifyStation('JOHANNESBURG STATION')}"`);
+}
+
+{
+  const tt = buildRouteSeoTimetable(ROUTES['jhb-soweto']);
+  const stations = [...(tt.weekday?.a?.stations || []), ...(tt.weekday?.b?.stations || [])];
+  if (!stations.includes('Johannesburg')) fail('Naledi grid must list Johannesburg');
+  if (stations.some((s) => /Park Station/i.test(s))) {
+    fail('Naledi grid must not list Johannesburg Park Station');
+  }
+  if (tt.origin !== 'Johannesburg' && tt.dest !== 'Johannesburg') {
+    fail(`Naledi termini should include Johannesburg, got ${tt.origin} / ${tt.dest}`);
+  }
 }
 
 const title = bidirectionalTitle('Johannesburg', 'Naledi');
@@ -291,14 +306,20 @@ if (existsSync(DIST)) {
     if (!html.includes('forceLight') && !html.includes('Naledi to Johannesburg')) {
       /* forceLight is a build prop; the title is the crawler-visible signal */
     }
-    if (!html.includes('Johannesburg Park Station to Naledi') && !html.includes('Showing trains to Johannesburg Park Station')) {
-      fail('Naledi route HTML must mention Johannesburg Park Station as a terminus');
+    if (!html.includes('Johannesburg to Naledi') && !html.includes('Showing trains to Johannesburg')) {
+      fail('Naledi route HTML must mention Johannesburg as a terminus');
     }
-    if (!html.includes('Naledi to Johannesburg Park Station') && !html.includes('Showing trains to Naledi')) {
+    if (!html.includes('Naledi to Johannesburg') && !html.includes('Showing trains to Naledi')) {
       fail('Naledi route HTML must mention both directions');
     }
-    if (!html.includes('Johannesburg Park Station ↔ Naledi Train Schedule & Times')) {
-      fail('Naledi route H1/title should use Johannesburg Park Station');
+    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
+      fail('Naledi route H1/title should use Johannesburg');
+    }
+    if (/Johannesburg Park Station/.test(html)) {
+      fail('Naledi route HTML must not use Johannesburg Park Station');
+    }
+    if (!html.includes('>Johannesburg</th>') && !html.includes('>Johannesburg</')) {
+      fail('Naledi timetable must label the station Johannesburg');
     }
     if (/Johannesburg to Naledi &amp; Naledi to Johannesburg/.test(html) || /Johannesburg to Naledi & Naledi to Johannesburg/.test(html)) {
       fail('Naledi route HTML still uses the stuffed both-direction title');

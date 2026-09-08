@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_09.08.4";
+export const APP_VERSION = "V9_09.08.5";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -177,7 +177,7 @@ export function getCorridorLabel(routeOrCorridorId) {
 }
 
 export const REGION_SEO = {
-    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg Park Station and Germiston corridor timetables for Gauteng Metrorail.' },
+    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
     KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
     EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },

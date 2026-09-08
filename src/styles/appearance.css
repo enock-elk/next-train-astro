@@ -50,6 +50,7 @@
   --nt-app-h: 100svh;
   --nt-shell-h: 100svh;
   --nt-shell-top: 0px;
+  --nt-kb-lift: 0px;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;

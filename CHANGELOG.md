@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.08.5 — Community composer lift and Johannesburg SEO label (8 Sep 2026)
+
+no release notes.
+
+- Community keeps leftover fill while typing. The oval stays at the physical bottom (under the keys). `#app-scroll` lifts by `--nt-kb-lift` so the composer and the feed above it sit on the keyboard, with no leftover band between Post and the IME.
+- SEO timetable / route labels use Johannesburg, not Johannesburg Park Station. Station-column cells clip instead of painting over the time.
+
 ## V9_09.08.4 — Account points and photo opt-in (8 Sep 2026)
 
 no release notes.

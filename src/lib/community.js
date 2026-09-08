@@ -174,6 +174,15 @@ function renderAvatarHtml(photoURL) {
     return `<span class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base shrink-0" aria-hidden="true">🙍</span>`;
 }
 
+async function publicCommuterPhoto(acct) {
+    try {
+        const { showPhotoInAlerts } = await import('./rider-marks.js');
+        return showPhotoInAlerts() ? (acct?.photoURL || null) : null;
+    } catch {
+        return null;
+    }
+}
+
 /** @type {{ postId: string, routeId: string, displayName: string, body: string } | null} */
 let replyDraft = null;
 
@@ -383,7 +392,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     category: 'general',
                     uid: acct.uid,
                     displayName: acct.displayName || 'Passenger',
-                    photoURL: acct.photoURL || null,
+                    photoURL: await publicCommuterPhoto(acct),
                     deviceId: getDeviceId(),
                     timestamp: Date.now(),
                     hidden: false,
@@ -408,7 +417,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         category: COMMUNITY_CATEGORIES[category] ? category : 'general',
         uid: acct.uid,
         displayName: acct.displayName || 'Passenger',
-        photoURL: acct.photoURL || null,
+        photoURL: await publicCommuterPhoto(acct),
         deviceId: getDeviceId(),
         timestamp: Date.now(),
         hidden: false,
@@ -1312,6 +1321,9 @@ async function handlePostSubmit() {
     } else {
         showToast('Posted to the route feed', 'success');
     }
+    import('./rider-marks.js').then((m) => {
+        m.awardMark('first_community_post', { key: 'badge:first_community_post' });
+    }).catch(() => {});
     // Realtime listener will refresh; REST fallback still re-renders
     if (!postsListenRouteId || postsListenRouteId !== routeId) {
         await renderCommunityFeed(routeId);

@@ -1581,7 +1581,7 @@ export function maybeOfferPlannerContribute() {
       <div class="flex items-start gap-2">
         <div class="min-w-0 flex-1">
           <p class="text-[11px] font-black text-gray-900 dark:text-white">${when}.</p>
-          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Share this trip to help other riders - and earn marks.</p>
+          <p class="text-[10px] text-gray-600 dark:text-gray-400 leading-snug">Share this trip to help other riders - and earn points.</p>
         </div>
         <button type="button" id="planner-contribute-go" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold">Share this trip</button>
         <button type="button" id="planner-contribute-dismiss" class="shrink-0 p-1 text-gray-400" aria-label="Dismiss">✕</button>
@@ -1595,7 +1595,7 @@ export function maybeOfferPlannerContribute() {
 async function sharePlannerTrip(c) {
     const { $account, openAccountModal, waitForSignedIn } = await import('./account.js');
     if ($account.get().status !== 'signed-in') {
-        showToast('Quick sign-in to share this trip and earn marks.', 'info');
+        showToast('Quick sign-in to share this trip and earn points.', 'info');
         openAccountModal();
         const ok = await waitForSignedIn();
         if (!ok) {

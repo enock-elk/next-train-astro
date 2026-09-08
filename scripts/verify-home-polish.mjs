@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.08.2', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.08.4', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -208,6 +208,21 @@ assert(!presence.includes('Room online'), 'Room online presence copy is gone');
 assert(presence.includes("count <= 1 ? 'Just you here'"), 'solo room still says Just you here');
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
+const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
+assert(hubModals.includes('completely free, and you can cancel anytime'), 'account guest copy is free and cancellable');
+assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
+assert(hubModals.includes('Show my photo on commuter alerts'), 'photo on alerts is an opt-in');
+assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
+assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
+assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
+assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
+const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
+assert(riderMarks.includes('PHOTO_PREF_KEY') && riderMarks.includes('showPhotoInAlerts'), 'photo pref defaults off');
+assert(riderMarks.includes('isServiceDay') && riderMarks.includes('streak_5day'), 'service-day streaks include 3 and 5');
+assert(riderMarks.includes("return `${tier.label} · ${state.points} ${pointsWord(state.points)}`"), 'rider label says points');
+const layoutAds = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+assert(/#nt-ad-scroll-host \{\s*flex: 0 0 auto/.test(layoutAds), 'ad host does not flex-grow under filled tabs');
+
 const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
 assert(agents.includes('No unsolicited changes'), 'agent instructions forbid unsolicited changes');
 assert(agents.includes('Changelog is optional'), 'agent instructions allow shipping without changelog');

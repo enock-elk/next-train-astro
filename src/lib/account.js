@@ -98,6 +98,7 @@ export async function ensureUserProfile(user) {
                     role: 'user',
                 },
                 trustScore: 0,
+                prefs: { showPhotoInAlerts: false },
             });
         } else {
             const patch = {
@@ -116,6 +117,9 @@ export async function ensureUserProfile(user) {
             }
             if (snap.val()?.trustScore === undefined) {
                 patch.trustScore = 0;
+            }
+            if (snap.val()?.prefs?.showPhotoInAlerts === undefined) {
+                patch['prefs/showPhotoInAlerts'] = false;
             }
             await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, userPath), patch);
         }
@@ -287,12 +291,116 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (modalName) modalName.textContent = state.displayName || 'Passenger';
     if (modalEmail) modalEmail.textContent = state.email || '';
     const letterEl = document.getElementById('account-modal-avatar-letter');
+    const modalImg = document.getElementById('account-modal-avatar-img');
     if (letterEl) {
         letterEl.textContent = signed
             ? (state.displayName || state.email || 'P').charAt(0).toUpperCase()
             : '?';
+        letterEl.classList.toggle('hidden', !!(signed && state.photoURL && modalImg));
     }
+    if (modalImg) {
+        if (signed && state.photoURL) {
+            modalImg.src = state.photoURL;
+            modalImg.classList.remove('hidden');
+        } else {
+            modalImg.classList.add('hidden');
+            modalImg.removeAttribute('src');
+        }
+    }
+    const photoToggle = document.getElementById('account-photo-alerts');
+    if (photoToggle && !photoToggle.dataset.userToggled) {
+        import('./rider-marks.js').then((m) => {
+            photoToggle.checked = !!m.showPhotoInAlerts();
+        }).catch(() => {});
+    }
+    });
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+}
+
+function escapeAccountHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
+
+function badgeSvg(kind, on) {
+    const stroke = on ? '#d97706' : '#9ca3af';
+    const fill = on ? '#fef3c7' : '#f3f4f6';
+    const icons = {
+        community: `<path d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l.8-3.2A7.5 7.5 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>`,
+        map: `<path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/>`,
+        delay: `<circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/>`,
+        validate: `<path d="M20 6L9 17l-5-5"/>`,
+        streak3: `<path d="M12 3l2.1 6.3H21l-5.4 3.9 2.1 6.3L12 15.6 6.3 19.5l2.1-6.3L3 9.3h6.9z"/>`,
+        streak5: `<path d="M12 2l3 6 7 .9-5 4.9 1.2 7L12 17.8 5.8 20.8 7 13.8 2 8.9 9 8z"/>`,
+    };
+    const d = icons[kind] || icons.community;
+    return `<svg class="w-7 h-7 mx-auto" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+
+export function paintAccountPoints(state) {
+    if (typeof document === 'undefined') return;
+    import('./rider-marks.js').then((m) => {
+        const st = state || m.readMarks();
+        const tier = m.tierForPoints(st.points);
+        const next = m.nextTierForPoints(st.points);
+        const progressEl = document.getElementById('account-points-progress');
+        const bar = document.getElementById('account-points-bar');
+        if (progressEl) {
+            if (next) {
+                const need = next.min - st.points;
+                progressEl.textContent = `${tier.label} · ${st.points} ${m.pointsWord(st.points)}. ${need} more to ${next.label} (${next.min}).`;
+            } else {
+                progressEl.textContent = `${tier.label} · ${st.points} ${m.pointsWord(st.points)}. Highest level.`;
+            }
+        }
+        if (bar) {
+            if (!next) bar.style.width = '100%';
+            else {
+                const prevMin = tier.min;
+                const span = Math.max(1, next.min - prevMin);
+                bar.style.width = `${Math.max(6, Math.min(100, ((st.points - prevMin) / span) * 100))}%`;
+            }
+        }
+        const tiers = document.getElementById('account-tier-list');
+        if (tiers) {
+            tiers.innerHTML = m.MARK_TIERS.map((t) => {
+                const here = t.id === tier.id;
+                return `<li class="flex justify-between gap-2 ${here ? 'font-bold text-amber-800 dark:text-amber-200' : ''}"><span>${escapeAccountHtml(t.label)}</span><span>${t.min}+ points</span></li>`;
+            }).join('');
+        }
+        const earn = document.getElementById('account-earn-list');
+        if (earn) {
+            earn.innerHTML = m.MARK_CATALOG.map((c) => (
+                `<li><span class="font-semibold text-gray-800 dark:text-gray-200">${escapeAccountHtml(c.title)}</span> · ${c.points} ${m.pointsWord(c.points)}. ${escapeAccountHtml(c.how)}</li>`
+            )).join('');
+        }
+        const contrib = document.getElementById('account-contrib-list');
+        if (contrib) {
+            const rows = m.listContributions(st);
+            contrib.innerHTML = rows.length
+                ? rows.slice(0, 12).map((row) => {
+                    const when = row.at ? new Date(row.at).toLocaleDateString() : '';
+                    return `<li class="flex justify-between gap-2"><span>${escapeAccountHtml(row.title)}${when ? ` · ${escapeAccountHtml(when)}` : ''}</span><span class="shrink-0 font-semibold">+${row.points}</span></li>`;
+                }).join('')
+                : '<li>No contributions yet. Earn points from the actions above.</li>';
+        }
+        const grid = document.getElementById('account-badge-grid');
+        if (grid) {
+            const badges = [
+                { id: 'first_community_post', kind: 'community', title: 'First post' },
+                { id: 'first_share_day', kind: 'map', title: 'Trip share' },
+                { id: 'delay_report', kind: 'delay', title: 'Delay report' },
+                { id: 'delay_confirm', kind: 'validate', title: 'Validation' },
+                { id: 'streak_3day', kind: 'streak3', title: '3-day streak' },
+                { id: 'streak_5day', kind: 'streak5', title: '5-day streak' },
+            ];
+            grid.innerHTML = badges.map((b) => {
+                const on = m.badgeUnlocked(b.id, st);
+                return `<div class="rounded-xl border px-1.5 py-2 text-center ${on ? 'border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20' : 'border-gray-100 dark:border-gray-800 opacity-55'}">${badgeSvg(b.kind, on)}<p class="mt-1 text-[9px] font-bold leading-tight ${on ? 'text-amber-800 dark:text-amber-200' : 'text-gray-400'}">${escapeAccountHtml(b.title)}</p></div>`;
+            }).join('');
+        }
+    }).catch(() => {});
 }
 
 export function bindAccountUi() {
@@ -314,7 +422,6 @@ export function bindAccountUi() {
     document.getElementById('settings-account-btn')?.addEventListener('click', open);
 
     document.getElementById('account-modal-close')?.addEventListener('click', closeAccountModal);
-    document.getElementById('account-modal-done')?.addEventListener('click', closeAccountModal);
 
     const setBusy = (busy) => {
         document.querySelectorAll('[data-account-action]').forEach((el) => {
@@ -334,7 +441,7 @@ export function bindAccountUi() {
         try {
             await signInWithGoogle();
             if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            closeAccountModal();
+            paintAccountPoints();
         } catch (e) {
             showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : (e?.message || 'Google sign-in failed.'));
         } finally {
@@ -353,7 +460,7 @@ export function bindAccountUi() {
         try {
             await signInWithEmail(email, password);
             if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            closeAccountModal();
+            paintAccountPoints();
         } catch (e) {
             showErr(friendlyAuthError(e));
         } finally {
@@ -377,7 +484,7 @@ export function bindAccountUi() {
         try {
             await signUpWithEmail(email, password, displayName);
             if (typeof window.showToast === 'function') window.showToast('Account created', 'success');
-            closeAccountModal();
+            paintAccountPoints();
         } catch (e) {
             showErr(friendlyAuthError(e));
         } finally {
@@ -396,6 +503,38 @@ export function bindAccountUi() {
             setBusy(false);
         }
     });
+
+    const togglePoints = () => {
+        const panel = document.getElementById('account-points-panel');
+        if (!panel) return;
+        const open = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden', !open);
+        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
+            el.classList.toggle('rotate-180', open);
+        });
+        if (open) paintAccountPoints();
+    };
+    document.getElementById('account-points-btn')?.addEventListener('click', togglePoints);
+    document.getElementById('account-points-guest-btn')?.addEventListener('click', togglePoints);
+
+    document.getElementById('account-photo-alerts')?.addEventListener('change', async (e) => {
+        const box = e.target;
+        box.dataset.userToggled = '1';
+        const { setShowPhotoInAlerts } = await import('./rider-marks.js');
+        await setShowPhotoInAlerts(!!box.checked);
+    });
+
+    document.querySelectorAll('.account-legal-link').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const type = btn.getAttribute('data-legal') || 'privacy';
+            window.openLegal?.(type);
+        });
+    });
+
+    paintAccountPoints();
 }
 
 function friendlyAuthError(e) {
@@ -415,5 +554,6 @@ if (typeof window !== 'undefined') {
     window.openAccountModal = openAccountModal;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
+    window.paintAccountPoints = paintAccountPoints;
     window.$account = $account;
 }

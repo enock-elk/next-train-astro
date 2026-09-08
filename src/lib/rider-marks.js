@@ -1,18 +1,25 @@
 /**
- * Private rider marks — bronze → platinum labels, not a public game.
+ * Private rider points — bronze → platinum labels, not a public game.
  * localStorage first; signed-in users also keep users/{uid}.marks for carry-over.
+ *
+ * Streaks count consecutive Metrorail service days (Monday to Saturday).
+ * Sunday does not add to a streak and does not break one.
  */
 import { DYNAMIC_BASE_URL } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
 
 const STORAGE_KEY = 'ntRiderMarksV1';
+const PHOTO_PREF_KEY = 'ntShowPhotoInAlerts';
 
 export const MARK_POINTS = {
+    first_community_post: 10,
     first_share_day: 5,
     join_confirm: 3,
+    delay_report: 5,
     delay_confirm: 2,
     streak_3day: 8,
+    streak_5day: 15,
 };
 
 export const MARK_TIERS = [
@@ -22,12 +29,65 @@ export const MARK_TIERS = [
     { id: 'platinum', label: 'Platinum', min: 250 },
 ];
 
+export const MARK_CATALOG = [
+    {
+        id: 'first_community_post',
+        title: 'First community post',
+        how: 'Post once in a route room.',
+        points: MARK_POINTS.first_community_post,
+        badge: true,
+    },
+    {
+        id: 'first_share_day',
+        title: 'Share your trip',
+        how: 'Share live location on the map while on a train, once per service day.',
+        points: MARK_POINTS.first_share_day,
+        badge: true,
+    },
+    {
+        id: 'join_confirm',
+        title: 'Join a live trip',
+        how: 'Confirm you are on a shared train.',
+        points: MARK_POINTS.join_confirm,
+        badge: false,
+    },
+    {
+        id: 'delay_report',
+        title: 'Delay report',
+        how: 'Send a status report for a train near its scheduled time.',
+        points: MARK_POINTS.delay_report,
+        badge: true,
+    },
+    {
+        id: 'delay_confirm',
+        title: 'Report validation',
+        how: 'Confirm another commuter’s delay report.',
+        points: MARK_POINTS.delay_confirm,
+        badge: true,
+    },
+    {
+        id: 'streak_3day',
+        title: '3 service-day streak',
+        how: 'Contribute on 3 Monday-to-Saturday days in a row. Sundays do not break the streak.',
+        points: MARK_POINTS.streak_3day,
+        badge: true,
+    },
+    {
+        id: 'streak_5day',
+        title: '5 service-day streak',
+        how: 'Contribute on 5 Monday-to-Saturday days in a row. Sundays do not break the streak.',
+        points: MARK_POINTS.streak_5day,
+        badge: true,
+    },
+];
+
 function emptyState() {
     return {
         points: 0,
         lastShareDay: '',
         shareStreak: 0,
         awarded: {},
+        history: [],
         updatedAt: 0,
     };
 }
@@ -39,9 +99,31 @@ function todayKey(d = new Date()) {
     return `${y}-${m}-${day}`;
 }
 
-function yesterdayKey(d = new Date()) {
+/** Metrorail service days: Monday (1) through Saturday (6). Sunday is 0. */
+export function isServiceDay(d = new Date()) {
+    const day = d.getDay();
+    return day >= 1 && day <= 6;
+}
+
+function previousServiceDay(d = new Date()) {
     const prev = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-    return todayKey(prev);
+    while (!isServiceDay(prev)) {
+        prev.setDate(prev.getDate() - 1);
+    }
+    return prev;
+}
+
+function clampHistory(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .filter((row) => row && typeof row === 'object' && typeof row.action === 'string')
+        .slice(-40)
+        .map((row) => ({
+            action: String(row.action),
+            points: Math.max(0, Number(row.points) || 0),
+            at: Number(row.at) || 0,
+            key: typeof row.key === 'string' ? row.key : '',
+        }));
 }
 
 function clampState(raw) {
@@ -54,6 +136,7 @@ function clampState(raw) {
         lastShareDay: typeof raw.lastShareDay === 'string' ? raw.lastShareDay : '',
         shareStreak: Math.max(0, Number(raw.shareStreak) || 0),
         awarded,
+        history: clampHistory(raw.history),
         updatedAt: Number(raw.updatedAt) || 0,
     };
 }
@@ -82,9 +165,31 @@ export function tierForPoints(points) {
     return tier;
 }
 
+export function nextTierForPoints(points) {
+    const current = tierForPoints(points);
+    const idx = MARK_TIERS.findIndex((t) => t.id === current.id);
+    return MARK_TIERS[idx + 1] || null;
+}
+
+export function pointsWord(n) {
+    return Number(n) === 1 ? 'point' : 'points';
+}
+
 export function marksLabel(state = readMarks()) {
     const tier = tierForPoints(state.points);
-    return `${tier.label} · ${state.points} mark${state.points === 1 ? '' : 's'}`;
+    return `${tier.label} · ${state.points} ${pointsWord(state.points)}`;
+}
+
+export function catalogFor(action) {
+    return MARK_CATALOG.find((c) => c.id === action) || null;
+}
+
+function pushHistory(state, action, points, key) {
+    const history = clampHistory([
+        ...(state.history || []),
+        { action, points, at: Date.now(), key: key || '' },
+    ]);
+    return { ...state, history };
 }
 
 function mergeStates(a, b) {
@@ -92,11 +197,14 @@ function mergeStates(a, b) {
     const right = clampState(b);
     const awarded = { ...left.awarded, ...right.awarded };
     const newer = (right.updatedAt || 0) >= (left.updatedAt || 0) ? right : left;
+    const history = clampHistory([...(left.history || []), ...(right.history || [])]
+        .sort((x, y) => (x.at || 0) - (y.at || 0)));
     return clampState({
         points: Math.max(left.points, right.points),
         lastShareDay: newer.lastShareDay || left.lastShareDay || right.lastShareDay,
         shareStreak: Math.max(left.shareStreak, right.shareStreak),
         awarded,
+        history,
         updatedAt: Math.max(left.updatedAt, right.updatedAt),
     });
 }
@@ -169,59 +277,105 @@ export async function hydrateRemoteMarks() {
     }
 }
 
+/** Photo on public commuter surfaces is off until the rider opts in. */
+export function showPhotoInAlerts() {
+    return safeStorage.getItem(PHOTO_PREF_KEY) === '1';
+}
+
+export async function setShowPhotoInAlerts(on) {
+    safeStorage.setItem(PHOTO_PREF_KEY, on ? '1' : '0');
+    const uid = authUid();
+    if (!uid || typeof window === 'undefined') return;
+    try {
+        if (!window.firebaseAuth) await bootFirebase();
+        const user = window.firebaseAuth?.currentUser;
+        if (!user || user.isAnonymous || user.uid !== uid || !window.firebaseDb) return;
+        await window.firebaseDbUpdate(
+            window.firebaseDbRef(window.firebaseDb, `users/${uid}/prefs`),
+            { showPhotoInAlerts: !!on, updatedAt: Date.now() }
+        );
+    } catch {
+        /* local pref is enough */
+    }
+}
+
+function bumpServiceStreak(state, now = new Date()) {
+    if (!isServiceDay(now)) {
+        return { state, streak: state.shareStreak || 0, grew: false };
+    }
+    const today = todayKey(now);
+    if (state.lastShareDay === today) {
+        return { state, streak: state.shareStreak || 0, grew: false };
+    }
+    const prev = todayKey(previousServiceDay(now));
+    const streak = state.lastShareDay === prev ? (state.shareStreak || 0) + 1 : 1;
+    return {
+        state: { ...state, lastShareDay: today, shareStreak: streak },
+        streak,
+        grew: true,
+    };
+}
+
+function maybeAwardStreaks(state) {
+    const streak = state.shareStreak || 0;
+    let next = state;
+    if (streak >= 3) {
+        const r = awardMark('streak_3day', { key: 'badge:streak_3', _nested: true, state: next });
+        next = r.state;
+    }
+    if (streak >= 5) {
+        const r = awardMark('streak_5day', { key: 'badge:streak_5', _nested: true, state: next });
+        next = r.state;
+    }
+    return next;
+}
+
 /**
- * @param {'first_share_day'|'join_confirm'|'delay_confirm'|'streak_3day'} action
- * @param {{ key?: string }} [opts]  dedupe key (train/day)
- * @returns {{ awarded: boolean, points: number, added: number, total: number, tier: object, label: string, state: object }}
+ * @param {keyof typeof MARK_POINTS} action
+ * @param {{ key?: string, _nested?: boolean, state?: object }} [opts]
  */
 export function awardMark(action, opts = {}) {
     const pts = MARK_POINTS[action];
+    const incoming = opts.state ? clampState(opts.state) : readMarks();
     if (!pts) {
-        const state = readMarks();
-        return { awarded: false, points: 0, added: 0, total: state.points, tier: tierForPoints(state.points), label: marksLabel(state), state };
+        return {
+            awarded: false, points: 0, added: 0, total: incoming.points,
+            tier: tierForPoints(incoming.points), label: marksLabel(incoming), state: incoming,
+        };
     }
 
-    let state = readMarks();
+    let state = incoming;
     const today = todayKey();
     const dedupe = opts.key || `${action}:${today}`;
 
-    if (action === 'first_share_day') {
-        if (state.lastShareDay === today || state.awarded[dedupe]) {
-            return { awarded: false, points: 0, added: 0, total: state.points, tier: tierForPoints(state.points), label: marksLabel(state), state };
-        }
-        const streak = state.lastShareDay === yesterdayKey() ? (state.shareStreak || 0) + 1 : 1;
-        state = {
-            ...state,
-            points: state.points + pts,
-            lastShareDay: today,
-            shareStreak: streak,
-            awarded: { ...state.awarded, [dedupe]: true },
-        };
-        state = writeMarks(state);
-        if (streak > 0 && streak % 3 === 0) {
-            const streakAward = awardMark('streak_3day', { key: `streak:${today}:${streak}` });
-            state = streakAward.state;
-        }
-        return {
-            awarded: true,
-            points: pts,
-            added: state.points - (state.points - pts),
-            total: state.points,
-            tier: tierForPoints(state.points),
-            label: marksLabel(state),
-            state,
-        };
-    }
-
     if (state.awarded[dedupe]) {
-        return { awarded: false, points: 0, added: 0, total: state.points, tier: tierForPoints(state.points), label: marksLabel(state), state };
+        return {
+            awarded: false, points: 0, added: 0, total: state.points,
+            tier: tierForPoints(state.points), label: marksLabel(state), state,
+        };
     }
 
-    state = writeMarks({
+    const countsAsServiceDay = action === 'first_share_day'
+        || action === 'delay_report'
+        || action === 'first_community_post'
+        || action === 'delay_confirm';
+
+    if (countsAsServiceDay && !opts._nested) {
+        const bumped = bumpServiceStreak(state);
+        state = bumped.state;
+    }
+
+    state = pushHistory({
         ...state,
         points: state.points + pts,
         awarded: { ...state.awarded, [dedupe]: true },
-    });
+    }, action, pts, dedupe);
+
+    if (!opts._nested) {
+        state = maybeAwardStreaks(state);
+        state = writeMarks(state);
+    }
+
     return {
         awarded: true,
         points: pts,
@@ -249,6 +403,23 @@ export function awardShareMarks({ joinedLive = false, confirmedCloser = false, t
     };
 }
 
+export function listContributions(state = readMarks()) {
+    const rows = [...(state.history || [])].reverse();
+    return rows.map((row) => {
+        const cat = catalogFor(row.action);
+        return {
+            ...row,
+            title: cat?.title || row.action,
+            points: row.points,
+        };
+    });
+}
+
+export function badgeUnlocked(action, state = readMarks()) {
+    if (!action) return false;
+    return Object.keys(state.awarded || {}).some((k) => k === action || k.startsWith(`${action}:`) || k.includes(action));
+}
+
 export function syncRiderMarksUi(state = readMarks()) {
     if (typeof document === 'undefined') return;
     const label = marksLabel(state);
@@ -256,9 +427,13 @@ export function syncRiderMarksUi(state = readMarks()) {
         el.textContent = label;
         el.classList.remove('hidden');
     });
+    if (typeof window !== 'undefined' && typeof window.paintAccountPoints === 'function') {
+        window.paintAccountPoints(state);
+    }
 }
 
 if (typeof window !== 'undefined') {
     window.awardMark = awardMark;
     window.syncRiderMarksUi = syncRiderMarksUi;
+    window.showPhotoInAlerts = showPhotoInAlerts;
 }

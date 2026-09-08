@@ -680,6 +680,11 @@ export async function submitQuickDelayReport({
         delete routeReportCacheAt[routeId];
         refreshDelayReportSurface(routeId);
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+        if (!existing) {
+            import('./rider-marks.js').then((m) => {
+                m.awardMark('delay_report', { key: `delay_report:${reportId}` });
+            }).catch(() => {});
+        }
         return { ok: true };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not send report' };
@@ -911,6 +916,11 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         showTrainReportStep('done');
         refreshDelayReportSurface(routeId);
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+        if (!isUpdate) {
+            import('./rider-marks.js').then((m) => {
+                m.awardMark('delay_report', { key: `delay_report:${reportId}` });
+            }).catch(() => {});
+        }
         return true;
     } catch (e) {
         showErr(e?.message || 'Could not send report.');

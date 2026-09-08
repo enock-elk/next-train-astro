@@ -2,6 +2,20 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.08.4 — Account points and photo opt-in (8 Sep 2026)
+
+no release notes.
+
+- Account sign-in explains why an account is useful, that it is free, and that it can be cancelled anytime. Privacy Policy and Terms of Use sit at the bottom.
+- Points (was marks) open from the Bronze chip: levels, badges, how to earn, and this device’s contributions. Streaks count Monday to Saturday; Sunday does not break them.
+- Profile photo on public commuter surfaces is off until the rider opts in. Ad slot at the top of `#app-scroll` stays non-growing so filled tabs cannot swallow it.
+
+## V9_09.08.3 — Community keyboard leaves the header free (8 Sep 2026)
+
+no release notes.
+
+- Community still fills leftover height at rest so Post sits on the oval. Opening the composer does not shrink the app shell or pin Next Train in the visual hole; `#app-scroll` can carry the header away.
+
 ## V9_09.08.2 — Community fills leftover height (8 Sep 2026)
 
 no release notes.

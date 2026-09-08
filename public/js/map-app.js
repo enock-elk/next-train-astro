@@ -700,7 +700,9 @@
 
         /**
          * Strict paint rule: consecutive stations in route order.
-         * OSM may only fill the hop between station i and i+1 (no shortcuts, no skips).
+         * Use the baked corridor when it covers every served stop. Graph
+         * smoothing is only a fallback: the merged GP graph can "succeed" with
+         * a two-node shortcut (Hercules-Gezina) that paints as a straight chord.
          */
         function resolveRouteLatLngs(routeObj, trackBundle) {
             const stops = routeObj.validStops || [];
@@ -708,13 +710,13 @@
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
             const bundle = trackBundle || { byId: new Map(), graph: null };
-            if (bundle.graph) {
-                const smoothed = smoothStopsOnRailGraph(bundle.graph, stops);
-                if (smoothed && smoothed.length > 1) return smoothed;
-            }
             const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
             if (baked && baked.length > 1 && bakedLineCoversStops(baked, stops)) {
                 return baked;
+            }
+            if (bundle.graph) {
+                const smoothed = smoothStopsOnRailGraph(bundle.graph, stops);
+                if (smoothed && smoothed.length > 1) return smoothed;
             }
             return chords;
         }

@@ -7,6 +7,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 no release notes.
 
 - Network map drops clock-less ghost rows from the polyline so OSM / baked rail can snap. Hercules-Koedoespoort no longer chords through Daspoort and Capital Park (those stops sit off that corridor).
+- When the baked corridor covers the served stops, the map paints that line instead of a merged-graph shortcut (two-node hops that look straight).
 - Incident segment picker and board disruption geometry use the same served-stop list. Shared-corridor cuts between stations that have times (Pretoria-Sportpark on Irene) still apply across lines.
 
 ## V9_09.08.4 — Account points and photo opt-in (8 Sep 2026)

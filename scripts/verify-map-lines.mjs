@@ -125,6 +125,10 @@ assert(mapApp.includes('return chords;'), 'fallback paint is station-to-station 
 assert(mapApp.includes('railHops !== stops.length - 1'), 'graph smoothing wins only when every hop succeeds');
 assert(mapApp.includes('bakedLineCoversStops(baked, stops)'), 'baked line must pass every station before it is painted');
 assert(
+    mapApp.indexOf('bakedLineCoversStops(baked, stops)') < mapApp.indexOf('smoothStopsOnRailGraph(bundle.graph, stops)'),
+    'baked corridor is used when it covers served stops, before merged-graph smoothing'
+);
+assert(
     mapApp.includes('"CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "KENTEMADE", "CENTURY CITY"'),
     'Cape Town to Bellville is the Northern Line via Century City'
 );

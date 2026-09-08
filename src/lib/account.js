@@ -313,7 +313,6 @@ export function syncAccountSettingsUi(state = $account.get()) {
             photoToggle.checked = !!m.showPhotoInAlerts();
         }).catch(() => {});
     }
-    });
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
 }
 

@@ -700,13 +700,13 @@ const Admin = {
     },
 
     /**
-     * Stations on a corridor for incident segments, including inactive / ghost
-     * rows (geometry only). Commuter boarding lists stay on the active index.
+     * Stations on a corridor for incident segments. Clock-less ghost rows
+     * stay out so cuts snap to the painted (active) rail path.
      */
     listIncidentStations: (rId) => {
         const out = [];
         const seen = new Set();
-        const add = (raw, inactive) => {
+        const add = (raw) => {
             const name = String(raw || '').trim();
             if (!name) return;
             const lower = name.toLowerCase();
@@ -714,20 +714,12 @@ const Admin = {
             const norm = (typeof normalizeStationName === 'function')
                 ? normalizeStationName(name)
                 : name.replace(/ STATION$/i, '').trim().toUpperCase();
-            if (!norm) return;
-            if (seen.has(norm)) {
-                if (!inactive) {
-                    const hit = out.find((s) => s.norm === norm);
-                    if (hit) hit.inactive = false;
-                }
-                return;
-            }
+            if (!norm || seen.has(norm)) return;
             seen.add(norm);
             const label = name.replace(/ STATION/gi, '').trim();
             out.push({
                 value: name,
                 label,
-                inactive: !!inactive,
                 norm,
             });
         };
@@ -760,7 +752,7 @@ const Admin = {
             }
             if (!Array.isArray(rows)) return;
             rows.forEach((row) => {
-                if (row?.STATION) add(row.STATION, !rowHasService(row));
+                if (row?.STATION && rowHasService(row)) add(row.STATION);
             });
         };
 
@@ -784,16 +776,7 @@ const Admin = {
                 if (routes && typeof routes.has === 'function') on = routes.has(rId);
                 else if (Array.isArray(routes)) on = routes.includes(rId);
             } catch { on = false; }
-            if (on) add(stName, false);
-        });
-
-        const ghosts = (typeof window !== 'undefined' && window.GHOST_STATION_INDEX) ? window.GHOST_STATION_INDEX : {};
-        Object.entries(ghosts).forEach(([stName, stData]) => {
-            const routes = stData?.routes;
-            let on = false;
-            if (routes && typeof routes.has === 'function') on = routes.has(rId);
-            else if (Array.isArray(routes)) on = routes.includes(rId);
-            if (on) add(stName, true);
+            if (on) add(stName);
         });
 
         return out;
@@ -12218,7 +12201,7 @@ const Admin = {
                         </div>
                     </div>
                 </div>
-                <p class="text-[9px] text-gray-400 leading-snug">Pick Station A and Station B for a segment. Inactive stops are listed so the map can draw the cut. Shared stretches apply to every corridor that uses them (Pretoria-Sportpark on Irene also marks Kempton Park).</p>
+                <p class="text-[9px] text-gray-400 leading-snug">Pick Station A and Station B for a segment. Only stations with service on this corridor are listed. Shared stretches apply to every corridor that uses them (Pretoria-Sportpark on Irene also marks Kempton Park).</p>
 
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Badge Button Text</label>
@@ -12465,7 +12448,7 @@ const Admin = {
         };
         Admin.populateDisruptionRoutes();
 
-        // Populate stations from the route sheet (active + inactive) so segment bans work.
+        // Populate stations from the route sheet (served stops only).
         const populateStations = () => {
             const rId = routeSelect.value;
             statASelect.innerHTML = '';

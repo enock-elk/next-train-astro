@@ -289,8 +289,9 @@ assert(admin.includes('roadmap-refine-v1'), 'roadmap panel rebuilds after the ca
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 
-assert(admin.includes('listIncidentStations'), 'incident picker lists sheet stations including inactive');
-assert(admin.includes('Inactive stops are listed'), 'incident picker still includes inactive geometry stops');
+assert(admin.includes('listIncidentStations'), 'incident picker lists corridor stations');
+assert(admin.includes('Only stations with service on this corridor are listed'), 'incident picker is served stops only');
+assert(!admin.includes('Inactive stops are listed'), 'incident picker no longer lists ghost geometry');
 assert(admin.includes('alert-active-delete'), 'active alerts have a Delete action');
 assert(admin.includes('alert-sched-edit'), 'scheduled alerts have Edit');
 assert(/alert-sched-delete[^>]*>Delete</.test(admin), 'scheduled delete label is Delete');

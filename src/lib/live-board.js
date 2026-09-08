@@ -358,9 +358,20 @@ function unwrapSheetRows(raw) {
     return [];
 }
 
+function sheetRowHasTrainTimes(row) {
+    const ignored = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+    return Object.keys(row || {}).some((k) => {
+        if (ignored.has(k)) return false;
+        const v = row[k];
+        if (v == null) return false;
+        const s = String(v).trim();
+        return s !== '' && s !== '-';
+    });
+}
+
 /**
- * Geographic station order for a corridor, including inactive / ghost rows.
- * Ghosts are geometry only (map path + shared-corridor cuts), never boarding.
+ * Geographic station order for a corridor, served stops only.
+ * Clock-less ghost rows stay off the painted path and out of segment cuts.
  */
 export function routeGeometryStations(rId) {
     if (!rId || !getFullDatabase() || !ROUTES[rId]) return [];
@@ -385,7 +396,10 @@ export function routeGeometryStations(rId) {
     for (const key of keys) {
         const rows = unwrapSheetRows(getFullDatabase()[key]);
         const before = names.length;
-        rows.forEach((r) => pushName(r.STATION));
+        rows.forEach((r) => {
+            if (!sheetRowHasTrainTimes(r)) return;
+            pushName(r.STATION);
+        });
         if (names.length > before) break;
     }
     return names;
@@ -464,7 +478,7 @@ export function getTripDisruptions(routeId, stopsArray) {
     const hits = [];
     const seenIds = new Set();
 
-    // Master geography includes inactive / ghost rows so shared-corridor cuts
+    // Master geography is served stops so shared-corridor cuts
     // (Pretoria–Sportpark on Irene) also hit Kempton Park.
     const currentRouteMasterStations = routeGeometryStations(routeId);
 

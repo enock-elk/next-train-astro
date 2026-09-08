@@ -103,6 +103,10 @@ assert(mapApp.includes('"NDABENI", "PINELANDS", "HAZENDAL"'), 'Cape Flats static
 assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line is Avoca then Duff\'s Road');
 assert(!mapApp.includes('"AVOCA", "TEMPLE"'), 'Avoca is not followed by Temple');
 assert(mapApp.includes('applyCanonicalStationOrder(route.id, validStops, routeCoords)'), 'every drawn route is reordered before paint');
+assert(mapApp.includes('if (!hasData) continue'), 'map paint drops clock-less ghost rows');
+assert(mapApp.includes('Ghost-row pruning'), 'map paint uses the same ghost prune as the bake');
+assert(!mapApp.includes('geometryStations'), 'incident overlays no longer route through ghost geometry');
+assert(mapApp.includes('if (s.inactive) continue'), 'canonical order skips inactive stops');
 assert(mapApp.includes('railHopSkipsRouteStop(graph, nodePath, stops, i)'), 'OSM hop skip check is wired');
 assert(mapApp.includes('railHopStraysFromChord(graph, nodePath, a, b)'), 'OSM hops cannot stray off the station chord');
 assert(mapApp.includes('function applySelectedLine'), 'Network Lines rows isolate one corridor');
@@ -251,6 +255,26 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
     assert(gp.properties?.generatedAt === '2026-08-29T01:37:44.682Z', 'GP tracks keep the live 29 Aug bake timestamp');
     const soweto = gp.features.find((f) => f.properties?.routeId === 'jhb-soweto');
     assert((soweto?.geometry?.coordinates || []).length === 517, 'other GP lines were not rebaked');
+    const herc = gp.features.find((f) => f.properties?.routeId === 'herc-koed');
+    const hercNames = herc?.properties?.stationNames || [];
+    assert(
+        hercNames.join('>') === 'HERCULES>GEZINA>VILLIERIA>KOEDOESPOORT',
+        'herc-koed bake is the four served stops, not Daspoort/Capital Park ghosts'
+    );
+    const dump = JSON.parse(readFileSync(new URL('../public/data/full-database.json', import.meta.url), 'utf8'));
+    const sheet = dump.gauteng?.herc_to_koed_weekday;
+    const ignored = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+    const served = [];
+    for (const row of (Array.isArray(sheet) ? sheet : [])) {
+        const raw = String(row?.STATION || '').trim();
+        if (!raw || raw.toLowerCase().includes('updated') || raw.toLowerCase().includes('inter-station')) continue;
+        const hasTimes = Object.keys(row).some((k) => (
+            !ignored.has(k) && row[k] && String(row[k]).trim() !== '' && String(row[k]).trim() !== '-'
+        ));
+        if (!hasTimes) continue;
+        served.push(raw.replace(/ STATION/gi, '').toUpperCase());
+    }
+    assert(served.join('>') === hercNames.join('>'), 'herc-koed paint list matches the bake after ghost prune');
 }
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');

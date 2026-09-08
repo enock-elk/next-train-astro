@@ -1157,7 +1157,6 @@
             };
 
             const globalStations = {}; // { name: {lat, lon, origName, routes: Set()} } — active boarding stops only
-            const geometryStations = {}; // coords for inactive / ghost stops used only in disruption paths
             const drawnRoutes = []; // { routeId, name, color, isActive, coords: [], validStops: [] }
 
             function isGhostStationName(name) {
@@ -1244,11 +1243,10 @@
                 for (const name of names) {
                     const s = byName.get(name);
                     if (!s) continue;
-                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon, inactive: !!s.inactive });
-                    if (s.inactive) {
-                        geometryStations[s.name] = { lat: s.lat, lon: s.lon };
-                        continue;
-                    }
+                    // Clock-less ghost rows sit off the OSM bake (Daspoort on
+                    // herc-koed) and force the whole corridor onto straight chords.
+                    if (s.inactive) continue;
+                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon });
                     if (!globalStations[s.name]) {
                         globalStations[s.name] = { lat: s.lat, lon: s.lon, origName: s.name, routes: new Set() };
                     }
@@ -1312,7 +1310,9 @@
                         const sNameOrig = String(row[stationKey]).trim();
                         if (sNameOrig.toLowerCase().includes('last updated') || sNameOrig.toLowerCase().includes('inter-station')) continue;
 
+                        // Ghost-row pruning: a row with no train times is not a served stop.
                         const hasData = Object.keys(row).some(k => k !== stationKey && k !== coordKey && k !== 'KM_MARK' && k !== 'row_index' && row[k] && String(row[k]).trim() !== "" && String(row[k]).trim() !== "-");
+                        if (!hasData) continue;
 
                         const sName = sNameOrig.replace(/ STATION/gi, '').toUpperCase();
 
@@ -1337,15 +1337,11 @@
 
                         if (lat !== null && lon !== null) {
                             routeCoords.push([lat, lon]);
-                            validStops.push({ name: sName, lat: lat, lon: lon, inactive: !hasData });
-                            if (hasData) {
-                                if (!globalStations[sName]) {
-                                    globalStations[sName] = { lat, lon, origName: sNameOrig, routes: new Set() };
-                                }
-                                globalStations[sName].routes.add(route.id);
-                            } else {
-                                geometryStations[sName] = { lat, lon };
+                            validStops.push({ name: sName, lat: lat, lon: lon });
+                            if (!globalStations[sName]) {
+                                globalStations[sName] = { lat, lon, origName: sNameOrig, routes: new Set() };
                             }
+                            globalStations[sName].routes.add(route.id);
                         }
                     }
                     
@@ -1372,16 +1368,13 @@
                             if (lat !== null && lon !== null) {
                                 const alreadyLive = !!globalStations[sName];
                                 const ghostOnly = isGhostStationName(sName) && !alreadyLive;
+                                if (ghostOnly) return;
                                 routeCoords.push([lat, lon]);
-                                validStops.push({ name: sName, lat: lat, lon: lon, inactive: ghostOnly });
-                                if (ghostOnly) {
-                                    geometryStations[sName] = { lat, lon };
-                                } else {
-                                    if (!globalStations[sName]) {
-                                        globalStations[sName] = { lat, lon, origName: sName, routes: new Set() };
-                                    }
-                                    globalStations[sName].routes.add(route.id);
+                                validStops.push({ name: sName, lat: lat, lon: lon });
+                                if (!globalStations[sName]) {
+                                    globalStations[sName] = { lat, lon, origName: sName, routes: new Set() };
                                 }
+                                globalStations[sName].routes.add(route.id);
                             }
                         });
                     }
@@ -1528,16 +1521,6 @@
                             const resolvePathStop = (normName) => {
                                 const live = (currentValidStops || []).find((s) => s.name === normName);
                                 if (live) return live;
-                                const geo = geometryStations[normName];
-                                if (geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lon)) {
-                                    return { name: normName, lat: geo.lat, lon: geo.lon };
-                                }
-                                const gs = globalStations[normName];
-                                if (gs && Number.isFinite(gs.lat) && Number.isFinite(gs.lon)) {
-                                    return { name: normName, lat: gs.lat, lon: gs.lon };
-                                }
-                                const dict = STATION_COORDINATES[normName];
-                                if (dict) return { name: normName, lat: dict[0], lon: dict[1] };
                                 return null;
                             };
 
@@ -1711,7 +1694,7 @@
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
-                // Inactive / ghost stops keep coords for incident cuts, never a name label.
+                // Clock-less ghost rows are not painted and get no name label.
                 if (isGhostStationName(name)) return;
 
                 // Important = corridor terminals + designated transfer/relay hubs only

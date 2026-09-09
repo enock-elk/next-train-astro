@@ -74,6 +74,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             else if (sessionStorage.getItem('nt_standalone') === '1') on = true;
             if (String(document.referrer || '').indexOf('android-app://') === 0) {
               sessionStorage.setItem('nt_twa', '1');
+              var twaMatch = String(document.referrer).match(/^android-app:\/\/([^/]+)/);
+              if (twaMatch) sessionStorage.setItem('nt_twa_package', twaMatch[1]);
+              else sessionStorage.setItem('nt_twa_package', 'za.co.nexttrain.app');
             }
           } catch (e) {}
           try { if (sessionStorage.getItem('nt_twa') === '1') on = true; } catch (e) {}
@@ -465,7 +468,33 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           userRegion = savedRegion;
         }
       } catch (e) {}
-      gaConfig['user_properties'] = { crm_region: userRegion, custom_device_id: deviceId };
+      var appSource = 'web';
+      var twaPackage = '';
+      try {
+        var twaRef = String(document.referrer || '');
+        if (twaRef.indexOf('android-app://') === 0) {
+          appSource = 'twa';
+          var twaHit = twaRef.match(/^android-app:\/\/([^/]+)/);
+          twaPackage = (twaHit && twaHit[1]) || sessionStorage.getItem('nt_twa_package') || 'za.co.nexttrain.app';
+          sessionStorage.setItem('nt_twa', '1');
+          sessionStorage.setItem('nt_twa_package', twaPackage);
+        } else if (sessionStorage.getItem('nt_twa') === '1') {
+          appSource = 'twa';
+          twaPackage = sessionStorage.getItem('nt_twa_package') || 'za.co.nexttrain.app';
+        } else if (
+          (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+          || (window.navigator && window.navigator.standalone)
+        ) {
+          appSource = 'pwa';
+        }
+      } catch (e) {}
+      gaConfig['user_properties'] = {
+        crm_region: userRegion,
+        custom_device_id: deviceId,
+        app_client: appSource,
+        twa_package: twaPackage
+      };
+      window.__ntAppClient = { app_source: appSource, twa_package: twaPackage };
 
       window.NEXT_TRAIN_DEVICE_ID = deviceId;
       window.__ntCrmRegion = userRegion;

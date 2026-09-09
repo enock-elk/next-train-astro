@@ -178,6 +178,33 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId }}>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      var TWA_PACKAGE = 'za.co.nexttrain.app';
+      function detectAppClient() {
+        var ref = String(document.referrer || '');
+        var pkg = '';
+        try { pkg = sessionStorage.getItem('nt_twa_package') || ''; } catch (e) {}
+        var isTwa = false;
+        try { isTwa = sessionStorage.getItem('nt_twa') === '1'; } catch (e) {}
+        if (ref.indexOf('android-app://') === 0) {
+          isTwa = true;
+          var m = ref.match(/^android-app:\/\/([^/]+)/);
+          if (m) pkg = m[1];
+          try {
+            sessionStorage.setItem('nt_twa', '1');
+            if (pkg) sessionStorage.setItem('nt_twa_package', pkg);
+          } catch (e) {}
+        }
+        if (!pkg && isTwa) pkg = TWA_PACKAGE;
+        if (isTwa) return { app_source: 'twa', twa_package: pkg || TWA_PACKAGE };
+        var standalone = false;
+        try {
+          if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) standalone = true;
+          if (window.navigator && window.navigator.standalone) standalone = true;
+        } catch (e) {}
+        if (standalone) return { app_source: 'pwa', twa_package: '' };
+        return { app_source: 'web', twa_package: '' };
+      }
+      var client = detectAppClient();
       var gaConfig = {};
       var isDevAnalytics = false;
       var userRegion = 'GP';
@@ -187,7 +214,11 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') userRegion = saved;
       } catch(e) {}
       if (isDevAnalytics) gaConfig['traffic_type'] = 'internal';
-      gaConfig['user_properties'] = { crm_region: userRegion };
+      gaConfig['user_properties'] = {
+        crm_region: userRegion,
+        app_client: client.app_source,
+        twa_package: client.twa_package || ''
+      };
       // Stable SEO dimensions on every page_view for this document.
       if (seoPageType) gaConfig['seo_page_type'] = String(seoPageType);
       if (seoSlug) gaConfig['seo_slug'] = String(seoSlug);
@@ -196,12 +227,32 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       if (seoCorridor) gaConfig['seo_corridor'] = String(seoCorridor);
       if (seoRouteId) gaConfig['seo_route_id'] = String(seoRouteId);
       window.__ntGaConfig = gaConfig;
+      window.__ntAppClient = client;
+      var pageType = seoPageType || '';
+      if (!pageType) {
+        var pathName = String((typeof location !== 'undefined' && location.pathname) || '');
+        if (/guide\.html?$/i.test(pathName)) pageType = 'guide';
+        else if (/map\.html?$/i.test(pathName)) pageType = 'map';
+        else if (/status\.html?$/i.test(pathName)) pageType = 'status';
+        else if (/routes\.html?$/i.test(pathName)) pageType = 'routes_index';
+        else if (/\/routes\//i.test(pathName)) pageType = 'route';
+        else if (/\/regions\//i.test(pathName)) pageType = 'region';
+        else if (/\/corridors\//i.test(pathName)) pageType = 'corridor';
+        else pageType = 'content';
+      }
       window.__ntSeoAnalytics = {
-        seo_page_type: seoPageType || '',
+        seo_page_type: pageType,
         seo_slug: seoSlug || '',
         seo_region: seoRegion || userRegion,
         seo_corridor: seoCorridor || '',
-        seo_route_id: seoRouteId || ''
+        seo_route_id: seoRouteId || '',
+        route_id: seoRouteId || '',
+        region: seoRegion || userRegion,
+        page_type: pageType,
+        slug: seoSlug || '',
+        corridor: seoCorridor || '',
+        app_source: client.app_source,
+        twa_package: client.twa_package || ''
       };
       var bootGa = function () {
         if (window.__ntGaBooted) return;
@@ -213,8 +264,9 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           window.__ntGaReady = true;
           try { window.dispatchEvent(new Event('nt-ga-ready')); } catch (e) {}
           try {
-            if (seoPageType && typeof gtag === 'function') {
-              gtag('event', 'seo_page_view', window.__ntSeoAnalytics || {});
+            if (typeof gtag === 'function') {
+              gtag('event', 'View_astro_pages', window.__ntSeoAnalytics || {});
+              if (pageType) gtag('event', 'seo_page_view', window.__ntSeoAnalytics || {});
             }
           } catch (e) {}
         };
@@ -248,12 +300,16 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
             clarity('set', 'custom_id', id);
           }
           if (typeof clarity === 'function') {
-            if (seoPageType) clarity('set', 'seo_page_type', String(seoPageType));
+            var analytics = window.__ntSeoAnalytics || {};
+            if (analytics.page_type) clarity('set', 'seo_page_type', String(analytics.page_type));
             if (seoSlug) clarity('set', 'seo_slug', String(seoSlug));
-            if (seoRegion) clarity('set', 'seo_region', String(seoRegion));
+            if (analytics.region) clarity('set', 'seo_region', String(analytics.region));
             if (seoCorridor) clarity('set', 'seo_corridor', String(seoCorridor));
             if (seoRouteId) clarity('set', 'seo_route_id', String(seoRouteId));
-            if (seoPageType) clarity('event', 'seo_page_view');
+            if (analytics.app_source) clarity('set', 'app_client', String(analytics.app_source));
+            if (analytics.twa_package) clarity('set', 'twa_package', String(analytics.twa_package));
+            clarity('event', 'View_astro_pages');
+            if (analytics.page_type) clarity('event', 'seo_page_view');
           }
         } catch (e) {}
       };

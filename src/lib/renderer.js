@@ -814,8 +814,8 @@ export const Renderer = {
             }).join('');
 
             const bottomBlock = `
-                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-left">
-                    <div class="text-[9px] font-black uppercase tracking-wide text-gray-500 dark:text-gray-400">At ${hubLabel}</div>
+                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1">
+                    <div class="text-[9px] font-black uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">At ${hubLabel}</div>
                     ${onwardRows}
                 </div>
             `;

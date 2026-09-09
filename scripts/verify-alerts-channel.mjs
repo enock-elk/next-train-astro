@@ -230,6 +230,10 @@ const now = 1_700_000_000_000;
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
+    assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
+    assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');
+    assert(js.includes('pointer-events-none'), 'loading overlay does not steal hold-to-react');
+    assert(!js.includes('onclick='), 'alert posters must not use inline onclick');
     assert(js.includes('nt-alert-chip'), 'card has severity chip class');
     assert(js.includes('nt-alert-strip flex items-center justify-between gap-2 px-3 py-1'), 'Ops/INFO strip is a single compact row');
     assert(js.includes('nt-alert-strip-info'), 'info strip uses the blue severity class');

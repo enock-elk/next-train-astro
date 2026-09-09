@@ -159,17 +159,41 @@ function severityChrome(severity) {
 
 function renderPosterHtml(urls) {
     if (!urls.length) return '';
+    const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
     const cells = urls.map((path) => {
         const href = resolveAlertImageSrc(path);
         if (!href) return '';
         const src = escapeHTML(href);
-        return `<button type="button" data-alert-lightbox="${src}" class="relative block w-full focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
-            <img src="${src}" alt="Service poster" draggable="false" class="w-full h-auto max-h-72 object-cover bg-gray-100 dark:bg-gray-900 pointer-events-none">
+        return `<button type="button" data-alert-lightbox="${src}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+            <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
+            <img src="${src}" alt="Service poster" draggable="false" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
     const grid = urls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
     return `<div class="${grid} mt-2 mb-1" data-alert-media>${cells}</div>`;
+}
+
+export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
+        const reveal = () => {
+            img.classList.remove('opacity-0');
+            img.classList.add('opacity-100');
+            img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+        };
+        const fail = () => {
+            img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+        };
+        if (img.complete && img.naturalWidth > 0) {
+            reveal();
+        } else if (img.complete) {
+            fail();
+        } else {
+            img.addEventListener('load', reveal, { once: true });
+            img.addEventListener('error', fail, { once: true });
+        }
+    });
 }
 
 function renderPollHtml(notice) {
@@ -493,6 +517,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
         parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
     });
     feed.innerHTML = parts.join('');
+    hydrateAlertPosterImages(feed);
     return true;
 }
 

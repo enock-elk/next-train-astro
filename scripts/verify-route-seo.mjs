@@ -28,6 +28,7 @@ import {
   loadScheduleDump,
   buildRouteGridAppPath,
   buildRouteBoardAppPath,
+  corridorStationList,
 } from '../src/lib/seo-timetable.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
@@ -105,8 +106,20 @@ if (stationLabel('JOHANNESBURG STATION') !== 'Johannesburg Park Station') {
 if (stationLabel('JOHANNESBURG') !== 'Johannesburg Park Station') {
   fail(`stationLabel JOHANNESBURG is "${stationLabel('JOHANNESBURG')}"`);
 }
+if (stationLabel('PRETORIA-N') !== 'Pretoria North') {
+  fail(`stationLabel PRETORIA-N is "${stationLabel('PRETORIA-N')}"`);
+}
+if (stationLabel('PRETORIA WES') !== 'Pretoria West') {
+  fail(`stationLabel PRETORIA WES is "${stationLabel('PRETORIA WES')}"`);
+}
 if (slugifyStation('JOHANNESBURG STATION') !== 'johannesburg') {
   fail(`slugifyStation must stay johannesburg, got "${slugifyStation('JOHANNESBURG STATION')}"`);
+}
+if (slugifyStation('PRETORIA-N') !== 'pretoria-north') {
+  fail(`slugifyStation PRETORIA-N must be pretoria-north, got "${slugifyStation('PRETORIA-N')}"`);
+}
+if (slugifyStation('PRETORIA WES') !== 'pretoria-west') {
+  fail(`slugifyStation PRETORIA WES must be pretoria-west, got "${slugifyStation('PRETORIA WES')}"`);
 }
 
 const title = bidirectionalTitle('Johannesburg', 'Naledi');
@@ -169,6 +182,30 @@ if (!boardPath.includes('rt=herc-koed') || !boardPath.includes('r=GP') || boardP
 const gridPathSa = buildRouteGridAppPath('pta-kempton', 'A', 'saturday');
 if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   fail(`Saturday dir-A grid path looks wrong: ${gridPathSa}`);
+}
+
+{
+  const mabStops = corridorStationList(buildRouteSeoTimetable(ROUTES['pta-mabopane']));
+  if (!mabStops.some((s) => s === 'Pretoria North')) fail('pta-mabopane station list missing Pretoria North');
+  if (!mabStops.some((s) => s === 'Pretoria West')) fail('pta-mabopane station list missing Pretoria West');
+  if (mabStops.some((s) => /^PRETORIA-N$/i.test(s) || /^Pretoria-N$/i.test(s))) {
+    fail('pta-mabopane still lists dump key Pretoria-N');
+  }
+}
+
+{
+  const guideSrc = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
+  if (!guideSrc.includes('isSeoLanding') || !guideSrc.includes('__ntOpenSeoPage')) {
+    fail('guide.html must open SEO landings instead of closing onto the pinned board');
+  }
+  if (/isAppHome \|\| \/\\\/routes/.test(guideSrc)) {
+    fail('guide.html still closes the in-app sheet for /routes/ links');
+  }
+  const hubSrc = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+  if (!hubSrc.includes('window.__ntOpenSeoPage')) fail('hub must expose __ntOpenSeoPage for guide SEO links');
+  const layout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+  if (!layout.includes("View_astro_pages")) fail('ContentLayout must fire View_astro_pages');
+  if (!layout.includes('za.co.nexttrain.app')) fail('ContentLayout must detect Play Store TWA package');
 }
 
 {
@@ -365,6 +402,9 @@ if (existsSync(DIST)) {
     const html = readFileSync(mab, 'utf8');
     if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Mabopane route page has html.dark');
     if (!html.includes('<table')) fail('Mabopane route HTML has no <table>');
+    if (!html.includes('Pretoria North')) fail('Mabopane route HTML missing Pretoria North');
+    if (!html.includes('Pretoria West')) fail('Mabopane route HTML missing Pretoria West');
+    if (!html.includes('Stations on this corridor')) fail('Mabopane route HTML missing stations list');
   }
 
   const kemp = join(DIST, 'routes/pretoria-to-kempton-park.html');
@@ -373,7 +413,16 @@ if (existsSync(DIST)) {
     if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Kempton route page has html.dark');
     if (!html.includes('<table')) fail('Kempton route HTML has no <table>');
     if (!html.includes('Showing trains to')) fail('Kempton route HTML missing in-app direction heading');
-    if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-grid CTA');
+    if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-board CTA');
+    if ((html.match(/Open live timetable in Next Train/g) || []).length !== 2) {
+      fail('Kempton route HTML should keep exactly two “Open live timetable in Next Train” CTAs');
+    }
+    if (html.includes('Download and Share are there.')) {
+      fail('Kempton route HTML still has per-grid Download and Share lines');
+    }
+    if (!html.includes('Open this weekday sheet in Next Train')) {
+      fail('Kempton route HTML missing the single weekday-sheet app link');
+    }
     if (!html.includes('v=g') || !html.includes('rt=pta-kempton')) {
       fail('Kempton route HTML missing in-app grid deep link (?rt=&v=g)');
     }

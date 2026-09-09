@@ -95,6 +95,21 @@ if (!mapViewer.includes("click_static_map")) fail('PRASA PNG map must ping click
 
 if (!ui.includes("view_legal_doc")) fail('openLegal must ping view_legal_doc');
 
+const contentLayout = src('src/layouts/ContentLayout.astro');
+if (!contentLayout.includes("gtag('event', 'View_astro_pages'")) {
+    fail('ContentLayout must fire View_astro_pages');
+}
+if (!contentLayout.includes('route_id:') || !contentLayout.includes('region:')) {
+    fail('View_astro_pages must send route_id and region');
+}
+if (!contentLayout.includes('za.co.nexttrain.app') || !contentLayout.includes('app_source')) {
+    fail('SEO analytics must tag Play Store TWA (za.co.nexttrain.app)');
+}
+const appLayout = src('src/layouts/Layout.astro');
+if (!appLayout.includes("app_client: appSource") || !appLayout.includes('nt_twa_package')) {
+    fail('App Layout must set app_client / twa_package user properties');
+}
+
 const adminBridge = src('src/lib/admin-bridge.js');
 if (!adminBridge.includes('if (!window.trackAnalyticsEvent)')) {
     fail('admin-bridge must not overwrite the real tracker');

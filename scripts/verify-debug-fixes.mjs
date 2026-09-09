@@ -120,7 +120,13 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(resolvePlannerStationInput('park station', gp) === 'JOHANNESBURG', 'park station → JOHANNESBURG');
     assert(resolvePlannerStationInput('Kempton Park', gp) === 'KEMPTON PARK', 'Kempton Park stays Kempton Park');
     assert(resolvePlannerStationInput('Ellis Park', gp) === 'ELLIS PARK', 'Ellis Park stays Ellis Park');
+    const gpNorth = ['PRETORIA', 'PRETORIA-N', 'PRETORIA WES', 'MABOPANE', 'KEMPTON PARK'];
+    assert(resolvePlannerStationInput('Pretoria North', gpNorth) === 'PRETORIA-N', 'Pretoria North → PRETORIA-N');
+    assert(resolvePlannerStationInput('Pretoria West', gpNorth) === 'PRETORIA WES', 'Pretoria West → PRETORIA WES');
+    assert(resolvePlannerStationInput('Pretoria Wes', gpNorth) === 'PRETORIA WES', 'Pretoria Wes → PRETORIA WES');
     assert(STATION_ALIASES.BOSMAN === 'PRETORIA', 'Bosman alias map');
+    assert(STATION_ALIASES['PRETORIA NORTH'] === 'PRETORIA N', 'Pretoria North alias map');
+    assert(STATION_ALIASES['PRETORIA WEST'] === 'PRETORIA WES', 'Pretoria West alias map');
     assert(plannerStationDisplayName('JOHANNESBURG') === 'JOHANNESBURG', 'Johannesburg recents stay in caps');
     assert(!/Park Station/i.test(plannerStationDisplayName('JOHANNESBURG')), 'Park Station is not a display label');
     const stamp = new Date(2026, 7, 25, 7, 19, 0);

@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.09.1 — SEO landings, station aliases, Astro page analytics (9 Sep 2026)
+
+no release notes.
+
+- Guide route / region / corridor links open the implied SEO landing instead of closing the in-app sheet onto the pinned board.
+- Pretoria-N and Pretoria Wes display as Pretoria North / Pretoria West on SEO pages (Park Station-style aliases). Planner accepts those typed names.
+- Route landings keep two app CTAs (header region + hero/bottom live board) and one weekday-sheet link. Per-grid “Open live timetable” repeats are gone. Station list sits above the weekday grids.
+- Content pages fire `View_astro_pages` with `route_id`, `region`, `page_type`, `slug`, `corridor`, `app_source`, and `twa_package`. Play Store TWA (`za.co.nexttrain.app` / `android-app://`) is stored as `app_client=twa`.
+
 ## V9_09.08.4 — Account points and photo opt-in (8 Sep 2026)
 
 no release notes.

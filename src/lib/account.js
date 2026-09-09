@@ -506,12 +506,17 @@ export function bindAccountUi() {
             el.disabled = !!busy;
             el.classList.toggle('opacity-60', !!busy);
         });
-        const err = document.getElementById('account-error');
-        if (!busy && err) err.textContent = '';
+        if (busy) {
+            const err = document.getElementById('account-error');
+            if (err) err.textContent = '';
+        }
     };
     const showErr = (msg) => {
         const err = document.getElementById('account-error');
-        if (err) err.textContent = msg || 'Something went wrong.';
+        if (err) {
+            err.textContent = msg || 'Something went wrong.';
+            try { err.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+        }
     };
 
     document.getElementById('account-google-btn')?.addEventListener('click', async () => {

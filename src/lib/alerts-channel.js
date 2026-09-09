@@ -166,7 +166,7 @@ function renderPosterHtml(urls) {
         const src = escapeHTML(href);
         return `<button type="button" data-alert-lightbox="${src}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
-            <img src="${src}" alt="Service poster" draggable="false" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
+            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
@@ -176,24 +176,59 @@ function renderPosterHtml(urls) {
 
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
+    watchAlertPosterHydration(root);
     root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
+        if (img.dataset.ntPosterBound === '1') return;
+        img.dataset.ntPosterBound = '1';
+        img.setAttribute('fetchpriority', 'high');
+        img.decoding = 'async';
         const reveal = () => {
+            if (img.dataset.ntPosterRevealed === '1') return;
+            img.dataset.ntPosterRevealed = '1';
             img.classList.remove('opacity-0');
             img.classList.add('opacity-100');
             img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
         };
         const fail = () => {
+            if (img.dataset.ntPosterRevealed === '1') return;
+            img.dataset.ntPosterRevealed = '1';
             img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
         };
-        if (img.complete && img.naturalWidth > 0) {
+        const tryDecode = () => {
+            if (typeof img.decode === 'function') {
+                Promise.race([
+                    img.decode(),
+                    new Promise((resolve) => setTimeout(resolve, 2500)),
+                ]).then(reveal, reveal);
+                return;
+            }
             reveal();
-        } else if (img.complete) {
-            fail();
+        };
+        const onLoad = () => {
+            if (img.naturalWidth > 0) tryDecode();
+            else fail();
+        };
+        img.addEventListener('load', onLoad, { once: true });
+        img.addEventListener('error', fail, { once: true });
+        if (img.complete) {
+            if (img.naturalWidth > 0) onLoad();
+            else fail();
         } else {
-            img.addEventListener('load', reveal, { once: true });
-            img.addEventListener('error', fail, { once: true });
+            setTimeout(() => {
+                if (img.dataset.ntPosterRevealed === '1') return;
+                if (img.naturalWidth > 0) tryDecode();
+                else fail();
+            }, 5000);
         }
     });
+}
+
+function watchAlertPosterHydration(root) {
+    const feed = root.id === 'alerts-feed' ? root : root.querySelector?.('#alerts-feed') || root;
+    if (!feed || feed.__ntPosterWatch) return;
+    feed.__ntPosterWatch = true;
+    const mo = new MutationObserver(() => hydrateAlertPosterImages(feed));
+    mo.observe(feed, { childList: true, subtree: true });
 }
 
 function renderPollHtml(notice) {

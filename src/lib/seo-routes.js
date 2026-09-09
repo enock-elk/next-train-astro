@@ -9,6 +9,17 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './
 
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string }} SeoRouteSeed */
 
+/** Sheet / dump names → commuter-facing labels on SEO pages. */
+const STATION_DISPLAY_ALIASES = {
+    JOHANNESBURG: 'Johannesburg Park Station',
+    'JOHANNESBURG PARK': 'Johannesburg Park Station',
+    'PRETORIA-N': 'Pretoria North',
+    'PRETORIA N': 'Pretoria North',
+    'PRETORIA NORTH': 'Pretoria North',
+    'PRETORIA WES': 'Pretoria West',
+    'PRETORIA WEST': 'Pretoria West',
+};
+
 export function stationLabel(raw) {
     const cleaned = String(raw || '')
         .replace(/\s+STATION$/i, '')
@@ -16,9 +27,7 @@ export function stationLabel(raw) {
         .replace(/\s+/g, ' ')
         .trim();
     const key = cleaned.toUpperCase();
-    if (key === 'JOHANNESBURG' || key === 'JOHANNESBURG PARK') {
-        return 'Johannesburg Park Station';
-    }
+    if (STATION_DISPLAY_ALIASES[key]) return STATION_DISPLAY_ALIASES[key];
     if (cleaned && cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
         return cleaned
             .toLowerCase()

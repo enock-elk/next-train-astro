@@ -299,6 +299,7 @@ export function normalizeStationName(name) {
  * Typed nicknames → canonical index keys (after normalizeStationName).
  * Exact PARK is Johannesburg Park Station. Kempton Park / Ellis Park / Loftus
  * keep their full names (no substring alias).
+ * Pretoria-N / Pretoria Wes are the dump keys; commuters type North / West.
  */
 export const STATION_ALIASES = Object.freeze({
     'PARK': 'JOHANNESBURG',
@@ -306,6 +307,10 @@ export const STATION_ALIASES = Object.freeze({
     'JHB PARK': 'JOHANNESBURG',
     'BOSMAN': 'PRETORIA',
     'PRETORIA BOSMAN': 'PRETORIA',
+    'PRETORIA NORTH': 'PRETORIA N',
+    'PTA NORTH': 'PRETORIA N',
+    'PRETORIA WEST': 'PRETORIA WES',
+    'PTA WEST': 'PRETORIA WES',
 });
 
 export function resolveStationAlias(raw) {

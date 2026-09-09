@@ -72,7 +72,7 @@ const account = src('src/lib/account.js');
 if (!account.includes('signInWithFacebook')) fail('account must expose Facebook sign-in');
 if (!account.includes('deletionRequestedAt')) fail('account delete must flag users/{uid}');
 if (!account.includes("location: 'account_delete'")) fail('account delete must open feedback with account_delete');
-if (account.includes('deleteUser(')) fail('account delete must not call deleteUser');
+if (/\bdeleteUser\s*\(/.test(account)) fail('account delete must not call deleteUser');
 const firebaseBoot = src('src/lib/firebase-boot.js');
 if (!firebaseBoot.includes('FacebookAuthProvider')) fail('firebase-boot must expose FacebookAuthProvider');
 if (!firebaseBoot.includes('firebaseFacebookProvider')) fail('firebase-boot must set window.firebaseFacebookProvider');

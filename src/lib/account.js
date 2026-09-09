@@ -213,7 +213,7 @@ function notifyOperatorsOfDeletion(draft) {
     openDeletionMail(draft);
 }
 
-/** Flag the profile and email operators. Does not call deleteUser(). */
+/** Flag the profile and email operators. Does not wipe Firebase Auth. */
 export async function requestAccountDeletion() {
     const state = $account.get();
     if (isAdminEmail(state.email)) {

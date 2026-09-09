@@ -2,6 +2,13 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.09.3 — Live share polish, hub loading, posters, Community keyboard (9 Sep 2026)
+
+no release notes.
+
+- Live-share chip is admin or RTDB-pinned only. Active sharers keep Stop. Map glyphs scale with zoom. Copy distinguishes you vs others. Share lasts until Stop or terminus (rules TTL 8h). Second device on the same account is blocked.
+- Feedback Hub paints local mail first and times out identity/remote fetch so Loading cannot stick. Alert posters decode, use high fetch priority, and reveal on a timeout. Hub “At …” is centered; onward rows stay left. Community + keyboard sizes the pane to the visual viewport.
+
 ## V9_09.09.2 — Account sheet, quiet SEO, alert posters, hub onward align (9 Sep 2026)
 
 no release notes.

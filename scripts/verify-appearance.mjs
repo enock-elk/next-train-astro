@@ -218,6 +218,11 @@ const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.u
 assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth');
 assert(ridePings.includes("if (!isAdminAuthed()) return;"), 'nearby click is admin-gated');
 assert(ridePings.includes('syncRidePresenceRow'), 'presence row hides when nearby and chip are empty');
+assert(ridePings.includes('canSeeLiveShareChrome'), 'live-share chip is pin/admin gated');
+assert(ridePings.includes('data-live-share-stop'), 'active sharer can stop from the board');
+assert(ridePings.includes('You’re already sharing on another device'), 'second-device share is blocked');
+assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last station');
+assert(ridePings.includes('8 * 60 * 60 * 1000'), 'ride ping safety TTL is hours');
 
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
@@ -379,14 +384,12 @@ assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome'
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
 assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
-assert(layout.includes('communityOn'), 'Community keyboard does not pin the Next Train header');
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
-assert(!layout.includes('#app-scroll:has(#view-community.active)'), 'Community #app-scroll stays free like Trip Planner');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(/#view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community pane fills leftover height like Feedback Hub');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{\s*flex: 0 0 auto;/.test(layout), 'Community keyboard stops filling leftover height so the header can leave');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active[\s\S]{0,180}padding-bottom: 0\.5rem;/.test(layout), 'Community keyboard keeps only a small pad above the IME');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 0 0 auto;/.test(layout), 'Community keyboard pane shrinks to content');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard fills the visual hole so the composer sits on the IME');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane fills leftover height');
+assert(layout.includes('#app-scroll:has(#view-community.active)'), 'Community keyboard hides leftover scroll gray');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');

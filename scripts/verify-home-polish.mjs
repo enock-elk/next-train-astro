@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.09.2', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.09.3', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -102,6 +102,8 @@ assert(renderer.includes('fitOnwardRowLabels'), 'onward dest names shrink only w
 assert(renderer.includes('data-nt-onward-row'), 'onward trains are one nowrap row');
 assert(renderer.includes('w-full min-w-0 whitespace-nowrap text-left'), 'onward rows stay left-aligned');
 assert(/data-nt-onward-row class="[^"]*text-left/.test(renderer), 'onward rows are left-aligned');
+assert(renderer.includes('text-center">At ${hubLabel}'), 'At-hub heading is centered');
+assert(!renderer.includes('space-y-1 text-left'), 'hub bottom block is not globally left-aligned');
 assert(!renderer.includes('justify-center w-full min-w-0 whitespace-nowrap text-center'), 'onward rows are not centered');
 assert(renderer.includes('To ${hubLabel}'), 'shuttle line names the change station');
 assert(!renderer.includes('Connect Train ${conn.train}'), 'old Connect Train heading is gone');

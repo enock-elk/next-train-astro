@@ -13,6 +13,8 @@
  */
 import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
+import { isAdminEmail, SUPPORT_EMAIL } from './config.js';
+import { trackAnalyticsEvent } from './analytics.js';
 import { safeStorage } from './utils.js';
 import { $deviceId } from '../store.js';
 
@@ -172,6 +174,76 @@ export async function signInWithGoogle() {
     return cred.user;
 }
 
+export async function signInWithFacebook() {
+    const ok = await waitForFirebase();
+    if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    if (typeof window.firebaseFacebookProvider !== 'function') {
+        throw new Error('Facebook sign-in is not available yet.');
+    }
+    const provider = new window.firebaseFacebookProvider();
+    const cred = await window.firebaseSignInWithPopup(window.firebaseAuth, provider);
+    await ensureUserProfile(cred.user);
+    return cred.user;
+}
+
+function deletionRequestDraft(user) {
+    const uid = user?.uid || '';
+    const email = user?.email || '';
+    return `Please delete my Next Train account.\n\nuid: ${uid}\nemail: ${email}`;
+}
+
+function openDeletionMail(draft) {
+    const href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Account deletion request')}&body=${encodeURIComponent(draft)}`;
+    try {
+        window.open(href, '_blank', 'noopener');
+    } catch {
+        window.location.href = href;
+    }
+}
+
+function notifyOperatorsOfDeletion(draft) {
+    const ta = document.getElementById('feedback-text');
+    if (ta) ta.value = draft;
+    if (typeof window.openFeedbackModal === 'function') {
+        window.openFeedbackModal({ location: 'account_delete', skipClear: true });
+        const again = document.getElementById('feedback-text');
+        if (again && !again.value.trim()) again.value = draft;
+        return;
+    }
+    openDeletionMail(draft);
+}
+
+/** Flag the profile and email operators. Does not call deleteUser(). */
+export async function requestAccountDeletion() {
+    const state = $account.get();
+    if (isAdminEmail(state.email)) {
+        throw new Error('Operator accounts cannot use this control.');
+    }
+    const ok = await waitForFirebase();
+    if (!ok || !window.firebaseAuth || !window.firebaseDb) {
+        throw new Error('Cloud sign-in unavailable offline.');
+    }
+    const user = window.firebaseAuth.currentUser;
+    if (!user || user.isAnonymous) {
+        throw new Error('Sign in first.');
+    }
+    const now = Date.now();
+    const draft = deletionRequestDraft(user);
+    try {
+        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
+            deletionRequestedAt: now,
+            deletionRequestedEmail: user.email || null,
+            deletionRequestedReason: 'user_request',
+        });
+    } catch (e) {
+        console.warn('Account deletion flag deferred', e?.message || e);
+    }
+    trackAnalyticsEvent('account_delete', { location: 'account_delete' });
+    await signOutAccount();
+    closeAccountModal();
+    notifyOperatorsOfDeletion(draft);
+}
+
 export async function signInWithEmail(email, password) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
@@ -288,6 +360,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
+    const deleteWrap = document.getElementById('account-delete-wrap');
+    if (deleteWrap) {
+        deleteWrap.classList.toggle('hidden', !signed || isAdminEmail(state.email));
+    }
+    if (!signed) {
+        document.getElementById('account-delete-confirm')?.classList.add('hidden');
+    }
     if (modalName) modalName.textContent = state.displayName || 'Passenger';
     if (modalEmail) modalEmail.textContent = state.email || '';
     const letterEl = document.getElementById('account-modal-avatar-letter');
@@ -442,7 +521,20 @@ export function bindAccountUi() {
             if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
             paintAccountPoints();
         } catch (e) {
-            showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : (e?.message || 'Google sign-in failed.'));
+            showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e) || 'Google sign-in failed.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    document.getElementById('account-facebook-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            await signInWithFacebook();
+            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
+            paintAccountPoints();
+        } catch (e) {
+            showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e));
         } finally {
             setBusy(false);
         }
@@ -503,6 +595,29 @@ export function bindAccountUi() {
         }
     });
 
+    const deleteConfirm = document.getElementById('account-delete-confirm');
+    document.getElementById('account-delete-btn')?.addEventListener('click', () => {
+        if (isAdminEmail($account.get().email)) {
+            showErr('Operator accounts cannot use this control.');
+            return;
+        }
+        deleteConfirm?.classList.remove('hidden');
+    });
+    document.getElementById('account-delete-cancel-btn')?.addEventListener('click', () => {
+        deleteConfirm?.classList.add('hidden');
+    });
+    document.getElementById('account-delete-confirm-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            await requestAccountDeletion();
+            if (typeof window.showToast === 'function') window.showToast('Deletion request sent');
+        } catch (e) {
+            showErr(e?.message || 'Could not send the deletion request.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
     const togglePoints = () => {
         const panel = document.getElementById('account-points-panel');
         if (!panel) return;
@@ -545,7 +660,11 @@ function friendlyAuthError(e) {
     if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
-    if (code === 'auth/popup-blocked') return 'Popup blocked - allow popups for Google sign-in.';
+    if (code === 'auth/popup-blocked') return 'Popup blocked. Allow popups and try again.';
+    if (code === 'auth/operation-not-allowed') return 'Facebook sign-in is not enabled yet. Try Google or email.';
+    if (code === 'auth/account-exists-with-different-credential') {
+        return 'That email is already used with another sign-in method.';
+    }
     return e?.message || 'Authentication failed.';
 }
 

@@ -68,6 +68,15 @@ if (!hub.includes("click_interactive_map")) fail('GPS map button must ping click
 if (!hub.includes("click_network_map")) fail('GPS map button must ping click_network_map');
 if (!hub.includes("open_interactive_map")) fail('Map sheet show must ping open_interactive_map');
 
+const account = src('src/lib/account.js');
+if (!account.includes('signInWithFacebook')) fail('account must expose Facebook sign-in');
+if (!account.includes('deletionRequestedAt')) fail('account delete must flag users/{uid}');
+if (!account.includes("location: 'account_delete'")) fail('account delete must open feedback with account_delete');
+if (account.includes('deleteUser(')) fail('account delete must not call deleteUser');
+const firebaseBoot = src('src/lib/firebase-boot.js');
+if (!firebaseBoot.includes('FacebookAuthProvider')) fail('firebase-boot must expose FacebookAuthProvider');
+if (!firebaseBoot.includes('firebaseFacebookProvider')) fail('firebase-boot must set window.firebaseFacebookProvider');
+
 const planner = src('src/lib/planner-ui.js');
 if (!planner.includes("planner_disruption_reply")) fail('planner disruption reply location missing');
 if (!planner.includes("planner_missing_route")) fail('missing-route feedback location missing');

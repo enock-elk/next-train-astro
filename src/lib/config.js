@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_09.09.1";
+export const APP_VERSION = "V9_09.09.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -234,6 +234,7 @@ export const LEGAL_TEXTS = {
     privacy: `
         <h4 class="font-bold text-lg mb-2">1. What Information Do We Collect?</h4>
         <p class="mb-3">We respect your privacy. Next Train is designed to be used without creating an account.</p>
+        <p class="mb-3"><strong>Optional sign-in:</strong> If you create an account, Google or Facebook may act as an identity provider. We receive a name, email, and optional photo so we can keep your profile. We do not post on your behalf.</p>
         <p class="mb-3"><strong>Location Data:</strong> If you use the “Find Nearest Station” feature, your GPS coordinates are processed strictly locally on your device. We never transmit, track, or store your physical location on our servers.</p>
         <p class="mb-3"><strong>Anonymous Telemetry:</strong> To keep the app fast and crash-free, we automatically collect basic diagnostic data (e.g., device model, operating system, generic region, and crash logs).</p>
         <p class="mb-3">We may also collect limited anonymous diagnostics related to trip planning and routing outcomes, solely to improve service reliability. This data is not used to identify or market to you.</p>

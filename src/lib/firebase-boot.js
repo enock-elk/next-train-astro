@@ -15,6 +15,7 @@ import {
     setPersistence,
     browserLocalPersistence,
     GoogleAuthProvider,
+    FacebookAuthProvider,
     signInWithPopup,
     updateProfile,
 } from 'firebase/auth';
@@ -77,6 +78,7 @@ export async function bootFirebase() {
         window.firebaseSignInAnonymously = signInAnonymously;
         window.firebaseSignInWithPopup = signInWithPopup;
         window.firebaseGoogleProvider = GoogleAuthProvider;
+        window.firebaseFacebookProvider = FacebookAuthProvider;
         window.firebaseUpdateProfile = updateProfile;
 
         window.firebaseStorage = getStorage(app);

@@ -271,128 +271,157 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- ACCOUNT -->
-<div id="account-modal" class="fixed inset-0 bg-black/70 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700 transform transition-all">
-        <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
-            <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Account</h3>
-            <button type="button" id="account-modal-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
+<div id="account-modal" class="fixed inset-0 bg-black/50 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-[2px] transition-opacity duration-300">
+    <div class="bg-[#f2f2f7] dark:bg-black rounded-t-[12px] sm:rounded-[12px] shadow-2xl w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar transform transition-all">
+        <div class="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[#f2f2f7]/95 dark:bg-black/95 backdrop-blur">
+            <h3 class="text-[28px] leading-tight font-bold text-gray-900 dark:text-white tracking-tight">Account</h3>
+            <button type="button" id="account-modal-close" class="px-2 py-1 text-[17px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none" aria-label="Close">Done</button>
         </div>
 
-        <div class="px-5 py-4 space-y-4">
+        <div class="px-4 pb-6 space-y-6">
             <!-- Signed-in panel -->
-            <div id="account-signed-in" class="hidden space-y-4">
-                <div class="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700">
-                    <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-lg font-black text-blue-700 dark:text-blue-300 shrink-0 overflow-hidden">
+            <div id="account-signed-in" class="hidden space-y-6">
+                <div class="flex items-center gap-3 px-1 pt-1">
+                    <div class="w-14 h-14 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden">
                         <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="">
                         <span id="account-modal-avatar-letter" class="select-none"></span>
                     </div>
                     <div class="min-w-0">
-                        <p id="account-modal-display-name" class="text-sm font-bold text-gray-900 dark:text-white truncate">Passenger</p>
-                        <p id="account-modal-email" class="text-[11px] text-gray-500 dark:text-gray-400 truncate"></p>
+                        <p id="account-modal-display-name" class="text-[17px] font-semibold text-gray-900 dark:text-white truncate">Passenger</p>
+                        <p id="account-modal-email" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
                     </div>
                 </div>
 
-                <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-2 px-3.5 py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" aria-expanded="false" aria-controls="account-points-panel">
-                    <span data-rider-marks class="text-sm font-bold text-amber-800 dark:text-amber-200">Bronze · 0 points</span>
-                    <svg id="account-points-chevron" class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
+                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
+                        <span class="flex items-center gap-1 min-w-0">
+                            <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
+                            <svg id="account-points-chevron" class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                        </span>
+                    </button>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] cursor-pointer">
+                        <span class="min-w-0">
+                            <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo on commuter alerts</span>
+                            <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on. Your name can still appear.</span>
+                        </span>
+                        <input type="checkbox" id="account-photo-alerts" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0">
+                    </label>
+                </div>
 
-                <label class="flex items-start gap-3 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 cursor-pointer">
-                    <input type="checkbox" id="account-photo-alerts" class="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                    <span>
-                        <span class="block text-sm font-bold text-gray-900 dark:text-white">Show my photo on commuter alerts</span>
-                        <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on. Your name can still appear.</span>
-                    </span>
-                </label>
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-signout-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">
+                        Sign out
+                    </button>
+                </div>
 
-                <button type="button" id="account-signout-btn" data-account-action class="w-full py-3 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-colors">
-                    Sign out
-                </button>
+                <div id="account-delete-wrap" class="hidden space-y-2">
+                    <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Danger zone</p>
+                    <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                        <button type="button" id="account-delete-btn" class="w-full px-4 py-[11px] text-[13px] font-normal text-[#ff3b30] text-left focus:outline-none">
+                            Delete account
+                        </button>
+                    </div>
+                    <div id="account-delete-confirm" class="hidden rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-3">
+                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This flags your profile for the operators. You will be signed out. Your login stays until they process the request.</p>
+                        <div class="flex gap-2">
+                            <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                            <button type="button" id="account-delete-confirm-btn" data-account-action class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Delete</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Guest / sign-in panel -->
-            <div id="account-guest" class="space-y-4">
-                <p class="text-[13px] text-gray-600 dark:text-gray-300 leading-relaxed">
+            <div id="account-guest" class="space-y-6">
+                <p class="px-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-relaxed">
                     An account unlocks extra features such as route rooms, delay reports, and trip sharing. It is completely free, and you can cancel anytime.
                 </p>
 
-                <button type="button" id="account-points-guest-btn" class="w-full flex items-center justify-between gap-2 px-3.5 py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" aria-expanded="false" aria-controls="account-points-panel">
-                    <span data-rider-marks class="text-sm font-bold text-amber-800 dark:text-amber-200">Bronze · 0 points</span>
-                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 account-points-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
-
-                <button type="button" id="account-google-btn" data-account-action class="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 shadow-sm focus:outline-none transition-colors">
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                    Continue with Google
-                </button>
-
-                <div class="relative flex items-center gap-3">
-                    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">or email</span>
-                    <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
+                    <button type="button" id="account-google-btn" data-account-action class="w-full flex items-center gap-3 px-4 py-[11px] text-[13px] font-normal text-gray-900 dark:text-white text-left focus:outline-none">
+                        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                        Continue with Google
+                    </button>
+                    <button type="button" id="account-facebook-btn" data-account-action class="w-full flex items-center gap-3 px-4 py-[11px] text-[13px] font-normal text-gray-900 dark:text-white text-left focus:outline-none">
+                        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+                        Continue with Facebook
+                    </button>
                 </div>
 
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-display-name">Display name <span class="font-medium normal-case tracking-normal text-gray-400">(new accounts)</span></label>
-                        <input id="account-display-name" type="text" autocomplete="nickname" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Optional">
+                <div class="relative flex items-center gap-3 px-1">
+                    <div class="flex-1 h-px bg-black/10 dark:bg-white/15"></div>
+                    <span class="text-[12px] font-normal text-gray-500">or</span>
+                    <div class="flex-1 h-px bg-black/10 dark:bg-white/15"></div>
+                </div>
+
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
+                    <div class="px-4 py-2">
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-display-name">Display name <span class="text-gray-400">(new accounts)</span></label>
+                        <input id="account-display-name" type="text" autocomplete="nickname" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="Optional">
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-email">Email</label>
-                        <input id="account-email" type="email" autocomplete="email" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="you@example.com">
+                    <div class="px-4 py-2">
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-email">Email</label>
+                        <input id="account-email" type="email" autocomplete="email" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="you@example.com">
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1" for="account-password">Password</label>
+                    <div class="px-4 py-2">
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-password">Password</label>
                         <div class="relative">
-                            <input id="account-password" type="password" autocomplete="current-password" class="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none pr-12" placeholder="••••••••">
-                            <button type="button" id="account-toggle-password-btn" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors focus:outline-none h-full w-10 justify-center z-10" aria-label="Show password" aria-pressed="false">
-                                <svg id="account-eye-open-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                <svg id="account-eye-closed-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.978 9.978 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                            <input id="account-password" type="password" autocomplete="current-password" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none pr-10" placeholder="••••••••">
+                            <button type="button" id="account-toggle-password-btn" class="absolute inset-y-0 right-0 flex items-center text-gray-400 hover:text-blue-500 transition-colors focus:outline-none h-full w-8 justify-center" aria-label="Show password" aria-pressed="false">
+                                <svg id="account-eye-open-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                <svg id="account-eye-closed-icon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.978 9.978 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
                             </button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button type="button" id="account-email-signin-btn" data-account-action class="py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none transition-colors">Sign in</button>
-                        <button type="button" id="account-email-signup-btn" data-account-action class="py-3 rounded-xl font-bold text-sm border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 focus:outline-none transition-colors">Create account</button>
-                    </div>
+                    <button type="button" id="account-email-signin-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Sign in</button>
+                    <button type="button" id="account-email-signup-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Create account</button>
+                </div>
+
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-points-guest-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
+                        <span class="flex items-center gap-1 min-w-0">
+                            <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
+                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 account-points-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                        </span>
+                    </button>
                 </div>
             </div>
 
-            <div id="account-points-panel" class="hidden space-y-4 pt-1">
+            <div id="account-points-panel" class="hidden rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-4">
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Your level</p>
-                    <p id="account-points-progress" class="text-[12px] text-gray-600 dark:text-gray-300 leading-snug"></p>
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-1">Your level</p>
+                    <p id="account-points-progress" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
                     <div class="mt-2 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <div id="account-points-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
                     </div>
                 </div>
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Levels</p>
-                    <ul id="account-tier-list" class="space-y-1.5"></ul>
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Levels</p>
+                    <ul id="account-tier-list" class="space-y-1.5 text-[13px] font-normal"></ul>
                 </div>
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Badges</p>
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Badges</p>
                     <div id="account-badge-grid" class="grid grid-cols-3 gap-2"></div>
-                    <p class="text-[10px] text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
+                    <p class="text-[12px] font-normal text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
                 </div>
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">How to earn points</p>
-                    <ul id="account-earn-list" class="space-y-1.5 text-[12px] text-gray-600 dark:text-gray-300"></ul>
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
+                    <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                 </div>
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Your contributions</p>
-                    <ul id="account-contrib-list" class="space-y-1.5 text-[12px] text-gray-600 dark:text-gray-300"></ul>
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
+                    <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                 </div>
             </div>
 
-            <p id="account-error" class="text-xs font-medium text-red-600 dark:text-red-400 min-h-[1rem]" role="alert"></p>
+            <p id="account-error" class="px-1 text-[13px] font-normal text-red-600 dark:text-red-400 min-h-[1rem]" role="alert"></p>
 
-            <div class="pt-2 pb-1 border-t border-gray-100 dark:border-gray-800 flex justify-center items-center gap-3">
-                <button type="button" class="account-legal-link text-[11px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-semibold underline underline-offset-2 focus:outline-none" data-legal="privacy">Privacy Policy</button>
-                <span class="text-gray-300 dark:text-gray-600 text-[11px]">|</span>
-                <button type="button" class="account-legal-link text-[11px] text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 font-semibold underline underline-offset-2 focus:outline-none" data-legal="terms">Terms of Use</button>
+            <div class="px-1 pb-2 flex justify-center items-center gap-3">
+                <button type="button" class="account-legal-link text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2 focus:outline-none" data-legal="privacy">Privacy Policy</button>
+                <span class="text-gray-300 dark:text-gray-600 text-[12px]">|</span>
+                <button type="button" class="account-legal-link text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2 focus:outline-none" data-legal="terms">Terms of Use</button>
             </div>
         </div>
     </div>

@@ -801,10 +801,10 @@ export const Renderer = {
                     arrivalTime: opt.arrivalTime || '',
                     station: reportStation,
                     destination: opt.actualDestination || destination || '',
-                    className: 'shrink-0 inline-flex items-baseline text-[9px] font-black text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
+                    className: 'shrink-0 inline-flex items-baseline text-[9px] font-bold tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
                 });
                 return `
-                    <div data-nt-onward-row class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
+                    <div data-nt-onward-row class="flex items-baseline w-full min-w-0 whitespace-nowrap text-left text-[9px] text-gray-600 dark:text-gray-400 leading-none">
                         <span data-nt-onward-dest data-full-name="${destSafe}" class="font-bold min-w-0" title="${destSafe}">${destSafe}</span>
                         <span class="font-normal opacity-70 shrink-0">&nbsp;·&nbsp;</span>
                         ${trainBtn}
@@ -814,7 +814,7 @@ export const Renderer = {
             }).join('');
 
             const bottomBlock = `
-                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-center">
+                <div class="text-[9px] leading-tight w-full min-w-0 space-y-1 text-left">
                     <div class="text-[9px] font-black uppercase tracking-wide text-gray-500 dark:text-gray-400">At ${hubLabel}</div>
                     ${onwardRows}
                 </div>

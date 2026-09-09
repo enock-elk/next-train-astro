@@ -2,6 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.09.2 — Account sheet, quiet SEO, alert posters, hub onward align (9 Sep 2026)
+
+no release notes.
+
+- Account modal is a grouped settings sheet. Facebook sign-in sits next to Google. Delete account flags `users/{uid}` and opens Feedback; Auth is not wiped. Operator emails stay blocked from that control.
+- Route meta prefers “train times” plus a Saturday/Sunday sentence when the dump has a Saturday sheet. Homepage FAQ/JSON-LD and the guide mention delay notes and optional trip sharing. No What’s New card.
+- Alert posters reserve a square and show a spinner until the image loads. Hold-to-react is unchanged.
+- Hub onward rows are left-aligned; station name and train chip share `font-bold`.
+
 ## V9_09.09.1 — SEO landings, station aliases, Astro page analytics (9 Sep 2026)
 
 no release notes.

@@ -60,7 +60,7 @@ const satNote = timetable.hasSaturday
   ? 'Saturday trains are listed further down this page.'
   : 'This corridor has no Saturday sheet in the published dump.';
 const title = routeDocumentTitle(origin, dest);
-const description = routeMetaDescription(origin, dest, province);
+const description = routeMetaDescription(origin, dest, province, { hasSaturday: timetable.hasSaturday });
 const canonicalPath = `/routes/${seed.slug}.html`;
 const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const liveBoardHref = withBase(buildRouteBoardAppPath(route.id));

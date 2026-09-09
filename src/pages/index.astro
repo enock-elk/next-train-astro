@@ -35,7 +35,7 @@ const softwareAppLd = {
     'Live Metrorail schedules and route maps for Gauteng (Pretoria, Johannesburg), Western Cape (Cape Town), KZN, and Eastern Cape. Download timetable images for offline use.',
   softwareVersion: APP_VERSION,
   featureList:
-    'Offline Access, Full Timetable, Fare Calculator, Trip Planner, Network Map, Download Timetable Images',
+    'Offline Access, Full Timetable, Fare Calculator, Trip Planner, Network Map, Download Timetable Images, Delay notes, Optional trip sharing',
   url: 'https://nexttrain.co.za/',
 };
 
@@ -79,7 +79,7 @@ const faqLd = {
       name: 'How can I help improve the app?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'As a crowdsourced tool, we rely on commuters like you. If you notice a missing train, or if you have a photo of a new timetable at your local station, please use the Feedback button in the app to send it to us so we can update the database.',
+        text: 'As a crowdsourced tool, we rely on commuters like you. If you notice a missing train, or if you have a photo of a new timetable at your local station, please use the Feedback button in the app to send it to us so we can update the database. Commuters can send a delay note, and some testers can share a trip location.',
       },
     },
     {
@@ -116,6 +116,12 @@ const faqLd = {
           ·
           <a href={withBase('guide.html')}>User guide</a>
         </p>
+        <section class="mt-6 text-sm">
+          <h2 class="font-bold mb-2">How can I help improve the app?</h2>
+          <p>
+            As a crowdsourced tool, we rely on commuters like you. If you notice a missing train, or if you have a photo of a new timetable at your local station, please use the Feedback button in the app to send it to us so we can update the database. Commuters can send a delay note, and some testers can share a trip location.
+          </p>
+        </section>
       </div>
     </noscript>
     

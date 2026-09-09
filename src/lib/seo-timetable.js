@@ -356,8 +356,21 @@ export function routeDocumentTitle(origin, dest) {
     return `${bidirectionalTitle(origin, dest)} | Metrorail Next Train`;
 }
 
-export function routeMetaDescription(origin, dest, province) {
-    return `Check Metrorail train schedules and times between ${origin} and ${dest} (${province}), including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}.`;
+export function routeMetaDescription(origin, dest, province, opts = {}) {
+    const hasSaturday = opts?.hasSaturday;
+    const pair = `${origin} and ${dest}`;
+    const cape = /cape town/i.test(`${origin} ${dest}`);
+    const lead = cape
+        ? `Cape Town train times between ${pair}`
+        : `Metrorail train times between ${pair}`;
+    const dirs = `including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}`;
+    let extra = '';
+    if (hasSaturday === true) {
+        extra = ' Saturday train times are listed on this page. No Sunday service.';
+    } else if (hasSaturday === false) {
+        extra = ' No Saturday sheet in the published dump. No Sunday service.';
+    }
+    return `Check ${lead} (${province}), ${dirs}.${extra}`;
 }
 
 function getDumpValue(db, key) {

@@ -146,6 +146,32 @@ if (!meta.includes('Pretoria to Mabopane') || !meta.includes('Mabopane to Pretor
 if (meta.includes(' & Mabopane to')) {
   fail('meta description should not use the stuffed & title form');
 }
+if (!/train times/i.test(meta)) {
+  fail(`meta description should use train-times language: "${meta}"`);
+}
+const metaSat = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', { hasSaturday: true });
+if (!/saturday/i.test(metaSat) || !/sunday/i.test(metaSat)) {
+  fail(`Saturday meta should mention Saturday and Sunday: "${metaSat}"`);
+}
+const capeMeta = routeMetaDescription('Cape Town', 'Bellville', 'Western Cape', { hasSaturday: true });
+if (!/cape town train times/i.test(capeMeta)) {
+  fail(`Cape Town meta should lead with Cape Town train times: "${capeMeta}"`);
+}
+
+{
+  const indexAstro = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
+  const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
+  if (!indexAstro.includes(faqLine)) {
+    fail('homepage FAQ JSON-LD must include the delay-note sentence');
+  }
+  if (!indexAstro.includes('Delay notes, Optional trip sharing')) {
+    fail('homepage SoftwareApplication featureList must include Delay notes and Optional trip sharing');
+  }
+  const guideAstro = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
+  if (!guideAstro.includes(faqLine)) {
+    fail('guide.astro must use the same delay-note sentence as the homepage FAQ');
+  }
+}
 
 {
   const mabZone = resolveRouteZone(ROUTES['pta-mabopane']);
@@ -386,10 +412,19 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('johannesburg-to-naledi')) {
     fail('homepage HTML should link the Naledi landing');
   }
+  if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
+    fail('homepage FAQ must mention delay notes and optional trip sharing');
+  }
+  if (!indexHtml.includes('Delay notes') || !indexHtml.includes('Optional trip sharing')) {
+    fail('homepage SoftwareApplication featureList must include delay notes and optional trip sharing');
+  }
 
   const guideHtml = readFileSync(join(DIST, 'guide.html'), 'utf8');
   if (!guideHtml.includes('routes.html') || !guideHtml.includes('johannesburg-to-naledi')) {
     fail('guide.html should list featured route timetables');
+  }
+  if (!guideHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
+    fail('guide.html must use the same delay-note FAQ sentence');
   }
 
   const robots = readFileSync(join(DIST, 'robots.txt'), 'utf8');

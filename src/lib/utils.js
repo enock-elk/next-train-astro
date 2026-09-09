@@ -647,6 +647,31 @@ function applyCanonicalDeviceId(id) {
 
 let restoreDevicePromise = null;
 
+function withTimeout(promise, ms, fallback) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const t = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(fallback);
+        }, ms);
+        Promise.resolve(promise).then(
+            (v) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(t);
+                resolve(v);
+            },
+            () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(t);
+                resolve(fallback);
+            }
+        );
+    });
+}
+
 /**
  * Prefer the long-lived device id (IndexedDB / cookie) over an id minted this
  * boot after an update or localStorage wipe — inbox/{deviceId} must stay stable.
@@ -659,13 +684,19 @@ export function restoreDeviceIdentity() {
         const cookie = readDidCookie();
         let idb = null;
         try {
-            const db = await safeStorage._initIDB();
-            idb = await new Promise((resolve) => {
-                const tx = db.transaction('IdentityStore', 'readonly');
-                const req = tx.objectStore('IdentityStore').get('next_train_device_id');
-                req.onsuccess = () => resolve(req.result?.value || null);
-                req.onerror = () => resolve(null);
-            });
+            const db = await withTimeout(safeStorage._initIDB(), 2000, null);
+            if (db) {
+                idb = await withTimeout(new Promise((resolve) => {
+                    try {
+                        const tx = db.transaction('IdentityStore', 'readonly');
+                        const req = tx.objectStore('IdentityStore').get('next_train_device_id');
+                        req.onsuccess = () => resolve(req.result?.value || null);
+                        req.onerror = () => resolve(null);
+                    } catch {
+                        resolve(null);
+                    }
+                }), 2000, null);
+            }
         } catch { /* ignore */ }
 
         const mintedAgo = (() => {
@@ -677,7 +708,7 @@ export function restoreDeviceIdentity() {
             : (freshMint && cookie && cookie !== ls) ? cookie
             : (ls || idb || cookie || '');
         if (stable) applyCanonicalDeviceId(stable);
-        try { await safeStorage.getResilientItem('ntInboxLocalV1'); } catch { /* optional */ }
+        try { await withTimeout(safeStorage.getResilientItem('ntInboxLocalV1'), 1500, null); } catch { /* optional */ }
         return stable;
     })();
     return restoreDevicePromise;

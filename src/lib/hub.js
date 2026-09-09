@@ -1086,14 +1086,41 @@ async function fetchRemoteInbox() {
         .filter((m) => m && (m.message || m.text));
 }
 
+function withTimeout(promise, ms, fallback) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const t = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(fallback);
+        }, ms);
+        Promise.resolve(promise).then(
+            (v) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(t);
+                resolve(v);
+            },
+            () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(t);
+                resolve(fallback);
+            }
+        );
+    });
+}
+
 async function fetchInboxThread() {
+    const localFirst = readLocalInbox();
     try {
-        const recovered = await restoreDeviceIdentity();
+        const recovered = await withTimeout(restoreDeviceIdentity(), 2500, '');
         if (recovered && recovered !== $deviceId.get()) $deviceId.set(recovered);
     } catch { /* keep current id */ }
     let remote = [];
-    try { remote = await fetchRemoteInbox(); } catch { remote = []; }
-    return mergeInboxThread(remote, readLocalInbox());
+    try { remote = await withTimeout(fetchRemoteInbox(), 6000, []); } catch { remote = []; }
+    if (!Array.isArray(remote)) remote = [];
+    return mergeInboxThread(remote, readLocalInbox().length ? readLocalInbox() : localFirst);
 }
 
 function renderMessagesThread(list) {
@@ -1166,7 +1193,11 @@ export async function openMessagesThread() {
     closeAppHub(true);
     document.getElementById('developer-reply-banner')?.classList.add('hidden');
     const host = document.getElementById('messages-thread-list');
-    if (host) host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    const local = readLocalInbox();
+    if (host) {
+        if (local.length) renderMessagesThread(local);
+        else host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
+    }
     paintThreadContactRow();
     setTimeout(() => {
         syncFeedbackModalViewport();

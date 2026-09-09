@@ -1914,18 +1914,50 @@
             /** Rider markers from the parent Map tab (ride_pings with coarse GPS). */
             let ridePingLayer = null;
             let rideTrainMarkers = {};
+            let lastRidePings = [];
             const trainAnim = [];
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
                 });
             }
+            function liveTrainIconSpec(zoom) {
+                var z = typeof zoom === 'number' ? zoom : 12;
+                var t = Math.max(0, Math.min(1, (z - 8) / 7));
+                return {
+                    w: Math.round(40 + t * 56),
+                    h: Math.round(16 + t * 16),
+                    name: (7 + t * 3).toFixed(1),
+                    sub: (6 + t * 2).toFixed(1)
+                };
+            }
+            function sharingStatusCopy(count, mine) {
+                var n = Math.max(0, Number(count) || 0);
+                if (mine) {
+                    var others = Math.max(0, n - 1);
+                    if (others <= 0) return "You’re sharing";
+                    if (others === 1) return "You and 1 other are sharing";
+                    return "You and " + others + " others are sharing";
+                }
+                if (n <= 0) return "";
+                if (n === 1) return "1 sharing";
+                return n + " sharing";
+            }
+            function liveTrainShareLine(n, mine) {
+                if (mine) {
+                    var others = Math.max(0, n - 1);
+                    if (others <= 0) return "You’re sharing";
+                    if (others === 1) return "You + 1";
+                    return "You + " + others;
+                }
+                return n + " sharing";
+            }
             function animateTrainMarker(marker, lat, lng, headingDeg, speedMps, expiresAt) {
                 const start = Date.now();
                 const rad = (headingDeg * Math.PI) / 180;
                 function tick() {
                     if (!map.hasLayer(marker)) return;
-                    if (Date.now() > (expiresAt || start + 600000)) return;
+                    if (Date.now() > (expiresAt || start + 28800000)) return;
                     const dt = (Date.now() - start) / 1000;
                     const distM = Math.min(speedMps * dt, 2500);
                     const dLat = (Math.cos(rad) * distM) / 111320;
@@ -1938,6 +1970,7 @@
                 trainAnim.push(requestAnimationFrame(tick));
             }
             function renderRidePingMarkers(pings) {
+                lastRidePings = Array.isArray(pings) ? pings : [];
                 trainAnim.splice(0).forEach(function (id) { try { cancelAnimationFrame(id); } catch (_) {} });
                 if (ridePingLayer) {
                     map.removeLayer(ridePingLayer);
@@ -1955,6 +1988,7 @@
                         (trains[k] = trains[k] || []).push(p);
                     } else loose.push(p);
                 });
+                const spec = liveTrainIconSpec(map.getZoom());
 
                 Object.keys(trains).forEach(function (trainId) {
                     const list = trains[trainId];
@@ -1963,23 +1997,24 @@
                     const ids = {};
                     list.forEach(function (p) { ids[p.deviceId || (p.lat + ',' + p.lng)] = 1; });
                     const n = Object.keys(ids).length;
+                    const mine = list.some(function (p) { return !!p.mine; });
                     const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || {}).speedMps || 0;
                     const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || {}).heading;
                     const icon = L.divIcon({
                         className: 'nt-live-train',
-                        html: '<div class="nt-live-train-glyph"><span class="nt-live-train-name">Train '
-                            + escapePing(trainId) + '</span><span class="nt-live-train-n">'
-                            + n + ' sharing</span></div>',
-                        iconSize: [96, 32],
-                        iconAnchor: [48, 16]
+                        html: '<div class="nt-live-train-glyph" style="width:' + spec.w + 'px;min-width:0">'
+                            + '<span class="nt-live-train-name" style="font-size:' + spec.name + 'px">Train '
+                            + escapePing(trainId) + '</span><span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">'
+                            + escapePing(liveTrainShareLine(n, mine)) + '</span></div>',
+                        iconSize: [spec.w, spec.h],
+                        iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
                     const marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
                     const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     marker.bindPopup(
                         "<div class='text-xs text-gray-900 text-center'>"
                         + "<p class='font-black'>Train " + escapePing(trainId) + "</p>"
-                        + "<p class='text-[10px] text-gray-500 mt-0.5'>" + n + " Next Train rider"
-                        + (n === 1 ? '' : 's') + " sharing</p>"
+                        + "<p class='text-[10px] text-gray-500 mt-0.5'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
                         + "<button type='button' id='" + joinId + "' class='mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold'>I’m on this train</button>"
                         + "</div>"
                     );
@@ -2016,7 +2051,7 @@
                     }).bindPopup(
                         "<div class='text-xs font-bold text-center text-gray-900'>"
                         + (mine ? 'You · ' : '') + (p.station || 'Person')
-                        + "<br><span class='text-[10px] text-gray-500 font-normal'>visible for 10 min</span></div>"
+                        + "<br><span class='text-[10px] text-gray-500 font-normal'>visible until you stop</span></div>"
                     ).addTo(group);
                 });
                 ridePingLayer = group.addTo(map);
@@ -2076,7 +2111,10 @@
                 }
             }
 
-            map.on('zoomend', updateTooltipSize);
+            map.on('zoomend', function () {
+                updateTooltipSize();
+                if (lastRidePings.length) renderRidePingMarkers(lastRidePings);
+            });
             updateTooltipSize(); 
         }
 

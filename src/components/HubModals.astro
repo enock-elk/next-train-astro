@@ -899,7 +899,7 @@ import { withBase } from '../lib/config.js';
 <div id="nt-on-train-sheet" class="fixed inset-0 z-[140] hidden flex items-end sm:items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="nt-on-train-title">
     <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 p-5">
         <h3 id="nt-on-train-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight">Show others where you are?</h3>
-        <p id="nt-on-train-body" class="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Share a rough location for 10 minutes so others on this corridor can see you.</p>
+        <p id="nt-on-train-body" class="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Share a rough location so others on this corridor can see you. Stop when you are done, or sharing ends at the last station.</p>
         <div class="mt-5 flex flex-col gap-2">
             <button type="button" id="nt-on-train-primary" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Show where I am</button>
             <button type="button" id="nt-on-train-secondary" class="w-full py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Not now</button>
@@ -946,7 +946,8 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
         <div id="nt-live-tracker-list" class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 min-h-[8rem]"></div>
-        <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800">
+        <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+            <button type="button" id="nt-live-tracker-stop" class="hidden w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold focus:outline-none">Stop sharing</button>
             <button type="button" id="nt-live-tracker-dismiss" class="w-full py-2.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Close</button>
         </div>
     </div>

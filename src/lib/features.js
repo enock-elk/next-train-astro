@@ -11,9 +11,10 @@
  * }
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
- * realtime / delay / push / ride-checkin on. Map and Community tabs stay off
- * until config/features lists pinned routes.
- * Production: missing config → all off (safe merge).
+ * realtime / delay / push / ride-checkin on (sharing still works for admins).
+ * Map and Community tabs stay off until config/features lists pinned routes.
+ * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
+ * lab `*` default). Production: missing config → all off (safe merge).
  */
 import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
 
@@ -166,7 +167,7 @@ export async function fetchFeatures(force = false) {
  */
 export function isFeatureEnabled(name, routeId = '') {
     // Lab testers need ride sharing on every corridor, even if RTDB still
-    // has the production allow-list.
+    // has the production allow-list. The green chip does not use this shortcut.
     if (name === FEATURE_KEYS.RIDE_CHECKIN && isLabEnvironment()) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(name, bag?.[name]);
@@ -178,6 +179,22 @@ export function isFeatureEnabled(name, routeId = '') {
     return ids.includes(routeId);
 }
 
+/**
+ * Commuter live-share chrome. No lab always-on, and lab default `*` is not a pin.
+ * Explicit RTDB route ids (or production `*`) count.
+ * @param {string} [routeId]
+ */
+export function isRideCheckInPinned(routeId = '') {
+    const bag = cachedFeatures || defaultsForEnv();
+    const entry = normalizeEntry(FEATURE_KEYS.RIDE_CHECKIN, bag?.[FEATURE_KEYS.RIDE_CHECKIN]);
+    if (!entry.enabled) return false;
+    const ids = entry.routeIds || [];
+    if (!ids.length) return false;
+    if (ids.includes('*')) return !isLabEnvironment();
+    if (!routeId) return true;
+    return ids.includes(String(routeId));
+}
+
 /** Async variant — ensures config is loaded once. */
 export async function isFeatureEnabledAsync(name, routeId = '') {
     await fetchFeatures();
@@ -187,6 +204,7 @@ export async function isFeatureEnabledAsync(name, routeId = '') {
 if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
+    window.isRideCheckInPinned = isRideCheckInPinned;
     window.isLabEnvironment = isLabEnvironment;
     window.relaxLiveShareGuards = relaxLiveShareGuards;
 }

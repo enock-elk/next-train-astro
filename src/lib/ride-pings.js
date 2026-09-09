@@ -1,25 +1,25 @@
 /**
- * Live presence — show where you are (train optional) for ~10 minutes.
+ * Live presence — show where you are (train optional) until Stop or terminus.
  *
  * RTDB: ride_pings/{routeId}/{deviceId}
  * {
  *   routeId, deviceId, station, trainId?, waitingFor?, destination?,
- *   at, expiresAt, uid?, coarseLat?, coarseLng?, appVersion, source
+ *   at, expiresAt, uid?, email?, coarseLat?, coarseLng?, appVersion, source
  * }
  * trainId is set only when the rider is on-path and moving. Waiting / far
  * shares keep trainId null so clocks and the dashboard stay off that train.
  *
  * No GPS trails — optional coarse coords only to snap station / show on Leaflet.
- * TTL ~10 minutes (rules allow up to 20); one active ride per device.
+ * Safety TTL is hours (rules must allow the same window); one active ride per account.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
-import { isAdminAuthed } from './admin-chrome.js';
+import { isAdminAuthed, getPinnedRouteIds } from './admin-chrome.js';
 import { safeStorage, escapeHTML, normalizeStationName, getDistanceFromLatLonInKm, formatTimeDisplay } from './utils.js';
 import { $currentRouteId, $deviceId, $globalStationIndex } from '../store.js';
 import { $account } from './account.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
-import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, relaxLiveShareGuards } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isRideCheckInPinned, relaxLiveShareGuards } from './features.js';
 import {
     expectedPosition,
     isStationAheadOfGhost,
@@ -36,7 +36,8 @@ import {
 import { peekCachedRouteReports } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
 
-export const RIDE_PING_TTL_MS = 10 * 60 * 1000;
+/** Safety TTL while the onboard loop refreshes `expiresAt`. Stop or terminus ends the share. */
+export const RIDE_PING_TTL_MS = 8 * 60 * 60 * 1000;
 const ACTIVE_KEY = 'ridePingActiveV1';
 
 /** @type {Record<string, () => void>} */
@@ -50,6 +51,60 @@ function getDeviceId() {
 
 export function isRideCheckInEnabled(routeId = $currentRouteId.get()) {
     return isFeatureEnabled(FEATURE_KEYS.RIDE_CHECKIN, routeId || '');
+}
+
+/** Green chip / tracker entry: admin, or a pinned corridor that RTDB allow-lists. */
+export function canSeeLiveShareChrome(routeId = $currentRouteId.get()) {
+    if (isAdminAuthed()) return true;
+    const pins = getPinnedRouteIds();
+    if (!pins.length) return false;
+    const current = String(routeId || '');
+    if (current && !pins.includes(current)) return false;
+    const ids = current ? [current] : pins;
+    return ids.some((id) => isRideCheckInPinned(id));
+}
+
+function isMyDevicePing(p) {
+    const deviceId = getDeviceId();
+    return !!(p && deviceId && p.deviceId === deviceId);
+}
+
+function iAmSharingTrain(trainId, routeId = $currentRouteId.get()) {
+    const id = String(trainId || '');
+    if (!id) return false;
+    const mine = getActiveShare();
+    if (mine && String(mine.trainId || '') === id && (!mine.routeId || mine.routeId === routeId)) return true;
+    return activePings(getCachedRidePings(routeId)).some((p) => isMyDevicePing(p) && String(p.trainId || '') === id);
+}
+
+/**
+ * Chip / map / tracker copy. Never call a solo self-share “1 rider”.
+ * @param {{ count?: number, iAmSharing?: boolean }} opts
+ */
+export function sharingStatusCopy({ count = 0, iAmSharing = false } = {}) {
+    const n = Math.max(0, Number(count) || 0);
+    if (iAmSharing) {
+        const others = Math.max(0, n - 1);
+        if (others <= 0) return 'You’re sharing';
+        if (others === 1) return 'You and 1 other are sharing';
+        return `You and ${others} others are sharing`;
+    }
+    if (n <= 0) return '';
+    if (n === 1) return '1 sharing';
+    return `${n} sharing`;
+}
+
+function shareReachedTerminus(trainId, lat, lng, station) {
+    const id = String(trainId || '');
+    if (!id) return false;
+    const { stops } = findStopsForTrain(id);
+    if (!stops.length) return false;
+    const last = stops[stops.length - 1]?.station;
+    if (station && last && normalizeStationName(station) === normalizeStationName(last)) return true;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    const prog = progressAlongStops(lat, lng, stops, $globalStationIndex.get() || {});
+    if (prog == null) return false;
+    return prog >= (stops.length - 1) - 0.15;
 }
 
 async function ensureAuthToken() {
@@ -105,10 +160,6 @@ export function getActiveShare() {
     } catch {
         return null;
     }
-}
-
-function minutesLeft(expiresAt) {
-    return Math.max(1, Math.round(((expiresAt || 0) - Date.now()) / 60000));
 }
 
 function stationShort(name) {
@@ -506,6 +557,50 @@ export function stopRidePingsListener(routeId) {
     });
 }
 
+function pingMatchesAccount(p, uid, emailLc) {
+    if (!p) return false;
+    if (uid && p.uid && p.uid === uid) return true;
+    if (emailLc && p.email && String(p.email).toLowerCase() === emailLc) return true;
+    return false;
+}
+
+async function findConflictingShare({ deviceId, uid, email }) {
+    if (!uid && !email) return null;
+    const emailLc = email ? String(email).toLowerCase() : '';
+    const now = Date.now();
+    const matches = (p) => {
+        if (!p || p.deviceId === deviceId) return false;
+        if ((p.expiresAt || 0) <= now) return false;
+        return pingMatchesAccount(p, uid, emailLc);
+    };
+    for (const list of Object.values(routeCache)) {
+        const hit = activePings(list).find(matches);
+        if (hit) return hit;
+    }
+    try {
+        const token = await ensureAuthToken();
+        const urls = [`${DYNAMIC_BASE_URL}ride_pings.json`];
+        if (token) urls.unshift(`${urls[0]}?auth=${encodeURIComponent(token)}`);
+        let data = null;
+        for (const url of urls) {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (res.ok) {
+                data = await res.json();
+                break;
+            }
+            if (res.status !== 401 && res.status !== 403) break;
+        }
+        if (!data || typeof data !== 'object') return null;
+        for (const nodes of Object.values(data)) {
+            if (!nodes || typeof nodes !== 'object') continue;
+            const list = Array.isArray(nodes) ? nodes : Object.values(nodes);
+            const found = list.find(matches);
+            if (found) return found;
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
 /**
  * Share a ride from the current station / optional train (no continuous GPS).
  */
@@ -538,6 +633,14 @@ export async function submitRideCheckIn({
     const deviceId = getDeviceId();
     const now = Date.now();
     const acct = $account.get();
+    const uid = acct.status === 'signed-in' ? acct.uid : null;
+    const email = acct.status === 'signed-in' ? (acct.email || null) : null;
+    if (source !== 'onboard_ping' && source !== 'stop') {
+        const clash = await findConflictingShare({ deviceId, uid, email });
+        if (clash) {
+            return { ok: false, message: 'You’re already sharing on another device. Stop there first.' };
+        }
+    }
     const payload = {
         routeId,
         deviceId,
@@ -547,7 +650,8 @@ export async function submitRideCheckIn({
         destination: destination || null,
         at: now,
         expiresAt: now + RIDE_PING_TTL_MS,
-        uid: acct.status === 'signed-in' ? acct.uid : null,
+        uid,
+        email,
         coarseLat: typeof coarseLat === 'number' ? Math.round(coarseLat * 1000) / 1000 : null,
         coarseLng: typeof coarseLng === 'number' ? Math.round(coarseLng * 1000) / 1000 : null,
         heading: typeof heading === 'number' ? Math.round(heading) : null,
@@ -575,12 +679,11 @@ export async function submitRideCheckIn({
         }));
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
         routeCache[routeId] = activePings([payload, ...existing]);
-        const mins = Math.round(RIDE_PING_TTL_MS / 60000);
         const toastMsg = trainId
             ? `Others can see ${trainId}${destination ? ` → ${stationShort(destination)}` : ''}`
             : waitingFor
                 ? `You’re visible as a commuter - not on train ${waitingFor} yet`
-                : `You’re visible at ${stationShort(st)} · ${mins} min`;
+                : `You’re visible at ${stationShort(st)}`;
         const others = activePings(getCachedRidePings(routeId))
             .filter((p) => String(p.trainId || '') === String(trainId || '') && p.deviceId !== deviceId);
         awardShareMarks({
@@ -596,7 +699,7 @@ export async function submitRideCheckIn({
     }
 }
 
-export async function stopRideShare({ quiet = false } = {}) {
+export async function stopRideShare({ quiet = false, reason = '' } = {}) {
     const active = getActiveShare();
     const routeId = active?.routeId || $currentRouteId.get();
     const deviceId = getDeviceId();
@@ -629,7 +732,9 @@ export async function stopRideShare({ quiet = false } = {}) {
         stopOnboardPingLoop();
         notifyPingsUpdated(routeId);
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
-        if (!quiet) showToast('Sharing ended', 'info');
+        if (!quiet) {
+            showToast(reason === 'terminus' ? 'Sharing ended at the last station' : 'Sharing ended', 'info');
+        }
         return { ok: true };
     } catch (e) {
         return { ok: false, message: e?.message || 'Couldn’t stop sharing' };
@@ -656,9 +761,14 @@ export function startOnboardPingLoop() {
         }
         try {
             const pos = await oneShotGps();
+            const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
+            if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station)) {
+                await stopRideShare({ reason: 'terminus' });
+                return;
+            }
             await submitRideCheckIn({
                 routeId: active.routeId,
-                station: active.station,
+                station: near?.stationName || active.station,
                 trainId: active.trainId,
                 destination: active.destination || null,
                 coarseLat: pos.lat,
@@ -673,7 +783,7 @@ export function startOnboardPingLoop() {
 }
 
 /**
- * Anyone on the corridor: one GPS fix, no train required, 10 minutes.
+ * Anyone on the corridor: one GPS fix, no train required.
  * After a share, open Trains near you so they can attach if they’re close.
  */
 export async function startPresenceShare({
@@ -699,7 +809,7 @@ export async function startPresenceShare({
 
     const existing = getActiveShare();
     if (existing) {
-        showToast(`Already visible · ${minutesLeft(existing.expiresAt)} min left`, 'info');
+        showToast('Already visible on this device', 'info');
         return { ok: true, already: true };
     }
 
@@ -707,7 +817,7 @@ export async function startPresenceShare({
         const { promptOnTrainSheet } = await import('./map-tab.js');
         const choice = await promptOnTrainSheet({
             title: 'Show others where you are?',
-            body: 'Share a rough location for 10 minutes so others on this corridor can see you. You don’t have to be on a train.',
+            body: 'Share a rough location so others on this corridor can see you. You don’t have to be on a train. Stop when you are done, or sharing ends at the last station.',
             primary: 'Show where I am',
             secondary: 'Not now',
         });
@@ -774,7 +884,8 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     const cta = document.getElementById('ride-checkin-btn');
     if (!host) return;
 
-    if (!isRideCheckInEnabled(routeId)) {
+    const mine = getActiveShare();
+    if (!isRideCheckInEnabled(routeId) && !mine) {
         host.classList.add('hidden');
         host.innerHTML = '';
         cta?.classList.add('hidden');
@@ -787,13 +898,12 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     cta?.classList.add('hidden');
     if (isAdminAuthed()) document.getElementById('ride-nearby-btn')?.classList.remove('hidden');
     else document.getElementById('ride-nearby-btn')?.classList.add('hidden');
-    const mine = getActiveShare();
     paintLiveDirectionHeaders(routeId);
 
     if (mine) {
         host.classList.remove('hidden');
         const trainBit = mine.trainId ? ` Train ${escapeHTML(String(mine.trainId))}` : ` at ${escapeHTML(stationShort(mine.station))}`;
-        host.innerHTML = `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>You’re sharing${trainBit} · ${minutesLeft(mine.expiresAt)} min left</span>`;
+        host.innerHTML = `<span class="inline-flex items-center gap-1.5 min-w-0 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></span><span class="min-w-0 truncate">You’re sharing${trainBit}</span><button type="button" data-live-share-stop class="nt-live-stop-btn shrink-0">Stop</button></span>`;
         syncRidePresenceRow();
         return;
     }
@@ -818,13 +928,16 @@ export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
     notifyPingsUpdated(routeId);
 }
 
-function liveLocButtonHtml(count) {
+function liveLocButtonHtml(count, iAmSharing) {
     const n = Math.max(1, Number(count) || 1);
+    const countHtml = (iAmSharing && n <= 1)
+        ? ''
+        : `<span class="nt-live-loc-count">${n}</span>`;
     return `<span class="nt-live-loc" aria-hidden="true">
         <span class="nt-live-loc-ring"></span>
         <span class="nt-live-loc-ring nt-live-loc-ring-delay"></span>
         <svg class="nt-live-loc-pin" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
-    </span><span class="nt-live-loc-count">${n}</span>`;
+    </span>${countHtml}`;
 }
 
 function ensureLiveLocStyles() {
@@ -865,6 +978,14 @@ function ensureLiveLocStyles() {
             background: #86efac; border: 2px solid #fff;
         }
         html.dark .nt-tracker-secondary { border-color: #1f2937; }
+        .nt-live-stop-btn {
+            font-size: 11px; font-weight: 800; line-height: 1.2;
+            color: #dc2626; background: transparent; border: 0;
+            padding: 0.15rem 0.35rem; margin: 0; cursor: pointer;
+            border-radius: 9999px;
+        }
+        html.dark .nt-live-stop-btn { color: #f87171; }
+        .nt-live-stop-btn:focus-visible { outline: 2px solid #dc2626; outline-offset: 2px; }
     `;
     document.head.appendChild(style);
 }
@@ -885,12 +1006,29 @@ export function setDirectionHeaderLabel(headerEl, destUpper) {
     }
 }
 
-function paintOneLiveHeader(headerEl, group, side) {
+function paintOneLiveHeader(headerEl, group, side, routeId) {
     if (!headerEl) return;
     setDirectionHeaderLabel(headerEl);
     let btn = headerEl.querySelector('[data-live-tracker]');
-    if (!group?.trainId || !isRideCheckInEnabled($currentRouteId.get())) {
+    let stopBtn = headerEl.querySelector('[data-live-share-stop]');
+    const chrome = canSeeLiveShareChrome(routeId);
+    const iAmSharing = !!(group?.trainId && iAmSharingTrain(group.trainId, routeId));
+    if (!group?.trainId || (!chrome && !iAmSharing)) {
         btn?.remove();
+        stopBtn?.remove();
+        return;
+    }
+    if (!chrome) {
+        btn?.remove();
+        ensureLiveLocStyles();
+        if (!stopBtn) {
+            stopBtn = document.createElement('button');
+            stopBtn.type = 'button';
+            stopBtn.setAttribute('data-live-share-stop', '1');
+            stopBtn.className = 'nt-live-stop-btn';
+            stopBtn.textContent = 'Stop';
+            headerEl.appendChild(stopBtn);
+        }
         return;
     }
     ensureLiveLocStyles();
@@ -902,8 +1040,20 @@ function paintOneLiveHeader(headerEl, group, side) {
     }
     btn.setAttribute('data-live-tracker', group.trainId);
     btn.setAttribute('data-live-side', side);
-    btn.setAttribute('aria-label', `${group.count} live on Train ${group.trainId}`);
-    btn.innerHTML = liveLocButtonHtml(group.count);
+    btn.setAttribute('aria-label', sharingStatusCopy({ count: group.count, iAmSharing }));
+    btn.innerHTML = liveLocButtonHtml(group.count, iAmSharing);
+    if (iAmSharing) {
+        if (!stopBtn) {
+            stopBtn = document.createElement('button');
+            stopBtn.type = 'button';
+            stopBtn.setAttribute('data-live-share-stop', '1');
+            stopBtn.className = 'nt-live-stop-btn';
+            stopBtn.textContent = 'Stop';
+            headerEl.appendChild(stopBtn);
+        }
+    } else {
+        stopBtn?.remove();
+    }
 }
 
 export function paintLiveDirectionHeaders(routeId = $currentRouteId.get()) {
@@ -911,18 +1061,23 @@ export function paintLiveDirectionHeaders(routeId = $currentRouteId.get()) {
     const route = ROUTES[routeId];
     const pret = document.getElementById('pretoria-header');
     const pien = document.getElementById('pienaarspoort-header');
-    if (!route || !isRideCheckInEnabled(routeId)) {
+    const chrome = canSeeLiveShareChrome(routeId);
+    const mine = getActiveShare();
+    if (!route || (!chrome && !mine)) {
         pret?.querySelector('[data-live-tracker]')?.remove();
         pien?.querySelector('[data-live-tracker]')?.remove();
+        pret?.querySelector('[data-live-share-stop]')?.remove();
+        pien?.querySelector('[data-live-share-stop]')?.remove();
         return;
     }
     const live = liveTrackersByDirection(routeId);
-    paintOneLiveHeader(pret, live.a, 'a');
-    paintOneLiveHeader(pien, live.b, 'b');
+    paintOneLiveHeader(pret, live.a, 'a', routeId);
+    paintOneLiveHeader(pien, live.b, 'b', routeId);
 }
 
 function hideLiveTrackerSheet() {
     document.getElementById('nt-live-tracker-modal')?.classList.add('hidden');
+    document.getElementById('nt-live-tracker-stop')?.classList.add('hidden');
 }
 
 function trackerStopRow(stop, { pin, extras, first, last }) {
@@ -965,6 +1120,7 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
     const title = document.getElementById('nt-live-tracker-title');
     const sub = document.getElementById('nt-live-tracker-sub');
     if (!modal || !list || !trainId) return;
+    if (!canSeeLiveShareChrome(routeId) && !iAmSharingTrain(trainId, routeId)) return;
 
     ensureLiveLocStyles();
     triggerHaptic();
@@ -975,11 +1131,14 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
     const route = ROUTES[routeId];
     const dest = destinationForTrain(id, route) || '';
     if (title) title.textContent = trainGoingLabel(id, dest);
+    const iAmSharing = iAmSharingTrain(id, routeId);
     if (sub) {
         sub.textContent = ranked.length
-            ? `${ranked.length} sharing · clock follows the closest heading match`
+            ? `${sharingStatusCopy({ count: ranked.length, iAmSharing })} · clock follows the closest heading match`
             : 'No verified live share on this train right now';
     }
+    const stop = document.getElementById('nt-live-tracker-stop');
+    if (stop) stop.classList.toggle('hidden', !iAmSharing);
 
     if (!stops.length) {
         list.innerHTML = '<p class="text-sm font-semibold text-gray-500 dark:text-gray-400 text-center py-6">No station list for this train.</p>';
@@ -1047,6 +1206,15 @@ export function bindRideCheckInUi() {
     });
 
     document.addEventListener('click', (e) => {
+        const stopShare = e.target.closest?.('[data-live-share-stop]');
+        if (stopShare) {
+            e.preventDefault();
+            e.stopPropagation();
+            stopRideShare().then((result) => {
+                if (!result.ok && result.message) showToast(result.message, 'error');
+            });
+            return;
+        }
         const people = e.target.closest?.('[data-focus-map]');
         if (people) {
             e.preventDefault();
@@ -1108,6 +1276,11 @@ export function bindRideCheckInUi() {
 
     document.getElementById('nt-live-tracker-close')?.addEventListener('click', hideLiveTrackerSheet);
     document.getElementById('nt-live-tracker-dismiss')?.addEventListener('click', hideLiveTrackerSheet);
+    document.getElementById('nt-live-tracker-stop')?.addEventListener('click', async () => {
+        const result = await stopRideShare();
+        if (!result.ok && result.message) showToast(result.message, 'error');
+        hideLiveTrackerSheet();
+    });
     document.getElementById('nt-live-tracker-modal')?.addEventListener('click', (e) => {
         if (e.target?.id === 'nt-live-tracker-modal') hideLiveTrackerSheet();
     });
@@ -1131,4 +1304,6 @@ if (typeof window !== 'undefined') {
     window.setDirectionHeaderLabel = setDirectionHeaderLabel;
     window.getCachedRidePings = getCachedRidePings;
     window.nearestStationOnRoute = nearestStationOnRoute;
+    window.canSeeLiveShareChrome = canSeeLiveShareChrome;
+    window.sharingStatusCopy = sharingStatusCopy;
 }

@@ -1,7 +1,7 @@
 /**
  * Map tab — embed Leaflet /map + trip-tied location contribution.
  *
- * Presence = coarse GPS for ~10 minutes so others can see you (train optional).
+ * Presence = coarse GPS until Stop or terminus so others can see you (train optional).
  * Attaching a train still uses the 30s vet + closest-train confirm, except on
  * lab where GPS / path guards are off for testing (`relaxLiveShareGuards`).
  */
@@ -1287,7 +1287,7 @@ async function finishRideShare({
     trainId, station, destination, routeId, lat, lng, heading, speedMps, source, waitingFor, quiet = false,
 }) {
     try {
-        const { submitRideCheckIn, isRideCheckInEnabled, RIDE_PING_TTL_MS } = await import('./ride-pings.js');
+        const { submitRideCheckIn, isRideCheckInEnabled } = await import('./ride-pings.js');
         const { fetchFeatures } = await import('./features.js');
         await fetchFeatures();
         if (!isRideCheckInEnabled(routeId)) {
@@ -1316,17 +1316,15 @@ async function finishRideShare({
             return result;
         }
 
-        const mins = Math.round((RIDE_PING_TTL_MS || 600000) / 60000);
         setStatus(trainId
-            ? `Sharing · train ${trainId} · ${mins} min`
-            : `Sharing where you are · ${mins} min`);
+            ? `Sharing · train ${trainId}`
+            : 'Sharing where you are');
         postToMap({
             type: 'nt-map-contribute',
             lat,
             lng,
             trainId,
             station,
-            expiresInMs: RIDE_PING_TTL_MS,
         });
         syncRidePingsToMap(routeId);
         if (trainId) {
@@ -1341,7 +1339,7 @@ async function finishRideShare({
 }
 
 /**
- * Volunteer coarse location for a specific train (10‑minute ride ping).
+ * Volunteer coarse location for a specific train.
  */
 export async function contributeForTrain(candidate) {
     return startOnTrainShare({

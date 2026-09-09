@@ -430,6 +430,20 @@ export function firstLastSummaryLine(grid) {
     return `${grid.heading}: ${bits.join(', ')}`;
 }
 
+/** Ordered stop names for one corridor (weekday B, else weekday A). */
+export function corridorStationList(timetable) {
+    const grid = timetable?.weekday?.b || timetable?.weekday?.a;
+    const seen = new Set();
+    const out = [];
+    for (const name of grid?.stations || []) {
+        const key = String(name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(name);
+    }
+    return out;
+}
+
 export function ogTimetableImageUrl(routeId, dir = 'A') {
     const id = encodeURIComponent(routeId || '');
     return `https://nexttrain.co.za/og/timetable.png?rt=${id}&dir=${dir === 'B' ? 'B' : 'A'}&d=wd`;

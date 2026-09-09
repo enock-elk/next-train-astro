@@ -1892,6 +1892,12 @@ export function initHub() {
             });
             window.__ntCloseInAppSheet = closeSheet;
             window.__ntNavigateInAppSheet = navigateSheet;
+            window.__ntOpenSeoPage = (nextUrl) => {
+                const dest = String(nextUrl || '').trim();
+                if (!dest) return;
+                try { hideSheetOverlay(overlay); } catch { /* ignore */ }
+                try { window.location.assign(dest); } catch { /* ignore */ }
+            };
         }
         const mode = isMapSheetUrl(url) ? 'map' : 'guide';
         applySheetChrome(overlay, mode, title);

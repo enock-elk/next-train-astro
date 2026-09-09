@@ -94,6 +94,8 @@ const faqJsonLd = {
   ogType="article"
   robots="index, follow"
   bodyClass="bg-slate-50 dark:bg-gray-900 selection:bg-blue-200 selection:text-blue-900"
+  seoPageType="guide"
+  seoSlug="guide"
 >
   <script slot="head" is:inline type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
   <style slot="head" is:global>
@@ -240,14 +242,28 @@ const faqJsonLd = {
           var isAppHome = path === '' || path === '/' || /\/index\.html?$/i.test(path)
             || path === String(window.__NT_BASE__ || '/').replace(/\/+$/, '')
             || path === String(window.__NT_BASE__ || '/');
-          // Stay inside sheet for map; close sheet for home / routes / other app exits.
+          // Stay inside sheet for map. SEO landings leave the sheet and open
+          // the implied /routes|/regions|/corridors page (not the pinned board).
           if (isMap && typeof window.parent.__ntNavigateInAppSheet === 'function') {
             e.preventDefault();
             window.parent.__ntNavigateInAppSheet(href, 'Network Map');
             return;
           }
           if (isGuide) return;
-          if (isAppHome || /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path) || /\/status\.html?/i.test(path)) {
+          var isSeoLanding = /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path);
+          if (isSeoLanding) {
+            e.preventDefault();
+            var dest = a.href;
+            try {
+              if (typeof window.parent.__ntOpenSeoPage === 'function') {
+                window.parent.__ntOpenSeoPage(dest);
+                return;
+              }
+            } catch (_) {}
+            try { window.parent.location.assign(dest); } catch (_) { window.location.assign(dest); }
+            return;
+          }
+          if (isAppHome || /\/status\.html?/i.test(path)) {
             e.preventDefault();
             window.parent.__ntCloseInAppSheet();
           }

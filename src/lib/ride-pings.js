@@ -945,15 +945,23 @@ async function appendRideShareLog({ action, routeId, trainId, deviceId, uid, ema
         if (action !== 'start') return;
 
         if (ownSession) {
-            await patchRideShareLog(existing.region, existing.id, {
+            const patch = {
                 action: 'session',
-                status: 'stopped',
-                stoppedAt: now,
+                status: 'live',
                 at: now,
-                source: 'superseded',
-                stopSource: 'superseded',
-            }, token);
-            writeShareSession(null);
+                source: source || existing.source || '',
+                routeId,
+            };
+            if (trainId) patch.trainId = String(trainId);
+            const ok = await patchRideShareLog(existing.region, existing.id, patch, token);
+            if (ok) {
+                writeShareSession({
+                    ...existing,
+                    routeId,
+                    trainId: trainId || existing.trainId || '',
+                });
+                return;
+            }
         }
         const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
         const sessionPayload = { ...payload, action: 'session', status: 'live', startedAt: now };

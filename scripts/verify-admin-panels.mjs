@@ -151,8 +151,8 @@ assert(!admin.includes('now.getHours() + 48'), 'disruption no longer defaults to
 assert(!admin.includes('defaultExpiry.setHours(defaultExpiry.getHours() + 24)'), 'grid notice no longer defaults to +24 hours');
 assert(!admin.includes('Show on download image'), 'old banner download label is gone');
 assert(!admin.includes('Show NO SVC / SPL tag on export image'), 'old train-tag export label is gone');
-assert(admin.includes('Include banner on downloaded PNG'), 'banner PNG label is specific');
-assert(admin.includes('Include NO SVC / SPL tag on downloaded PNG'), 'train-tag PNG label is specific');
+assert(admin.includes('Show in app timetable') && admin.includes('Show on downloaded grid'), 'banner surface labels are specific');
+assert(admin.includes('In-app board and planner') && admin.includes('Timetable grid and PNG'), 'train-tag surface labels are specific');
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
 assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()'), 'publish still sends sourceUrl');

@@ -29,10 +29,21 @@ export const FEATURE_KEYS = {
 
 export { PILOT_ROUTE_IDS };
 
+export const GRANTABLE_FEATURES = [
+    { key: FEATURE_KEYS.MAP_TAB, label: 'Map' },
+    { key: FEATURE_KEYS.COMMUNITY_TAB, label: 'Community' },
+    { key: FEATURE_KEYS.RIDE_CHECKIN, label: "I'm on it / live share" },
+    { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
+    { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
+    { key: FEATURE_KEYS.PUSH_NOTIFY, label: 'Push notifications' },
+];
+
 const CACHE_TTL_MS = 60 * 1000;
 
 /** @type {Record<string, { enabled?: boolean, routeIds?: string[] }> | null} */
 let cachedFeatures = null;
+/** @type {Record<string, boolean>} */
+let grantedFeatures = {};
 let loadedAt = 0;
 /** @type {Promise<object|null> | null} */
 let loadPromise = null;
@@ -97,6 +108,41 @@ export function getCachedFeatures() {
     return cachedFeatures;
 }
 
+export function getGrantedFeatures() {
+    return { ...grantedFeatures };
+}
+
+export function isFeatureGranted(name) {
+    return grantedFeatures[name] === true;
+}
+
+function currentDeviceId() {
+    try {
+        return String(localStorage.getItem('$deviceId') || localStorage.getItem('next_train_device_id') || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+async function fetchFeatureGrants() {
+    const deviceId = currentDeviceId();
+    if (!deviceId) {
+        grantedFeatures = {};
+        return;
+    }
+    try {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        const res = await fetch(`${DYNAMIC_BASE_URL}config/feature_grants/${encodeURIComponent(deviceId)}.json?t=${Date.now()}`, {
+            cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        grantedFeatures = data && typeof data === 'object' && !data.error ? data : {};
+    } catch {
+        // Keep last known grants on transient failures
+    }
+}
+
 /**
  * Normalize a feature entry; missing keys fall back to env defaults.
  * @param {string} name
@@ -147,6 +193,7 @@ export async function fetchFeatures(force = false) {
             }
         }
 
+        await fetchFeatureGrants();
         cachedFeatures = merged;
         loadedAt = Date.now();
         loadPromise = null;
@@ -165,6 +212,7 @@ export async function fetchFeatures(force = false) {
  * @returns {boolean}
  */
 export function isFeatureEnabled(name, routeId = '') {
+    if (grantedFeatures[name] === true) return true;
     // Lab testers need ride sharing on every corridor, even if RTDB still
     // has the production allow-list. The green chip does not use this shortcut.
     if (name === FEATURE_KEYS.RIDE_CHECKIN && isLabEnvironment()) return true;
@@ -184,6 +232,7 @@ export function isFeatureEnabled(name, routeId = '') {
  * @param {string} [routeId]
  */
 export function isRideCheckInPinned(routeId = '') {
+    if (grantedFeatures[FEATURE_KEYS.RIDE_CHECKIN] === true) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(FEATURE_KEYS.RIDE_CHECKIN, bag?.[FEATURE_KEYS.RIDE_CHECKIN]);
     if (!entry.enabled) return false;
@@ -203,7 +252,10 @@ export async function isFeatureEnabledAsync(name, routeId = '') {
 if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
+    window.isFeatureGranted = isFeatureGranted;
+    window.getGrantedFeatures = getGrantedFeatures;
     window.isRideCheckInPinned = isRideCheckInPinned;
     window.isLabEnvironment = isLabEnvironment;
     window.relaxLiveShareGuards = relaxLiveShareGuards;
+    window.GRANTABLE_FEATURES = GRANTABLE_FEATURES;
 }

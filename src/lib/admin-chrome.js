@@ -6,7 +6,7 @@
  */
 import { safeStorage } from './utils.js';
 import { $currentRouteId } from '../store.js';
-import { FEATURE_KEYS, isFeatureEnabled } from './features.js';
+import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
 
 const PIN_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
 
@@ -48,6 +48,13 @@ function setReveal(el, on) {
 /** Pin-gated testers: Map / Community / Account follow pinned routes, not the viewed corridor. */
 export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
+    if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
+    if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    if (surface === 'account' && (
+        isFeatureGranted(FEATURE_KEYS.MAP_TAB)
+        || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
+        || isFeatureGranted(FEATURE_KEYS.RIDE_CHECKIN)
+    )) return true;
     const pins = routeId ? [String(routeId)] : getPinnedRouteIds();
     if (!pins.length) return false;
     const hit = (key) => pins.some((id) => isFeatureEnabled(key, id));

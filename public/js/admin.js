@@ -117,6 +117,42 @@ function ntAdminUpsertAlertSource(list, name, url, existingId) {
     return { ok: true, list: next, source };
 }
 
+function ntAdminSecureEscape(str) {
+    if (str == null || str === '') return '';
+    if (typeof escapeHTML === 'function') return escapeHTML(str);
+    return String(str).replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[m]));
+}
+
+function ntAdminFlattenTripPlanRows(data) {
+    const rows = [];
+    if (!data || typeof data !== 'object') return rows;
+    Object.entries(data).forEach(([batchId, batch]) => {
+        if (!batch || typeof batch !== 'object') return;
+        const trips = Array.isArray(batch.trips) ? batch.trips : [];
+        const batchTs = Number(batch.flushedAt || 0);
+        trips.forEach((entry) => {
+            if (!entry?.origin || !entry?.destination) return;
+            rows.push({
+                batchId,
+                origin: entry.origin,
+                destination: entry.destination,
+                dayType: entry.dayType || 'unknown',
+                region: entry.region || batch.region || '',
+                userId: entry.userId || entry.deviceId || batch.userId || batch.deviceId || '',
+                authUid: entry.authUid || batch.authUid || '',
+                depTime: entry.depTime || '',
+                arrTime: entry.arrTime || '',
+                transfers: entry.transfers ?? '',
+                appVersion: entry.appVersion || batch.appVersion || '',
+                timestamp: Number(entry.timestamp || batchTs || 0),
+            });
+        });
+    });
+    return rows;
+}
+
 function ntAdminDeleteAlertSource(list, id) {
     return (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
 }
@@ -5626,33 +5662,7 @@ const Admin = {
         };
 
         /** Flatten cached trip_plans batches into filterable rows. */
-        Admin.flattenTripPlanRows = (data = Admin._cachedTripPlans) => {
-            const rows = [];
-            if (!data || typeof data !== 'object') return rows;
-            Object.entries(data).forEach(([batchId, batch]) => {
-                if (!batch || typeof batch !== 'object') return;
-                const trips = Array.isArray(batch.trips) ? batch.trips : [];
-                const batchTs = Number(batch.flushedAt || 0);
-                trips.forEach((entry) => {
-                    if (!entry?.origin || !entry?.destination) return;
-                    rows.push({
-                        batchId,
-                        origin: entry.origin,
-                        destination: entry.destination,
-                        dayType: entry.dayType || 'unknown',
-                        region: entry.region || batch.region || '',
-                        userId: entry.userId || entry.deviceId || batch.userId || batch.deviceId || '',
-                        authUid: entry.authUid || batch.authUid || '',
-                        depTime: entry.depTime || '',
-                        arrTime: entry.arrTime || '',
-                        transfers: entry.transfers ?? '',
-                        appVersion: entry.appVersion || batch.appVersion || '',
-                        timestamp: Number(entry.timestamp || batchTs || 0),
-                    });
-                });
-            });
-            return rows;
-        };
+        Admin.flattenTripPlanRows = (data = Admin._cachedTripPlans) => ntAdminFlattenTripPlanRows(data);
 
         Admin.tripCorridorKey = (entry) =>
             `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
@@ -6213,6 +6223,7 @@ const Admin = {
 
         if (fbPanel.dataset.adminLoaded === "true") return;
         fbPanel.dataset.adminLoaded = "true";
+        Admin.bindAdminChangelogClicks();
 
         // Local state config
         Admin.currentFeedbackTab = 'inbox';
@@ -6550,9 +6561,11 @@ const Admin = {
                                     Options
                                     <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                 </button>
-                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-44 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
                                     <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
                                     <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackBetaGrant('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('star', 'w-3.5 h-3.5')} Add to beta</button>` : ''}
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackTripPlans('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('search', 'w-3.5 h-3.5')} Trip plans</button>` : ''}
                                     ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
                                 </div>
                             </div>
@@ -14142,6 +14155,208 @@ const Admin = {
         return res.json();
     },
 
+    bindAdminChangelogClicks: () => {
+        if (window.__ntAdminChangelogBound) return;
+        window.__ntAdminChangelogBound = true;
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.nodeType === 1 ? e.target : e.target?.parentElement;
+            const btn = el?.closest?.('[data-admin-changelog]');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
+        });
+    },
+
+    grantableFeatures: () => {
+        if (Array.isArray(window.GRANTABLE_FEATURES) && window.GRANTABLE_FEATURES.length) {
+            return window.GRANTABLE_FEATURES;
+        }
+        return [
+            { key: 'mapTab', label: 'Map' },
+            { key: 'communityTab', label: 'Community' },
+            { key: 'rideCheckIn', label: "I'm on it / live share" },
+            { key: 'delayReportsUi', label: 'Delay reports' },
+            { key: 'communityRealtime', label: 'Community realtime' },
+            { key: 'pushNotify', label: 'Push notifications' },
+        ];
+    },
+
+    openFeedbackBetaGrant: async (deviceId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No device id on this thread.', 'error');
+            return;
+        }
+        const features = Admin.grantableFeatures();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        let existing = {};
+        try {
+            const res = await fetch(`${dynamicEndpoint}config/feature_grants/${encodeURIComponent(did)}.json`, { cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && typeof data === 'object' && !data.error) existing = data;
+            }
+        } catch { /* empty grant */ }
+
+        const modalId = 'admin-beta-grant-modal';
+        let modal = document.getElementById(modalId);
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'fixed inset-0 bg-black/80 z-[210] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+            document.body.appendChild(modal);
+        }
+        const boxes = features.map((f) => `
+            <label class="flex items-start gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/60">
+                <input type="checkbox" data-beta-key="${ntAdminSecureEscape(f.key)}" class="mt-0.5" ${existing[f.key] === true ? 'checked' : ''}>
+                <span class="text-[12px] font-semibold text-gray-800 dark:text-gray-100">${ntAdminSecureEscape(f.label)}</span>
+            </label>`).join('');
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700">
+                <h3 class="text-base font-black text-gray-900 dark:text-white mb-1">Add to beta</h3>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 font-mono break-all">${ntAdminSecureEscape(did)}</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-snug">Choose which experimental features this device can open, even without a pinned route.</p>
+                <div class="space-y-0.5 max-h-[45vh] overflow-y-auto mb-4">${boxes}</div>
+                <div class="flex gap-2">
+                    <button type="button" id="admin-beta-cancel" class="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Cancel</button>
+                    <button type="button" id="admin-beta-clear" class="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-900 text-sm font-bold text-gray-600 dark:text-gray-300">Clear</button>
+                    <button type="button" id="admin-beta-save" class="flex-1 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold">Save</button>
+                </div>
+            </div>`;
+        const close = () => {
+            if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal(modalId);
+            else modal.classList.add('hidden');
+        };
+        modal.querySelector('#admin-beta-cancel')?.addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        modal.querySelector('#admin-beta-save')?.addEventListener('click', async () => {
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                    return;
+                }
+                const payload = {
+                    updatedAt: Date.now(),
+                    updatedBy: Admin.currentUser?.email || 'Admin',
+                };
+                features.forEach((f) => {
+                    payload[f.key] = !!modal.querySelector(`[data-beta-key="${f.key}"]`)?.checked;
+                });
+                const res = await window.guardianFetch(`${dynamicEndpoint}config/feature_grants/${encodeURIComponent(did)}.json?auth=${secret}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload),
+                }, 10000);
+                if (!res.ok) throw new Error('Auth failed');
+                if (typeof showToast === 'function') showToast('Beta features saved', 'success');
+                close();
+            } catch {
+                if (typeof showToast === 'function') showToast('Failed to save beta grant.', 'error');
+            }
+        });
+        modal.querySelector('#admin-beta-clear')?.addEventListener('click', async () => {
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                    return;
+                }
+                const res = await window.guardianFetch(`${dynamicEndpoint}config/feature_grants/${encodeURIComponent(did)}.json?auth=${secret}`, {
+                    method: 'DELETE',
+                }, 10000);
+                if (!res.ok) throw new Error('Auth failed');
+                if (typeof showToast === 'function') showToast('Beta grant cleared', 'success');
+                close();
+            } catch {
+                if (typeof showToast === 'function') showToast('Failed to clear beta grant.', 'error');
+            }
+        });
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal(modalId);
+        else modal.classList.remove('hidden');
+    },
+
+    openFeedbackTripPlans: (deviceId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No device id on this thread.', 'error');
+            return;
+        }
+        const modalId = 'admin-trip-plans-modal';
+        let modal = document.getElementById(modalId);
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'fixed inset-0 bg-black/80 z-[210] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col p-5 border border-gray-200 dark:border-gray-700">
+                <h3 class="text-base font-black text-gray-900 dark:text-white mb-1">Trip plans</h3>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 font-mono break-all">${ntAdminSecureEscape(did)}</p>
+                <p id="admin-trip-plans-hint" class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-snug">Press Search to look up this device in trip planner telemetry. Nothing is loaded until then.</p>
+                <div id="admin-trip-plans-results" class="flex-1 overflow-y-auto min-h-[8rem] max-h-[50vh] mb-4 text-[12px] text-gray-500">Waiting for search.</div>
+                <div class="flex gap-2 shrink-0">
+                    <button type="button" id="admin-trip-plans-close" class="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-sm font-bold">Close</button>
+                    <button type="button" id="admin-trip-plans-search" class="flex-1 py-2.5 rounded-xl bg-sky-600 text-white text-sm font-bold">Search</button>
+                </div>
+            </div>`;
+        const close = () => {
+            if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal(modalId);
+            else modal.classList.add('hidden');
+        };
+        modal.querySelector('#admin-trip-plans-close')?.addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        modal.querySelector('#admin-trip-plans-search')?.addEventListener('click', async () => {
+            const btn = modal.querySelector('#admin-trip-plans-search');
+            const results = modal.querySelector('#admin-trip-plans-results');
+            const hint = modal.querySelector('#admin-trip-plans-hint');
+            if (btn) { btn.disabled = true; btn.textContent = 'Searching…'; }
+            if (results) results.textContent = 'Searching trip planner telemetry…';
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) throw new Error('Authentication required.');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plans.json?auth=${secret}`, {}, 20000);
+                if (!res.ok) throw new Error('Fetch failed');
+                const data = await res.json();
+                const id = did.toLowerCase();
+                const rows = ntAdminFlattenTripPlanRows(data).filter((r) => {
+                    const hay = [r.userId, r.authUid].map((v) => String(v || '').toLowerCase());
+                    return hay.some((h) => h && h === id);
+                }).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                if (hint) hint.textContent = rows.length ? `${rows.length} plan${rows.length === 1 ? '' : 's'} for this device.` : 'No trip plans logged for this device.';
+                if (!rows.length) {
+                    if (results) results.textContent = 'No trip plans found.';
+                    return;
+                }
+                const shown = rows.slice(0, 50);
+                if (results) {
+                    results.innerHTML = shown.map((r) => {
+                        const when = r.timestamp
+                            ? ((typeof formatAppDate === 'function' ? formatAppDate(new Date(r.timestamp)) : new Date(r.timestamp).toLocaleDateString())
+                                + ' '
+                                + ((typeof formatAppTime === 'function') ? formatAppTime(new Date(r.timestamp)) : new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })))
+                            : '';
+                        const times = [r.depTime, r.arrTime].filter(Boolean).join(' → ');
+                        return `<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-2 mb-2 bg-gray-50 dark:bg-gray-900/50">
+                            <div class="font-bold text-gray-900 dark:text-white">${ntAdminSecureEscape(r.origin)} → ${ntAdminSecureEscape(r.destination)}</div>
+                            <div class="text-[10px] text-gray-500 mt-0.5">${ntAdminSecureEscape([r.dayType, r.region, times, r.appVersion].filter(Boolean).join(' · '))}</div>
+                            <div class="text-[10px] text-gray-400">${ntAdminSecureEscape(when)}</div>
+                        </div>`;
+                    }).join('') + (rows.length > shown.length ? `<p class="text-[10px] text-gray-400">Showing ${shown.length} of ${rows.length}.</p>` : '');
+                }
+            } catch (err) {
+                if (results) results.textContent = err.message || 'Search failed.';
+                if (typeof showToast === 'function') showToast(err.message || 'Search failed.', 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Search'; }
+            }
+        });
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal(modalId);
+        else modal.classList.remove('hidden');
+    },
+
     openAdminChangelogLookup: (version) => {
         const key = String(version || '').split(' - ')[0].trim();
         const notes = (typeof window.lookupAdminChangelog === 'function')
@@ -14159,8 +14374,15 @@ const Admin = {
                     <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl">Close</button>
                 </div>`;
             document.body.appendChild(modal);
-            modal.querySelector('#admin-changelog-close')?.addEventListener('click', () => modal.classList.add('hidden'));
-            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+            modal.querySelector('#admin-changelog-close')?.addEventListener('click', () => {
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal');
+                else modal.classList.add('hidden');
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target !== modal) return;
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal');
+                else modal.classList.add('hidden');
+            });
         }
         const title = modal.querySelector('#admin-changelog-title');
         const body = modal.querySelector('#admin-changelog-notes');
@@ -14169,10 +14391,11 @@ const Admin = {
             if (!notes || !notes.length) {
                 body.textContent = 'No notes for this build.';
             } else {
-                body.innerHTML = `<ul class="list-disc pl-4 space-y-1">${notes.map((n) => `<li>${secureEscape(String(n))}</li>`).join('')}</ul>`;
+                body.innerHTML = `<ul class="list-disc pl-4 space-y-1">${notes.map((n) => `<li>${ntAdminSecureEscape(String(n))}</li>`).join('')}</ul>`;
             }
         }
-        modal.classList.remove('hidden');
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('admin-changelog-modal');
+        else modal.classList.remove('hidden');
     },
 
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
@@ -14489,24 +14712,18 @@ const Admin = {
         const adminClList = document.getElementById('admin-changelog-list');
         const adminClInput = document.getElementById('admin-changelog-input');
         const adminClLookup = document.getElementById('admin-changelog-lookup-btn');
-        if (adminClList && window.ADMIN_CHANGELOG) {
-            adminClList.innerHTML = Object.keys(window.ADMIN_CHANGELOG).sort().reverse().map((ver) => (
-                `<button type="button" class="block w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-800 font-mono text-[11px]" data-admin-changelog="${secureEscape(ver)}">${secureEscape(ver)}</button>`
+        const changelogVersions = (typeof window.listAdminChangelogVersions === 'function')
+            ? window.listAdminChangelogVersions()
+            : Object.keys(window.ADMIN_CHANGELOG || {});
+        if (adminClList && changelogVersions.length) {
+            adminClList.innerHTML = changelogVersions.map((ver) => (
+                `<button type="button" class="block w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-800 font-mono text-[11px]" data-admin-changelog="${ntAdminSecureEscape(ver)}">${ntAdminSecureEscape(ver)}</button>`
             )).join('');
         }
         if (adminClLookup) {
             adminClLookup.onclick = () => Admin.openAdminChangelogLookup(adminClInput ? adminClInput.value : '');
         }
-        if (!window.__ntAdminChangelogBound) {
-            window.__ntAdminChangelogBound = true;
-            document.addEventListener('click', (e) => {
-                const btn = e.target.closest?.('[data-admin-changelog]');
-                if (!btn) return;
-                e.preventDefault();
-                e.stopPropagation();
-                Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
-            });
-        }
+        Admin.bindAdminChangelogClicks();
 
         const deepscanHeader = document.getElementById('deepscan-header-btn');
         const deepscanBody = document.getElementById('deepscan-body');

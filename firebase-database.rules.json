@@ -10,6 +10,7 @@
       "special_event": { ".read": true },
       "schedule_override": { ".read": true },
       "features": { ".read": true },
+      "feature_grants": { ".read": true },
       "shadow_ban_mode": {
         ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
       }

@@ -22,7 +22,7 @@ import {
 } from './logic.js';
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
-import { ADMIN_CHANGELOG, lookupAdminChangelog } from './admin-changelog.js';
+import { ADMIN_CHANGELOG, lookupAdminChangelog, listAdminChangelogVersions } from './admin-changelog.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import { applyAdminAuthedChrome } from './admin-chrome.js';
@@ -105,6 +105,7 @@ export function exposeAdminGlobals() {
     window.ZONE_KM_RANGE_LABELS = ZONE_KM_RANGE_LABELS;
     window.ADMIN_CHANGELOG = ADMIN_CHANGELOG;
     window.lookupAdminChangelog = lookupAdminChangelog;
+    window.listAdminChangelogVersions = listAdminChangelogVersions;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

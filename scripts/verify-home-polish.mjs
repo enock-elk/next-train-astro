@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.9', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.10', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -197,6 +197,11 @@ assert(!admin.includes('admin-feedback-styles'), 'feedback panel has no fixed-he
 assert(!admin.includes('min-height: min(72dvh, 40rem)'), 'feedback panel reserves no blank minimum height');
 assert(!admin.includes('max-height: calc(100dvh - 6.5rem)'), 'feedback panel is not capped to an inner scroller');
 assert(admin.includes('feedback-thread-chat nt-pack-wallpaper relative space-y-3 p-2 sm:p-3'), 'open chat uses natural content height');
+assert(admin.includes('openFeedbackBetaGrant'), 'feedback Options can grant beta features');
+assert(admin.includes('Add to beta'), 'feedback Options has Add to beta');
+assert(admin.includes('openFeedbackTripPlans'), 'feedback Options can search trip plans');
+assert(admin.includes('Press Search to look up this device'), 'trip plan search waits for admin');
+assert(admin.includes('bindAdminChangelogClicks'), 'feedback binds build-notes clicks');
 assert(!admin.includes('feedback-thread-chat space-y-3 p-2 sm:p-3 flex-1'), 'open chat does not create a nested scrollbar');
 assert(!admin.includes("header.scrollIntoView({ behavior: 'smooth', block: 'start' })"), 'opening an admin feedback thread does not auto-scroll to the top');
 assert(admin.includes("formatAlertText('link'") && admin.includes("URL ${Admin.icon('globe'"), 'WYSIWYG link control is URL + globe');
@@ -210,6 +215,9 @@ const presence = readFileSync(new URL('../src/lib/community-presence.js', import
 assert(presence.includes("el.textContent = 'Just you here'"), 'presence fallback is Just you here');
 assert(!presence.includes('Room online'), 'Room online presence copy is gone');
 assert(presence.includes("count <= 1 ? 'Just you here'"), 'solo room still says Just you here');
+assert(presence.includes('countPresencePeople'), 'presence totals unique people');
+assert(presence.includes("host: presenceHostTag()"), 'presence writes the host so lab and production share one room');
+assert(presence.includes('s_${presenceHostTag()}_${base}'), 'presence sessions are host-scoped');
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
 assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
@@ -218,6 +226,8 @@ assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not 
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
+assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
+assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
 const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
@@ -308,7 +318,10 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
-    assert(adminCl.includes('V9_09.10.9'), 'current build has operator notes');
+    assert(adminCl.includes('V9_09.10.10'), 'current build has operator notes');
+    assert(adminCl.includes('CHANGELOG_DATA'), 'build notes fall back to What’s New');
+    assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
+    assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');
 }
 assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');

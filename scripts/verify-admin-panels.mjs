@@ -304,6 +304,9 @@ assert(admin.includes('data-ls-session'), 'share sessions are expandable');
 assert(admin.includes('openAdminChangelogLookup'), 'admin can look up operator build notes');
 assert(admin.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
 assert(admin.includes('data-admin-changelog'), 'feedback version opens build notes');
+assert(admin.includes('openFeedbackBetaGrant'), 'feedback Options opens Add to beta');
+assert(admin.includes('openFeedbackTripPlans'), 'feedback Options opens trip plan search');
+assert(admin.includes('config/feature_grants/'), 'beta grants write config/feature_grants');
 
 {
     const start = admin.indexOf('const groupRideShareLogs = (items) => {');

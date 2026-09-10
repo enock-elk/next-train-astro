@@ -2,13 +2,17 @@
  * Phase 8 — Lightweight room presence + typing (RTDB)
  * Path: route_community/{routeId}/presence/{sessionId}
  *        route_community/{routeId}/typing/{sessionId}
+ *
+ * Lab and production share this RTDB tree. Session keys are host-scoped so
+ * one host's onDisconnect cannot wipe the other. The UI counts unique people
+ * (signed-in uid, else device id) so the same person on both hosts is 1.
  */
 import { bootFirebase } from './firebase-boot.js';
 import { $account } from './account.js';
 import { $deviceId } from '../store.js';
 import { safeStorage } from './utils.js';
 
-const PRESENCE_TTL_MS = 90 * 1000;
+const PRESENCE_TTL_MS = 150 * 1000;
 const TYPING_TTL_MS = 4 * 1000;
 
 let presenceUnsub = null;
@@ -16,15 +20,54 @@ let typingUnsub = null;
 let heartbeatTimer = null;
 let activeRouteId = null;
 let sessionId = null;
+let lastLiveCount = 1;
+
+function presenceHostTag() {
+    try {
+        const host = String(location.hostname || '').toLowerCase();
+        if (host === 'lab.nexttrain.co.za' || host.startsWith('lab.')) return 'lab';
+        if (host === 'nexttrain.co.za' || host === 'www.nexttrain.co.za') return 'prod';
+        if (host.includes('pages.dev')) return 'pages';
+        if (host === 'localhost' || host === '127.0.0.1') return 'local';
+        return 'web';
+    } catch {
+        return 'web';
+    }
+}
+
+function currentDeviceId() {
+    return String($deviceId.get() || safeStorage.getItem('next_train_device_id') || '').trim();
+}
+
+function signedInUid() {
+    const acct = $account.get();
+    if (acct.status === 'signed-in' && acct.uid) return String(acct.uid).trim();
+    return '';
+}
 
 function getSessionId() {
     if (sessionId) return sessionId;
-    const acct = $account.get();
-    const base = acct.status === 'signed-in' && acct.uid
-        ? acct.uid
-        : ($deviceId.get() || safeStorage.getItem('next_train_device_id') || `anon_${Math.random().toString(36).slice(2, 8)}`);
-    sessionId = `s_${base}`.replace(/[.#$\[\]]/g, '_');
+    const base = signedInUid() || currentDeviceId() || `anon_${Math.random().toString(36).slice(2, 8)}`;
+    sessionId = `s_${presenceHostTag()}_${base}`.replace(/[.#$\[\]]/g, '_');
     return sessionId;
+}
+
+function personKey(sid, row) {
+    const uid = String(row?.uid || '').trim();
+    const deviceId = String(row?.deviceId || '').trim();
+    return uid || deviceId || String(sid || '').trim();
+}
+
+function countPresencePeople(data) {
+    const now = Date.now();
+    const people = new Set();
+    Object.entries(data || {}).forEach(([sid, row]) => {
+        if (!row || typeof row !== 'object') return;
+        if (now - (Number(row.at) || 0) >= PRESENCE_TTL_MS) return;
+        const person = personKey(sid, row);
+        if (person) people.add(person);
+    });
+    return people.size;
 }
 
 async function ensureDb() {
@@ -50,19 +93,31 @@ function displayLabel() {
     return 'Someone';
 }
 
+function applyPresenceSnapshot(data, live) {
+    if (!live) {
+        updatePresenceUi(lastLiveCount, lastLiveCount > 1);
+        return;
+    }
+    const n = Math.max(1, countPresencePeople(data));
+    lastLiveCount = n;
+    updatePresenceUi(n, true);
+}
+
 export async function joinCommunityPresence(routeId) {
     if (!routeId) return;
     await leaveCommunityPresence();
     activeRouteId = routeId;
     if (!(await ensureDb())) {
-        updatePresenceUi(1, false);
+        applyPresenceSnapshot(null, false);
         return;
     }
 
     const sid = getSessionId();
     const ref = window.firebaseDbRef(window.firebaseDb, presencePath(routeId, sid));
     const payload = {
-        uid: $account.get().uid || null,
+        uid: signedInUid() || null,
+        deviceId: currentDeviceId() || null,
+        host: presenceHostTag(),
         name: displayLabel(),
         at: Date.now(),
     };
@@ -73,7 +128,7 @@ export async function joinCommunityPresence(routeId) {
             window.firebaseDbOnDisconnect(ref).remove().catch(() => {});
         }
     } catch {
-        updatePresenceUi(1, false);
+        applyPresenceSnapshot(null, false);
         return;
     }
 
@@ -81,18 +136,15 @@ export async function joinCommunityPresence(routeId) {
         if (!activeRouteId) return;
         window.firebaseDbUpdate?.(
             window.firebaseDbRef(window.firebaseDb, presencePath(activeRouteId, sid)),
-            { at: Date.now() }
+            { at: Date.now(), host: presenceHostTag() }
         ).catch(() => {});
-    }, 25000);
+    }, 20000);
 
     if (window.firebaseDbOnValue) {
         const roomRef = window.firebaseDbRef(window.firebaseDb, `route_community/${routeId}/presence`);
         presenceUnsub = window.firebaseDbOnValue(roomRef, (snap) => {
-            const data = snap.val() || {};
-            const now = Date.now();
-            const live = Object.values(data).filter((p) => p && (now - (p.at || 0)) < PRESENCE_TTL_MS);
-            updatePresenceUi(Math.max(1, live.length), true);
-        }, () => updatePresenceUi(1, false));
+            applyPresenceSnapshot(snap.val() || {}, true);
+        }, () => applyPresenceSnapshot(null, false));
 
         const typingRef = window.firebaseDbRef(window.firebaseDb, `route_community/${routeId}/typing`);
         typingUnsub = window.firebaseDbOnValue(typingRef, (snap) => {
@@ -104,7 +156,7 @@ export async function joinCommunityPresence(routeId) {
             updateTypingUi(others);
         });
     } else {
-        updatePresenceUi(1, false);
+        applyPresenceSnapshot(null, false);
     }
 }
 
@@ -128,6 +180,7 @@ export async function leaveCommunityPresence() {
         } catch { /* */ }
     }
     activeRouteId = null;
+    lastLiveCount = 1;
     updateTypingUi([]);
 }
 
@@ -151,11 +204,12 @@ export async function signalCommunityTyping(routeId, isTyping) {
 function updatePresenceUi(count, live) {
     const el = document.getElementById('community-presence');
     if (!el) return;
-    if (!live) {
+    const n = Math.max(1, Number(count) || 1);
+    if (!live && n <= 1) {
         el.textContent = 'Just you here';
         return;
     }
-    el.textContent = count <= 1 ? 'Just you here' : `${count} looking at this line`;
+    el.textContent = count <= 1 ? 'Just you here' : `${n} looking at this line`;
 }
 
 function explainCommunityPresence() {

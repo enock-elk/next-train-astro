@@ -273,6 +273,7 @@ const now = 1_700_000_000_000;
     const { readFileSync } = await import('node:fs');
     const rules = JSON.parse(readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8')).rules;
     assert(rules.config?.features?.['.read'] === true, 'live config/features kept');
+    assert(rules.config?.feature_grants?.['.read'] === true, 'live config/feature_grants kept');
     assert(!!rules.push_subscriptions, 'live push_subscriptions kept');
     assert(rules.ride_pings, 'live ride_pings kept');
     const pingWrite = String(rules.ride_pings?.$routeId?.$deviceId?.['.write'] || '');

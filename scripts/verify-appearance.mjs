@@ -466,6 +466,7 @@ const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 
 assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
 assert(adminJs.includes('id="exp-map-enabled"') && adminJs.includes('id="exp-community-enabled"'), 'experimental Map and Community toggles exist');
 assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');
+assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write config/feature_grants');
 assert(adminJs.includes('mapTab:') && adminJs.includes('communityTab:'), 'save merges mapTab and communityTab without wiping other flags');
 
 if (failures.length) {

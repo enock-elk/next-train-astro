@@ -19,6 +19,13 @@ const herc = (gp.features || []).find((f) => f.properties?.routeId === 'herc-koe
 assert(!!herc, 'GP tracks include herc-koed');
 const verts = herc?.geometry?.coordinates?.length || 0;
 assert(verts > 2, `GP herc-koed GeoJSON has more than 2 vertices (got ${verts})`);
+const hercPath = mapApp.match(/'herc-koed': \[([^\]]+)\]/);
+assert(!!hercPath, 'herc-koed static path is present');
+assert(!hercPath[1].includes('DASPOORT'), 'herc-koed static path does not use DASPOORT');
+assert(mapApp.includes("'pta-mabopane':") && mapApp.includes('"DASPOORT"'), 'Mabopane still uses DASPOORT');
+const herculesLon = 28.167401;
+const west = (herc?.geometry?.coordinates || []).filter((c) => c[0] < herculesLon - 0.0002);
+assert(west.length === 0, `herc-koed does not run west of Hercules (got ${west.length} verts)`);
 
 if (failures.length) {
     console.error(failures.map((m) => `FAIL ${m}`).join('\n'));

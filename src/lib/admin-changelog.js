@@ -1,7 +1,9 @@
 /**
  * Operator-only build notes. Not shown in commuter What’s New.
- * Keyed by APP_VERSION (V9_MM.DD.n).
+ * Keyed by APP_VERSION (V9_MM.DD.n). Older chips fall back to CHANGELOG_DATA.
  */
+import { CHANGELOG_DATA } from './config.js';
+
 export const ADMIN_CHANGELOG = {
     'V9_09.10.4': [
         'Commuter reports dock as an accordion under the board.',
@@ -34,11 +36,51 @@ export const ADMIN_CHANGELOG = {
         'Live sharing admin groups start/stop into one expandable session. Deploy RTDB rules so session PATCH is allowed.',
         'Crash shield ignores extension noise (xbrowser/swbrowser), empty Uncaught, SVG className, and missing .at. Planner zoom guard is defined. Store hydrate uses safeStorage.',
     ],
+    'V9_09.10.10': [
+        'Feedback thread wallpaper is darker than the white commuter bubbles.',
+        'Feedback Options can grant experimental features per device (Add to beta) and search that device trip plans on demand.',
+        'Community presence totals unique people across lab and production (host-scoped sessions).',
+        'Hercules-Koedoespoort no longer follows the Daspoort spur past Hercules.',
+        'Build notes open from feedback version chips and fall back to What’s New copy.',
+    ],
 };
+
+function stripHtml(html) {
+    return String(html || '')
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/p>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function versionSortKey(v) {
+    const m = String(v || '').match(/^V(\d+)_(\d+)\.(\d+)(?:\.(\d+))?/i);
+    if (!m) return 0;
+    return ((((Number(m[1]) * 100) + Number(m[2])) * 100 + Number(m[3])) * 100) + Number(m[4] || 0);
+}
 
 export function lookupAdminChangelog(version) {
     const key = String(version || '').split(' - ')[0].trim();
     if (!key) return null;
     const notes = ADMIN_CHANGELOG[key];
-    return Array.isArray(notes) && notes.length ? notes : null;
+    if (Array.isArray(notes) && notes.length) return notes;
+    const row = CHANGELOG_DATA.find((item) => item.id === key || item.version === key);
+    if (!row) return null;
+    const features = Array.isArray(row.features) ? row.features : [row.features];
+    const cleaned = features.map(stripHtml).filter(Boolean);
+    return cleaned.length ? cleaned : null;
+}
+
+export function listAdminChangelogVersions() {
+    const keys = new Set([
+        ...Object.keys(ADMIN_CHANGELOG),
+        ...CHANGELOG_DATA.map((item) => item.id).filter(Boolean),
+    ]);
+    return [...keys].sort((a, b) => versionSortKey(b) - versionSortKey(a));
 }

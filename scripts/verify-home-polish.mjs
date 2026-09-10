@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.2', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.3', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -212,6 +212,11 @@ assert(!presence.includes('Room online'), 'Room online presence copy is gone');
 assert(presence.includes("count <= 1 ? 'Just you here'"), 'solo room still says Just you here');
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
+assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
+assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
+assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
+assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
+assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('completely free, and you can cancel anytime'), 'account guest copy is free and cancellable');
 assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
@@ -222,8 +227,10 @@ assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
 assert(hubModals.includes('id="account-delete-confirm"'), 'delete confirm sheet');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
-assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
+assert(hubModals.includes('id="account-legal-link"') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
+assert(hubModals.includes('id="reports-feed-modal"'), 'VIEW opens a commuter reports list');
+assert(hubModals.includes('id="reports-feed-list"'), 'reports list has a feed host');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
 assert(riderMarks.includes('PHOTO_PREF_KEY') && riderMarks.includes('showPhotoInAlerts'), 'photo pref defaults off');
 assert(riderMarks.includes('isServiceDay') && riderMarks.includes('streak_5day'), 'service-day streaks include 3 and 5');
@@ -266,6 +273,15 @@ assert(fitStationLabel('Mamelodi Gardens', () => false) === 'Mamelodi Gardens', 
 assert(fitStationLabel('Mamelodi Gardens', (s) => s === 'Mamelodi Gardens') === 'Mamelodi Gard', 'dest shortens only after a wrap');
 assert(fitStationLabel('Pienaarspoort', (s) => s === 'Pienaarspoort') === 'Pienaarsp', 'one-word dest shortens only after a wrap');
 assert(liveBoard.includes('routeAllowsDualHubOptions(routeId)'), 'findConnections only builds a second hub option on the allow-list');
+
+const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
+const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
+assert(!mapView.includes('Loading network map'), 'Map tab overlay does not duplicate the iframe loader');
+assert(mapPage.includes('Loading network…'), 'iframe keeps one loading heading');
+assert(!mapPage.includes('Loading Network...'), 'iframe heading is not Title Case Loading Network');
+assert(mapTab.includes("map-tab-placeholder')?.classList.add('hidden')"), 'Map tab does not unhide a second loader');
+assert(!mapTab.includes("map-tab-placeholder')?.classList.remove('hidden')"), 'Map tab never shows the outer loader');
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

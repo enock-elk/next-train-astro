@@ -369,6 +369,10 @@ assert(!hubJs.includes('py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-700 focu
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 assert(delayReports.includes('isAdminAuthed'), 'train title flags require admin auth');
 assert(delayReports.includes('!isDelayReportsUiEnabled(routeId) || !isAdminAuthed()'), 'flags skipped unless admin authed');
+assert(delayReports.includes('openReportsFeedSheet'), 'banner VIEW opens the reports list');
+assert(delayReports.includes('function reportStationLabel'), 'report surfaces sentence-case station names');
+assert(!delayReports.includes('Pending:'), 'board cards do not show Pending chips');
+assert(!delayReports.includes('Verify delay'), 'board cards do not show Verify delay');
 
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');

@@ -59,9 +59,7 @@ function setHeaderDest(el, destUpper) {
     el.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
     let span = el.querySelector('[data-header-dest]');
     if (!span) {
-        const btn = el.querySelector('[data-live-tracker]');
         el.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${destUpper}</span>`;
-        if (btn) el.appendChild(btn);
     } else {
         span.textContent = destUpper;
     }
@@ -1478,7 +1476,6 @@ export function attachLiveBoardGlobals() {
             window.openTrainExclusionSheet(el.getAttribute('data-excl-route'), el.getAttribute('data-excl-train'), Number(el.getAttribute('data-excl-day')));
         };
         document.addEventListener('click', (e) => {
-            if (e.target?.closest?.('[data-focus-train]')) return;
             const hit = e.target?.closest?.('[data-excl-open="1"]');
             if (!hit || !hit.closest('#grid-container')) return;
             e.preventDefault();
@@ -1486,7 +1483,6 @@ export function attachLiveBoardGlobals() {
         });
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
-            if (e.target?.closest?.('[data-focus-train]')) return;
             const hit = e.target?.closest?.('[data-excl-open="1"]');
             if (!hit || !hit.closest('#grid-container')) return;
             e.preventDefault();

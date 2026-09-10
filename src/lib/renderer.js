@@ -29,7 +29,7 @@ import {
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { decorateJourneyLive, trainHasLivePing } from './ride-pings.js';
+import { decorateJourneyLive } from './ride-pings.js';
 import {
     collectHubOnwardOptions,
     fitOnwardRowLabels,
@@ -599,9 +599,6 @@ export const Renderer = {
         const liveHintHtml = liveDeco.liveHint
             ? `<div class="text-[9px] font-bold text-blue-600 dark:text-blue-300 mt-0.5">${escapeHTML(liveDeco.liveHint)}</div>`
             : '';
-        const livePulseHtml = trainHasLivePing(liveTrainId)
-            ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live - open timetable"><span class="block w-2 h-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.35)] animate-pulse"></span></button>`
-            : '';
         const onTrainHtml = '';
         const boardKey = liveBoardJourneyKey(journey, destination);
         if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr, { clockTime: safeDepTime })) return;
@@ -764,7 +761,7 @@ export const Renderer = {
                     
                     <!-- DESCRIPTION BOX -->
                     <div class="flex-1 min-w-0 h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg self-stretch">
-                        <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${titleBtn}</div>
+                        <div class="flex items-center justify-center gap-1 max-w-full">${titleBtn}</div>
                         <div class="text-[10px] ${detailColor} leading-tight break-words w-full px-1 min-w-0" title="${detailLine}">
                             ${detailLine}
                         </div>
@@ -837,7 +834,7 @@ export const Renderer = {
                     <!-- DESCRIPTION BOX -->
                     <div class="flex-1 min-w-0 flex flex-col justify-center items-center text-center px-1 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg h-full min-h-[110px] self-stretch">
                         <div class="border-b border-gray-200 dark:border-gray-700 pb-1.5 mb-1.5 w-full min-w-0">
-                            <div class="flex items-center justify-center gap-1 max-w-full">${livePulseHtml}${shuttleBtn}</div>
+                            <div class="flex items-center justify-center gap-1 max-w-full">${shuttleBtn}</div>
                             <div class="text-[9px] text-gray-600 dark:text-gray-400 font-bold break-words w-full" title="To ${hubLabel} · Arr ${arrivalAtTransfer}">To ${hubLabel} <span class="font-normal opacity-80">· Arr ${arrivalAtTransfer}</span></div>
                         </div>
                         ${bottomBlock}

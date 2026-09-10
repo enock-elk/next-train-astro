@@ -268,9 +268,10 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
-    assert(mapApp.includes('nt-live-train-glyph--stale'), 'map train glyph has a stale GPS state');
+    assert(mapApp.includes('nt-live-train-glyph--paused'), 'map train glyph has a paused GPS state');
     assert(mapApp.includes('nt-live-train-glyph--compact'), 'map train glyph shrinks when zoomed out');
-    assert(mapApp.includes('nt-live-train-num'), 'map train oval shows the train number');
+    assert(mapApp.includes('nt-live-train-num'), 'map train circle shows the train number');
+    assert(mapApp.includes('nt-live-train-direction'), 'map train circle shows accepted bearing');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
@@ -284,10 +285,9 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
     assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
     assert(ridePings.includes('Still on this train?'), 'off-path onboard loop asks once');
-    assert(ridePings.includes('paintLiveTrainDots'), 'live red dots paint on the board');
+    assert(!renderer.includes('nt-live-train-pulse'), 'live board has no sharing dots');
     const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
-    assert(timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid paints live dots');
-    assert(ridePings.includes('openPlannerTrainSheet'), 'live dots open the train sheet');
+    assert(!timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid has no sharing dots');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
     assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
@@ -311,7 +311,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
     const liveBoard = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
-    assert(liveBoard.includes('id="nt-timetable-live-dot"'), 'VIEW FULL TIMETABLE has a live dot');
+    assert(!liveBoard.includes('id="nt-timetable-live-dot"'), 'VIEW FULL TIMETABLE has no live dot');
     const marksJs = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
     assert(marksJs.includes('hydrateRemoteMarks({ persist = false }'), 'sign-in can force-upload merged marks');
     const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');

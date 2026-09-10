@@ -15,10 +15,12 @@ import {
     TRACKER_SNAP_MAX_M,
 } from '../src/lib/rail-tracks.js';
 import {
+    compactPingsForMap,
     consensusProjectedPings,
     projectTrainTrackerFix,
     TRACKING_STATE,
 } from '../src/lib/ride-pings.js';
+import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
     WEEKEND_REPORT_MAX_AGE_MS,
@@ -135,6 +137,80 @@ const consensus = consensusProjectedPings([
     { trackingState: TRACKING_STATE.PAUSED, acceptedAt, projectedProgress: 1.02, projectedLat: -25, projectedLng: 28.001 },
 ]);
 assert(consensus.length === 2, 'progress consensus rejects paused and along-route outlier pings');
+
+const pausedAt = Date.now();
+const pausedMarkers = await compactPingsForMap([{
+    deviceId: 'paused-device',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    routeProgressM: 12400,
+    acceptedAt: pausedAt - 45000,
+    at: pausedAt,
+    expiresAt: pausedAt + 600000,
+    bearing: 92,
+    speedMps: 0,
+    accuracy: 18,
+    lastSeenLabel: 'At MIDDLE',
+    trackingState: TRACKING_STATE.PAUSED,
+    pauseReason: 'offline',
+}], { mineDeviceId: 'observer', routeId: 'pta-pien' });
+assert(pausedMarkers.length === 1, 'paused train remains visible on the map');
+assert(pausedMarkers[0]?.trackingState === TRACKING_STATE.PAUSED, 'paused map marker exposes paused status');
+assert(
+    pausedMarkers[0]?.lat === -25 && pausedMarkers[0]?.lng === 28.01,
+    'paused map marker stays at its last accepted projected position'
+);
+assert(pausedMarkers[0]?.bearing === 92, 'paused map marker preserves accepted bearing');
+assert(pausedMarkers[0]?.routeProgressM === 12400, 'paused map marker exposes rail distance');
+assert(pausedMarkers[0]?.accuracy === 18, 'paused map marker exposes GPS accuracy');
+const staleActiveMarkers = await compactPingsForMap([{
+    deviceId: 'stale-active',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    acceptedAt: Date.now() - 120000,
+    at: Date.now() - 120000,
+    expiresAt: Date.now() + 600000,
+    bearing: 92,
+    trackingState: TRACKING_STATE.ACTIVE,
+}], { routeId: 'pta-pien' });
+assert(
+    staleActiveMarkers[0]?.trackingState === TRACKING_STATE.PAUSED,
+    'a stale active write remains visible as a stationary paused marker'
+);
+
+const mapAppSource = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+const mapPageSource = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+const mapViewSource = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
+const mapTabSource = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
+const boardSource = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+const liveBoardSource = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
+const timetableSource = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+assert(mapAppSource.includes('nt-live-train-direction'), 'map marker has a bearing direction indicator');
+assert(mapPageSource.includes('border-radius: 50%'), 'map marker uses a numbered circle');
+assert(!mapAppSource.includes('animateTrainMarker'), 'map marker never extrapolates movement');
+assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
+assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');
+assert(mapViewSource.includes('id="map-tracking-card"'), 'current contributor has a bottom tracking card');
+assert(mapViewSource.includes('id="map-tracking-minimize"'), 'tracking card is minimizable');
+assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is dismissible');
+assert(mapTabSource.includes('Currently tracking'), 'Nearby trains shows the current tracked train status');
+assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current train opens tracking details');
+assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');
+assert(!boardSource.includes('nt-live-train-pulse'), 'Next Train cards have no sharing pulse');
+assert(!liveBoardSource.includes('nt-timetable-live-dot'), 'full timetable control has no sharing dot');
+assert(!timetableSource.includes('paintLiveTrainDots'), 'full timetable does not paint sharing dots');
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => ({

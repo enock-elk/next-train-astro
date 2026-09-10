@@ -49,7 +49,6 @@ function paintOpenGridBody() {
             ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName)
             : grid.innerHTML)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
-    import('./ride-pings.js').then((m) => m.paintLiveTrainDots?.()).catch(() => {});
 }
 
 function bindGridExclusionRefresh() {
@@ -454,7 +453,6 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
-    import('./ride-pings.js').then((m) => m.paintLiveTrainDots?.()).catch(() => {});
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');

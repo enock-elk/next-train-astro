@@ -225,7 +225,7 @@ assert(ridePings.includes('isAdminAuthed()'), 'nearby chip requires admin auth')
 assert(ridePings.includes("if (!isAdminAuthed()) return;"), 'nearby click is admin-gated');
 assert(ridePings.includes('syncRidePresenceRow'), 'presence row hides when nearby and chip are empty');
 assert(ridePings.includes('canSeeLiveShareChrome'), 'live-share chip is pin/admin gated');
-assert(ridePings.includes('data-live-share-stop'), 'active sharer can stop from the board');
+assert(!ridePings.includes('data-live-share-stop'), 'Next Train board has no legacy sharing stop chip');
 assert(ridePings.includes('You’re already sharing on another device'), 'second-device share is blocked');
 assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last station');
 assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'ride ping idle TTL is 30 minutes');

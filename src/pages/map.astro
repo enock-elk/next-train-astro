@@ -269,8 +269,11 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 0;
       }
       .nt-live-train-ring--delay { animation-delay: 1.15s; }
-      .nt-live-train-wrap--stale .nt-live-train-ring {
-        background: rgba(100, 116, 139, 0.22);
+      .nt-live-train-wrap--paused .nt-live-train-ring {
+        background: rgba(100, 116, 139, 0.18);
+        animation: none;
+        transform: scale(1);
+        opacity: 0.45;
       }
       .nt-live-train-wrap--mine .nt-live-train-ring {
         background: rgba(37, 99, 235, 0.32);
@@ -278,46 +281,67 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph {
         position: relative; z-index: 1;
         display: flex; align-items: center; justify-content: center;
-        min-width: 44px; height: 22px; padding: 0 9px;
+        width: 38px; height: 38px; padding: 0;
         box-sizing: border-box;
-        border-radius: 999px;
+        border-radius: 50%;
         background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-        border: 2px solid #fff;
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.38);
-        transform-origin: center center;
+        border: 2.5px solid #fff;
+        box-shadow: 0 2px 7px rgba(15, 23, 42, 0.4), inset 0 1px 1px rgba(255,255,255,0.28);
         pointer-events: auto;
       }
       .nt-live-train-num {
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-        font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
-        letter-spacing: 0.03em; color: #fff; line-height: 1; white-space: nowrap;
+        max-width: 32px; overflow: hidden; text-overflow: clip;
+        font-size: 10px; font-weight: 900; font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em; color: #fff; line-height: 1; white-space: nowrap;
       }
+      .nt-live-train-direction {
+        position: absolute;
+        left: 50%; top: -8px;
+        width: 12px; height: 54px;
+        margin-left: -6px;
+        display: flex; align-items: flex-start; justify-content: center;
+        color: #0f172a; font-size: 14px; font-weight: 1000; line-height: 10px;
+        transform-origin: 50% 27px;
+        text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff;
+        pointer-events: none;
+      }
+      .nt-live-train-direction > span { display: inline-block; transform: rotate(-90deg); }
       .nt-live-train-glyph--mine {
         background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
         box-shadow: 0 0 0 1px #93c5fd, 0 1px 4px rgba(30, 64, 175, 0.45);
       }
-      .nt-live-train-glyph--stale {
+      .nt-live-train-glyph--paused {
         background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
       }
-      .nt-live-train-glyph--stale.nt-live-train-glyph--mine {
+      .nt-live-train-glyph--paused.nt-live-train-glyph--mine {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
-      .nt-live-train-glyph--compact { min-width: 36px; height: 18px; padding: 0 7px; }
+      .nt-live-train-glyph--compact { width: 32px; height: 32px; }
       .nt-live-train-glyph--compact .nt-live-train-num { font-size: 9px; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }
       }
-      .nt-live-train-pop { text-align: center; color: #111827; min-width: 9.5rem; padding: 0.1rem 0.15rem; }
+      .nt-live-train-pop { text-align: left; color: #111827; min-width: 13.5rem; padding: 0.1rem 0.15rem; }
+      .nt-live-train-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; }
       .nt-live-train-pop-title { font-size: 13px; font-weight: 900; letter-spacing: 0.01em; }
       .nt-live-train-pop-sub { font-size: 10px; color: #6b7280; margin-top: 2px; font-weight: 600; }
-      .nt-live-train-pop-stale { font-size: 10px; color: #64748b; margin-top: 4px; font-weight: 700; }
+      .nt-live-train-status { padding: 0.18rem 0.45rem; border-radius: 999px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+      .nt-live-train-status--active { color: #166534; background: #dcfce7; }
+      .nt-live-train-status--paused { color: #475569; background: #e2e8f0; }
+      .nt-live-train-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.75rem; margin: 0.55rem 0 0; }
+      .nt-live-train-metrics div { min-width: 0; }
+      .nt-live-train-metrics dt { font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+      .nt-live-train-metrics dd { margin: 0.05rem 0 0; font-size: 10px; font-weight: 800; color: #334155; }
+      .nt-live-train-last { margin-top: 0.45rem; font-size: 10px; font-weight: 700; color: #64748b; }
       .nt-live-train-pop-actions { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.55rem; }
       .nt-live-train-pop-btn {
         margin-top: 0; width: 100%; padding: 0.4rem 0.55rem; border-radius: 0.7rem;
         background: #2563eb; color: #fff; font-size: 11px; font-weight: 800; border: 0; cursor: pointer;
       }
       .nt-live-train-pop-btn--stop { background: #dc2626; }
+      .nt-live-train-pop-btn--details { background: #0f172a; }
       .nt-live-train-pop-btn--sheet {
         background: #eff6ff; color: #1d4ed8; box-shadow: inset 0 0 0 1px #bfdbfe;
       }

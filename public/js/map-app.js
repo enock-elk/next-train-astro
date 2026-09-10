@@ -1944,7 +1944,6 @@
             let ridePingLayer = null;
             let rideTrainMarkers = {};
             let lastRidePings = [];
-            const trainAnim = [];
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -1968,11 +1967,8 @@
             function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
                 var compact = z < 11;
-                var stale = isPingGpsStale(ping);
+                var paused = !!(ping && ping.trackingState === 'paused') || isPingGpsStale(ping);
                 var id = String(trainId || '');
-                var chars = Math.max(3, Math.min(6, id.length || 3));
-                var ovalH = compact ? 18 : 22;
-                var ovalW = compact ? Math.max(36, 12 + chars * 7) : Math.max(44, 14 + chars * 8);
                 var box = compact ? 52 : 64;
                 var bearing = ping && Number.isFinite(ping.bearing)
                     ? ping.bearing
@@ -1980,10 +1976,8 @@
                 return {
                     w: box,
                     h: box,
-                    ovalW: ovalW,
-                    ovalH: ovalH,
                     compact: compact,
-                    stale: stale,
+                    paused: paused,
                     bearing: bearing
                 };
             }
@@ -1994,9 +1988,9 @@
                     cls += ' nt-live-train-glyph--mine';
                     wrapCls += ' nt-live-train-wrap--mine';
                 }
-                if (spec && spec.stale) {
-                    cls += ' nt-live-train-glyph--stale';
-                    wrapCls += ' nt-live-train-wrap--stale';
+                if (spec && spec.paused) {
+                    cls += ' nt-live-train-glyph--paused';
+                    wrapCls += ' nt-live-train-wrap--paused';
                 }
                 if (spec && spec.compact) {
                     wrapCls += ' nt-live-train-wrap--compact';
@@ -2007,8 +2001,9 @@
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
-                    + '<span class="' + cls + '" style="min-width:' + spec.ovalW + 'px;height:' + spec.ovalH + 'px;transform:rotate(' + deg + 'deg)">'
-                    + '<span class="nt-live-train-num" style="transform:rotate(' + (-deg) + 'deg)">' + id + '</span>'
+                    + '<span class="' + cls + '">'
+                    + '<span class="nt-live-train-num">' + id + '</span>'
+                    + '<span class="nt-live-train-direction" style="transform:rotate(' + deg + 'deg)" aria-hidden="true"><span>&gt;</span></span>'
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
@@ -2023,26 +2018,27 @@
                 if (n === 1) return "1 sharing";
                 return n + " sharing";
             }
-            function animateTrainMarker(marker, lat, lng, headingDeg, speedMps, expiresAt) {
-                const start = Date.now();
-                const rad = (headingDeg * Math.PI) / 180;
-                function tick() {
-                    if (!map.hasLayer(marker)) return;
-                    if (Date.now() > (expiresAt || start + 1800000)) return;
-                    const dt = (Date.now() - start) / 1000;
-                    const distM = Math.min(speedMps * dt, 2500);
-                    const dLat = (Math.cos(rad) * distM) / 111320;
-                    const cosLat = Math.cos((lat * Math.PI) / 180) || 0.7;
-                    const dLng = (Math.sin(rad) * distM) / (111320 * cosLat);
-                    marker.setLatLng([lat + dLat, lng + dLng]);
-                    const id = requestAnimationFrame(tick);
-                    trainAnim.push(id);
-                }
-                trainAnim.push(requestAnimationFrame(tick));
+            function metricValue(value, fallback) {
+                return value == null || value === '' ? (fallback || 'Unknown') : String(value);
+            }
+            function ageMetric(at) {
+                var sec = Math.max(0, Math.round((Date.now() - Number(at || 0)) / 1000));
+                if (!Number(at)) return 'Unknown';
+                if (sec < 60) return sec + ' sec';
+                return Math.round(sec / 60) + ' min';
+            }
+            function headingMetric(deg) {
+                if (!Number.isFinite(deg)) return 'Unknown';
+                var d = ((Math.round(deg) % 360) + 360) % 360;
+                var cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                return d + '° ' + cardinals[Math.round(d / 45) % 8];
+            }
+            function distanceMetric(metres) {
+                if (!Number.isFinite(metres)) return 'Unknown';
+                return metres < 1000 ? Math.round(metres) + ' m' : (metres / 1000).toFixed(1) + ' km';
             }
             function renderRidePingMarkers(pings) {
                 lastRidePings = Array.isArray(pings) ? pings : [];
-                trainAnim.splice(0).forEach(function (id) { try { cancelAnimationFrame(id); } catch (_) {} });
                 if (ridePingLayer) {
                     map.removeLayer(ridePingLayer);
                     ridePingLayer = null;
@@ -2069,14 +2065,20 @@
 
                 Object.keys(trains).forEach(function (trainId) {
                     const list = trains[trainId];
-                    const lat = list.reduce(function (s, p) { return s + p.lat; }, 0) / list.length;
-                    const lng = list.reduce(function (s, p) { return s + p.lng; }, 0) / list.length;
+                    // Parent sends one robust, route-projected consensus marker.
+                    // Never average again here: a second mean can move it off rail.
+                    const consensus = list.reduce(function (a, b) {
+                        return (Number(a.at) || 0) >= (Number(b.at) || 0) ? a : b;
+                    }, list[0]);
+                    const lat = consensus.lat;
+                    const lng = consensus.lng;
                     const ids = {};
                     list.forEach(function (p) { ids[p.deviceId || (p.lat + ',' + p.lng)] = 1; });
                     const n = list.reduce(function (s, p) { return s + (Number(p.n) || 1); }, 0) || Object.keys(ids).length;
                     const mine = list.some(function (p) { return !!p.mine; });
-                    const newest = list.reduce(function (a, b) { return (a.at || 0) >= (b.at || 0) ? a : b; }, list[0]);
-                    const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps || 0;
+                    const newest = consensus;
+                    const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
+                    const speed = typeof speedValue === 'number' ? speedValue : null;
                     const heading = Number.isFinite(newest.bearing)
                         ? newest.bearing
                         : (list.find(function (p) { return typeof p.heading === 'number'; }) || newest || {}).heading;
@@ -2093,13 +2095,25 @@
                     const actionBtn = mine
                         ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
                         : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
-                    const staleBit = isPingGpsStale(newest) ? "<p class='nt-live-train-pop-stale'>Location delayed</p>" : "";
+                    const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
+                    const status = paused ? 'Paused' : 'Active';
+                    const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     marker.bindPopup(
                         "<div class='nt-live-train-pop'>"
-                        + "<p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
+                        + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
+                        + "<span class='nt-live-train-status nt-live-train-status--" + (paused ? 'paused' : 'active') + "'>" + status + "</span></div>"
                         + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
-                        + staleBit
+                        + "<dl class='nt-live-train-metrics'>"
+                        + "<div><dt>Speed</dt><dd>" + escapePing(speed == null ? 'Unknown' : (Math.max(0, speed) * 3.6).toFixed(0) + ' km/h') + "</dd></div>"
+                        + "<div><dt>Heading</dt><dd>" + escapePing(headingMetric(heading)) + "</dd></div>"
+                        + "<div><dt>Rail distance</dt><dd>" + escapePing(distanceMetric(Number(newest.railDistanceM))) + "</dd></div>"
+                        + "<div><dt>GPS age</dt><dd>" + escapePing(ageMetric(newest.acceptedAt || newest.at)) + "</dd></div>"
+                        + "<div><dt>GPS accuracy</dt><dd>" + escapePing(Number.isFinite(newest.accuracy) ? '±' + Math.round(newest.accuracy) + ' m' : 'Unknown') + "</dd></div>"
+                        + "<div><dt>Contributors</dt><dd>" + escapePing(metricValue(n, '0')) + "</dd></div>"
+                        + "</dl>"
+                        + "<p class='nt-live-train-last'>Last seen " + escapePing(metricValue(newest.lastSeenLabel, 'on the route')) + "</p>"
                         + "<div class='nt-live-train-pop-actions'>"
+                        + "<button type='button' id='" + detailsId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--details'>Show tracking details</button>"
                         + actionBtn
                         + "<button type='button' id='" + sheetId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--sheet'>Timetable</button>"
                         + "</div></div>"
@@ -2114,6 +2128,20 @@
                                         trainId: trainId,
                                         station: list[0].station || '',
                                         routeId: list[0].routeId || null
+                                    }, '*');
+                                } catch (_) {}
+                                map.closePopup();
+                            };
+                        }
+                        const detailsBtn = document.getElementById(detailsId);
+                        if (detailsBtn) {
+                            detailsBtn.onclick = function () {
+                                try {
+                                    (window.parent || window).postMessage({
+                                        type: 'nt-map-show-tracking-details',
+                                        trainId: trainId,
+                                        routeId: list[0].routeId || null,
+                                        mine: mine
                                     }, '*');
                                 } catch (_) {}
                                 map.closePopup();
@@ -2135,9 +2163,6 @@
                     });
                     marker.addTo(group);
                     rideTrainMarkers[trainId] = marker;
-                    if (speed > 1 && typeof heading === 'number' && map.getZoom() >= 11 && !document.hidden) {
-                        animateTrainMarker(marker, lat, lng, heading, speed, newest.expiresAt);
-                    }
                 });
 
                 loose.forEach(function (p) {

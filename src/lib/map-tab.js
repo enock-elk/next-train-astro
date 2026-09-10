@@ -48,6 +48,7 @@ const PINGS_POLL_MS = 45 * 1000;
 const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
+let trackingCardMode = 'expanded';
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -64,6 +65,81 @@ function statusEl() {
 function setStatus(text) {
     const el = statusEl();
     if (el) el.textContent = text;
+}
+
+function trackingAgeLabel(at, now = Date.now()) {
+    if (!Number(at)) return 'Unknown';
+    const sec = Math.max(0, Math.round((now - Number(at)) / 1000));
+    return sec < 60 ? `${sec}s` : `${Math.round(sec / 60)}m`;
+}
+
+function trackingDistanceLabel(metres) {
+    if (!Number.isFinite(Number(metres))) return 'Unknown';
+    const n = Number(metres);
+    return n < 1000 ? `${Math.round(n)} m` : `${(n / 1000).toFixed(1)} km`;
+}
+
+function trackingHeadingLabel(deg) {
+    if (!Number.isFinite(Number(deg))) return 'Unknown';
+    const n = ((Math.round(Number(deg)) % 360) + 360) % 360;
+    const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return `${n}° ${points[Math.round(n / 45) % 8]}`;
+}
+
+function setTrackingText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function renderTrackingStatusCard(active, marker = null) {
+    const card = document.getElementById('map-tracking-card');
+    const restore = document.getElementById('map-tracking-restore');
+    if (!card || !restore) return;
+    if (!active?.trainId) {
+        card.classList.add('hidden');
+        restore.classList.add('hidden');
+        return;
+    }
+    const state = marker?.trackingState || active.trackingState || 'active';
+    const paused = state === 'paused';
+    const at = marker?.acceptedAt || marker?.at || active.acceptedAt || active.lastPingAt || active.at;
+    const bearing = marker?.bearing ?? marker?.heading ?? active.bearing;
+    const speed = marker?.speedMps;
+    const accuracy = marker?.accuracy ?? active.accuracy;
+    setTrackingText('map-tracking-title', `Tracking Train ${active.trainId}`);
+    setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
+    setTrackingText('map-tracking-last-seen', `Last seen ${marker?.lastSeenLabel || active.lastSeenLabel || active.station || 'on the route'}`);
+    setTrackingText('map-tracking-speed', Number.isFinite(speed) ? `${Math.round(Math.max(0, speed) * 3.6)} km/h` : 'Unknown');
+    setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
+    setTrackingText('map-tracking-gps', trackingAgeLabel(at));
+    setTrackingText('map-tracking-rail', trackingDistanceLabel(marker?.railDistanceM ?? active.railDistanceM));
+    setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
+    setTrackingText('map-tracking-count', String(Math.max(1, Number(marker?.n) || 1)));
+    setTrackingText('map-tracking-restore-label', `Train ${active.trainId} · ${paused ? 'paused' : 'active'}`);
+    const stateEl = document.getElementById('map-tracking-state');
+    stateEl?.classList.toggle('bg-green-100', !paused);
+    stateEl?.classList.toggle('dark:bg-green-950', !paused);
+    stateEl?.classList.toggle('text-green-700', !paused);
+    stateEl?.classList.toggle('dark:text-green-300', !paused);
+    stateEl?.classList.toggle('bg-gray-200', paused);
+    stateEl?.classList.toggle('dark:bg-gray-700', paused);
+    stateEl?.classList.toggle('text-gray-700', paused);
+    stateEl?.classList.toggle('dark:text-gray-200', paused);
+    card.classList.toggle('hidden', trackingCardMode !== 'expanded');
+    restore.classList.toggle('hidden', trackingCardMode !== 'minimized');
+}
+
+export function showTrackingStatusCard() {
+    trackingCardMode = 'expanded';
+    import('./ride-pings.js').then((ride) => {
+        const active = ride.getActiveShare?.();
+        const trainPings = active?.trainId
+            ? (ride.getCachedRidePings?.(active.routeId) || []).filter((p) => String(p.trainId || '') === String(active.trainId))
+            : [];
+        const own = trainPings.find((p) => p.deviceId === getDeviceId());
+        const marker = own ? { ...own, n: trainPings.length || 1 } : null;
+        renderTrackingStatusCard(active, marker);
+    }).catch(() => {});
 }
 
 function nowSeconds() {
@@ -629,6 +705,11 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     modal.classList.remove('hidden');
     list.innerHTML = `<p class="text-[12px] font-semibold text-gray-500 dark:text-gray-400 text-center py-6">Finding trains near you…</p>`;
     empty?.classList.add('hidden');
+    let pingMod = {};
+    try {
+        pingMod = await import('./ride-pings.js');
+    } catch { /* optional */ }
+    const currentShare = pingMod.getActiveShare?.();
 
     const {
         scoreAllTrainsForFix, TRAIN_TRACKER_MAX_M, timetableWhereLabel,
@@ -644,7 +725,11 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
 
     let coords = (Number.isFinite(lat) && Number.isFinite(lng))
         ? { lat, lng }
-        : lastCoords;
+        : (lastCoords || (
+            Number.isFinite(currentShare?.projectedLat) && Number.isFinite(currentShare?.projectedLng)
+                ? { lat: currentShare.projectedLat, lng: currentShare.projectedLng }
+                : null
+        ));
     if (!coords) {
         try {
             const pos = await getPosition();
@@ -661,15 +746,10 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     }
 
     let delayMod = {};
-    let pingMod = {};
     try {
         delayMod = await import('./delay-reports.js');
         await delayMod.fetchRecentRouteReports?.($currentRouteId.get());
     } catch { /* reports optional */ }
-    try {
-        pingMod = await import('./ride-pings.js');
-    } catch { /* optional */ }
-
     const ranked = relaxLiveShareGuards() && !routeHasStationCoords($currentRouteId.get())
         ? []
         : scoreAllTrainsForFix(coords.lat, coords.lng);
@@ -701,6 +781,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     });
     const now = nowSeconds();
     const nearby = rows.filter((c) => {
+        if (currentShare?.trainId && String(c.trainId) === String(currentShare.trainId)) return false;
         if (c.ghost && !isGhostTrackable(c.ghost, now)) return false;
         if (Number.isFinite(c.driftMin) && Math.abs(c.driftMin) * 60 > TRACKING_WINDOW_SEC) return false;
         return true;
@@ -708,7 +789,39 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     nearby.sort(compareNearbyTrainLikelihood);
 
     list.innerHTML = '';
-    if (!nearby.length) {
+    if (currentShare?.trainId) {
+        const ownPing = (pingMod.getCachedRidePings?.(currentShare.routeId) || [])
+            .find((p) => p.deviceId === getDeviceId());
+        const state = ownPing?.trackingState || currentShare.trackingState || 'active';
+        const current = document.createElement('section');
+        current.className = 'rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/30 px-4 py-3';
+        current.innerHTML = `
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-300">Currently tracking</p>
+                    <p class="text-sm font-black text-gray-900 dark:text-white">Train ${escapeHTML(String(currentShare.trainId))}</p>
+                    <p class="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">${state === 'paused' ? 'Paused at the last accepted position' : 'Active tracking'}</p>
+                </div>
+                <span class="shrink-0 px-2 py-1 rounded-full ${state === 'paused' ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' : 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300'} text-[9px] font-black uppercase">${state === 'paused' ? 'Paused' : 'Active'}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-3">
+                <button type="button" data-current-tracking-details class="py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[11px] font-black">Tracking details</button>
+                <button type="button" data-current-tracking-stop class="py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[11px] font-black">Stop sharing</button>
+            </div>`;
+        current.querySelector('[data-current-tracking-details]')?.addEventListener('click', () => {
+            hideNearbyTrainsModal();
+            showTrackingStatusCard();
+        });
+        current.querySelector('[data-current-tracking-stop]')?.addEventListener('click', async () => {
+            const result = await pingMod.stopRideShare?.();
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+            hideNearbyTrainsModal();
+            syncMapShareChrome();
+            syncRidePingsToMap();
+        });
+        list.appendChild(current);
+    }
+    if (!nearby.length && !currentShare?.trainId) {
         empty?.classList.remove('hidden');
         return;
     }
@@ -1360,7 +1473,7 @@ export async function startOnTrainShare({
 }
 
 async function finishRideShare({
-    trainId, station, destination, routeId, lat, lng, heading, speedMps, source, waitingFor, quiet = false,
+    trainId, station, destination, routeId, lat, lng, heading, speedMps, accuracy, source, waitingFor, quiet = false,
 }) {
     try {
         const { submitRideCheckIn, isRideCheckInEnabled } = await import('./ride-pings.js');
@@ -1381,6 +1494,7 @@ async function finishRideShare({
             coarseLng: lng,
             heading,
             speedMps,
+            accuracy: accuracy ?? lastCoords?.accuracy ?? null,
             source: source || 'board_on_train',
             waitingFor: waitingFor || null,
             quiet,
@@ -1407,6 +1521,8 @@ async function finishRideShare({
         if (trainId) {
             const { startOnboardPingLoop } = await import('./ride-pings.js');
             startOnboardPingLoop();
+            trackingCardMode = 'expanded';
+            showTrackingStatusCard();
         }
         return { ok: true, trainId };
     } catch (e) {
@@ -1459,7 +1575,13 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                     n: 1,
                     routeId: p.routeId || routeId,
                 }));
-        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.bearing || ''}`).join('|');
+        const groupedMine = markers.find((m) => m.mine) || null;
+        const ownPing = (pings || []).find((p) => p.deviceId === mine) || null;
+        const ownMetrics = ownPing
+            ? { ...groupedMine, ...ownPing, n: groupedMine?.n || 1 }
+            : groupedMine;
+        renderTrackingStatusCard(ride.getActiveShare?.(), ownMetrics);
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}`).join('|');
         if (sig === lastMapPingSig) return;
         lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });
@@ -1486,6 +1608,7 @@ export function syncMapShareChrome() {
             btn.setAttribute('aria-hidden', 'true');
         }
         btn.setAttribute('aria-label', mine?.trainId ? `Stop sharing Train ${mine.trainId}` : 'Stop sharing');
+        if (!mine) renderTrackingStatusCard(null);
     }).catch(() => {});
 }
 
@@ -1820,6 +1943,23 @@ export function bindMapTabUi() {
         syncMapShareChrome();
         syncRidePingsToMap();
     });
+    document.getElementById('map-tracking-stop')?.addEventListener('click', async () => {
+        triggerHaptic();
+        const { stopRideShare } = await import('./ride-pings.js');
+        const result = await stopRideShare();
+        if (!result.ok && result.message) showToast(result.message, 'error');
+        syncMapShareChrome();
+        syncRidePingsToMap();
+    });
+    document.getElementById('map-tracking-minimize')?.addEventListener('click', () => {
+        trackingCardMode = 'minimized';
+        syncRidePingsToMap();
+    });
+    document.getElementById('map-tracking-dismiss')?.addEventListener('click', () => {
+        trackingCardMode = 'dismissed';
+        syncRidePingsToMap();
+    });
+    document.getElementById('map-tracking-restore')?.addEventListener('click', showTrackingStatusCard);
     window.addEventListener('nt-ride-pings-updated', (ev) => {
         syncMapShareChrome();
         if (document.getElementById('view-map')?.classList.contains('active')) {
@@ -1932,6 +2072,16 @@ export function bindMapTabUi() {
                 showToast('Full timetable for this train is not available.', 'error');
             });
         }
+        if (data.type === 'nt-map-show-tracking-details' && data.trainId) {
+            import('./ride-pings.js').then((ride) => {
+                const active = ride.getActiveShare?.();
+                if (active?.trainId && String(active.trainId) === String(data.trainId)) {
+                    showTrackingStatusCard();
+                    return;
+                }
+                ride.openLiveTrackerSheet?.(String(data.trainId), data.routeId || $currentRouteId.get());
+            }).catch(() => {});
+        }
     });
 }
 
@@ -1947,6 +2097,7 @@ if (typeof window !== 'undefined') {
     window.clearTripWatch = clearTripWatch;
     window.bindMapTabUi = bindMapTabUi;
     window.syncMapShareChrome = syncMapShareChrome;
+    window.showTrackingStatusCard = showTrackingStatusCard;
     // Legacy name used by map-app share FAB — route to contribute picker
     window.shareMyLocation = openContributePicker;
     window.promptOnTrainSheet = promptOnTrainSheet;

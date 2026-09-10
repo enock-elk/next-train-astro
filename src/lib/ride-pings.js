@@ -312,10 +312,18 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
     const loose = [];
     (pings || []).forEach((p) => {
         if (typeof p?.coarseLat !== 'number' || typeof p?.coarseLng !== 'number') return;
+        const state = p.trackingState || TRACKING_STATE.ACTIVE;
+        const keepsAcceptedTrain = !!(
+            p.trainId
+            && (state === TRACKING_STATE.ACTIVE || state === TRACKING_STATE.PAUSED)
+            && typeof p.projectedLat === 'number'
+            && typeof p.projectedLng === 'number'
+            && Number.isFinite(p.projectedProgress)
+        );
         const publicId = pingPublicTrainId(p);
-        const trainId = publicId || '';
-        const lat = trainId && typeof p.projectedLat === 'number' ? p.projectedLat : p.coarseLat;
-        const lng = trainId && typeof p.projectedLng === 'number' ? p.projectedLng : p.coarseLng;
+        const trainId = keepsAcceptedTrain ? String(p.trainId) : (publicId || '');
+        const lat = trainId ? p.projectedLat : p.coarseLat;
+        const lng = trainId ? p.projectedLng : p.coarseLng;
         const row = {
             lat,
             lng,
@@ -328,9 +336,14 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             mine: p.deviceId === mineDeviceId,
             routeId: p.routeId || routeId,
             projectedProgress: p.projectedProgress,
+            routeProgressM: p.routeProgressM,
+            railDistanceM: p.railDistanceM,
             bearing: p.bearing,
-            trackingState: p.trackingState,
+            trackingState: state,
             acceptedAt: p.acceptedAt,
+            lastSeenLabel: p.lastSeenLabel || p.station || '',
+            accuracy: p.accuracy,
+            pauseReason: p.pauseReason || '',
         };
         if (trainId) {
             (trains[trainId] = trains[trainId] || []).push(row);
@@ -341,7 +354,19 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
     const out = [];
     for (const trainId of Object.keys(trains)) {
         const list = trains[trainId];
-        const kept = consensusProjectedPings(list);
+        const active = consensusProjectedPings(list);
+        const paused = list
+            .filter((p) =>
+                (
+                    p.trackingState === TRACKING_STATE.PAUSED
+                    || (p.trackingState === TRACKING_STATE.ACTIVE && isRidePingGpsStale(p.acceptedAt || p.at))
+                )
+                && Number.isFinite(p.projectedProgress)
+                && Number.isFinite(p.lat)
+                && Number.isFinite(p.lng)
+            )
+            .sort((a, b) => (b.at || 0) - (a.at || 0));
+        const kept = active.length ? active : paused.slice(0, 1);
         if (!kept.length) continue;
         const medianProgress = median(kept.map((p) => p.projectedProgress));
         const driver = [...kept].sort((a, b) => {
@@ -350,12 +375,13 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             return da - db || (b.at || 0) - (a.at || 0);
         })[0];
         const newest = kept.reduce((a, b) => ((a.at || 0) >= (b.at || 0) ? a : b), kept[0]);
+        const pausedOnly = active.length === 0;
         out.push({
             lat: driver.lat,
             lng: driver.lng,
             trainId,
-            n: kept.length,
-            mine: kept.some((p) => p.mine),
+            n: active.length || list.length,
+            mine: list.some((p) => p.mine),
             at: newest.at,
             expiresAt: newest.expiresAt,
             heading: newest.heading,
@@ -367,6 +393,13 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
                 : journeyHeadingAtProgress(trainId, driver.projectedProgress),
             onRails: true,
             projectedProgress: medianProgress,
+            routeProgressM: driver.routeProgressM,
+            railDistanceM: newest.railDistanceM,
+            trackingState: pausedOnly ? TRACKING_STATE.PAUSED : TRACKING_STATE.ACTIVE,
+            acceptedAt: driver.acceptedAt,
+            lastSeenLabel: driver.lastSeenLabel,
+            accuracy: newest.accuracy,
+            pauseReason: pausedOnly ? newest.pauseReason : '',
         });
     }
     return out.concat(loose);
@@ -603,41 +636,6 @@ export function liveTrainIdsForRoute(routeId = $currentRouteId.get()) {
         if (id) ids.add(String(id));
     });
     return ids;
-}
-
-function liveTrainDotButton(trainId) {
-    const id = escapeHTML(String(trainId || ''));
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.setAttribute('data-focus-train', String(trainId || ''));
-    btn.className = 'nt-live-train-pulse inline-flex shrink-0 p-0.5 ml-0.5 align-middle focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-full';
-    btn.setAttribute('aria-label', `Train ${id} is live - open timetable`);
-    btn.innerHTML = '<span class="block w-2 h-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.35)] animate-pulse"></span>';
-    return btn;
-}
-
-export function paintLiveTrainDots(routeId = $currentRouteId.get()) {
-    if (typeof document === 'undefined') return;
-    const ids = liveTrainIdsForRoute(routeId);
-    const tt = document.getElementById('nt-timetable-live-dot');
-    if (tt) {
-        const first = [...ids][0] || '';
-        const on = ids.size > 0;
-        tt.hidden = !on;
-        tt.classList.toggle('hidden', !on);
-        if (first) tt.setAttribute('data-focus-train', first);
-        else tt.removeAttribute('data-focus-train');
-        tt.setAttribute('aria-hidden', on ? 'false' : 'true');
-    }
-    document.querySelectorAll('th[data-nt-live-host]').forEach((th) => {
-        const tid = String(th.getAttribute('data-nt-live-host') || '');
-        let dot = th.querySelector(':scope > [data-focus-train]');
-        if (ids.has(tid)) {
-            if (!dot) th.appendChild(liveTrainDotButton(tid));
-        } else if (dot) {
-            dot.remove();
-        }
-    });
 }
 
 function matchingDelayReport(trainId, routeId) {
@@ -1077,6 +1075,7 @@ export async function submitRideCheckIn({
     coarseLng = null,
     heading = null,
     speedMps = null,
+    accuracy = null,
     source = 'board_checkin',
     waitingFor = null,
     quiet = false,
@@ -1156,6 +1155,7 @@ export async function submitRideCheckIn({
         coarseLng: typeof coarseLng === 'number' ? Math.round(coarseLng * 1000) / 1000 : null,
         heading: typeof heading === 'number' ? Math.round(heading) : null,
         speedMps: typeof speedMps === 'number' ? Math.round(speedMps * 10) / 10 : null,
+        accuracy: typeof accuracy === 'number' ? Math.round(accuracy) : null,
         appVersion: APP_VERSION,
         source: source || 'board_checkin',
         trackingState: resolvedState,
@@ -1166,11 +1166,12 @@ export async function submitRideCheckIn({
         payload.projectedLng = projection.projectedLng;
         payload.projectedProgress = projection.projectedProgress;
         payload.routeProgressM = Math.round(projection.routeProgressM);
+        payload.railDistanceM = Math.round(projection.distanceM);
         payload.acceptedAt = now;
         payload.lastSeenLabel = projection.lastSeenLabel || st;
         if (Number.isFinite(projection.bearing)) payload.bearing = Math.round(projection.bearing);
     } else if (resolvedState === TRACKING_STATE.PAUSED && previous) {
-        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
+        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
             if (previous[key] != null) payload[key] = previous[key];
         }
     }
@@ -1194,7 +1195,9 @@ export async function submitRideCheckIn({
             trackingState: payload.trackingState, pauseReason: payload.pauseReason || '',
             projectedLat: payload.projectedLat, projectedLng: payload.projectedLng,
             projectedProgress: payload.projectedProgress, routeProgressM: payload.routeProgressM,
+            railDistanceM: payload.railDistanceM,
             acceptedAt: payload.acceptedAt, lastSeenLabel: payload.lastSeenLabel, bearing: payload.bearing,
+            accuracy: payload.accuracy,
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1249,7 +1252,7 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         source: 'stop',
         trackingState: TRACKING_STATE.STOPPED,
     };
-    for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
+    for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
         if (active?.[key] != null) payload[key] = active[key];
     }
     try {
@@ -1321,6 +1324,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
         coarseLng: pos?.lng ?? active.projectedLng ?? null,
         heading: pos?.heading ?? null,
         speedMps: pos?.speedMps ?? null,
+        accuracy: pos?.accuracy ?? active.accuracy ?? null,
         source: 'onboard_paused',
         quiet: true,
         trackingState: TRACKING_STATE.PAUSED,
@@ -1406,6 +1410,7 @@ export function startOnboardPingLoop() {
                 coarseLng: pos.lng,
                 heading: pos.heading,
                 speedMps: pos.speedMps,
+                accuracy: pos.accuracy,
                 source: 'onboard_ping',
                 quiet: true,
             });
@@ -1536,9 +1541,8 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     paintLiveDirectionHeaders(routeId);
 
     if (mine) {
-        host.classList.remove('hidden');
-        const trainBit = mine.trainId ? ` Train ${escapeHTML(String(mine.trainId))}` : ` at ${escapeHTML(stationShort(mine.station))}`;
-        host.innerHTML = `<span class="inline-flex items-center gap-1.5 min-w-0 text-[11px] font-semibold text-blue-700 dark:text-blue-300"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></span><span class="min-w-0 truncate">You’re sharing${trainBit}</span><button type="button" data-live-share-stop class="nt-live-stop-btn shrink-0">Stop</button></span>`;
+        host.classList.add('hidden');
+        host.innerHTML = '';
         syncRidePresenceRow();
         return;
     }
@@ -1563,152 +1567,22 @@ export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
     notifyPingsUpdated(routeId);
 }
 
-function liveLocButtonHtml(count, iAmSharing) {
-    const n = Math.max(1, Number(count) || 1);
-    const countHtml = (iAmSharing && n <= 1)
-        ? ''
-        : `<span class="nt-live-loc-count">${n}</span>`;
-    return `<span class="nt-live-loc" aria-hidden="true">
-        <span class="nt-live-loc-ring"></span>
-        <span class="nt-live-loc-ring nt-live-loc-ring-delay"></span>
-        <svg class="nt-live-loc-pin" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
-    </span>${countHtml}`;
-}
-
-function ensureLiveLocStyles() {
-    if (typeof document === 'undefined' || document.getElementById('nt-live-loc-style')) return;
-    const style = document.createElement('style');
-    style.id = 'nt-live-loc-style';
-    style.textContent = `
-        .nt-live-loc-btn {
-            display: inline-flex; align-items: center; gap: 0.2rem;
-            padding: 0.1rem 0.35rem 0.1rem 0.15rem; margin: 0;
-            border: 0; background: transparent; color: #16a34a;
-            cursor: pointer; vertical-align: middle; border-radius: 9999px;
-        }
-        .nt-live-loc-btn:focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
-        html.dark .nt-live-loc-btn { color: #4ade80; }
-        .nt-live-loc { position: relative; width: 1.55rem; height: 1.55rem; display: inline-block; }
-        .nt-live-loc-ring {
-            position: absolute; inset: 0; border-radius: 9999px;
-            border: 2px solid currentColor; opacity: 0.55;
-            animation: nt-live-pulse 1.8s ease-out infinite;
-        }
-        .nt-live-loc-ring-delay { animation-delay: 0.55s; }
-        .nt-live-loc-pin { position: relative; width: 1.15rem; height: 1.15rem; margin: 0.2rem; display: block; }
-        .nt-live-loc-count { font-size: 10px; font-weight: 800; line-height: 1; min-width: 0.7rem; }
-        @keyframes nt-live-pulse {
-            0% { transform: scale(0.55); opacity: 0.7; }
-            100% { transform: scale(1.85); opacity: 0; }
-        }
-        .nt-tracker-pin {
-            width: 1.1rem; height: 1.1rem; color: #16a34a;
-            filter: drop-shadow(0 0 4px rgba(22,163,74,0.55));
-        }
-        html.dark .nt-tracker-pin { color: #4ade80; }
-        .nt-tracker-pin-wrap { position: relative; width: 1.15rem; height: 1.15rem; }
-        .nt-tracker-pin-wrap .nt-live-loc-ring { inset: -3px; }
-        .nt-tracker-secondary {
-            width: 0.55rem; height: 0.55rem; border-radius: 9999px;
-            background: #86efac; border: 2px solid #fff;
-        }
-        html.dark .nt-tracker-secondary { border-color: #1f2937; }
-        .nt-live-stop-btn {
-            font-size: 11px; font-weight: 800; line-height: 1.2;
-            color: #dc2626; background: transparent; border: 0;
-            padding: 0.15rem 0.35rem; margin: 0; cursor: pointer;
-            border-radius: 9999px;
-        }
-        html.dark .nt-live-stop-btn { color: #f87171; }
-        .nt-live-stop-btn:focus-visible { outline: 2px solid #dc2626; outline-offset: 2px; }
-    `;
-    document.head.appendChild(style);
-}
-
 export function setDirectionHeaderLabel(headerEl, destUpper) {
     if (!headerEl) return;
     headerEl.classList.add('flex', 'items-center', 'justify-center', 'gap-1.5', 'flex-wrap');
     let span = headerEl.querySelector('[data-header-dest]');
     if (!span) {
-        const btn = headerEl.querySelector('[data-live-tracker]');
         const existing = headerEl.querySelector('.text-blue-500, .text-blue-400');
         const label = destUpper || existing?.textContent || '…';
         headerEl.innerHTML = `Next train to <span data-header-dest class="text-blue-500 dark:text-blue-400">${escapeHTML(label)}</span>`;
-        if (btn) headerEl.appendChild(btn);
         span = headerEl.querySelector('[data-header-dest]');
     } else if (destUpper) {
         span.textContent = destUpper;
     }
 }
 
-function paintOneLiveHeader(headerEl, group, side, routeId) {
-    if (!headerEl) return;
-    setDirectionHeaderLabel(headerEl);
-    let btn = headerEl.querySelector('[data-live-tracker]');
-    let stopBtn = headerEl.querySelector('[data-live-share-stop]');
-    const chrome = canSeeLiveShareChrome(routeId);
-    const iAmSharing = !!(group?.trainId && iAmSharingTrain(group.trainId, routeId));
-    if (!group?.trainId || (!chrome && !iAmSharing)) {
-        btn?.remove();
-        stopBtn?.remove();
-        return;
-    }
-    if (!chrome) {
-        btn?.remove();
-        ensureLiveLocStyles();
-        if (!stopBtn) {
-            stopBtn = document.createElement('button');
-            stopBtn.type = 'button';
-            stopBtn.setAttribute('data-live-share-stop', '1');
-            stopBtn.className = 'nt-live-stop-btn';
-            stopBtn.textContent = 'Stop';
-            headerEl.appendChild(stopBtn);
-        }
-        return;
-    }
-    ensureLiveLocStyles();
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'nt-live-loc-btn';
-        headerEl.appendChild(btn);
-    }
-    btn.setAttribute('data-live-tracker', group.trainId);
-    btn.setAttribute('data-live-side', side);
-    btn.setAttribute('aria-label', sharingStatusCopy({ count: group.count, iAmSharing }));
-    btn.innerHTML = liveLocButtonHtml(group.count, iAmSharing);
-    if (iAmSharing) {
-        if (!stopBtn) {
-            stopBtn = document.createElement('button');
-            stopBtn.type = 'button';
-            stopBtn.setAttribute('data-live-share-stop', '1');
-            stopBtn.className = 'nt-live-stop-btn';
-            stopBtn.textContent = 'Stop';
-            headerEl.appendChild(stopBtn);
-        }
-    } else {
-        stopBtn?.remove();
-    }
-}
-
 export function paintLiveDirectionHeaders(routeId = $currentRouteId.get()) {
-    if (typeof document === 'undefined') return;
-    paintLiveTrainDots(routeId);
-    const route = ROUTES[routeId];
-    const pret = document.getElementById('pretoria-header');
-    const pien = document.getElementById('pienaarspoort-header');
-    const chrome = canSeeLiveShareChrome(routeId);
-    const mine = getActiveShare();
-    if (!route || (!chrome && !mine)) {
-        pret?.querySelector('[data-live-tracker]')?.remove();
-        pien?.querySelector('[data-live-tracker]')?.remove();
-        pret?.querySelector('[data-live-share-stop]')?.remove();
-        pien?.querySelector('[data-live-share-stop]')?.remove();
-        return;
-    }
-    const live = liveTrackersByDirection(routeId);
-    paintOneLiveHeader(pret, live.a, 'a', routeId);
-    paintOneLiveHeader(pien, live.b, 'b', routeId);
+    void routeId;
 }
 
 function hideLiveTrackerSheet() {
@@ -1716,7 +1590,7 @@ function hideLiveTrackerSheet() {
     document.getElementById('nt-live-tracker-stop')?.classList.add('hidden');
 }
 
-function trackerStopRow(stop, { pin, extras, first, last }) {
+function trackerStopRow(stop, { pin, first, last }) {
     const name = escapeHTML(String(stop.station || '').replace(/ STATION$/i, ''));
     const time = escapeHTML(formatTimeDisplay(stop.time) || String(stop.time || '').slice(0, 5));
     const textClass = last
@@ -1724,17 +1598,11 @@ function trackerStopRow(stop, { pin, extras, first, last }) {
         : first
             ? 'text-gray-900 dark:text-white font-bold'
             : 'text-gray-700 dark:text-gray-300 font-medium';
-    const extraDots = extras
-        ? `<span class="absolute -right-3 top-1.5 flex gap-0.5">${Array.from({ length: extras }, () => '<span class="nt-tracker-secondary"></span>').join('')}</span>`
-        : '';
     const marker = pin
-        ? `<div class="nt-tracker-pin-wrap absolute -left-[9px] top-1">
-                <span class="nt-live-loc-ring"></span>
-                <svg class="nt-tracker-pin relative" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
-           </div>`
-        : `<div class="absolute -left-[5px] top-2 w-3 h-3 rounded-full ${last ? 'bg-red-500' : 'bg-blue-500 border-2 border-white dark:border-gray-800'}"></div>`;
+        ? '<span class="absolute -left-[3px] top-1.5 w-1 h-5 rounded bg-green-500" aria-hidden="true"></span>'
+        : `<span class="absolute -left-[3px] top-2 w-1 h-4 rounded ${last ? 'bg-red-500' : 'bg-blue-500'}" aria-hidden="true"></span>`;
     return `<div class="flex justify-between text-xs py-1.5 relative pl-5">
-        ${marker}${extraDots}
+        ${marker}
         <span class="${textClass}">${name}</span>
         <span class="font-mono ${textClass}">${time}</span>
     </div>`;
@@ -1742,10 +1610,7 @@ function trackerStopRow(stop, { pin, extras, first, last }) {
 
 function liveBetweenRow() {
     return `<div class="flex items-center gap-2 text-[11px] font-bold text-green-700 dark:text-green-400 py-1 relative pl-5">
-        <div class="nt-tracker-pin-wrap absolute -left-[9px] top-0.5">
-            <span class="nt-live-loc-ring"></span>
-            <svg class="nt-tracker-pin relative" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.4 0-6.2 2.7-6.2 6.1 0 4.6 6.2 12.4 6.2 12.4s6.2-7.8 6.2-12.4C18.2 5.2 15.4 2.5 12 2.5zm0 8.3a2.2 2.2 0 110-4.4 2.2 2.2 0 010 4.4z"/></svg>
-        </div>
+        <span class="absolute -left-[3px] top-1 w-1 h-5 rounded bg-green-500" aria-hidden="true"></span>
         Live here
     </div>`;
 }
@@ -1758,7 +1623,6 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
     if (!modal || !list || !trainId) return;
     if (!canSeeLiveShareChrome(routeId) && !iAmSharingTrain(trainId, routeId)) return;
 
-    ensureLiveLocStyles();
     triggerHaptic();
     const id = String(trainId);
     const ranked = rankVerifiedPings(getCachedRidePings(routeId), id);
@@ -1792,21 +1656,10 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
         ? -1
         : (frac > 0.88 ? Math.min(stops.length - 1, lastIdx + 1) : lastIdx);
 
-    const extraAt = {};
-    ranked.slice(1).forEach((r) => {
-        const p = r.ping;
-        if (typeof p.projectedProgress !== 'number') return;
-        const prog = p.projectedProgress;
-        if (prog == null) return;
-        const i = Math.round(prog);
-        extraAt[i] = (extraAt[i] || 0) + 1;
-    });
-
     let html = '<div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2 space-y-0">';
     stops.forEach((stop, i) => {
         html += trackerStopRow(stop, {
             pin: onStation && i === pinStationIdx,
-            extras: extraAt[i] || 0,
             first: i === 0,
             last: i === stops.length - 1,
         });
@@ -1841,42 +1694,10 @@ export function bindRideCheckInUi() {
     });
 
     document.addEventListener('click', (e) => {
-        const stopShare = e.target.closest?.('[data-live-share-stop]');
-        if (stopShare) {
-            e.preventDefault();
-            e.stopPropagation();
-            stopRideShare().then((result) => {
-                if (!result.ok && result.message) showToast(result.message, 'error');
-            });
-            return;
-        }
         const people = e.target.closest?.('[data-focus-map]');
         if (people) {
             e.preventDefault();
             import('./ui.js').then((m) => m.switchTab?.('map')).catch(() => {});
-            return;
-        }
-        const pulse = e.target.closest?.('[data-focus-train]');
-        if (pulse) {
-            e.preventDefault();
-            e.stopPropagation();
-            const trainId = pulse.getAttribute('data-focus-train');
-            const routeId = $currentRouteId.get();
-            if (trainId) {
-                import('./planner-ui.js').then((m) => {
-                    if (typeof m.openPlannerTrainSheet === 'function') {
-                        m.openPlannerTrainSheet(routeId, trainId);
-                    }
-                }).catch(() => {});
-            }
-            return;
-        }
-        const liveBtn = e.target.closest?.('[data-live-tracker]');
-        if (liveBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            const trainId = liveBtn.getAttribute('data-live-tracker');
-            if (trainId) openLiveTrackerSheet(trainId);
             return;
         }
         const onTrain = e.target.closest?.('[data-on-train]');
@@ -1940,7 +1761,6 @@ if (typeof window !== 'undefined') {
     window.decorateJourneyLive = decorateJourneyLive;
     window.rankVerifiedPings = rankVerifiedPings;
     window.paintLiveDirectionHeaders = paintLiveDirectionHeaders;
-    window.paintLiveTrainDots = paintLiveTrainDots;
     window.liveTrainIdsForRoute = liveTrainIdsForRoute;
     window.openLiveTrackerSheet = openLiveTrackerSheet;
     window.setDirectionHeaderLabel = setDirectionHeaderLabel;

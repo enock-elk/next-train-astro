@@ -148,7 +148,12 @@
 
     "admin_state": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      "$adminUid": {
+        ".write": "auth != null && auth.uid === $adminUid && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      },
+      "aliases": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      }
     },
 
     "notices_archive": {
@@ -245,6 +250,17 @@
               ".validate": "!newData.exists() || (newData.hasChildren(['emoji', 'at']) && newData.child('emoji').isString() && (newData.child('emoji').val() === 'thumb' || newData.child('emoji').val() === 'heart' || newData.child('emoji').val() === 'laugh' || newData.child('emoji').val() === 'wow' || newData.child('emoji').val() === 'sad' || newData.child('emoji').val() === 'pray') && newData.child('at').isNumber())"
             }
           }
+        }
+      }
+    },
+
+    "community_activity": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$routeId": {
+        ".indexOn": ["timestamp"],
+        "$messageId": {
+          ".write": "auth != null && ((auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com') || (auth.token.firebase.sign_in_provider != 'anonymous' && !data.exists() && newData.child('uid').val() === auth.uid && ((newData.child('kind').val() === 'post' && newData.child('postId').val() === $messageId && root.child('route_community').child($routeId).child('posts').child($messageId).child('uid').val() === auth.uid && root.child('route_community').child($routeId).child('posts').child($messageId).child('timestamp').val() === newData.child('timestamp').val() && root.child('route_community').child($routeId).child('posts').child($messageId).child('hidden').val() !== true) || (newData.child('kind').val() === 'reply' && newData.child('replyId').val() === $messageId && root.child('route_community').child($routeId).child('posts').child(newData.child('postId').val()).child('replies').child($messageId).child('uid').val() === auth.uid && root.child('route_community').child($routeId).child('posts').child(newData.child('postId').val()).child('replies').child($messageId).child('timestamp').val() === newData.child('timestamp').val() && root.child('route_community').child($routeId).child('posts').child(newData.child('postId').val()).child('replies').child($messageId).child('hidden').val() !== true))))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['kind', 'postId', 'uid', 'timestamp']) && newData.child('kind').isString() && (newData.child('kind').val() === 'post' || newData.child('kind').val() === 'reply') && newData.child('postId').isString() && newData.child('postId').val().length > 0 && newData.child('postId').val().length <= 80 && newData.child('uid').isString() && newData.child('uid').val().length > 0 && newData.child('uid').val().length <= 128 && newData.child('timestamp').isNumber() && ((newData.child('kind').val() === 'post' && newData.child('postId').val() === $messageId && !newData.hasChild('replyId')) || (newData.child('kind').val() === 'reply' && newData.hasChild('replyId') && newData.child('replyId').isString() && newData.child('replyId').val() === $messageId)))"
         }
       }
     },

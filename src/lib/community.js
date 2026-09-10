@@ -127,6 +127,28 @@ async function authQuery() {
     return token ? `?auth=${encodeURIComponent(token)}` : '';
 }
 
+function communityActivityPayload(payload, kind) {
+    return {
+        kind,
+        postId: payload.postId,
+        ...(kind === 'reply' ? { replyId: payload.replyId } : {}),
+        uid: payload.uid,
+        timestamp: payload.timestamp,
+    };
+}
+
+async function writeCommunityActivity(routeId, messageId, payload, kind, q) {
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(messageId)}.json${q}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(communityActivityPayload(payload, kind)),
+        }
+    );
+    if (!res.ok) throw new Error(`Activity index failed (${res.status})`);
+}
+
 export { isShadowBanned };
 
 function relativeTime(ts) {
@@ -296,7 +318,8 @@ async function startRealtimePosts(routeId) {
             applyFeedFilter(routeId);
             feedSilentRepaint = false;
             // Keep unread badge honest while room is open
-            if (routeId === getPinnedRouteId() && safeStorage.getItem('activeTab') === 'community') {
+            if (safeStorage.getItem('activeTab') === 'community'
+                && (routeId === getPinnedRouteId() || isAdminAuthed())) {
                 markCommunityRouteSeen(routeId);
             }
         }, (err) => {
@@ -373,6 +396,13 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     const limit = checkCommunityRateLimit();
     if (!limit.ok) return limit;
 
+    const replyToPayload = replyDraft?.postId ? {
+        replyTo: {
+            postId: replyDraft.postId,
+            displayName: replyDraft.displayName,
+            body: replyDraft.body,
+        },
+    } : {};
     const safety = checkContentSafety(text);
     if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };
     if (safety.verdict === 'review') {
@@ -400,6 +430,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     hidden: false,
                     replyCount: 0,
                     appVersion: APP_VERSION,
+                    ...replyToPayload,
                 },
             },
         });
@@ -426,14 +457,8 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
+        ...replyToPayload,
     };
-    if (replyDraft?.postId) {
-        payload.replyTo = {
-            postId: replyDraft.postId,
-            displayName: replyDraft.displayName,
-            body: replyDraft.body,
-        };
-    }
 
     const banned = await isShadowBanned(acct.uid);
     if (banned) {
@@ -512,6 +537,13 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                 return { ok: true, post: payload, shadowSilenced: true };
             }
             throw new Error(`Post failed (${res.status})`);
+        }
+        // The message body remains authoritative. Indexing follows the accepted
+        // write so rules can verify this user owns the published message.
+        try {
+            await writeCommunityActivity(routeId, postId, payload, 'post', q);
+        } catch (e) {
+            console.warn('Community activity indexing failed', e);
         }
         recordRateHit();
         rememberBody(text);
@@ -608,6 +640,11 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
                 return { ok: true, reply: payload, shadowSilenced: true };
             }
             throw new Error(`Reply failed (${res.status})`);
+        }
+        try {
+            await writeCommunityActivity(routeId, replyId, payload, 'reply', q);
+        } catch (e) {
+            console.warn('Community reply activity indexing failed', e);
         }
         // Best-effort replyCount bump
         try {
@@ -1004,10 +1041,28 @@ function getLastSeen(routeId) {
     return Number.isFinite(n) ? n : 0;
 }
 
-export function markCommunityRouteSeen(routeId = getPinnedRouteId()) {
+export async function markCommunityRouteSeen(routeId = getPinnedRouteId()) {
     if (!routeId) return;
-    safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
+    const seenAt = Date.now();
+    safeStorage.setItem(unreadSeenKey(routeId), String(seenAt));
     paintCommunityUnreadBadge(0);
+    if (!isAdminAuthed()) return;
+    try {
+        const acct = $account.get();
+        if (!acct?.uid) return;
+        const q = await authQuery();
+        if (!q) return;
+        await fetch(
+            `${DYNAMIC_BASE_URL}admin_state/${encodeURIComponent(acct.uid)}/community_seen/${encodeURIComponent(routeId)}.json${q}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(seenAt),
+            }
+        );
+    } catch {
+        /* local seen cursor still keeps the commuter surface responsive */
+    }
 }
 
 function paintCommunityUnreadBadge(count) {
@@ -1051,6 +1106,30 @@ export async function refreshCommunityUnreadBadge() {
     }
 
     try {
+        if (isAdminAuthed()) {
+            const acct = $account.get();
+            const q = await authQuery();
+            if (acct?.uid && q) {
+                const [activityRes, seenRes] = await Promise.all([
+                    fetch(`${DYNAMIC_BASE_URL}community_activity/${encodeURIComponent(routeId)}.json${q}`),
+                    fetch(`${DYNAMIC_BASE_URL}admin_state/${encodeURIComponent(acct.uid)}/community_seen/${encodeURIComponent(routeId)}.json${q}`),
+                ]);
+                if (activityRes.ok && seenRes.ok) {
+                    const activity = await activityRes.json() || {};
+                    const remoteSeen = Number(await seenRes.json() || 0);
+                    if (!remoteSeen) {
+                        await markCommunityRouteSeen(routeId);
+                        return 0;
+                    }
+                    safeStorage.setItem(unreadSeenKey(routeId), String(remoteSeen));
+                    const unread = Object.values(activity).filter((item) =>
+                        Number(item?.timestamp || 0) > remoteSeen
+                    ).length;
+                    paintCommunityUnreadBadge(unread);
+                    return unread;
+                }
+            }
+        }
         const raw = safeStorage.getItem(unreadSeenKey(routeId));
         if (!raw) {
             // First watch: seed last-seen so historic posts aren't all "unread"
@@ -1235,7 +1314,7 @@ export function openRouteCommunity(opts = {}) {
     triggerHaptic();
     renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
-    if (activeRoute && activeRoute === getPinnedRouteId()) markCommunityRouteSeen(activeRoute);
+    if (activeRoute && (activeRoute === getPinnedRouteId() || isAdminAuthed())) markCommunityRouteSeen(activeRoute);
     else refreshCommunityUnreadBadge();
 }
 
@@ -1398,7 +1477,7 @@ export function bindCommunityUi() {
         if (display) display.textContent = routeLabel(rid);
         renderCommunityFeed(rid);
         joinCommunityPresence(rid);
-        if (rid && rid === getPinnedRouteId()) markCommunityRouteSeen(rid);
+        if (rid && (rid === getPinnedRouteId() || isAdminAuthed())) markCommunityRouteSeen(rid);
         else refreshCommunityUnreadBadge();
     });
     document.getElementById('community-route-trigger')?.addEventListener('click', (e) => {

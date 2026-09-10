@@ -72,13 +72,11 @@ const workerSource = await readFile(new URL('../workers/nexttrain-community/work
 
 assert.match(admin, /Admin\.approveHeldCommunity\s*=\s*async/);
 assert.match(admin, /Admin\.rejectHeldCommunity\s*=\s*async/);
-assert.match(admin, /body:\s*JSON\.stringify\(payload\)/, 'approval writes the validated payload unchanged');
-assert.match(admin, /replies\[replyId\]\s*=\s*payload/);
-assert.match(admin, /post\.replyCount\s*=\s*Object\.keys\(replies\)\.length/);
-assert.match(admin, /'X-Firebase-ETag':\s*'true'/);
-assert.match(admin, /'If-Match':\s*etag/);
-assert.match(admin, /publishRes\.status\s*===\s*412/);
-assert.match(admin, /await markModerationStatus[\s\S]{0,120}status:\s*'approved'/);
+assert.match(admin, /\[kind === 'community_post' \? routePath : `\$\{routePath\}\/replies\/\$\{replyId\}`\]: payload/, 'approval writes the validated payload unchanged');
+assert.match(admin, /community_activity\/\$\{routeId\}/);
+assert.match(admin, /moderation_queue\/\$\{reportId\}/);
+assert.match(admin, /method:\s*'PATCH'/);
+assert.match(admin, /status:\s*'approved'/);
 assert.match(admin, /status:\s*'rejected'[\s\S]{0,80}resolution:\s*'rejected'/);
 assert.match(admin, /Admin\.approveHeldFeedback\s*=\s*async/, 'feedback approval remains available');
 

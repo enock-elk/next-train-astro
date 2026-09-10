@@ -18,6 +18,10 @@ const ALLOWED_HOST = /(^|\.)nexttrain\.co\.za$/i;
 /** @type {Map<string, number[]>} */
 const rateBuckets = new Map();
 
+function isSafeRtdbKey(value) {
+    return typeof value === 'string' && value.length > 0 && value.length <= 80 && !/[.#$[\]/]/.test(value);
+}
+
 function corsHeaders(env, request) {
     const origin = request.headers.get('Origin') || '';
     const allowed = String(env.ALLOWED_ORIGINS || '')
@@ -201,6 +205,27 @@ async function rtdbWrite(env, path, value) {
     return true;
 }
 
+async function rtdbUpdate(env, updates) {
+    const email = env.FIREBASE_CLIENT_EMAIL;
+    const key = env.FIREBASE_PRIVATE_KEY;
+    const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
+    if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
+    const token = await getGoogleAccessToken(email, key);
+    const res = await fetch(`${base}/.json`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`RTDB update failed (${res.status}): ${t.slice(0, 200)}`);
+    }
+    return true;
+}
+
 async function rtdbGet(env, path) {
     const email = env.FIREBASE_CLIENT_EMAIL;
     const key = env.FIREBASE_PRIVATE_KEY;
@@ -265,7 +290,7 @@ async function handlePost(request, env) {
     }
 
     const routeId = String(body.routeId || '').trim();
-    if (!routeId || routeId.length > 80) {
+    if (!isSafeRtdbKey(routeId)) {
         return json(env, request, 400, { ok: false, error: 'Invalid routeId' });
     }
 
@@ -302,6 +327,9 @@ async function handlePost(request, env) {
     }
 
     const postId = String(body.postId || newId('cp')).slice(0, 80);
+    if (!isSafeRtdbKey(postId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid postId' });
+    }
     const category = ['general', 'delay', 'safety', 'other', 'system'].includes(body.category)
         ? body.category
         : 'general';
@@ -359,7 +387,15 @@ async function handlePost(request, env) {
                 reportId,
             });
         }
-        await rtdbWrite(env, `route_community/${routeId}/posts/${postId}`, payload);
+        await rtdbUpdate(env, {
+            [`route_community/${routeId}/posts/${postId}`]: payload,
+            [`community_activity/${routeId}/${postId}`]: {
+                kind: 'post',
+                postId,
+                uid: payload.uid,
+                timestamp: payload.timestamp,
+            },
+        });
         return json(env, request, 200, { ok: true, post: payload });
     } catch (e) {
         return json(env, request, 500, { ok: false, error: e.message || 'Write failed' });
@@ -379,7 +415,14 @@ async function wipeStalePosts(env) {
             const ts = Number(post?.timestamp || 0);
             if (ts && ts < cut) {
                 try {
-                    await rtdbDelete(env, `route_community/${routeId}/posts/${postId}`);
+                    const updates = {
+                        [`route_community/${routeId}/posts/${postId}`]: null,
+                        [`community_activity/${routeId}/${postId}`]: null,
+                    };
+                    Object.keys(post?.replies || {}).forEach((replyId) => {
+                        updates[`community_activity/${routeId}/${replyId}`] = null;
+                    });
+                    await rtdbUpdate(env, updates);
                     deleted += 1;
                 } catch {
                     /* continue */

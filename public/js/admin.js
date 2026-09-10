@@ -299,6 +299,54 @@ function ntAdminDrillBackAction(stack, hashPanelId, fromPopState) {
     return { action: 'grid', stack: [] };
 }
 
+function ntAdminCommunityActivityRows(activityByRoute, seenByRoute, heldItems, routes) {
+    const routeMap = routes && typeof routes === 'object' ? routes : {};
+    const held = Array.isArray(heldItems) ? heldItems : [];
+    const ids = new Set([
+        ...Object.keys(routeMap),
+        ...Object.keys(activityByRoute || {}),
+        ...held.map((item) => String(item?.routeId || item?.publish?.routeId || '')).filter(Boolean),
+    ]);
+    return Array.from(ids).map((routeId) => {
+        const activities = Object.entries(activityByRoute?.[routeId] || {})
+            .map(([messageId, value]) => ({ messageId, ...(value || {}) }))
+            .filter((item) => Number.isFinite(Number(item.timestamp)))
+            .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+        const routeHeld = held.filter((item) =>
+            String(item?.routeId || item?.publish?.routeId || '') === routeId
+            && !['closed', 'resolved', 'approved', 'rejected'].includes(String(item?.status || 'open'))
+        );
+        const latestActivity = activities[activities.length - 1] || null;
+        const latestHeldAt = routeHeld.reduce((max, item) => Math.max(max, Number(item.timestamp || 0)), 0);
+        const seenAt = Number(seenByRoute?.[routeId] || 0);
+        return {
+            routeId,
+            routeName: routeMap[routeId]?.name || routeId,
+            activities,
+            held: routeHeld,
+            latestActivity,
+            latestAt: Math.max(Number(latestActivity?.timestamp || 0), latestHeldAt),
+            unread: activities.filter((item) => Number(item.timestamp || 0) > seenAt).length,
+        };
+    }).sort((a, b) => (b.latestAt - a.latestAt)
+        || String(a.routeName).localeCompare(String(b.routeName)));
+}
+
+function ntAdminCommunityActivityPath(routeId, activity) {
+    if (!routeId || !activity?.postId) return '';
+    const base = `route_community/${routeId}/posts/${activity.postId}`;
+    return activity.kind === 'reply' && activity.replyId
+        ? `${base}/replies/${activity.replyId}`
+        : base;
+}
+
+function ntAdminCommunitySeenPatch(adminUid, routeId, timestamp) {
+    if (!adminUid || !routeId) return {};
+    return {
+        [`admin_state/${adminUid}/community_seen/${routeId}`]: Number(timestamp || Date.now()),
+    };
+}
+
 const NT_ADMIN_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function ntAdminParseTimeOfDay(hhmm) {
@@ -1849,16 +1897,29 @@ const Admin = {
                 }
             }
 
-            // 5. Moderation queue (Phase 6)
-            const mqRes = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}`, {}, 6000);
+            // 5. Community activity, per operator and per route.
+            const mqRes = await window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}`, {}, 6000);
             if (mqRes.ok) {
                 const mqData = await mqRes.json();
                 let mqUnread = 0;
-                const localMqChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('mq_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localMqChecked, parseInt(adminState.mq_last_checked || '0'));
                 if (mqData && typeof mqData === 'object') {
-                    Object.values(mqData).forEach((i) => {
-                        if (i && i.status !== 'closed' && i.status !== 'resolved' && (i.timestamp || 0) > lastChecked) mqUnread++;
+                    Object.entries(mqData).forEach(([routeId, messages]) => {
+                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
+                        Object.values(messages || {}).forEach((item) => {
+                            if (Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
+                        });
+                    });
+                }
+                const heldRes = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}`, {}, 6000);
+                if (heldRes.ok) {
+                    const heldData = await heldRes.json();
+                    Object.values(heldData || {}).forEach((item) => {
+                        const kind = item?.publish?.kind;
+                        if (!['community_post', 'community_reply'].includes(kind)) return;
+                        if (['closed', 'resolved', 'approved', 'rejected'].includes(String(item?.status || 'open'))) return;
+                        const routeId = String(item?.routeId || item?.publish?.routeId || '');
+                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
+                        if (routeId && Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
                     });
                 }
                 totalUnread += mqUnread;
@@ -7949,7 +8010,7 @@ const Admin = {
         };
     },
 
-    // --- PHASE 6: COMMUNITY MODERATION QUEUE ---
+    // --- COMMUNITY MONITOR: ROUTE ACTIVITY + HELD MODERATION ---
     setupModerationQueueManager: () => {
         const alertPanel = document.getElementById('alert-panel');
         if (!alertPanel || !alertPanel.parentNode) return;
@@ -7970,13 +8031,17 @@ const Admin = {
             <div id="mq-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('shield', 'text-emerald-500 dark:text-emerald-400')}
-                    <span>Moderation Queue</span>
+                    <span>Community Monitor</span>
                 </span>
-                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread moderation items"></span>
+                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Community reports and held feedback. Approve held feedback into the Feedback Hub, or hide / shadow-ban community posts.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
+                <label class="px-1 mb-3">
+                    <span class="sr-only">Search community routes and messages</span>
+                    <input id="mq-search" type="search" placeholder="Search routes or messages" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                </label>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -8076,52 +8141,42 @@ const Admin = {
             if (!reportId) throw new Error('Missing moderation report id');
             const { kind, routeId, postId, replyId, payload } = validateHeldCommunityPublish(report);
             const routePath = `route_community/${routeId}/posts/${postId}`;
-            const routeUrlPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
-
-            if (kind === 'community_post') {
-                const publishRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (!publishRes.ok) throw new Error(`Community post publish failed (${publishRes.status})`);
-            } else {
-                let published = false;
-                for (let attempt = 0; attempt < 4 && !published; attempt += 1) {
-                    const postRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
-                        headers: { 'X-Firebase-ETag': 'true' },
-                    });
-                    if (!postRes.ok) throw new Error(`Parent post read failed (${postRes.status})`);
-                    const etag = postRes.headers.get('ETag');
-                    const post = await postRes.json();
-                    if (!etag || !post || typeof post !== 'object') throw new Error('Parent post no longer exists');
-                    const replies = post.replies && typeof post.replies === 'object' ? post.replies : {};
-                    replies[replyId] = payload;
-                    post.replies = replies;
-                    post.replyCount = Object.keys(replies).length;
-                    const publishRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'If-Match': etag,
-                        },
-                        body: JSON.stringify(post),
-                    });
-                    if (publishRes.status === 412) continue;
-                    if (!publishRes.ok) throw new Error(`Community reply publish failed (${publishRes.status})`);
-                    published = true;
-                }
-                if (!published) throw new Error('Community reply changed while approving. Try again.');
+            let replyCount = 0;
+            if (kind === 'community_reply') {
+                const repliesRes = await fetch(`${dynamicEndpoint}${routePath}/replies.json?auth=${secret}`);
+                if (!repliesRes.ok) throw new Error(`Parent replies read failed (${repliesRes.status})`);
+                const replies = await repliesRes.json() || {};
+                replyCount = Object.keys(replies).filter((id) => id !== replyId).length + 1;
             }
-
-            await markModerationStatus(dynamicEndpoint, secret, reportId, {
+            const approvedPatch = {
                 status: 'approved',
                 resolution: 'approved',
                 approvedAt: Date.now(),
                 approvedCommunityPath: kind === 'community_post'
                     ? routePath
                     : `${routePath}/replies/${replyId}`,
+            };
+            const activity = {
+                kind: kind === 'community_post' ? 'post' : 'reply',
+                postId,
+                ...(kind === 'community_reply' ? { replyId } : {}),
+                uid: payload.uid,
+                timestamp: payload.timestamp,
+            };
+            const queueRecord = { ...report, ...approvedPatch };
+            delete queueRecord._key;
+            const updates = {
+                [kind === 'community_post' ? routePath : `${routePath}/replies/${replyId}`]: payload,
+                [`community_activity/${routeId}/${kind === 'community_post' ? postId : replyId}`]: activity,
+                [`moderation_queue/${reportId}`]: queueRecord,
+            };
+            if (kind === 'community_reply') updates[`${routePath}/replyCount`] = replyCount;
+            const publishRes = await fetch(`${dynamicEndpoint}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
             });
+            if (!publishRes.ok) throw new Error(`Community publish failed (${publishRes.status})`);
         };
 
         Admin.rejectHeldCommunity = async (report) => {
@@ -8223,36 +8278,41 @@ const Admin = {
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
             try {
                 const secret = await Admin.getAuthKey();
+                if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const authQ = secret ? `?auth=${secret}` : '';
-                const res = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json${authQ}`, {}, 8000);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const items = data
-                    ? Object.entries(data).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                const authQ = `?auth=${secret}`;
+                const [activityRes, queueRes, seenRes] = await Promise.all([
+                    window.guardianFetch(`${dynamicEndpoint}community_activity.json${authQ}`, {}, 8000),
+                    window.guardianFetch(`${dynamicEndpoint}moderation_queue.json${authQ}`, {}, 8000),
+                    window.guardianFetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen.json${authQ}`, {}, 8000),
+                ]);
+                if (!activityRes.ok || !queueRes.ok || !seenRes.ok) {
+                    throw new Error(`HTTP ${activityRes.status}/${queueRes.status}/${seenRes.status}`);
+                }
+                const activityData = await activityRes.json() || {};
+                const queueData = await queueRes.json();
+                const seenData = await seenRes.json() || {};
+                const items = queueData
+                    ? Object.entries(queueData).map(([key, v]) => ({ ...v, _key: key })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
                     : [];
                 Admin._mqCache = Object.fromEntries(items.map((r) => [r.reportId || r._key, r]));
-
-                if (typeof safeStorage !== 'undefined') safeStorage.setItem('mq_last_checked', String(Date.now()));
-                try {
-                    await fetch(`${dynamicEndpoint}admin_state/${Admin.currentUser.uid}/mq_last_checked.json?auth=${secret}`, {
-                        method: 'PUT', body: JSON.stringify(Date.now())
-                    });
-                } catch (e) { /* optional */ }
-
+                const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
+                const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
+                Admin._communityMonitorRows = rows;
                 const badge = document.getElementById('mq-unread-badge');
-                if (badge) badge.classList.add('hidden');
-
-                if (!items.length) {
-                    list.innerHTML = '<p class="text-xs text-gray-400 text-center py-6">Queue is empty.</p>';
-                    return;
+                const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
+                if (badge) {
+                    badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
+                    badge.classList.toggle('hidden', totalUnread < 1);
                 }
 
-                list.innerHTML = items.slice(0, 100).map((r) => {
+                const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
+                const formatWhen = (value) => value ? new Date(Number(value)).toLocaleString() : 'No activity yet';
+                const renderHeld = (r) => {
                     const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
-                    const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                    const snippet = esc(r.snippet || r.body || r.publish?.payload?.body || '');
                     const closed = status === 'closed' || status === 'resolved' || status === 'approved' || status === 'rejected';
                     const isFeedbackHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
                         && (r.publish?.kind === 'feedback' || r.source === 'feedback' || r.source === 'feedback_thread');
@@ -8281,17 +8341,191 @@ const Admin = {
                                 ${r.targetUid ? `<button type="button" class="mq-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${r.targetUid || ''}">Shadow ban</button>` : ''}
                                 <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Close</button>
                             </div>`);
-                    return `
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${r.reportId || r._key}">
+                    return `<div class="${isCommunityHold ? 'border-2 border-dashed border-amber-400 bg-amber-50/80 dark:bg-amber-950/20' : 'border border-rose-300 bg-rose-50/70 dark:bg-rose-950/20'} rounded-xl p-3 text-left ${closed ? 'opacity-50' : ''}" data-mq-id="${esc(r.reportId || r._key)}" data-community-held="${isCommunityHold ? 'true' : 'false'}">
                             <div class="flex justify-between gap-2 mb-1">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${type} - ${r.routeId || '-'}</p>
-                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${when}</span>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${isCommunityHold ? 'HELD - ' : ''}${esc(type)}</p>
+                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${esc(when)}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 font-mono mb-1 break-all">${metaLine}</p>
+                            <p class="text-[10px] text-gray-500 font-mono mb-1 break-all">${esc(metaLine)}</p>
                             ${snippet ? `<p class="text-[11px] text-gray-700 dark:text-gray-300 mb-2">"${snippet}"</p>` : ''}
                             ${actions}
                         </div>`;
-                }).join('');
+                };
+
+                const fetchPreview = async (row) => {
+                    if (!row.latestActivity) return row.held[0]?.snippet || row.held[0]?.publish?.payload?.body || '';
+                    const path = ntAdminCommunityActivityPath(row.routeId, row.latestActivity);
+                    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+                    try {
+                        const previewRes = await window.guardianFetch(`${dynamicEndpoint}${encodedPath}.json${authQ}`, {}, 5000);
+                        if (!previewRes.ok) return '';
+                        const message = await previewRes.json();
+                        return String(message?.body || '');
+                    } catch (e) {
+                        return '';
+                    }
+                };
+                const previews = await Promise.all(rows.map(fetchPreview));
+                list.innerHTML = rows.map((row, index) => `
+                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]}`.toLowerCase())}">
+                        <summary class="cursor-pointer list-none p-3 flex items-start justify-between gap-3">
+                            <span class="min-w-0">
+                                <span class="block text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.routeName)}</span>
+                                <span class="block text-[11px] text-gray-600 dark:text-gray-300 truncate mt-0.5">${esc(previews[index] || (row.held.length ? 'Held item awaiting review' : 'No published messages'))}</span>
+                                <span class="block text-[9px] font-mono text-gray-400 mt-1">${esc(formatWhen(row.latestAt))}</span>
+                            </span>
+                            <span class="flex items-center gap-2 shrink-0">
+                                ${row.held.length ? `<span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[9px] font-black">${row.held.length} held</span>` : ''}
+                                <span class="community-route-unread ${row.unread ? '' : 'hidden'} rounded-full bg-emerald-500 text-white min-w-5 h-5 px-1 inline-flex items-center justify-center text-[9px] font-black">${row.unread}</span>
+                            </span>
+                        </summary>
+                        <div class="community-monitor-route-body border-t border-gray-100 dark:border-gray-700 p-3 space-y-2">
+                            ${row.held.map(renderHeld).join('')}
+                            <div class="community-route-conversation text-xs text-gray-400 text-center py-3">Open to load conversation.</div>
+                        </div>
+                    </details>
+                `).join('');
+
+                const renderMessage = (message, routeId, isReply = false) => {
+                    const category = message.category && message.category !== 'general'
+                        ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
+                        : '';
+                    const quote = message.replyTo?.body
+                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b><br>${esc(message.replyTo.body)}</div>`
+                        : '';
+                    const postId = message.postId || '';
+                    return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message>
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${category}</span>
+                            <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
+                        </div>
+                        ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="cm-hide-message text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
+                            ${message.uid ? `<button type="button" class="cm-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                        </div>
+                    </div>`;
+                };
+
+                Admin._communityLoadRoute = async (details) => {
+                    if (!details || details.dataset.loaded === 'true') return;
+                    const routeId = details.dataset.communityRoute;
+                    const target = details.querySelector('.community-route-conversation');
+                    target.innerHTML = '<p class="py-3">Loading conversation...</p>';
+                    const routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${authQ}`, {}, 8000);
+                    if (!routeRes.ok) throw new Error(`Route load failed (${routeRes.status})`);
+                    const postsData = await routeRes.json() || {};
+                    const posts = Object.values(postsData).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                    const missingActivity = {};
+                    posts.forEach((post) => {
+                        if (post?.postId && post.body && !post.hidden && !post.pendingReview && !activityData?.[routeId]?.[post.postId]) {
+                            missingActivity[`community_activity/${routeId}/${post.postId}`] = {
+                                kind: 'post',
+                                postId: post.postId,
+                                uid: post.uid,
+                                timestamp: post.timestamp,
+                            };
+                        }
+                        Object.values(post?.replies || {}).forEach((reply) => {
+                            if (!reply?.replyId || !reply.body || reply.hidden || reply.pendingReview || activityData?.[routeId]?.[reply.replyId]) return;
+                            missingActivity[`community_activity/${routeId}/${reply.replyId}`] = {
+                                kind: 'reply',
+                                postId: post.postId,
+                                replyId: reply.replyId,
+                                uid: reply.uid,
+                                timestamp: reply.timestamp,
+                            };
+                        });
+                    });
+                    if (Object.keys(missingActivity).length) {
+                        try {
+                            const backfillRes = await fetch(`${dynamicEndpoint}.json${authQ}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(missingActivity),
+                            });
+                            if (!backfillRes.ok) throw new Error(`Activity backfill failed (${backfillRes.status})`);
+                        } catch (e) {
+                            console.warn('Community activity backfill failed', e);
+                        }
+                    }
+                    target.innerHTML = posts.length ? posts.map((post) => {
+                        const replies = Object.values(post.replies || {}).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                        return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage({ ...reply, postId: post.postId }, routeId, true)).join('')}`;
+                    }).join('') : '<p class="py-3">No published messages on this route.</p>';
+                    details.dataset.loaded = 'true';
+                    details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
+                };
+
+                const markRouteSeen = async (details) => {
+                    const routeId = details.dataset.communityRoute;
+                    const seenAt = Date.now();
+                    const seenRes = await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen/${encodeURIComponent(routeId)}.json${authQ}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(seenAt),
+                    });
+                    if (!seenRes.ok) throw new Error(`Seen update failed (${seenRes.status})`);
+                    const routeBadge = details.querySelector('.community-route-unread');
+                    routeBadge.textContent = '0';
+                    routeBadge.classList.add('hidden');
+                    const remaining = Array.from(list.querySelectorAll('.community-route-unread:not(.hidden)'))
+                        .reduce((sum, el) => sum + Number(el.textContent || 0), 0);
+                    if (badge) {
+                        badge.textContent = remaining > 99 ? '99+' : String(remaining);
+                        badge.classList.toggle('hidden', remaining < 1);
+                    }
+                };
+
+                list.querySelectorAll('.community-monitor-route').forEach((details) => {
+                    details.addEventListener('toggle', async () => {
+                        if (!details.open) return;
+                        try {
+                            await Promise.all([Admin._communityLoadRoute(details), markRouteSeen(details)]);
+                        } catch (e) {
+                            const target = details.querySelector('.community-route-conversation');
+                            if (target && details.dataset.loaded !== 'true') target.textContent = e?.message || 'Could not load route.';
+                        }
+                    });
+                });
+
+                const search = document.getElementById('mq-search');
+                if (search) {
+                    search.oninput = async () => {
+                        const query = search.value.trim().toLowerCase();
+                        const cards = Array.from(list.querySelectorAll('.community-monitor-route'));
+                        if (query.length >= 3) {
+                            await Promise.all(cards.filter((card) =>
+                                card.dataset.loaded !== 'true'
+                            ).map((card) => Admin._communityLoadRoute(card).catch(() => {})));
+                        }
+                        cards.forEach((card) => {
+                            card.classList.toggle('hidden', !!query && !String(card.dataset.communitySearch || '').includes(query));
+                        });
+                    };
+                }
+
+                list.addEventListener('click', async (event) => {
+                    const hide = event.target.closest?.('.cm-hide-message');
+                    if (hide) {
+                        event.preventDefault();
+                        const routeId = hide.dataset.route;
+                        const postId = hide.dataset.post;
+                        const replyId = hide.dataset.reply;
+                        const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}/hidden.json`;
+                        const put = await fetch(`${dynamicEndpoint}${path}${authQ}`, { method: 'PUT', body: 'true' });
+                        if (put.ok) {
+                            hide.closest('[data-community-message]')?.classList.add('opacity-50', 'ring-1', 'ring-red-400');
+                            if (typeof showToast === 'function') showToast('Message hidden', 'success');
+                        }
+                        return;
+                    }
+                    const ban = event.target.closest?.('.cm-shadow-ban');
+                    if (ban) {
+                        event.preventDefault();
+                        await Admin.applyShadowBan(ban.dataset.uid);
+                    }
+                });
 
                 list.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {

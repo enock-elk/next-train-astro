@@ -256,7 +256,7 @@ function currentAllowlistedUser() {
     return isAdminEmail(user.email) ? user : null;
 }
 
-function openDevHubUi() {
+export function openDevHubUi() {
     const devModal = document.getElementById('dev-modal');
     if (!devModal) return;
     try {

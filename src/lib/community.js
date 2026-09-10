@@ -14,6 +14,7 @@ import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './c
 import { safeStorage, escapeHTML } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
+import { isAdminAuthed } from './admin-chrome.js';
 import { showToast, triggerHaptic, openSmoothModal } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
@@ -393,6 +394,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     uid: acct.uid,
                     displayName: acct.displayName || 'Passenger',
                     photoURL: await publicCommuterPhoto(acct),
+                    email: acct.email || null,
                     deviceId: getDeviceId(),
                     timestamp: Date.now(),
                     hidden: false,
@@ -418,6 +420,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         uid: acct.uid,
         displayName: acct.displayName || 'Passenger',
         photoURL: await publicCommuterPhoto(acct),
+        email: acct.email || null,
         deviceId: getDeviceId(),
         timestamp: Date.now(),
         hidden: false,
@@ -768,7 +771,7 @@ function openReactionSheet(postId, routeId) {
             <div class="absolute left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 w-[min(92vw,22rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 px-3 py-3">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center mb-2">React</p>
                 <div class="flex items-center justify-between gap-1" id="community-reaction-sheet-emojis"></div>
-                <div class="mt-3 grid grid-cols-2 gap-2">
+                <div class="mt-3 grid grid-cols-2 gap-2" id="community-reaction-sheet-actions">
                     <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
                     <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
                 </div>
@@ -779,6 +782,17 @@ function openReactionSheet(postId, routeId) {
 
     sheet.dataset.postId = postId;
     sheet.dataset.routeId = routeId;
+    const post = findCachedPost(postId);
+    sheet.dataset.uid = post?.uid || '';
+    sheet.dataset.email = post?.email || '';
+    const actions = sheet.querySelector('#community-reaction-sheet-actions');
+    if (actions) {
+        actions.innerHTML = `
+                    <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
+                    <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
+                    ${isAdminAuthed() ? '<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>' : ''}
+        `;
+    }
     const { myEmoji } = summarizeReactions(postId);
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
     if (row) {
@@ -827,7 +841,7 @@ function renderPostCard(post, routeId) {
         </div>
         ${avatar}
         <div class="community-bubble-wrap">
-          <article class="community-post min-w-0" data-post-id="${postId}" data-uid="${uid}" data-category="${escapeHTML(post.category || 'general')}">
+          <article class="community-post min-w-0" data-post-id="${postId}" data-uid="${uid}" data-email="${escapeHTML(post.email || '')}" data-category="${escapeHTML(post.category || 'general')}">
             <div class="${bubbleCls} shadow-sm">
               ${nameHtml}
               <div class="community-bubble-body">
@@ -1274,13 +1288,13 @@ function liveModerateComposer() {
     const btn = document.getElementById('community-post-btn');
     if (!composer || !errEl) return;
     const safety = checkContentSafety(composer.value, { live: true });
-    if (safety.verdict === 'block') {
+    if (safety.verdict === 'block' && safety.reason !== 'url') {
         errEl.textContent = safety.message;
         if (btn) btn.disabled = true;
         return;
     }
     if (btn && !communityWaitCancel) btn.disabled = false;
-    if (errEl && (safety.reason === 'url' || safety.reason === 'profanity' || /allowed|swearing|links/i.test(errEl.textContent || ''))) {
+    if (errEl && (safety.reason === 'url' || safety.reason === 'profanity' || /allowed|swearing|links|Couldn't post/i.test(errEl.textContent || ''))) {
         errEl.textContent = '';
     }
 }
@@ -1488,6 +1502,28 @@ export function bindCommunityUi() {
                 snippet: String(post?.body || '').slice(0, 80),
             });
             showToast(result.ok ? 'Thanks - report sent to moderation.' : (result.message || 'Report failed'), result.ok ? 'success' : 'error');
+            return;
+        }
+
+        const sheetLookup = t.closest?.('.community-sheet-lookup');
+        if (sheetLookup) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const sheet = document.getElementById('community-reaction-sheet');
+            const uid = sheet?.dataset.uid || '';
+            const email = sheet?.dataset.email || '';
+            closeReactionSheet();
+            const { ensureAdminLoaded, openDevHubUi } = await import('./admin-bridge.js');
+            const Admin = await ensureAdminLoaded();
+            if (!Admin) {
+                showToast('Admin tools unavailable', 'error');
+                return;
+            }
+            openDevHubUi();
+            try { Admin.setupUserTrustManager?.(); } catch { /* ignore */ }
+            setTimeout(() => {
+                Admin.openUserTrustLookup?.({ uid, email });
+            }, 80);
             return;
         }
 

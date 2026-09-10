@@ -222,7 +222,7 @@ export function checkContentSafety(text, { live = false, allowLinks = false } = 
                 ok: false,
                 verdict: 'block',
                 reason: 'url',
-                message: 'Only nexttrain.co.za links are allowed. Remove other websites and try again.',
+                message: "Couldn't post that.",
             };
         }
     }

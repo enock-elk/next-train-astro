@@ -101,7 +101,7 @@ function hasBlockedProfanity(text) {
 function sanitizeBody(raw) {
     const text = stripHtml(raw);
     if (hasDisallowedUrl(text)) {
-        return { ok: false, error: 'Only nexttrain.co.za links are allowed. Remove other websites and try again.' };
+        return { ok: false, error: "Couldn't post that." };
     }
     if (hasBlockedProfanity(text)) {
         return { ok: false, error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
@@ -326,6 +326,7 @@ async function handlePost(request, env) {
         uid: user.uid,
         displayName: String(body.displayName || user.displayName || 'Passenger').slice(0, 80),
         photoURL: body.photoURL || user.photoURL || null,
+        email: String(body.email || user.email || '').slice(0, 120) || null,
         deviceId: String(body.deviceId || 'unknown').slice(0, 120),
         timestamp: Date.now(),
         hidden: false,

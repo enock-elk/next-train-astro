@@ -6555,7 +6555,7 @@ const Admin = {
                                 </div>
                             </div>
                         </div>
-                        <div class="feedback-thread-chat space-y-3 p-2 sm:p-3 bg-[#efeae2] dark:bg-[#0b141a]">
+                        <div class="feedback-thread-chat nt-pack-wallpaper relative space-y-3 p-2 sm:p-3">
                 `;
 
                 let lastRenderedDate = "";
@@ -8158,6 +8158,30 @@ const Admin = {
         };
         tabBans?.addEventListener('click', () => setUtTab('bans'));
         tabLookup?.addEventListener('click', () => setUtTab('lookup'));
+        Admin.setUtTab = setUtTab;
+        Admin.openUserTrustLookup = ({ uid, email } = {}) => {
+            const needle = String(uid || email || '').trim();
+            if (!needle) {
+                if (typeof showToast === 'function') showToast('No rider id on that post', 'warning');
+                return;
+            }
+            Admin.setupUserTrustManager();
+            if (typeof Admin.deepLinkToPanel === 'function') {
+                Admin.deepLinkToPanel('user-trust-panel');
+            } else {
+                Admin.showDrilledPanel?.('user-trust-panel');
+            }
+            const body = document.getElementById('ut-body');
+            const chevron = document.getElementById('ut-chevron');
+            const header = document.getElementById('ut-header-btn');
+            body?.classList.remove('hidden');
+            chevron?.classList.remove('-rotate-90');
+            if (header && body && !body.classList.contains('hidden')) header.classList.add('mb-4');
+            Admin.setUtTab?.('lookup');
+            const input = document.getElementById('ut-uid-input');
+            if (input) input.value = needle;
+            setTimeout(() => Admin.lookupUserTrust?.(), 50);
+        };
         header.onclick = () => {
             if (Admin.isGridMode) return;
             body.classList.toggle('hidden');

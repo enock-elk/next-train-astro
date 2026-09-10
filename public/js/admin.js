@@ -16557,7 +16557,7 @@ const Admin = {
         // Re-init if an older admin session left a panel without newer controls
         if (
             maintPanel.dataset.loaded === "true"
-            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn') || !document.getElementById('exp-features-header'))
+            && (!document.getElementById('maint-mode-header') || !document.getElementById('cf-purge-header-btn') || !document.getElementById('cf-purge-everything-btn') || !document.getElementById('deploy-production-btn') || !document.getElementById('exp-features-header') || !document.getElementById('auth-providers-header'))
         ) {
             delete maintPanel.dataset.loaded;
             maintPanel.innerHTML = '';
@@ -16654,6 +16654,32 @@ const Admin = {
                         <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
+                    </div>
+                </div>
+
+                <!-- Passenger account authentication providers -->
+                <div class="bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="auth-providers-header" class="w-full px-3 py-3 bg-slate-100/60 dark:bg-slate-900/40 text-left text-[10px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-slate-200/60 dark:hover:bg-slate-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-slate-600 dark:text-slate-300">${Admin.icon('user', 'w-4 h-4')}</span> Account sign-in
+                        </span>
+                        <svg id="auth-providers-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="auth-providers-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-snug">Choose which sign-in options commuters can use. Disabled options remain visible as not available.</p>
+                        <label class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100">Google</span>
+                            <input type="checkbox" id="auth-provider-google" class="rounded border-slate-400 text-slate-600 focus:ring-slate-500" checked>
+                        </label>
+                        <label class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100">Email and password</span>
+                            <input type="checkbox" id="auth-provider-email" class="rounded border-slate-400 text-slate-600 focus:ring-slate-500" checked>
+                        </label>
+                        <label class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100">Facebook</span>
+                            <input type="checkbox" id="auth-provider-facebook" class="rounded border-slate-400 text-slate-600 focus:ring-slate-500">
+                        </label>
+                        <button type="button" id="auth-providers-save" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save sign-in options</button>
                     </div>
                 </div>
 
@@ -17082,6 +17108,13 @@ const Admin = {
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const authProvidersHeader = document.getElementById('auth-providers-header');
+        const authProvidersBody = document.getElementById('auth-providers-body');
+        const authProvidersChevron = document.getElementById('auth-providers-chevron');
+        const authProviderGoogle = document.getElementById('auth-provider-google');
+        const authProviderEmail = document.getElementById('auth-provider-email');
+        const authProviderFacebook = document.getElementById('auth-provider-facebook');
+        const authProvidersSave = document.getElementById('auth-providers-save');
         const expFeaturesHeader = document.getElementById('exp-features-header');
         const expFeaturesBody = document.getElementById('exp-features-body');
         const expFeaturesChevron = document.getElementById('exp-features-chevron');
@@ -17145,6 +17178,13 @@ const Admin = {
                 expFeaturesBody.classList.toggle('hidden');
                 if (expFeaturesBody.classList.contains('hidden')) expFeaturesChevron?.classList.add('-rotate-90');
                 else expFeaturesChevron?.classList.remove('-rotate-90');
+            };
+        }
+        if (authProvidersHeader && authProvidersBody) {
+            authProvidersHeader.onclick = () => {
+                authProvidersBody.classList.toggle('hidden');
+                if (authProvidersBody.classList.contains('hidden')) authProvidersChevron?.classList.add('-rotate-90');
+                else authProvidersChevron?.classList.remove('-rotate-90');
             };
         }
         paintExpRouteBox(expMapRoutes, expMapSelected);
@@ -17351,6 +17391,16 @@ const Admin = {
                     }
                 } catch (fe) { /* optional config */ }
 
+                try {
+                    const resAuthProviders = await fetch(`${dynamicEndpoint}config/auth_providers.json`);
+                    if (resAuthProviders.ok) {
+                        const cfg = await resAuthProviders.json();
+                        if (authProviderGoogle) authProviderGoogle.checked = typeof cfg?.google === 'boolean' ? cfg.google : true;
+                        if (authProviderEmail) authProviderEmail.checked = typeof cfg?.email === 'boolean' ? cfg.email : true;
+                        if (authProviderFacebook) authProviderFacebook.checked = typeof cfg?.facebook === 'boolean' ? cfg.facebook : false;
+                    }
+                } catch (ape) { /* keep safe defaults */ }
+
                 } catch(e) { console.warn("Failed to check system status"); }
         }
         checkStatus();
@@ -17424,6 +17474,34 @@ const Admin = {
                     }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save experimental features.', 'error');
+                }
+            };
+        }
+
+        if (authProvidersSave) {
+            authProvidersSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const payload = {
+                        google: !!authProviderGoogle?.checked,
+                        email: !!authProviderEmail?.checked,
+                        facebook: !!authProviderFacebook?.checked,
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/auth_providers.json?auth=${secret}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    if (typeof showToast === 'function') showToast('Sign-in options saved', 'success');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save sign-in options.', 'error');
                 }
             };
         }

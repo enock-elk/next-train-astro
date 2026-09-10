@@ -16,6 +16,11 @@ import { bootFirebase } from './firebase-boot.js';
 import { isAdminEmail, SUPPORT_EMAIL } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { safeStorage } from './utils.js';
+import {
+    getAuthProviders,
+    isAuthProviderActionDisabled,
+    loadAuthProviders,
+} from './auth-providers.js';
 import { $deviceId } from '../store.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
@@ -30,6 +35,7 @@ export const $account = atom({
 
 let _inited = false;
 let _unsubAuth = null;
+let _accountUiBusy = false;
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
@@ -417,6 +423,18 @@ export function syncAccountSettingsUi(state = $account.get()) {
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
 }
 
+export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('[data-account-provider]').forEach((button) => {
+        const provider = button.getAttribute('data-account-provider');
+        const unavailable = isAuthProviderActionDisabled(provider, providers, false);
+        button.disabled = isAuthProviderActionDisabled(provider, providers, busy);
+        button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+        button.classList.toggle('nt-account-provider-disabled', unavailable);
+        button.querySelector('[data-provider-unavailable]')?.classList.toggle('hidden', !unavailable);
+    });
+}
+
 function escapeAccountHtml(s) {
     return String(s || '').replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -507,12 +525,15 @@ export function bindAccountUi() {
     if (typeof document === 'undefined') return;
     if (window.__ntAccountUiBound) {
         syncAccountSettingsUi();
+        syncAuthProviderUi();
         return;
     }
     window.__ntAccountUiBound = true;
 
     $account.subscribe(syncAccountSettingsUi);
     syncAccountSettingsUi();
+    syncAuthProviderUi();
+    loadAuthProviders().then((providers) => syncAuthProviderUi(providers)).catch(() => {});
     import('./rider-marks.js').then((m) => m.hydrateRemoteMarks()).catch(() => {});
 
     const open = () => {
@@ -524,10 +545,12 @@ export function bindAccountUi() {
     document.getElementById('account-modal-close')?.addEventListener('click', closeAccountModal);
 
     const setBusy = (busy) => {
+        _accountUiBusy = !!busy;
         document.querySelectorAll('[data-account-action]').forEach((el) => {
-            el.disabled = !!busy;
+            if (!el.hasAttribute('data-account-provider')) el.disabled = _accountUiBusy;
             el.classList.toggle('opacity-60', !!busy);
         });
+        syncAuthProviderUi(getAuthProviders(), _accountUiBusy);
         if (busy) {
             const err = document.getElementById('account-error');
             if (err) err.textContent = '';

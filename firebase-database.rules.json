@@ -11,6 +11,10 @@
       "schedule_override": { ".read": true },
       "features": { ".read": true },
       "feature_grants": { ".read": true },
+      "auth_providers": {
+        ".read": true,
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      },
       "shadow_ban_mode": {
         ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
       }

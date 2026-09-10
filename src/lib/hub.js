@@ -38,6 +38,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
+import { markAppUpdatedToast } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -185,11 +186,11 @@ function autosizeMessagesThreadInput() {
     el.style.overflowY = el.scrollHeight > maxH + 1 ? 'auto' : 'hidden';
 }
 
-const COMMUTER_FEEDBACK_MODAL_IDS = ['feedback-modal', 'messages-thread-modal'];
+const COMMUTER_FEEDBACK_MODAL_IDS = ['feedback-modal', 'messages-thread-modal', 'account-modal'];
 let feedbackViewportBound = false;
 
 function keepFeedbackFieldVisible(field) {
-    if (!field?.closest?.('#feedback-modal, #messages-thread-modal')) return;
+    if (!field?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
     const scroller = field.closest('[data-feedback-scroll]')
         || field.closest('#messages-thread-modal > div')
         || field.closest('#feedback-modal > div');
@@ -214,7 +215,7 @@ function syncFeedbackModalViewport() {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
     const cssVv = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nt-vv-h')) || 0;
-    const editing = !!document.activeElement?.closest?.('#feedback-modal, #messages-thread-modal');
+    const editing = !!document.activeElement?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal');
     // Prefer the live visual viewport while typing. --nt-vv-h can stay tall if
     // the IME overlays instead of resizing layout.
     const height = Math.max(240, Math.round(
@@ -237,7 +238,7 @@ function syncFeedbackModalViewport() {
         modal.style.maxHeight = `${height}px`;
         modal.style.bottom = 'auto';
         const card = modal.querySelector(':scope > div');
-        if (id === 'messages-thread-modal') {
+        if (id === 'messages-thread-modal' || id === 'account-modal') {
             modal.style.paddingBottom = '0px';
             if (card) {
                 card.style.maxHeight = '100%';
@@ -256,7 +257,7 @@ function bindFeedbackViewportHandling() {
     const update = () => {
         syncFeedbackModalViewport();
         const active = document.activeElement;
-        if (active?.closest?.('#feedback-modal, #messages-thread-modal')) {
+        if (active?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) {
             requestAnimationFrame(() => keepFeedbackFieldVisible(active));
         }
     };
@@ -264,7 +265,7 @@ function bindFeedbackViewportHandling() {
     window.visualViewport?.addEventListener('resize', update, { passive: true });
     window.visualViewport?.addEventListener('scroll', update, { passive: true });
     document.addEventListener('focusin', (event) => {
-        if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal')) return;
+        if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
         syncFeedbackModalViewport();
         [80, 220, 450].forEach((ms) => {
             setTimeout(() => {
@@ -535,6 +536,7 @@ export async function performHardCacheClear(source = 'modal_confirm') {
         console.warn('🛡️ Guardian: Failed to fully clear caches', e);
     }
     markPendingReload('cache_sync', 500);
+    markAppUpdatedToast();
     setTimeout(() => {
         window.location.href = window.location.pathname + '?v=' + Date.now();
     }, 500);
@@ -1655,6 +1657,7 @@ export function initHub() {
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
     window.openFeedbackModal = openFeedbackModal;
+    window.syncFeedbackModalViewport = syncFeedbackModalViewport;
     injectRichTextStyles();
     initAlertsChannel();
     bindPasswordReveal({

@@ -271,14 +271,14 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- ACCOUNT -->
-<div id="account-modal" class="fixed inset-0 bg-black/50 z-[120] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-[2px] transition-opacity duration-300">
-    <div class="bg-[#f2f2f7] dark:bg-black rounded-t-[12px] sm:rounded-[12px] shadow-2xl w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar transform transition-all">
-        <div class="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[#f2f2f7]/95 dark:bg-black/95 backdrop-blur">
+<div id="account-modal" class="fixed left-0 right-0 bg-black/50 z-[120] hidden flex items-end justify-center p-0 backdrop-blur-[2px] transition-opacity duration-300">
+    <div class="bg-[#f2f2f7] dark:bg-black rounded-t-2xl shadow-2xl w-full max-w-md h-full flex flex-col overflow-hidden transform transition-all border-b-0">
+        <div class="shrink-0 z-10 flex items-center justify-between px-4 py-3 bg-[#f2f2f7]/95 dark:bg-black/95 backdrop-blur">
             <h3 class="text-[28px] leading-tight font-bold text-gray-900 dark:text-white tracking-tight">Account</h3>
             <button type="button" id="account-modal-close" class="px-2 py-1 text-[17px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none" aria-label="Close">Done</button>
         </div>
 
-        <div class="px-4 pb-6 space-y-6">
+        <div class="px-4 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
             <p id="account-error" class="px-1 text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
 
             <!-- Signed-in panel -->
@@ -412,7 +412,7 @@ import { withBase } from '../lib/config.js';
                     <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
                     <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                 </div>
-                <div>
+                <div id="account-contrib-wrap">
                     <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
                     <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                 </div>
@@ -539,8 +539,11 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="messages-thread-list" class="inbox-thread-list flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-[#efeae2] dark:bg-gray-950">
-            <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
+        <div class="relative flex-1 min-h-0">
+            <div class="nt-pack-wallpaper" aria-hidden="true"></div>
+            <div id="messages-thread-list" class="inbox-thread-list relative z-[1] h-full overflow-y-auto custom-scrollbar p-3 space-y-2 bg-transparent">
+                <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
+            </div>
         </div>
         <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
             <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 empty:hidden" aria-live="polite"></p>
@@ -575,7 +578,8 @@ import { withBase } from '../lib/config.js';
 
 <style is:global>
   #feedback-modal,
-  #messages-thread-modal {
+  #messages-thread-modal,
+  #account-modal {
     top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px));
     bottom: auto;
     height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
@@ -599,12 +603,18 @@ import { withBase } from '../lib/config.js';
     padding-left: 0;
     padding-right: 0;
   }
-  #messages-thread-modal > div {
+  #messages-thread-modal > div,
+  #account-modal > div {
     width: 100%;
     height: 100%;
     max-height: 100%;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+  }
+  #account-modal {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
   }
   #messages-thread-form {
     flex-shrink: 0;
@@ -752,10 +762,8 @@ import { withBase } from '../lib/config.js';
     background: #1f2937;
   }
   #feedback-panel .feedback-thread-chat {
-    background: #efeae2;
-  }
-  html.dark #feedback-panel .feedback-thread-chat {
-    background: #0b141a;
+    position: relative;
+    background: transparent;
   }
 </style>
 

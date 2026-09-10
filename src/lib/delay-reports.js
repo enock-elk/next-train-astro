@@ -307,8 +307,66 @@ function flagSvgHtml(status) {
     return `<svg class="nt-train-flag w-3.5 h-3.5 ml-1 shrink-0 ${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3v18M4 4h11.2c.9 0 1.4 1 .8 1.7L14 9.5l2 3.8c.6.7.1 1.7-.8 1.7H4"/></svg>`;
 }
 
+function shortStatusWord(agg) {
+    if (!agg) return '';
+    if (agg.status === 'cancelled') return 'Cancelled';
+    if (agg.status === 'early') return 'Early';
+    if (agg.status === 'on_time') return 'On time';
+    if (agg.status === 'late') return 'Late';
+    return '';
+}
+
 function paintTrainFlags(root, byRoute) {
-    (root || document).querySelectorAll?.('[data-open-train-report]').forEach((btn) => {
+    const host = root || document;
+    host.querySelectorAll?.('[data-nt-time-tile]').forEach((tile) => {
+        const routeId = tile.getAttribute('data-route');
+        const trainId = tile.getAttribute('data-train');
+        const scheduledTime = tile.getAttribute('data-dep');
+        const station = tile.getAttribute('data-station');
+        const agg = aggregateTrainReports(byRoute[routeId] || [], {
+            routeId, trainId, scheduledTime, station,
+        });
+        let statusEl = tile.querySelector('[data-nt-time-status]');
+        if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.setAttribute('data-nt-time-status', '');
+            tile.appendChild(statusEl);
+        }
+        const word = shortStatusWord(agg);
+        if (!word) {
+            statusEl.textContent = '';
+            statusEl.classList.add('hidden');
+            return;
+        }
+        statusEl.classList.remove('hidden');
+        statusEl.className = `text-[9px] font-black uppercase tracking-wide mt-0.5 ${statusColorClass(agg.status)}`;
+        statusEl.setAttribute('data-nt-time-status', '');
+        statusEl.textContent = word;
+    });
+    host.querySelectorAll?.('[data-nt-onward-row]').forEach((row) => {
+        const btn = row.querySelector('[data-open-train-report]');
+        const routeId = btn?.getAttribute('data-route') || row.getAttribute('data-route');
+        const trainId = btn?.getAttribute('data-train') || row.getAttribute('data-train');
+        const scheduledTime = btn?.getAttribute('data-dep') || row.getAttribute('data-dep');
+        const station = btn?.getAttribute('data-station') || row.getAttribute('data-station');
+        const agg = trainId ? aggregateTrainReports(byRoute[routeId] || [], {
+            routeId, trainId, scheduledTime, station,
+        }) : null;
+        let statusEl = row.querySelector('[data-nt-onward-status]');
+        const word = shortStatusWord(agg);
+        if (!word) {
+            statusEl?.remove();
+            return;
+        }
+        if (!statusEl) {
+            statusEl = document.createElement('span');
+            statusEl.setAttribute('data-nt-onward-status', '');
+            row.appendChild(statusEl);
+        }
+        statusEl.className = `font-bold shrink-0 ${statusColorClass(agg.status)}`;
+        statusEl.textContent = `\u00a0·\u00a0${word}`;
+    });
+    host.querySelectorAll?.('[data-open-train-report]').forEach((btn) => {
         const routeId = btn.getAttribute('data-route');
         const trainId = btn.getAttribute('data-train');
         const scheduledTime = btn.getAttribute('data-dep');
@@ -474,7 +532,6 @@ export function buildTrainTitleReportButton({
     ].join(' ');
     return `<button type="button" class="${className}" ${attrs} title="Train ${escapeHTML(String(trainId || ''))} - status and I’m on it">
       <span class="min-w-0 break-words">${escapeHTML(label)}</span>
-      ${flagSvgHtml(null)}
     </button>`;
 }
 

@@ -278,6 +278,9 @@ export async function signOutAccount() {
 }
 
 export function openAccountModal() {
+    if (typeof window.syncFeedbackModalViewport === 'function') {
+        window.syncFeedbackModalViewport();
+    }
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -366,9 +369,22 @@ export function syncAccountSettingsUi(state = $account.get()) {
     }
     if (!signed) {
         document.getElementById('account-delete-confirm')?.classList.add('hidden');
+        const pointsPanel = document.getElementById('account-points-panel');
+        pointsPanel?.classList.add('hidden');
+        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
+            btn.setAttribute('aria-expanded', 'false');
+        });
+        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
+            el.classList.remove('rotate-180');
+        });
+        if (modalName) modalName.textContent = 'Passenger';
+        if (modalEmail) modalEmail.textContent = '';
+    } else {
+        if (modalName) modalName.textContent = state.displayName || 'Passenger';
+        if (modalEmail) modalEmail.textContent = state.email || '';
     }
-    if (modalName) modalName.textContent = state.displayName || 'Passenger';
-    if (modalEmail) modalEmail.textContent = state.email || '';
+    const contribWrap = document.getElementById('account-contrib-wrap');
+    if (contribWrap) contribWrap.classList.toggle('hidden', !signed);
     const letterEl = document.getElementById('account-modal-avatar-letter');
     const modalImg = document.getElementById('account-modal-avatar-img');
     if (letterEl) {
@@ -665,6 +681,7 @@ function friendlyAuthError(e) {
     if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
+    if (code === 'auth/unauthorized-domain') return 'This host cannot sign in. Open nexttrain.co.za or ask an operator to allow this domain.';
     if (code === 'auth/popup-blocked') return 'Popup blocked. Allow popups and try again.';
     if (code === 'auth/operation-not-allowed') return 'Facebook sign-in is not enabled yet. Try Google or email.';
     if (code === 'auth/account-exists-with-different-credential') {

@@ -134,9 +134,29 @@ export async function handleUpdateClick(newVersion) {
     hardReloadWithCacheBust('version_enforce');
 }
 
+const UPDATED_TOAST_KEY = 'nt_show_updated_toast';
+
+export function markAppUpdatedToast() {
+    if (typeof sessionStorage === 'undefined') return;
+    try { sessionStorage.setItem(UPDATED_TOAST_KEY, APP_VERSION); } catch { /* ignore */ }
+}
+
+export function maybeShowUpdatedVersionToast() {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+        if (!sessionStorage.getItem(UPDATED_TOAST_KEY)) return;
+        sessionStorage.removeItem(UPDATED_TOAST_KEY);
+    } catch {
+        return;
+    }
+    showToast(`App updated to version ${APP_VERSION}`, 'success', 3000);
+}
+
 /** Boot check: stored shell version vs bundled APP_VERSION. */
 export function enforceAppVersion() {
     if (typeof window === 'undefined') return;
+
+    maybeShowUpdatedVersionToast();
 
     const currentVersion = APP_VERSION || 'unknown';
     const storedVersion = safeStorage.getItem('app_installed_version');

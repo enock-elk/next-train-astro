@@ -11,7 +11,7 @@
 
 <div id="alerts-channel" class="fixed inset-0 bg-slate-200 dark:bg-gray-950 z-[115] hidden flex flex-col transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="alerts-channel-title">
     <div id="alerts-channel-card" class="relative flex flex-col h-full w-full bg-slate-200 dark:bg-gray-950 scale-100 overflow-hidden">
-        <div id="alerts-channel-wallpaper" aria-hidden="true"></div>
+        <div id="alerts-channel-wallpaper" class="nt-pack-wallpaper" aria-hidden="true"></div>
         <header class="relative z-[1] shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
             <div class="flex items-center gap-2">
                 <button type="button" id="alerts-channel-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
@@ -36,7 +36,7 @@
         </div>
 
         <div id="alerts-channel-footer" class="relative z-[1] shrink-0 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl">
-            <button type="button" id="alerts-channel-footer-close" class="w-full inline-flex items-center justify-center text-sm font-bold text-blue-600 dark:text-blue-400 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/30" aria-label="Close alerts">Close</button>
+            <button type="button" id="alerts-channel-footer-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none" aria-label="Close alerts">Close</button>
         </div>
     </div>
 </div>

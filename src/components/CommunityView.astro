@@ -40,10 +40,13 @@
             </div>
         </div>
 
-        <!-- Grows into leftover height; only this area scrolls — header/composer stay full size -->
-        <div class="flex-1 basis-0 min-h-[8rem] overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-gray-100/80 dark:bg-gray-950/40">
-            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-            <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+        <!-- Grows into leftover height; wallpaper stays put while the feed scrolls -->
+        <div class="relative flex-1 basis-0 min-h-[8rem] min-h-0">
+            <div class="nt-pack-wallpaper" aria-hidden="true"></div>
+            <div class="relative z-[1] h-full overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent">
+                <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+                <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
+            </div>
         </div>
 
         <div id="community-composer-dock" class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 space-y-2">

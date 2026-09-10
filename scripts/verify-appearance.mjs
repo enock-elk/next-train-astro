@@ -198,6 +198,7 @@ assert(/html\.dark \.dark\\:bg-gray-900,[\s\S]{0,220}var\(--nt-canvas\)/.test(cs
 assert(!/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,80}html\.dark \.dark\\:bg-gray-900/.test(css), 'gray-800 and gray-900 remaps are split');
 assert(css.includes('#alerts-channel-card'), 'alerts sheet card uses canvas');
 assert(css.includes('#alerts-channel-wallpaper'), 'alerts wallpaper uses the colour pack');
+assert(css.includes('.nt-pack-wallpaper'), 'Alerts, Community, and Feedback Hub share .nt-pack-wallpaper');
 assert(css.includes('mask-image'), 'alerts wallpaper tiles via mask-image so pack tokens colour it');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas))'), 'alerts wallpaper wash follows chrome + canvas');
 assert(/nt-alert-strip-info \{\s*background-color: color-mix\(in srgb, var\(--nt-primary\)/.test(css), 'info strip is a quiet primary wash');
@@ -286,7 +287,8 @@ assert(hubModals.includes('bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-
 assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox shares WhatsApp own-bubble tokens');
 assert(hubModals.includes('#feedback-panel .inbox-bubble-other'), 'admin inbox shares WhatsApp other-bubble tokens');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat'), 'admin thread wallpaper selector');
-assert(hubModals.includes('background: #efeae2'), 'WhatsApp wallpaper token is #efeae2');
+assert(hubModals.includes('nt-pack-wallpaper'), 'Feedback Hub uses the shared pack wallpaper');
+assert(!hubModals.includes('background: #efeae2'), 'Feedback Hub dropped the #efeae2 wallpaper wash');
 assert(hubModals.includes('#d9fdd3'), 'own bubble is WhatsApp green');
 assert(hubModals.includes('#005c4b'), 'dark own bubble is WhatsApp teal');
 
@@ -379,6 +381,7 @@ assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
+assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account sheet uses the keyboard-safe overlay height');
 assert(layout.includes('var(--nt-feedback-vv-height, var(--nt-vv-h'), 'Feedback Hub height prefers the JS keyboard height');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');

@@ -1103,7 +1103,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       /* Feedback Hub / Send Feedback follow the keyboard, not --nt-app-h. */
       #nt-shell #messages-thread-modal.fixed,
-      #nt-shell #feedback-modal.fixed {
+      #nt-shell #feedback-modal.fixed,
+      #nt-shell #account-modal.fixed {
         inset: unset !important;
         top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
         left: 0 !important;

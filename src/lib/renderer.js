@@ -752,9 +752,10 @@ export const Renderer = {
             element.innerHTML = `
                 <div class="flex flex-row items-stretch w-full gap-2.5 sm:gap-3">
                     <!-- TIME BOX -->
-                    <div class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div data-nt-time-tile data-route="${escapeHTML(reportRouteId)}" data-train="${escapeHTML(String(reportTrainId))}" data-dep="${escapeHTML(String(rawTime || ''))}" data-station="${escapeHTML(reportStation)}" class="relative w-[42%] min-w-[7.75rem] max-w-[10.5rem] h-auto min-h-[96px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight" data-nt-deptime>${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
+                        <div data-nt-time-status class="hidden"></div>
                         ${liveHintHtml}
                         ${schedNote}
                         ${sharedTag}
@@ -804,7 +805,7 @@ export const Renderer = {
                     className: 'shrink-0 inline-flex items-baseline text-[9px] font-bold tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
                 });
                 return `
-                    <div data-nt-onward-row class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
+                    <div data-nt-onward-row data-route="${escapeHTML(reportRouteId)}" data-train="${escapeHTML(String(opt.train || ''))}" data-dep="${escapeHTML(String(opt.departureTime || ''))}" data-station="${escapeHTML(hubRaw || '')}" class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
                         <span data-nt-onward-dest data-full-name="${destSafe}" class="font-bold min-w-0" title="${destSafe}">${destSafe}</span>
                         <span class="font-normal opacity-70 shrink-0">&nbsp;·&nbsp;</span>
                         ${trainBtn}
@@ -823,9 +824,10 @@ export const Renderer = {
             element.innerHTML = `
                 <div class="flex flex-row items-stretch w-full gap-1.5">
                     <!-- TIME BOX -->
-                    <div class="relative w-[38%] min-w-[6.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
+                    <div data-nt-time-tile data-route="${escapeHTML(reportRouteId)}" data-train="${escapeHTML(String(reportTrainId))}" data-dep="${escapeHTML(String(rawTime || ''))}" data-station="${escapeHTML(reportStation)}" class="relative w-[38%] min-w-[6.75rem] max-w-[10.5rem] h-auto min-h-[110px] flex flex-col justify-center items-center text-center p-1 pb-7 ${timeClass} rounded-lg shadow-sm flex-shrink-0 self-stretch">
                         <div class="text-2xl font-black text-gray-900 dark:text-white leading-tight" data-nt-deptime>${safeDepTime}</div>
                         <div class="text-xs text-gray-700 dark:text-gray-300 font-bold" data-nt-countdown>${timeDiffStr}</div>
+                        <div data-nt-time-status class="hidden"></div>
                         ${liveHintHtml}
                         ${schedNote}
                         ${sharedTag}

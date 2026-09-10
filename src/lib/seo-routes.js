@@ -11,8 +11,8 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './
 
 /** Sheet / dump names → commuter-facing labels on SEO pages. */
 const STATION_DISPLAY_ALIASES = {
-    JOHANNESBURG: 'Johannesburg Park Station',
-    'JOHANNESBURG PARK': 'Johannesburg Park Station',
+    JOHANNESBURG: 'Johannesburg',
+    'JOHANNESBURG PARK': 'Johannesburg',
     'PRETORIA-N': 'Pretoria North',
     'PRETORIA N': 'Pretoria North',
     'PRETORIA NORTH': 'Pretoria North',
@@ -50,7 +50,7 @@ export function regionName(regionCode) {
 /** URL slug fragment from a station name. */
 export function slugifyStation(raw) {
     const display = stationLabel(raw);
-    const slugSource = display === 'Johannesburg Park Station' ? 'Johannesburg' : display;
+    const slugSource = (display === 'Johannesburg Park Station' || display === 'Johannesburg') ? 'Johannesburg' : display;
     return slugSource
         .toLowerCase()
         .replace(/['']/g, '')

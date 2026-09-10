@@ -50,7 +50,7 @@ export function stationLabel(raw) {
     .replace(/\s+/g, ' ')
     .trim();
   const key = cleaned.toUpperCase();
-  if (key === 'JOHANNESBURG' || key === 'JOHANNESBURG PARK') return 'Johannesburg Park Station';
+  if (key === 'JOHANNESBURG' || key === 'JOHANNESBURG PARK') return 'Johannesburg';
   if (key === 'PRETORIA-N' || key === 'PRETORIA N' || key === 'PRETORIA NORTH') return 'Pretoria North';
   if (key === 'PRETORIA WES' || key === 'PRETORIA WEST') return 'Pretoria West';
   // Title-case ALL CAPS sheet labels for nicer WhatsApp cards

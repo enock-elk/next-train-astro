@@ -80,8 +80,8 @@
       background: transparent; color: var(--text);
       border: 1px solid var(--line);
     }
-    .btn-wa { background: #128c7e; }
-    .btn-wa:hover { background: #075e54; }
+    .btn-fb { background: #1877f2; }
+    .btn-fb:hover { background: #0f5fbf; }
     .btn:disabled { opacity: 0.55; cursor: wait; }
     label {
       display: block; font-size: 0.75rem; font-weight: 700;
@@ -151,7 +151,7 @@
 
     <div class="card">
       <h2>Contact us</h2>
-      <a class="btn btn-wa" id="link-wa" href="https://wa.me/27696473764" target="_blank" rel="noopener">WhatsApp +27 69 647 3764</a>
+      <a class="btn btn-fb" id="link-fb" href="https://www.facebook.com/enock.kazembe" target="_blank" rel="noopener">Facebook</a>
       <a class="btn btn-ghost" id="link-mail" href="mailto:admin@nexttrain.co.za">Email admin@nexttrain.co.za</a>
 
       <form id="distress-form" style="margin-top:14px">
@@ -177,7 +177,7 @@
           <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
         </div>
 
-        <p class="hint">Sent to our support inbox when Firebase is reachable. If send fails, use WhatsApp or email above - nothing is lost.</p>
+        <p class="hint">Sent to our support inbox when Firebase is reachable. If send fails, use Facebook or email above - nothing is lost.</p>
         <button type="submit" class="btn btn-primary" id="btn-send">Please contact me</button>
         <div class="status" id="form-status" role="status"></div>
       </form>
@@ -198,7 +198,7 @@
 (function () {
   var RTDB = 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
   var EMAIL = 'admin@nexttrain.co.za';
-  var WA = '27696473764';
+  var FB = 'https://www.facebook.com/enock.kazembe';
 
   function qs(name) {
     try { return new URLSearchParams(location.search).get(name) || ''; } catch (e) { return ''; }
@@ -271,7 +271,7 @@
   else if (reasonKey === 'boot' || reasonKey === 'crash' || reasonKey === 'cache') sel.value = 'broken_install';
 
   document.getElementById('link-home').href = BASE;
-  document.getElementById('link-wa').href = 'https://wa.me/' + WA;
+  document.getElementById('link-fb').href = FB;
   document.getElementById('link-mail').href = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('Next Train help (' + reasonKey + ')');
 
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -399,7 +399,7 @@
     } catch (err) { ok = false; }
 
     if (ok) {
-      showStatus(status, 'ok', 'Sent. We’ll try to contact you - also keep WhatsApp/email handy if systems are down.');
+      showStatus(status, 'ok', 'Sent. We’ll try to contact you - also keep Facebook/email handy if systems are down.');
       document.getElementById('note').value = '';
     } else {
       var body =
@@ -412,11 +412,10 @@
       var mail = 'mailto:' + EMAIL +
         '?subject=' + encodeURIComponent('Next Train distress (' + reason + ')') +
         '&body=' + encodeURIComponent(body);
-      var waText = encodeURIComponent('Hi Next Train support - ' + reason + '. Reach me on ' + contact + '. ' + (note || ''));
-      showStatus(status, 'err', 'Could not reach our servers. Opening email… or use WhatsApp.');
+      showStatus(status, 'err', 'Could not reach our servers. Opening email… or use Facebook.');
       try { location.href = mail; } catch (e) {}
       try {
-        document.getElementById('link-wa').href = 'https://wa.me/' + WA + '?text=' + waText;
+        document.getElementById('link-fb').href = FB;
       } catch (e) {}
     }
     btn.disabled = false;

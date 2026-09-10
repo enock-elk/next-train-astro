@@ -11,10 +11,9 @@
  * lays the document out in source order, so this is what the commuter reads
  * first instead of an unstyled Options drawer.
  */
-import { SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY, withBase } from '../lib/config.js';
+import { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL, withBase } from '../lib/config.js';
 
 const helpHref = withBase('help.html');
-const waHref = `https://wa.me/${SUPPORT_WHATSAPP}`;
 const mailHref = `mailto:${SUPPORT_EMAIL}`;
 ---
 
@@ -26,7 +25,7 @@ const mailHref = `mailto:${SUPPORT_EMAIL}`;
     to clear it and load the current version.
   </p>
   <p>
-    Still stuck? WhatsApp <a href={waHref} rel="nofollow">{SUPPORT_WHATSAPP_DISPLAY}</a>
+    Still stuck? Message us on <a href={SUPPORT_FACEBOOK_URL} rel="nofollow" target="_blank">Facebook</a>
     or email <a href={mailHref} rel="nofollow">{SUPPORT_EMAIL}</a> and we will help.
   </p>
 </div>

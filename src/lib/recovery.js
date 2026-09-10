@@ -8,11 +8,10 @@
 import {
     withBase,
     SUPPORT_EMAIL,
-    SUPPORT_WHATSAPP,
-    SUPPORT_WHATSAPP_DISPLAY,
+    SUPPORT_FACEBOOK_URL,
 } from './config.js';
 
-export { SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY };
+export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 
 /** Auto lifeboat — only with dual signal (overlay still up + visible time). */
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
@@ -35,10 +34,8 @@ export function openRecoveryHelp(reason = 'broken_install') {
     }
 }
 
-export function whatsappSupportUrl(prefill = '') {
-    const base = `https://wa.me/${SUPPORT_WHATSAPP}`;
-    if (!prefill) return base;
-    return `${base}?text=${encodeURIComponent(prefill)}`;
+export function facebookSupportUrl() {
+    return SUPPORT_FACEBOOK_URL;
 }
 
 export function mailtoSupportUrl(subject = 'Next Train help', body = '') {

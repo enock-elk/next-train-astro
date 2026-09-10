@@ -1,12 +1,12 @@
 ---
 import ContentLayout from '../layouts/ContentLayout.astro';
-import { normalizeBase, SUPPORT_EMAIL, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY } from '../lib/config.js';
+import { normalizeBase, SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL } from '../lib/config.js';
 
 const title = "You're Offline | Metrorail Next Train";
 const description = "You appear to be offline. Reconnect or open recovery help for Next Train.";
 const base = normalizeBase(import.meta.env.BASE_URL);
 const helpHref = `${base}help.html?reason=offline`;
-const waHref = `https://wa.me/${SUPPORT_WHATSAPP}`;
+const fbHref = SUPPORT_FACEBOOK_URL;
 const mailHref = `mailto:${SUPPORT_EMAIL}`;
 ---
 
@@ -38,12 +38,12 @@ const mailHref = `mailto:${SUPPORT_EMAIL}`;
         Open recovery help
       </a>
       <a
-        href={waHref}
+        href={fbHref}
         target="_blank"
         rel="noopener"
         class="inline-flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 font-semibold px-5 py-3 transition-colors"
       >
-        WhatsApp {SUPPORT_WHATSAPP_DISPLAY}
+        Facebook
       </a>
       <a
         href={mailHref}

@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.1', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.2', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -187,7 +187,7 @@ assert(!/setCommuterAlias[\s\S]{0,500}prompt\(/.test(admin), 'setCommuterAlias n
 assert(admin.includes('data-fb-more-toggle'), 'Options toggle remains');
 assert(!admin.includes("icon('more'"), 'Options dropped the more icon');
 assert(admin.includes('feedback-thread-chat'), 'thread wallpaper lives on feedback-thread-chat');
-assert(admin.includes('bg-[#efeae2]'), 'admin thread wallpaper is #efeae2');
+assert(admin.includes('nt-pack-wallpaper'), 'admin thread wallpaper uses the shared pack');
 assert(admin.includes('id="fb-list" class="space-y-3 pr-1"'), 'fb-list grows with its messages');
 assert(admin.includes('min-h-full'), 'admin canvas grows with list content');
 assert(!admin.includes('min-h-screen'), 'admin canvas is not capped to 100vh');
@@ -196,7 +196,7 @@ assert(!admin.includes("'!mb-0', 'bg-transparent'"), 'drill-down no longer punch
 assert(!admin.includes('admin-feedback-styles'), 'feedback panel has no fixed-height sizing override');
 assert(!admin.includes('min-height: min(72dvh, 40rem)'), 'feedback panel reserves no blank minimum height');
 assert(!admin.includes('max-height: calc(100dvh - 6.5rem)'), 'feedback panel is not capped to an inner scroller');
-assert(admin.includes('feedback-thread-chat space-y-3 p-2 sm:p-3 bg-[#efeae2]'), 'open chat uses natural content height');
+assert(admin.includes('feedback-thread-chat nt-pack-wallpaper relative space-y-3 p-2 sm:p-3'), 'open chat uses natural content height');
 assert(!admin.includes('feedback-thread-chat space-y-3 p-2 sm:p-3 flex-1'), 'open chat does not create a nested scrollbar');
 assert(!admin.includes("header.scrollIntoView({ behavior: 'smooth', block: 'start' })"), 'opening an admin feedback thread does not auto-scroll to the top');
 assert(admin.includes("formatAlertText('link'") && admin.includes("URL ${Admin.icon('globe'"), 'WYSIWYG link control is URL + globe');

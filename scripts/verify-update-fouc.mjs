@@ -9,7 +9,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FORCE_UPDATE_REQUIRED, SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_DISPLAY, SUPPORT_EMAIL } from '../src/lib/config.js';
+import { FORCE_UPDATE_REQUIRED, SUPPORT_FACEBOOK_URL, SUPPORT_EMAIL } from '../src/lib/config.js';
 import { applyRetention, retainPreviousAstro } from './retain-previous-astro.mjs';
 
 const failures = [];
@@ -22,11 +22,10 @@ assert(config.includes('it is the flash commuters were reporting') || config.inc
 
 const lifeline = readFileSync(new URL('../src/components/RecoveryLifeline.astro', import.meta.url), 'utf8');
 assert(lifeline.includes('id="nt-recovery-lifeline"'), 'lifeline has a stable id');
-assert(lifeline.includes('{SUPPORT_WHATSAPP_DISPLAY}'), 'lifeline prints the WhatsApp number');
-assert(lifeline.includes('wa.me/${SUPPORT_WHATSAPP}'), 'lifeline links wa.me');
+assert(lifeline.includes('{SUPPORT_FACEBOOK_URL}'), 'lifeline links Facebook support');
+assert(lifeline.includes('facebook.com/enock.kazembe') || lifeline.includes('SUPPORT_FACEBOOK_URL'), 'lifeline uses the Facebook support URL');
 assert(lifeline.includes('{SUPPORT_EMAIL}'), 'lifeline prints the support email');
-assert(SUPPORT_WHATSAPP === '27696473764', 'support WhatsApp digits stay 27696473764');
-assert(SUPPORT_WHATSAPP_DISPLAY === '+27 69 647 3764', 'support WhatsApp display stays +27 69 647 3764');
+assert(SUPPORT_FACEBOOK_URL === 'https://www.facebook.com/enock.kazembe', 'support Facebook URL stays the owner profile');
 assert(SUPPORT_EMAIL === 'admin@nexttrain.co.za', 'support email stays admin@nexttrain.co.za');
 assert(lifeline.includes('help.html'), 'lifeline links Reset and Recover');
 assert(!/\shidden[\s>]/.test(lifeline), 'lifeline is not hidden=');

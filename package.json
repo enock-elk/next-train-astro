@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "9.9.10.1",
+  "version": "9.9.10.2",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -25,6 +25,7 @@
     "verify:deeplink": "node scripts/verify-deeplink-launch.mjs",
     "verify:clever-ads": "node scripts/verify-clever-ads.mjs",
     "verify:planner-saturday": "node scripts/verify-planner-saturday.mjs",
+    "verify:map-hops": "node scripts/verify-map-hops.mjs",
     "verify:route-seo": "node scripts/verify-route-seo.mjs",
     "verify:attachments": "node scripts/verify-attachments.mjs",
     "verify:feedback-contact": "node scripts/verify-feedback-contact.mjs",

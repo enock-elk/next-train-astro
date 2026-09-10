@@ -13,13 +13,12 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_09.10.1";
+export const APP_VERSION = "V9_09.10.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
-/** WhatsApp digits for wa.me (no + or spaces). */
-export const SUPPORT_WHATSAPP = '27696473764';
-export const SUPPORT_WHATSAPP_DISPLAY = '+27 69 647 3764';
+/** Facebook profile for recovery / crash support (not the commuter WhatsApp field). */
+export const SUPPORT_FACEBOOK_URL = 'https://www.facebook.com/enock.kazembe';
 
 /** Operator emails — keep in sync with firebase-database.rules.json and nexttrain-telemetry. */
 export const ADMIN_EMAILS = ['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com'];
@@ -177,7 +176,7 @@ export function getCorridorLabel(routeOrCorridorId) {
 }
 
 export const REGION_SEO = {
-    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg Park Station and Germiston corridor timetables for Gauteng Metrorail.' },
+    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
     KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
     EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },

@@ -2,8 +2,8 @@
  * Map tab — embed Leaflet /map + trip-tied location contribution.
  *
  * Presence = coarse GPS until Stop or terminus so others can see you (train optional).
- * Attaching a train still uses the 30s vet + closest-train confirm, except on
- * lab where GPS / path guards are off for testing (`relaxLiveShareGuards`).
+ * Attaching a train still runs the GPS / path / speed / heading checks.
+ * `ENFORCE_LIVE_SHARE_VET` is off until those checks are ready to block a share.
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
@@ -22,6 +22,12 @@ import { relaxLiveShareGuards } from './features.js';
  * Flip to true (and re-show MapView / nearby controls) when releasing.
  */
 export const LIVE_LOCATION_SHARE_UI_ENABLED = false;
+
+/**
+ * Run displacement / speed / heading checks, but do not block the share yet.
+ * Flip to true when live tracking should require a passing vet.
+ */
+export const ENFORCE_LIVE_SHARE_VET = false;
 
 /**
  * A train stays linkable for 45 minutes either side of its scheduled time.
@@ -671,9 +677,11 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             ${where ? `<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(where)}</p>` : ''}
             <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5">${escapeHTML(liveLine)}</p>
             <p class="text-[11px] mt-1 ${c.plausible ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-amber-700 dark:text-amber-300'}">${
-                c.plausible
-                    ? 'Close enough to track this train'
-                    : 'Too far from this train’s path - you’ll show as a person, not a tracker'
+                ENFORCE_LIVE_SHARE_VET
+                    ? (c.plausible
+                        ? 'Close enough to track this train'
+                        : 'Too far from this train’s path - you’ll show as a person, not a tracker')
+                    : 'Tap to share as this train'
             }</p>`;
         btn.addEventListener('click', () => {
             hideNearbyTrainsModal();
@@ -1032,6 +1040,11 @@ export async function startOnTrainShare({
         showToast('Pick a train first', 'error');
         return { ok: false };
     }
+    const { routeHasNoScheduledTrains } = await import('./delay-reports.js');
+    if (routeHasNoScheduledTrains()) {
+        showToast('There are no trains to share today.', 'info');
+        return { ok: false };
+    }
 
     hideContributeSheet();
 
@@ -1072,9 +1085,15 @@ export async function startOnTrainShare({
         return { ...result, asPerson: true, waiting: true };
     }
 
-    // Lab: claim the train immediately so testers can see each other without
-    // GPS path / speed / heading checks. Restore the vet below before main.
-    if (relaxLiveShareGuards()) {
+    setStatus('Checking your location…');
+    const vet = await runOnboardToastVet(id);
+    const enforce = ENFORCE_LIVE_SHARE_VET;
+
+    if (!vet.ok) {
+        if (enforce) {
+            if (!vet.noCoords) hideCheckToast();
+            return vet;
+        }
         let lat = lastCoords?.lat ?? null;
         let lng = lastCoords?.lng ?? null;
         let heading = null;
@@ -1088,7 +1107,7 @@ export async function startOnTrainShare({
             lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
         } catch { /* still attach so the share is visible */ }
         const st = station || document.getElementById('station-select')?.value || 'here';
-        const shared = await finishRideShare({
+        const sharedAnyway = await finishRideShare({
             trainId: id,
             station: st,
             destination,
@@ -1099,7 +1118,7 @@ export async function startOnTrainShare({
             speedMps,
             source,
         });
-        if (shared?.ok) {
+        if (sharedAnyway?.ok) {
             scheduleTripWatch({
                 trainId: id,
                 station: st,
@@ -1108,21 +1127,14 @@ export async function startOnTrainShare({
                 destination,
             });
         }
-        return shared;
-    }
-
-    setStatus('Checking your location…');
-    const vet = await runOnboardToastVet(id);
-    if (!vet.ok) {
-        if (!vet.noCoords) hideCheckToast();
-        return vet;
+        return sharedAnyway;
     }
 
     const { resolveTrainAttachment, scoreTrainForFix, TRAIN_TRACKER_MAX_M, expectedPosition, ghostHeadingDeg, headingAgrees } = await import('./train-ghosts.js');
     const decision = resolveTrainAttachment(vet.lat, vet.lng, id);
     let finalId = id;
     let confirmedCloser = false;
-    if (decision.action === 'confirm' && decision.best?.trainId) {
+    if (enforce && decision.action === 'confirm' && decision.best?.trainId) {
         const pick = await promptOnTrainSheet({
             title: 'Different train?',
             body: `You’re more likely on ${trainGoingLabel(decision.best.trainId)} than ${trainGoingLabel(id, destination)}. Show you as ${trainGoingLabel(decision.best.trainId)}?`,
@@ -1148,7 +1160,7 @@ export async function startOnTrainShare({
     let moving = !!(vet.isMoving || (typeof vet.speedMps === 'number' && vet.speedMps >= 1.5));
     let headingOk = vet.headingAgrees !== false;
 
-    if (!tooFar && !moving) {
+    if (enforce && !tooFar && !moving) {
         hideCheckToast();
         const parked = await promptOnTrainSheet({
             title: 'Is the train moving?',
@@ -1238,7 +1250,7 @@ export async function startOnTrainShare({
         }
     }
 
-    const attach = !tooFar && moving && headingOk;
+    const attach = !enforce || (!tooFar && moving && headingOk);
 
     if (!attach) {
         const result = await finishRideShare({
@@ -1315,7 +1327,7 @@ async function finishRideShare({
         });
 
         if (!result.ok) {
-            showToast(result.message || 'Couldn’t share', 'error');
+            if (!result.cancelled) showToast(result.message || 'Couldn’t share', 'error');
             setStatus(result.message || 'Couldn’t share');
             return result;
         }
@@ -1331,6 +1343,7 @@ async function finishRideShare({
             station,
         });
         syncRidePingsToMap(routeId);
+        syncMapShareChrome();
         if (trainId) {
             const { startOnboardPingLoop } = await import('./ride-pings.js');
             startOnboardPingLoop();
@@ -1355,6 +1368,7 @@ export async function contributeForTrain(candidate) {
             : candidate?.source === 'map_join' ? 'map_join'
             : 'map_contribute',
         scheduledTime: candidate?.scheduledTime || '',
+        skipVolunteer: candidate?.source === 'map_join' || candidate?.skipVolunteer === true,
     });
 }
 
@@ -1387,6 +1401,24 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             setStatus(`${others} rider${others === 1 ? '' : 's'} sharing on this corridor`);
         }
     } catch { /* optional */ }
+}
+
+export function syncMapShareChrome() {
+    const btn = document.getElementById('map-tab-stop-btn');
+    if (!btn) return;
+    import('./ride-pings.js').then(({ getActiveShare }) => {
+        const mine = getActiveShare();
+        const on = !!mine;
+        btn.classList.toggle('hidden', !on);
+        if (on) {
+            btn.removeAttribute('hidden');
+            btn.setAttribute('aria-hidden', 'false');
+        } else {
+            btn.setAttribute('hidden', '');
+            btn.setAttribute('aria-hidden', 'true');
+        }
+        btn.setAttribute('aria-label', mine?.trainId ? `Stop sharing Train ${mine.trainId}` : 'Stop sharing');
+    }).catch(() => {});
 }
 
 function getDeviceId() {
@@ -1664,6 +1696,7 @@ export function activateMapTab() {
         syncRidePingsToMap();
     }
     startPingsPolling();
+    syncMapShareChrome();
 }
 
 export function deactivateMapTab() {
@@ -1694,6 +1727,15 @@ export function bindMapTabUi() {
         triggerHaptic();
         openNearbyTrainsModal();
     });
+    document.getElementById('map-tab-stop-btn')?.addEventListener('click', async () => {
+        triggerHaptic();
+        const { stopRideShare } = await import('./ride-pings.js');
+        const result = await stopRideShare();
+        if (!result.ok && result.message) showToast(result.message, 'error');
+        syncMapShareChrome();
+        syncRidePingsToMap();
+    });
+    window.addEventListener('nt-ride-pings-updated', () => syncMapShareChrome());
     // Back-compat if old Share button id remains in cache
     document.getElementById('map-tab-share-btn')?.addEventListener('click', () => {
         openContributePicker();
@@ -1775,7 +1817,16 @@ export function bindMapTabUi() {
                 destination: data.destination || '',
                 routeId: data.routeId || routeId,
                 source: 'map_join',
+                skipVolunteer: true,
             });
+        }
+        if (data.type === 'nt-map-stop-share') {
+            import('./ride-pings.js').then(async ({ stopRideShare }) => {
+                const result = await stopRideShare();
+                if (!result.ok && result.message) showToast(result.message, 'error');
+                syncMapShareChrome();
+                syncRidePingsToMap();
+            }).catch(() => {});
         }
     });
 }
@@ -1791,6 +1842,7 @@ if (typeof window !== 'undefined') {
     window.openNearbyTrainsModal = openNearbyTrainsModal;
     window.clearTripWatch = clearTripWatch;
     window.bindMapTabUi = bindMapTabUi;
+    window.syncMapShareChrome = syncMapShareChrome;
     // Legacy name used by map-app share FAB — route to contribute picker
     window.shareMyLocation = openContributePicker;
     window.promptOnTrainSheet = promptOnTrainSheet;

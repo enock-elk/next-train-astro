@@ -296,6 +296,11 @@ assert(admin.includes('alert-sched-edit'), 'scheduled alerts have Edit');
 assert(/alert-sched-delete[^>]*>Delete</.test(admin), 'scheduled delete label is Delete');
 assert(!/alert-sched-delete[^>]*>Clear</.test(admin), 'scheduled Clear label is gone');
 
+assert(admin.includes('setupRideShareManager'), 'live sharing admin panel exists');
+assert(admin.includes('live-share-panel'), 'live sharing panel id');
+assert(admin.includes('data-ls-region'), 'live sharing has region tabs');
+assert(admin.includes("Train ${esc(r.trainId || '—')}"), 'share log lists the train id');
+
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);
     process.exit(1);

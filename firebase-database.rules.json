@@ -183,8 +183,19 @@
       "$routeId": {
         ".read": true,
         "$deviceId": {
-          ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.child('deviceId').val() === $deviceId && newData.child('deviceId').val() === $deviceId) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.child('deviceId').val() === $deviceId && newData.child('deviceId').val() === $deviceId) || (data.exists() && data.hasChild('uid') && data.child('uid').val() === auth.uid && newData.child('deviceId').val() === $deviceId) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
           ".validate": "!newData.exists() || (newData.hasChildren(['routeId', 'deviceId', 'station', 'at', 'expiresAt']) && newData.child('routeId').val() === $routeId && newData.child('deviceId').val() === $deviceId && newData.child('station').isString() && newData.child('station').val().length > 0 && newData.child('station').val().length < 120 && newData.child('at').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= newData.child('at').val() + 28800000 && (!newData.hasChild('coarseLat') || newData.child('coarseLat').isNumber()) && (!newData.hasChild('coarseLng') || newData.child('coarseLng').isNumber()) && (!newData.hasChild('heading') || newData.child('heading').isNumber()) && (!newData.hasChild('speedMps') || newData.child('speedMps').isNumber()) && (!newData.hasChild('email') || newData.child('email').isString()))"
+        }
+      }
+    },
+
+    "ride_share_log": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$region": {
+        ".indexOn": ["at", "routeId"],
+        "$entryId": {
+          ".write": "auth != null && !data.exists() && (newData.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "newData.hasChildren(['routeId', 'deviceId', 'action', 'at', 'uid']) && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && newData.child('uid').isString() && newData.child('action').isString() && (newData.child('action').val() === 'start' || newData.child('action').val() === 'stop') && newData.child('at').isNumber() && (!newData.hasChild('trainId') || newData.child('trainId').isString() || newData.child('trainId').val() == null) && (!newData.hasChild('email') || newData.child('email').isString() || newData.child('email').val() == null) && (!newData.hasChild('source') || newData.child('source').isString())"
         }
       }
     },

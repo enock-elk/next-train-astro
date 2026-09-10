@@ -12,6 +12,10 @@ import {
     WEEKEND_REPORT_MAX_AGE_MS,
     reportSurfaceWindowMs,
     isReportStillLive,
+    isAfterReportCurfew,
+    isSameLocalDay,
+    expiredReportsFromToday,
+    routeHasNoScheduledTrains,
 } from '../src/lib/delay-reports.js';
 
 const failures = [];
@@ -73,6 +77,34 @@ const ranked = [
 assert(ranked[0].trainId === 'near', 'most likely nearby train is first');
 assert(ranked[1].trainId === 'done', 'just-finished trains rank after live ones');
 assert(ranked[2].trainId === 'far', 'implausible trains rank last');
+
+assert(routeHasNoScheduledTrains('sunday'), 'Sunday has no trains to report');
+assert(!routeHasNoScheduledTrains('weekday', 'GP', {
+    weekday_to_a: {
+        headers: ['STATION', '0600'],
+        rows: [{ STATION: 'PRETORIA', '0600': '06:00:00' }],
+    },
+}), 'weekday sheet with a clock is service');
+
+const curfewMs = new Date(2026, 8, 10, 23, 59, 0).getTime();
+assert(isAfterReportCurfew(curfewMs), '23:59 is report curfew');
+assert(!isAfterReportCurfew(new Date(2026, 8, 10, 23, 58, 0).getTime()), '23:58 is still before curfew');
+assert(!isReportStillLive(fresh, { nowMs: curfewMs, nowSec: 23 * 3600 + 59 * 60, dayType: 'weekday' }), 'live reports hide at 23:59');
+
+const morning = new Date(2026, 8, 10, 11, 0, 0).getTime();
+const staleToday = {
+    timestamp: new Date(2026, 8, 10, 7, 0, 0).getTime(),
+    scheduledTime: '06:30:00',
+    trainStatus: 'late',
+    lateBucket: '1-5',
+    statusOpen: 'open',
+};
+assert(isSameLocalDay(staleToday.timestamp, morning), 'stale report is still today');
+assert(!isReportStillLive(staleToday, { nowMs: morning, nowSec: 11 * 3600, dayType: 'weekday' }), 'hour-plus morning report is not live');
+const expired = expiredReportsFromToday([staleToday], { nowMs: morning, nowSec: 11 * 3600, dayType: 'weekday' });
+assert(expired.length === 1, 'expired accordion keeps today’s stale reports');
+assert(expiredReportsFromToday([fresh], { nowMs, nowSec, dayType: 'weekday' }).length === 0, 'live reports stay out of expired');
+assert(expiredReportsFromToday([staleToday], { nowMs: curfewMs }).length === 0, 'expired accordion also hides at 23:59');
 
 if (failures.length) {
     console.error('verify-reports-tracking failed:');

@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.4', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.5', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -239,10 +239,31 @@ assert(hubModals.includes('items-end justify-center p-0'), 'reports sheet docks 
 assert(hubModals.includes('h-[min(88dvh,100%)]'), 'reports sheet occupies viewport height');
 assert(!/id="reports-feed-modal"[\s\S]{0,400}scale-95/.test(hubModals), 'reports sheet does not scale-float off the bottom');
 assert(delayReports.includes('<details class="group'), 'commuter reports list is an accordion');
+assert(delayReports.includes('Expired Reports'), 'stale same-day reports sit under Expired Reports');
+assert(delayReports.includes('isAfterReportCurfew'), 'reports hide at 23:59');
+assert(delayReports.includes('routeHasNoScheduledTrains'), 'reporting is blocked when there is no timetable');
 assert(delayReports.includes('WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000'), 'weekday reports expire after one hour');
 assert(delayReports.includes('isReportStillLive'), 'stale and past-time reports are filtered');
 assert(trainGhosts.includes('TRACKING_WINDOW_SEC = 45 * 60'), 'tracking window is 45 minutes');
 assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty copy matches the 45-minute window');
+{
+    const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
+    const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
+    const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
+    assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = false'), 'live-share GPS vet is recorded but not enforced');
+    assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
+    assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
+    assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
+    assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
+    assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
+    assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');
+    assert(adminJs.includes('setupRideShareManager'), 'admin has a live sharing panel');
+    assert(adminJs.includes('live-share-panel'), 'live sharing panel id');
+    assert(adminJs.includes('data-ls-region'), 'live sharing panel has region tabs');
+}
 assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');

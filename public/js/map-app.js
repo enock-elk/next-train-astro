@@ -1948,15 +1948,26 @@
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
                 });
             }
-            function liveTrainIconSpec(zoom) {
+            function liveTrainIconSpec(zoom, trainId) {
                 var z = typeof zoom === 'number' ? zoom : 12;
                 var t = Math.max(0, Math.min(1, (z - 8) / 7));
+                var digits = String(trainId || '').length;
                 return {
-                    w: Math.round(40 + t * 56),
-                    h: Math.round(16 + t * 16),
-                    name: (7 + t * 3).toFixed(1),
-                    sub: (6 + t * 2).toFixed(1)
+                    w: Math.round(92 + t * 28 + Math.max(0, digits - 4) * 7),
+                    h: Math.round(40 + t * 8),
+                    name: (12 + t * 2).toFixed(1),
+                    sub: (8 + t * 1.5).toFixed(1)
                 };
+            }
+            function liveTrainGlyphHtml(trainId, n, mine, spec) {
+                var mineCls = mine ? ' nt-live-train-glyph--mine' : '';
+                var ico = '<span class="nt-live-train-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="4" y="7" width="16" height="10" rx="2.2" fill="currentColor"/><path d="M7 17.5v1.8M17 17.5v1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.2" cy="17.2" r="1.35" fill="#1e3a8a"/><circle cx="15.8" cy="17.2" r="1.35" fill="#1e3a8a"/><path d="M8 10h3.2M14.2 10H16" stroke="#dbeafe" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
+                return '<div class="nt-live-train-glyph' + mineCls + '" style="width:' + spec.w + 'px">'
+                    + ico
+                    + '<span class="nt-live-train-copy">'
+                    + '<span class="nt-live-train-name" style="font-size:' + spec.name + 'px">' + escapePing(trainId) + '</span>'
+                    + '<span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">' + escapePing(liveTrainShareLine(n, mine)) + '</span>'
+                    + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
                 var n = Math.max(0, Number(count) || 0);
@@ -2015,7 +2026,6 @@
                         (trains[k] = trains[k] || []).push(p);
                     } else loose.push(p);
                 });
-                const spec = liveTrainIconSpec(map.getZoom());
 
                 Object.keys(trains).forEach(function (trainId) {
                     const list = trains[trainId];
@@ -2027,22 +2037,23 @@
                     const mine = list.some(function (p) { return !!p.mine; });
                     const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || {}).speedMps || 0;
                     const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || {}).heading;
+                    const spec = liveTrainIconSpec(map.getZoom(), trainId);
                     const icon = L.divIcon({
                         className: 'nt-live-train',
-                        html: '<div class="nt-live-train-glyph" style="width:' + spec.w + 'px;min-width:0">'
-                            + '<span class="nt-live-train-name" style="font-size:' + spec.name + 'px">Train '
-                            + escapePing(trainId) + '</span><span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">'
-                            + escapePing(liveTrainShareLine(n, mine)) + '</span></div>',
+                        html: liveTrainGlyphHtml(trainId, n, mine, spec),
                         iconSize: [spec.w, spec.h],
                         iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
                     const marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
                     const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
+                    const actionBtn = mine
+                        ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
+                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
                     marker.bindPopup(
-                        "<div class='text-xs text-gray-900 text-center'>"
-                        + "<p class='font-black'>Train " + escapePing(trainId) + "</p>"
-                        + "<p class='text-[10px] text-gray-500 mt-0.5'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
-                        + "<button type='button' id='" + joinId + "' class='mt-2 w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold'>I’m on this train</button>"
+                        "<div class='nt-live-train-pop'>"
+                        + "<p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
+                        + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
+                        + actionBtn
                         + "</div>"
                     );
                     marker.on('popupopen', function () {
@@ -2051,7 +2062,7 @@
                         btn.onclick = function () {
                             try {
                                 (window.parent || window).postMessage({
-                                    type: 'nt-map-join-train',
+                                    type: mine ? 'nt-map-stop-share' : 'nt-map-join-train',
                                     trainId: trainId,
                                     station: list[0].station || '',
                                     routeId: list[0].routeId || null

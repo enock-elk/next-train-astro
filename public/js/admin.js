@@ -3324,6 +3324,7 @@ const Admin = {
         runAdminSetup('telemetry', () => Admin.setupTelemetry());
         runAdminSetup('feedback', () => Admin.setupFeedbackManager());
         runAdminSetup('delayReports', () => Admin.setupDelayReportsManager());
+        runAdminSetup('rideShare', () => Admin.setupRideShareManager());
         runAdminSetup('moderation', () => Admin.setupModerationQueueManager());
         runAdminSetup('userTrust', () => Admin.setupUserTrustManager());
         runAdminSetup('deadEnds', () => Admin.setupDeadEndsManager());
@@ -4131,6 +4132,7 @@ const Admin = {
         if (quiet) return true;
         if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
         if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
+        if (panelId === 'live-share-panel' && typeof Admin.fetchRideShareLog === 'function') Admin.fetchRideShareLog();
         if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
         if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
         if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
@@ -7580,6 +7582,167 @@ const Admin = {
                 });
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
+            }
+        };
+    },
+
+    setupRideShareManager: () => {
+        const alertPanel = document.getElementById('alert-panel');
+        if (!alertPanel || !alertPanel.parentNode) return;
+
+        let lsPanel = document.getElementById('live-share-panel');
+        if (!lsPanel) {
+            lsPanel = document.createElement('div');
+            lsPanel.id = 'live-share-panel';
+            const after = document.getElementById('delay-reports-panel') || document.getElementById('feedback-panel');
+            if (after && after.parentNode) after.parentNode.insertBefore(lsPanel, after.nextSibling);
+            else alertPanel.parentNode.insertBefore(lsPanel, alertPanel);
+        }
+        if (lsPanel.dataset.adminLoaded === 'true') return;
+        lsPanel.dataset.adminLoaded = 'true';
+        Admin._lsRegion = Admin._lsRegion || 'GP';
+
+        lsPanel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        lsPanel.innerHTML = `
+            <div id="ls-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative cursor-pointer">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('pin', 'text-blue-600 dark:text-blue-400')}
+                    <span>Live sharing</span>
+                </span>
+                <svg id="ls-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div id="ls-body" class="hidden mt-4 flex flex-col">
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Live ride pings and a log of share start / stop by region. User ID is the Firebase uid.</p>
+                <div class="grid-hidden-actions flex space-x-1 mb-3 px-1" id="ls-region-tabs"></div>
+                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                    <button type="button" id="ls-refresh-btn" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                </div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Live now</p>
+                <div id="ls-live-list" class="space-y-2 max-h-[28vh] overflow-y-auto pr-1 custom-scrollbar mb-4"></div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Share log</p>
+                <div id="ls-log-list" class="space-y-2 max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+            </div>
+        `;
+
+        const header = document.getElementById('ls-header-btn');
+        const body = document.getElementById('ls-body');
+        const chevron = document.getElementById('ls-chevron');
+        const refreshBtn = document.getElementById('ls-refresh-btn');
+        const tabsHost = document.getElementById('ls-region-tabs');
+        const regions = (typeof REGIONS !== 'undefined' && REGIONS) ? Object.keys(REGIONS) : ['GP', 'WC', 'KZN', 'EC'];
+
+        const paintTabs = () => {
+            if (!tabsHost) return;
+            tabsHost.innerHTML = regions.map((id) => {
+                const on = Admin._lsRegion === id;
+                const label = (typeof REGIONS !== 'undefined' && REGIONS[id]?.name) || id;
+                return `<button type="button" data-ls-region="${id}" class="flex-1 rounded-lg px-2 py-2 text-[10px] font-black ${on ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300'}">${label}</button>`;
+            }).join('');
+            tabsHost.querySelectorAll('[data-ls-region]').forEach((btn) => {
+                btn.onclick = () => {
+                    Admin._lsRegion = btn.getAttribute('data-ls-region');
+                    paintTabs();
+                    Admin.fetchRideShareLog();
+                };
+            });
+        };
+        paintTabs();
+
+        header.onclick = () => {
+            if (Admin.isGridMode) return;
+            body.classList.toggle('hidden');
+            if (body.classList.contains('hidden')) {
+                chevron.classList.add('-rotate-90');
+                header.classList.remove('mb-4');
+            } else {
+                chevron.classList.remove('-rotate-90');
+                header.classList.add('mb-4');
+                Admin.fetchRideShareLog();
+            }
+        };
+        refreshBtn.onclick = () => Admin.fetchRideShareLog();
+
+        const esc = (t) => String(t || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        const routeName = (id) => {
+            try {
+                if (typeof ROUTES !== 'undefined' && ROUTES[id]) return ROUTES[id].name || id;
+            } catch (e) {}
+            return id || 'Unknown route';
+        };
+        const regionOf = (routeId) => {
+            try {
+                if (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) return ROUTES[routeId].region;
+            } catch (e) {}
+            return '';
+        };
+
+        Admin.fetchRideShareLog = async () => {
+            const liveEl = document.getElementById('ls-live-list');
+            const logEl = document.getElementById('ls-log-list');
+            if (!liveEl || !logEl) return;
+            liveEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+            logEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+            const region = Admin._lsRegion || 'GP';
+            try {
+                const secret = await Admin.getAuthKey();
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = secret ? `?auth=${secret}` : '';
+                const [pingsRes, logRes] = await Promise.all([
+                    window.guardianFetch(`${dynamicEndpoint}ride_pings.json${authQ}`, {}, 8000),
+                    window.guardianFetch(`${dynamicEndpoint}ride_share_log/${encodeURIComponent(region)}.json${authQ}`, {}, 8000),
+                ]);
+                const now = Date.now();
+                const liveRows = [];
+                if (pingsRes.ok) {
+                    const pings = await pingsRes.json();
+                    if (pings && typeof pings === 'object') {
+                        Object.entries(pings).forEach(([routeId, nodes]) => {
+                            if (regionOf(routeId) !== region || !nodes || typeof nodes !== 'object') return;
+                            Object.values(nodes).forEach((p) => {
+                                if (!p || (p.expiresAt || 0) <= now) return;
+                                liveRows.push({ ...p, routeId: p.routeId || routeId });
+                            });
+                        });
+                    }
+                }
+                liveRows.sort((a, b) => (b.at || 0) - (a.at || 0));
+                liveEl.innerHTML = liveRows.length
+                    ? liveRows.slice(0, 80).map((p) => `
+                        <div class="border border-blue-100 dark:border-blue-900/50 rounded-xl p-3 text-left">
+                            <div class="flex justify-between gap-2">
+                                <p class="text-xs font-black text-gray-900 dark:text-white">Train ${esc(p.trainId || '—')} · ${esc(routeName(p.routeId))}</p>
+                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${p.at ? new Date(p.at).toLocaleString() : '-'}</span>
+                            </div>
+                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">${esc(p.source || '')} · ${esc(p.station || '')}</p>
+                        </div>`).join('')
+                    : '<p class="text-xs text-gray-400 text-center py-4">No live shares in this region.</p>';
+
+                const logItems = [];
+                if (logRes.ok) {
+                    const data = await logRes.json();
+                    if (data && typeof data === 'object') {
+                        Object.entries(data).forEach(([key, v]) => {
+                            if (v) logItems.push({ ...v, _key: key });
+                        });
+                    }
+                }
+                logItems.sort((a, b) => (b.at || 0) - (a.at || 0));
+                logEl.innerHTML = logItems.length
+                    ? logItems.slice(0, 120).map((r) => `
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left">
+                            <div class="flex justify-between gap-2">
+                                <p class="text-xs font-black text-gray-900 dark:text-white">${esc(r.action || '')} · Train ${esc(r.trainId || '—')}</p>
+                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${r.at ? new Date(r.at).toLocaleString() : '-'}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5">${esc(routeName(r.routeId))}</p>
+                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(r.uid || '')} · ${esc(r.email || '')} · device ${esc(r.deviceId || '')}</p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">${esc(r.source || '')} · ${esc(r._key)}</p>
+                        </div>`).join('')
+                    : '<p class="text-xs text-gray-400 text-center py-4">No share log entries for this region yet.</p>';
+            } catch (e) {
+                liveEl.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
+                logEl.innerHTML = '';
             }
         };
     },

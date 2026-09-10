@@ -33,7 +33,7 @@ import {
     progressAlongStops,
     trainGoingLabel,
 } from './train-ghosts.js';
-import { peekCachedRouteReports } from './delay-reports.js';
+import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
 
 /** Safety TTL while the onboard loop refreshes `expiresAt`. Stop or terminus ends the share. */
@@ -357,7 +357,7 @@ export function trainHasLivePing(trainId, routeId = $currentRouteId.get()) {
 function matchingDelayReport(trainId, routeId) {
     const id = String(trainId || '');
     return peekCachedRouteReports(routeId).some((r) => {
-        if (!r || String(r.trainId || '') !== id) return false;
+        if (!r || String(r.trainId || '') !== id || !isReportStillLive(r)) return false;
         const s = r.trainStatus || r.status;
         return s === 'late' || s === 'early';
     });
@@ -601,6 +601,86 @@ async function findConflictingShare({ deviceId, uid, email }) {
     return null;
 }
 
+async function expireRemoteShare(ping) {
+    if (!ping?.routeId || !ping?.deviceId) return { ok: false, message: 'Couldn’t find the other share.' };
+    const now = Date.now();
+    const payload = {
+        routeId: ping.routeId,
+        deviceId: ping.deviceId,
+        station: ping.station || 'here',
+        at: now,
+        expiresAt: now,
+        appVersion: APP_VERSION,
+        source: 'stop_remote',
+    };
+    if (ping.trainId) payload.trainId = ping.trainId;
+    if (ping.waitingFor) payload.waitingFor = ping.waitingFor;
+    if (ping.destination) payload.destination = ping.destination;
+    if (ping.uid) payload.uid = ping.uid;
+    if (ping.email) payload.email = ping.email;
+    if (typeof ping.coarseLat === 'number') payload.coarseLat = ping.coarseLat;
+    if (typeof ping.coarseLng === 'number') payload.coarseLng = ping.coarseLng;
+    if (typeof ping.heading === 'number') payload.heading = ping.heading;
+    if (typeof ping.speedMps === 'number') payload.speedMps = ping.speedMps;
+    try {
+        const token = await ensureAuthToken();
+        if (!token) throw new Error('Sign-in required to stop the other share.');
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}ride_pings/${encodeURIComponent(ping.routeId)}/${encodeURIComponent(ping.deviceId)}.json?auth=${encodeURIComponent(token)}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }
+        );
+        if (!res.ok) throw new Error(permissionMessage(res.status));
+        appendRideShareLog({
+            action: 'stop',
+            routeId: ping.routeId,
+            trainId: ping.trainId || null,
+            deviceId: ping.deviceId,
+            uid: ping.uid,
+            email: ping.email,
+            source: 'stop_remote',
+            at: now,
+        });
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Couldn’t stop the other share' };
+    }
+}
+
+async function appendRideShareLog({ action, routeId, trainId, deviceId, uid, email, source, at }) {
+    const fbUid = (typeof window !== 'undefined' && window.firebaseAuth?.currentUser?.uid) || uid || null;
+    if (!fbUid || !routeId || !deviceId) return;
+    const region = String(ROUTES[routeId]?.region || 'GP');
+    const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        region,
+        routeId,
+        deviceId,
+        uid: fbUid,
+        action,
+        source: source || '',
+        at: at || Date.now(),
+        appVersion: APP_VERSION,
+    };
+    if (trainId) payload.trainId = String(trainId);
+    if (email) payload.email = String(email);
+    try {
+        const token = await ensureAuthToken();
+        if (!token) return;
+        await fetch(
+            `${DYNAMIC_BASE_URL}ride_share_log/${encodeURIComponent(region)}/${encodeURIComponent(entryId)}.json?auth=${encodeURIComponent(token)}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }
+        );
+    } catch { /* optional history */ }
+}
+
 /**
  * Share a ride from the current station / optional train (no continuous GPS).
  */
@@ -626,6 +706,9 @@ export async function submitRideCheckIn({
         st = nearestStationOnRoute(coarseLat, coarseLng, routeId)?.stationName || '';
     }
     if (!routeId) return { ok: false, message: 'Pick a corridor first.' };
+    if (source !== 'onboard_ping' && source !== 'stop' && routeHasNoScheduledTrains()) {
+        return { ok: false, message: 'There are no trains to share today.' };
+    }
     if (!st && relaxLiveShareGuards()) st = 'here';
     if (!st) return { ok: false, message: 'Pick a station or allow location.' };
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
@@ -638,7 +721,19 @@ export async function submitRideCheckIn({
     if (source !== 'onboard_ping' && source !== 'stop') {
         const clash = await findConflictingShare({ deviceId, uid, email });
         if (clash) {
-            return { ok: false, message: 'You’re already sharing on another device. Stop there first.' };
+            const trainBit = clash.trainId ? ` Train ${clash.trainId}` : '';
+            const { promptOnTrainSheet } = await import('./map-tab.js');
+            const choice = await promptOnTrainSheet({
+                title: 'Already sharing elsewhere',
+                body: `You’re already sharing${trainBit} on another device. Stop that share and continue here?`,
+                primary: 'Stop the other share',
+                secondary: 'Keep the other share',
+            });
+            if (choice !== 'primary') {
+                return { ok: false, cancelled: true, message: 'Still sharing on the other device.' };
+            }
+            const stopped = await expireRemoteShare(clash);
+            if (!stopped.ok) return { ok: false, message: stopped.message };
         }
     }
     const payload = {
@@ -679,6 +774,18 @@ export async function submitRideCheckIn({
         }));
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
         routeCache[routeId] = activePings([payload, ...existing]);
+        if (source !== 'onboard_ping' && source !== 'stop') {
+            appendRideShareLog({
+                action: 'start',
+                routeId,
+                trainId: trainId || null,
+                deviceId,
+                uid,
+                email,
+                source: source || 'board_checkin',
+                at: now,
+            });
+        }
         const toastMsg = trainId
             ? `Others can see ${trainId}${destination ? ` → ${stationShort(destination)}` : ''}`
             : waitingFor
@@ -730,6 +837,16 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.removeItem(ACTIVE_KEY);
         stopOnboardPingLoop();
+        appendRideShareLog({
+            action: 'stop',
+            routeId,
+            trainId: active?.trainId || null,
+            deviceId,
+            uid: $account.get().status === 'signed-in' ? $account.get().uid : null,
+            email: $account.get().status === 'signed-in' ? ($account.get().email || null) : null,
+            source: reason ? `stop_${reason}` : 'stop',
+            at: now,
+        });
         notifyPingsUpdated(routeId);
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
         if (!quiet) {

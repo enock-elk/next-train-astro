@@ -10,8 +10,8 @@
  * }
  */
 import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
-import { safeStorage, timeToSeconds, normalizeStationName, escapeHTML, formatTimeDisplay } from './utils.js';
-import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
+import { safeStorage, timeToSeconds, normalizeStationName, escapeHTML, formatTimeDisplay, isRealTime, usesSaturdayScheduleSheet, usesPublicHolidayScheduleSheet } from './utils.js';
+import { $currentRouteId, $userRegion, $deviceId, $schedules } from '../store.js';
 import { $account } from './account.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
@@ -50,6 +50,9 @@ const AUTH_ROUTE_MS = 8 * 60 * 1000;
 /** Weekdays drop reports after one hour; Sat/Sun keep the longer board window. */
 export const WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000;
 export const WEEKEND_REPORT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+/** Local wall-clock minute when the day’s reports leave the feed entirely. */
+export const REPORT_CURFEW_HOUR = 23;
+export const REPORT_CURFEW_MINUTE = 59;
 const REPORT_WINDOW_SEC = 20 * 60; // ±20 min around scheduled station time when filing
 const RATE_KEY = 'delayReportRateV1';
 const VALIDATE_RATE_KEY = 'delayValidateRateV1';
@@ -91,6 +94,45 @@ export function reportSurfaceWindowMs(dayType = currentDayType()) {
         : WEEKDAY_REPORT_MAX_AGE_MS;
 }
 
+export function startOfLocalDayMs(nowMs = Date.now()) {
+    const d = new Date(nowMs);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
+/** Hide the whole feed from 23:59 local until the next calendar day. */
+export function isAfterReportCurfew(nowMs = Date.now()) {
+    const d = new Date(nowMs);
+    return d.getHours() > REPORT_CURFEW_HOUR
+        || (d.getHours() === REPORT_CURFEW_HOUR && d.getMinutes() >= REPORT_CURFEW_MINUTE);
+}
+
+export function isSameLocalDay(ts, nowMs = Date.now()) {
+    const t = Number(ts) || 0;
+    if (!t) return false;
+    return t >= startOfLocalDayMs(nowMs) && t <= nowMs;
+}
+
+function scheduleSheetHasTrains(schedule) {
+    if (!schedule?.rows?.length || !Array.isArray(schedule.headers)) return false;
+    const stationCol = schedule.stationColumnName || 'STATION';
+    const trainCols = schedule.headers.filter((h) => h && h !== stationCol && h !== 'STATION' && h !== 'COORDINATES' && h !== 'KM_MARK' && h !== 'row_index');
+    if (!trainCols.length) return false;
+    return schedule.rows.some((row) => trainCols.some((col) => isRealTime(row[col])));
+}
+
+/** Sunday, empty Saturday sheets, or a public holiday with no trains. */
+export function routeHasNoScheduledTrains(dayType = currentDayType(), region = $userRegion.get() || 'GP', schedules = $schedules.get() || {}) {
+    if (dayType === 'sunday') return true;
+    const sat = scheduleSheetHasTrains(schedules.saturday_to_a) || scheduleSheetHasTrains(schedules.saturday_to_b);
+    if (usesSaturdayScheduleSheet(dayType, region)) return !sat;
+    if (usesPublicHolidayScheduleSheet(dayType, region)) {
+        const pub = scheduleSheetHasTrains(schedules.pub_to_a) || scheduleSheetHasTrains(schedules.pub_to_b);
+        return !pub && !sat;
+    }
+    return !(scheduleSheetHasTrains(schedules.weekday_to_a) || scheduleSheetHasTrains(schedules.weekday_to_b));
+}
+
 /**
  * Hide reports that are older than the day window, or whose train is well past
  * the 45-minute tracking envelope (lateness / cancellation add a little slack).
@@ -98,6 +140,7 @@ export function reportSurfaceWindowMs(dayType = currentDayType()) {
 export function isReportStillLive(report, opts = {}) {
     if (!report || report.statusOpen === 'closed' || report.status === 'closed') return false;
     const nowMs = opts.nowMs ?? Date.now();
+    if (isAfterReportCurfew(nowMs) || !isSameLocalDay(report.timestamp, nowMs)) return false;
     const nowSec = opts.nowSec ?? getNowSeconds();
     const dayType = opts.dayType ?? currentDayType();
     if ((Number(report.timestamp) || 0) <= nowMs - reportSurfaceWindowMs(dayType)) return false;
@@ -196,6 +239,13 @@ export function peekCachedRouteReports(routeId) {
     return routeReportCache[routeId] || [];
 }
 
+function keepTodaysOpenReports(list, nowMs = Date.now()) {
+    if (isAfterReportCurfew(nowMs)) return [];
+    return (list || [])
+        .filter((r) => r && r.statusOpen !== 'closed' && r.status !== 'closed' && isSameLocalDay(r.timestamp, nowMs))
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+
 export async function fetchRecentRouteReports(routeId, maxAgeMs = reportSurfaceWindowMs()) {
     if (!routeId || !navigator.onLine) return [];
     const cached = routeReportCache[routeId];
@@ -218,11 +268,8 @@ export async function fetchRecentRouteReports(routeId, maxAgeMs = reportSurfaceW
             routeReportCacheAt[routeId] = Date.now();
             return [];
         }
-        const cut = Date.now() - maxAgeMs;
-        const list = Object.values(data)
-            .filter((r) => r && r.statusOpen !== 'closed' && r.status !== 'closed' && (r.timestamp || 0) > cut)
-            .filter((r) => isReportStillLive(r))
-            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        void maxAgeMs;
+        const list = keepTodaysOpenReports(Object.values(data));
         routeReportCache[routeId] = list;
         routeReportCacheAt[routeId] = Date.now();
         return list;
@@ -318,11 +365,22 @@ function relativeAgo(ts) {
     return mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
 }
 
-function displayableReports(reports) {
+function primaryReports(reports) {
     const list = Array.isArray(reports) ? reports : [];
     const primary = list.filter((r) => !r?.isValidation);
-    const src = primary.length ? primary : list;
-    return src.filter((r) => isReportStillLive(r));
+    return primary.length ? primary : list;
+}
+
+function displayableReports(reports) {
+    return primaryReports(reports).filter((r) => isReportStillLive(r));
+}
+
+export function expiredReportsFromToday(reports, opts = {}) {
+    if (isAfterReportCurfew(opts.nowMs ?? Date.now())) return [];
+    return primaryReports(reports).filter((r) => {
+        if (isReportStillLive(r, opts)) return false;
+        return isSameLocalDay(r.timestamp, opts.nowMs ?? Date.now());
+    });
 }
 
 export function reportStatusPhrase(agg) {
@@ -333,7 +391,7 @@ export function reportStatusPhrase(agg) {
 export function reportsForTrain(trainId, routeId = $currentRouteId.get()) {
     const id = String(trainId || '');
     if (!id) return [];
-    return peekCachedRouteReports(routeId).filter((r) => String(r.trainId || '') === id);
+    return peekCachedRouteReports(routeId).filter((r) => String(r.trainId || '') === id && isReportStillLive(r));
 }
 
 export function summarizeReportsForTrain(trainId, routeId = $currentRouteId.get()) {
@@ -511,13 +569,11 @@ export async function startDelayReportsListener(routeId) {
 
         const unsub = window.firebaseDbOnValue(q, (snap) => {
             const data = snap?.val?.() || null;
-            const cut = Date.now() - reportSurfaceWindowMs();
             let list = [];
             if (data) {
-                list = Object.values(data)
-                    .filter((r) => r && r.routeId === routeId && r.statusOpen !== 'closed' && r.status !== 'closed' && (r.timestamp || 0) > cut)
-                    .filter((r) => isReportStillLive(r))
-                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                list = keepTodaysOpenReports(
+                    Object.values(data).filter((r) => r && r.routeId === routeId)
+                );
             }
             routeReportCache[routeId] = list;
             routeReportCacheAt[routeId] = Date.now();
@@ -625,7 +681,7 @@ export async function hydrateTrainReportSlots(root = document) {
 
     const byRoute = {};
     await Promise.all(routeIds.map(async (rid) => {
-        byRoute[rid] = await fetchRecentRouteReports(rid);
+        byRoute[rid] = displayableReports(await fetchRecentRouteReports(rid));
         if (!routeListeners[rid]) startDelayReportsListener(rid);
     }));
 
@@ -788,6 +844,10 @@ function showTrainReportStep(step) {
 export function openTrainReportModal(opts = {}) {
     const routeId = opts.routeId || $currentRouteId.get() || '';
     if (!isDelayReportsUiEnabled(routeId)) return;
+    if (routeHasNoScheduledTrains()) {
+        showToast('There are no trains to report today.', 'info');
+        return;
+    }
     const trainId = opts.trainId || '';
     const scheduledTime = opts.scheduledTime || '';
     const station = opts.station || document.getElementById('station-select')?.value || '';
@@ -898,6 +958,10 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
     const showErr = (m) => { if (errEl) errEl.textContent = m; };
 
     if (!routeId) { showErr('Missing route.'); return false; }
+    if (routeHasNoScheduledTrains()) {
+        showErr('There are no trains to report today.');
+        return false;
+    }
     if (trainId && scheduledTime && !isTrainInReportWindow(scheduledTime)) {
         showErr('Outside the 20-minute report window.');
         return false;
@@ -1291,41 +1355,25 @@ function consensusButtonsHtml(candidate, routeId) {
     </div>`;
 }
 
-async function paintReportsFeed(routeId) {
-    const listEl = document.getElementById('reports-feed-list');
-    if (!listEl) return;
-    const reports = await fetchRecentRouteReports(routeId);
-    let rows = displayableReports(reports);
-    if (reportsFeedFocusTrain) {
-        rows = rows.filter((r) => String(r.trainId || '') === reportsFeedFocusTrain);
-    }
-    if (!rows.length) {
-        listEl.innerHTML = `<p class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400 text-center">No reports on this line right now.</p>`;
-        return;
-    }
-    const groups = groupReportsForAccordion(rows.slice(0, 24));
-    listEl.innerHTML = groups.map((g, i) => {
-        const r = g.reports[0];
-        const going = reportGoingLabel(r.trainId, r.destination);
-        const status = statusLabel({
-            status: r.trainStatus || r.status || 'late',
-            avgLateMin: LATE_MID[r.lateBucket] || 10,
-        });
-        const cls = statusColorClass(r.trainStatus || r.status || 'late');
-        const seen = r.station ? `Last seen ${reportStationLabel(r.station)}` : '';
-        const when = relativeAgo(r.timestamp);
-        const open = reportsFeedFocusTrain
-            ? String(r.trainId) === reportsFeedFocusTrain
-            : i === 0;
-        const notes = g.reports
-            .map((item) => String(item.note || '').trim())
-            .filter(Boolean);
-        const uniqueNotes = [...new Set(notes)];
-        const candidate = reportConsensusCandidate(g.reports, routeId, r.trainId);
-        const extra = g.reports.length > 1
-            ? `<p class="text-[11px] text-gray-400 mt-1">${g.reports.length} sightings</p>`
-            : '';
-        return `<details class="group border-b border-gray-100 dark:border-gray-800" ${open ? 'open' : ''}>
+function reportGroupDetailsHtml(g, routeId, { open = false, consensus = true } = {}) {
+    const r = g.reports[0];
+    const going = reportGoingLabel(r.trainId, r.destination);
+    const status = statusLabel({
+        status: r.trainStatus || r.status || 'late',
+        avgLateMin: LATE_MID[r.lateBucket] || 10,
+    });
+    const cls = statusColorClass(r.trainStatus || r.status || 'late');
+    const seen = r.station ? `Last seen ${reportStationLabel(r.station)}` : '';
+    const when = relativeAgo(r.timestamp);
+    const notes = g.reports
+        .map((item) => String(item.note || '').trim())
+        .filter(Boolean);
+    const uniqueNotes = [...new Set(notes)];
+    const candidate = consensus ? reportConsensusCandidate(g.reports, routeId, r.trainId) : null;
+    const extra = g.reports.length > 1
+        ? `<p class="text-[11px] text-gray-400 mt-1">${g.reports.length} sightings</p>`
+        : '';
+    return `<details class="group border-b border-gray-100 dark:border-gray-800" ${open ? 'open' : ''}>
             <summary class="flex items-start justify-between gap-3 px-4 py-3 cursor-pointer select-none">
                 <div class="min-w-0 text-left">
                     <p class="text-sm font-black text-gray-900 dark:text-white">${escapeHTML(going)}</p>
@@ -1333,7 +1381,7 @@ async function paintReportsFeed(routeId) {
                 </div>
                 <span class="flex items-center gap-2 shrink-0 pt-0.5">
                     <span class="text-[10px] font-semibold text-gray-400">${escapeHTML(when)}</span>
-                    <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-join="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                    <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
                 </span>
             </summary>
             <div class="px-4 pb-4 text-left">
@@ -1343,15 +1391,62 @@ async function paintReportsFeed(routeId) {
                 ${consensusButtonsHtml(candidate, routeId)}
             </div>
         </details>`;
-    }).join('');
-    listEl.querySelectorAll('details').forEach((d) => {
+}
+
+function bindExclusiveDetails(root) {
+    if (!root) return;
+    root.querySelectorAll(':scope > details').forEach((d) => {
         d.addEventListener('toggle', () => {
             if (!d.open) return;
-            listEl.querySelectorAll('details').forEach((other) => {
+            root.querySelectorAll(':scope > details').forEach((other) => {
                 if (other !== d) other.open = false;
             });
         });
     });
+}
+
+async function paintReportsFeed(routeId) {
+    const listEl = document.getElementById('reports-feed-list');
+    if (!listEl) return;
+    const reports = await fetchRecentRouteReports(routeId);
+    let liveRows = displayableReports(reports);
+    let expiredRows = expiredReportsFromToday(reports);
+    if (reportsFeedFocusTrain) {
+        liveRows = liveRows.filter((r) => String(r.trainId || '') === reportsFeedFocusTrain);
+        expiredRows = expiredRows.filter((r) => String(r.trainId || '') === reportsFeedFocusTrain);
+    }
+    if (!liveRows.length && !expiredRows.length) {
+        const empty = isAfterReportCurfew()
+            ? 'Reports reset at midnight. Come back tomorrow.'
+            : 'No reports on this line right now.';
+        listEl.innerHTML = `<p class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400 text-center">${empty}</p>`;
+        return;
+    }
+    const liveGroups = groupReportsForAccordion(liveRows.slice(0, 24));
+    const expiredGroups = groupReportsForAccordion(expiredRows.slice(0, 24));
+    const liveHtml = liveGroups.map((g, i) => reportGroupDetailsHtml(g, routeId, {
+        open: reportsFeedFocusTrain
+            ? String(g.trainId) === reportsFeedFocusTrain
+            : i === 0,
+        consensus: true,
+    })).join('');
+    const expiredHtml = expiredGroups.length
+        ? `<details class="group border-t border-gray-200 dark:border-gray-700 mt-1">
+            <summary class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none">
+                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Expired Reports</span>
+                <span class="flex items-center gap-2 shrink-0">
+                    <span class="text-[10px] font-bold text-gray-400">${expiredGroups.length}</span>
+                    <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                </span>
+            </summary>
+            <div id="reports-feed-expired" class="pb-2">
+                ${expiredGroups.map((g) => reportGroupDetailsHtml(g, routeId, { open: false, consensus: false })).join('')}
+            </div>
+        </details>`
+        : '';
+    listEl.innerHTML = `${liveHtml}${expiredHtml}`;
+    bindExclusiveDetails(listEl);
+    bindExclusiveDetails(document.getElementById('reports-feed-expired'));
 }
 
 function refreshReportsFeedIfOpen(routeId) {

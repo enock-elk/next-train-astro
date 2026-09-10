@@ -138,7 +138,7 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');
     assert(renderer.includes('top-[2px]'), 'in-app NO SVC sits above the train number');
     assert(!renderer.includes('bottom-[2px]'), 'NO SVC is not anchored to the bottom of the header');
-    assert(renderer.includes('position:absolute; top:2px'), 'PNG export NO SVC sits above the train number');
+    assert(renderer.includes('export-banned-stack'), 'PNG export NO SVC sits above the train number');
     assert(!renderer.includes('bottom:2px'), 'PNG export NO SVC is not on the train number');
     assert(renderer.includes('decoration-dotted'), 'NO SVC uses a dotted underline');
     assert(!renderer.includes('nt-excl-col'), 'banned columns do not use extra nt-excl-col padding');
@@ -149,7 +149,8 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(board.includes('[data-excl-open="1"]'), 'NO SVC column taps open the advisory');
     assert(board.includes('[data-focus-train]'), 'live dots do not steal the cancellation tap');
     assert(board.includes("openFeedbackReplyFromOverlay('disruption-modal', replyOptions)"), 'exclusion Reply keeps an advisory preview');
-    assert(renderer.includes('export-banned-col relative'), 'PNG export NO SVC stays a static span');
+    assert(renderer.includes('export-no-svc'), 'PNG export NO SVC stays a static span');
+    assert(!/export-banned-col[\s\S]{0,80}position:absolute/.test(renderer), 'PNG export NO SVC is not absolutely positioned');
     const grid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(grid.includes('ensureOpsOverlaysReady'), 'full timetable waits for exclusions before relying on the first paint');
     assert(grid.includes('paintOpenGridBody'), 'open timetable re-paints when cancellations arrive');

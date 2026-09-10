@@ -299,9 +299,32 @@ assert(!/alert-sched-delete[^>]*>Clear</.test(admin), 'scheduled Clear label is 
 assert(admin.includes('setupRideShareManager'), 'live sharing admin panel exists');
 assert(admin.includes('live-share-panel'), 'live sharing panel id');
 assert(admin.includes('data-ls-region'), 'live sharing has region tabs');
+assert(admin.includes('groupRideShareLogs'), 'live sharing groups start/stop into sessions');
+assert(admin.includes('data-ls-session'), 'share sessions are expandable');
 assert(admin.includes('openAdminChangelogLookup'), 'admin can look up operator build notes');
 assert(admin.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
 assert(admin.includes('data-admin-changelog'), 'feedback version opens build notes');
+
+{
+    const start = admin.indexOf('const groupRideShareLogs = (items) => {');
+    assert(start >= 0, 'groupRideShareLogs function body is present');
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < admin.length; i++) {
+        if (admin[i] === '{') depth += 1;
+        else if (admin[i] === '}') {
+            depth -= 1;
+            if (depth === 0) { end = i + 1; break; }
+        }
+    }
+    const fn = admin.slice(start, end);
+    const groupRideShareLogs = eval('(' + fn.replace(/^const groupRideShareLogs = /, '') + ')');
+    const grouped = groupRideShareLogs([
+        { _key: 'stop1', action: 'stop', uid: 'u', deviceId: 'd', trainId: '1173', routeId: 'pta-pienaarspoort', at: 200, source: 'stop' },
+        { _key: 'start1', action: 'start', uid: 'u', deviceId: 'd', trainId: '1173', routeId: 'pta-pienaarspoort', at: 100, source: 'nearby_modal' },
+    ]);
+    assert(grouped.length === 1 && grouped[0].status === 'stopped' && grouped[0].startedAt === 100 && grouped[0].stoppedAt === 200, 'start and stop pair into one session');
+}
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

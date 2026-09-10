@@ -105,7 +105,7 @@ function ensureFrameSrc(force = false) {
     if (force || !frame.getAttribute('src')) {
         frameLoaded = false;
         document.getElementById('map-tab-fallback')?.classList.add('hidden');
-        document.getElementById('map-tab-placeholder')?.classList.remove('hidden');
+        document.getElementById('map-tab-placeholder')?.classList.add('hidden');
         // Cache-bust on retry so a cached redirect chain isn't replayed.
         const src = force ? `${mapFrameSrc()}&r=${Date.now()}` : mapFrameSrc();
         frame.setAttribute('src', src);

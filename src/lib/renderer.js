@@ -18,7 +18,7 @@ import { orderGridTrainIds } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, shortSharedSourceLabel,
+    formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg
 } from './utils.js';
 
@@ -49,10 +49,11 @@ import {
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
 const getCurrentDayIndex = () => typeof window !== 'undefined' && window.currentDayIndex !== undefined ? window.currentDayIndex : 1;
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
-const isTrainExcluded = (train, route, day) => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day) : false;
+const isTrainExcluded = (train, route, day, surface = 'in_app') => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day, surface) : false;
 /** Ban/special still applies live; export tags honour showOnExport (default true). */
 const exclusionShowsOnExport = (train, route, day) => {
     if (typeof window === 'undefined') return false;
+    if (!isTrainExcluded(train, route, day, 'export')) return false;
     const rule = typeof window.getTrainExclusionRule === 'function'
         ? window.getTrainExclusionRule(train, route, day)
         : null;
@@ -927,8 +928,9 @@ export const Renderer = {
         let gridNoticeHtml = '';
         const globalExclData = $globalExclusions.get();
         if (!isExport && globalExclData && globalExclData[routeId] && globalExclData[routeId]['_grid_notice']) {
-            const noticeText = globalExclData[routeId]['_grid_notice'].text;
-            if (noticeText && noticeText.trim() !== '') {
+            const noticeNode = globalExclData[routeId]['_grid_notice'];
+            const noticeText = noticeNode.text;
+            if (noticeNode.showInApp !== false && noticeText && noticeText.trim() !== '') {
                 const cleanText = escapeHTML(noticeText);
                 gridNoticeHtml = `
                     <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-4 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r flex items-start">
@@ -950,30 +952,33 @@ export const Renderer = {
                         <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
-                            const exclusionType = isTrainExcluded(h, routeId, dayIdx);
-                            // Live board always tags bans; export image honours showOnExport.
+                            const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
-                            let headerContent = h;
+                            const trainIdStyle = isExport
+                                ? 'display:block;font-size:11px;font-weight:800;color:#0f172a;line-height:14px;'
+                                : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
+                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px 14px;align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            let headerContent = stack('&nbsp;', 'visibility:hidden;');
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
                                 if (isExport) {
-                                    bgClass = 'export-spl-col relative';
-                                    headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#16a34a; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center;">${splIcon} SPL</span>${h}`;
+                                    bgClass = 'export-spl-col';
+                                    headerContent = stack(`${splIcon} SPL`, 'font-size:7px;color:#16a34a;font-weight:900;letter-spacing:0.5px;');
                                 } else {
-                                    bgClass = 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 opacity-95 relative';
-                                    headerContent = `<span class="absolute top-[2px] left-0 w-full text-[8px] text-green-600 dark:text-green-500 font-black tracking-tight leading-none flex justify-center items-center">${splIcon} SPL</span>${h}`;
+                                    bgClass = 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 opacity-95';
+                                    headerContent = stack(`${splIcon} SPL`, 'font-size:8px;color:#16a34a;font-weight:900;letter-spacing:0.02em;');
                                 }
                             } else if (paintExclusion) {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
                                     bgClass = 'export-banned-col';
-                                    headerContent = `<span class="export-banned-stack" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1.15;white-space:nowrap;"><span class="export-no-svc" style="display:block;font-size:9px;font-weight:800;letter-spacing:0.08em;color:#b91c1c;">NO SVC</span><span class="export-train-id" style="display:block;font-size:11px;font-weight:800;color:#0f172a;">${h}</span></span>`;
+                                    headerContent = stack('NO SVC', 'font-size:9px;font-weight:800;letter-spacing:0.08em;color:#b91c1c;');
                                 } else {
-                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
-                                    headerContent = `<span class="nt-excl-hit pointer-events-none absolute left-0 right-0 top-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center">${banIcon} NO SVC</span>${h}`;
+                                    bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90';
+                                    headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
@@ -1026,7 +1031,7 @@ export const Renderer = {
                         }
 
                         const isHighlight = i === activeColIndex;
-                        const exclusionType = isTrainExcluded(col, routeId, dayIdx);
+                        const exclusionType = isTrainExcluded(col, routeId, dayIdx, isExport ? 'export' : 'grid');
                         const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(col, routeId, dayIdx));
 
                         let cellClass = `${paddingClass} text-center border-r ${borderClass} border-b`;
@@ -1349,6 +1354,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const htmlB = schedB 
         ? Renderer._buildGridHTML(schedB, firebaseKeyB || keyB, activeRouteId, dummyDayIdx, false, true) 
         : `<div class="p-8 text-center italic border rounded" style="color:${mutedColor}; border-color:${borderColor}">No service scheduled for this direction.</div>`;
+    const primaryDirection = routePrimaryGridDirection(route);
+    const primarySection = primaryDirection === 'B'
+        ? { from: destAName, to: destBName, html: htmlB }
+        : { from: destBName, to: destAName, html: htmlA };
+    const returnSection = primaryDirection === 'B'
+        ? { from: destBName, to: destAName, html: htmlA }
+        : { from: destAName, to: destBName, html: htmlB };
 
     exportContainer.innerHTML = `
         <div class="mb-6 border-b-4 pb-4" style="border-color: ${accentColor}">
@@ -1367,11 +1379,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         ${exportGridNoticeHtml}
 
         <div class="mb-8">
-            <div class="p-2 mb-0 border-l-4" style="background-color: ${tableHeaderBg}; border-color: ${accentColor}">
-                <h3 class="font-bold text-lg uppercase" style="color: ${textColor}"> ${destBName} ➔ ${destAName}</h3>
+            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
+                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
-                ${htmlA}
+                ${primarySection.html}
             </div>
         </div>
 
@@ -1382,11 +1394,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-8">
-            <div class="p-2 mb-0 border-l-4" style="background-color: ${tableHeaderBg}; border-color: ${accentColor}">
-                <h3 class="font-bold text-lg uppercase" style="color: ${textColor}"> ${destAName} ➔ ${destBName}</h3>
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#f8fafc;border-color:#94a3b8;padding:10px 12px;min-height:42px;display:flex;align-items:center;">
+                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
-                ${htmlB}
+                ${returnSection.html}
             </div>
         </div>
 
@@ -1439,7 +1451,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         t.querySelectorAll('th.export-banned-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#fef2f2'; 
             headerCell.style.color = '#991b1b';
-            headerCell.style.padding = isCompact ? '10px 4px 8px' : '12px 8px 10px';
             headerCell.style.verticalAlign = 'middle';
         });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {

@@ -289,10 +289,22 @@ export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.n
     return rule;
 }
 
+/** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
+export function exclusionAppliesToSurface(rule, surface = 'in_app') {
+    if (!rule) return false;
+    const configured = rule.surface === 'in_app' || rule.surface === 'grid'
+        ? rule.surface
+        : 'both';
+    if (configured === 'both') return true;
+    return surface === 'grid' || surface === 'export'
+        ? configured === 'grid'
+        : configured === 'in_app';
+}
+
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
-export function isTrainExcluded(trainNumber, routeId, dayIdx) {
+export function isTrainExcluded(trainNumber, routeId, dayIdx, surface = 'in_app') {
     const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
-    return rule ? (rule.type || 'banned') : false;
+    return exclusionAppliesToSurface(rule, surface) ? (rule.type || 'banned') : false;
 }
 
 export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {

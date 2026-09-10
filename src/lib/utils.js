@@ -248,6 +248,23 @@ export function formatRouteLabelPlain(raw) {
     return raw.replace(/\s*<->\s*/g, ' ↔ ').replace(/\s*↔\s*/g, ' ↔ ').trim();
 }
 
+/**
+ * Grid direction is named for its destination. Route labels are named
+ * origin-first, so a "Hercules ↔ Koedoespoort" timetable starts with the
+ * sheet travelling away from Hercules, toward destB.
+ */
+export function routePrimaryGridDirection(route) {
+    if (!route) return 'A';
+    const cleanEnd = (value) => normalizeStationName(String(value || '').replace(/\s+STATION$/i, ''));
+    const firstLabel = formatRouteLabelPlain(route.name).split('↔')[0]?.trim() || '';
+    const first = cleanEnd(firstLabel);
+    const destA = cleanEnd(route.destA);
+    const destB = cleanEnd(route.destB);
+    if (first && first === destA) return 'B';
+    if (first && first === destB) return 'A';
+    return 'A';
+}
+
 /** HTML route label with SVG arrow between corridor ends. */
 export function formatRouteLabelHtml(raw) {
     if (typeof raw !== 'string' || !raw) return escapeHTML('Select a route');

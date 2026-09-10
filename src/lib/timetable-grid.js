@@ -2,7 +2,7 @@
  * Full timetable grid UI + route deep-link handling
  */
 import { ROUTES } from './config.js';
-import { safeStorage, escapeHTML, routeArrowSvg, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
+import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
@@ -172,7 +172,7 @@ export async function applyRouteDeepLink() {
     return true;
 }
 
-export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
+export function renderFullScheduleGrid(direction = null, dayOverride = null) {
     triggerHaptic();
     const routeId = $currentRouteId.get();
     const route = ROUTES[routeId];
@@ -181,6 +181,9 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
         showToast('Loading latest schedules... please wait.', 'info', 2000);
         return;
     }
+    direction = direction === 'A' || direction === 'B'
+        ? direction
+        : routePrimaryGridDirection(route);
 
     const currentDayType = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
     let selectedDay = dayOverride || currentDayType;

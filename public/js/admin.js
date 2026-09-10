@@ -13592,10 +13592,16 @@ const Admin = {
                         <input type="datetime-local" id="excl-grid-notice-expiry" class="w-full h-10 px-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                         <p class="text-[9px] text-blue-600 dark:text-blue-400 mt-1">Defaults to today at 23:59. Clear the field for no auto-expiry.</p>
                     </div>
-                    <label class="flex items-start cursor-pointer gap-2 pt-1 border-t border-blue-200 dark:border-blue-800/50">
-                        <input type="checkbox" id="excl-grid-notice-export" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
-                        <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Include banner on downloaded PNG</span>
-                    </label>
+                    <div class="pt-2 border-t border-blue-200 dark:border-blue-800/50 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                            <input type="checkbox" id="excl-grid-notice-in-app" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                            <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Show in app timetable</span>
+                        </label>
+                        <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                            <input type="checkbox" id="excl-grid-notice-export" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                            <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Show on downloaded grid</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
@@ -13666,19 +13672,21 @@ const Admin = {
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
                     <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">4. How this exception appears</p>
                     <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-white dark:bg-gray-800">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Live board</p>
-                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Ban / Special always hides or marks the train in the app board and planner for the days you pick.</p>
+                        <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Visibility</p>
+                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Tick one surface for in-app only or grid-only. Tick both to publish everywhere.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
+                                <input type="checkbox" id="excl-in-app-toggle" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">In-app board and planner</span>
+                            </label>
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
+                                <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">Timetable grid and PNG</span>
+                            </label>
+                        </div>
                         <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Live expiry</label>
                         <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                         <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. If set, the train automatically returns after this date. Clear the field for no auto-return.</p>
-                    </div>
-                    <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 bg-white dark:bg-gray-800">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-1">Downloaded PNG train tag</p>
-                        <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Not the timetable banner above. This only stamps the red NO SVC or green SPL tag on that train in the PNG you download.</p>
-                        <label class="flex items-start cursor-pointer gap-2">
-                            <input type="checkbox" id="excl-export-toggle" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
-                            <span class="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-snug">Include NO SVC / SPL tag on downloaded PNG</span>
-                        </label>
                     </div>
                 </div>
                 
@@ -14106,8 +14114,14 @@ const Admin = {
             const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
             const noticeExpiryTs = (noticeExpiryInput && noticeExpiryInput.value) ? new Date(noticeExpiryInput.value).getTime() : null;
             
+            const noticeInAppToggle = document.getElementById('excl-grid-notice-in-app');
+            const showInApp = noticeInAppToggle ? noticeInAppToggle.checked : true;
             const noticeExportToggle = document.getElementById('excl-grid-notice-export');
             const showOnExport = noticeExportToggle ? noticeExportToggle.checked : true;
+            if (text && !showInApp && !showOnExport) {
+                if (typeof showToast === 'function') showToast("Tick in-app, downloaded grid, or both.", "error");
+                return;
+            }
 
             const secret = await Admin.getAuthKey();
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required.", "error"); return; }
@@ -14127,6 +14141,7 @@ const Admin = {
                             text: text, 
                             updatedAt: Date.now(),
                             expiresAt: noticeExpiryTs,
+                            showInApp: showInApp,
                             showOnExport: showOnExport
                         })
                     }, 10000);
@@ -14185,8 +14200,13 @@ const Admin = {
             if (expiry) {
                 expiry.value = item.expiresAt ? Admin.toLocalDatetimeValue(item.expiresAt) : '';
             }
+            const configuredSurface = item.surface === 'in_app' || item.surface === 'grid'
+                ? item.surface
+                : (item.showOnExport === false ? 'in_app' : 'both');
+            const inAppToggle = document.getElementById('excl-in-app-toggle');
+            if (inAppToggle) inAppToggle.checked = configuredSurface !== 'grid';
             const exportToggle = document.getElementById('excl-export-toggle');
-            if (exportToggle) exportToggle.checked = item.showOnExport !== false;
+            if (exportToggle) exportToggle.checked = configuredSurface !== 'in_app';
             if (saveBtn) saveBtn.textContent = 'Update Exception';
             reasonEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             if (typeof showToast === 'function') showToast(`Editing #${tNum}`, 'info', 1400);
@@ -14224,6 +14244,10 @@ const Admin = {
                     if (noticeExportToggle) {
                         noticeExportToggle.checked = data._grid_notice.showOnExport !== false;
                     }
+                    const noticeInAppToggle = document.getElementById('excl-grid-notice-in-app');
+                    if (noticeInAppToggle) {
+                        noticeInAppToggle.checked = data._grid_notice.showInApp !== false;
+                    }
                 } else {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
@@ -14232,6 +14256,8 @@ const Admin = {
                     }
                     const noticeExportToggle = document.getElementById('excl-grid-notice-export');
                     if (noticeExportToggle) noticeExportToggle.checked = true;
+                    const noticeInAppToggle = document.getElementById('excl-grid-notice-in-app');
+                    if (noticeInAppToggle) noticeInAppToggle.checked = true;
                 }
 
                 listDiv.innerHTML = '';
@@ -14270,6 +14296,9 @@ const Admin = {
                     const badgeHtml = isSpecial 
                         ? '<span class="bg-green-100 text-green-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">SPL</span>'
                         : '<span class="bg-red-100 text-red-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">BAN</span>';
+                    const surfaceLabel = item.surface === 'in_app'
+                        ? 'IN APP'
+                        : (item.surface === 'grid' ? 'GRID' : 'BOTH');
 
                     const row = document.createElement('div');
                     row.className = `flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded text-xs border border-gray-100 dark:border-gray-700 mt-1 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 ${rowOpacityClass}`;
@@ -14282,6 +14311,7 @@ const Admin = {
                             <span class="font-bold ${isSpecial ? 'text-green-600' : 'text-red-600'}">#${trainNum}</span>
                             <span class="text-gray-400 mx-1">|</span>
                             <span class="text-gray-700 dark:text-gray-300 font-mono tracking-widest">[${dayLabels}]</span>
+                            <span class="ml-1 rounded bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 text-[8px] font-black tracking-wide text-blue-600 dark:text-blue-300">${surfaceLabel}</span>
                             <div class="text-[9px] text-gray-400 mt-0.5">${item.reason || 'No reason specified'}</div>
                             ${expiryHtml}
                         </div>
@@ -14320,8 +14350,15 @@ const Admin = {
             const expiryInput = document.getElementById('excl-expiry').value;
             const expiryTs = expiryInput ? new Date(expiryInput).getTime() : null;
             
+            const inAppToggle = document.getElementById('excl-in-app-toggle');
             const exportToggle = document.getElementById('excl-export-toggle');
-            const showOnExport = exportToggle ? exportToggle.checked : true;
+            const showInApp = inAppToggle ? inAppToggle.checked : true;
+            const showOnGrid = exportToggle ? exportToggle.checked : true;
+            if (!showInApp && !showOnGrid) {
+                if (typeof showToast === 'function') showToast("Tick in-app, timetable grid, or both.", "error");
+                return;
+            }
+            const surface = showInApp && showOnGrid ? 'both' : (showInApp ? 'in_app' : 'grid');
             
             const secret = await Admin.getAuthKey(); 
             
@@ -14348,7 +14385,8 @@ const Admin = {
                     reason: reason,
                     type: exceptionType, 
                     expiresAt: expiryTs, 
-                    showOnExport: showOnExport,
+                    surface: surface,
+                    showOnExport: showOnGrid,
                     updatedAt: Date.now()
                 };
             });

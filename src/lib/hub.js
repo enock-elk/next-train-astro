@@ -10,7 +10,10 @@ import {
     getChangelogVersionId,
     normalizeChangelogId,
 } from './config.js';
-import { safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate } from './utils.js';
+import {
+    safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
+    cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
+} from './utils.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText } from './feedback-quote.js';
 import {
     validateFeedbackContact,
@@ -496,7 +499,28 @@ export function resetProfile() {
 }
 
 export async function performHardCacheClear(source = 'modal_confirm') {
-    triggerHaptic();
+    const policy = cacheClearPolicy(source);
+    if (policy.systemKillswitch) {
+        const online = typeof navigator === 'undefined' || navigator.onLine === true;
+        if (!destructiveNetworkIsSafe({ online, lieFi: isLieFi, preflight: 'ok' })) return false;
+        let preflight = 'unavailable';
+        try {
+            preflight = typeof window.probeReachability === 'function'
+                ? await window.probeReachability(3500)
+                : 'unavailable';
+        } catch {
+            preflight = 'unavailable';
+        }
+        if (!destructiveNetworkIsSafe({
+            online: typeof navigator === 'undefined' || navigator.onLine === true,
+            lieFi: isLieFi,
+            preflight,
+        })) {
+            return false;
+        }
+    }
+
+    if (!policy.systemKillswitch) triggerHaptic();
     trackAnalyticsEvent('execute_hard_cache_clear', { source });
     if (source === 'modal_confirm' || source === 'check_updates') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
@@ -507,22 +531,24 @@ export async function performHardCacheClear(source = 'modal_confirm') {
     if (modal) closeSmoothModal('cache-clear-modal');
 
     try {
-        if ('serviceWorker' in navigator) {
+        if (policy.unregisterServiceWorkers && 'serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
             for (const reg of regs) await reg.unregister();
         }
         if ('caches' in window) {
             const names = await caches.keys();
-            for (const name of names) await caches.delete(name);
+            for (const name of names) {
+                if (shouldDeleteCacheForPolicy(name, policy)) await caches.delete(name);
+            }
         }
-        if (typeof safeStorage.flushVolatile === 'function') {
+        if (policy.flushLocalStorage && typeof safeStorage.flushVolatile === 'function') {
             safeStorage.flushVolatile();
-        } else {
+        } else if (policy.flushLocalStorage) {
             safeStorage.removeItem(`full_db_${$userRegion.get() || 'GP'}`);
             safeStorage.removeItem('app_installed_version');
         }
-        resetLookToClassicLight();
-        if (window.indexedDB) {
+        if (policy.resetLook) resetLookToClassicLight();
+        if (policy.deleteScheduleDatabase && window.indexedDB) {
             await new Promise((resolve) => {
                 try {
                     const req = indexedDB.deleteDatabase('NextTrainDB');
@@ -534,12 +560,14 @@ export async function performHardCacheClear(source = 'modal_confirm') {
         }
     } catch (e) {
         console.warn('🛡️ Guardian: Failed to fully clear caches', e);
+        if (policy.systemKillswitch) return false;
     }
-    markPendingReload('cache_sync', 500);
-    markAppUpdatedToast();
+    markPendingReload(policy.systemKillswitch ? 'killswitch' : 'cache_sync', 500);
+    if (policy.showUpdatedToast) markAppUpdatedToast();
     setTimeout(() => {
         window.location.href = window.location.pathname + '?v=' + Date.now();
     }, 500);
+    return true;
 }
 
 export async function showCacheClearWarning() {

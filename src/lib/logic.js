@@ -21,10 +21,11 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
-    pruneExclusionsTree, readCachedExclusions, writeCachedExclusions
+    pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
+    KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
+    newestUnappliedKillswitchTimestamp, createAsyncMutex
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
-import { markPendingReload } from './session-stability.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
     fetchScheduleOverride,
@@ -543,73 +544,80 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     }
 }
 
-/** Nuclear safety valve — wipe client caches when remote killswitch timestamp advances. */
-export async function checkKillswitch(force = false) {
-    if (typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) return false;
-    try {
-        const res = await guardianFetch(
-            `${DYNAMIC_BASE_URL}config/killswitch.json?t=${Date.now()}`,
-            { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } },
-            3000
-        );
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (!data || !data.timestamp) return false;
+const killswitchMutex = createAsyncMutex();
+let killswitchCheckPromise = null;
 
-        const localTimestamp = safeStorage.getItem('last_killswitch_timestamp');
-        if (localTimestamp && data.timestamp <= parseInt(localTimestamp, 10)) return false;
+/** Nuclear safety valve: safely retire runtime caches when the remote timestamp advances. */
+async function runKillswitchCheck() {
+    if (typeof window === 'undefined') return false;
+    if (typeof navigator !== 'undefined' && (!navigator.onLine || isLieFi)) return false;
 
-        console.log("☢️ GUARDIAN KILLSWITCH ACTIVATED. Wiping all local data...");
-        safeStorage.setItem('last_killswitch_timestamp', String(data.timestamp));
+    return killswitchMutex.runExclusive(async () => {
+        const pending = safeStorage.getItem(KILLSWITCH_PENDING_KEY);
+        const applied = safeStorage.getItem(KILLSWITCH_APPLIED_KEY);
+        let remoteTimestamp = 0;
 
-        if (typeof window !== 'undefined' && typeof window.performHardCacheClear === 'function') {
-            window.performHardCacheClear('system_killswitch');
-        } else if (typeof window !== 'undefined') {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then((regs) => {
-                    for (const reg of regs) reg.unregister();
-                });
+        try {
+            const res = await guardianFetch(
+                `${DYNAMIC_BASE_URL}config/killswitch.json?t=${Date.now()}`,
+                { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } },
+                3000
+            );
+            if (res.ok) {
+                const data = await res.json();
+                remoteTimestamp = data?.timestamp || 0;
             }
-            if ('caches' in window) {
-                caches.keys().then((names) => {
-                    for (const name of names) caches.delete(name);
-                });
+        } catch (e) {
+            if (!pending) {
+                console.warn("Killswitch check failed:", e);
+                return false;
             }
-            try {
-                const region = $userRegion.get() || 'GP';
-                safeStorage.removeItem(`full_db_${region}`);
-                safeStorage.removeItem('app_installed_version');
-                // Best-effort IndexedDB wipe
-                if (window.indexedDB && indexedDB.deleteDatabase) {
-                    indexedDB.deleteDatabase('NextTrainDB');
-                }
-            } catch (e) {}
-            markPendingReload('killswitch', 500);
-            setTimeout(() => { window.location.reload(); }, 500);
+            console.warn("Killswitch refresh failed; retrying interrupted cleanup.", e);
         }
+
+        const targetTimestamp = newestUnappliedKillswitchTimestamp(remoteTimestamp, pending, applied);
+        if (!targetTimestamp) {
+            if (pending) safeStorage.removeItem(KILLSWITCH_PENDING_KEY);
+            return false;
+        }
+
+        // Write-ahead marker: a terminated tab retries this timestamp next boot.
+        safeStorage.setItem(KILLSWITCH_PENDING_KEY, String(targetTimestamp));
+        console.log("☢️ GUARDIAN KILLSWITCH ACTIVATED. Retiring volatile caches safely...");
+
+        if (typeof window.performHardCacheClear !== 'function') return false;
+        const cleared = await window.performHardCacheClear('system_killswitch');
+        if (cleared !== true) return false;
+
+        safeStorage.setItem(KILLSWITCH_APPLIED_KEY, String(targetTimestamp));
+        safeStorage.removeItem(KILLSWITCH_PENDING_KEY);
         return true;
-    } catch (e) {
-        console.warn("Killswitch check failed:", e);
-        return false;
-    }
+    });
+}
+
+export function checkKillswitch(_force = false) {
+    if (killswitchCheckPromise) return killswitchCheckPromise;
+    killswitchCheckPromise = runKillswitchCheck().finally(() => {
+        killswitchCheckPromise = null;
+    });
+    return killswitchCheckPromise;
 }
 
 /** Re-check NUKE when the app is online — including Hub-open sessions that skip schedule load. */
 export function bindKillswitchWatch() {
     if (typeof window === 'undefined' || window.__ntKillswitchWatch) return;
     window.__ntKillswitchWatch = true;
-    let lastPoke = 0;
-    const poke = () => {
-        const now = Date.now();
-        if (now - lastPoke < 15_000) return;
-        lastPoke = now;
+    const poke = ({ visibleOnly = false } = {}) => {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (visibleOnly && typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
         checkKillswitch().catch(() => {});
     };
-    window.addEventListener('online', poke);
+    window.addEventListener('online', () => poke());
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') poke();
     });
     poke();
+    setInterval(() => poke({ visibleOnly: true }), 60_000);
 }
 
 /** Remote special-event route activation without a deploy. */

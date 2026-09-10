@@ -58,12 +58,10 @@ export function withBase(path = '/') {
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // Admin NUKE (killswitch.json) still wipes caches for online clients.
 //
-// Keep this false unless a build genuinely cannot be left running. By the time
-// enforceAppVersion() sees a version gap the new shell is already the one
-// executing, so the forced path only adds a red toast and a ?v= hard reload on
-// top of an update that has already landed. On a cheap handset that reload is a
-// second cold boot, and it is the flash commuters were reporting.
-export const FORCE_UPDATE_REQUIRED = false;
+// This build requires the forced path. app-update.js defers it until an active
+// reachability preflight succeeds, keeps the current shell offline, and activates
+// an already-waiting worker before the cache-bust navigation.
+export const FORCE_UPDATE_REQUIRED = true;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
 // The Data Pipeline Router automatically falls back to backups if the primary endpoint fails.

@@ -4,7 +4,7 @@
  * session-stability marks so CleverAds are not injected into a dying page.
  */
 import { APP_VERSION, FORCE_UPDATE_REQUIRED, withBase } from './config.js';
-import { safeStorage } from './utils.js';
+import { safeStorage, destructiveNetworkIsSafe } from './utils.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 
@@ -105,35 +105,103 @@ function showCrucialUpdateToast(incomingVersion) {
     }
 }
 
-export async function handleUpdateClick(newVersion) {
+async function updateNetworkPreflight() {
+    const online = typeof navigator === 'undefined' || navigator.onLine === true;
+    if (!destructiveNetworkIsSafe({ online, lieFi: window.isLieFi === true, preflight: 'ok' })) {
+        return false;
+    }
+    if (typeof window.probeReachability !== 'function') return false;
+    let preflight = 'unavailable';
+    try {
+        preflight = await window.probeReachability(3500);
+    } catch {
+        preflight = 'unavailable';
+    }
+    return destructiveNetworkIsSafe({
+        online: typeof navigator === 'undefined' || navigator.onLine === true,
+        lieFi: window.isLieFi === true,
+        preflight,
+    });
+}
+
+async function activateWaitingServiceWorker() {
+    if (!('serviceWorker' in navigator)) return true;
+    try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        try { await reg?.update?.(); } catch { /* an already-waiting worker is enough */ }
+        const waiting = reg?.waiting;
+        if (!waiting) return true;
+
+        const activated = new Promise((resolve) => {
+            let settled = false;
+            const finish = (value) => {
+                if (settled) return;
+                settled = true;
+                navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+                clearTimeout(timer);
+                resolve(value);
+            };
+            const onControllerChange = () => finish(true);
+            const timer = setTimeout(() => finish(false), 8000);
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+            waiting.postMessage({ type: 'SKIP_WAITING' });
+        });
+        return await activated;
+    } catch (e) {
+        console.warn('SW activate failed during update', e);
+        return false;
+    }
+}
+
+export async function handleUpdateClick(newVersion, options = {}) {
     // Never wipe Cache Storage / unregister the SW here. That left returning
     // commuters with no shell if the reload raced a lock-screen or drop.
     // Activate a waiting worker when we can, then cache-bust navigate.
-    markPendingReload('version_enforce', 5000);
-    const online = typeof navigator === 'undefined' || navigator.onLine;
-    if (!online) {
+    if (!await updateNetworkPreflight()) {
         try {
             showToast('You are offline. Using saved times until you reconnect.', 'error', 4000);
         } catch { /* ignore */ }
-        return;
+        return false;
     }
-    try {
-        if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg?.waiting) {
-                window.__ntPendingUpdateToken = Date.now();
-                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }
-        }
-    } catch (e) {
-        console.warn('SW activate failed during update', e);
-    }
+    if (options.announce === true) showCrucialUpdateToast(newVersion || APP_VERSION);
+
+    markPendingReload('version_enforce', 10000);
+    if (!await activateWaitingServiceWorker()) return false;
 
     safeStorage.setItem('app_installed_version', newVersion || APP_VERSION);
     hardReloadWithCacheBust('version_enforce');
+    return true;
 }
 
 const UPDATED_TOAST_KEY = 'nt_show_updated_toast';
+let forcedUpdatePromise = null;
+
+function scheduleForcedUpdate(version) {
+    if (typeof window === 'undefined') return;
+    window.__ntForcedUpdateVersion = version;
+    const attempt = () => {
+        if (!window.__ntForcedUpdateVersion || forcedUpdatePromise) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce: true })
+            .then((started) => {
+                if (started) window.__ntForcedUpdateVersion = null;
+            })
+            .finally(() => {
+                forcedUpdatePromise = null;
+            });
+    };
+
+    if (!window.__ntForcedUpdateRetryBound) {
+        window.__ntForcedUpdateRetryBound = true;
+        window.addEventListener('online', attempt);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') attempt();
+        });
+        setInterval(attempt, 60_000);
+    }
+    setTimeout(attempt, 1600);
+}
 
 export function markAppUpdatedToast() {
     if (typeof sessionStorage === 'undefined') return;
@@ -164,8 +232,7 @@ export function enforceAppVersion() {
         console.log(`[Guardian] Version Upgrade Available: ${storedVersion} -> ${currentVersion}`);
 
         if (FORCE_UPDATE_REQUIRED) {
-            showCrucialUpdateToast(currentVersion);
-            setTimeout(() => handleUpdateClick(currentVersion), 1600);
+            scheduleForcedUpdate(currentVersion);
             return;
         }
 

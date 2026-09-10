@@ -481,6 +481,110 @@ export function writeCachedExclusions(tree) {
     } catch { /* ignore */ }
 }
 
+export const KILLSWITCH_APPLIED_KEY = 'last_killswitch_timestamp';
+export const KILLSWITCH_PENDING_KEY = 'nt_killswitch_pending_timestamp';
+
+/** Convert remote/storage killswitch values to comparable positive integers. */
+export function normalizeKillswitchTimestamp(value) {
+    const n = Number(value);
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+
+/** Collapse remote and interrupted work to the newest timestamp not yet applied. */
+export function newestUnappliedKillswitchTimestamp(remote, pending, applied) {
+    const newest = Math.max(
+        normalizeKillswitchTimestamp(remote),
+        normalizeKillswitchTimestamp(pending)
+    );
+    return newest > normalizeKillswitchTimestamp(applied) ? newest : 0;
+}
+
+/** Small FIFO promise mutex used to serialize destructive maintenance work. */
+export function createAsyncMutex() {
+    let tail = Promise.resolve();
+    return {
+        runExclusive(task) {
+            const run = tail.then(() => task());
+            tail = run.catch(() => {});
+            return run;
+        },
+    };
+}
+
+/** Pure guard shared by NUKE/update checks and deterministic verification. */
+export function destructiveNetworkIsSafe({ online = true, lieFi = false, preflight = 'ok' } = {}) {
+    return online === true && lieFi !== true && preflight === 'ok';
+}
+
+export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
+    'next_train_device_id',
+    'userProfile',
+    'theme',
+    'hapticsEnabled',
+    'userRegion',
+    'navStyle',
+    'colourPack',
+    'welcomeSeen',
+    'authUid',
+    'activeTab',
+    'ntPrefsAccordionOpen',
+    'ntLabEmberSeededV1',
+    'ntProdClassicPackV1',
+    'analytics_ignore',
+    'analytics_queue',
+    'nt_trip_plan_queue_v1',
+    'last_impression_timestamp',
+    'seen_changelog_version',
+    'ntInboxLocalV1',
+    'defaultRoute_GP',
+    'defaultRoute_WC',
+    'defaultRoute_KZN',
+    'defaultRoute_EC',
+    KILLSWITCH_APPLIED_KEY,
+    KILLSWITCH_PENDING_KEY,
+]);
+
+export const VOLATILE_FLUSH_PROTECTED_PREFIXES = Object.freeze([
+    'clever_',
+    'cws_',
+    'firebase:',
+    'plannerHistory_',
+    'seen_holiday_',
+    'ntInbox',
+    'analytics_',
+    'poll_voted_',
+]);
+
+export function isProtectedVolatileKey(key, { preserveSchedules = false } = {}) {
+    const value = String(key || '');
+    if (!value) return false;
+    if (VOLATILE_FLUSH_PROTECTED_KEYS.includes(value)) return true;
+    if (VOLATILE_FLUSH_PROTECTED_PREFIXES.some((prefix) => value.startsWith(prefix))) return true;
+    return preserveSchedules && value.startsWith('full_db_');
+}
+
+/** Source-specific cache policy. The remote killswitch keeps the offline lifeline. */
+export function cacheClearPolicy(source = 'modal_confirm') {
+    const systemKillswitch = source === 'system_killswitch';
+    return Object.freeze({
+        systemKillswitch,
+        unregisterServiceWorkers: !systemKillswitch,
+        preservePrecache: systemKillswitch,
+        preserveScheduleCaches: systemKillswitch,
+        flushLocalStorage: !systemKillswitch,
+        resetLook: !systemKillswitch,
+        deleteScheduleDatabase: !systemKillswitch,
+        showUpdatedToast: !systemKillswitch,
+    });
+}
+
+export function shouldDeleteCacheForPolicy(name, policy = cacheClearPolicy()) {
+    const cacheName = String(name || '');
+    if (policy.preservePrecache && /precache/i.test(cacheName)) return false;
+    if (policy.preserveScheduleCaches && /schedule-dump/i.test(cacheName)) return false;
+    return true;
+}
+
 export const safeStorage = {
     memoryFallback: {},
     
@@ -525,52 +629,22 @@ export const safeStorage = {
     // GUARDIAN PHASE 2 (Identity Protection): Safe Volatile Flush
     // Mass-deletes localStorage to clear zombie cache items, while surgically extracting, 
     // protecting, and restoring core identity/preference keys.
-    flushVolatile: function() {
+    flushVolatile: function(options = {}) {
         if (typeof window === 'undefined') return;
-        
-        const exactProtectedKeys = [
-            'next_train_device_id',
-            'userProfile',
-            'theme',
-            'hapticsEnabled',
-            'userRegion',
-            'navStyle',
-            'colourPack',
-            'welcomeSeen',
-            'authUid',
-            'analytics_ignore',
-            'defaultRoute_GP',
-            'defaultRoute_WC',
-            'defaultRoute_KZN', // 🛡️ GUARDIAN FIX: Protect KZN
-            'defaultRoute_EC',  // 🛡️ GUARDIAN FIX: Protect EC
-            'last_killswitch_timestamp', // Protect killswitch memory
-            'analytics_queue', // Protect offline events queue
-            'nt_trip_plan_queue_v1', // Protect batched trip-plan telemetry until flush
-            'last_impression_timestamp', // 🛡️ GUARDIAN FIX: Protect ad frequency cap
-            'ntInboxLocalV1', // commuter ↔ admin thread fallback
-        ];
-        
+
         const vault = {};
         
         // 1. Extract to RAM Vault (With Ad Network Wildcard Support)
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (
-                    exactProtectedKeys.includes(key) ||
-                    key.startsWith('clever_') ||
-                    key.startsWith('cws_') ||
-                    key.startsWith('firebase:authUser:') ||
-                    key.startsWith('plannerHistory_') ||
-                    key.startsWith('seen_holiday_') ||
-                    key.startsWith('ntInbox')
-                ) {
+                if (isProtectedVolatileKey(key, options)) {
                     vault[key] = localStorage.getItem(key);
                 }
             }
         } catch(e) {
             // Fallback if localStorage iteration is blocked
-            exactProtectedKeys.forEach(key => {
+            VOLATILE_FLUSH_PROTECTED_KEYS.forEach(key => {
                 const val = this.getItem(key);
                 if (val !== null) vault[key] = val;
             });
@@ -579,6 +653,11 @@ export const safeStorage = {
                 const hk = `plannerHistory_${region}`;
                 const val = this.getItem(hk);
                 if (val !== null) vault[hk] = val;
+                if (options.preserveSchedules) {
+                    const sk = `full_db_${region}`;
+                    const schedule = this.getItem(sk);
+                    if (schedule !== null) vault[sk] = schedule;
+                }
             });
         }
         

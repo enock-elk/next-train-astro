@@ -172,7 +172,14 @@ assert(admin.includes('excl-refine-v3'), 'exclusion panel rebuild key');
 assert(admin.includes('Admin.loadExclusionForEdit'), 'admins can open a banned train into the editor');
 assert(admin.includes('data-excl-edit'), 'active exception rows are clickable for edit');
 assert(admin.includes('id="alert-force-popup"') && admin.includes('id="alert-poll-toggle"'), 'force popup and poll toggles remain');
-assert(admin.includes('id="excl-grid-notice-export"') && admin.includes('id="excl-export-toggle"'), 'banner and train-tag export checkboxes remain');
+assert(
+    admin.includes('id="excl-grid-notice-in-app"')
+    && admin.includes('id="excl-grid-notice-export"')
+    && admin.includes('id="excl-in-app-toggle"')
+    && admin.includes('id="excl-export-toggle"')
+    && admin.includes("const surface = showInApp && showOnGrid ? 'both'"),
+    'banner and train exceptions support in-app, grid-only, or both'
+);
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
 assert(admin.includes('roadmap-refine-v1'), 'roadmap card redesign is loaded');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');

@@ -3,7 +3,7 @@
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -94,6 +94,14 @@ assert(
     getTrainExclusionRule(longBan, '1220', 'herc-koed', 4) !== null,
     'long-lived ban with no days[] still applies'
 );
+assert(
+    routePrimaryGridDirection({
+        name: 'Hercules <-> Koedoespoort',
+        destA: 'HERCULES STATION',
+        destB: 'KOEDOESPOORT STATION',
+    }) === 'B',
+    'route-name-first grid direction travels Hercules to Koedoespoort'
+);
 
 {
     const now = 1_000_000;
@@ -129,6 +137,10 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
 
 {
     const { readFileSync } = await import('node:fs');
+    const { exclusionAppliesToSurface } = await import('../src/lib/live-board.js');
+    assert(exclusionAppliesToSurface({}, 'in_app') && exclusionAppliesToSurface({}, 'grid'), 'legacy exclusions default to both surfaces');
+    assert(exclusionAppliesToSurface({ surface: 'in_app' }, 'in_app') && !exclusionAppliesToSurface({ surface: 'in_app' }, 'grid'), 'in-app-only exclusions stay out of the grid');
+    assert(exclusionAppliesToSurface({ surface: 'grid' }, 'grid') && !exclusionAppliesToSurface({ surface: 'grid' }, 'in_app'), 'grid-only exclusions stay out of board and planner');
     const board = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
     assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
     assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
@@ -136,21 +148,23 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(renderer.includes('data-excl-open="1"'), 'cancelled columns open the exclusion sheet');
     assert(renderer.includes('exclHeadAttrs'), 'NO SVC header cell is the hit target');
     assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');
-    assert(renderer.includes('top-[2px]'), 'in-app NO SVC sits above the train number');
-    assert(!renderer.includes('bottom-[2px]'), 'NO SVC is not anchored to the bottom of the header');
-    assert(renderer.includes('export-banned-stack'), 'PNG export NO SVC sits above the train number');
-    assert(!renderer.includes('bottom:2px'), 'PNG export NO SVC is not on the train number');
-    assert(renderer.includes('decoration-dotted'), 'NO SVC uses a dotted underline');
+    assert(renderer.includes('nt-grid-train-head') && renderer.includes('grid-template-rows:11px 14px'), 'all train headers reserve the same status and number rows');
+    assert(!renderer.includes('top-[2px]') && !renderer.includes('position:absolute; top:2px'), 'NO SVC no longer overlaps an absolutely positioned train number');
+    assert(renderer.includes('text-decoration:underline dotted'), 'NO SVC keeps its dotted underline');
     assert(!renderer.includes('nt-excl-col'), 'banned columns do not use extra nt-excl-col padding');
     assert(!renderer.includes('nt-excl-head'), 'NO SVC number uses the same header box as other trains');
+    assert(renderer.includes("isExport ? 'export' : 'grid'"), 'grid visibility uses the selected exclusion surface');
+    assert(renderer.includes('noticeNode.showInApp !== false'), 'in-app grid banner honours its visibility checkbox');
+    assert(renderer.includes('routePrimaryGridDirection(route)') && renderer.includes('primarySection.html'), 'download grid starts with the route-name direction');
+    assert(renderer.includes('nt-export-direction--primary') && renderer.includes('nt-export-direction--return'), 'direction strips use distinct restrained shading');
     assert(renderer.includes("isExport ? 'border-gray-200'"), 'PNG export uses softer grid lines');
     assert(renderer.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'PNG export times are bold; in-app times stay medium');
     assert(renderer.includes("td.style.fontWeight = '700'"), 'PNG snapshot paints times at 700');
     assert(board.includes('[data-excl-open="1"]'), 'NO SVC column taps open the advisory');
     assert(!board.includes('[data-focus-train]'), 'live dots stay removed from the Next Train board');
     assert(board.includes("openFeedbackReplyFromOverlay('disruption-modal', replyOptions)"), 'exclusion Reply keeps an advisory preview');
-    assert(renderer.includes('export-no-svc'), 'PNG export NO SVC stays a static span');
-    assert(!/export-banned-col[\s\S]{0,80}position:absolute/.test(renderer), 'PNG export NO SVC is not absolutely positioned');
+    assert(renderer.includes("stack('NO SVC'"), 'PNG export NO SVC uses the shared aligned stack');
+    assert(!/export-banned-col[\s\S]{0,160}position:absolute/.test(renderer), 'PNG export NO SVC is not absolutely positioned');
     const grid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(grid.includes('ensureOpsOverlaysReady'), 'full timetable waits for exclusions before relying on the first paint');
     assert(grid.includes('paintOpenGridBody'), 'open timetable re-paints when cancellations arrive');

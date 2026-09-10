@@ -154,8 +154,8 @@ assert(admin.includes('pickExpiryExtension'), 'Extend uses a picker, not a fixed
 assert(admin.includes("label: '+4 hours'") && admin.includes("label: '+7 days'"), 'Extend presets include +4h and +7d');
 assert(admin.includes('id="excl-train-grid-a"') && admin.includes('id="excl-train-grid-b"'), 'exclusions show both directions');
 assert(!admin.includes('id="excl-direction"'), 'exclusion direction dropdown removed');
-assert(admin.includes('Include NO SVC / SPL tag on downloaded PNG'), 'export-only NO SVC toggle present');
-assert(admin.includes('Include banner on downloaded PNG'), 'grid notice banner export toggle is distinct');
+assert(admin.includes('In-app board and planner') && admin.includes('Timetable grid and PNG'), 'train exception surface checkboxes are distinct');
+assert(admin.includes('Show in app timetable') && admin.includes('Show on downloaded grid'), 'grid notice surface checkboxes are distinct');
 assert(!admin.includes('Show on download image'), 'old confusing download-image label removed');
 assert(!admin.includes('Show NO SVC / SPL tag on export image'), 'old export-image label removed');
 assert(admin.includes('id="alert-source-saved"'), 'saved alert sources dropdown');

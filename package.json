@@ -30,6 +30,7 @@
     "verify:route-seo": "node scripts/verify-route-seo.mjs",
     "verify:attachments": "node scripts/verify-attachments.mjs",
     "verify:feedback-contact": "node scripts/verify-feedback-contact.mjs",
+    "verify:community-safety": "node scripts/verify-community-safety.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"

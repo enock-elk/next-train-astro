@@ -10,6 +10,7 @@
  * Secrets: FIREBASE_PRIVATE_KEY (PEM; \n escaped OK)
  * Vars: FIREBASE_WEB_API_KEY, FIREBASE_DATABASE_URL, FIREBASE_CLIENT_EMAIL, …
  */
+import { classifyUnsafeLanguage } from '../../src/lib/content-safety-core.js';
 
 const BODY_MAX = 280;
 const ALLOWED_HOST = /(^|\.)nexttrain\.co\.za$/i;
@@ -54,23 +55,6 @@ function stripHtml(text) {
         .trim();
 }
 
-const BLOCK_WORDS = new Set([
-    'fuck', 'fucker', 'fucking', 'motherfucker', 'shit', 'bullshit',
-    'bitch', 'asshole', 'cunt', 'whore', 'slut', 'dickhead', 'wanker',
-    'nigger', 'faggot', 'retard',
-    'fok', 'fokken', 'poes', 'doos', 'naai', 'hoer', 'moer',
-    'msunu', 'umsunu', 'isifebe',
-]);
-
-function foldForSafety(text) {
-    return String(text || '')
-        .toLowerCase()
-        .normalize('NFKD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e')
-        .replace(/4/g, 'a').replace(/5/g, 's').replace(/@/g, 'a');
-}
-
 function hasDisallowedUrl(text) {
     const re = /\b((?:https?:\/\/|www\.)[^\s]+|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\.[a-z]{2,})(?:\/\S*)?)/gi;
     let m;
@@ -86,28 +70,27 @@ function hasDisallowedUrl(text) {
     return false;
 }
 
-function hasBlockedProfanity(text) {
-    const folded = foldForSafety(text);
-    const words = folded.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
-    if (words.some((w) => BLOCK_WORDS.has(w))) return true;
-    const compact = folded.replace(/[^a-z]+/g, '');
-    for (const bad of BLOCK_WORDS) {
-        if (bad.length >= 4 && compact.includes(bad)) return true;
-    }
-    return false;
-}
-
 /** Keep nexttrain.co.za links; refuse other URLs / profanity at the edge. */
-function sanitizeBody(raw) {
+export function sanitizeBody(raw) {
     const text = stripHtml(raw);
     if (hasDisallowedUrl(text)) {
-        return { ok: false, error: "Couldn't post that." };
+        return { ok: false, verdict: 'block', error: "Couldn't post that." };
     }
-    if (hasBlockedProfanity(text)) {
-        return { ok: false, error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
+    const safety = classifyUnsafeLanguage(text);
+    if (safety.block.length) {
+        return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
+    }
+    if (safety.review.length) {
+        const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
+        return {
+            ok: false,
+            verdict: 'review',
+            text: clipped.trim(),
+            error: 'We’re checking this message. It won’t appear until an admin approves it.',
+        };
     }
     const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
-    return { ok: true, text: clipped.trim() };
+    return { ok: true, verdict: 'allow', text: clipped.trim() };
 }
 
 function checkRate(key, windowMs, max) {
@@ -287,9 +270,14 @@ async function handlePost(request, env) {
     }
 
     const cleaned = sanitizeBody(body.body || '');
-    if (!cleaned.ok) {
-        return json(env, request, 400, { ok: false, error: cleaned.error, blocked: true });
+    if (!cleaned.ok && cleaned.verdict === 'block') {
+        return json(env, request, 400, {
+            ok: false,
+            error: cleaned.error,
+            blocked: true,
+        });
     }
+    const heldForReview = cleaned.verdict === 'review';
     const text = cleaned.text;
     if (text.length < 2) {
         return json(env, request, 400, { ok: false, error: 'Write a short message.' });
@@ -343,6 +331,34 @@ async function handlePost(request, env) {
     }
 
     try {
+        if (heldForReview) {
+            const reportId = newId('mr');
+            await rtdbWrite(env, `moderation_queue/${reportId}`, {
+                reportId,
+                type: 'auto_hold',
+                source: 'community_post',
+                reason: 'mild_or_ambiguous',
+                routeId,
+                targetUid: user.uid,
+                targetPostId: postId,
+                deviceId: payload.deviceId,
+                contact: payload.email,
+                snippet: text,
+                body: text,
+                publish: { kind: 'community_post', routeId, payload },
+                reportedByUid: user.uid,
+                reportedByDeviceId: payload.deviceId,
+                timestamp: Date.now(),
+                status: 'open',
+                appVersion: payload.appVersion,
+            });
+            return json(env, request, 200, {
+                ok: true,
+                held: true,
+                message: cleaned.error,
+                reportId,
+            });
+        }
         await rtdbWrite(env, `route_community/${routeId}/posts/${postId}`, payload);
         return json(env, request, 200, { ok: true, post: payload });
     } catch (e) {

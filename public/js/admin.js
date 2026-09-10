@@ -8003,6 +8003,141 @@ const Admin = {
         };
         refreshBtn.onclick = () => Admin.fetchModerationQueue();
 
+        const validateHeldCommunityPublish = (report) => {
+            const publish = report?.publish;
+            const payload = publish?.payload;
+            const kind = publish?.kind;
+            if (!['community_post', 'community_reply'].includes(kind) || !payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                throw new Error('Missing held community payload');
+            }
+            const routeId = String(publish.routeId || '');
+            const postId = String(kind === 'community_post' ? payload.postId : publish.postId || '');
+            const replyId = kind === 'community_reply' ? String(payload.replyId || '') : '';
+            const safeKey = (value) => value.length > 0 && value.length <= 80 && !/[.#$[\]/]/.test(value);
+            if (!safeKey(routeId) || !safeKey(postId) || (replyId && !safeKey(replyId))) {
+                throw new Error('Invalid held community path');
+            }
+            if (payload.routeId !== routeId || (kind === 'community_reply' && (payload.postId !== postId || !safeKey(replyId)))) {
+                throw new Error('Held community payload does not match its path');
+            }
+
+            const allowedKeys = kind === 'community_post'
+                ? ['postId', 'routeId', 'region', 'body', 'category', 'uid', 'displayName', 'photoURL', 'email', 'deviceId', 'timestamp', 'hidden', 'replyCount', 'appVersion', 'via', 'replyTo']
+                : ['replyId', 'postId', 'routeId', 'body', 'uid', 'displayName', 'deviceId', 'timestamp', 'hidden', 'appVersion'];
+            if (Object.keys(payload).some((key) => !allowedKeys.includes(key))) {
+                throw new Error('Held community payload contains unsupported fields');
+            }
+            const optionalString = (value, max) => value == null || (typeof value === 'string' && value.length <= max);
+            const validReplyTo = (value) => {
+                if (value == null) return true;
+                if (typeof value !== 'object' || Array.isArray(value)) return false;
+                if (Object.keys(value).some((key) => !['postId', 'displayName', 'body'].includes(key))) return false;
+                return optionalString(value.postId, 80)
+                    && optionalString(value.displayName, 80)
+                    && optionalString(value.body, 120);
+            };
+            if (
+                typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 280
+                || typeof payload.uid !== 'string' || !payload.uid || payload.uid.length > 128
+                || typeof payload.displayName !== 'string' || !payload.displayName || payload.displayName.length > 80
+                || typeof payload.timestamp !== 'number' || !Number.isFinite(payload.timestamp)
+                || payload.hidden !== false
+                || !optionalString(payload.deviceId, 120)
+                || !optionalString(payload.appVersion, 40)
+                || !optionalString(payload.via, 40)
+                || (report.targetUid && report.targetUid !== payload.uid)
+                || (kind === 'community_post' && payload.replyCount !== 0)
+                || (kind === 'community_post' && !optionalString(payload.region, 8))
+                || (kind === 'community_post' && !['general', 'delay', 'safety', 'other', 'system'].includes(payload.category))
+                || (kind === 'community_post' && !optionalString(payload.photoURL, 500))
+                || (kind === 'community_post' && !optionalString(payload.email, 120))
+                || (kind === 'community_post' && !validReplyTo(payload.replyTo))
+            ) {
+                throw new Error('Invalid held community payload');
+            }
+            return { kind, routeId, postId, replyId, payload };
+        };
+
+        const markModerationStatus = async (dynamicEndpoint, secret, reportId, patch) => {
+            const markRes = await fetch(`${dynamicEndpoint}moderation_queue/${encodeURIComponent(reportId)}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!markRes.ok) throw new Error(`Moderation status update failed (${markRes.status})`);
+        };
+
+        /** Publish the exact validated held payload, then approve its queue item. */
+        Admin.approveHeldCommunity = async (report) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const reportId = String(report?.reportId || report?._key || '');
+            if (!reportId) throw new Error('Missing moderation report id');
+            const { kind, routeId, postId, replyId, payload } = validateHeldCommunityPublish(report);
+            const routePath = `route_community/${routeId}/posts/${postId}`;
+            const routeUrlPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
+
+            if (kind === 'community_post') {
+                const publishRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!publishRes.ok) throw new Error(`Community post publish failed (${publishRes.status})`);
+            } else {
+                let published = false;
+                for (let attempt = 0; attempt < 4 && !published; attempt += 1) {
+                    const postRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
+                        headers: { 'X-Firebase-ETag': 'true' },
+                    });
+                    if (!postRes.ok) throw new Error(`Parent post read failed (${postRes.status})`);
+                    const etag = postRes.headers.get('ETag');
+                    const post = await postRes.json();
+                    if (!etag || !post || typeof post !== 'object') throw new Error('Parent post no longer exists');
+                    const replies = post.replies && typeof post.replies === 'object' ? post.replies : {};
+                    replies[replyId] = payload;
+                    post.replies = replies;
+                    post.replyCount = Object.keys(replies).length;
+                    const publishRes = await fetch(`${dynamicEndpoint}${routeUrlPath}.json?auth=${secret}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'If-Match': etag,
+                        },
+                        body: JSON.stringify(post),
+                    });
+                    if (publishRes.status === 412) continue;
+                    if (!publishRes.ok) throw new Error(`Community reply publish failed (${publishRes.status})`);
+                    published = true;
+                }
+                if (!published) throw new Error('Community reply changed while approving. Try again.');
+            }
+
+            await markModerationStatus(dynamicEndpoint, secret, reportId, {
+                status: 'approved',
+                resolution: 'approved',
+                approvedAt: Date.now(),
+                approvedCommunityPath: kind === 'community_post'
+                    ? routePath
+                    : `${routePath}/replies/${replyId}`,
+            });
+        };
+
+        Admin.rejectHeldCommunity = async (report) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const reportId = String(report?.reportId || report?._key || '');
+            if (!reportId) throw new Error('Missing moderation report id');
+            validateHeldCommunityPublish(report);
+            await markModerationStatus(dynamicEndpoint, secret, reportId, {
+                status: 'rejected',
+                resolution: 'rejected',
+                rejectedAt: Date.now(),
+            });
+        };
+
         /** Migrate a held feedback AUTO_HOLD into feedback/ + inbox/. */
         Admin.approveHeldFeedback = async (report) => {
             const secret = await Admin.getAuthKey();
@@ -8118,20 +8253,28 @@ const Admin = {
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = r.snippet ? String(r.snippet).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-                    const closed = status === 'closed' || status === 'resolved' || status === 'approved';
+                    const closed = status === 'closed' || status === 'resolved' || status === 'approved' || status === 'rejected';
                     const isFeedbackHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
                         && (r.publish?.kind === 'feedback' || r.source === 'feedback' || r.source === 'feedback_thread');
+                    const isCommunityHold = (r.type === 'auto_hold' || type === 'AUTO_HOLD')
+                        && (r.publish?.kind === 'community_post' || r.publish?.kind === 'community_reply');
                     const deviceId = r.deviceId || r.reportedByDeviceId || r.publish?.payload?.deviceId || '';
                     const contact = r.contact || r.publish?.payload?.email || '';
                     const sourceLabel = r.source || (isFeedbackHold ? 'feedback' : 'report');
                     const metaLine = isFeedbackHold
                         ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${(deviceId || '-').toString().slice(0, 22)} · contact: ${(contact || '-').toString().slice(0, 24)}`
                         : `target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
-                    const statusLabel = status === 'approved' ? 'Approved to Feedback Hub' : (closed ? 'Closed' : '');
+                    const statusLabel = status === 'approved'
+                        ? (isFeedbackHold ? 'Approved to Feedback Hub' : 'Approved')
+                        : (status === 'rejected' ? 'Rejected' : (closed ? 'Closed' : ''));
                     const actions = closed ? `<span class="text-[10px] text-gray-400">${statusLabel}</span>` : (isFeedbackHold ? `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-approve-feedback text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
                                 <button type="button" class="mq-close text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
+                            </div>` : isCommunityHold ? `
+                            <div class="flex flex-wrap gap-2 mt-1">
+                                <button type="button" class="mq-approve-community text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
+                                <button type="button" class="mq-reject-community text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
                             </div>` : `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
@@ -8187,6 +8330,40 @@ const Admin = {
                             try { if (typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback(); } catch (e) { /* optional */ }
                         } catch (e) {
                             if (typeof showToast === 'function') showToast(e?.message || 'Approve failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-approve-community').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        const report = id ? Admin._mqCache?.[id] : null;
+                        if (!report) return;
+                        btn.disabled = true;
+                        try {
+                            await Admin.approveHeldCommunity(report);
+                            if (typeof showToast === 'function') showToast('Community message approved', 'success');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast(e?.message || 'Approve failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                list.querySelectorAll('.mq-reject-community').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const id = btn.getAttribute('data-id');
+                        const report = id ? Admin._mqCache?.[id] : null;
+                        if (!report) return;
+                        btn.disabled = true;
+                        try {
+                            await Admin.rejectHeldCommunity(report);
+                            if (typeof showToast === 'function') showToast('Community message rejected', 'success');
+                            Admin.fetchModerationQueue();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast(e?.message || 'Reject failed', 'error');
                             btn.disabled = false;
                         }
                     };

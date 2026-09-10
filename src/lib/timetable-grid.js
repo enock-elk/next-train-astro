@@ -392,6 +392,7 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
+    import('./ride-pings.js').then((m) => m.paintLiveTrainDots?.()).catch(() => {});
 
     openSmoothModal('full-schedule-modal');
     if (location.hash !== '#grid') {

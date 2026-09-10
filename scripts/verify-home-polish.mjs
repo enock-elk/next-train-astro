@@ -272,6 +272,8 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
     assert(ridePings.includes('Still on this train?'), 'off-path onboard loop asks once');
     assert(ridePings.includes('paintLiveTrainDots'), 'live red dots paint on the board');
+    const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+    assert(timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid paints live dots');
     assert(ridePings.includes('openPlannerTrainSheet'), 'live dots open the train sheet');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');

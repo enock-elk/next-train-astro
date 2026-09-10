@@ -110,6 +110,7 @@ const MODAL_HASH = {
     'alerts-channel': '#alerts',
     'developer-reply-modal': '#devreply',
     'delay-report-modal': '#delay-report',
+    'reports-feed-modal': '#commuter-reports',
     'disruption-modal': '#disruption',
     'planner-train-sheet-modal': '#train-sheet',
     'cache-clear-modal': '#cacheclear',

@@ -26,7 +26,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
-import { trainGoingLabel, timetableWhereLabel } from './train-ghosts.js';
+import { timetableWhereLabel } from './train-ghosts.js';
 import { isAdminAuthed } from './admin-chrome.js';
 
 /** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
@@ -255,6 +255,38 @@ function statusLabel(agg) {
     return `~${agg.avgLateMin || 10} min late`;
 }
 
+/** Sentence-case dump names on commuter report surfaces only. */
+function reportStationLabel(raw) {
+    const cleaned = String(raw || '')
+        .replace(/\s+STATION$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!cleaned) return '';
+    if (cleaned === cleaned.toUpperCase() && /[A-Z]/.test(cleaned)) {
+        return cleaned.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase());
+    }
+    return cleaned;
+}
+
+function reportGoingLabel(trainId, destination) {
+    const id = String(trainId || '').trim();
+    const dest = reportStationLabel(destination);
+    if (id && dest) return `${id} → ${dest}`;
+    if (id) return `Train ${id}`;
+    return dest || 'Train';
+}
+
+function relativeAgo(ts) {
+    const mins = Math.max(1, Math.round((Date.now() - (Number(ts) || Date.now())) / 60000));
+    return mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+}
+
+function displayableReports(reports) {
+    const list = Array.isArray(reports) ? reports : [];
+    const primary = list.filter((r) => !r?.isValidation);
+    return primary.length ? primary : list;
+}
+
 export function reportStatusPhrase(agg) {
     return statusLabel(agg);
 }
@@ -311,7 +343,7 @@ function shortStatusWord(agg) {
     if (!agg) return '';
     if (agg.status === 'cancelled') return 'Cancelled';
     if (agg.status === 'early') return 'Early';
-    if (agg.status === 'on_time') return 'On time';
+    if (agg.status === 'on_time') return '';
     if (agg.status === 'late') return 'Late';
     return '';
 }
@@ -453,6 +485,7 @@ export async function startDelayReportsListener(routeId) {
             if ($currentRouteId.get() === routeId) {
                 refreshDelayReportSurface(routeId);
                 hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
+                refreshReportsFeedIfOpen(routeId);
             }
         }, (err) => {
             console.warn('Delay reports realtime failed', err);
@@ -508,8 +541,8 @@ export function buildTrainReportSlotHtml({
         reportable ? 'data-reportable="1"' : 'data-reportable="0"',
     ].join(' ');
 
-    // Empty host for hydrateTrainReportSlots live chip; reporting is on the train title button
-    return `<div class="mt-1.5 w-full px-0.5" ${attrs}></div>`;
+    // Empty host; live chips used to crowd the journey card. Banner + VIEW list carry reports.
+    return `<div class="w-full" ${attrs}></div>`;
 }
 
 /** Clickable train title — opens report modal for that train (disabled during parity cutover). */
@@ -563,56 +596,15 @@ export async function hydrateTrainReportSlots(root = document) {
         const scheduledTime = slot.getAttribute('data-dep');
         const arrivalTime = slot.getAttribute('data-arr');
         const station = slot.getAttribute('data-station');
-        const destination = slot.getAttribute('data-dest');
-        const attrs = chipAttrs(routeId, trainId, scheduledTime, arrivalTime, station, destination);
         const agg = aggregateTrainReports(byRoute[routeId] || [], {
             routeId, trainId, scheduledTime, station, arrivalTime,
         });
-
-        if (!agg) {
-            slot.innerHTML = '';
-            return;
-        }
-
-        const liveCls = statusColorClass(agg.status);
-        const exp = expectedTimeLabel(agg);
-        const validated = hasLocalValidated(agg.trainKey);
-
-        if (agg.isVerified) {
+        slot.innerHTML = '';
+        if (agg?.isVerified) {
             import('./push-notify.js').then((m) => {
                 m.maybeNotifyVerifiedDelay?.(agg, { routeId, trainId, station });
             }).catch(() => {});
-            slot.innerHTML = `
-              <div class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-950/30 shadow-sm" data-train-key="${escapeHTML(agg.trainKey)}">
-                <div class="flex items-center gap-1 mb-0.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
-                  <span class="text-[8px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300">Live alert</span>
-                  ${exp ? `<span class="ml-auto text-[9px] font-black text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800">EXP ${escapeHTML(exp)}</span>` : ''}
-                </div>
-                <p class="text-[10px] font-black ${liveCls} leading-tight">${escapeHTML(statusLabel(agg))}</p>
-                <div class="mt-1.5 pt-1.5 border-t border-orange-200/60 dark:border-orange-800/40 flex justify-between items-center gap-2">
-                  <span class="text-[9px] text-orange-600/90 dark:text-orange-400 font-bold">${agg.count} report${agg.count === 1 ? '' : 's'}</span>
-                  ${validated
-                ? `<span class="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded text-[8px] font-bold">Validated</span>`
-                : `<div class="flex gap-1">
-                        <button type="button" class="delay-validate-btn bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-green-600 px-1.5 py-1 rounded shadow-sm focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}" aria-label="Confirm report">👍</button>
-                        <button type="button" class="delay-validate-btn bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 px-1.5 py-1 rounded shadow-sm focus:outline-none" data-validate="down" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" aria-label="Disagree">👎</button>
-                      </div>`}
-                </div>
-              </div>`;
-            return;
         }
-
-        // Pending corroboration
-        slot.innerHTML = `
-          <div class="train-live-chip w-full text-left px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 shadow-sm">
-            <p class="text-[9px] text-gray-600 dark:text-gray-300 leading-tight">
-              <span class="font-bold">Pending:</span> Commuters report ${escapeHTML(statusLabel(agg))} (${agg.distinctDevices}/${VERIFY_THRESHOLD})
-            </p>
-            ${validated
-            ? `<span class="mt-1 inline-block text-[8px] font-bold text-green-700 dark:text-green-300">Thanks - counted</span>`
-            : `<button type="button" class="delay-validate-btn mt-1.5 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-[9px] font-bold text-gray-700 dark:text-gray-200 py-1 rounded shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" data-validate="up" ${attrs} data-train-key="${escapeHTML(agg.trainKey)}" data-status="${escapeHTML(agg.status)}">Verify delay</button>`}
-          </div>`;
     });
 
     paintTrainFlags(root, byRoute);
@@ -784,13 +776,13 @@ export function openTrainReportModal(opts = {}) {
     const dest = opts.destination || '';
     const title = document.getElementById('train-report-title');
     if (title) {
-        if (trainId) title.textContent = trainGoingLabel(trainId, dest);
+        if (trainId) title.textContent = reportGoingLabel(trainId, dest);
         else title.textContent = 'Train status';
     }
     const sub = document.getElementById('train-report-sub');
     if (sub) {
         const where = trainId ? timetableWhereLabel(trainId) : '';
-        const bits = [where, station ? `Last seen ${String(station).replace(/ STATION$/i, '')}` : '']
+        const bits = [where, station ? `Last seen ${reportStationLabel(station)}` : '']
             .filter(Boolean);
         sub.textContent = bits.join(' · ');
         sub.classList.toggle('hidden', !bits.length);
@@ -1035,8 +1027,7 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
 
     const top = withTrain[0];
     const count = withTrain.length;
-    const mins = Math.max(1, Math.round((Date.now() - (top.timestamp || Date.now())) / 60000));
-    const when = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+    const when = relativeAgo(top.timestamp);
     banner.setAttribute('data-route', top.routeId || routeId || '');
     banner.setAttribute('data-train', top.trainId || '');
     banner.setAttribute('data-dep', top.scheduledTime || '');
@@ -1044,8 +1035,8 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
     banner.setAttribute('data-station', top.station || '');
     banner.setAttribute('data-dest', top.destination || '');
     if (text) {
-        const going = trainGoingLabel(top.trainId, top.destination);
-        const seen = top.station ? ` · last seen ${String(top.station).replace(/ STATION$/i, '')}` : '';
+        const going = reportGoingLabel(top.trainId, top.destination);
+        const seen = top.station ? ` · last seen ${reportStationLabel(top.station)}` : '';
         const status = statusLabel({ status: top.trainStatus || 'late', avgLateMin: LATE_MID[top.lateBucket] || 10 });
         const cls = statusColorClass(top.trainStatus || top.status || 'late');
         text.innerHTML = count === 1
@@ -1168,9 +1159,9 @@ function showCorroborationSheet(report, trainKey) {
     const label = statusLabel({ status, avgLateMin: LATE_MID[report.lateBucket] || 10 });
     const title = document.getElementById('delay-ask-title');
     const body = document.getElementById('delay-ask-body');
-    if (title) title.textContent = trainGoingLabel(report.trainId, report.destination);
+    if (title) title.textContent = reportGoingLabel(report.trainId, report.destination);
     if (body) {
-        body.textContent = `Reported ${label}${report.station ? ` · last seen ${String(report.station).replace(/ STATION$/i, '')}` : ''}. Still true from where you are?`;
+        body.textContent = `Reported ${label}${report.station ? ` · last seen ${reportStationLabel(report.station)}` : ''}. Still true from where you are?`;
     }
     sheet.dataset.route = report.routeId || '';
     sheet.dataset.train = report.trainId || '';
@@ -1189,6 +1180,110 @@ function hideCorroborationSheet() {
     if (!sheet) return;
     sheet.classList.add('hidden');
     sheet.setAttribute('aria-hidden', 'true');
+}
+
+let reportsFeedFocusTrain = '';
+
+function reportsFeedIsOpen() {
+    const modal = document.getElementById('reports-feed-modal');
+    return !!(modal && !modal.classList.contains('hidden'));
+}
+
+function paintReportsFeedConsensus(reports, routeId) {
+    const box = document.getElementById('reports-feed-consensus');
+    const text = document.getElementById('reports-feed-consensus-text');
+    if (!box) return;
+    const myId = getDeviceId();
+    const candidate = (reports || []).find((r) => {
+        if (!r?.trainId || r.deviceId === myId) return false;
+        const status = r.trainStatus || r.status;
+        if (!status || status === 'closed') return false;
+        if (reportsFeedFocusTrain && String(r.trainId) !== reportsFeedFocusTrain) return false;
+        const key = r.trainKey || trainReportKey({
+            routeId: r.routeId || routeId,
+            trainId: r.trainId,
+            scheduledTime: r.scheduledTime,
+            station: r.station,
+        });
+        if (hasLocalValidated(key) || getOwnReport(key)) return false;
+        return true;
+    });
+    if (!candidate) {
+        box.classList.add('hidden');
+        return;
+    }
+    const key = candidate.trainKey || trainReportKey({
+        routeId: candidate.routeId || routeId,
+        trainId: candidate.trainId,
+        scheduledTime: candidate.scheduledTime,
+        station: candidate.station,
+    });
+    const status = candidate.trainStatus || candidate.status || 'late';
+    const label = statusLabel({ status, avgLateMin: LATE_MID[candidate.lateBucket] || 10 });
+    const going = reportGoingLabel(candidate.trainId, candidate.destination);
+    if (text) text.textContent = `${going}: ${label}. Still true from where you are?`;
+    box.dataset.route = candidate.routeId || routeId || '';
+    box.dataset.train = candidate.trainId || '';
+    box.dataset.dep = candidate.scheduledTime || '';
+    box.dataset.arr = candidate.arrivalTime || '';
+    box.dataset.station = candidate.station || '';
+    box.dataset.dest = candidate.destination || '';
+    box.dataset.trainKey = key;
+    box.dataset.status = status;
+    box.classList.remove('hidden');
+}
+
+async function paintReportsFeed(routeId) {
+    const listEl = document.getElementById('reports-feed-list');
+    if (!listEl) return;
+    const reports = await fetchRecentRouteReports(routeId);
+    let rows = displayableReports(reports);
+    if (reportsFeedFocusTrain) {
+        rows = rows.filter((r) => String(r.trainId || '') === reportsFeedFocusTrain);
+    }
+    if (!rows.length) {
+        listEl.innerHTML = `<p class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400 text-center">No reports on this line right now.</p>`;
+        paintReportsFeedConsensus([], routeId);
+        return;
+    }
+    listEl.innerHTML = rows.slice(0, 24).map((r) => {
+        const going = reportGoingLabel(r.trainId, r.destination);
+        const status = statusLabel({
+            status: r.trainStatus || r.status || 'late',
+            avgLateMin: LATE_MID[r.lateBucket] || 10,
+        });
+        const cls = statusColorClass(r.trainStatus || r.status || 'late');
+        const seen = r.station ? `Last seen ${reportStationLabel(r.station)}` : '';
+        const note = String(r.note || '').trim();
+        const when = relativeAgo(r.timestamp);
+        return `<article class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 text-left">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-black text-gray-900 dark:text-white min-w-0">${escapeHTML(going)}</p>
+                <span class="text-[10px] font-semibold text-gray-400 shrink-0">${escapeHTML(when)}</span>
+            </div>
+            <p class="text-[12px] font-bold mt-0.5 ${cls}">${escapeHTML(status)}</p>
+            ${seen ? `<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(seen)}</p>` : ''}
+            ${note ? `<p class="text-[13px] text-gray-800 dark:text-gray-200 mt-1.5 leading-snug">${escapeHTML(note)}</p>` : ''}
+        </article>`;
+    }).join('');
+    paintReportsFeedConsensus(reports, routeId);
+}
+
+function refreshReportsFeedIfOpen(routeId) {
+    if (!reportsFeedIsOpen()) return;
+    paintReportsFeed(routeId || $currentRouteId.get()).catch(() => {});
+}
+
+export async function openReportsFeedSheet({ routeId, trainId } = {}) {
+    const rid = routeId || $currentRouteId.get() || '';
+    if (!isDelayReportsUiEnabled(rid)) return;
+    reportsFeedFocusTrain = trainId ? String(trainId) : '';
+    const listEl = document.getElementById('reports-feed-list');
+    if (listEl) {
+        listEl.innerHTML = `<p class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Loading reports…</p>`;
+    }
+    openSmoothModal('reports-feed-modal');
+    await paintReportsFeed(rid);
 }
 
 export function bindDelayReportUi() {
@@ -1282,14 +1377,36 @@ export function bindDelayReportUi() {
 
     document.getElementById('delay-report-banner')?.addEventListener('click', () => {
         const banner = document.getElementById('delay-report-banner');
-        openTrainReportModal({
+        openReportsFeedSheet({
             routeId: banner?.getAttribute('data-route') || $currentRouteId.get(),
-            trainId: banner?.getAttribute('data-train') || '',
-            scheduledTime: banner?.getAttribute('data-dep') || '',
-            arrivalTime: banner?.getAttribute('data-arr') || '',
-            station: banner?.getAttribute('data-station') || document.getElementById('station-select')?.value || '',
-            destination: banner?.getAttribute('data-dest') || '',
         });
+    });
+
+    document.getElementById('reports-feed-close')?.addEventListener('click', () => closeSmoothModal('reports-feed-modal'));
+    document.getElementById('reports-feed-agree')?.addEventListener('click', () => {
+        const box = document.getElementById('reports-feed-consensus');
+        if (!box) return;
+        submitDelayValidation({
+            routeId: box.dataset.route || $currentRouteId.get(),
+            trainId: box.dataset.train,
+            scheduledTime: box.dataset.dep,
+            arrivalTime: box.dataset.arr,
+            station: box.dataset.station,
+            destination: box.dataset.dest,
+            trainKey: box.dataset.trainKey,
+            status: box.dataset.status || 'late',
+            agree: true,
+        }).then((r) => {
+            if (!r.ok && r.message) showToast(r.message, 'error');
+            else paintReportsFeed(box.dataset.route || $currentRouteId.get());
+        });
+    });
+    document.getElementById('reports-feed-disagree')?.addEventListener('click', () => {
+        const box = document.getElementById('reports-feed-consensus');
+        const key = box?.dataset.trainKey;
+        if (key) markLocalValidated(key);
+        showToast('Thanks - report noted', 'info');
+        paintReportsFeed(box?.dataset.route || $currentRouteId.get());
     });
 
     document.getElementById('tr-im-on-it')?.addEventListener('click', () => {
@@ -1392,6 +1509,7 @@ export function bindDelayReportUi() {
 if (typeof window !== 'undefined') {
     window.openDelayReportModal = openDelayReportModal;
     window.openTrainReportModal = openTrainReportModal;
+    window.openReportsFeedSheet = openReportsFeedSheet;
     window.refreshDelayReportSurface = refreshDelayReportSurface;
     window.hydrateTrainReportSlots = hydrateTrainReportSlots;
     window.submitQuickDelayReport = submitQuickDelayReport;

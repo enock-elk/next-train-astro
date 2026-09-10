@@ -1,9 +1,14 @@
-# nexttrain-community — write bouncer + TTL wipe
+# nexttrain-community — write bouncer, scheduled alerts + TTL wipe
 
 Cloudflare Worker that:
 
 1. **`POST /community/post`** — verifies Firebase ID token, rate-limits, refuses non-`nexttrain.co.za` URLs and profanity, writes via service-account Admin access to RTDB.
-2. **Hourly cron** — deletes `route_community/*/posts/*` older than 24h (pilot TTL).
+2. **Five-minute cron** — claims and publishes due `notices_scheduled` alerts.
+3. **Hourly cron** — deletes `route_community/*/posts/*` older than 24h (pilot TTL).
+
+Allowlisted operators can use `GET /admin/scheduled-alerts` for queue/last-run status and
+`POST /admin/scheduled-alerts` to run the scheduler immediately. Both require a Firebase
+ID token in `Authorization: Bearer …`.
 
 ## Deploy
 

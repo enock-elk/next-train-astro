@@ -8,7 +8,7 @@
  */
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
-    ADMIN_EMAILS, isAdminEmail,
+    ADMIN_EMAILS, isAdminEmail, COMMUNITY_WORKER_URL,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName } from './utils.js';
@@ -68,6 +68,7 @@ export function exposeAdminGlobals() {
 
     window.ROUTES = ROUTES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
+    window.COMMUNITY_WORKER_URL = COMMUNITY_WORKER_URL;
     window.APP_VERSION = APP_VERSION;
     window.ADMIN_EMAILS = ADMIN_EMAILS;
     window.isAdminEmail = isAdminEmail;

@@ -32,6 +32,7 @@
     "verify:feedback-contact": "node scripts/verify-feedback-contact.mjs",
     "verify:community-safety": "node scripts/verify-community-safety.mjs",
     "verify:community-monitor": "node scripts/verify-community-monitor.mjs",
+    "verify:scheduled-alerts": "node scripts/verify-scheduled-alerts.mjs",
     "verify:auth-providers": "node scripts/verify-auth-providers.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",

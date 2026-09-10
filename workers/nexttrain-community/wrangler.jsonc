@@ -17,6 +17,6 @@
     "ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,http://localhost:4321"
   },
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["*/5 * * * *", "0 * * * *"]
   }
 }

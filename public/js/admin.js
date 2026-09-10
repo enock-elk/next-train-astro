@@ -10745,62 +10745,23 @@ const Admin = {
 
     publishDueScheduledAlerts: async (secret) => {
         if (!secret) secret = await Admin.getAuthKey();
-        if (!secret) return { published: 0 };
-        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        let published = 0;
-        try {
-            const res = await fetch(`${dynamicEndpoint}notices_scheduled.json?auth=${secret}`);
-            if (!res.ok) return { published: 0 };
-            const data = await res.json();
-            if (!data || typeof data !== 'object') return { published: 0 };
-            const now = Date.now();
-            for (const [schedId, job] of Object.entries(data)) {
-                if (!job || job.enabled === false || !job.notice) continue;
-                const jobTargets = Admin.dedupeAlertTargets(
-                    Array.isArray(job.targets) && job.targets.length
-                        ? job.targets
-                        : (job.target ? [job.target] : [])
-                );
-                if (!jobTargets.length) continue;
-                const nextRun = Number(job.nextRunAt || 0);
-                if (!nextRun || nextRun > now) continue;
-                try {
-                    const notice = { ...job.notice };
-                    delete notice.expiresInMs;
-                    const payload = {
-                        ...notice,
-                        id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
-                        postedAt: Date.now(),
-                        expiresAt: ntAdminNoticeExpiresAt(now, job),
-                    };
-                    try {
-                        for (const t of jobTargets) {
-                            await Admin.publishNoticeToTarget(t, { ...payload }, secret);
-                        }
-                    } catch {
-                        continue;
-                    }
-                    published++;
-                    const next = ntAdminComputeJobNextRun(job, Math.max(nextRun, now));
-                    if (!next || job.frequency === 'once') {
-                        await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, { method: 'DELETE' });
-                    } else {
-                        await fetch(`${dynamicEndpoint}notices_scheduled/${schedId}.json?auth=${secret}`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ nextRunAt: next, lastRunAt: Date.now(), lastNoticeId: payload.id }),
-                        });
-                    }
-                } catch (e) {
-                    console.warn('Scheduled alert publish failed', schedId, e);
-                }
-            }
-        } catch (e) {
-            console.warn('publishDueScheduledAlerts failed', e);
-        }
-        if (published && typeof checkServiceAlerts === 'function') {
+        if (!secret) throw new Error('Authentication required');
+        const workerUrl = String(window.COMMUNITY_WORKER_URL || '').replace(/\/$/, '');
+        if (!workerUrl) throw new Error('Scheduled alert service is not configured');
+        const res = await fetch(`${workerUrl}/admin/scheduled-alerts`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${secret}`,
+                'Content-Type': 'application/json',
+            },
+            body: '{}',
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.ok) throw new Error(result.error || 'Scheduled alert run failed');
+        if (result.published && typeof checkServiceAlerts === 'function') {
             try { checkServiceAlerts(); } catch (_) {}
         }
-        return { published };
+        return result;
     },
 
     fetchScheduledAlerts: async () => {

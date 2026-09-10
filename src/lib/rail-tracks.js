@@ -18,6 +18,10 @@ const STUB_MIN_M = 20;
  * graph; anything wilder is a teleport from a stale file.
  */
 const MAX_EDGE_M = 6000;
+/** A tracker fix is never accepted farther than this from trusted rail. */
+export const TRACKER_SNAP_MAX_M = 100;
+const TRUST_EDGE_FLOOR_M = 250;
+const TRUST_EDGE_CAP_M = 700;
 const HOP_DETOUR_RATIO = 2.8;
 const HOP_DETOUR_MIN_M = 900;
 const HOP_STRAY_M = 600;
@@ -90,6 +94,87 @@ function buildGraph(features) {
     return { nodes, adj };
 }
 
+function featureLines(feature) {
+    const geom = feature?.geometry;
+    if (geom?.type === 'LineString') return [geom.coordinates];
+    if (geom?.type === 'MultiLineString') return geom.coordinates;
+    return [];
+}
+
+function edgeLengths(feature) {
+    const lengths = [];
+    for (const line of featureLines(feature)) {
+        for (let i = 1; i < line.length; i++) {
+            const a = line[i - 1];
+            const b = line[i];
+            if (!a || !b) continue;
+            const metres = haversineM(a[1], a[0], b[1], b[0]);
+            if (Number.isFinite(metres) && metres > 0) lengths.push(metres);
+        }
+    }
+    return lengths.sort((a, b) => a - b);
+}
+
+/**
+ * Chord-free bakes are wholly sourced from OSM. For mixed bakes, derive a
+ * conservative route-specific cutoff from normal OSM edge density. This
+ * excludes the long station-to-station fallback chords without guessing
+ * which hop indices produced them.
+ */
+export function trustedEdgeThresholdM(feature) {
+    if (!(Number(feature?.properties?.chordHops) > 0)) return MAX_EDGE_M;
+    const lengths = edgeLengths(feature);
+    if (!lengths.length) return 0;
+    const p95 = lengths[Math.floor((lengths.length - 1) * 0.95)];
+    return Math.min(TRUST_EDGE_CAP_M, Math.max(TRUST_EDGE_FLOOR_M, p95 * 3));
+}
+
+function projectToSegment(lat, lon, a, b) {
+    const lat0 = ((a[1] + b[1]) / 2) * Math.PI / 180;
+    const xScale = 6371000 * Math.cos(lat0);
+    const yScale = 6371000;
+    const ax = a[0] * Math.PI / 180 * xScale;
+    const ay = a[1] * Math.PI / 180 * yScale;
+    const bx = b[0] * Math.PI / 180 * xScale;
+    const by = b[1] * Math.PI / 180 * yScale;
+    const px = lon * Math.PI / 180 * xScale;
+    const py = lat * Math.PI / 180 * yScale;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const den = dx * dx + dy * dy;
+    const t = den > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / den)) : 0;
+    return {
+        t,
+        lat: a[1] + (b[1] - a[1]) * t,
+        lon: a[0] + (b[0] - a[0]) * t,
+        distanceM: Math.hypot(px - (ax + dx * t), py - (ay + dy * t)),
+    };
+}
+
+export function projectToTrustedFeature(feature, lat, lon) {
+    const thresholdM = trustedEdgeThresholdM(feature);
+    let best = null;
+    let routeM = 0;
+    let totalM = 0;
+    for (const line of featureLines(feature)) {
+        for (let i = 1; i < line.length; i++) {
+            const a = line[i - 1];
+            const b = line[i];
+            const edgeM = haversineM(a[1], a[0], b[1], b[0]);
+            if (!Number.isFinite(edgeM) || edgeM <= 0) continue;
+            if (edgeM <= thresholdM) {
+                const projected = projectToSegment(lat, lon, a, b);
+                if (!best || projected.distanceM < best.distanceM) {
+                    best = { ...projected, routeM: totalM + edgeM * projected.t };
+                }
+            }
+            totalM += edgeM;
+        }
+    }
+    if (best) routeM = best.routeM;
+    return best ? { ...best, routeM, totalM, thresholdM } : null;
+}
+
 function nearestNode(graph, lat, lon, maxM = SNAP_MAX_M) {
     let best = null;
     let bestD = Infinity;
@@ -110,29 +195,41 @@ function nearestNode(graph, lat, lon, maxM = SNAP_MAX_M) {
  * Snap a GPS point onto the rail graph. Rejects if farther than maxM.
  * @returns {Promise<{ ok: boolean, lat?: number, lon?: number, distanceM: number|null, trackBearing?: number|null }>}
  */
-export async function snapToRail(lat, lon, region = 'GP', maxM = 150) {
+export async function snapToRail(lat, lon, region = 'GP', maxM = TRACKER_SNAP_MAX_M, routeId = '') {
     const bundle = await loadRegionBundle(region);
-    if (!bundle?.graph || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return { ok: false, distanceM: null };
+    if (!bundle?.graph) {
+        return { ok: false, geometryUnavailable: true, distanceM: null };
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return { ok: false, geometryUnavailable: false, distanceM: null };
+    }
+    if (routeId) {
+        const feature = bundle.byId?.get(routeId);
+        if (!feature) return { ok: false, geometryUnavailable: true, distanceM: null };
+        const projected = projectToTrustedFeature(feature, lat, lon);
+        if (!projected) return { ok: false, geometryUnavailable: true, distanceM: null };
+        const limitM = Math.min(TRACKER_SNAP_MAX_M, Math.max(0, Number(maxM) || 0));
+        return {
+            ok: projected.distanceM <= limitM,
+            geometryUnavailable: false,
+            lat: projected.lat,
+            lon: projected.lon,
+            distanceM: projected.distanceM,
+            routeM: projected.routeM,
+            routeFraction: projected.totalM > 0 ? projected.routeM / projected.totalM : 0,
+            trustedEdgeThresholdM: projected.thresholdM,
+        };
     }
     const id = nearestNode(bundle.graph, lat, lon, Math.max(maxM, SNAP_MAX_M));
-    if (id == null) return { ok: false, distanceM: null };
+    if (id == null) return { ok: false, geometryUnavailable: false, distanceM: null };
     const n = bundle.graph.nodes[id];
     const distanceM = haversineM(lat, lon, n.lat, n.lon);
-    let trackBearing = null;
-    const neighbors = bundle.graph.adj.get(id) || [];
-    if (neighbors.length) {
-        const nb = bundle.graph.nodes[neighbors[0].to];
-        if (nb) {
-            trackBearing = (Math.atan2(nb.lon - n.lon, nb.lat - n.lat) * 180) / Math.PI;
-        }
-    }
     return {
         ok: distanceM <= maxM,
+        geometryUnavailable: false,
         lat: n.lat,
         lon: n.lon,
         distanceM,
-        trackBearing,
     };
 }
 

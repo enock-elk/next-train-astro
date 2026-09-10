@@ -202,6 +202,21 @@ export function journeyHeadingDeg(trainId, opts = {}) {
     return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
 }
 
+/** Scheduled stop-to-stop direction at confirmed journey progress. */
+export function journeyHeadingAtProgress(trainId, progress, opts = {}) {
+    const { stops } = findStopsForTrain(trainId, opts);
+    if (stops.length < 2) return null;
+    const index = opts.stationIndex || $globalStationIndex.get() || {};
+    const bounded = Math.max(0, Math.min(stops.length - 1, Number(progress) || 0));
+    const fromIdx = Math.min(stops.length - 2, Math.floor(bounded));
+    const a = coordsForStation(stops[fromIdx].station, index);
+    const b = coordsForStation(stops[fromIdx + 1].station, index);
+    if (!a || !b || (Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lng - b.lng) < 1e-6)) {
+        return journeyHeadingDeg(trainId, opts);
+    }
+    return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
+}
+
 function trainInWindow(stops, nowSec, windowSec) {
     if (!stops.length) return false;
     const first = stops[0].seconds;
@@ -407,6 +422,14 @@ export function isStationAheadOfGhost(station, ghost) {
  * Project a lat/lng onto the stop chain and return along-track progress.
  */
 export function progressAlongStops(lat, lng, stops, stationIndex) {
+    return progressAlongStopsDetailed(lat, lng, stops, stationIndex)?.progress ?? null;
+}
+
+/**
+ * Project onto the scheduled origin-to-terminus chain. The returned progress
+ * is bounded to that train's stop sequence, never an adjacent route branch.
+ */
+export function progressAlongStopsDetailed(lat, lng, stops, stationIndex) {
     if (!stops?.length || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     let best = { progress: 0, dist: Infinity };
     for (let i = 0; i < stops.length; i++) {
@@ -426,7 +449,23 @@ export function progressAlongStops(lat, lng, stops, stationIndex) {
             if (pd < best.dist) best = { progress: i + t, dist: pd };
         }
     }
-    return Number.isFinite(best.progress) ? best.progress : null;
+    if (!Number.isFinite(best.progress) || !Number.isFinite(best.dist)) return null;
+    return {
+        progress: Math.max(0, Math.min(stops.length - 1, best.progress)),
+        distanceM: best.dist,
+    };
+}
+
+export function journeyPositionLabel(stops, progress) {
+    if (!stops?.length || !Number.isFinite(progress)) return '';
+    const bounded = Math.max(0, Math.min(stops.length - 1, progress));
+    const i = Math.floor(bounded);
+    const fraction = bounded - i;
+    const here = shortStation(stops[i]?.station);
+    if (i >= stops.length - 1 || fraction < 0.12) return here ? `At ${here}` : '';
+    const next = shortStation(stops[i + 1]?.station);
+    if (fraction > 0.88) return next ? `At ${next}` : '';
+    return here && next ? `Between ${here} and ${next}` : (here || next);
 }
 
 function projectFraction(lat, lng, a, b) {

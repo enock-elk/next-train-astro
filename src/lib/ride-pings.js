@@ -33,6 +33,9 @@ import {
     headingAgrees,
     findStopsForTrain,
     progressAlongStops,
+    progressAlongStopsDetailed,
+    journeyHeadingAtProgress,
+    journeyPositionLabel,
     trainGoingLabel,
 } from './train-ghosts.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
@@ -44,6 +47,13 @@ export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
 export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
 /** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
 export const RIDE_GPS_STALE_MS = 90 * 1000;
+export const TRACKING_STATE = Object.freeze({
+    ACTIVE: 'active',
+    PAUSED: 'paused',
+    STOPPED: 'stopped',
+});
+const REVERSE_PROGRESS_TOLERANCE = 0.08;
+const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
 
@@ -169,6 +179,73 @@ export function isRidePingGpsStale(at, now = Date.now()) {
     return !t || (now - t) >= RIDE_GPS_STALE_MS;
 }
 
+function roundCoord(value) {
+    return Math.round(value * 100000) / 100000;
+}
+
+/**
+ * Validate and project one train fix onto trusted geometry for this route and
+ * bind it to the scheduled origin-to-terminus stop sequence.
+ */
+export async function projectTrainTrackerFix({
+    lat,
+    lng,
+    trainId,
+    routeId,
+    previousProgress = null,
+    stationIndex = $globalStationIndex.get() || {},
+    schedules,
+} = {}) {
+    const id = String(trainId || '');
+    const route = ROUTES[routeId];
+    const { stops } = findStopsForTrain(id, schedules ? { schedules } : {});
+    if (!id || !route || stops.length < 2) {
+        return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
+    }
+    let snap;
+    try {
+        const { snapToRail, TRACKER_SNAP_MAX_M } = await import('./rail-tracks.js');
+        snap = await snapToRail(lat, lng, route.region || 'GP', TRACKER_SNAP_MAX_M, routeId);
+    } catch {
+        return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
+    }
+    if (!snap.ok) {
+        return {
+            ok: false,
+            state: TRACKING_STATE.PAUSED,
+            reason: snap.geometryUnavailable ? 'geometryUnavailable' : 'offTrack',
+            geometryUnavailable: !!snap.geometryUnavailable,
+            distanceM: snap.distanceM,
+        };
+    }
+    const projected = progressAlongStopsDetailed(snap.lat, snap.lon, stops, stationIndex);
+    if (!projected) {
+        return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
+    }
+    const progress = projected.progress;
+    if (Number.isFinite(previousProgress) && progress < previousProgress - REVERSE_PROGRESS_TOLERANCE) {
+        return {
+            ok: false,
+            state: TRACKING_STATE.PAUSED,
+            reason: 'reverseProgress',
+            geometryUnavailable: false,
+            progress,
+        };
+    }
+    return {
+        ok: true,
+        state: TRACKING_STATE.ACTIVE,
+        geometryUnavailable: false,
+        projectedLat: roundCoord(snap.lat),
+        projectedLng: roundCoord(snap.lon),
+        projectedProgress: progress,
+        routeProgressM: snap.routeM,
+        distanceM: snap.distanceM,
+        lastSeenLabel: journeyPositionLabel(stops, progress),
+        bearing: journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) }),
+    };
+}
+
 function shareSessionIdle(raw, now = Date.now()) {
     if (!raw) return true;
     if ((raw.expiresAt || 0) <= now) return true;
@@ -236,10 +313,12 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
     (pings || []).forEach((p) => {
         if (typeof p?.coarseLat !== 'number' || typeof p?.coarseLng !== 'number') return;
         const publicId = pingPublicTrainId(p);
-        const trainId = publicId || (p.trainId ? String(p.trainId) : '');
+        const trainId = publicId || '';
+        const lat = trainId && typeof p.projectedLat === 'number' ? p.projectedLat : p.coarseLat;
+        const lng = trainId && typeof p.projectedLng === 'number' ? p.projectedLng : p.coarseLng;
         const row = {
-            lat: p.coarseLat,
-            lng: p.coarseLng,
+            lat,
+            lng,
             trainId: trainId || '',
             station: p.station || '',
             at: p.at || 0,
@@ -248,6 +327,10 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             speedMps: p.speedMps,
             mine: p.deviceId === mineDeviceId,
             routeId: p.routeId || routeId,
+            projectedProgress: p.projectedProgress,
+            bearing: p.bearing,
+            trackingState: p.trackingState,
+            acceptedAt: p.acceptedAt,
         };
         if (trainId) {
             (trains[trainId] = trains[trainId] || []).push(row);
@@ -255,56 +338,21 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             loose.push({ ...row, n: 1 });
         }
     });
-    const region = (ROUTES[routeId] && ROUTES[routeId].region) || 'GP';
-    let snapToRail = null;
-    try {
-        snapToRail = (await import('./rail-tracks.js')).snapToRail;
-    } catch { /* tracks optional */ }
     const out = [];
     for (const trainId of Object.keys(trains)) {
         const list = trains[trainId];
-        const kept = [];
-        for (const p of list) {
-            const metres = scoreTrainForFix(p.lat, p.lng, trainId);
-            const onPath = Number.isFinite(metres) && metres <= TRAIN_TRACKER_MAX_M;
-            if (!onPath) continue;
-            let onRails = false;
-            let trackBearing = null;
-            if (typeof snapToRail === 'function') {
-                try {
-                    const snap = await snapToRail(p.lat, p.lng, region, 150);
-                    onRails = !!snap.ok;
-                    trackBearing = Number.isFinite(snap.trackBearing) ? snap.trackBearing : null;
-                } catch { onRails = false; }
-            } else {
-                onRails = true;
-            }
-            if (!onRails) continue;
-            kept.push({ ...p, metres, trackBearing });
-        }
+        const kept = consensusProjectedPings(list);
         if (!kept.length) continue;
-        let lat = kept.reduce((s, p) => s + p.lat, 0) / kept.length;
-        let lng = kept.reduce((s, p) => s + p.lng, 0) / kept.length;
-        let bearing = kept.map((p) => p.trackBearing).find((b) => Number.isFinite(b));
-        if (typeof snapToRail === 'function') {
-            try {
-                const avgSnap = await snapToRail(lat, lng, region, 150);
-                if (avgSnap.ok) {
-                    lat = avgSnap.lat;
-                    lng = avgSnap.lon;
-                    if (Number.isFinite(avgSnap.trackBearing)) bearing = avgSnap.trackBearing;
-                }
-            } catch { /* keep average */ }
-        }
+        const medianProgress = median(kept.map((p) => p.projectedProgress));
+        const driver = [...kept].sort((a, b) => {
+            const da = Math.abs(a.projectedProgress - medianProgress);
+            const db = Math.abs(b.projectedProgress - medianProgress);
+            return da - db || (b.at || 0) - (a.at || 0);
+        })[0];
         const newest = kept.reduce((a, b) => ((a.at || 0) >= (b.at || 0) ? a : b), kept[0]);
-        if (!Number.isFinite(bearing) && Number.isFinite(newest.heading)) bearing = newest.heading;
-        if (!Number.isFinite(bearing)) {
-            const ghostH = ghostHeadingDeg(expectedPosition(trainId));
-            if (Number.isFinite(ghostH)) bearing = ghostH;
-        }
         out.push({
-            lat,
-            lng,
+            lat: driver.lat,
+            lng: driver.lng,
             trainId,
             n: kept.length,
             mine: kept.some((p) => p.mine),
@@ -314,11 +362,41 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             speedMps: newest.speedMps,
             station: newest.station,
             routeId: newest.routeId,
-            bearing,
+            bearing: Number.isFinite(driver.bearing)
+                ? driver.bearing
+                : journeyHeadingAtProgress(trainId, driver.projectedProgress),
             onRails: true,
+            projectedProgress: medianProgress,
         });
     }
     return out.concat(loose);
+}
+
+function median(values) {
+    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return NaN;
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** Median/MAD consensus on accepted along-journey progress, never raw GPS. */
+export function consensusProjectedPings(pings) {
+    const valid = (pings || []).filter((p) =>
+        p?.trackingState === TRACKING_STATE.ACTIVE
+        && !isRidePingGpsStale(p.acceptedAt || p.at)
+        && Number.isFinite(p.projectedProgress)
+        && Number.isFinite(p.lat ?? p.projectedLat)
+        && Number.isFinite(p.lng ?? p.projectedLng)
+    ).map((p) => ({
+        ...p,
+        lat: p.lat ?? p.projectedLat,
+        lng: p.lng ?? p.projectedLng,
+    }));
+    if (valid.length < 3) return valid;
+    const centre = median(valid.map((p) => p.projectedProgress));
+    const mad = median(valid.map((p) => Math.abs(p.projectedProgress - centre)));
+    const band = Math.max(CONSENSUS_MIN_BAND, mad * 3);
+    return valid.filter((p) => Math.abs(p.projectedProgress - centre) <= band);
 }
 
 function stationShort(name) {
@@ -371,15 +449,17 @@ function pingTracksTrain(p, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id || String(p?.trainId || '') !== id) return false;
     if (relaxLiveShareGuards()) return true;
-    const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
-    const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
+    if (p.trackingState !== TRACKING_STATE.ACTIVE || isRidePingGpsStale(p.acceptedAt || p.at)) return false;
+    const lat = typeof p.projectedLat === 'number' ? p.projectedLat : null;
+    const lng = typeof p.projectedLng === 'number' ? p.projectedLng : null;
     if (lat == null || lng == null) return false;
+    if (!Number.isFinite(p.projectedProgress)) return false;
     const metres = scoreTrainForFix(lat, lng, id, opts);
     if (!Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M) return false;
     if (typeof p.speedMps !== 'number' || p.speedMps < 1.5) return false;
     if (typeof p.heading === 'number') {
-        const ghost = expectedPosition(id, opts.now, opts);
-        if (!headingAgrees(p.heading, ghostHeadingDeg(ghost))) return false;
+        const scheduledHeading = journeyHeadingAtProgress(id, p.projectedProgress, opts);
+        if (!headingAgrees(p.heading, scheduledHeading)) return false;
     }
     return true;
 }
@@ -396,12 +476,12 @@ export function compareRankedPings(a, b) {
 }
 
 function scorePingAgainstGhost(p, trainId, ghost, opts = {}) {
-    const lat = typeof p.coarseLat === 'number' ? p.coarseLat : null;
-    const lng = typeof p.coarseLng === 'number' ? p.coarseLng : null;
+    const lat = typeof p.projectedLat === 'number' ? p.projectedLat : null;
+    const lng = typeof p.projectedLng === 'number' ? p.projectedLng : null;
     const metres = (lat != null && lng != null)
         ? scoreTrainForFix(lat, lng, trainId, opts)
         : Infinity;
-    const ghostH = ghostHeadingDeg(ghost);
+    const ghostH = journeyHeadingAtProgress(trainId, p.projectedProgress, opts);
     const headingOk = headingAgrees(
         typeof p.heading === 'number' ? p.heading : NaN,
         ghostH
@@ -428,7 +508,9 @@ function scorePingAgainstGhost(p, trainId, ghost, opts = {}) {
 export function rankVerifiedPings(pings, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id) return [];
-    const live = activePings(pings).filter((p) => pingTracksTrain(p, id, opts));
+    const live = consensusProjectedPings(
+        activePings(pings).filter((p) => pingTracksTrain(p, id, opts))
+    );
     if (!live.length) return [];
     const ghost = expectedPosition(id, opts.now, opts);
     return live
@@ -582,8 +664,8 @@ export function computeRideDelta(pings, trainId, opts = {}) {
     if (!ghost) return null;
 
     const winner = ranked[0].ping;
-    const lat = typeof winner.coarseLat === 'number' ? winner.coarseLat : null;
-    const lng = typeof winner.coarseLng === 'number' ? winner.coarseLng : null;
+    const lat = typeof winner.projectedLat === 'number' ? winner.projectedLat : null;
+    const lng = typeof winner.projectedLng === 'number' ? winner.projectedLng : null;
     if (lat == null || lng == null) return null;
     const lagMinRaw = lagMinutesFromFix(lat, lng, ghost, winner.speedMps, opts.stationIndex);
     if (!Number.isFinite(lagMinRaw)) return null;
@@ -998,6 +1080,8 @@ export async function submitRideCheckIn({
     source = 'board_checkin',
     waitingFor = null,
     quiet = false,
+    trackingState = null,
+    pauseReason = '',
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
@@ -1038,6 +1122,25 @@ export async function submitRideCheckIn({
             if (!stopped.ok) return { ok: false, message: stopped.message };
         }
     }
+    const previous = peekStoredShare();
+    let projection = null;
+    let resolvedState = trackingState;
+    let resolvedPauseReason = pauseReason;
+    if (trainId && !resolvedState) {
+        const previousProgress = previous?.routeId === routeId && String(previous?.trainId || '') === String(trainId)
+            ? previous.projectedProgress
+            : null;
+        projection = await projectTrainTrackerFix({
+            lat: coarseLat,
+            lng: coarseLng,
+            trainId,
+            routeId,
+            previousProgress,
+        });
+        resolvedState = projection.ok ? TRACKING_STATE.ACTIVE : TRACKING_STATE.PAUSED;
+        resolvedPauseReason = projection.ok ? '' : projection.reason;
+    }
+    if (!resolvedState) resolvedState = TRACKING_STATE.ACTIVE;
     const payload = {
         routeId,
         deviceId,
@@ -1055,7 +1158,22 @@ export async function submitRideCheckIn({
         speedMps: typeof speedMps === 'number' ? Math.round(speedMps * 10) / 10 : null,
         appVersion: APP_VERSION,
         source: source || 'board_checkin',
+        trackingState: resolvedState,
     };
+    if (resolvedPauseReason) payload.pauseReason = resolvedPauseReason;
+    if (projection?.ok) {
+        payload.projectedLat = projection.projectedLat;
+        payload.projectedLng = projection.projectedLng;
+        payload.projectedProgress = projection.projectedProgress;
+        payload.routeProgressM = Math.round(projection.routeProgressM);
+        payload.acceptedAt = now;
+        payload.lastSeenLabel = projection.lastSeenLabel || st;
+        if (Number.isFinite(projection.bearing)) payload.bearing = Math.round(projection.bearing);
+    } else if (resolvedState === TRACKING_STATE.PAUSED && previous) {
+        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
+            if (previous[key] != null) payload[key] = previous[key];
+        }
+    }
 
     try {
         const token = await ensureAuthToken();
@@ -1070,10 +1188,13 @@ export async function submitRideCheckIn({
             }
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
-        const prev = peekStoredShare();
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
             routeId, station: st, trainId: trainId || null, destination: destination || null,
-            at: now, lastPingAt: now, startedAt: prev?.startedAt || now, expiresAt: payload.expiresAt,
+            at: now, lastPingAt: now, startedAt: previous?.startedAt || now, expiresAt: payload.expiresAt,
+            trackingState: payload.trackingState, pauseReason: payload.pauseReason || '',
+            projectedLat: payload.projectedLat, projectedLng: payload.projectedLng,
+            projectedProgress: payload.projectedProgress, routeProgressM: payload.routeProgressM,
+            acceptedAt: payload.acceptedAt, lastSeenLabel: payload.lastSeenLabel, bearing: payload.bearing,
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1126,7 +1247,11 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         expiresAt: now,
         appVersion: APP_VERSION,
         source: 'stop',
+        trackingState: TRACKING_STATE.STOPPED,
     };
+    for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
+        if (active?.[key] != null) payload[key] = active[key];
+    }
     try {
         const token = await ensureAuthToken();
         if (!token) throw new Error('Couldn’t stop sharing');
@@ -1178,6 +1303,31 @@ export function stopOnboardPingLoop() {
     }
 }
 
+async function pauseActiveTracker(active, reason, pos = null) {
+    const paused = {
+        ...active,
+        trackingState: TRACKING_STATE.PAUSED,
+        pauseReason: reason,
+        at: Date.now(),
+    };
+    safeStorage.setItem(ACTIVE_KEY, JSON.stringify(paused));
+    if (!navigator.onLine) return { ok: false, offline: true };
+    return submitRideCheckIn({
+        routeId: active.routeId,
+        station: active.station,
+        trainId: active.trainId,
+        destination: active.destination || null,
+        coarseLat: pos?.lat ?? active.projectedLat ?? null,
+        coarseLng: pos?.lng ?? active.projectedLng ?? null,
+        heading: pos?.heading ?? null,
+        speedMps: pos?.speedMps ?? null,
+        source: 'onboard_paused',
+        quiet: true,
+        trackingState: TRACKING_STATE.PAUSED,
+        pauseReason: reason,
+    });
+}
+
 /** While attached to a train, refresh the ping so others see movement. */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
@@ -1189,7 +1339,18 @@ export function startOnboardPingLoop() {
             stopOnboardPingLoop();
             return;
         }
-        if (typeof document !== 'undefined' && document.hidden) return;
+        if (typeof document !== 'undefined' && document.hidden) {
+            if (active.trackingState !== TRACKING_STATE.PAUSED || active.pauseReason !== 'staleGps') {
+                await pauseActiveTracker(active, 'staleGps');
+            }
+            return;
+        }
+        if (!navigator.onLine) {
+            if (active.trackingState !== TRACKING_STATE.PAUSED || active.pauseReason !== 'offline') {
+                await pauseActiveTracker(active, 'offline');
+            }
+            return;
+        }
         try {
             const pos = await oneShotGps();
             const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
@@ -1197,33 +1358,20 @@ export function startOnboardPingLoop() {
                 await stopRideShare({ reason: 'terminus' });
                 return;
             }
-            const metres = scoreTrainForFix(pos.lat, pos.lng, active.trainId);
-            let onRails = true;
-            try {
-                const { snapToRail } = await import('./rail-tracks.js');
-                const region = (ROUTES[active.routeId] && ROUTES[active.routeId].region) || 'GP';
-                const snap = await snapToRail(pos.lat, pos.lng, region, 150);
-                onRails = !!snap.ok;
-            } catch { /* keep last assumption */ }
-            const offPath = !onRails || !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
+            const projection = await projectTrainTrackerFix({
+                lat: pos.lat,
+                lng: pos.lng,
+                trainId: active.trainId,
+                routeId: active.routeId,
+                previousProgress: active.projectedProgress,
+            });
+            const offPath = !projection.ok;
             if (offPath) {
                 if (onboardPromptInFlight) return;
                 onboardPromptInFlight = true;
                 stopOnboardPingLoop();
                 try {
-                await submitRideCheckIn({
-                    routeId: active.routeId,
-                    station: near?.stationName || active.station,
-                    trainId: null,
-                    waitingFor: active.trainId,
-                    destination: active.destination || null,
-                    coarseLat: pos.lat,
-                    coarseLng: pos.lng,
-                    heading: pos.heading,
-                    speedMps: pos.speedMps,
-                    source: 'onboard_off_path',
-                    quiet: true,
-                });
+                    await pauseActiveTracker(active, projection.reason, pos);
                     const { promptOnTrainSheet, startOnTrainShare } = await import('./map-tab.js');
                     const choice = await promptOnTrainSheet({
                         title: 'Still on this train?',
@@ -1261,7 +1409,9 @@ export function startOnboardPingLoop() {
                 source: 'onboard_ping',
                 quiet: true,
             });
-        } catch { /* keep last ping; do not slide expiresAt */ }
+        } catch {
+            await pauseActiveTracker(active, 'fixFailure');
+        }
     };
     onboardPingTimer = setInterval(tick, 45000);
 }
@@ -1632,9 +1782,8 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
         return;
     }
 
-    const index = $globalStationIndex.get() || {};
-    const driverProg = (driver && typeof driver.coarseLat === 'number')
-        ? progressAlongStops(driver.coarseLat, driver.coarseLng, stops, index)
+    const driverProg = (driver && typeof driver.projectedProgress === 'number')
+        ? driver.projectedProgress
         : null;
     const lastIdx = driverProg == null ? -1 : Math.floor(driverProg);
     const frac = driverProg == null ? 0 : driverProg - lastIdx;
@@ -1646,8 +1795,8 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
     const extraAt = {};
     ranked.slice(1).forEach((r) => {
         const p = r.ping;
-        if (typeof p.coarseLat !== 'number' || typeof p.coarseLng !== 'number') return;
-        const prog = progressAlongStops(p.coarseLat, p.coarseLng, stops, index);
+        if (typeof p.projectedProgress !== 'number') return;
+        const prog = p.projectedProgress;
         if (prog == null) return;
         const i = Math.round(prog);
         extraAt[i] = (extraAt[i] || 0) + 1;

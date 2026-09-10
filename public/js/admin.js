@@ -1948,12 +1948,12 @@ const Admin = {
         const cycleBtn = document.getElementById('trend-cycle-btn');
         if (cycleBtn) cycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange} Trend`;
         
-        const modalCycleBtn = document.getElementById('modal-trend-cycle');
-        if (modalCycleBtn) modalCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange}`;
+        const drillCycleBtn = document.getElementById('analytics-trend-cycle');
+        if (drillCycleBtn) drillCycleBtn.innerHTML = `${Admin.icon('trending', 'w-3.5 h-3.5 inline-block mr-1 align-middle')} ${Admin.telemetryRange}`;
         
         Admin.telemetryWeeksAgo = 0; // Reset pagination context
         
-        const paginationControls = document.getElementById('modal-pagination-controls');
+        const paginationControls = document.getElementById('analytics-pagination-controls');
         if (paginationControls) {
             if (Admin.telemetryRange === 'DAU' || Admin.telemetryRange === 'WAU') {
                 paginationControls.classList.remove('hidden');
@@ -2039,61 +2039,55 @@ const Admin = {
             `;
             telBody.appendChild(trendWrapper);
             
-            // GUARDIAN PHASE 11: Reordered Title Below Graph for interactive airspace
-            let chartModal = document.getElementById('telemetry-chart-modal');
-            if (!chartModal) {
-                chartModal = document.createElement('div');
-                chartModal.id = 'telemetry-chart-modal';
-                chartModal.className = 'fixed inset-0 bg-black/90 z-[160] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300';
-                chartModal.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] landscape:h-[95vh] flex flex-col transform transition-all scale-95 border border-slate-200 dark:border-slate-700">
-                        <div class="p-3 md:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 rounded-t-2xl shrink-0">
+            // Full-height analytics drill: part of admin navigation, not an overlay modal.
+            let chartPanel = document.getElementById('telemetry-chart-panel');
+            if (!chartPanel) {
+                const adminContainer = document.getElementById('admin-modules-container');
+                chartPanel = document.createElement('section');
+                chartPanel.id = 'telemetry-chart-panel';
+                chartPanel.dataset.adminSubview = 'true';
+                chartPanel.style.display = 'none';
+                chartPanel.className = 'bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-5.5rem)] h-[calc(100dvh-5.5rem)] landscape:min-h-[calc(100dvh-4.5rem)] landscape:h-[calc(100dvh-4.5rem)]';
+                chartPanel.innerHTML = `
+                    <button id="telemetry-chart-header-btn" class="hidden" type="button"><span>Analytics Trends</span></button>
+                    <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                        <div class="p-2 sm:p-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-2 bg-slate-50 dark:bg-slate-900 shrink-0">
+                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm flex items-center">
+                                <svg class="w-3.5 h-3.5 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                                <span>${Admin.telemetryRange}</span>
+                            </button>
                             <div class="flex items-center space-x-2">
-                                <button id="modal-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm flex items-center">
-                                    <svg class="w-3.5 h-3.5 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                                    <span>${Admin.telemetryRange}</span>
-                                </button>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <button id="modal-trend-compare-btn" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Compare Previous Period">
+                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                                 </button>
-                                <button id="modal-trend-export" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Export Chart">
+                                <button id="analytics-trend-export" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
-                                <button onclick="closeSmoothModal('telemetry-chart-modal')" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors focus:outline-none">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
                             </div>
                         </div>
-                        
-                        <div id="modal-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="modal-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+                        <div id="analytics-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
+                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
                             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="modal-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
                         </div>
-                        
-                        <div class="flex-grow p-2 md:p-6 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0">
-                            <div id="modal-chart-svg-container" class="w-full flex-grow mb-4">
-                                <!-- High-Res SVG Line Graph gets injected here -->
-                            </div>
-                            <div class="text-center shrink-0 pb-4">
-                                <h3 class="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none" id="modal-trend-title">Loading...</h3>
+                        <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
+                            <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
+                            <div class="text-center shrink-0 pb-2 landscape:pb-0">
+                                <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
                                 <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
                             </div>
                         </div>
                     </div>
                 `;
-                document.body.appendChild(chartModal);
+                adminContainer?.appendChild(chartPanel);
 
-                // Bind Modal Pagination & Unified Toggle
-                document.getElementById('modal-trend-prev').onclick = () => { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); };
-                document.getElementById('modal-trend-next').onclick = () => { if(Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } };
-                document.getElementById('modal-trend-export').onclick = () => Admin.exportTrendGraph();
-                document.getElementById('modal-trend-cycle').onclick = Admin.cycleTelemetryRange;
+                document.getElementById('analytics-trend-prev').onclick = () => { Admin.telemetryWeeksAgo++; Admin.refreshTelemetry(); };
+                document.getElementById('analytics-trend-next').onclick = () => { if(Admin.telemetryWeeksAgo > 0) { Admin.telemetryWeeksAgo--; Admin.refreshTelemetry(); } };
+                document.getElementById('analytics-trend-export').onclick = () => Admin.exportTrendGraph();
+                document.getElementById('analytics-trend-cycle').onclick = Admin.cycleTelemetryRange;
                 
                 // Compare Toggle Binding
-                const compareBtn = document.getElementById('modal-trend-compare-btn');
+                const compareBtn = document.getElementById('analytics-trend-compare-btn');
                 if (compareBtn) {
                     compareBtn.onclick = () => {
                         Admin.isComparing = !Admin.isComparing;
@@ -2174,7 +2168,7 @@ const Admin = {
                     closeSmoothModal('telemetry-region-modal');
                     // Give the modal 300ms to visually close before opening the full-screen chart
                     setTimeout(() => {
-                        openSmoothModal('telemetry-chart-modal');
+                        Admin.deepLinkToPanel('telemetry-chart-panel');
                     }, 300);
                 };
             }
@@ -2188,8 +2182,8 @@ const Admin = {
             const inlineExportBtn = document.getElementById('trend-inline-export-btn');
             const inlineContainer = document.getElementById('tel-trend-container');
 
-            if (expandBtn) expandBtn.onclick = () => openSmoothModal('telemetry-chart-modal');
-            if (inlineContainer) inlineContainer.onclick = () => openSmoothModal('telemetry-chart-modal');
+            if (expandBtn) expandBtn.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
+            if (inlineContainer) inlineContainer.onclick = () => Admin.deepLinkToPanel('telemetry-chart-panel');
             if (inlineExportBtn) inlineExportBtn.onclick = () => Admin.exportTrendGraph();
 
             // Main Global Export Button (Raw Data Snapshot)
@@ -2733,12 +2727,12 @@ const Admin = {
                     titleStr = `All-Time Active Users${rangeStr || ' (from Jan 2026)'}`;
                 }
                 
-                const modalTitleEl = document.getElementById('modal-trend-title');
-                if (modalTitleEl) modalTitleEl.textContent = titleStr;
+                const drillTitleEl = document.getElementById('analytics-trend-title');
+                if (drillTitleEl) drillTitleEl.textContent = titleStr;
                 
-                const nextBtn = document.getElementById('modal-trend-next');
+                const nextBtn = document.getElementById('analytics-trend-next');
                 const inlineNextBtn = document.getElementById('trend-next-btn');
-                const prevBtn = document.getElementById('modal-trend-prev');
+                const prevBtn = document.getElementById('analytics-trend-prev');
                 
                 // Forward-in-time guard (Next)
                 [nextBtn, inlineNextBtn].forEach(btn => {
@@ -2787,9 +2781,9 @@ const Admin = {
                 const inlineContainer = document.getElementById('tel-trend-container');
                 if (inlineContainer) inlineContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, true, compareCountsArray);
                 
-                // Render Full-Screen Modal SVG
-                const modalSvgContainer = document.getElementById('modal-chart-svg-container');
-                if (modalSvgContainer) modalSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray);
+                // Render the full-height admin analytics drill.
+                const drillSvgContainer = document.getElementById('analytics-chart-svg-container');
+                if (drillSvgContainer) drillSvgContainer.innerHTML = Admin._buildLineGraphSVG(activeCountsArray, displayLabels, titleStr, isTodayIdx, false, compareCountsArray);
 
                 [stat5m, stat30m, statToday, statWeekly, statMonthly, statAllTime, statErrors].forEach(el => {
                     if (el) el.classList.remove('animate-pulse');
@@ -3022,8 +3016,8 @@ const Admin = {
             }
         }
 
-        const titleText = document.getElementById('modal-trend-title')?.textContent || '7-Day DAU Trend';
-        const rawSvgNode = document.querySelector('#modal-chart-svg-container svg');
+        const titleText = document.getElementById('analytics-trend-title')?.textContent || '7-Day DAU Trend';
+        const rawSvgNode = document.querySelector('#analytics-chart-svg-container svg');
         if (!rawSvgNode) return;
 
         const exportContainer = document.createElement('div');
@@ -5118,7 +5112,8 @@ const Admin = {
                     /* Hide empty HubModals shells — .hidden loses to this rule's display:flex otherwise */
                     .admin-grid-view > div.hidden,
                     .admin-grid-view > div:empty,
-                    .admin-grid-view > div[data-admin-shell="empty"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
+                    .admin-grid-view > div[data-admin-shell="empty"],
+                    .admin-grid-view > div[data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
@@ -5209,7 +5204,8 @@ const Admin = {
                     gridStyleEl.textContent += `
                     .admin-grid-view > div.hidden,
                     .admin-grid-view > div:empty,
-                    .admin-grid-view > div[data-admin-shell="empty"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
+                    .admin-grid-view > div[data-admin-shell="empty"],
+                    .admin-grid-view > div[data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
                 }
                 if (!gridStyleEl.textContent.includes('color: #64748b')) {
                     gridStyleEl.textContent += `

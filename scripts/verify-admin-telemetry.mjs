@@ -134,6 +134,15 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
 ok(adminJs.includes('Unique users by last selected region'), 'regional modal says unique users, not a partition of TODAY');
+ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
+ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
+ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');
+ok(!adminJs.includes("chartModal.id = 'telemetry-chart-modal'"), 'telemetry chart overlay modal is removed');
+ok(adminJs.includes('100dvh') && adminJs.includes('landscape:'), 'analytics drill responds to portrait and landscape viewports');
+{
+    const astroConfig = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
+    ok(!astroConfig.includes("orientation: 'portrait'"), 'PWA manifest no longer locks portrait orientation');
+}
 ok(adminJs.includes('data-gsm-tab'), 'Global State Monitor has feature tabs');
 ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM tabs include grid notices and exclusions');
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');

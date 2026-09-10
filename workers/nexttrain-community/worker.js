@@ -20,6 +20,7 @@ const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
 const TTL_CRON = '0 * * * *';
 const DEFAULT_CLAIM_LEASE_MS = 2 * 60 * 1000;
+const DEFAULT_IMPRESSION_DEDUPE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** @type {Map<string, number[]>} */
 const rateBuckets = new Map();
@@ -113,6 +114,31 @@ function checkRate(key, windowMs, max) {
     arr.push(now);
     rateBuckets.set(key, arr);
     return true;
+}
+
+export function isValidImpressionScope(value) {
+    const scope = String(value || '').trim();
+    if (!isSafeRtdbKey(scope)) return false;
+    return scope === 'all'
+        || /^all_[A-Z]{2,3}$/.test(scope)
+        || /^[a-z]{2,4}-[a-z0-9][a-z0-9-]{0,70}$/i.test(scope);
+}
+
+export function isValidImpressionNoticeId(value) {
+    return isSafeRtdbKey(String(value || '').trim());
+}
+
+export function isValidInstallationId(value) {
+    return typeof value === 'string'
+        && value.length >= 16
+        && value.length <= 128
+        && /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+export async function hashInstallationId(installationId, secret = '') {
+    const bytes = new TextEncoder().encode(`${secret}:${installationId}`);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function toBase64Url(obj) {
@@ -307,6 +333,86 @@ function createRtdbClient(env) {
             return { matched: true };
         },
     };
+}
+
+function isNoticePayload(value) {
+    return !!value && typeof value === 'object' && !!(
+        value.id || value.message || value.text || value.imageUrl || value.imageUrls
+    );
+}
+
+async function noticeExists(rtdb, scope, noticeId) {
+    const direct = (await rtdb.get(`notices/${scope}/${noticeId}`)).value;
+    if (isNoticePayload(direct)) return true;
+    const bucket = (await rtdb.get(`notices/${scope}`)).value;
+    return isNoticePayload(bucket) && String(bucket.id || '') === noticeId;
+}
+
+/**
+ * ETag transaction over count + dedupe map. A concurrent duplicate either wins
+ * this transaction or observes the winner, so the count changes exactly once.
+ */
+export async function recordAlertImpression({
+    rtdb,
+    scope,
+    noticeId,
+    installationId,
+    hashSecret = '',
+    now = Date.now(),
+    retentionMs = DEFAULT_IMPRESSION_DEDUPE_TTL_MS,
+}) {
+    if (!isValidImpressionScope(scope)) throw new Error('Invalid scope');
+    if (!isValidImpressionNoticeId(noticeId)) throw new Error('Invalid noticeId');
+    if (!isValidInstallationId(installationId)) throw new Error('Invalid installationId');
+    if (!(await noticeExists(rtdb, scope, noticeId))) return { found: false, counted: false, count: 0 };
+
+    const installationHash = await hashInstallationId(installationId, hashSecret);
+    const path = `notice_impressions/${scope}/${noticeId}`;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+        const current = await rtdb.get(path, true);
+        const node = current.value && typeof current.value === 'object' ? current.value : {};
+        const dedupe = node.dedupe && typeof node.dedupe === 'object' ? node.dedupe : {};
+        if (dedupe[installationHash]) {
+            return { found: true, counted: false, count: Math.max(0, Number(node.count) || 0) };
+        }
+        const next = {
+            count: Math.max(0, Number(node.count) || 0) + 1,
+            updatedAt: now,
+            dedupe: {
+                ...dedupe,
+                [installationHash]: { createdAt: now, expiresAt: now + retentionMs },
+            },
+        };
+        const written = await rtdb.put(path, next, current.etag);
+        if (written.matched) return { found: true, counted: true, count: next.count };
+    }
+    throw new Error('Impression transaction contended');
+}
+
+export async function cleanupAlertImpressionDedupe(env, options = {}) {
+    const now = Number(options.now ?? Date.now());
+    const rtdb = options.rtdb || createRtdbClient(env);
+    const tree = (await rtdb.get('notice_impressions')).value;
+    let deleted = 0;
+    for (const [scope, notices] of Object.entries(tree || {})) {
+        for (const noticeId of Object.keys(notices || {})) {
+            const path = `notice_impressions/${scope}/${noticeId}`;
+            for (let attempt = 0; attempt < 4; attempt += 1) {
+                const current = await rtdb.get(path, true);
+                if (!current.value || typeof current.value !== 'object') break;
+                const entries = Object.entries(current.value.dedupe || {});
+                const live = Object.fromEntries(entries.filter(([, item]) => Number(item?.expiresAt || 0) > now));
+                const removed = entries.length - Object.keys(live).length;
+                if (!removed) break;
+                const next = { ...current.value, dedupe: live };
+                const written = await rtdb.put(path, next, current.etag);
+                if (!written.matched) continue;
+                deleted += removed;
+                break;
+            }
+        }
+    }
+    return { deleted };
 }
 
 function johannesburgParts(ts) {
@@ -633,6 +739,42 @@ export async function runScheduledAlerts(env, options = {}) {
     return summary;
 }
 
+async function handleAlertImpression(request, env) {
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const scope = String(body.scope || '').trim();
+    const noticeId = String(body.noticeId || '').trim();
+    const installationId = String(body.installationId || '').trim();
+    if (!isValidImpressionScope(scope) || !isValidImpressionNoticeId(noticeId) || !isValidInstallationId(installationId)) {
+        return json(env, request, 400, { ok: false, error: 'Invalid impression identity' });
+    }
+    const windowMs = Number(env.IMPRESSION_RATE_WINDOW_MS || 60_000);
+    const max = Number(env.IMPRESSION_RATE_MAX || 30);
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!checkRate(`imp-device:${installationId}`, windowMs, max)
+        || !checkRate(`imp-ip:${ip}`, windowMs, max * 4)) {
+        return json(env, request, 429, { ok: false, error: 'Rate limited', retryAfterMs: windowMs });
+    }
+    try {
+        const result = await recordAlertImpression({
+            rtdb: createRtdbClient(env),
+            scope,
+            noticeId,
+            installationId,
+            hashSecret: env.IMPRESSION_HASH_SECRET || env.FIREBASE_PRIVATE_KEY || '',
+            retentionMs: Number(env.IMPRESSION_DEDUPE_TTL_MS || DEFAULT_IMPRESSION_DEDUPE_TTL_MS),
+        });
+        if (!result.found) return json(env, request, 404, { ok: false, error: 'Notice not found' });
+        return json(env, request, 200, { ok: true, counted: result.counted, count: result.count });
+    } catch (error) {
+        return json(env, request, 500, { ok: false, error: error?.message || 'Impression write failed' });
+    }
+}
+
 async function requireAdmin(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) return { error: 'Missing Authorization', status: 401 };
@@ -645,6 +787,30 @@ async function requireAdmin(request, env) {
     } catch (error) {
         return { error: error?.message || 'Unauthorized', status: 401 };
     }
+}
+
+async function handleAlertImpressionAdmin(request, env) {
+    const auth = await requireAdmin(request, env);
+    if (auth.error) return json(env, request, auth.status, { ok: false, error: auth.error });
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    const notices = Array.isArray(body.notices) ? body.notices.slice(0, 50) : [];
+    if (notices.some((item) => !isValidImpressionScope(item?.scope)
+        || !isValidImpressionNoticeId(item?.noticeId))) {
+        return json(env, request, 400, { ok: false, error: 'Invalid notice query' });
+    }
+    const rtdb = createRtdbClient(env);
+    const rows = await Promise.all(notices.map(async (item) => {
+        const scope = String(item.scope);
+        const noticeId = String(item.noticeId);
+        const node = (await rtdb.get(`notice_impressions/${scope}/${noticeId}`)).value;
+        return { scope, noticeId, count: Math.max(0, Number(node?.count) || 0) };
+    }));
+    return json(env, request, 200, { ok: true, notices: rows });
 }
 
 async function handleScheduledAlertsAdmin(request, env) {
@@ -865,6 +1031,16 @@ export default {
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);
         }
+        if (request.method === 'POST' && url.pathname === '/alerts/impression') {
+            return handleAlertImpression(request, env);
+        }
+        if (request.method === 'POST' && url.pathname === '/admin/alert-impressions') {
+            try {
+                return await handleAlertImpressionAdmin(request, env);
+            } catch (e) {
+                return json(env, request, 500, { ok: false, error: e.message || 'Impression lookup failed' });
+            }
+        }
         if (
             (request.method === 'GET' || request.method === 'POST')
             && url.pathname === '/admin/scheduled-alerts'
@@ -899,7 +1075,10 @@ export default {
         }
         if (event.cron === TTL_CRON) {
             ctx.waitUntil(
-                wipeStalePosts(env).catch((e) => console.error('TTL wipe failed', e))
+                Promise.all([
+                    wipeStalePosts(env),
+                    cleanupAlertImpressionDedupe(env),
+                ]).catch((e) => console.error('TTL wipe failed', e))
             );
         }
     },

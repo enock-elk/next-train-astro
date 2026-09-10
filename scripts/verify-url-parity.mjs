@@ -152,7 +152,7 @@ if (!existsSync(manifestPath)) {
   if (m.id !== '/' && m.id !== './') fail(`manifest id is "${m.id}", want "/" (SPA "./")`);
   if (m.start_url !== '/' && m.start_url !== './') fail(`manifest start_url is "${m.start_url}", want "/"`);
   if (m.background_color !== '#1d4ed8') fail(`manifest background_color is ${m.background_color}, want #1d4ed8`);
-  if (m.orientation !== 'portrait') fail(`manifest orientation is ${m.orientation}, want portrait`);
+  if (m.orientation) fail(`manifest orientation should be unrestricted, got ${m.orientation}`);
   if (m.icons?.some((i) => i.purpose === 'maskable')) {
     fail('manifest declares a maskable icon — Android will re-crop every existing install');
   }

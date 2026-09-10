@@ -14,6 +14,9 @@
     "POST_TTL_MS": "86400000",
     "RATE_WINDOW_MS": "60000",
     "RATE_MAX": "4",
+    "IMPRESSION_DEDUPE_TTL_MS": "1209600000",
+    "IMPRESSION_RATE_WINDOW_MS": "60000",
+    "IMPRESSION_RATE_MAX": "30",
     "ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,http://localhost:4321"
   },
   "triggers": {

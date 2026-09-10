@@ -220,7 +220,6 @@ export default defineConfig({
         // a white splash is the most visible sign of the rewrite on cold launch.
         background_color: '#1d4ed8',
         display: 'standalone',
-        orientation: 'portrait',
         scope: baseWithSlash,
         // SPA used "./" relative to a root manifest, which resolves to the origin
         // root — same value baseWithSlash produces here.

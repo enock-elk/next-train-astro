@@ -534,6 +534,7 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'analytics_queue',
     'nt_trip_plan_queue_v1',
     'last_impression_timestamp',
+    'nt_alert_impression_installation_v1',
     'seen_changelog_version',
     'ntInboxLocalV1',
     'defaultRoute_GP',
@@ -552,6 +553,7 @@ export const VOLATILE_FLUSH_PROTECTED_PREFIXES = Object.freeze([
     'seen_holiday_',
     'ntInbox',
     'analytics_',
+    'nt_alert_impression_v1:',
     'poll_voted_',
 ]);
 

@@ -15,7 +15,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
-    simUsesSpecificDate
+    simUsesSpecificDate, exclusionAppliesToSurface
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -290,16 +290,7 @@ export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.n
 }
 
 /** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
-export function exclusionAppliesToSurface(rule, surface = 'in_app') {
-    if (!rule) return false;
-    const configured = rule.surface === 'in_app' || rule.surface === 'grid'
-        ? rule.surface
-        : 'both';
-    if (configured === 'both') return true;
-    return surface === 'grid' || surface === 'export'
-        ? configured === 'grid'
-        : configured === 'in_app';
-}
+export { exclusionAppliesToSurface };
 
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
 export function isTrainExcluded(trainNumber, routeId, dayIdx, surface = 'in_app') {

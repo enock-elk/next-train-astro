@@ -265,6 +265,18 @@ export function routePrimaryGridDirection(route) {
     return 'A';
 }
 
+/** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
+export function exclusionAppliesToSurface(rule, surface = 'in_app') {
+    if (!rule) return false;
+    const configured = rule.surface === 'in_app' || rule.surface === 'grid'
+        ? rule.surface
+        : 'both';
+    if (configured === 'both') return true;
+    return surface === 'grid' || surface === 'export'
+        ? configured === 'grid'
+        : configured === 'in_app';
+}
+
 /** HTML route label with SVG arrow between corridor ends. */
 export function formatRouteLabelHtml(raw) {
     if (typeof raw !== 'string' || !raw) return escapeHTML('Select a route');

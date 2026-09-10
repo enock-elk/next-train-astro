@@ -3,7 +3,7 @@
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -137,7 +137,6 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
 
 {
     const { readFileSync } = await import('node:fs');
-    const { exclusionAppliesToSurface } = await import('../src/lib/live-board.js');
     assert(exclusionAppliesToSurface({}, 'in_app') && exclusionAppliesToSurface({}, 'grid'), 'legacy exclusions default to both surfaces');
     assert(exclusionAppliesToSurface({ surface: 'in_app' }, 'in_app') && !exclusionAppliesToSurface({ surface: 'in_app' }, 'grid'), 'in-app-only exclusions stay out of the grid');
     assert(exclusionAppliesToSurface({ surface: 'grid' }, 'grid') && !exclusionAppliesToSurface({ surface: 'grid' }, 'in_app'), 'grid-only exclusions stay out of board and planner');

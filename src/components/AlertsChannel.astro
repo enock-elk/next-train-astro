@@ -10,8 +10,9 @@
 </style>
 
 <div id="alerts-channel" class="fixed inset-0 bg-slate-200 dark:bg-gray-950 z-[115] hidden flex flex-col transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="alerts-channel-title">
-    <div id="alerts-channel-card" class="flex flex-col h-full w-full bg-slate-200 dark:bg-gray-950 scale-100">
-        <header class="shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
+    <div id="alerts-channel-card" class="relative flex flex-col h-full w-full bg-slate-200 dark:bg-gray-950 scale-100 overflow-hidden">
+        <div id="alerts-channel-wallpaper" aria-hidden="true"></div>
+        <header class="relative z-[1] shrink-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
             <div class="flex items-center gap-2">
                 <button type="button" id="alerts-channel-back" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -24,7 +25,7 @@
             </div>
         </header>
 
-        <div id="alerts-channel-scroll" class="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div id="alerts-channel-scroll" class="relative z-[1] flex-1 overflow-y-auto custom-scrollbar px-3 py-3">
             <div id="alerts-pin-strip" class="hidden mb-3"></div>
             <button type="button" id="alerts-load-earlier" class="hidden w-full mb-3 py-2 text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:outline-none">Show earlier</button>
             <div id="alerts-empty" class="hidden text-center py-16 px-6">
@@ -32,6 +33,10 @@
                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">When Next Train posts a notice for your region or route, it will show up here.</p>
             </div>
             <div id="alerts-feed" class="space-y-3"></div>
+        </div>
+
+        <div id="alerts-channel-footer" class="relative z-[1] shrink-0 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl">
+            <button type="button" id="alerts-channel-footer-close" class="w-full inline-flex items-center justify-center text-sm font-bold text-blue-600 dark:text-blue-400 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/30" aria-label="Close alerts">Close</button>
         </div>
     </div>
 </div>

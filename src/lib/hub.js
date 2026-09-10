@@ -1259,7 +1259,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         ? 'nt-alert-strip-critical bg-red-600 text-white'
         : severity === 'warning'
             ? 'nt-alert-strip-warning bg-amber-500 text-gray-900'
-            : 'nt-alert-strip-info bg-blue-600 text-white';
+            : 'nt-alert-strip-info bg-blue-50 text-blue-800';
     if (strip) {
         strip.className = `nt-alert-strip flex items-center justify-between gap-2 px-4 py-2 shrink-0 ${stripCls}`;
     }

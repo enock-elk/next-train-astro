@@ -197,6 +197,11 @@ assert(/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,220}var\(--nt-surface\)/.test(c
 assert(/html\.dark \.dark\\:bg-gray-900,[\s\S]{0,220}var\(--nt-canvas\)/.test(css), 'dark gray-900 maps to canvas, not surface');
 assert(!/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,80}html\.dark \.dark\\:bg-gray-900/.test(css), 'gray-800 and gray-900 remaps are split');
 assert(css.includes('#alerts-channel-card'), 'alerts sheet card uses canvas');
+assert(css.includes('#alerts-channel-wallpaper'), 'alerts wallpaper uses the colour pack');
+assert(css.includes('mask-image'), 'alerts wallpaper tiles via mask-image so pack tokens colour it');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas))'), 'alerts wallpaper wash follows chrome + canvas');
+assert(/nt-alert-strip-info \{\s*background-color: color-mix\(in srgb, var\(--nt-primary\)/.test(css), 'info strip is a quiet primary wash');
+assert(!/nt-alert-strip-info \{\s*background-color: #2563eb/.test(css), 'info strip is no longer a solid blue banner');
 assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
 assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
@@ -387,9 +392,12 @@ assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(/#view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community pane fills leftover height like Feedback Hub');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard fills the visual hole so the composer sits on the IME');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane fills leftover height');
-assert(layout.includes('#app-scroll:has(#view-community.active)'), 'Community keyboard hides leftover scroll gray');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard keeps leftover fill so the composer has no gray slab');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane does not shrink to fit the Next Train header');
+assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
+assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
+assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');
+assert(!/html\.nt-keyboard[\s\S]{0,500}#app-scroll:has\(#view-community\.active\) \{\s*overflow:\s*hidden/.test(layout), 'Community keyboard does not freeze #app-scroll');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');
 assert(layout.includes('border-width: 0 !important'), 'phone in-app drops the card hairline');
 assert(layout.includes('Layout height never follows visualViewport'), 'keyboard does not shrink --nt-app-h');

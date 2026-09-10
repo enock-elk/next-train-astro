@@ -224,11 +224,14 @@ const now = 1_700_000_000_000;
     const { readFileSync } = await import('node:fs');
     const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
     assert(channel.includes('>Close</button>'), 'header has a labeled Close button');
+    assert(channel.includes('id="alerts-channel-wallpaper"'), 'alerts wallpaper sits behind the feed');
+    assert(channel.includes('id="alerts-channel-footer-close"'), 'alerts has a bottom Close');
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
     assert(!channel.includes('When PRASA or Next Train'), 'empty-state no longer mentions PRASA');
     assert(channel.includes('bg-slate-200 dark:bg-gray-950'), 'channel background contrasts with white cards');
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    assert(js.includes('alerts-channel-footer-close'), 'footer Close is bound');
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
     assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
     assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');

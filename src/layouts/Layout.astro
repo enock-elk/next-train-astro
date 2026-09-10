@@ -132,6 +132,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           if (editing && full && layoutH < full - 80) {
             keyboard = true;
           }
+          var communityOn = false;
+          try {
+            var cv = document.getElementById('view-community');
+            communityOn = !!(cv && cv.classList.contains('active'));
+          } catch (e) {}
           var shellTop = Math.max(0, off);
           var shellH = Math.round(vh || layoutH);
           if (shellH < 240) shellH = lastShellH || lastFullLayoutH || layoutH || 240;
@@ -153,11 +158,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           } else {
             // Keep html/body at the last full layout so the page does not
             // collapse under the IME. Pin #nt-shell to the LIVE visual hole
-            // so Community's composer sits on the keyboard (no leftover gray
-            // slab). The oval stays hidden while nt-keyboard is on.
+            // on other tabs. Community must not: leave the shell at full size
+            // so #app-scroll can carry the Next Train header away.
             layoutH = full;
             lastLayoutH = full;
-            if (shellH < 240) {
+            if (communityOn) {
+              shellTop = lastShellTop;
+              shellH = lastShellH || full;
+            } else if (shellH < 240) {
               shellH = lastShellH || full;
             }
           }
@@ -182,6 +190,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           if (vvH < 240) vvH = 240;
           root.style.setProperty('--nt-vv-h', vvH + 'px');
           root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
+          var kbH = 0;
+          if (keyboard) {
+            kbH = Math.max(0, Math.round(gap));
+            if (vv && vv.height) {
+              var covered = Math.round((full || layoutH) - (off + vv.height));
+              if (covered > kbH) kbH = covered;
+            }
+          }
+          root.style.setProperty('--nt-kb-h', kbH + 'px');
           root.classList.toggle('nt-keyboard', keyboard);
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
@@ -804,10 +821,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
          and body fill the layout (no white slab). --nt-shell-* pin the frame
          to the visible hole so NEXT TRAIN sits below the URL bar and the
          oval sits on the visual bottom. While the IME is open those tokens
-         follow the live visual hole so Community's composer sits on the
-         keyboard. Do not pad a tray under the floating pill. 100svh
-         fallback keeps first paint on-screen before JS measures. Do not
-         transform #nt-shell. */
+         follow the live visual hole except on Community, where the header
+         stays free in #app-scroll. Do not pad a tray under the floating
+         pill. 100svh fallback keeps first paint on-screen before JS
+         measures. Do not transform #nt-shell. */
       #nt-shell {
         top: var(--nt-shell-top, 0px);
         height: var(--nt-shell-h, var(--nt-app-h, 100svh)) !important;
@@ -964,9 +981,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 4.75rem;
         box-sizing: border-box;
       }
-      /* Keyboard: fill the visual hole so the composer sits on the IME.
-         Do not shrink to content height — leftover #app-scroll gray was
-         the slab above the keys. Oval stays hidden. */
+      /* Keyboard: keep Community filling leftover height (no gray slab)
+         without shrinking the room chrome to fit Next Train. The composer
+         docks to --nt-kb-h. Oval stays hidden. #app-scroll stays scrollable
+         so the blue header can leave. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
         flex: 1 1 auto;
         min-height: 0;
@@ -979,8 +997,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         min-height: 0;
         height: 100%;
       }
-      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll:has(#view-community.active) {
-        overflow: hidden;
+      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #community-composer-dock {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: var(--nt-kb-h, 0px);
+        z-index: 112;
+        width: 100%;
+        max-width: 28rem;
+        margin-left: auto;
+        margin-right: auto;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

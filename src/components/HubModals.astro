@@ -878,9 +878,9 @@ import { withBase } from '../lib/config.js';
 <div id="notice-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[125] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
     <div id="notice-modal-card" class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm transform transition-all scale-100 border-l-4 border-red-500 flex flex-col max-h-[85dvh] overflow-hidden">
         <div id="notice-modal-strip" class="nt-alert-strip nt-alert-strip-info flex items-center justify-between gap-2 px-4 py-2 shrink-0">
-            <span id="notice-modal-signoff" class="text-xs font-semibold leading-none">Next Train Ops</span>
+            <span id="notice-modal-signoff" class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">Next Train Ops</span>
             <div class="flex items-center gap-2">
-                <span id="notice-modal-sev-chip" class="text-[10px] font-black uppercase tracking-wider leading-none">🔵 Info</span>
+                <span id="notice-modal-sev-chip" class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none">🔵 Info</span>
                 <button type="button" id="notice-modal-x" onclick="if(location.hash==='#notice')history.back();else closeSmoothModal('notice-modal')" class="opacity-80 hover:opacity-100 focus:outline-none" aria-label="Close">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>

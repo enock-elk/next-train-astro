@@ -804,7 +804,7 @@ export const Renderer = {
                     className: 'shrink-0 inline-flex items-baseline text-[9px] font-bold tracking-wide whitespace-nowrap focus:outline-none hover:opacity-80 [&_span]:whitespace-nowrap [&_span]:break-keep',
                 });
                 return `
-                    <div data-nt-onward-row class="flex items-baseline w-full min-w-0 whitespace-nowrap text-left text-[9px] text-gray-600 dark:text-gray-400 leading-none">
+                    <div data-nt-onward-row class="flex items-baseline justify-center w-full min-w-0 whitespace-nowrap text-center text-[9px] text-gray-600 dark:text-gray-400 leading-none">
                         <span data-nt-onward-dest data-full-name="${destSafe}" class="font-bold min-w-0" title="${destSafe}">${destSafe}</span>
                         <span class="font-normal opacity-70 shrink-0">&nbsp;·&nbsp;</span>
                         ${trainBtn}

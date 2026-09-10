@@ -150,8 +150,8 @@ function severityChrome(severity) {
     }
     return {
         bar: 'border-blue-500',
-        strip: 'nt-alert-strip-info bg-blue-600 text-white',
-        chip: 'text-white',
+        strip: 'nt-alert-strip-info bg-blue-50 text-blue-800',
+        chip: 'text-blue-700',
         emoji: '🔵',
         label: 'Info',
     };
@@ -455,8 +455,8 @@ function renderPostCard(notice, opts = {}) {
         : 'ring-1 ring-black/5 dark:ring-white/10';
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
-            <span class="nt-alert-signoff text-xs font-semibold leading-none">${escapeHTML(signoff)}</span>
-            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+            <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
+            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}
@@ -724,6 +724,7 @@ function bindAlertsChannelOnce() {
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-close')?.addEventListener('click', closeChannel);
+    document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {
         triggerHaptic();

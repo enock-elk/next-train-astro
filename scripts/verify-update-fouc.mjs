@@ -67,8 +67,10 @@ assert(appUpdate.includes('it is not how FOUC is fixed'), 'app-update comments t
 assert(appUpdate.includes('export async function peekIncomingVersion'), 'incoming version peek is shared');
 assert(appUpdate.includes('return null;'), 'failed version peek does not pretend this shell is incoming');
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
-assert(hubJs.includes('No new updates; still'), 'Check for Updates says when the shell is already current');
-assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates peeks CDN version first');
+assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
+assert(hubJs.includes('You must be online to check for updates'), 'Check for Updates stays put when offline');
+assert(!hubJs.includes('No new updates; still'), 'Check for Updates does not skip restart when already current');
+assert(!hubJs.includes('peekIncomingVersion'), 'Check for Updates does not peek CDN version before restart');
 
 const deploy = readFileSync(new URL('../.github/workflows/deploy-production.yml', import.meta.url), 'utf8');
 assert(deploy.includes('Snapshot current /_astro/ before sweep'), 'production deploy snapshots hashed assets before rsync');

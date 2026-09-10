@@ -38,7 +38,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
-import { markAppUpdatedToast, peekIncomingVersion } from './app-update.js';
+import { markAppUpdatedToast } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -498,7 +498,7 @@ export function resetProfile() {
 export async function performHardCacheClear(source = 'modal_confirm') {
     triggerHaptic();
     trackAnalyticsEvent('execute_hard_cache_clear', { source });
-    if (source === 'modal_confirm') {
+    if (source === 'modal_confirm' || source === 'check_updates') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
         await new Promise((r) => setTimeout(r, 600));
     }
@@ -548,38 +548,9 @@ export async function showCacheClearWarning() {
         return;
     }
     triggerHaptic();
-    const incoming = await peekIncomingVersion();
-    const current = String(APP_VERSION || '').split(' - ')[0];
-    if (incoming && incoming === current) {
-        closeAppHub(true);
-        showToast(`No new updates; still ${current}`, 'info', 3500);
-        return;
-    }
-    closeAppHub(true);
-    let modal = document.getElementById('cache-clear-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'cache-clear-modal';
-        modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-md z-[140] hidden flex items-center justify-center p-4 transition-opacity duration-300';
-        modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                <div class="text-center">
-                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900 mb-4 shadow-inner">
-                        <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
-                    </div>
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Check for App Updates?</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">This clears your offline cache and reloads the latest <span class="font-bold">app version</span> from the server. Schedules refresh as part of that reload.</p>
-                    <div class="flex space-x-3">
-                        <button type="button" id="cache-clear-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3 px-4 rounded-xl transition-colors focus:outline-none">Cancel</button>
-                        <button type="button" id="cache-clear-confirm" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">Update App</button>
-                    </div>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-        modal.querySelector('#cache-clear-cancel')?.addEventListener('click', () => closeSmoothModal('cache-clear-modal'));
-        modal.querySelector('#cache-clear-confirm')?.addEventListener('click', () => performHardCacheClear('modal_confirm'));
-    }
-    openSmoothModal('cache-clear-modal');
+    // Always restart when online so Check for Updates can drop a stuck SW / cache.
+    // After reload, maybeShowUpdatedVersionToast shows "App updated to version …".
+    await performHardCacheClear('check_updates');
 }
 
 function syncProfileDisplay() {

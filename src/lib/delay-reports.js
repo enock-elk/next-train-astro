@@ -26,7 +26,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
-import { timetableWhereLabel } from './train-ghosts.js';
+import { timetableWhereLabel, TRACKING_WINDOW_SEC } from './train-ghosts.js';
 import { isAdminAuthed } from './admin-chrome.js';
 
 /** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
@@ -47,8 +47,10 @@ const GUEST_ROUTE_MS = 2 * 60 * 60 * 1000;
 const AUTH_GLOBAL_MS = 30 * 60 * 1000;
 const AUTH_GLOBAL_MAX = 5;
 const AUTH_ROUTE_MS = 8 * 60 * 1000;
-const SURFACE_WINDOW_MS = 3 * 60 * 60 * 1000;
-const REPORT_WINDOW_SEC = 20 * 60; // ±20 min around scheduled station time
+/** Weekdays drop reports after one hour; Sat/Sun keep the longer board window. */
+export const WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000;
+export const WEEKEND_REPORT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+const REPORT_WINDOW_SEC = 20 * 60; // ±20 min around scheduled station time when filing
 const RATE_KEY = 'delayReportRateV1';
 const VALIDATE_RATE_KEY = 'delayValidateRateV1';
 /** Distinct devices needed before a chip goes fully public (prototype: 3). */
@@ -73,6 +75,40 @@ function getDeviceId() {
 function getNowSeconds() {
     const t = (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : null;
     return timeToSeconds(t || '12:00:00');
+}
+
+function currentDayType() {
+    if (typeof window !== 'undefined' && window.currentDayType) return window.currentDayType;
+    const day = new Date().getDay();
+    if (day === 0) return 'sunday';
+    if (day === 6) return 'saturday';
+    return 'weekday';
+}
+
+export function reportSurfaceWindowMs(dayType = currentDayType()) {
+    return dayType === 'saturday' || dayType === 'sunday'
+        ? WEEKEND_REPORT_MAX_AGE_MS
+        : WEEKDAY_REPORT_MAX_AGE_MS;
+}
+
+/**
+ * Hide reports that are older than the day window, or whose train is well past
+ * the 45-minute tracking envelope (lateness / cancellation add a little slack).
+ */
+export function isReportStillLive(report, opts = {}) {
+    if (!report || report.statusOpen === 'closed' || report.status === 'closed') return false;
+    const nowMs = opts.nowMs ?? Date.now();
+    const nowSec = opts.nowSec ?? getNowSeconds();
+    const dayType = opts.dayType ?? currentDayType();
+    if ((Number(report.timestamp) || 0) <= nowMs - reportSurfaceWindowMs(dayType)) return false;
+    const scheduled = report.scheduledTime;
+    if (!scheduled) return true;
+    const dep = timeToSeconds(scheduled);
+    if (dep == null && dep !== 0) return true;
+    const status = report.trainStatus || report.status;
+    const lateMin = status === 'late' ? (LATE_MID[report.lateBucket] || 20) : 0;
+    const cancelSlack = status === 'cancelled' ? TRACKING_WINDOW_SEC : 0;
+    return nowSec <= dep + TRACKING_WINDOW_SEC + (lateMin * 60) + cancelSlack;
 }
 
 function readRate() {
@@ -160,7 +196,7 @@ export function peekCachedRouteReports(routeId) {
     return routeReportCache[routeId] || [];
 }
 
-export async function fetchRecentRouteReports(routeId, maxAgeMs = SURFACE_WINDOW_MS) {
+export async function fetchRecentRouteReports(routeId, maxAgeMs = reportSurfaceWindowMs()) {
     if (!routeId || !navigator.onLine) return [];
     const cached = routeReportCache[routeId];
     const at = routeReportCacheAt[routeId] || 0;
@@ -185,6 +221,7 @@ export async function fetchRecentRouteReports(routeId, maxAgeMs = SURFACE_WINDOW
         const cut = Date.now() - maxAgeMs;
         const list = Object.values(data)
             .filter((r) => r && r.statusOpen !== 'closed' && r.status !== 'closed' && (r.timestamp || 0) > cut)
+            .filter((r) => isReportStillLive(r))
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         routeReportCache[routeId] = list;
         routeReportCacheAt[routeId] = Date.now();
@@ -284,7 +321,8 @@ function relativeAgo(ts) {
 function displayableReports(reports) {
     const list = Array.isArray(reports) ? reports : [];
     const primary = list.filter((r) => !r?.isValidation);
-    return primary.length ? primary : list;
+    const src = primary.length ? primary : list;
+    return src.filter((r) => isReportStillLive(r));
 }
 
 export function reportStatusPhrase(agg) {
@@ -323,7 +361,7 @@ function getOwnReport(trainKey) {
     if (!trainKey) return null;
     const rec = readOwnReports()[trainKey];
     if (!rec?.reportId) return null;
-    if (Date.now() - (rec.timestamp || 0) > SURFACE_WINDOW_MS) return null;
+    if (Date.now() - (rec.timestamp || 0) > reportSurfaceWindowMs()) return null;
     return rec;
 }
 
@@ -473,11 +511,12 @@ export async function startDelayReportsListener(routeId) {
 
         const unsub = window.firebaseDbOnValue(q, (snap) => {
             const data = snap?.val?.() || null;
-            const cut = Date.now() - SURFACE_WINDOW_MS;
+            const cut = Date.now() - reportSurfaceWindowMs();
             let list = [];
             if (data) {
                 list = Object.values(data)
                     .filter((r) => r && r.routeId === routeId && r.statusOpen !== 'closed' && r.status !== 'closed' && (r.timestamp || 0) > cut)
+                    .filter((r) => isReportStillLive(r))
                     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             }
             routeReportCache[routeId] = list;
@@ -1017,7 +1056,7 @@ export async function refreshDelayReportSurface(routeId = $currentRouteId.get())
 
     if (!routeListeners[routeId]) startDelayReportsListener(routeId);
 
-    const reports = await fetchRecentRouteReports(routeId);
+    const reports = displayableReports(await fetchRecentRouteReports(routeId));
     const withTrain = reports.filter((r) => r.trainId);
     if (!withTrain.length) {
         showBanner(banner, false);
@@ -1056,7 +1095,7 @@ export async function getPlannerCrowdDelayHtml(routeIds = []) {
     const ids = [...new Set((routeIds || []).filter(Boolean))];
     if (!ids.length) return '';
     const batches = await Promise.all(ids.slice(0, 4).map((id) => fetchRecentRouteReports(id)));
-    const flat = batches.flat().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const flat = displayableReports(batches.flat()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     if (!flat.length) return '';
     const top = flat[0];
     const n = flat.length;
@@ -1189,16 +1228,28 @@ function reportsFeedIsOpen() {
     return !!(modal && !modal.classList.contains('hidden'));
 }
 
-function paintReportsFeedConsensus(reports, routeId) {
-    const box = document.getElementById('reports-feed-consensus');
-    const text = document.getElementById('reports-feed-consensus-text');
-    if (!box) return;
+function groupReportsForAccordion(rows) {
+    const groups = [];
+    const index = new Map();
+    for (const r of rows) {
+        const id = String(r.trainId || r.trainKey || '');
+        const key = id || `anon:${groups.length}`;
+        if (!index.has(key)) {
+            index.set(key, groups.length);
+            groups.push({ trainId: String(r.trainId || ''), reports: [] });
+        }
+        groups[index.get(key)].reports.push(r);
+    }
+    return groups;
+}
+
+function reportConsensusCandidate(reports, routeId, trainId) {
     const myId = getDeviceId();
-    const candidate = (reports || []).find((r) => {
+    return (reports || []).find((r) => {
         if (!r?.trainId || r.deviceId === myId) return false;
+        if (trainId && String(r.trainId) !== String(trainId)) return false;
         const status = r.trainStatus || r.status;
         if (!status || status === 'closed') return false;
-        if (reportsFeedFocusTrain && String(r.trainId) !== reportsFeedFocusTrain) return false;
         const key = r.trainKey || trainReportKey({
             routeId: r.routeId || routeId,
             trainId: r.trainId,
@@ -1207,11 +1258,11 @@ function paintReportsFeedConsensus(reports, routeId) {
         });
         if (hasLocalValidated(key) || getOwnReport(key)) return false;
         return true;
-    });
-    if (!candidate) {
-        box.classList.add('hidden');
-        return;
-    }
+    }) || null;
+}
+
+function consensusButtonsHtml(candidate, routeId) {
+    if (!candidate) return '';
     const key = candidate.trainKey || trainReportKey({
         routeId: candidate.routeId || routeId,
         trainId: candidate.trainId,
@@ -1221,16 +1272,23 @@ function paintReportsFeedConsensus(reports, routeId) {
     const status = candidate.trainStatus || candidate.status || 'late';
     const label = statusLabel({ status, avgLateMin: LATE_MID[candidate.lateBucket] || 10 });
     const going = reportGoingLabel(candidate.trainId, candidate.destination);
-    if (text) text.textContent = `${going}: ${label}. Still true from where you are?`;
-    box.dataset.route = candidate.routeId || routeId || '';
-    box.dataset.train = candidate.trainId || '';
-    box.dataset.dep = candidate.scheduledTime || '';
-    box.dataset.arr = candidate.arrivalTime || '';
-    box.dataset.station = candidate.station || '';
-    box.dataset.dest = candidate.destination || '';
-    box.dataset.trainKey = key;
-    box.dataset.status = status;
-    box.classList.remove('hidden');
+    const attr = (name, val) => `${name}="${escapeHTML(String(val || ''))}"`;
+    return `<div class="mt-3 rounded-xl bg-gray-50 dark:bg-gray-800/80 px-3 py-3">
+        <p class="text-[12px] text-gray-700 dark:text-gray-300 leading-snug">${escapeHTML(going)}: ${escapeHTML(label)}. Still true from where you are?</p>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" data-reports-agree class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-black focus:outline-none"
+                ${attr('data-route', candidate.routeId || routeId)}
+                ${attr('data-train', candidate.trainId)}
+                ${attr('data-dep', candidate.scheduledTime)}
+                ${attr('data-arr', candidate.arrivalTime)}
+                ${attr('data-station', candidate.station)}
+                ${attr('data-dest', candidate.destination)}
+                ${attr('data-train-key', key)}
+                ${attr('data-status', status)}>That's right</button>
+            <button type="button" data-reports-disagree class="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-[12px] font-black focus:outline-none"
+                ${attr('data-train-key', key)}>Not from here</button>
+        </div>
+    </div>`;
 }
 
 async function paintReportsFeed(routeId) {
@@ -1243,10 +1301,11 @@ async function paintReportsFeed(routeId) {
     }
     if (!rows.length) {
         listEl.innerHTML = `<p class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400 text-center">No reports on this line right now.</p>`;
-        paintReportsFeedConsensus([], routeId);
         return;
     }
-    listEl.innerHTML = rows.slice(0, 24).map((r) => {
+    const groups = groupReportsForAccordion(rows.slice(0, 24));
+    listEl.innerHTML = groups.map((g, i) => {
+        const r = g.reports[0];
         const going = reportGoingLabel(r.trainId, r.destination);
         const status = statusLabel({
             status: r.trainStatus || r.status || 'late',
@@ -1254,19 +1313,45 @@ async function paintReportsFeed(routeId) {
         });
         const cls = statusColorClass(r.trainStatus || r.status || 'late');
         const seen = r.station ? `Last seen ${reportStationLabel(r.station)}` : '';
-        const note = String(r.note || '').trim();
         const when = relativeAgo(r.timestamp);
-        return `<article class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 text-left">
-            <div class="flex items-start justify-between gap-2">
-                <p class="text-sm font-black text-gray-900 dark:text-white min-w-0">${escapeHTML(going)}</p>
-                <span class="text-[10px] font-semibold text-gray-400 shrink-0">${escapeHTML(when)}</span>
+        const open = reportsFeedFocusTrain
+            ? String(r.trainId) === reportsFeedFocusTrain
+            : i === 0;
+        const notes = g.reports
+            .map((item) => String(item.note || '').trim())
+            .filter(Boolean);
+        const uniqueNotes = [...new Set(notes)];
+        const candidate = reportConsensusCandidate(g.reports, routeId, r.trainId);
+        const extra = g.reports.length > 1
+            ? `<p class="text-[11px] text-gray-400 mt-1">${g.reports.length} sightings</p>`
+            : '';
+        return `<details class="group border-b border-gray-100 dark:border-gray-800" ${open ? 'open' : ''}>
+            <summary class="flex items-start justify-between gap-3 px-4 py-3 cursor-pointer select-none">
+                <div class="min-w-0 text-left">
+                    <p class="text-sm font-black text-gray-900 dark:text-white">${escapeHTML(going)}</p>
+                    <p class="text-[12px] font-bold mt-0.5 ${cls}">${escapeHTML(status)}</p>
+                </div>
+                <span class="flex items-center gap-2 shrink-0 pt-0.5">
+                    <span class="text-[10px] font-semibold text-gray-400">${escapeHTML(when)}</span>
+                    <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-join="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                </span>
+            </summary>
+            <div class="px-4 pb-4 text-left">
+                ${seen ? `<p class="text-[11px] text-gray-500 dark:text-gray-400">${escapeHTML(seen)}</p>` : ''}
+                ${extra}
+                ${uniqueNotes.map((n) => `<p class="text-[13px] text-gray-800 dark:text-gray-200 mt-1.5 leading-snug">${escapeHTML(n)}</p>`).join('')}
+                ${consensusButtonsHtml(candidate, routeId)}
             </div>
-            <p class="text-[12px] font-bold mt-0.5 ${cls}">${escapeHTML(status)}</p>
-            ${seen ? `<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHTML(seen)}</p>` : ''}
-            ${note ? `<p class="text-[13px] text-gray-800 dark:text-gray-200 mt-1.5 leading-snug">${escapeHTML(note)}</p>` : ''}
-        </article>`;
+        </details>`;
     }).join('');
-    paintReportsFeedConsensus(reports, routeId);
+    listEl.querySelectorAll('details').forEach((d) => {
+        d.addEventListener('toggle', () => {
+            if (!d.open) return;
+            listEl.querySelectorAll('details').forEach((other) => {
+                if (other !== d) other.open = false;
+            });
+        });
+    });
 }
 
 function refreshReportsFeedIfOpen(routeId) {
@@ -1383,30 +1468,32 @@ export function bindDelayReportUi() {
     });
 
     document.getElementById('reports-feed-close')?.addEventListener('click', () => closeSmoothModal('reports-feed-modal'));
-    document.getElementById('reports-feed-agree')?.addEventListener('click', () => {
-        const box = document.getElementById('reports-feed-consensus');
-        if (!box) return;
-        submitDelayValidation({
-            routeId: box.dataset.route || $currentRouteId.get(),
-            trainId: box.dataset.train,
-            scheduledTime: box.dataset.dep,
-            arrivalTime: box.dataset.arr,
-            station: box.dataset.station,
-            destination: box.dataset.dest,
-            trainKey: box.dataset.trainKey,
-            status: box.dataset.status || 'late',
-            agree: true,
-        }).then((r) => {
-            if (!r.ok && r.message) showToast(r.message, 'error');
-            else paintReportsFeed(box.dataset.route || $currentRouteId.get());
-        });
-    });
-    document.getElementById('reports-feed-disagree')?.addEventListener('click', () => {
-        const box = document.getElementById('reports-feed-consensus');
-        const key = box?.dataset.trainKey;
-        if (key) markLocalValidated(key);
-        showToast('Thanks - report noted', 'info');
-        paintReportsFeed(box?.dataset.route || $currentRouteId.get());
+    document.getElementById('reports-feed-list')?.addEventListener('click', (e) => {
+        const agree = e.target?.closest?.('[data-reports-agree]');
+        const disagree = e.target?.closest?.('[data-reports-disagree]');
+        if (agree) {
+            submitDelayValidation({
+                routeId: agree.getAttribute('data-route') || $currentRouteId.get(),
+                trainId: agree.getAttribute('data-train'),
+                scheduledTime: agree.getAttribute('data-dep'),
+                arrivalTime: agree.getAttribute('data-arr'),
+                station: agree.getAttribute('data-station'),
+                destination: agree.getAttribute('data-dest'),
+                trainKey: agree.getAttribute('data-train-key'),
+                status: agree.getAttribute('data-status') || 'late',
+                agree: true,
+            }).then((r) => {
+                if (!r.ok && r.message) showToast(r.message, 'error');
+                else paintReportsFeed(agree.getAttribute('data-route') || $currentRouteId.get());
+            });
+            return;
+        }
+        if (disagree) {
+            const key = disagree.getAttribute('data-train-key');
+            if (key) markLocalValidated(key);
+            showToast('Thanks - report noted', 'info');
+            paintReportsFeed($currentRouteId.get());
+        }
     });
 
     document.getElementById('tr-im-on-it')?.addEventListener('click', () => {

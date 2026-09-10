@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.3', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.4', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -218,6 +218,9 @@ assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not 
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
+const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
+const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
+const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
 assert(hubModals.includes('completely free, and you can cancel anytime'), 'account guest copy is free and cancellable');
 assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
 assert(hubModals.includes('Show my photo on commuter alerts'), 'photo on alerts is an opt-in');
@@ -227,10 +230,21 @@ assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
 assert(hubModals.includes('id="account-delete-confirm"'), 'delete confirm sheet');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
-assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
-assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
+assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
+assert(hubModals.indexOf('id="account-points-panel"') < hubModals.indexOf('id="account-photo-alerts"'), 'points breakdown opens before the photo row, not at the page footer');
+assert(accountJs.includes("insertAdjacentElement('afterend'") && accountJs.includes('account-points-panel'), 'Points toggle docks the breakdown next to the accordion button');
 assert(hubModals.includes('id="reports-feed-modal"'), 'VIEW opens a commuter reports list');
 assert(hubModals.includes('id="reports-feed-list"'), 'reports list has a feed host');
+assert(hubModals.includes('items-end justify-center p-0'), 'reports sheet docks to the bottom');
+assert(hubModals.includes('h-[min(88dvh,100%)]'), 'reports sheet occupies viewport height');
+assert(!/id="reports-feed-modal"[\s\S]{0,400}scale-95/.test(hubModals), 'reports sheet does not scale-float off the bottom');
+assert(delayReports.includes('<details class="group'), 'commuter reports list is an accordion');
+assert(delayReports.includes('WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000'), 'weekday reports expire after one hour');
+assert(delayReports.includes('isReportStillLive'), 'stale and past-time reports are filtered');
+assert(trainGhosts.includes('TRACKING_WINDOW_SEC = 45 * 60'), 'tracking window is 45 minutes');
+assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty copy matches the 45-minute window');
+assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
+assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
 assert(riderMarks.includes('PHOTO_PREF_KEY') && riderMarks.includes('showPhotoInAlerts'), 'photo pref defaults off');
 assert(riderMarks.includes('isServiceDay') && riderMarks.includes('streak_5day'), 'service-day streaks include 3 and 5');
@@ -282,6 +296,7 @@ assert(mapPage.includes('Loading network…'), 'iframe keeps one loading heading
 assert(!mapPage.includes('Loading Network...'), 'iframe heading is not Title Case Loading Network');
 assert(mapTab.includes("map-tab-placeholder')?.classList.add('hidden')"), 'Map tab does not unhide a second loader');
 assert(!mapTab.includes("map-tab-placeholder')?.classList.remove('hidden')"), 'Map tab never shows the outer loader');
+assert(mapTab.includes('compareNearbyTrainLikelihood'), 'nearby modal ranks likely trains first');
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

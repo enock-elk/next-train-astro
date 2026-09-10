@@ -11,7 +11,9 @@ import {
     getDistanceFromLatLonInKm,
 } from './utils.js';
 
-export const GHOST_WINDOW_SEC = 30 * 60;
+/** Trains stay trackable for 45 minutes either side of timetable time. */
+export const TRACKING_WINDOW_SEC = 45 * 60;
+export const GHOST_WINDOW_SEC = TRACKING_WINDOW_SEC;
 export const CLOSER_TRAIN_M = 400;
 export const LOCATE_RAIL_M = 50;
 export const LOCATE_GHOST_M = 2000;
@@ -195,6 +197,42 @@ function trainInWindow(stops, nowSec, windowSec) {
     return nowSec >= first - windowSec && nowSec <= last + windowSec;
 }
 
+/** Still approaching, mid-trip, or only just arrived — not hours past the last stop. */
+export function isGhostTrackable(ghost, nowSec, windowSec = TRACKING_WINDOW_SEC) {
+    if (!ghost?.stops?.length) return false;
+    const now = Number.isFinite(nowSec) ? nowSec : ghost.nowSec;
+    if (!Number.isFinite(now)) return false;
+    if (ghost.finished) {
+        const last = ghost.stops[ghost.stops.length - 1]?.seconds;
+        if (last == null) return false;
+        return now - last <= windowSec;
+    }
+    if (!ghost.started) {
+        const first = ghost.stops[0]?.seconds;
+        if (first == null) return false;
+        return first - now <= windowSec;
+    }
+    return true;
+}
+
+/**
+ * Nearby list: live / close trains first, then nearer ghosts, then closer in time.
+ */
+export function compareNearbyTrainLikelihood(a, b) {
+    const aOk = a?.plausible ? 0 : 1;
+    const bOk = b?.plausible ? 0 : 1;
+    if (aOk !== bOk) return aOk - bOk;
+    const aDone = a?.ghost?.finished ? 1 : 0;
+    const bDone = b?.ghost?.finished ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    const am = Number.isFinite(a?.metres) ? a.metres : Infinity;
+    const bm = Number.isFinite(b?.metres) ? b.metres : Infinity;
+    if (am !== bm) return am - bm;
+    const ad = Math.abs(Number.isFinite(a?.driftMin) ? a.driftMin : 99);
+    const bd = Math.abs(Number.isFinite(b?.driftMin) ? b.driftMin : 99);
+    return ad - bd;
+}
+
 /**
  * Where the timetable says this train is right now.
  */
@@ -294,6 +332,7 @@ export function listTrainsInWindow(now, opts = {}) {
 export function scoreAllTrainsForFix(lat, lng, opts = {}) {
     const nowSec = nowSeconds(opts.now);
     const ids = listTrainsInWindow(nowSec, opts);
+    const windowSec = opts.windowSec ?? GHOST_WINDOW_SEC;
     return ids
         .map((trainId) => {
             const ghost = expectedPosition(trainId, nowSec, opts);
@@ -302,8 +341,8 @@ export function scoreAllTrainsForFix(lat, lng, opts = {}) {
                 : Infinity;
             return { trainId, metres, ghost };
         })
-        .filter((s) => Number.isFinite(s.metres))
-        .sort((a, b) => a.metres - b.metres);
+        .filter((s) => Number.isFinite(s.metres) && isGhostTrackable(s.ghost, nowSec, windowSec))
+        .sort(compareNearbyTrainLikelihood);
 }
 
 /**

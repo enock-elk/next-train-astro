@@ -14,7 +14,7 @@ import {
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
-import { trainGoingLabel, trainGoingFullLabel } from './train-ghosts.js';
+import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 
 /**
@@ -24,11 +24,9 @@ import { relaxLiveShareGuards } from './features.js';
 export const LIVE_LOCATION_SHARE_UI_ENABLED = false;
 
 /**
- * A train stays linkable for 30 minutes either side of its scheduled time —
- * Metrorail delays routinely run that long, so a tighter window would reject
- * the riders who are most worth hearing from.
+ * A train stays linkable for 45 minutes either side of its scheduled time.
  */
-export const CONTRIBUTE_WINDOW_SEC = 30 * 60;
+export const CONTRIBUTE_WINDOW_SEC = TRACKING_WINDOW_SEC;
 
 /** How far from the train's expected station a rider can be and still match. */
 export const CONTRIBUTE_MATCH_KM = 5;
@@ -418,7 +416,7 @@ export async function runOnboardToastVet(trainId) {
 }
 
 /**
- * Trains on the live board (and the open planner trip) inside the 30-minute
+ * Trains on the live board (and the open planner trip) inside the 45-minute
  * window. When we know the rider's position, each candidate is also scored for
  * whether that position makes sense for the train.
  */
@@ -436,7 +434,7 @@ export function listContributeCandidates(coords = lastCoords) {
         const dep = timeToSeconds(c.scheduledTime);
         if (dep == null || Number.isNaN(dep)) return;
         const drift = now - dep;
-        if (!relaxLiveShareGuards() && Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
+        if (Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
         const key = `${c.routeId}|${c.trainId}|${c.scheduledTime}|${c.station}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -635,16 +633,22 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
                 || (!!c.plausible && (c.distanceKm == null || c.distanceKm * 1000 <= TRAIN_TRACKER_MAX_M)),
         });
     });
-    rows.sort((a, b) => (a.metres || Infinity) - (b.metres || Infinity));
+    const now = nowSeconds();
+    const nearby = rows.filter((c) => {
+        if (c.ghost && !isGhostTrackable(c.ghost, now)) return false;
+        if (Number.isFinite(c.driftMin) && Math.abs(c.driftMin) * 60 > TRACKING_WINDOW_SEC) return false;
+        return true;
+    });
+    nearby.sort(compareNearbyTrainLikelihood);
 
     list.innerHTML = '';
-    if (!rows.length) {
+    if (!nearby.length) {
         empty?.classList.remove('hidden');
         return;
     }
     empty?.classList.add('hidden');
 
-    rows.forEach((c) => {
+    nearby.forEach((c) => {
         const dep = c.scheduledTime
             ? (formatTimeDisplay(c.scheduledTime) || String(c.scheduledTime).slice(0, 5))
             : '';

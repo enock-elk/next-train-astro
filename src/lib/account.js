@@ -371,6 +371,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
         document.getElementById('account-delete-confirm')?.classList.add('hidden');
         const pointsPanel = document.getElementById('account-points-panel');
         pointsPanel?.classList.add('hidden');
+        const guestBtn = document.getElementById('account-points-guest-btn');
+        if (pointsPanel && guestBtn) guestBtn.insertAdjacentElement('afterend', pointsPanel);
         document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
             btn.setAttribute('aria-expanded', 'false');
         });
@@ -380,6 +382,9 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (modalName) modalName.textContent = 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
+        const pointsPanel = document.getElementById('account-points-panel');
+        const signedBtn = document.getElementById('account-points-btn');
+        if (pointsPanel && signedBtn) signedBtn.insertAdjacentElement('afterend', pointsPanel);
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
     }
@@ -639,18 +644,38 @@ export function bindAccountUi() {
         }
     });
 
-    const togglePoints = () => {
+    const attachPointsPanel = (btn) => {
         const panel = document.getElementById('account-points-panel');
+        if (!panel || !btn) return panel;
+        btn.insertAdjacentElement('afterend', panel);
+        return panel;
+    };
+    const visiblePointsButton = () => {
+        const signed = document.getElementById('account-signed-in');
+        if (signed && !signed.classList.contains('hidden')) {
+            return document.getElementById('account-points-btn');
+        }
+        return document.getElementById('account-points-guest-btn');
+    };
+    const togglePoints = (e) => {
+        const btn = e?.currentTarget || visiblePointsButton();
+        const panel = attachPointsPanel(btn);
         if (!panel) return;
         const open = panel.classList.contains('hidden');
         panel.classList.toggle('hidden', !open);
-        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((el) => {
+            el.setAttribute('aria-expanded', el === btn && open ? 'true' : 'false');
         });
         document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
-            el.classList.toggle('rotate-180', open);
+            const owner = el.closest('button');
+            el.classList.toggle('rotate-180', open && owner === btn);
         });
-        if (open) paintAccountPoints();
+        if (open) {
+            paintAccountPoints();
+            try {
+                panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            } catch { /* ignore */ }
+        }
     };
     document.getElementById('account-points-btn')?.addEventListener('click', togglePoints);
     document.getElementById('account-points-guest-btn')?.addEventListener('click', togglePoints);

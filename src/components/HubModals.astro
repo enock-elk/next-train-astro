@@ -182,9 +182,9 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
-<!-- Commuter reports list (banner VIEW) -->
-<div id="reports-feed-modal" class="fixed inset-0 bg-gray-900/60 z-[130] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-md transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[82dvh] flex flex-col transform transition-all scale-95 border border-gray-200 dark:border-gray-700 overflow-hidden">
+<!-- Commuter reports list (banner VIEW) — docked sheet, accordion rows -->
+<div id="reports-feed-modal" class="fixed inset-0 bg-gray-900/60 z-[130] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md h-[min(88dvh,100%)] max-h-[min(88dvh,100%)] flex flex-col border border-gray-200 dark:border-gray-700 border-b-0 overflow-hidden">
         <div class="p-4 border-b border-gray-200/80 dark:border-gray-800 flex justify-between items-center shrink-0">
             <div class="min-w-0 pr-2">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live board</p>
@@ -194,14 +194,7 @@ import { withBase } from '../lib/config.js';
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="reports-feed-list" class="overflow-y-auto flex-grow custom-scrollbar min-h-[8rem]"></div>
-        <div id="reports-feed-consensus" class="hidden shrink-0 border-t border-gray-200 dark:border-gray-800 p-4">
-            <p id="reports-feed-consensus-text" class="text-[12px] text-gray-700 dark:text-gray-300 leading-snug"></p>
-            <div class="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" id="reports-feed-agree" class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-black focus:outline-none">That's right</button>
-                <button type="button" id="reports-feed-disagree" class="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-[12px] font-black focus:outline-none">Not from here</button>
-            </div>
-        </div>
+        <div id="reports-feed-list" class="overflow-y-auto flex-1 min-h-0 custom-scrollbar"></div>
     </div>
 </div>
 
@@ -325,6 +318,32 @@ import { withBase } from '../lib/config.js';
                             <svg id="account-points-chevron" class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
                         </span>
                     </button>
+                    <div id="account-points-panel" class="hidden px-4 py-3 space-y-4 bg-[#f2f2f7] dark:bg-black/40">
+                        <div>
+                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-1">Your level</p>
+                            <p id="account-points-progress" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
+                            <div class="mt-2 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                <div id="account-points-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Levels</p>
+                            <ul id="account-tier-list" class="space-y-1.5 text-[13px] font-normal"></ul>
+                        </div>
+                        <div>
+                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Badges</p>
+                            <div id="account-badge-grid" class="grid grid-cols-3 gap-2"></div>
+                            <p class="text-[12px] font-normal text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
+                        </div>
+                        <div>
+                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
+                            <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
+                        </div>
+                        <div id="account-contrib-wrap">
+                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
+                            <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
+                        </div>
+                    </div>
                     <label class="flex items-center justify-between gap-3 px-4 py-[11px] cursor-pointer">
                         <span class="min-w-0">
                             <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo on commuter alerts</span>
@@ -411,33 +430,6 @@ import { withBase } from '../lib/config.js';
                             <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 account-points-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
                         </span>
                     </button>
-                </div>
-            </div>
-
-            <div id="account-points-panel" class="hidden rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-4">
-                <div>
-                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-1">Your level</p>
-                    <p id="account-points-progress" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
-                    <div class="mt-2 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                        <div id="account-points-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
-                    </div>
-                </div>
-                <div>
-                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Levels</p>
-                    <ul id="account-tier-list" class="space-y-1.5 text-[13px] font-normal"></ul>
-                </div>
-                <div>
-                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Badges</p>
-                    <div id="account-badge-grid" class="grid grid-cols-3 gap-2"></div>
-                    <p class="text-[12px] font-normal text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
-                </div>
-                <div>
-                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
-                    <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
-                </div>
-                <div id="account-contrib-wrap">
-                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
-                    <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                 </div>
             </div>
 
@@ -638,6 +630,29 @@ import { withBase } from '../lib/config.js';
     align-items: flex-end;
     justify-content: center;
     padding: 0;
+  }
+  #reports-feed-modal {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  #reports-feed-modal > div {
+    width: 100%;
+    height: min(88dvh, 100%);
+    max-height: min(88dvh, 100%);
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    transform: none;
+  }
+  #reports-feed-list details > summary {
+    list-style: none;
+  }
+  #reports-feed-list details > summary::-webkit-details-marker {
+    display: none;
+  }
+  #reports-feed-list details[open] summary svg {
+    transform: rotate(180deg);
   }
   #messages-thread-form {
     flex-shrink: 0;
@@ -954,7 +969,7 @@ import { withBase } from '../lib/config.js';
             </div>
         </div>
         <div id="nt-nearby-list" class="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-2 min-h-[8rem]"></div>
-        <p id="nt-nearby-empty" class="hidden px-5 py-6 text-sm font-semibold text-gray-500 dark:text-gray-400 text-center">No trains in the next 30 minutes on this corridor.</p>
+        <p id="nt-nearby-empty" class="hidden px-5 py-6 text-sm font-semibold text-gray-500 dark:text-gray-400 text-center">No trains in the next 45 minutes on this corridor.</p>
         <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
             <button type="button" id="nt-nearby-presence" hidden inert aria-hidden="true" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Just show where I am</button>
             <button type="button" id="nt-nearby-dismiss" class="w-full py-2.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Close</button>

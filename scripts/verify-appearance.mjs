@@ -352,7 +352,7 @@ assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer gro
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
 assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinned to visualViewport.top');
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
-assert(hubJs.includes("if (id === 'messages-thread-modal')"), 'only Feedback Hub card is stretched to 100%');
+assert(hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Feedback Hub and Account cards stretch to 100%');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('editing && vv?.height'), 'Feedback Hub uses live visualViewport height while typing');
 assert(hubJs.includes('modal.style.maxHeight'), 'Feedback Hub maxHeight follows the keyboard');

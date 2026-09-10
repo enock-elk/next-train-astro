@@ -3,7 +3,7 @@
  *
  * Presence = coarse GPS until Stop or terminus so others can see you (train optional).
  * Attaching a train still runs the GPS / path / speed / heading checks.
- * `ENFORCE_LIVE_SHARE_VET` is off until those checks are ready to block a share.
+ * `ENFORCE_LIVE_SHARE_VET` blocks a share when those checks fail.
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
@@ -24,10 +24,9 @@ import { relaxLiveShareGuards } from './features.js';
 export const LIVE_LOCATION_SHARE_UI_ENABLED = false;
 
 /**
- * Run displacement / speed / heading checks, but do not block the share yet.
- * Flip to true when live tracking should require a passing vet.
+ * Block a train share when GPS / path / speed / heading checks fail.
  */
-export const ENFORCE_LIVE_SHARE_VET = false;
+export const ENFORCE_LIVE_SHARE_VET = true;
 
 /**
  * A train stays linkable for 45 minutes either side of its scheduled time.
@@ -341,6 +340,7 @@ export async function runOnboardToastVet(trainId) {
         expectedPosition,
         ghostHeadingDeg,
         headingAgrees,
+        journeyHeadingDeg,
         TRAIN_TRACKER_MAX_M,
         NO_COORDS_MESSAGE,
     } = await import('./train-ghosts.js');
@@ -384,42 +384,100 @@ export async function runOnboardToastVet(trainId) {
         await pause(450);
     }
 
-    showCheckToast('Checking velocity…');
-    await pause(350);
+    const region = $userRegion.get() || 'GP';
+    let snap = null;
+    try {
+        const { snapToRail } = await import('./rail-tracks.js');
+        snap = await snapToRail(last.lat, last.lng, region, TRACK_MAX_M);
+    } catch { /* tracks optional */ }
+    const nearStation = nearestStationMeters(last.lat, last.lng);
+    const atPlatform = nearStation != null && nearStation < STATION_NEAR_M;
+    const onRails = !!(snap?.ok || atPlatform);
+    if (snap && snap.distanceM != null) {
+        showCheckToast(onRails
+            ? `Railway is ${formatDistanceM(snap.distanceM)} away`
+            : `Not on the railway (${formatDistanceM(snap.distanceM)})`);
+        await pause(450);
+    }
+
     const displacement = haversineM(first, last);
     const dt = Math.max(1, (last.t - first.t) / 1000);
-    const speedMps = typeof last.speed === 'number' && last.speed >= 0
-        ? last.speed
-        : displacement / dt;
-    const kmh = Math.max(0, Math.round(speedMps * 3.6));
-    showCheckToast(`You’re moving at about ${kmh} km/h`);
-    await pause(450);
+    const hasGpsSpeed = typeof last.speed === 'number' && last.speed >= 0 && !Number.isNaN(last.speed);
+    const derivedSpeed = displacement / dt;
+    const hasDerivedSpeed = samples.length >= 2 && displacement >= MOVE_MIN_M;
+    const speedMps = hasGpsSpeed ? last.speed : (hasDerivedSpeed ? derivedSpeed : null);
+    if (speedMps != null) {
+        const kmh = Math.max(0, Math.round(speedMps * 3.6));
+        showCheckToast(`You’re moving at about ${kmh} km/h`);
+        await pause(450);
+    } else {
+        showCheckToast('No speed from GPS yet');
+        await pause(350);
+    }
 
     let heading = last.heading;
     if ((heading == null || Number.isNaN(heading)) && samples.length >= 2) {
         heading = (Math.atan2(last.lng - first.lng, last.lat - first.lat) * 180) / Math.PI;
     }
     const ghost = expectedPosition(trainId);
-    const agrees = headingAgrees(heading, ghostHeadingDeg(ghost));
-    showCheckToast(agrees
+    const journeyH = journeyHeadingDeg(trainId);
+    const ghostH = ghostHeadingDeg(ghost);
+    const targetH = Number.isFinite(journeyH) ? journeyH : ghostH;
+    const moving = (speedMps != null && speedMps >= 1.5) || displacement >= MOVE_MIN_M;
+    const agrees = headingAgrees(heading, targetH);
+    const headingPass = !moving || atPlatform || agrees;
+    showCheckToast(headingPass
         ? `Heading matches Train ${trainId}`
         : `Heading doesn’t match Train ${trainId} yet`);
     await pause(450);
     const tooFar = !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
-    const moving = speedMps >= 1.5 || displacement >= MOVE_MIN_M;
-    lastCoords = { lat: last.lat, lng: last.lng, accuracy: last.accuracy };
+    lastCoords = {
+        lat: snap?.ok ? snap.lat : last.lat,
+        lng: snap?.ok ? snap.lon : last.lng,
+        accuracy: last.accuracy,
+    };
+
+    const attach = onRails && !tooFar && (moving || atPlatform) && headingPass;
+    const ok = onRails && !tooFar && headingPass;
+    if (!ok) {
+        const msg = !onRails
+            ? 'You need to be near the railway to share this train.'
+            : tooFar
+                ? `You’re too far from Train ${trainId}`
+                : `Heading doesn’t match Train ${trainId}`;
+        showCheckToast(msg);
+        return {
+            ok: false,
+            message: msg,
+            lat: lastCoords.lat,
+            lng: lastCoords.lng,
+            heading: typeof heading === 'number' && !Number.isNaN(heading) ? heading : null,
+            speedMps,
+            isMoving: moving,
+            metres,
+            headingAgrees: agrees,
+            attach: false,
+            tooFar,
+            onRails,
+            trackM: snap?.distanceM ?? null,
+            atPlatform,
+        };
+    }
 
     return {
         ok: true,
-        lat: last.lat,
-        lng: last.lng,
+        lat: lastCoords.lat,
+        lng: lastCoords.lng,
         heading: typeof heading === 'number' && !Number.isNaN(heading) ? heading : null,
         speedMps,
         isMoving: moving,
         metres,
         headingAgrees: agrees,
-        attach: !tooFar && moving && agrees,
+        attach,
         tooFar,
+        onRails,
+        trackM: snap?.distanceM ?? null,
+        atPlatform,
     };
 }
 
@@ -1385,7 +1443,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             pings = await ride.fetchRouteRidePings(routeId);
         }
         const markers = typeof ride.compactPingsForMap === 'function'
-            ? ride.compactPingsForMap(pings, { mineDeviceId: mine, routeId })
+            ? await ride.compactPingsForMap(pings, { mineDeviceId: mine, routeId })
             : (pings || [])
                 .filter((p) => typeof p.coarseLat === 'number' && typeof p.coarseLng === 'number')
                 .map((p) => ({
@@ -1401,7 +1459,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                     n: 1,
                     routeId: p.routeId || routeId,
                 }));
-        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}`).join('|');
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.bearing || ''}`).join('|');
         if (sig === lastMapPingSig) return;
         lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });

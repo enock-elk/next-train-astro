@@ -184,10 +184,22 @@ export function ghostHeadingDeg(ghost, stationIndex) {
 }
 
 export function headingAgrees(userHeading, ghostHeading, maxDelta = HEADING_AGREE_DEG) {
-    if (!Number.isFinite(userHeading) || !Number.isFinite(ghostHeading)) return true;
+    if (!Number.isFinite(userHeading) || !Number.isFinite(ghostHeading)) return false;
     let d = Math.abs(userHeading - ghostHeading) % 360;
     if (d > 180) d = 360 - d;
     return d <= maxDelta;
+}
+
+/** Origin → terminus bearing for this train’s stop list. */
+export function journeyHeadingDeg(trainId, opts = {}) {
+    const { stops } = findStopsForTrain(trainId, opts);
+    if (!stops || stops.length < 2) return null;
+    const index = opts.stationIndex || $globalStationIndex.get() || {};
+    const a = coordsForStation(stops[0].station, index);
+    const b = coordsForStation(stops[stops.length - 1].station, index);
+    if (!a || !b) return null;
+    if (Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lng - b.lng) < 1e-6) return null;
+    return (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
 }
 
 function trainInWindow(stops, nowSec, windowSec) {

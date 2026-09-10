@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.6', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.7', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -254,18 +254,25 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
     const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
-    assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = false'), 'live-share GPS vet is recorded but not enforced');
+    assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = true'), 'live-share GPS vet is enforced');
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
     assert(mapApp.includes('nt-live-train-glyph--stale'), 'map train glyph has a stale GPS state');
     assert(mapApp.includes('nt-live-train-glyph--compact'), 'map train glyph shrinks when zoomed out');
+    assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
+    assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
     assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
     assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
     assert(mapPage.includes('0 0 0 1px rgba(255,255,255,0.9)'), 'map train glyph ring is 1px');
+    assert(mapPage.includes('height: 12px'), 'map train oval is hub-dot sized');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS = 90 * 1000'), 'GPS stale window is 90 seconds');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
+    assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
+    assert(ridePings.includes('Still on this train?'), 'off-path onboard loop asks once');
+    assert(ridePings.includes('paintLiveTrainDots'), 'live red dots paint on the board');
+    assert(ridePings.includes('openPlannerTrainSheet'), 'live dots open the train sheet');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
     assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
@@ -274,6 +281,24 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(adminJs.includes('setupRideShareManager'), 'admin has a live sharing panel');
     assert(adminJs.includes('live-share-panel'), 'live sharing panel id');
     assert(adminJs.includes('data-ls-region'), 'live sharing panel has region tabs');
+    assert(adminJs.includes('openAdminChangelogLookup'), 'admin can look up build notes');
+    assert(adminJs.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
+    const featuresJs = readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8');
+    assert(/export function relaxLiveShareGuards\(\) \{\s*return false;\s*\}/.test(featuresJs), 'lab does not skip live-share GPS guards');
+    const ghostsJs = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
+    assert(ghostsJs.includes('journeyHeadingDeg'), 'vet compares heading to the journey');
+    assert(ghostsJs.includes('if (!Number.isFinite(userHeading) || !Number.isFinite(ghostHeading)) return false'), 'missing heading is not a match');
+    const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
+    const liveBoard = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
+    assert(liveBoard.includes('id="nt-timetable-live-dot"'), 'VIEW FULL TIMETABLE has a live dot');
+    const marksJs = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
+    assert(marksJs.includes('hydrateRemoteMarks({ persist = false }'), 'sign-in can force-upload merged marks');
+    const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
+    assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
+    const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
+    assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
+    assert(adminCl.includes('V9_09.10.7'), 'current build has operator notes');
 }
 assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');

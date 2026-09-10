@@ -299,7 +299,9 @@ assert(!/alert-sched-delete[^>]*>Clear</.test(admin), 'scheduled Clear label is 
 assert(admin.includes('setupRideShareManager'), 'live sharing admin panel exists');
 assert(admin.includes('live-share-panel'), 'live sharing panel id');
 assert(admin.includes('data-ls-region'), 'live sharing has region tabs');
-assert(admin.includes("Train ${esc(r.trainId || '—')}"), 'share log lists the train id');
+assert(admin.includes('openAdminChangelogLookup'), 'admin can look up operator build notes');
+assert(admin.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
+assert(admin.includes('data-admin-changelog'), 'feedback version opens build notes');
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

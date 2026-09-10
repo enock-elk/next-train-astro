@@ -2000,6 +2000,25 @@ export function openPlannerTrainSheet(routeId, trainId) {
     const listEl = document.getElementById('planner-train-sheet-stops');
     if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
     if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
+    const liveEl = document.getElementById('planner-train-sheet-live');
+    if (liveEl) {
+        liveEl.classList.add('hidden');
+        liveEl.textContent = '';
+        import('./ride-pings.js').then((m) => {
+            const ranked = typeof m.rankVerifiedPings === 'function'
+                ? m.rankVerifiedPings(m.getCachedRidePings(sheet.route.id), sheet.trainId)
+                : [];
+            if (!ranked.length) return;
+            const mine = typeof m.getActiveShare === 'function'
+                && String(m.getActiveShare()?.trainId || '') === String(sheet.trainId);
+            const copy = typeof m.sharingStatusCopy === 'function'
+                ? m.sharingStatusCopy({ count: ranked.length, iAmSharing: mine })
+                : `${ranked.length} sharing`;
+            const last = String(ranked[0]?.ping?.station || '').replace(/ STATION$/i, '').trim();
+            liveEl.textContent = [copy, last].filter(Boolean).join(' · ');
+            liveEl.classList.remove('hidden');
+        }).catch(() => {});
+    }
     if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType);
     const zone = resolvePlannerRouteZone(sheet.route.id);
     const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];

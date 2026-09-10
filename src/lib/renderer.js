@@ -600,7 +600,7 @@ export const Renderer = {
             ? `<div class="text-[9px] font-bold text-blue-600 dark:text-blue-300 mt-0.5">${escapeHTML(liveDeco.liveHint)}</div>`
             : '';
         const livePulseHtml = trainHasLivePing(liveTrainId)
-            ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live - open map"><span class="block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.35)] animate-pulse"></span></button>`
+            ? `<button type="button" data-focus-train="${escapeHTML(String(liveTrainId))}" class="nt-live-train-pulse shrink-0 p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-full" aria-label="Train ${escapeHTML(String(liveTrainId))} is live - open timetable"><span class="block w-2 h-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.35)] animate-pulse"></span></button>`
             : '';
         const onTrainHtml = '';
         const boardKey = liveBoardJourneyKey(journey, destination);
@@ -982,7 +982,7 @@ export const Renderer = {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
                             }
 
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} whitespace-nowrap text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''}>${headerContent}</th>`;
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} whitespace-nowrap text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header sticky right-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-l ${borderClass} font-bold min-w-[50px] shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center bg-gray-100 dark:bg-gray-800">STN</th>` : ''}
                     </tr>

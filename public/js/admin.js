@@ -6926,10 +6926,11 @@ const Admin = {
                             : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
+                        const verLabel = safeAppVersion.split(' - ')[0];
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
-                                <span class="font-mono font-medium opacity-60 ml-2 truncate">${safeAppVersion.split(' - ')[0]} · ${safeRouteId}</span>
+                                <button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}">${verLabel} · ${safeRouteId}</button>
                             </div>
                         `;
 
@@ -13956,6 +13957,39 @@ const Admin = {
         return res.json();
     },
 
+    openAdminChangelogLookup: (version) => {
+        const key = String(version || '').split(' - ')[0].trim();
+        const notes = (typeof window.lookupAdminChangelog === 'function')
+            ? window.lookupAdminChangelog(key)
+            : ((window.ADMIN_CHANGELOG && window.ADMIN_CHANGELOG[key]) || null);
+        let modal = document.getElementById('admin-changelog-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'admin-changelog-modal';
+            modal.className = 'fixed inset-0 bg-black/70 z-[160] hidden flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700">
+                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2"></h3>
+                    <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4"></div>
+                    <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl">Close</button>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.querySelector('#admin-changelog-close')?.addEventListener('click', () => modal.classList.add('hidden'));
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+        }
+        const title = modal.querySelector('#admin-changelog-title');
+        const body = modal.querySelector('#admin-changelog-notes');
+        if (title) title.textContent = key || 'Unknown version';
+        if (body) {
+            if (!notes || !notes.length) {
+                body.textContent = 'No notes for this build.';
+            } else {
+                body.innerHTML = `<ul class="list-disc pl-4 space-y-1">${notes.map((n) => `<li>${secureEscape(String(n))}</li>`).join('')}</ul>`;
+            }
+        }
+        modal.classList.remove('hidden');
+    },
+
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
     setupDiagnosticsManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -13983,6 +14017,25 @@ const Admin = {
             </button>
 
             <div id="diag-body" class="hidden mt-4 space-y-4">
+
+                <!-- BUILD NOTES ACCORDION -->
+                <div class="bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-all">
+                    <button id="admin-changelog-header-btn" class="w-full px-3 py-3 bg-slate-100/70 dark:bg-slate-900/50 text-left text-[10px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-slate-200/50 dark:hover:bg-slate-900/70">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Build notes
+                        </span>
+                        <svg id="admin-changelog-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="admin-changelog-body" class="p-3 hidden">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Look up a version</label>
+                        <div class="flex gap-2 mb-3">
+                            <input id="admin-changelog-input" type="text" placeholder="V9_09.10.7" class="flex-1 h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-slate-300 dark:border-slate-600 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                            <button type="button" id="admin-changelog-lookup-btn" class="px-3 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase tracking-wide">Open</button>
+                        </div>
+                        <div id="admin-changelog-list" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar text-[11px] text-slate-700 dark:text-slate-300"></div>
+                    </div>
+                </div>
                 
                 <!-- GUARDIAN PHASE 1: Global Target Region (Controls Both Panels) -->
                 <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -14244,6 +14297,31 @@ const Admin = {
         const matrixHeader = document.getElementById('matrix-header-btn');
         const matrixBody = document.getElementById('matrix-body');
         const matrixChevron = document.getElementById('matrix-chevron');
+
+        const adminClHeader = document.getElementById('admin-changelog-header-btn');
+        const adminClBody = document.getElementById('admin-changelog-body');
+        const adminClChevron = document.getElementById('admin-changelog-chevron');
+        const adminClList = document.getElementById('admin-changelog-list');
+        const adminClInput = document.getElementById('admin-changelog-input');
+        const adminClLookup = document.getElementById('admin-changelog-lookup-btn');
+        if (adminClList && window.ADMIN_CHANGELOG) {
+            adminClList.innerHTML = Object.keys(window.ADMIN_CHANGELOG).sort().reverse().map((ver) => (
+                `<button type="button" class="block w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-800 font-mono text-[11px]" data-admin-changelog="${secureEscape(ver)}">${secureEscape(ver)}</button>`
+            )).join('');
+        }
+        if (adminClLookup) {
+            adminClLookup.onclick = () => Admin.openAdminChangelogLookup(adminClInput ? adminClInput.value : '');
+        }
+        if (!window.__ntAdminChangelogBound) {
+            window.__ntAdminChangelogBound = true;
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest?.('[data-admin-changelog]');
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
+            });
+        }
 
         const deepscanHeader = document.getElementById('deepscan-header-btn');
         const deepscanBody = document.getElementById('deepscan-body');
@@ -14665,6 +14743,14 @@ const Admin = {
                 matrixBody.classList.toggle('hidden');
                 if (matrixBody.classList.contains('hidden')) matrixChevron.classList.add('-rotate-90');
                 else matrixChevron.classList.remove('-rotate-90');
+            };
+        }
+
+        if (adminClHeader) {
+            adminClHeader.onclick = () => {
+                adminClBody.classList.toggle('hidden');
+                if (adminClBody.classList.contains('hidden')) adminClChevron.classList.add('-rotate-90');
+                else adminClChevron.classList.remove('-rotate-90');
             };
         }
 

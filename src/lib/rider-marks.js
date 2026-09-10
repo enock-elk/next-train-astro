@@ -237,7 +237,7 @@ async function persistRemote(state) {
     }
 }
 
-export async function hydrateRemoteMarks() {
+export async function hydrateRemoteMarks({ persist = false } = {}) {
     const uid = authUid();
     if (!uid || typeof window === 'undefined' || !navigator.onLine) {
         syncRiderMarksUi();
@@ -256,18 +256,20 @@ export async function hydrateRemoteMarks() {
         const url = `${DYNAMIC_BASE_URL}users/${encodeURIComponent(uid)}/marks.json${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) {
+            if (persist) await persistRemote(readMarks());
             syncRiderMarksUi();
             return readMarks();
         }
         const remote = await res.json();
         if (!remote || typeof remote !== 'object') {
+            if (persist) await persistRemote(readMarks());
             syncRiderMarksUi();
             return readMarks();
         }
         const merged = mergeStates(readMarks(), remote);
         safeStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        if (merged.points !== (remote.points || 0) || merged.updatedAt !== (remote.updatedAt || 0)) {
-            persistRemote(merged);
+        if (persist || merged.points !== (remote.points || 0) || merged.updatedAt !== (remote.updatedAt || 0)) {
+            await persistRemote(merged);
         }
         syncRiderMarksUi(merged);
         return merged;

@@ -83,11 +83,10 @@ export function isLabEnvironment() {
 }
 
 /**
- * Lab-only: skip GPS / path / speed checks so live share can be tested.
- * Turn this back off (or delete the call sites) before merging to main.
+ * Skip GPS / path / speed checks. Off so lab actually vets shares.
  */
 export function relaxLiveShareGuards() {
-    return isLabEnvironment();
+    return false;
 }
 
 function defaultsForEnv() {

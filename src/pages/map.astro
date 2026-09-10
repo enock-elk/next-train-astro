@@ -248,41 +248,20 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .nt-live-train { background: transparent !important; border: none !important; }
       .nt-live-train-glyph {
-        display: flex; flex-direction: row; align-items: center; gap: 0.22rem;
-        min-width: 0; padding: 2px 6px 2px 3px; box-sizing: border-box;
-        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-        color: #fff; border-radius: 999px;
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(255,255,255,0.9);
-        border: none; line-height: 1.05; pointer-events: auto;
+        display: block; width: 10px; height: 12px; box-sizing: border-box;
+        border-radius: 999px; background: #2563eb;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.9), 0 1px 3px rgba(15, 23, 42, 0.35);
+        transform-origin: center center; pointer-events: auto;
       }
       .nt-live-train-glyph--mine {
-        background: linear-gradient(180deg, #2563eb 0%, #1e3a8a 100%);
-        box-shadow: 0 1px 4px rgba(30, 64, 175, 0.35), 0 0 0 1.5px #93c5fd;
+        background: #1d4ed8;
+        box-shadow: 0 0 0 1px #93c5fd, 0 1px 3px rgba(30, 64, 175, 0.4);
       }
-      .nt-live-train-glyph--stale {
-        background: linear-gradient(180deg, #94a3b8 0%, #475569 100%);
-      }
+      .nt-live-train-glyph--stale { background: #64748b; }
       .nt-live-train-glyph--stale.nt-live-train-glyph--mine {
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.28), 0 0 0 1.5px #cbd5e1;
+        box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
-      .nt-live-train-glyph--compact {
-        padding: 0; gap: 0; justify-content: center;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3), 0 0 0 1px rgba(255,255,255,0.85);
-      }
-      .nt-live-train-ico {
-        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        width: 14px; height: 14px; border-radius: 999px;
-        background: rgba(255,255,255,0.18); color: #fff;
-      }
-      .nt-live-train-glyph--compact .nt-live-train-ico {
-        width: 100%; height: 100%; background: transparent;
-      }
-      .nt-live-train-copy { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-      .nt-live-train-name {
-        font-size: 11px; font-weight: 900; letter-spacing: 0.03em;
-        font-variant-numeric: tabular-nums; line-height: 1.1;
-      }
-      .nt-live-train-n { font-size: 7px; font-weight: 700; opacity: 0.9; letter-spacing: 0.01em; }
+      .nt-live-train-glyph--compact { width: 8px; height: 10px; }
       .nt-live-train-pop { text-align: center; color: #111827; min-width: 9.5rem; padding: 0.1rem 0.15rem; }
       .nt-live-train-pop-title { font-size: 13px; font-weight: 900; letter-spacing: 0.01em; }
       .nt-live-train-pop-sub { font-size: 10px; color: #6b7280; margin-top: 2px; font-weight: 600; }

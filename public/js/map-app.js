@@ -1869,6 +1869,7 @@
             let lastKnownLatLng = null;
             let userMarker = null;
             let userRadius = null;
+            let hideUserDotForShare = false;
             
             const pulsingIcon = L.divIcon({
                 className: 'custom-div-icon',
@@ -1894,6 +1895,7 @@
                     userRadius.setLatLng(latlng);
                     userRadius.setRadius(radius);
                 }
+                applyShareHidesUserDot(hideUserDotForShare);
                 if (locateIcon) {
                     locateIcon.classList.remove('animate-spin', 'text-gray-400');
                     locateIcon.classList.add('text-blue-600', 'dark:text-blue-400');
@@ -1952,49 +1954,43 @@
                 var at = Number(ping && ping.at || 0);
                 return !at || (Date.now() - at) >= 90000;
             }
+            function applyShareHidesUserDot(hide) {
+                hideUserDotForShare = !!hide;
+                var el = userMarker && userMarker.getElement && userMarker.getElement();
+                if (el) el.style.visibility = hide ? 'hidden' : '';
+                if (userRadius) {
+                    userRadius.setStyle({
+                        opacity: hide ? 0 : 1,
+                        fillOpacity: hide ? 0 : 0.15
+                    });
+                }
+            }
             function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
                 var compact = z < 11;
-                var hideSub = z < 13;
-                var digits = String(trainId || '').length;
                 var stale = isPingGpsStale(ping);
-                var ico;
-                var name;
-                if (z <= 8) { ico = 14; name = 8; }
-                else if (z <= 9) { ico = 16; name = 8; }
-                else if (z <= 10) { ico = 18; name = 9; }
-                else if (z <= 11) { ico = 20; name = 10; }
-                else if (z <= 12) { ico = 22; name = 10; }
-                else if (z <= 14) { ico = 24; name = 11; }
-                else { ico = 26; name = 12; }
-                if (compact) {
-                    return { w: ico, h: ico, ico: Math.round(ico * 0.62), name: name, sub: 7, compact: true, hideSub: true, stale: stale };
-                }
-                var w = hideSub
-                    ? Math.round(40 + digits * 6.5)
-                    : Math.round(52 + digits * 6.5);
-                var h = hideSub ? 20 : 24;
-                return { w: w, h: h, ico: 12, name: name, sub: Math.max(7, name - 3), compact: false, hideSub: hideSub, stale: stale };
+                var ovalW = compact ? 8 : 10;
+                var ovalH = compact ? 10 : 12;
+                var bearing = ping && Number.isFinite(ping.bearing)
+                    ? ping.bearing
+                    : (ping && Number.isFinite(ping.heading) ? ping.heading : 0);
+                return {
+                    w: ovalW + 4,
+                    h: ovalH + 4,
+                    ovalW: ovalW,
+                    ovalH: ovalH,
+                    compact: compact,
+                    stale: stale,
+                    bearing: bearing
+                };
             }
             function liveTrainGlyphHtml(trainId, n, mine, spec) {
                 var cls = 'nt-live-train-glyph';
                 if (mine) cls += ' nt-live-train-glyph--mine';
                 if (spec && spec.stale) cls += ' nt-live-train-glyph--stale';
                 if (spec && spec.compact) cls += ' nt-live-train-glyph--compact';
-                var svgW = (spec && spec.ico) || 10;
-                var ico = '<span class="nt-live-train-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="' + svgW + '" height="' + svgW + '" fill="none"><rect x="4" y="7" width="16" height="10" rx="2.2" fill="currentColor"/><path d="M7 17.5v1.8M17 17.5v1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.2" cy="17.2" r="1.35" fill="#1e3a8a"/><circle cx="15.8" cy="17.2" r="1.35" fill="#1e3a8a"/><path d="M8 10h3.2M14.2 10H16" stroke="#dbeafe" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
-                if (spec && spec.compact) {
-                    return '<div class="' + cls + '" style="width:' + spec.w + 'px;height:' + spec.h + 'px">' + ico + '</div>';
-                }
-                var sub = (spec && spec.hideSub)
-                    ? ''
-                    : '<span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">' + escapePing(liveTrainShareLine(n, mine)) + '</span>';
-                return '<div class="' + cls + '" style="width:' + spec.w + 'px">'
-                    + ico
-                    + '<span class="nt-live-train-copy">'
-                    + '<span class="nt-live-train-name" style="font-size:' + spec.name + 'px">' + escapePing(trainId) + '</span>'
-                    + sub
-                    + '</span></div>';
+                var deg = spec && Number.isFinite(spec.bearing) ? spec.bearing : 0;
+                return '<div class="' + cls + '" style="width:' + spec.ovalW + 'px;height:' + spec.ovalH + 'px;transform:rotate(' + deg + 'deg)" title="Live"></div>';
             }
             function sharingStatusCopy(count, mine) {
                 var n = Math.max(0, Number(count) || 0);
@@ -2006,15 +2002,6 @@
                 }
                 if (n <= 0) return "";
                 if (n === 1) return "1 sharing";
-                return n + " sharing";
-            }
-            function liveTrainShareLine(n, mine) {
-                if (mine) {
-                    var others = Math.max(0, n - 1);
-                    if (others <= 0) return "You’re sharing";
-                    if (others === 1) return "You + 1";
-                    return "You + " + others;
-                }
                 return n + " sharing";
             }
             function animateTrainMarker(marker, lat, lng, headingDeg, speedMps, expiresAt) {
@@ -2041,7 +2028,10 @@
                     map.removeLayer(ridePingLayer);
                     ridePingLayer = null;
                 }
-                if (!pings || !pings.length) return;
+                if (!pings || !pings.length) {
+                    applyShareHidesUserDot(false);
+                    return;
+                }
                 const group = L.layerGroup();
                 const trains = {};
                 const loose = [];
@@ -2053,6 +2043,10 @@
                         (trains[k] = trains[k] || []).push(p);
                     } else loose.push(p);
                 });
+                var mineOnTrain = Object.keys(trains).some(function (id) {
+                    return trains[id].some(function (p) { return !!p.mine; });
+                });
+                applyShareHidesUserDot(mineOnTrain);
 
                 Object.keys(trains).forEach(function (trainId) {
                     const list = trains[trainId];
@@ -2064,7 +2058,9 @@
                     const mine = list.some(function (p) { return !!p.mine; });
                     const newest = list.reduce(function (a, b) { return (a.at || 0) >= (b.at || 0) ? a : b; }, list[0]);
                     const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps || 0;
-                    const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || newest || {}).heading;
+                    const heading = Number.isFinite(newest.bearing)
+                        ? newest.bearing
+                        : (list.find(function (p) { return typeof p.heading === 'number'; }) || newest || {}).heading;
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, newest);
                     const icon = L.divIcon({
                         className: 'nt-live-train',

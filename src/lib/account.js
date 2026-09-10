@@ -159,6 +159,7 @@ export async function initAccount() {
         publishUser(user);
         if (user && !user.isAnonymous) {
             await ensureUserProfile(user);
+            import('./rider-marks.js').then((m) => m.hydrateRemoteMarks({ persist: true })).catch(() => {});
         }
         window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     });

@@ -1455,7 +1455,7 @@ export function bindCommunityUi() {
     composerEl?.addEventListener('input', () => {
         // Auto-grow with new lines (WhatsApp-style), capped
         composerEl.style.height = 'auto';
-        const next = Math.min(Math.max(composerEl.scrollHeight, 52), 160);
+        const next = Math.min(Math.max(composerEl.scrollHeight, 44), 160);
         composerEl.style.height = `${next}px`;
         liveModerateComposer();
 

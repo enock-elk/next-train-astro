@@ -239,7 +239,7 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const planner = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
     assert(planner.includes('export function bindPlannerInputZoomGuard'), 'planner zoom guard is exported');
     const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
-    assert(renderer.includes('export-banned-stack'), 'export NO SVC is stacked text');
+    assert(renderer.includes('nt-grid-train-head') && renderer.includes("stack('NO SVC'"), 'export NO SVC is stacked text');
     assert(!/headerCell\.className = headerCell\.className/.test(renderer), 'export snapshot does not assign SVG className');
     const rules = readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
     assert(rules.includes('start|stop|session'), 'ride_share_log allows session updates');

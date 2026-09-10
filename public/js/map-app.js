@@ -1969,14 +1969,17 @@
                 var z = typeof zoom === 'number' ? zoom : 12;
                 var compact = z < 11;
                 var stale = isPingGpsStale(ping);
-                var ovalW = compact ? 8 : 10;
-                var ovalH = compact ? 10 : 12;
+                var id = String(trainId || '');
+                var chars = Math.max(3, Math.min(6, id.length || 3));
+                var ovalH = compact ? 18 : 22;
+                var ovalW = compact ? Math.max(36, 12 + chars * 7) : Math.max(44, 14 + chars * 8);
+                var box = compact ? 52 : 64;
                 var bearing = ping && Number.isFinite(ping.bearing)
                     ? ping.bearing
                     : (ping && Number.isFinite(ping.heading) ? ping.heading : 0);
                 return {
-                    w: ovalW + 4,
-                    h: ovalH + 4,
+                    w: box,
+                    h: box,
                     ovalW: ovalW,
                     ovalH: ovalH,
                     compact: compact,
@@ -1985,12 +1988,28 @@
                 };
             }
             function liveTrainGlyphHtml(trainId, n, mine, spec) {
+                var wrapCls = 'nt-live-train-wrap';
                 var cls = 'nt-live-train-glyph';
-                if (mine) cls += ' nt-live-train-glyph--mine';
-                if (spec && spec.stale) cls += ' nt-live-train-glyph--stale';
-                if (spec && spec.compact) cls += ' nt-live-train-glyph--compact';
+                if (mine) {
+                    cls += ' nt-live-train-glyph--mine';
+                    wrapCls += ' nt-live-train-wrap--mine';
+                }
+                if (spec && spec.stale) {
+                    cls += ' nt-live-train-glyph--stale';
+                    wrapCls += ' nt-live-train-wrap--stale';
+                }
+                if (spec && spec.compact) {
+                    wrapCls += ' nt-live-train-wrap--compact';
+                    cls += ' nt-live-train-glyph--compact';
+                }
                 var deg = spec && Number.isFinite(spec.bearing) ? spec.bearing : 0;
-                return '<div class="' + cls + '" style="width:' + spec.ovalW + 'px;height:' + spec.ovalH + 'px;transform:rotate(' + deg + 'deg)" title="Live"></div>';
+                var id = escapePing(String(trainId || ''));
+                return '<div class="' + wrapCls + '" title="Train ' + id + '">'
+                    + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
+                    + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
+                    + '<span class="' + cls + '" style="min-width:' + spec.ovalW + 'px;height:' + spec.ovalH + 'px;transform:rotate(' + deg + 'deg)">'
+                    + '<span class="nt-live-train-num" style="transform:rotate(' + (-deg) + 'deg)">' + id + '</span>'
+                    + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
                 var n = Math.max(0, Number(count) || 0);

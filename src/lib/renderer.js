@@ -972,8 +972,8 @@ export const Renderer = {
                             } else if (paintExclusion) {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
-                                    bgClass = 'export-banned-col relative';
-                                    headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center; text-decoration:underline dotted; text-underline-offset:2px;">${banIcon} NO SVC</span>${h}`;
+                                    bgClass = 'export-banned-col';
+                                    headerContent = `<span class="export-banned-stack" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1.15;white-space:nowrap;"><span class="export-no-svc" style="display:block;font-size:9px;font-weight:800;letter-spacing:0.08em;color:#b91c1c;">NO SVC</span><span class="export-train-id" style="display:block;font-size:11px;font-weight:800;color:#0f172a;">${h}</span></span>`;
                                 } else {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
                                     headerContent = `<span class="nt-excl-hit pointer-events-none absolute left-0 right-0 top-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center">${banIcon} NO SVC</span>${h}`;
@@ -985,7 +985,8 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} whitespace-nowrap text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
+                            const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header sticky right-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-l ${borderClass} font-bold min-w-[50px] shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center bg-gray-100 dark:bg-gray-800">STN</th>` : ''}
                     </tr>
@@ -1416,7 +1417,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.backgroundColor = tableHeaderBg;
             headerCell.style.color = headerTextColor;
             headerCell.style.border = `1px solid ${borderColor}`;
-            headerCell.className = headerCell.className;
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
             headerCell.style.fontSize = isCompact ? '12.5px' : '13px';
             headerCell.style.fontWeight = '900';
@@ -1442,6 +1442,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         t.querySelectorAll('th.export-banned-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#fef2f2'; 
             headerCell.style.color = '#991b1b';
+            headerCell.style.padding = isCompact ? '10px 4px 8px' : '12px 8px 10px';
+            headerCell.style.verticalAlign = 'middle';
         });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {
             td.style.backgroundColor = '#f0fdf4';

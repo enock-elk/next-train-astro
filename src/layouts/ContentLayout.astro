@@ -109,6 +109,28 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="icon" href={withBase('favicon.ico')} sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
     {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
+    <script is:inline>
+      (function () {
+        function atPolyfill(n) {
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += this.length;
+          if (n < 0 || n >= this.length) return undefined;
+          return this[n];
+        }
+        if (!Array.prototype.at) {
+          Object.defineProperty(Array.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+        }
+        if (!String.prototype.at) {
+          Object.defineProperty(String.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+        }
+        ['Int8Array','Uint8Array','Uint8ClampedArray','Int16Array','Uint16Array','Int32Array','Uint32Array','Float32Array','Float64Array','BigInt64Array','BigUint64Array'].forEach(function (name) {
+          var Ctor = window[name];
+          if (Ctor && Ctor.prototype && !Ctor.prototype.at) {
+            Object.defineProperty(Ctor.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+          }
+        });
+      })();
+    </script>
     <script is:inline define:vars={{ base, cartoKey }}>
       window.__NT_BASE__ = base;
       window.__NT_CARTO_KEY = cartoKey || '';

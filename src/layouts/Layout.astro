@@ -326,6 +326,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         if (!String.prototype.at) {
           Object.defineProperty(String.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
         }
+        ['Int8Array','Uint8Array','Uint8ClampedArray','Int16Array','Uint16Array','Int32Array','Uint32Array','Float32Array','Float64Array','BigInt64Array','BigUint64Array'].forEach(function (name) {
+          var Ctor = window[name];
+          if (Ctor && Ctor.prototype && !Ctor.prototype.at) {
+            Object.defineProperty(Ctor.prototype, 'at', { value: atPolyfill, writable: true, enumerable: false, configurable: true });
+          }
+        });
       })();
     </script>
     {unlockShellEarly && (

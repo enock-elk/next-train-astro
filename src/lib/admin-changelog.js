@@ -27,6 +27,13 @@ export const ADMIN_CHANGELOG = {
         'Full timetable waits for exclusions and keeps long-lived bans in local cache for offline.',
         'Downloaded PNG uses the older timetable type (bolder times, softer lines).',
     ],
+    'V9_09.10.9': [
+        'Map train oval is longer, shows the train number, and a faint ring pulses around it.',
+        'PNG export NO SVC is stacked text (no SVG slash).',
+        'Alert posters keep loading until the image is ready. Clicks before then do not open the lightbox.',
+        'Live sharing admin groups start/stop into one expandable session. Deploy RTDB rules so session PATCH is allowed.',
+        'Crash shield ignores extension noise (xbrowser/swbrowser), empty Uncaught, SVG className, and missing .at. Planner zoom guard is defined. Store hydrate uses safeStorage.',
+    ],
 };
 
 export function lookupAdminChangelog(version) {

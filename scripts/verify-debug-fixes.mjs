@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_09.10.8', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.9', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -207,6 +207,29 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const signoffRe = /(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*(?:\u2014|\u00E2\u20AC\u201D|\u00E2\u0080\u0094|&mdash;|[-–—])\s*([^<]*?)\s*<\/span>\s*$/i;
     const match = hyphenHtml.match(signoffRe);
     assert(!!match && match[1].trim() === 'Enock', 'hyphen italic signoff parses as Enock');
+}
+
+{
+    const { readFileSync } = await import('node:fs');
+    const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(ui.includes('xbrowser'), 'crash shield ignores xbrowser extension noise');
+    assert(ui.includes('swbrowser'), 'crash shield ignores swbrowser extension noise');
+    assert(ui.includes("text === 'Uncaught'"), 'crash shield ignores empty Uncaught');
+    assert(ui.includes("className of #<SVGElement>"), 'crash shield ignores SVG className getter');
+    assert(ui.includes('.at is not a function'), 'crash shield ignores missing .at from third-party');
+    const store = readFileSync(new URL('../src/store.js', import.meta.url), 'utf8');
+    assert(store.includes('safeStorage.getItem'), 'hydrateStores does not touch raw localStorage');
+    const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+    const content = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+    assert(layout.includes('Uint8Array') && content.includes('Uint8Array'), '.at polyfill covers typed arrays on app and map layouts');
+    const planner = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+    assert(planner.includes('export function bindPlannerInputZoomGuard'), 'planner zoom guard is exported');
+    const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+    assert(renderer.includes('export-banned-stack'), 'export NO SVC is stacked text');
+    assert(!/headerCell\.className = headerCell\.className/.test(renderer), 'export snapshot does not assign SVG className');
+    const rules = readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
+    assert(rules.includes('start|stop|session'), 'ride_share_log allows session updates');
+    assert(rules.includes('thandeka05nxumalo@gmail.com'), 'Thandeka stays on ride_share_log rules');
 }
 
 if (failed) {

@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.8', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.9', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -260,12 +260,15 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
     assert(mapApp.includes('nt-live-train-glyph--stale'), 'map train glyph has a stale GPS state');
     assert(mapApp.includes('nt-live-train-glyph--compact'), 'map train glyph shrinks when zoomed out');
+    assert(mapApp.includes('nt-live-train-num'), 'map train oval shows the train number');
+    assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
     assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
     assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
-    assert(mapPage.includes('0 0 0 1px rgba(255,255,255,0.9)'), 'map train glyph ring is 1px');
-    assert(mapPage.includes('height: 12px'), 'map train oval is hub-dot sized');
+    assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
+    assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
+    assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS = 90 * 1000'), 'GPS stale window is 90 seconds');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
@@ -280,9 +283,14 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');
+    assert(ridePings.includes("action: 'session'"), 'share log writes a session node');
+    assert(ridePings.includes('nt_ride_share_session'), 'share session id is kept until stop');
     assert(adminJs.includes('setupRideShareManager'), 'admin has a live sharing panel');
     assert(adminJs.includes('live-share-panel'), 'live sharing panel id');
     assert(adminJs.includes('data-ls-region'), 'live sharing panel has region tabs');
+    assert(adminJs.includes('groupRideShareLogs'), 'live sharing groups start/stop into sessions');
+    assert(adminJs.includes('data-ls-session'), 'share sessions are expandable');
+    assert(adminJs.includes('nt-ls-live-dot'), 'live now cards have a GPS pulse');
     assert(adminJs.includes('openAdminChangelogLookup'), 'admin can look up build notes');
     assert(adminJs.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
     const featuresJs = readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8');
@@ -300,7 +308,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
-    assert(adminCl.includes('V9_09.10.8'), 'current build has operator notes');
+    assert(adminCl.includes('V9_09.10.9'), 'current build has operator notes');
 }
 assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');

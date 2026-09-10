@@ -182,43 +182,57 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.dataset.ntPosterBound = '1';
         img.setAttribute('fetchpriority', 'high');
         img.decoding = 'async';
+        const host = img.closest('[data-alert-lightbox]');
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
+            if (!(img.naturalWidth > 0)) return;
             img.dataset.ntPosterRevealed = '1';
             img.classList.remove('opacity-0');
             img.classList.add('opacity-100');
-            img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            host?.setAttribute('data-alert-ready', '1');
         };
         const fail = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             img.dataset.ntPosterRevealed = '1';
-            img.closest('[data-alert-lightbox]')?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+            host?.removeAttribute('data-alert-ready');
         };
         const tryDecode = () => {
+            if (!(img.naturalWidth > 0)) return;
             if (typeof img.decode === 'function') {
-                Promise.race([
-                    img.decode(),
-                    new Promise((resolve) => setTimeout(resolve, 2500)),
-                ]).then(reveal, reveal);
+                img.decode().then(reveal, () => {
+                    if (img.naturalWidth > 0) reveal();
+                });
                 return;
             }
             reveal();
         };
         const onLoad = () => {
             if (img.naturalWidth > 0) tryDecode();
-            else fail();
         };
-        img.addEventListener('load', onLoad, { once: true });
-        img.addEventListener('error', fail, { once: true });
-        if (img.complete) {
-            if (img.naturalWidth > 0) onLoad();
-            else fail();
-        } else {
-            setTimeout(() => {
+        let errors = 0;
+        img.addEventListener('load', onLoad);
+        img.addEventListener('error', () => {
+            if (img.dataset.ntPosterRevealed === '1') return;
+            if (errors++ < 2) {
+                const src = img.getAttribute('src');
+                if (src) setTimeout(() => { img.src = src; }, 400 * errors);
+                return;
+            }
+            fail();
+        });
+        if (img.complete && img.naturalWidth > 0) onLoad();
+        else if (!img.complete) {
+            const kick = () => {
                 if (img.dataset.ntPosterRevealed === '1') return;
-                if (img.naturalWidth > 0) tryDecode();
-                else fail();
-            }, 5000);
+                if (img.naturalWidth > 0) {
+                    tryDecode();
+                    return;
+                }
+                if (!img.complete) setTimeout(kick, 4000);
+            };
+            setTimeout(kick, 4000);
         }
     });
 }
@@ -813,6 +827,7 @@ function bindAlertsChannelOnce() {
         const lightbox = e.target.closest?.('[data-alert-lightbox]');
         if (lightbox) {
             e.preventDefault();
+            if (lightbox.getAttribute('data-alert-ready') !== '1') return;
             const src = lightbox.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
             return;

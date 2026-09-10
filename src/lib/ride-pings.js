@@ -45,6 +45,7 @@ export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
 /** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
 export const RIDE_GPS_STALE_MS = 90 * 1000;
 const ACTIVE_KEY = 'ridePingActiveV1';
+const SHARE_SESSION_KEY = 'nt_ride_share_session';
 
 /** @type {Record<string, () => void>} */
 const routeListeners = {};
@@ -858,19 +859,58 @@ async function expireRemoteShare(ping) {
     }
 }
 
+async function putRideShareLog(region, entryId, payload, token) {
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}ride_share_log/${encodeURIComponent(region)}/${encodeURIComponent(entryId)}.json?auth=${encodeURIComponent(token)}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }
+    );
+    return res.ok;
+}
+
+async function patchRideShareLog(region, entryId, patch, token) {
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}ride_share_log/${encodeURIComponent(region)}/${encodeURIComponent(entryId)}.json?auth=${encodeURIComponent(token)}`,
+        {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+        }
+    );
+    return res.ok;
+}
+
+function readShareSession() {
+    try {
+        return JSON.parse(safeStorage.getItem(SHARE_SESSION_KEY) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function writeShareSession(row) {
+    try {
+        if (!row) safeStorage.removeItem(SHARE_SESSION_KEY);
+        else safeStorage.setItem(SHARE_SESSION_KEY, JSON.stringify(row));
+    } catch { /* ignore */ }
+}
+
 async function appendRideShareLog({ action, routeId, trainId, deviceId, uid, email, source, at }) {
+    if (action === 'onboard_ping') return;
     const fbUid = (typeof window !== 'undefined' && window.firebaseAuth?.currentUser?.uid) || uid || null;
     if (!fbUid || !routeId || !deviceId) return;
     const region = String(ROUTES[routeId]?.region || 'GP');
-    const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = at || Date.now();
     const payload = {
         region,
         routeId,
         deviceId,
         uid: fbUid,
-        action,
         source: source || '',
-        at: at || Date.now(),
+        at: now,
         appVersion: APP_VERSION,
     };
     if (trainId) payload.trainId = String(trainId);
@@ -878,14 +918,60 @@ async function appendRideShareLog({ action, routeId, trainId, deviceId, uid, ema
     try {
         const token = await ensureAuthToken();
         if (!token) return;
-        await fetch(
-            `${DYNAMIC_BASE_URL}ride_share_log/${encodeURIComponent(region)}/${encodeURIComponent(entryId)}.json?auth=${encodeURIComponent(token)}`,
-            {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+        const existing = readShareSession();
+        const ownSession = !!(existing && existing.uid === fbUid && existing.id && existing.region);
+
+        if (action === 'stop') {
+            if (ownSession) {
+                const ok = await patchRideShareLog(existing.region, existing.id, {
+                    action: 'session',
+                    status: 'stopped',
+                    stoppedAt: now,
+                    at: now,
+                    source: source || 'stop',
+                    stopSource: source || 'stop',
+                }, token);
+                if (ok) {
+                    writeShareSession(null);
+                    return;
+                }
             }
-        );
+            const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+            await putRideShareLog(region, entryId, { ...payload, action: 'stop' }, token);
+            writeShareSession(null);
+            return;
+        }
+
+        if (action !== 'start') return;
+
+        if (ownSession) {
+            await patchRideShareLog(existing.region, existing.id, {
+                action: 'session',
+                status: 'stopped',
+                stoppedAt: now,
+                at: now,
+                source: 'superseded',
+                stopSource: 'superseded',
+            }, token);
+            writeShareSession(null);
+        }
+        const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const sessionPayload = { ...payload, action: 'session', status: 'live', startedAt: now };
+        let ok = await putRideShareLog(region, entryId, sessionPayload, token);
+        if (!ok) {
+            ok = await putRideShareLog(region, entryId, { ...payload, action: 'start' }, token);
+        }
+        if (ok) {
+            writeShareSession({
+                id: entryId,
+                region,
+                uid: fbUid,
+                deviceId,
+                routeId,
+                trainId: trainId || '',
+                startedAt: now,
+            });
+        }
     } catch { /* optional history */ }
 }
 

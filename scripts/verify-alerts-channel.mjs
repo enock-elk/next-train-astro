@@ -236,6 +236,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
     assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');
     assert(js.includes('img.decode'), 'poster reveal waits on decode when available');
+    assert(js.includes("data-alert-ready"), 'poster click waits until the image is ready');
+    assert(!js.includes('setTimeout(resolve, 2500)'), 'poster decode is not raced against a timeout');
     assert(js.includes('fetchpriority="high"'), 'poster img asks for high fetch priority');
     assert(js.includes('watchAlertPosterHydration'), 'poster hydrate survives innerHTML rewrites');
     assert(js.includes('pointer-events-none'), 'loading overlay does not steal hold-to-react');

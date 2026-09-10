@@ -246,22 +246,68 @@ const regionSeoSlugs = Object.fromEntries(
         width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
         box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); animation: pulse 2s infinite; border: 3px solid white;
       }
-      .nt-live-train { background: transparent !important; border: none !important; }
+      .leaflet-marker-icon.nt-live-train,
+      .nt-live-train {
+        overflow: visible !important;
+        background: transparent !important;
+        border: none !important;
+      }
+      .nt-live-train-wrap {
+        position: relative;
+        width: 64px; height: 64px;
+        display: flex; align-items: center; justify-content: center;
+        pointer-events: auto;
+      }
+      .nt-live-train-wrap--compact { width: 52px; height: 52px; }
+      .nt-live-train-ring {
+        position: absolute;
+        width: 42px; height: 42px;
+        border-radius: 50%;
+        background: rgba(59, 130, 246, 0.28);
+        animation: nt-live-train-halo 2.4s ease-out infinite;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .nt-live-train-ring--delay { animation-delay: 1.15s; }
+      .nt-live-train-wrap--stale .nt-live-train-ring {
+        background: rgba(100, 116, 139, 0.22);
+      }
+      .nt-live-train-wrap--mine .nt-live-train-ring {
+        background: rgba(37, 99, 235, 0.32);
+      }
       .nt-live-train-glyph {
-        display: block; width: 10px; height: 12px; box-sizing: border-box;
-        border-radius: 999px; background: #2563eb;
-        box-shadow: 0 0 0 1px rgba(255,255,255,0.9), 0 1px 3px rgba(15, 23, 42, 0.35);
-        transform-origin: center center; pointer-events: auto;
+        position: relative; z-index: 1;
+        display: flex; align-items: center; justify-content: center;
+        min-width: 44px; height: 22px; padding: 0 9px;
+        box-sizing: border-box;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+        border: 2px solid #fff;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.38);
+        transform-origin: center center;
+        pointer-events: auto;
+      }
+      .nt-live-train-num {
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
+        letter-spacing: 0.03em; color: #fff; line-height: 1; white-space: nowrap;
       }
       .nt-live-train-glyph--mine {
-        background: #1d4ed8;
-        box-shadow: 0 0 0 1px #93c5fd, 0 1px 3px rgba(30, 64, 175, 0.4);
+        background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
+        box-shadow: 0 0 0 1px #93c5fd, 0 1px 4px rgba(30, 64, 175, 0.45);
       }
-      .nt-live-train-glyph--stale { background: #64748b; }
+      .nt-live-train-glyph--stale {
+        background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+      }
       .nt-live-train-glyph--stale.nt-live-train-glyph--mine {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
-      .nt-live-train-glyph--compact { width: 8px; height: 10px; }
+      .nt-live-train-glyph--compact { min-width: 36px; height: 18px; padding: 0 7px; }
+      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 9px; }
+      @keyframes nt-live-train-halo {
+        0% { transform: scale(0.55); opacity: 0.42; }
+        100% { transform: scale(1.7); opacity: 0; }
+      }
       .nt-live-train-pop { text-align: center; color: #111827; min-width: 9.5rem; padding: 0.1rem 0.15rem; }
       .nt-live-train-pop-title { font-size: 13px; font-weight: 900; letter-spacing: 0.01em; }
       .nt-live-train-pop-sub { font-size: 10px; color: #6b7280; margin-top: 2px; font-weight: 600; }

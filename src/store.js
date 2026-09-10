@@ -1,5 +1,5 @@
 import { atom } from 'nanostores';
-import { pruneExclusionsTree } from './lib/utils.js';
+import { pruneExclusionsTree, safeStorage } from './lib/utils.js';
 
 /**
  * METRORAIL NEXT TRAIN 2.0 - GLOBAL STATE (NANO STORES)
@@ -55,12 +55,13 @@ export function hydrateStores() {
     if (typeof window === 'undefined') return;
 
     // 1. Hydrate Region (selected app region is the telemetry source of truth)
-    const savedRegion = localStorage.getItem('userRegion');
+    let savedRegion = null;
+    try { savedRegion = safeStorage.getItem('userRegion'); } catch { savedRegion = null; }
     if (savedRegion) $userRegion.set(savedRegion);
     
     // Auto-save Region changes + keep GA/Clarity crm_region aligned
     $userRegion.listen((newRegion) => {
-        localStorage.setItem('userRegion', newRegion);
+        try { safeStorage.setItem('userRegion', newRegion); } catch { /* ignore */ }
         try {
             if (typeof window.syncCrmRegionAnalytics === 'function') {
                 window.syncCrmRegionAnalytics(newRegion);
@@ -74,11 +75,12 @@ export function hydrateStores() {
     } catch { /* ignore */ }
 
     // 2. Hydrate Profile
-    const savedProfile = localStorage.getItem('userProfile');
+    let savedProfile = null;
+    try { savedProfile = safeStorage.getItem('userProfile'); } catch { savedProfile = null; }
     if (savedProfile) $userProfile.set(savedProfile);
     
     $userProfile.listen((newProfile) => {
-        localStorage.setItem('userProfile', newProfile);
+        try { safeStorage.setItem('userProfile', newProfile); } catch { /* ignore */ }
     });
 
     // 3. Network Listeners
@@ -88,7 +90,7 @@ export function hydrateStores() {
 
     // 3b. Last-good corridor bans (including expiries more than a week out)
     try {
-        const raw = localStorage.getItem('nt_exclusions_cache');
+        const raw = safeStorage.getItem('nt_exclusions_cache');
         if (raw) {
             const next = pruneExclusionsTree(JSON.parse(raw));
             if (Object.keys(next).length) $globalExclusions.set(next);
@@ -97,10 +99,10 @@ export function hydrateStores() {
 
     // 4. Device Identity — reuse SPA key/format; never mint a second ID if head boot already set one
     let uid = (typeof window !== 'undefined' && window.NEXT_TRAIN_DEVICE_ID)
-        || localStorage.getItem('next_train_device_id');
+        || safeStorage.getItem('next_train_device_id');
     if (!uid) {
         uid = 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        localStorage.setItem('next_train_device_id', uid);
+        try { safeStorage.setItem('next_train_device_id', uid); } catch { /* ignore */ }
     }
     if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = uid;
     $deviceId.set(uid);

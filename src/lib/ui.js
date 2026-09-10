@@ -841,6 +841,12 @@ export function openLightbox(url) {
     if (typeof window === 'undefined') return;
     const src = sanitizeAttachmentDisplayUrl(url);
     if (!src) return;
+    try {
+        const pending = Array.from(document.querySelectorAll('[data-alert-lightbox]')).find((el) => {
+            return el.getAttribute('data-alert-lightbox') === src && el.getAttribute('data-alert-ready') !== '1';
+        });
+        if (pending) return;
+    } catch { /* ignore */ }
     triggerHaptic();
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');
     lockBackgroundScroll();
@@ -987,20 +993,35 @@ export function closeLightbox(fromPopState = false) {
 export function initGlobalErrorHandler() {
     if (typeof window === 'undefined') return;
 
+    const shouldIgnoreGlobalError = function(msg, url, error) {
+        const text = String(msg || (error && error.message) || '').trim();
+        if (!text || text === 'Uncaught' || /^Uncaught\s*$/i.test(text)) return true;
+        const IGNORED_ERRORS = [
+            "Script error.", "_AutofillCallbackHandler", "ResizeObserver loop limit exceeded",
+            "Unexpected end of input", "Unexpected token", "Unexpected token '<'",
+            "Unexpected end of JSON input", "JSON.parse: unexpected end of data",
+            "chrome-extension", "ethereum", "__firefox__", "DarkReader",
+            "xbrowser", "swbrowser",
+            "Failed to execute 'measure' on 'Performance'",
+            "className of #<SVGElement>",
+            ".at is not a function",
+            "reading 'getItem'",
+            "setting 'innerHTML'"
+        ];
+        if (IGNORED_ERRORS.some(err => text.indexOf(err) > -1)) return true;
+        const src = String(url || '') + ' ' + (error && error.stack ? String(error.stack) : '');
+        if (/chrome-extension:|moz-extension:|safari-extension:/i.test(src)) return true;
+        if (/reading 'startsWith'/i.test(text) && /chrome-extension:|moz-extension:|safari-extension:/i.test(src)) return true;
+        return false;
+    };
+
     window.onerror = function(msg, url, line, col, error) {
         // Sentry ErrorEvent Unwrap
         if (typeof msg === 'object') {
             msg = (msg.message) ? msg.message : ((error && error.message) ? error.message : "Unknown Error Object");
         }
 
-        const IGNORED_ERRORS = [
-            "Script error.", "_AutofillCallbackHandler", "ResizeObserver loop limit exceeded",
-            "Unexpected end of input", "Unexpected token", "Unexpected token '<'", 
-            "Unexpected end of JSON input", "JSON.parse: unexpected end of data",
-            "chrome-extension", "ethereum", "__firefox__", "DarkReader"
-        ];
-
-        if (typeof msg === 'string' && IGNORED_ERRORS.some(err => msg.indexOf(err) > -1)) {
+        if (shouldIgnoreGlobalError(msg, url, error)) {
             console.warn("Global Error Suppressed (Ignored Keyword):", msg);
             return false;
         }
@@ -1010,7 +1031,7 @@ export function initGlobalErrorHandler() {
         {
             const adminStack = error && error.stack ? String(error.stack) : '';
             const urlText = String(url || '');
-            const hash = (typeof location !== 'undefined' && location.hash) ? location.hash : '';
+            const hash = String((typeof location !== 'undefined' && location.hash) || '');
             const adminNoise =
                 window.__ntAdminSessionActive === true ||
                 /admin\.js/i.test(urlText) ||
@@ -1161,6 +1182,14 @@ export function initGlobalErrorHandler() {
         
         return false;
     };
+
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event && event.reason;
+        const msg = reason && (reason.message || String(reason)) || '';
+        if (shouldIgnoreGlobalError(msg, '', reason)) {
+            try { event.preventDefault(); } catch { /* ignore */ }
+        }
+    });
 }
 
 // --- TAB SHELL (ported from old SPA ui.js for Phase 1) ---

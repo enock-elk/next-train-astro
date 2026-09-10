@@ -7613,14 +7613,14 @@ const Admin = {
                 <svg id="ls-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ls-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Live ride pings and a log of share start / stop by region. User ID is the Firebase uid.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Live GPS shares and expandable sessions. Start and stop for the same rider sit in one entry.</p>
                 <div class="grid-hidden-actions flex space-x-1 mb-3 px-1" id="ls-region-tabs"></div>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="ls-refresh-btn" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Live now</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2 flex items-center gap-2">Live now <span id="ls-live-count" class="hidden text-[9px] font-black tracking-normal normal-case bg-blue-600 text-white px-1.5 py-0.5 rounded-full"></span></p>
                 <div id="ls-live-list" class="space-y-2 max-h-[28vh] overflow-y-auto pr-1 custom-scrollbar mb-4"></div>
-                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Share log</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 mb-2">Share sessions</p>
                 <div id="ls-log-list" class="space-y-2 max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"></div>
             </div>
         `;
@@ -7649,16 +7649,49 @@ const Admin = {
         };
         paintTabs();
 
+        if (!document.getElementById('nt-ls-style')) {
+            const st = document.createElement('style');
+            st.id = 'nt-ls-style';
+            st.textContent = `
+                .nt-ls-live-card { position: relative; overflow: hidden; }
+                .nt-ls-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #2563eb; box-shadow: 0 0 0 0 rgba(37,99,235,.55); animation: nt-ls-gps 2s ease-out infinite; }
+                .nt-ls-live-dot.is-stale { background: #64748b; animation: none; box-shadow: none; }
+                @keyframes nt-ls-gps {
+                    0% { box-shadow: 0 0 0 0 rgba(37,99,235,.55); }
+                    70% { box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+                    100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+                }
+                .nt-ls-session[open] .nt-ls-session-chevron { transform: rotate(180deg); }
+            `;
+            document.head.appendChild(st);
+        }
+
+        const stopLsTimer = () => {
+            if (Admin._lsTimer) {
+                clearInterval(Admin._lsTimer);
+                Admin._lsTimer = null;
+            }
+        };
+        const startLsTimer = () => {
+            stopLsTimer();
+            Admin._lsTimer = setInterval(() => {
+                if (!body || body.classList.contains('hidden')) return;
+                Admin.fetchRideShareLog({ quiet: true });
+            }, 8000);
+        };
+
         header.onclick = () => {
             if (Admin.isGridMode) return;
             body.classList.toggle('hidden');
             if (body.classList.contains('hidden')) {
                 chevron.classList.add('-rotate-90');
                 header.classList.remove('mb-4');
+                stopLsTimer();
             } else {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
                 Admin.fetchRideShareLog();
+                startLsTimer();
             }
         };
         refreshBtn.onclick = () => Admin.fetchRideShareLog();
@@ -7676,13 +7709,130 @@ const Admin = {
             } catch (e) {}
             return '';
         };
+        const fmtWhen = (ts) => ts ? new Date(ts).toLocaleString() : '—';
+        const fmtAge = (ts, now) => {
+            if (!ts) return '';
+            const d = Math.max(0, now - ts);
+            if (d < 5000) return 'just now';
+            if (d < 60000) return Math.round(d / 1000) + 's ago';
+            if (d < 3600000) return Math.round(d / 60000) + 'm ago';
+            return Math.round(d / 3600000) + 'h ago';
+        };
+        const fmtDuration = (ms) => {
+            if (!Number.isFinite(ms) || ms < 0) return '';
+            const s = Math.round(ms / 1000);
+            if (s < 60) return s + 's';
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            if (m < 60) return r ? (m + 'm ' + r + 's') : (m + 'm');
+            const h = Math.floor(m / 60);
+            return (m % 60) ? (h + 'h ' + (m % 60) + 'm') : (h + 'h');
+        };
+        const groupRideShareLogs = (items) => {
+            const sessions = [];
+            const rest = [];
+            items.forEach((r) => {
+                if (String(r.action || '') === 'session') {
+                    sessions.push({
+                        id: r._key,
+                        uid: r.uid,
+                        email: r.email,
+                        deviceId: r.deviceId,
+                        routeId: r.routeId,
+                        trainId: r.trainId,
+                        status: r.status || (r.stoppedAt ? 'stopped' : 'live'),
+                        startedAt: r.startedAt || r.at,
+                        stoppedAt: r.stoppedAt || null,
+                        startSource: r.source,
+                        stopSource: r.stopSource || '',
+                        appVersion: r.appVersion,
+                        keys: [r._key],
+                    });
+                } else {
+                    rest.push(r);
+                }
+            });
+            rest.sort((a, b) => (a.at || 0) - (b.at || 0));
+            const stacks = new Map();
+            const keyOf = (r) => [r.uid || '', r.deviceId || '', r.trainId || '', r.routeId || ''].join('|');
+            rest.forEach((r) => {
+                const k = keyOf(r);
+                if (r.action === 'start') {
+                    const arr = stacks.get(k) || [];
+                    arr.push(r);
+                    stacks.set(k, arr);
+                    return;
+                }
+                if (r.action !== 'stop') return;
+                const arr = stacks.get(k);
+                const start = arr && arr.length ? arr.pop() : null;
+                if (start) {
+                    sessions.push({
+                        id: start._key,
+                        uid: start.uid || r.uid,
+                        email: start.email || r.email,
+                        deviceId: start.deviceId || r.deviceId,
+                        routeId: start.routeId || r.routeId,
+                        trainId: start.trainId || r.trainId,
+                        status: 'stopped',
+                        startedAt: start.at,
+                        stoppedAt: r.at,
+                        startSource: start.source,
+                        stopSource: r.source,
+                        appVersion: r.appVersion || start.appVersion,
+                        keys: [start._key, r._key],
+                    });
+                } else {
+                    sessions.push({
+                        id: r._key,
+                        uid: r.uid,
+                        email: r.email,
+                        deviceId: r.deviceId,
+                        routeId: r.routeId,
+                        trainId: r.trainId,
+                        status: 'stopped',
+                        startedAt: null,
+                        stoppedAt: r.at,
+                        startSource: '',
+                        stopSource: r.source,
+                        appVersion: r.appVersion,
+                        keys: [r._key],
+                    });
+                }
+            });
+            stacks.forEach((arr) => {
+                arr.forEach((start) => {
+                    sessions.push({
+                        id: start._key,
+                        uid: start.uid,
+                        email: start.email,
+                        deviceId: start.deviceId,
+                        routeId: start.routeId,
+                        trainId: start.trainId,
+                        status: 'live',
+                        startedAt: start.at,
+                        stoppedAt: null,
+                        startSource: start.source,
+                        stopSource: '',
+                        appVersion: start.appVersion,
+                        keys: [start._key],
+                    });
+                });
+            });
+            sessions.sort((a, b) => (b.startedAt || b.stoppedAt || 0) - (a.startedAt || a.stoppedAt || 0));
+            return sessions;
+        };
 
-        Admin.fetchRideShareLog = async () => {
+        Admin.fetchRideShareLog = async (opts = {}) => {
+            const quiet = !!opts.quiet;
             const liveEl = document.getElementById('ls-live-list');
             const logEl = document.getElementById('ls-log-list');
+            const countEl = document.getElementById('ls-live-count');
             if (!liveEl || !logEl) return;
-            liveEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
-            logEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+            if (!quiet) {
+                liveEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+                logEl.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+            }
             const region = Admin._lsRegion || 'GP';
             try {
                 const secret = await Admin.getAuthKey();
@@ -7707,17 +7857,32 @@ const Admin = {
                     }
                 }
                 liveRows.sort((a, b) => (b.at || 0) - (a.at || 0));
+                if (countEl) {
+                    if (liveRows.length) {
+                        countEl.textContent = String(liveRows.length);
+                        countEl.classList.remove('hidden');
+                    } else {
+                        countEl.textContent = '';
+                        countEl.classList.add('hidden');
+                    }
+                }
                 liveEl.innerHTML = liveRows.length
                     ? liveRows.slice(0, 80).map((p) => {
                         const stale = p.at && (now - p.at) >= 90000;
+                        const acc = Number.isFinite(p.accuracy) ? Math.round(p.accuracy) + ' m' : '';
+                        const speed = Number.isFinite(p.speedMps) ? (p.speedMps * 3.6).toFixed(0) + ' km/h' : '';
+                        const bits = [p.source || '', p.station || '', acc, speed].filter(Boolean).join(' · ');
                         return `
-                        <div class="border ${stale ? 'border-slate-200 dark:border-slate-700' : 'border-blue-100 dark:border-blue-900/50'} rounded-xl p-3 text-left">
-                            <div class="flex justify-between gap-2">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">Train ${esc(p.trainId || '—')} · ${esc(routeName(p.routeId))}</p>
-                                <span class="text-[9px] font-mono ${stale ? 'text-slate-500' : 'text-gray-400'} shrink-0">${stale ? 'GPS stale · ' : ''}${p.at ? new Date(p.at).toLocaleString() : '-'}</span>
+                        <div class="nt-ls-live-card border ${stale ? 'border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40' : 'border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/30'} rounded-xl p-3 text-left">
+                            <div class="flex justify-between gap-2 items-start">
+                                <p class="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <span class="nt-ls-live-dot ${stale ? 'is-stale' : ''}"></span>
+                                    Train ${esc(p.trainId || '—')} · ${esc(routeName(p.routeId))}
+                                </p>
+                                <span class="text-[9px] font-mono ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-300'} shrink-0">${stale ? 'GPS stale · ' : 'LIVE · '}${esc(fmtAge(p.at, now))}</span>
                             </div>
                             <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
-                            <p class="text-[10px] text-gray-400 mt-0.5">${esc(p.source || '')} · ${esc(p.station || '')}</p>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">${esc(bits)}</p>
                         </div>`;
                     }).join('')
                     : '<p class="text-xs text-gray-400 text-center py-4">No live shares in this region.</p>';
@@ -7731,19 +7896,39 @@ const Admin = {
                         });
                     }
                 }
-                logItems.sort((a, b) => (b.at || 0) - (a.at || 0));
-                logEl.innerHTML = logItems.length
-                    ? logItems.slice(0, 120).map((r) => `
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-left">
-                            <div class="flex justify-between gap-2">
-                                <p class="text-xs font-black text-gray-900 dark:text-white">${esc(r.action || '')} · Train ${esc(r.trainId || '—')}</p>
-                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${r.at ? new Date(r.at).toLocaleString() : '-'}</span>
+                const sessions = groupRideShareLogs(logItems);
+                logEl.innerHTML = sessions.length
+                    ? sessions.slice(0, 80).map((s) => {
+                        const live = s.status === 'live';
+                        const durMs = (s.stoppedAt && s.startedAt)
+                            ? (s.stoppedAt - s.startedAt)
+                            : (live && s.startedAt ? (now - s.startedAt) : null);
+                        const dur = fmtDuration(durMs);
+                        const title = live
+                            ? `Live · Train ${esc(s.trainId || '—')}`
+                            : `Train ${esc(s.trainId || '—')}`;
+                        const when = live
+                            ? `since ${fmtWhen(s.startedAt)}`
+                            : `${fmtWhen(s.startedAt)} → ${fmtWhen(s.stoppedAt)}`;
+                        return `
+                        <details class="nt-ls-session ${live ? 'border-blue-200 dark:border-blue-800/70' : 'border-gray-200 dark:border-gray-700'} border rounded-xl text-left bg-white dark:bg-gray-800" data-ls-session="${esc(s.id)}">
+                            <summary class="cursor-pointer list-none p-3 flex justify-between gap-2 items-start">
+                                <span>
+                                    <span class="text-xs font-black text-gray-900 dark:text-white">${title}${dur ? ' · ' + esc(dur) : ''}</span>
+                                    <span class="block text-[11px] text-gray-600 dark:text-gray-300 mt-0.5">${esc(routeName(s.routeId))}</span>
+                                    <span class="block text-[9px] font-mono text-gray-400 mt-0.5">${esc(when)}</span>
+                                </span>
+                                <svg class="nt-ls-session-chevron w-4 h-4 text-gray-400 shrink-0 mt-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </summary>
+                            <div class="px-3 pb-3 pt-0 text-[10px] font-mono text-gray-500 dark:text-gray-400 space-y-0.5" data-ls-session-body>
+                                <p>uid ${esc(s.uid || '')} · ${esc(s.email || '')}</p>
+                                <p>device ${esc(s.deviceId || '')}</p>
+                                <p>start ${esc(s.startSource || '—')} · stop ${esc(s.stopSource || (live ? 'still live' : '—'))}</p>
+                                ${s.appVersion ? `<p>build ${esc(s.appVersion)}</p>` : ''}
                             </div>
-                            <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5">${esc(routeName(r.routeId))}</p>
-                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(r.uid || '')} · ${esc(r.email || '')} · device ${esc(r.deviceId || '')}</p>
-                            <p class="text-[10px] text-gray-400 mt-0.5">${esc(r.source || '')} · ${esc(r._key)}</p>
-                        </div>`).join('')
-                    : '<p class="text-xs text-gray-400 text-center py-4">No share log entries for this region yet.</p>';
+                        </details>`;
+                    }).join('')
+                    : '<p class="text-xs text-gray-400 text-center py-4">No share sessions for this region yet.</p>';
             } catch (e) {
                 liveEl.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
                 logEl.innerHTML = '';

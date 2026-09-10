@@ -3426,7 +3426,20 @@ export function renderPlannerHistory() {
     `;
 }
 
+/**
+ * iOS used to zoom planner inputs on focus. Viewport lock lives on the layout
+ * meta; this export stays so older inline callers do not throw.
+ */
+export function lockPlannerInputZoom() {}
+
+export function bindPlannerInputZoomGuard() {
+    if (typeof window === 'undefined') return;
+    try { window.bindPlannerInputZoomGuard = bindPlannerInputZoomGuard; } catch { /* ignore */ }
+    lockPlannerInputZoom();
+}
+
 export function setupAutocomplete(inputId, selectId) {
+    bindPlannerInputZoomGuard();
     const input = document.getElementById(inputId);
     const select = document.getElementById(selectId);
     if (!input || !select) return;
@@ -3583,7 +3596,11 @@ export function setupAutocomplete(inputId, selectId) {
     });
     
     input.addEventListener('focus', () => {
-        input.select();
+        let coarse = false;
+        try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch { coarse = false; }
+        if (!coarse) {
+            try { input.select(); } catch { /* ignore */ }
+        }
         requestAnimationFrame(() => renderList(''));
     });
 

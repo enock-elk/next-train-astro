@@ -516,7 +516,21 @@
             return path;
         }
 
-        function smoothStopsOnRailGraph(graph, stops) {
+        function clipBakedHop(latlngs, a, b) {
+            if (!latlngs || latlngs.length < 3 || !a || !b) return null;
+            const i1 = nearestPathIndex(latlngs, a.lat, a.lon);
+            const i2 = nearestPathIndex(latlngs, b.lat, b.lon);
+            if (i1 < 0 || i2 < 0 || i1 === i2) return null;
+            const step = i1 < i2 ? 1 : -1;
+            const slice = [];
+            for (let i = i1; ; i += step) {
+                slice.push(latlngs[i]);
+                if (i === i2) break;
+            }
+            return slice.length > 2 ? slice : null;
+        }
+
+        function smoothStopsOnRailGraph(graph, stops, baked) {
             if (!graph?.nodes?.length || !Array.isArray(stops) || stops.length < 2) return null;
             const out = [];
             let railHops = 0;
@@ -526,26 +540,39 @@
                 if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
                 const snapA = nearestRailNode(graph, a.lat, a.lon);
                 const snapB = nearestRailNode(graph, b.lat, b.lon);
+                let usedRail = false;
                 if (snapA != null && snapB != null) {
                     const nodePath = shortestRailPath(graph, snapA, snapB);
                     if (nodePath && nodePath.length >= 2) {
                         const chordM = railHaversineM(a.lat, a.lon, b.lat, b.lon);
                         const railM = railPathLengthM(graph, nodePath);
+                        const strayMax = Math.max(RAIL_HOP_STRAY_M, chordM * 0.65);
                         const skips = railHopSkipsRouteStop(graph, nodePath, stops, i);
-                        const strays = railHopStraysFromChord(graph, nodePath, a, b);
+                        const strays = railHopStraysFromChord(graph, nodePath, a, b, strayMax);
                         if (!skips && !strays && !hopDetourTooLong(chordM, railM)) {
                             const seg = nodePath.map((id) => [graph.nodes[id].lat, graph.nodes[id].lon]);
                             if (!out.length) out.push(...seg);
                             else out.push(...seg.slice(1));
                             railHops++;
-                            continue;
+                            usedRail = true;
                         }
                     }
                 }
-                if (!out.length) out.push([a.lat, a.lon]);
-                out.push([b.lat, b.lon]);
+                if (!usedRail) {
+                    const clipped = clipBakedHop(baked, a, b);
+                    if (clipped) {
+                        if (!out.length) out.push(...clipped);
+                        else out.push(...clipped.slice(1));
+                        railHops++;
+                        usedRail = true;
+                    }
+                }
+                if (!usedRail) {
+                    if (!out.length) out.push([a.lat, a.lon]);
+                    out.push([b.lat, b.lon]);
+                }
             }
-            if (out.length < 2 || railHops !== stops.length - 1) return null;
+            if (out.length < 2 || railHops === 0) return null;
             const deduped = [out[0]];
             for (let i = 1; i < out.length; i++) {
                 const p = out[i];
@@ -708,11 +735,11 @@
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
             const bundle = trackBundle || { byId: new Map(), graph: null };
+            const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
             if (bundle.graph) {
-                const smoothed = smoothStopsOnRailGraph(bundle.graph, stops);
+                const smoothed = smoothStopsOnRailGraph(bundle.graph, stops, baked);
                 if (smoothed && smoothed.length > 1) return smoothed;
             }
-            const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
             if (baked && baked.length > 1 && bakedLineCoversStops(baked, stops)) {
                 return baked;
             }

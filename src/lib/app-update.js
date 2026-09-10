@@ -65,9 +65,9 @@ function hardReloadWithCacheBust(reason = 'force_update') {
 
 /**
  * Incoming = version on the CDN (`app-version.json`), not the shell currently running.
- * SPA legacy parity: toast must name the build users are about to receive.
+ * Returns null when the probe fails so callers do not treat this shell as "incoming".
  */
-async function peekIncomingVersion() {
+export async function peekIncomingVersion() {
     try {
         const res = await fetch(withBase('app-version.json') + '?v=' + Date.now(), {
             cache: 'no-store',
@@ -80,8 +80,7 @@ async function peekIncomingVersion() {
     } catch (e) {
         console.warn('🛡️ Guardian: Failed to peek at incoming update version.', e);
     }
-    // Last resort only — prefer blank over lying that "incoming" equals this shell.
-    return String(APP_VERSION || 'Latest').split(' - ')[0];
+    return null;
 }
 
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */

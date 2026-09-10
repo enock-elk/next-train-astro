@@ -38,7 +38,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
-import { markAppUpdatedToast } from './app-update.js';
+import { markAppUpdatedToast, peekIncomingVersion } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -542,12 +542,19 @@ export async function performHardCacheClear(source = 'modal_confirm') {
     }, 500);
 }
 
-export function showCacheClearWarning() {
+export async function showCacheClearWarning() {
     if (!navigator.onLine) {
         showToast('You must be online to check for updates.', 'warning');
         return;
     }
     triggerHaptic();
+    const incoming = await peekIncomingVersion();
+    const current = String(APP_VERSION || '').split(' - ')[0];
+    if (incoming && incoming === current) {
+        closeAppHub(true);
+        showToast(`No new updates; still ${current}`, 'info', 3500);
+        return;
+    }
     closeAppHub(true);
     let modal = document.getElementById('cache-clear-modal');
     if (!modal) {

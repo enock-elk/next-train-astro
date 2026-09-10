@@ -43,6 +43,14 @@ export const ADMIN_CHANGELOG = {
         'Hercules-Koedoespoort no longer follows the Daspoort spur past Hercules.',
         'Build notes open from feedback version chips and fall back to What’s New copy.',
     ],
+    'V9_09.10.11': [
+        'Live train fixes require trusted rail within 100 m and stay inside the scheduled journey.',
+        'Tracking pauses at the last accepted location on stale, offline, reverse, or off-track fixes. The map never simulates movement.',
+        'Train markers are numbered circles with direction and detailed tracking metrics. Next Train sharing dots and pulses are removed.',
+        'Community language safety shares one multilingual classifier between the client and Worker. Held posts and replies can be approved or rejected.',
+        'Community Monitor groups route conversations by latest activity with a separate unread cursor for each operator.',
+        'Sign-in provider availability is controlled from System Controls. Facebook defaults unavailable; Google and email remain enabled.',
+    ],
 };
 
 function stripHtml(html) {

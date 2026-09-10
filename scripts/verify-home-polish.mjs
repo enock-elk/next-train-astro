@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.10', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.11', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -318,7 +318,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
-    assert(adminCl.includes('V9_09.10.10'), 'current build has operator notes');
+    assert(adminCl.includes('V9_09.10.11'), 'current build has operator notes');
     assert(adminCl.includes('CHANGELOG_DATA'), 'build notes fall back to What’s New');
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');

@@ -1,4 +1,5 @@
 import { atom } from 'nanostores';
+import { pruneExclusionsTree } from './lib/utils.js';
 
 /**
  * METRORAIL NEXT TRAIN 2.0 - GLOBAL STATE (NANO STORES)
@@ -84,6 +85,15 @@ export function hydrateStores() {
     window.addEventListener('offline', () => $isOffline.set(true));
     window.addEventListener('online', () => $isOffline.set(false));
     $isOffline.set(!navigator.onLine);
+
+    // 3b. Last-good corridor bans (including expiries more than a week out)
+    try {
+        const raw = localStorage.getItem('nt_exclusions_cache');
+        if (raw) {
+            const next = pruneExclusionsTree(JSON.parse(raw));
+            if (Object.keys(next).length) $globalExclusions.set(next);
+        }
+    } catch { /* ignore */ }
 
     // 4. Device Identity — reuse SPA key/format; never mint a second ID if head boot already set one
     let uid = (typeof window !== 'undefined' && window.NEXT_TRAIN_DEVICE_ID)

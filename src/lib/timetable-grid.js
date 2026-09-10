@@ -3,7 +3,7 @@
  */
 import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
-import { $currentRouteId, $userRegion, $schedules } from '../store.js';
+import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
@@ -13,6 +13,59 @@ import {
     stripShareParamsFromUrl,
 } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
+
+let lastGridBody = null;
+let gridExclRefreshBound = false;
+
+/** Wait briefly for exclusions so VIEW FULL TIMETABLE is not race-blind. */
+function ensureOpsOverlaysReady(timeoutMs = 2800) {
+    if ($opsOverlaysReady.get()) return Promise.resolve(true);
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (ready) => {
+            if (settled) return;
+            settled = true;
+            try { unsub(); } catch { /* ignore */ }
+            clearTimeout(timer);
+            resolve(ready);
+        };
+        const unsub = $opsOverlaysReady.subscribe((v) => {
+            if (v) done(true);
+        });
+        const timer = setTimeout(() => done($opsOverlaysReady.get()), timeoutMs);
+        if ($opsOverlaysReady.get()) done(true);
+    });
+}
+
+function paintOpenGridBody() {
+    const grid = document.getElementById('grid-container');
+    const modal = document.getElementById('full-schedule-modal');
+    if (!grid || !modal || modal.classList.contains('hidden') || !lastGridBody) return;
+    const {
+        noServiceSheet, schedule, routeName, routeSheetKey, routeId, targetDayIdx, isTodayType,
+    } = lastGridBody;
+    grid.innerHTML = noServiceSheet
+        ? (typeof window.Renderer?._buildNoSaturdayGridHTML === 'function'
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName)
+            : grid.innerHTML)
+        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
+    import('./ride-pings.js').then((m) => m.paintLiveTrainDots?.()).catch(() => {});
+}
+
+function bindGridExclusionRefresh() {
+    if (gridExclRefreshBound) return;
+    gridExclRefreshBound = true;
+    let exclPrimed = false;
+    let overlayPrimed = false;
+    $globalExclusions.subscribe(() => {
+        if (!exclPrimed) { exclPrimed = true; return; }
+        paintOpenGridBody();
+    });
+    $opsOverlaysReady.subscribe((ready) => {
+        if (!overlayPrimed) { overlayPrimed = true; return; }
+        if (ready) paintOpenGridBody();
+    });
+}
 
 function closeFullGridModal() {
     if (typeof location !== 'undefined' && location.hash === '#grid') {
@@ -385,6 +438,15 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     );
     const routeSheetKey = route.sheetKeys?.[sheetKey] || sheetKey;
     if (typeof window !== 'undefined') window._gridSwapDir = direction;
+    lastGridBody = {
+        noServiceSheet,
+        schedule,
+        routeName: route.name,
+        routeSheetKey,
+        routeId,
+        targetDayIdx,
+        isTodayType,
+    };
     const html = noServiceSheet
         ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
             ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name)
@@ -393,10 +455,14 @@ export function renderFullScheduleGrid(direction = 'A', dayOverride = null) {
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
     import('./ride-pings.js').then((m) => m.paintLiveTrainDots?.()).catch(() => {});
+    bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');
     if (location.hash !== '#grid') {
         history.pushState({ modal: 'grid' }, '', '#grid');
+    }
+    if (!$opsOverlaysReady.get()) {
+        ensureOpsOverlaysReady().then(() => paintOpenGridBody());
     }
 
     setTimeout(() => {

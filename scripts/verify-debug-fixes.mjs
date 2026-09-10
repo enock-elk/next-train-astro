@@ -3,7 +3,7 @@
  * Run: node scripts/verify-debug-fixes.mjs
  */
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, STATION_ALIASES } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -15,7 +15,7 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_09.10.7', `APP_VERSION is ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.8', `APP_VERSION is ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,
@@ -28,7 +28,12 @@ function isTrainExcluded(store, trainNumber, routeId, dayIdx) {
     if (rules && rules[trainNumber]) {
         const rule = rules[trainNumber];
         if (rule.expiresAt && Date.now() > rule.expiresAt) return false;
-        if (rule.days && rule.days.includes(parseInt(dayIdx, 10))) return rule.type || 'banned';
+        const days = Array.isArray(rule.days) ? rule.days : null;
+        if (days && days.length) {
+            const idx = Number(dayIdx);
+            if (!days.some((d) => Number(d) === idx)) return false;
+        }
+        return rule.type || 'banned';
     }
     return false;
 }
@@ -44,8 +49,12 @@ function getTrainExclusionRule(store, trainNumber, routeId, dayIdx, now = Date.n
     if (!rules || !rules[trainNumber]) return null;
     const rule = rules[trainNumber];
     if (rule.expiresAt && now > rule.expiresAt) return null;
-    if (rule.days && rule.days.includes(parseInt(dayIdx, 10))) return rule;
-    return null;
+    const days = Array.isArray(rule.days) ? rule.days : null;
+    if (days && days.length) {
+        const idx = Number(dayIdx);
+        if (!days.some((d) => Number(d) === idx)) return null;
+    }
+    return rule;
 }
 
 const liveBan = {
@@ -71,6 +80,32 @@ assert(
     isTrainExcluded(liveBan, '0619', 'pta-kempton', 2) === false,
     'Firebase ban honours days[] (Tue not banned)'
 );
+
+const longBan = {
+    'herc-koed': {
+        '1220': {
+            type: 'banned',
+            reason: 'Cancelled',
+            expiresAt: Date.now() + 10 * 24 * 60 * 60 * 1000,
+        },
+    },
+};
+assert(
+    getTrainExclusionRule(longBan, '1220', 'herc-koed', 4) !== null,
+    'long-lived ban with no days[] still applies'
+);
+
+{
+    const now = 1_000_000;
+    const pruned = pruneExclusionsTree({
+        r: {
+            keep: { type: 'banned', expiresAt: now + 10 * 24 * 60 * 60 * 1000 },
+            drop: { type: 'banned', expiresAt: now - 1 },
+            notice: { text: 'hi' },
+        },
+    }, now);
+    assert(pruned.r?.keep && pruned.r?.notice && !pruned.r?.drop, 'cache keeps far-future bans and drops expired');
+}
 
 // Sim weekday must not inherit leftover Sunday from #sim-date.
 globalThis.window = { __ntSimUseSpecificDate: false };
@@ -98,13 +133,29 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
     assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
     const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
-    assert(renderer.includes('data-excl-open="1"'), 'in-app NO SVC header opens the exclusion sheet');
+    assert(renderer.includes('data-excl-open="1"'), 'cancelled columns open the exclusion sheet');
+    assert(renderer.includes('exclHeadAttrs'), 'NO SVC header cell is the hit target');
+    assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');
+    assert(renderer.includes('top-[2px]'), 'in-app NO SVC sits above the train number');
+    assert(!renderer.includes('bottom-[2px]'), 'NO SVC is not anchored to the bottom of the header');
+    assert(renderer.includes('position:absolute; top:2px'), 'PNG export NO SVC sits above the train number');
+    assert(!renderer.includes('bottom:2px'), 'PNG export NO SVC is not on the train number');
     assert(renderer.includes('decoration-dotted'), 'NO SVC uses a dotted underline');
-    assert(!renderer.includes('nt-excl-col'), 'banned time cells are not a second hit target');
+    assert(!renderer.includes('nt-excl-col'), 'banned columns do not use extra nt-excl-col padding');
     assert(!renderer.includes('nt-excl-head'), 'NO SVC number uses the same header box as other trains');
-    assert(board.includes('[data-excl-open="1"]'), 'NO SVC header taps open the advisory');
+    assert(renderer.includes("isExport ? 'border-gray-200'"), 'PNG export uses softer grid lines');
+    assert(renderer.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'PNG export times are bold; in-app times stay medium');
+    assert(renderer.includes("td.style.fontWeight = '700'"), 'PNG snapshot paints times at 700');
+    assert(board.includes('[data-excl-open="1"]'), 'NO SVC column taps open the advisory');
+    assert(board.includes('[data-focus-train]'), 'live dots do not steal the cancellation tap');
     assert(board.includes("openFeedbackReplyFromOverlay('disruption-modal', replyOptions)"), 'exclusion Reply keeps an advisory preview');
     assert(renderer.includes('export-banned-col relative'), 'PNG export NO SVC stays a static span');
+    const grid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+    assert(grid.includes('ensureOpsOverlaysReady'), 'full timetable waits for exclusions before relying on the first paint');
+    assert(grid.includes('paintOpenGridBody'), 'open timetable re-paints when cancellations arrive');
+    const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+    assert(logic.includes('writeCachedExclusions'), 'successful exclusion fetch is cached for offline');
+    assert(logic.includes('readCachedExclusions'), 'boot hydrates last-good exclusions');
     const map = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
     assert(map.includes('attachMapDisruptionPopup'), 'map warnings open a popup');
     assert(map.includes('Promise.all'), 'map parallelises disruptions and tracks');

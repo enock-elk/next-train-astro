@@ -409,6 +409,49 @@ if (typeof window !== 'undefined') {
     } catch(e) {}
 }
 
+/** Last-good Firebase `exclusions/` tree for offline boards. Do not drop far-future `expiresAt`. */
+export const EXCLUSIONS_CACHE_KEY = 'nt_exclusions_cache';
+
+/**
+ * Keep notices and bans that have no expiry, or that have not expired yet.
+ * Cancellations set to expire more than a week from today stay in the tree.
+ */
+export function pruneExclusionsTree(tree, now = Date.now()) {
+    const next = {};
+    if (!tree || typeof tree !== 'object') return next;
+    Object.keys(tree).forEach((routeKey) => {
+        const routeExclusions = tree[routeKey];
+        if (!routeExclusions || typeof routeExclusions !== 'object' || Array.isArray(routeExclusions)) return;
+        const kept = {};
+        Object.keys(routeExclusions).forEach((itemKey) => {
+            const item = routeExclusions[itemKey];
+            if (!item || typeof item !== 'object') return;
+            const expiresAt = item.expiresAt != null ? Number(item.expiresAt) : 0;
+            if (!expiresAt || expiresAt > now) kept[itemKey] = item;
+        });
+        if (Object.keys(kept).length) next[routeKey] = kept;
+    });
+    return next;
+}
+
+export function readCachedExclusions(now = Date.now()) {
+    try {
+        const raw = safeStorage.getItem(EXCLUSIONS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const pruned = pruneExclusionsTree(parsed, now);
+        return Object.keys(pruned).length ? pruned : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeCachedExclusions(tree) {
+    try {
+        safeStorage.setItem(EXCLUSIONS_CACHE_KEY, JSON.stringify(tree && typeof tree === 'object' ? tree : {}));
+    } catch { /* ignore */ }
+}
+
 export const safeStorage = {
     memoryFallback: {},
     

@@ -22,6 +22,11 @@ export const ADMIN_CHANGELOG = {
         'Red live dots on train numbers and VIEW FULL TIMETABLE open the train sheet.',
         'System Health build notes. Account points merge on sign-in across devices.',
     ],
+    'V9_09.10.8': [
+        'NO SVC sits above the train number. The whole cancelled column opens the advisory.',
+        'Full timetable waits for exclusions and keeps long-lived bans in local cache for offline.',
+        'Downloaded PNG uses the older timetable type (bolder times, softer lines).',
+    ],
 };
 
 export function lookupAdminChangelog(version) {

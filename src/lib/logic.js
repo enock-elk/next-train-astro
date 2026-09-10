@@ -20,7 +20,8 @@ import {
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
     getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
-    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet
+    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
+    pruneExclusionsTree, readCachedExclusions, writeCachedExclusions
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { markPendingReload } from './session-stability.js';
@@ -1069,7 +1070,15 @@ export async function loadAllSchedules(force = false) {
             return mergedDb;
         };
 
-        if (!currentRoute.isActive) return; 
+        if (!currentRoute.isActive) return;
+
+        // Last-good corridor bans before any board/grid paint (offline + slow overlay fetch).
+        try {
+            if (!Object.keys($globalExclusions.get() || {}).length) {
+                const cachedExcl = readCachedExclusions();
+                if (cachedExcl) $globalExclusions.set(cachedExcl);
+            }
+        } catch { /* ignore */ }
 
         // 1. EAGER RENDER CACHE LOAD — must run BEFORE any Firebase/trust network calls.
         // Offline PWA relaunch was hanging forever on shadow-ban RTDB get() and never
@@ -1180,24 +1189,9 @@ export async function loadAllSchedules(force = false) {
             if (exclResp.ok) {
                 const exclData = await exclResp.json();
                 if (exclData) {
-                    const now = Date.now();
-                    const nextExclusions = {};
-                    Object.keys(exclData).forEach((routeKey) => {
-                        const routeExclusions = exclData[routeKey];
-                        if (routeExclusions && typeof routeExclusions === 'object') {
-                            nextExclusions[routeKey] = {};
-                            Object.keys(routeExclusions).forEach((itemKey) => {
-                                const item = routeExclusions[itemKey];
-                                if (!item.expiresAt || item.expiresAt > now) {
-                                    nextExclusions[routeKey][itemKey] = item;
-                                }
-                            });
-                            if (Object.keys(nextExclusions[routeKey]).length === 0) {
-                                delete nextExclusions[routeKey];
-                            }
-                        }
-                    });
+                    const nextExclusions = pruneExclusionsTree(exclData);
                     $globalExclusions.set(nextExclusions);
+                    writeCachedExclusions(nextExclusions);
                 }
             }
         } catch (e) {

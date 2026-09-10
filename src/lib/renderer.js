@@ -923,7 +923,7 @@ export const Renderer = {
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
         let stickyHeaderClass = isExport ? '' : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'; 
-        let borderClass = isExport ? 'border-gray-300' : 'border-gray-300 dark:border-gray-700';
+        let borderClass = isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700';
         let tbodyClass = isExport ? '' : 'bg-white dark:bg-gray-900';
         let stickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
 
@@ -973,21 +973,24 @@ export const Renderer = {
                                 const banIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`;
                                 if (isExport) {
                                     bgClass = 'export-banned-col relative';
-                                    headerContent = `${h}<span style="position:absolute; bottom:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center; text-decoration:underline dotted; text-underline-offset:2px;">${banIcon} NO SVC</span>`;
+                                    headerContent = `<span style="position:absolute; top:2px; left:0; width:100%; font-size:7px; color:#dc2626; font-weight:900; letter-spacing:0.5px; display:flex; justify-content:center; align-items:center; text-decoration:underline dotted; text-underline-offset:2px;">${banIcon} NO SVC</span>${h}`;
                                 } else {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90 relative';
-                                    headerContent = `${h}<button type="button" class="nt-excl-hit absolute left-0 right-0 bottom-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center focus:outline-none" data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" aria-label="Why train ${escapeHTML(String(h))} has no service">${banIcon} NO SVC</button>`;
+                                    headerContent = `<span class="nt-excl-hit pointer-events-none absolute left-0 right-0 top-[2px] z-10 text-[8px] text-red-600 dark:text-red-500 font-black tracking-tight leading-none underline decoration-dotted decoration-red-400/80 underline-offset-2 flex justify-center items-center">${banIcon} NO SVC</span>${h}`;
                                 }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
                             }
 
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} whitespace-nowrap text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}>${headerContent}</th>`;
+                            const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
+                                ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
+                                : '';
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} whitespace-nowrap text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header sticky right-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-l ${borderClass} font-bold min-w-[50px] shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center bg-gray-100 dark:bg-gray-800">STN</th>` : ''}
                     </tr>
                 </thead>
-                <tbody class="divide-y ${borderClass} ${tbodyClass}">
+                <tbody class="${isExport ? '' : 'divide-y '}${borderClass} ${tbodyClass}">
         `;
 
         let validRowIndex = 0;
@@ -1031,7 +1034,7 @@ export const Renderer = {
                         let cellClass = `${paddingClass} text-center border-r ${borderClass} border-b`;
                         
                         if (val !== "" && val !== "-") {
-                            cellClass += " font-mono font-medium";
+                            cellClass += isExport ? " font-mono font-bold" : " font-mono font-medium";
                             if (paintExclusion && exclusionType === 'special') {
                                 if (isExport) cellClass += " export-spl-cell";
                                 else cellClass += " text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 opacity-95 font-bold";
@@ -1057,8 +1060,12 @@ export const Renderer = {
                         }
                         
                         if (isExport && val === "-") val = "";
+
+                        const exclCellAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
+                            ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}"`
+                            : '';
                         
-                        return `<td class="${cellClass}">${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col sticky right-0 z-10 ${currentStickyCellClass || (isExport ? '' : 'bg-gray-50 dark:bg-gray-800/80')} ${paddingClass} border-l ${borderClass} border-b font-mono font-bold text-center shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-gray-500 dark:text-gray-400 text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
@@ -1424,7 +1431,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 
             td.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
             td.style.textAlign = 'center'; 
-            td.style.fontWeight = '600'; 
+            td.style.fontWeight = '700'; 
             if (isCompact) td.style.letterSpacing = '-0.5px'; 
         });
 
@@ -1483,14 +1490,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontFamily = 'system-ui, -apple-system, sans-serif';
             td.style.fontWeight = '800';
             td.style.color = '#1f2937';
-        });
-
-        t.querySelectorAll('th.nt-station-col, th:first-child').forEach((th) => {
-            th.style.backgroundColor = '#e2e8f0';
-        });
-        t.querySelectorAll('td.nt-station-col, td:first-child').forEach((td) => {
-            const row = td.parentElement;
-            td.style.backgroundColor = row && row.classList.contains('export-zebra') ? '#e2e8f0' : '#f1f5f9';
         });
     });
 

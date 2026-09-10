@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.7', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.8', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -300,7 +300,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
-    assert(adminCl.includes('V9_09.10.7'), 'current build has operator notes');
+    assert(adminCl.includes('V9_09.10.8'), 'current build has operator notes');
 }
 assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');

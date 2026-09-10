@@ -282,8 +282,13 @@ export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.n
     if (!rules || !rules[trainNumber]) return null;
     const rule = rules[trainNumber];
     if (rule.expiresAt && now > rule.expiresAt) return null;
-    if (rule.days && rule.days.includes(parseInt(dayIdx, 10))) return rule;
-    return null;
+    const days = Array.isArray(rule.days) ? rule.days : null;
+    if (days && days.length) {
+        const idx = Number(dayIdx);
+        const hit = days.some((d) => Number(d) === idx);
+        if (!hit) return null;
+    }
+    return rule;
 }
 
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
@@ -1473,6 +1478,7 @@ export function attachLiveBoardGlobals() {
             window.openTrainExclusionSheet(el.getAttribute('data-excl-route'), el.getAttribute('data-excl-train'), Number(el.getAttribute('data-excl-day')));
         };
         document.addEventListener('click', (e) => {
+            if (e.target?.closest?.('[data-focus-train]')) return;
             const hit = e.target?.closest?.('[data-excl-open="1"]');
             if (!hit || !hit.closest('#grid-container')) return;
             e.preventDefault();
@@ -1480,6 +1486,7 @@ export function attachLiveBoardGlobals() {
         });
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
+            if (e.target?.closest?.('[data-focus-train]')) return;
             const hit = e.target?.closest?.('[data-excl-open="1"]');
             if (!hit || !hit.closest('#grid-container')) return;
             e.preventDefault();

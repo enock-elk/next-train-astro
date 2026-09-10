@@ -147,7 +147,7 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(renderer.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'PNG export times are bold; in-app times stay medium');
     assert(renderer.includes("td.style.fontWeight = '700'"), 'PNG snapshot paints times at 700');
     assert(board.includes('[data-excl-open="1"]'), 'NO SVC column taps open the advisory');
-    assert(board.includes('[data-focus-train]'), 'live dots do not steal the cancellation tap');
+    assert(!board.includes('[data-focus-train]'), 'live dots stay removed from the Next Train board');
     assert(board.includes("openFeedbackReplyFromOverlay('disruption-modal', replyOptions)"), 'exclusion Reply keeps an advisory preview');
     assert(renderer.includes('export-no-svc'), 'PNG export NO SVC stays a static span');
     assert(!/export-banned-col[\s\S]{0,80}position:absolute/.test(renderer), 'PNG export NO SVC is not absolutely positioned');

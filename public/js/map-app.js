@@ -1948,25 +1948,52 @@
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
                 });
             }
-            function liveTrainIconSpec(zoom, trainId) {
+            function isPingGpsStale(ping) {
+                var at = Number(ping && ping.at || 0);
+                return !at || (Date.now() - at) >= 90000;
+            }
+            function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
-                var t = Math.max(0, Math.min(1, (z - 8) / 7));
+                var compact = z < 11;
+                var hideSub = z < 13;
                 var digits = String(trainId || '').length;
-                return {
-                    w: Math.round(92 + t * 28 + Math.max(0, digits - 4) * 7),
-                    h: Math.round(40 + t * 8),
-                    name: (12 + t * 2).toFixed(1),
-                    sub: (8 + t * 1.5).toFixed(1)
-                };
+                var stale = isPingGpsStale(ping);
+                var ico;
+                var name;
+                if (z <= 8) { ico = 14; name = 8; }
+                else if (z <= 9) { ico = 16; name = 8; }
+                else if (z <= 10) { ico = 18; name = 9; }
+                else if (z <= 11) { ico = 20; name = 10; }
+                else if (z <= 12) { ico = 22; name = 10; }
+                else if (z <= 14) { ico = 24; name = 11; }
+                else { ico = 26; name = 12; }
+                if (compact) {
+                    return { w: ico, h: ico, ico: Math.round(ico * 0.62), name: name, sub: 7, compact: true, hideSub: true, stale: stale };
+                }
+                var w = hideSub
+                    ? Math.round(40 + digits * 6.5)
+                    : Math.round(52 + digits * 6.5);
+                var h = hideSub ? 20 : 24;
+                return { w: w, h: h, ico: 12, name: name, sub: Math.max(7, name - 3), compact: false, hideSub: hideSub, stale: stale };
             }
             function liveTrainGlyphHtml(trainId, n, mine, spec) {
-                var mineCls = mine ? ' nt-live-train-glyph--mine' : '';
-                var ico = '<span class="nt-live-train-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="4" y="7" width="16" height="10" rx="2.2" fill="currentColor"/><path d="M7 17.5v1.8M17 17.5v1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.2" cy="17.2" r="1.35" fill="#1e3a8a"/><circle cx="15.8" cy="17.2" r="1.35" fill="#1e3a8a"/><path d="M8 10h3.2M14.2 10H16" stroke="#dbeafe" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
-                return '<div class="nt-live-train-glyph' + mineCls + '" style="width:' + spec.w + 'px">'
+                var cls = 'nt-live-train-glyph';
+                if (mine) cls += ' nt-live-train-glyph--mine';
+                if (spec && spec.stale) cls += ' nt-live-train-glyph--stale';
+                if (spec && spec.compact) cls += ' nt-live-train-glyph--compact';
+                var svgW = (spec && spec.ico) || 10;
+                var ico = '<span class="nt-live-train-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="' + svgW + '" height="' + svgW + '" fill="none"><rect x="4" y="7" width="16" height="10" rx="2.2" fill="currentColor"/><path d="M7 17.5v1.8M17 17.5v1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8.2" cy="17.2" r="1.35" fill="#1e3a8a"/><circle cx="15.8" cy="17.2" r="1.35" fill="#1e3a8a"/><path d="M8 10h3.2M14.2 10H16" stroke="#dbeafe" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
+                if (spec && spec.compact) {
+                    return '<div class="' + cls + '" style="width:' + spec.w + 'px;height:' + spec.h + 'px">' + ico + '</div>';
+                }
+                var sub = (spec && spec.hideSub)
+                    ? ''
+                    : '<span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">' + escapePing(liveTrainShareLine(n, mine)) + '</span>';
+                return '<div class="' + cls + '" style="width:' + spec.w + 'px">'
                     + ico
                     + '<span class="nt-live-train-copy">'
                     + '<span class="nt-live-train-name" style="font-size:' + spec.name + 'px">' + escapePing(trainId) + '</span>'
-                    + '<span class="nt-live-train-n" style="font-size:' + spec.sub + 'px">' + escapePing(liveTrainShareLine(n, mine)) + '</span>'
+                    + sub
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
@@ -1995,7 +2022,7 @@
                 const rad = (headingDeg * Math.PI) / 180;
                 function tick() {
                     if (!map.hasLayer(marker)) return;
-                    if (Date.now() > (expiresAt || start + 28800000)) return;
+                    if (Date.now() > (expiresAt || start + 1800000)) return;
                     const dt = (Date.now() - start) / 1000;
                     const distM = Math.min(speedMps * dt, 2500);
                     const dLat = (Math.cos(rad) * distM) / 111320;
@@ -2033,11 +2060,12 @@
                     const lng = list.reduce(function (s, p) { return s + p.lng; }, 0) / list.length;
                     const ids = {};
                     list.forEach(function (p) { ids[p.deviceId || (p.lat + ',' + p.lng)] = 1; });
-                    const n = Object.keys(ids).length;
+                    const n = list.reduce(function (s, p) { return s + (Number(p.n) || 1); }, 0) || Object.keys(ids).length;
                     const mine = list.some(function (p) { return !!p.mine; });
-                    const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || {}).speedMps || 0;
-                    const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || {}).heading;
-                    const spec = liveTrainIconSpec(map.getZoom(), trainId);
+                    const newest = list.reduce(function (a, b) { return (a.at || 0) >= (b.at || 0) ? a : b; }, list[0]);
+                    const speed = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps || 0;
+                    const heading = (list.find(function (p) { return typeof p.heading === 'number'; }) || newest || {}).heading;
+                    const spec = liveTrainIconSpec(map.getZoom(), trainId, newest);
                     const icon = L.divIcon({
                         className: 'nt-live-train',
                         html: liveTrainGlyphHtml(trainId, n, mine, spec),
@@ -2046,35 +2074,54 @@
                     });
                     const marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
                     const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
+                    const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const actionBtn = mine
                         ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
                         : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
+                    const staleBit = isPingGpsStale(newest) ? "<p class='nt-live-train-pop-stale'>Location delayed</p>" : "";
                     marker.bindPopup(
                         "<div class='nt-live-train-pop'>"
                         + "<p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
                         + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
+                        + staleBit
+                        + "<div class='nt-live-train-pop-actions'>"
                         + actionBtn
-                        + "</div>"
+                        + "<button type='button' id='" + sheetId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--sheet'>Timetable</button>"
+                        + "</div></div>"
                     );
                     marker.on('popupopen', function () {
                         const btn = document.getElementById(joinId);
-                        if (!btn) return;
-                        btn.onclick = function () {
-                            try {
-                                (window.parent || window).postMessage({
-                                    type: mine ? 'nt-map-stop-share' : 'nt-map-join-train',
-                                    trainId: trainId,
-                                    station: list[0].station || '',
-                                    routeId: list[0].routeId || null
-                                }, '*');
-                            } catch (_) {}
-                            map.closePopup();
-                        };
+                        if (btn) {
+                            btn.onclick = function () {
+                                try {
+                                    (window.parent || window).postMessage({
+                                        type: mine ? 'nt-map-stop-share' : 'nt-map-join-train',
+                                        trainId: trainId,
+                                        station: list[0].station || '',
+                                        routeId: list[0].routeId || null
+                                    }, '*');
+                                } catch (_) {}
+                                map.closePopup();
+                            };
+                        }
+                        const sheetBtn = document.getElementById(sheetId);
+                        if (sheetBtn) {
+                            sheetBtn.onclick = function () {
+                                try {
+                                    (window.parent || window).postMessage({
+                                        type: 'nt-map-open-timetable',
+                                        trainId: trainId,
+                                        routeId: list[0].routeId || null
+                                    }, '*');
+                                } catch (_) {}
+                                map.closePopup();
+                            };
+                        }
                     });
                     marker.addTo(group);
                     rideTrainMarkers[trainId] = marker;
-                    if (speed > 1 && typeof heading === 'number') {
-                        animateTrainMarker(marker, lat, lng, heading, speed, list[0].expiresAt);
+                    if (speed > 1 && typeof heading === 'number' && map.getZoom() >= 11 && !document.hidden) {
+                        animateTrainMarker(marker, lat, lng, heading, speed, newest.expiresAt);
                     }
                 });
 
@@ -2149,10 +2196,20 @@
                 }
             }
 
+            var zoomGlyphTimer = 0;
             map.on('zoomend', function () {
                 updateTooltipSize();
-                if (lastRidePings.length) renderRidePingMarkers(lastRidePings);
+                if (!lastRidePings.length) return;
+                if (zoomGlyphTimer) clearTimeout(zoomGlyphTimer);
+                zoomGlyphTimer = setTimeout(function () {
+                    zoomGlyphTimer = 0;
+                    renderRidePingMarkers(lastRidePings);
+                }, 80);
             });
+            setInterval(function () {
+                if (document.hidden || !lastRidePings.length) return;
+                renderRidePingMarkers(lastRidePings);
+            }, 30000);
             updateTooltipSize(); 
         }
 

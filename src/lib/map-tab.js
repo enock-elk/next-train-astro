@@ -44,9 +44,11 @@ const STATION_NEAR_M = 250;
 const MOVE_MIN_M = 20;
 const HIGHWAY_KMH = 90;
 
-/** Others' pins refresh while the Map tab is open. */
-const PINGS_REFRESH_MS = 45 * 1000;
+/** Others' pins: REST is a slow backup. Live updates come from the route listener. */
+const PINGS_POLL_MS = 45 * 1000;
+const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
+let lastMapPingSig = '';
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -1372,28 +1374,36 @@ export async function contributeForTrain(candidate) {
     });
 }
 
-/** Push every rider who opted in on this corridor onto the embedded map. */
+/** Push corridor riders onto the embedded map. Prefer the live listener cache. */
 export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
     if (!routeId) return;
     try {
-        const { fetchRouteRidePings, pingPublicTrainId } = await import('./ride-pings.js');
+        const ride = await import('./ride-pings.js');
         const mine = getDeviceId();
-        const pings = await fetchRouteRidePings(routeId);
-        const markers = (pings || [])
-            .filter((p) => typeof p.coarseLat === 'number' && typeof p.coarseLng === 'number')
-            .map((p) => ({
-                lat: p.coarseLat,
-                lng: p.coarseLng,
-                trainId: pingPublicTrainId(p),
-                station: p.station || '',
-                at: p.at,
-                expiresAt: p.expiresAt,
-                heading: p.heading,
-                speedMps: p.speedMps,
-                mine: p.deviceId === mine,
-                deviceId: p.deviceId,
-                routeId: p.routeId || routeId,
-            }));
+        let pings = ride.getCachedRidePings?.(routeId) || [];
+        if (!ride.hasRidePingsListener?.(routeId) || !pings.length) {
+            pings = await ride.fetchRouteRidePings(routeId);
+        }
+        const markers = typeof ride.compactPingsForMap === 'function'
+            ? ride.compactPingsForMap(pings, { mineDeviceId: mine, routeId })
+            : (pings || [])
+                .filter((p) => typeof p.coarseLat === 'number' && typeof p.coarseLng === 'number')
+                .map((p) => ({
+                    lat: p.coarseLat,
+                    lng: p.coarseLng,
+                    trainId: ride.pingPublicTrainId(p),
+                    station: p.station || '',
+                    at: p.at,
+                    expiresAt: p.expiresAt,
+                    heading: p.heading,
+                    speedMps: p.speedMps,
+                    mine: p.deviceId === mine,
+                    n: 1,
+                    routeId: p.routeId || routeId,
+                }));
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}`).join('|');
+        if (sig === lastMapPingSig) return;
+        lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });
 
         const others = markers.filter((m) => !m.mine).length;
@@ -1431,15 +1441,26 @@ function getDeviceId() {
 
 function startPingsPolling() {
     stopPingsPolling();
-    pingsTimer = setInterval(() => {
-        if (document.getElementById('view-map')?.classList.contains('active')) {
-            syncRidePingsToMap();
-        }
-    }, PINGS_REFRESH_MS);
+    const schedule = async () => {
+        let ms = PINGS_POLL_MS;
+        try {
+            const ride = await import('./ride-pings.js');
+            const id = $currentRouteId.get();
+            if (ride.hasRidePingsListener?.(id)) ms = PINGS_POLL_WITH_LISTENER_MS;
+        } catch { /* keep REST interval */ }
+        pingsTimer = setTimeout(async () => {
+            if (document.getElementById('view-map')?.classList.contains('active')) {
+                lastMapPingSig = '';
+                await syncRidePingsToMap();
+            }
+            if (pingsTimer) schedule();
+        }, ms);
+    };
+    schedule();
 }
 
 function stopPingsPolling() {
-    if (pingsTimer) clearInterval(pingsTimer);
+    if (pingsTimer) clearTimeout(pingsTimer);
     pingsTimer = 0;
 }
 
@@ -1693,8 +1714,14 @@ export function activateMapTab() {
         : 'Network overview');
     if (frameLoaded) {
         postToMap({ type: 'nt-map-locate' });
+        lastMapPingSig = '';
         syncRidePingsToMap();
     }
+    import('./ride-pings.js').then((m) => {
+        m.stopShareIfIdle?.();
+        const id = $currentRouteId.get();
+        if (id && !m.hasRidePingsListener?.(id)) m.startRidePingsListener?.(id);
+    }).catch(() => {});
     startPingsPolling();
     syncMapShareChrome();
 }
@@ -1735,7 +1762,12 @@ export function bindMapTabUi() {
         syncMapShareChrome();
         syncRidePingsToMap();
     });
-    window.addEventListener('nt-ride-pings-updated', () => syncMapShareChrome());
+    window.addEventListener('nt-ride-pings-updated', (ev) => {
+        syncMapShareChrome();
+        if (document.getElementById('view-map')?.classList.contains('active')) {
+            syncRidePingsToMap(ev?.detail?.routeId);
+        }
+    });
     // Back-compat if old Share button id remains in cache
     document.getElementById('map-tab-share-btn')?.addEventListener('click', () => {
         openContributePicker();
@@ -1793,6 +1825,7 @@ export function bindMapTabUi() {
         if (frameWatchdog) clearTimeout(frameWatchdog);
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');
         document.getElementById('map-tab-fallback')?.classList.add('hidden');
+        lastMapPingSig = '';
         syncRidePingsToMap();
     });
 
@@ -1825,8 +1858,21 @@ export function bindMapTabUi() {
                 const result = await stopRideShare();
                 if (!result.ok && result.message) showToast(result.message, 'error');
                 syncMapShareChrome();
+                lastMapPingSig = '';
                 syncRidePingsToMap();
             }).catch(() => {});
+        }
+        if (data.type === 'nt-map-open-timetable') {
+            const trainId = String(data.trainId || '').trim();
+            const routeId = String(data.routeId || '').trim() || $currentRouteId.get();
+            if (!trainId || !routeId) return;
+            import('./planner-ui.js').then((mod) => {
+                if (typeof mod.openPlannerTrainSheet === 'function') {
+                    mod.openPlannerTrainSheet(routeId, trainId);
+                }
+            }).catch(() => {
+                showToast('Full timetable for this train is not available.', 'error');
+            });
         }
     });
 }

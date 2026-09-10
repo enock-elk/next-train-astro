@@ -10,7 +10,9 @@
  * shares keep trainId null so clocks and the dashboard stay off that train.
  *
  * No GPS trails — optional coarse coords only to snap station / show on Leaflet.
- * Safety TTL is hours (rules must allow the same window); one active ride per account.
+ * Safety TTL is 30 minutes of no session activity (rules must allow the same
+ * window). Foreground GPS pings slide that window; backgrounded sessions die
+ * when `expiresAt` elapses even if JS timers were killed. One active ride per account.
  */
 import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { isAdminAuthed, getPinnedRouteIds } from './admin-chrome.js';
@@ -36,8 +38,12 @@ import {
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
 
-/** Safety TTL while the onboard loop refreshes `expiresAt`. Stop or terminus ends the share. */
-export const RIDE_PING_TTL_MS = 8 * 60 * 60 * 1000;
+/** Sliding share TTL. Last successful ping + this window, then the session ends. */
+export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
+/** Alias kept for callers / verifies: idle window is the write TTL. */
+export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
+/** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
+export const RIDE_GPS_STALE_MS = 90 * 1000;
 const ACTIVE_KEY = 'ridePingActiveV1';
 
 /** @type {Record<string, () => void>} */
@@ -149,17 +155,124 @@ function activePings(list) {
     });
 }
 
-export function getActiveShare() {
+function peekStoredShare() {
     try {
-        const raw = JSON.parse(safeStorage.getItem(ACTIVE_KEY) || 'null');
-        if (!raw || (raw.expiresAt || 0) <= Date.now()) {
-            if (raw) safeStorage.removeItem(ACTIVE_KEY);
-            return null;
-        }
-        return raw;
+        return JSON.parse(safeStorage.getItem(ACTIVE_KEY) || 'null');
     } catch {
         return null;
     }
+}
+
+export function isRidePingGpsStale(at, now = Date.now()) {
+    const t = Number(at || 0);
+    return !t || (now - t) >= RIDE_GPS_STALE_MS;
+}
+
+function shareSessionIdle(raw, now = Date.now()) {
+    if (!raw) return true;
+    if ((raw.expiresAt || 0) <= now) return true;
+    const last = Number(raw.lastPingAt || raw.at || 0);
+    return !!(last && now - last >= RIDE_SHARE_IDLE_MS);
+}
+
+export function getActiveShare() {
+    const raw = peekStoredShare();
+    if (!raw || shareSessionIdle(raw)) return null;
+    return raw;
+}
+
+export function hasRidePingsListener(routeId) {
+    return !!(routeId && routeListeners[routeId]);
+}
+
+let idleStopInFlight = false;
+let lastIdleAttempt = 0;
+let shareWatchTimer = 0;
+let shareIdleBound = false;
+
+function startShareIdleWatch() {
+    if (typeof document !== 'undefined' && !shareIdleBound) {
+        shareIdleBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') stopShareIfIdle();
+        });
+    }
+    if (shareWatchTimer) return;
+    shareWatchTimer = setInterval(() => { stopShareIfIdle(); }, 60 * 1000);
+}
+
+function stopShareIdleWatch() {
+    if (shareWatchTimer) {
+        clearInterval(shareWatchTimer);
+        shareWatchTimer = 0;
+    }
+}
+
+/** Expire a share that has had no ping activity for 30 minutes (or whose TTL elapsed). */
+export async function stopShareIfIdle() {
+    const raw = peekStoredShare();
+    if (!raw || !shareSessionIdle(raw) || idleStopInFlight) return false;
+    if (Date.now() - lastIdleAttempt < 5000) return false;
+    lastIdleAttempt = Date.now();
+    idleStopInFlight = true;
+    try {
+        const hidden = typeof document !== 'undefined' && document.hidden;
+        await stopRideShare({ reason: 'idle', quiet: hidden });
+        return true;
+    } finally {
+        idleStopInFlight = false;
+    }
+}
+
+/**
+ * One map marker per train (plus unattached people). Drops deviceId / uid / email
+ * so the iframe never needs other riders' identifiers.
+ */
+export function compactPingsForMap(pings, { mineDeviceId = '', routeId = '' } = {}) {
+    const trains = {};
+    const loose = [];
+    (pings || []).forEach((p) => {
+        if (typeof p?.coarseLat !== 'number' || typeof p?.coarseLng !== 'number') return;
+        const publicId = pingPublicTrainId(p);
+        const trainId = publicId || (p.trainId ? String(p.trainId) : '');
+        const row = {
+            lat: p.coarseLat,
+            lng: p.coarseLng,
+            trainId: trainId || '',
+            station: p.station || '',
+            at: p.at || 0,
+            expiresAt: p.expiresAt,
+            heading: p.heading,
+            speedMps: p.speedMps,
+            mine: p.deviceId === mineDeviceId,
+            routeId: p.routeId || routeId,
+        };
+        if (trainId) {
+            (trains[trainId] = trains[trainId] || []).push(row);
+        } else {
+            loose.push({ ...row, n: 1 });
+        }
+    });
+    const out = [];
+    Object.keys(trains).forEach((trainId) => {
+        const list = trains[trainId];
+        const newest = list.reduce((a, b) => ((a.at || 0) >= (b.at || 0) ? a : b), list[0]);
+        const anchor = list.find((p) => p.mine) || newest;
+        out.push({
+            lat: anchor.lat,
+            lng: anchor.lng,
+            trainId,
+            n: list.length,
+            mine: list.some((p) => p.mine),
+            at: newest.at,
+            expiresAt: newest.expiresAt,
+            heading: newest.heading,
+            speedMps: newest.speedMps,
+            station: newest.station,
+            routeId: newest.routeId,
+        });
+    });
+    return out.concat(loose);
 }
 
 function stationShort(name) {
@@ -511,8 +624,13 @@ export async function fetchRouteRidePings(routeId) {
             }
             if (res.status !== 401 && res.status !== 403) break;
         }
-        if (!data || typeof data !== 'object') return [];
-        return activePings(Object.values(data));
+        if (!data || typeof data !== 'object') {
+            if (routeId) routeCache[routeId] = [];
+            return [];
+        }
+        const list = activePings(Object.values(data));
+        routeCache[routeId] = list;
+        return list;
     } catch {
         return [];
     }
@@ -744,7 +862,7 @@ export async function submitRideCheckIn({
         waitingFor: waitingFor || null,
         destination: destination || null,
         at: now,
-        expiresAt: now + RIDE_PING_TTL_MS,
+        expiresAt: now + RIDE_SHARE_IDLE_MS,
         uid,
         email,
         coarseLat: typeof coarseLat === 'number' ? Math.round(coarseLat * 1000) / 1000 : null,
@@ -768,10 +886,12 @@ export async function submitRideCheckIn({
             }
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
+        const prev = peekStoredShare();
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
             routeId, station: st, trainId: trainId || null, destination: destination || null,
-            at: now, expiresAt: payload.expiresAt,
+            at: now, lastPingAt: now, startedAt: prev?.startedAt || now, expiresAt: payload.expiresAt,
         }));
+        startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
         routeCache[routeId] = activePings([payload, ...existing]);
         if (source !== 'onboard_ping' && source !== 'stop') {
@@ -807,7 +927,7 @@ export async function submitRideCheckIn({
 }
 
 export async function stopRideShare({ quiet = false, reason = '' } = {}) {
-    const active = getActiveShare();
+    const active = peekStoredShare();
     const routeId = active?.routeId || $currentRouteId.get();
     const deviceId = getDeviceId();
     if (!routeId || !deviceId) return { ok: false };
@@ -818,7 +938,7 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         deviceId,
         station,
         trainId: active?.trainId || null,
-        at: active?.at || now,
+        at: now,
         expiresAt: now,
         appVersion: APP_VERSION,
         source: 'stop',
@@ -837,6 +957,7 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         if (!res.ok) throw new Error(permissionMessage(res.status));
         safeStorage.removeItem(ACTIVE_KEY);
         stopOnboardPingLoop();
+        stopShareIdleWatch();
         appendRideShareLog({
             action: 'stop',
             routeId,
@@ -850,7 +971,12 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         notifyPingsUpdated(routeId);
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
         if (!quiet) {
-            showToast(reason === 'terminus' ? 'Sharing ended at the last station' : 'Sharing ended', 'info');
+            const msg = reason === 'terminus'
+                ? 'Sharing ended at the last station'
+                : reason === 'idle'
+                    ? 'Sharing ended after 30 minutes idle'
+                    : 'Sharing ended';
+            showToast(msg, 'info');
         }
         return { ok: true };
     } catch (e) {
@@ -870,12 +996,15 @@ export function stopOnboardPingLoop() {
 /** While attached to a train, refresh the ping so others see movement. */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
-    onboardPingTimer = setInterval(async () => {
+    startShareIdleWatch();
+    const tick = async () => {
+        if (await stopShareIfIdle()) return;
         const active = getActiveShare();
         if (!active?.trainId) {
             stopOnboardPingLoop();
             return;
         }
+        if (typeof document !== 'undefined' && document.hidden) return;
         try {
             const pos = await oneShotGps();
             const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
@@ -895,8 +1024,9 @@ export function startOnboardPingLoop() {
                 source: 'onboard_ping',
                 quiet: true,
             });
-        } catch { /* keep last ping */ }
-    }, 45000);
+        } catch { /* keep last ping; do not slide expiresAt */ }
+    };
+    onboardPingTimer = setInterval(tick, 45000);
 }
 
 /**
@@ -1002,6 +1132,7 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
     if (!host) return;
 
     const mine = getActiveShare();
+    if (!mine && peekStoredShare()) stopShareIfIdle();
     if (!isRideCheckInEnabled(routeId) && !mine) {
         host.classList.add('hidden');
         host.innerHTML = '';
@@ -1420,6 +1551,8 @@ if (typeof window !== 'undefined') {
     window.openLiveTrackerSheet = openLiveTrackerSheet;
     window.setDirectionHeaderLabel = setDirectionHeaderLabel;
     window.getCachedRidePings = getCachedRidePings;
+    window.stopShareIfIdle = stopShareIfIdle;
+    window.compactPingsForMap = compactPingsForMap;
     window.nearestStationOnRoute = nearestStationOnRoute;
     window.canSeeLiveShareChrome = canSeeLiveShareChrome;
     window.sharingStatusCopy = sharingStatusCopy;

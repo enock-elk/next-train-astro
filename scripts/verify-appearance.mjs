@@ -228,7 +228,7 @@ assert(ridePings.includes('canSeeLiveShareChrome'), 'live-share chip is pin/admi
 assert(ridePings.includes('data-live-share-stop'), 'active sharer can stop from the board');
 assert(ridePings.includes('You’re already sharing on another device'), 'second-device share is blocked');
 assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last station');
-assert(ridePings.includes('8 * 60 * 60 * 1000'), 'ride ping safety TTL is hours');
+assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'ride ping idle TTL is 30 minutes');
 
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');

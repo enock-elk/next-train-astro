@@ -7707,15 +7707,18 @@ const Admin = {
                 }
                 liveRows.sort((a, b) => (b.at || 0) - (a.at || 0));
                 liveEl.innerHTML = liveRows.length
-                    ? liveRows.slice(0, 80).map((p) => `
-                        <div class="border border-blue-100 dark:border-blue-900/50 rounded-xl p-3 text-left">
+                    ? liveRows.slice(0, 80).map((p) => {
+                        const stale = p.at && (now - p.at) >= 90000;
+                        return `
+                        <div class="border ${stale ? 'border-slate-200 dark:border-slate-700' : 'border-blue-100 dark:border-blue-900/50'} rounded-xl p-3 text-left">
                             <div class="flex justify-between gap-2">
                                 <p class="text-xs font-black text-gray-900 dark:text-white">Train ${esc(p.trainId || '—')} · ${esc(routeName(p.routeId))}</p>
-                                <span class="text-[9px] font-mono text-gray-400 shrink-0">${p.at ? new Date(p.at).toLocaleString() : '-'}</span>
+                                <span class="text-[9px] font-mono ${stale ? 'text-slate-500' : 'text-gray-400'} shrink-0">${stale ? 'GPS stale · ' : ''}${p.at ? new Date(p.at).toLocaleString() : '-'}</span>
                             </div>
                             <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
                             <p class="text-[10px] text-gray-400 mt-0.5">${esc(p.source || '')} · ${esc(p.station || '')}</p>
-                        </div>`).join('')
+                        </div>`;
+                    }).join('')
                     : '<p class="text-xs text-gray-400 text-center py-4">No live shares in this region.</p>';
 
                 const logItems = [];

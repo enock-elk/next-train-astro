@@ -18,7 +18,7 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.5', `APP_VERSION ${APP_VERSION}`);
+assert(APP_VERSION === 'V9_09.10.6', `APP_VERSION ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');
@@ -250,6 +250,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
     const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
     const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
     const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
     const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
@@ -257,6 +258,16 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
+    assert(mapApp.includes('nt-live-train-glyph--stale'), 'map train glyph has a stale GPS state');
+    assert(mapApp.includes('nt-live-train-glyph--compact'), 'map train glyph shrinks when zoomed out');
+    assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
+    assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
+    assert(mapPage.includes('0 0 0 1px rgba(255,255,255,0.9)'), 'map train glyph ring is 1px');
+    assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
+    assert(ridePings.includes('RIDE_GPS_STALE_MS = 90 * 1000'), 'GPS stale window is 90 seconds');
+    assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
+    assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
+    assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
     assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');

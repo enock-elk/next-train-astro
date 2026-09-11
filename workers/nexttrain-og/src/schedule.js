@@ -53,8 +53,10 @@ function getSheet(db, key) {
   for (const nest of REGION_NESTS) {
     const nested = db[nest]?.[key];
     if (Array.isArray(nested) && nested.length) return nested;
+    if (Array.isArray(nested?.rows) && nested.rows.length) return nested.rows;
   }
   if (Array.isArray(db[key]) && db[key].length) return db[key];
+  if (Array.isArray(db[key]?.rows) && db[key].rows.length) return db[key].rows;
   return null;
 }
 
@@ -201,16 +203,20 @@ export async function loadRegionGridOrder(env, region, ctx) {
       /* refetch */
     }
   }
-  const res = await fetch(`${base}config/grid_order/${encodeURIComponent(code)}.json`, {
-    cf: { cacheTtl: 300, cacheEverything: true },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const toCache = new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=300' },
-  });
-  if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, toCache.clone()));
-  else await cache.put(cacheKey, toCache.clone());
-  return data;
+  try {
+    const res = await fetch(`${base}config/grid_order/${encodeURIComponent(code)}.json`, {
+      cf: { cacheTtl: 300, cacheEverything: true },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    const toCache = new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=300' },
+    });
+    if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, toCache.clone()));
+    else await cache.put(cacheKey, toCache.clone());
+    return data;
+  } catch {
+    return null;
+  }
 }

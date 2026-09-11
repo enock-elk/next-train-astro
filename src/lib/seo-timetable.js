@@ -54,8 +54,10 @@ export function getSheet(db, key) {
     for (const nest of REGION_NESTS) {
         const nested = db[nest]?.[key];
         if (Array.isArray(nested) && nested.length) return nested;
+        if (Array.isArray(nested?.rows) && nested.rows.length) return nested.rows;
     }
     if (Array.isArray(db[key]) && db[key].length) return db[key];
+    if (Array.isArray(db[key]?.rows) && db[key].rows.length) return db[key].rows;
     return null;
 }
 

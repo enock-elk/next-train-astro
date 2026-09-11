@@ -13565,6 +13565,7 @@ const Admin = {
         let currentSheetKey = '';
         let currentRecord = null;
         let draggedIndex = -1;
+        let loadedSelection = null;
 
         const routes = typeof ROUTES === 'undefined' ? [] : Object.values(ROUTES)
             .filter((route) => route?.isActive !== false && route?.sheetKeys)
@@ -13694,6 +13695,11 @@ const Admin = {
                 manifestOrder,
             });
             baseline = currentOrder.slice();
+            loadedSelection = {
+                route: routeEl.value,
+                day: dayEl.value,
+                direction: directionEl.value,
+            };
             paintList();
             describeRecord(currentRecord);
             actionsEl.classList.remove('hidden');
@@ -13753,6 +13759,7 @@ const Admin = {
                     : null,
             });
             paintList();
+            markDirty();
             try {
                 await writeRecord({
                     action: 'reset',
@@ -13767,7 +13774,13 @@ const Admin = {
         };
         [routeEl, dayEl, directionEl].forEach((el) => {
             el.addEventListener('change', () => {
-                if (!Admin.gridOrderDirty || window.confirm('Discard unsaved grid order changes?')) {
+                if (Admin.gridOrderDirty && !window.confirm('Discard unsaved grid order changes?')) {
+                    if (loadedSelection) {
+                        routeEl.value = loadedSelection.route;
+                        dayEl.value = loadedSelection.day;
+                        directionEl.value = loadedSelection.direction;
+                    }
+                } else {
                     Admin.gridOrderDirty = false;
                     load();
                 }

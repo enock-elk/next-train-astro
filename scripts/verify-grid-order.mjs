@@ -119,6 +119,8 @@ for (const [label, source] of regionalAppsScripts) {
   assert(source.includes('return raw;'), `${label} must preserve non-train sheet headers like the original sync`);
   assert(!source.includes('return normalizeTrainId(raw);'), `${label} must not filter payload headers through train IDs`);
   assert(source.includes('if (header && value !== "") { obj[header] = value; }'), `${label} must keep the V6 header loop so COORDINATES is written`);
+  assert(source.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), `${label} must keep the V6 per-sheet execution log`);
+  assert(source.includes('✅ V6 Node Sync Status: '), `${label} must keep the V6 PUT status log`);
   assert(source.includes('Coordinates sent='), `${label} must log how many COORDINATES rows will be sent`);
   assert(source.includes('Coordinate validation'), `${label} must validate COORDINATES before the PUT`);
 }
@@ -129,6 +131,7 @@ assert(og.includes('loadRegionGridOrder'));
 assert(appsScript.includes('cleanKey + "_columnOrder"'));
 assert(appsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(appsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+assert(appsScript.includes('Synced Securely to V6 GP!'));
 assert(wcAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(wcAppsScript.includes('schedules/westerncape.json'));
 assert(wcAppsScript.includes('CT-to-HANI_Weekday'));

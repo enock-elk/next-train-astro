@@ -1,15 +1,15 @@
-// METRORAIL NEXT TRAIN - GAUTENG DATA SYNC (V6.0 - Region Split + columnOrder)
-// Targets: /schedules/gauteng.json
-// Row payload stays on the V6 header loop (keeps COORDINATES). columnOrder is the only new write.
+// METRORAIL NEXT TRAIN - GAUTENG DATA SYNC (V6.0 - Region Split + V5 Legacy Bridge)
+// Targets: /schedules/gauteng.json (New) AND /schedules.json (Legacy via PATCH)
+// Surgical adds only: `${sheetKey}_columnOrder` and coordinate count logs.
 
-const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
-const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL";
+const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"; 
+const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"; 
 
 const SHEET_NAMES = [
   // --- SPECIAL EVENT ROUTES ---
   "EVENT-to-A_Weekday", "EVENT-to-B_Weekday",
   "EVENT-to-A_Sat", "EVENT-to-B_Sat",
-
+  
   // --- STANDARD ROUTES ---
   "PIEN-to-PTA_Weekday", "PTA-to-PIEN_Weekday",
   "PIEN-to-PTA_Sat", "PTA-to-PIEN_Sat",
@@ -96,7 +96,6 @@ function syncToFirebase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allData = {};
   let totalCoordRows = 0;
-  let sheetsWithCoords = 0;
 
   SHEET_NAMES.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
@@ -111,7 +110,7 @@ function syncToFirebase() {
       return;
     }
 
-    let manualUpdateDate = data[0][1];
+    let manualUpdateDate = data[0][1]; 
     if (!manualUpdateDate) {
        manualUpdateDate = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
     }
@@ -125,7 +124,7 @@ function syncToFirebase() {
     }
 
     const rows = data.slice(2);
-
+    
     console.log(`ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}`);
 
     const formattedRows = rows.map(row => {
@@ -133,8 +132,8 @@ function syncToFirebase() {
       obj[headers[0] || "STATION"] = row[0];
       for (let i = 1; i < headers.length; i++) {
         let header = headers[i].toString().trim();
-
-        // 🛡️ GUARDIAN PATCH: Train ID Zero-Padding
+        
+        // 🛡️ GUARDIAN PATCH: Train ID Zero-Padding 
         // Ensures any purely numeric header is padded to exactly 4 digits
         if (/^\d+$/.test(header)) {
             header = header.padStart(4, '0');
@@ -148,20 +147,16 @@ function syncToFirebase() {
 
     const coordCount = countCoordinateRows(formattedRows);
     totalCoordRows += coordCount;
-    if (coordCount > 0) sheetsWithCoords += 1;
-    console.log(`🛰️ Sheet '${sheetName}': Coordinates sent=${coordCount}/${formattedRows.length}`);
-    if (coordCount === 0) {
-      console.log(`❌ Sheet '${sheetName}': No COORDINATES values found in the payload.`);
-    }
+    console.log(`🛰️ Sheet '${sheetName}': Coordinates sent=${coordCount}`);
 
     if (manualUpdateDate) {
         const metadataRow = {};
-        metadataRow[headers[0] || "STATION"] = "Last Updated: " + manualUpdateDate;
+        metadataRow[headers[0] || "STATION"] = "Last Updated: " + manualUpdateDate; 
         formattedRows.unshift(metadataRow);
-
+        
         const key = sanitizeKey(sheetName);
         allData[key + "_meta"] = manualUpdateDate;
-        if (zoneCode) allData[key + "_zone"] = zoneCode;
+        if (zoneCode) allData[key + "_zone"] = zoneCode; 
     }
 
     const cleanKey = sanitizeKey(sheetName);
@@ -172,18 +167,18 @@ function syncToFirebase() {
   allData["lastUpdated"] = new Date().toLocaleString();
 
   if (totalCoordRows === 0) {
-    console.log("❌ Coordinate validation FAILED: 0 COORDINATES values in this PUT. Station locate will break.");
+    console.log("❌ Coordinate validation FAILED: 0 COORDINATES values in this PUT.");
   } else {
-    console.log(`✅ Coordinate validation OK: ${totalCoordRows} rows with COORDINATES across ${sheetsWithCoords} sheets will be sent.`);
+    console.log("✅ Coordinate validation OK: " + totalCoordRows + " rows with COORDINATES will be sent.");
   }
-
+  
   const newUrl = FIREBASE_URL + "schedules/gauteng.json?auth=" + FIREBASE_SECRET;
-
+  
   try {
     // 1. Write to the NEW V6.0 Regional Node (PUT creates the folder/replaces its contents safely)
-    const newOptions = {
-      method: "put",
-      contentType: "application/json",
+    const newOptions = { 
+      method: "put", 
+      contentType: "application/json", 
       payload: JSON.stringify(allData),
       muteHttpExceptions: true
     };

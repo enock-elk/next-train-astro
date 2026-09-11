@@ -36,6 +36,7 @@ import {
     getGridOrderManifest,
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
+import { recordRouteScheduleRevision } from './schedule-revision.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -1088,6 +1089,18 @@ export async function loadAllSchedules(force = false) {
         if (!requestedRouteId) return; 
         const currentRoute = ROUTES[requestedRouteId];
         if (!currentRoute) return;
+        const rememberRouteRevision = (database, notify = false) => {
+            if ($currentRouteId.get() !== requestedRouteId) return;
+            const changed = recordRouteScheduleRevision({
+                database,
+                route: currentRoute,
+                routeId: requestedRouteId,
+                dayType: currentDayType,
+                storage: safeStorage,
+                notify,
+            });
+            if (changed) showToast('Schedule updated', 'success', 3000);
+        };
 
         const unwrapDatabase = (db, region) => {
             if (!db) return null;
@@ -1143,6 +1156,7 @@ export async function loadAllSchedules(force = false) {
                 $fullDatabase.set(proposedDB);
                 $schedules.set(proposedSchedules);
                 $globalStationIndex.set(proposedStationIndex);
+                rememberRouteRevision(proposedDB, false);
                 
                 const mList = Object.keys(proposedStationIndex).sort();
                 $masterStationList.set(mList);
@@ -1165,6 +1179,7 @@ export async function loadAllSchedules(force = false) {
                     $fullDatabase.set(proposedDB);
                     $schedules.set(proposedSchedules);
                     $globalStationIndex.set(proposedStationIndex);
+                    rememberRouteRevision(proposedDB, false);
                     const mList = Object.keys(proposedStationIndex).sort();
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
@@ -1367,18 +1382,18 @@ export async function loadAllSchedules(force = false) {
 
             const newStr = JSON.stringify(newDatabase);
             const oldStr = cachedDB ? JSON.stringify(cachedDB.data) : "";
+            const downloadedDB = unwrapDatabase(newDatabase, $userRegion.get());
 
             if (newStr !== oldStr) {
                 if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return; 
                 
                 try {
-                    const proposedDB = unwrapDatabase(newDatabase, $userRegion.get());
-                    const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, proposedDB);
-                    const proposedStationIndex = await buildGlobalStationIndexAsync(proposedDB);
+                    const proposedSchedules = await processRouteDataFromDBAsync(currentRoute, downloadedDB);
+                    const proposedStationIndex = await buildGlobalStationIndexAsync(downloadedDB);
                     
                     if (currentGen !== regionSwapGeneration) return;
 
-                    $fullDatabase.set(proposedDB);
+                    $fullDatabase.set(downloadedDB);
                     $schedules.set(proposedSchedules);
                     $globalStationIndex.set(proposedStationIndex);
                     
@@ -1389,6 +1404,7 @@ export async function loadAllSchedules(force = false) {
                     await saveToLocalCache(cacheKey, newDatabase, fetchSignal); 
                 } catch(e) { throw e; }
             }
+            rememberRouteRevision(downloadedDB, true);
         }
     } catch (error) {
         if (error.name === 'AbortError') return;

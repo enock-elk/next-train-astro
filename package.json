@@ -30,6 +30,7 @@
     "verify:map-hops": "node scripts/verify-map-hops.mjs",
     "verify:route-seo": "node scripts/verify-route-seo.mjs",
     "verify:grid-order": "node scripts/verify-grid-order.mjs",
+    "verify:schedule-toast": "node scripts/verify-schedule-update-toast.mjs",
     "verify:attachments": "node scripts/verify-attachments.mjs",
     "verify:feedback-contact": "node scripts/verify-feedback-contact.mjs",
     "verify:community-safety": "node scripts/verify-community-safety.mjs",

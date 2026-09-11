@@ -50,7 +50,8 @@ function normalizeSheetHeader(value, index) {
   const upper = raw.toUpperCase();
   if (upper === "COORDINATES") return "COORDINATES";
   if (upper === "KM_MARK" || upper === "KM MARK") return "KM_MARK";
-  return normalizeTrainId(raw);
+  if (/^\d+$/.test(raw)) return raw.padStart(4, "0");
+  return raw;
 }
 
 function trainColumnOrder(headers) {

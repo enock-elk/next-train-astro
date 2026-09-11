@@ -108,13 +108,16 @@ const og = read('workers/nexttrain-og/src/schedule.js');
 const appsScript = read('scripts/google-apps-script-gauteng-sync.gs');
 const wcAppsScript = read('scripts/google-apps-script-westerncape-sync.gs');
 const kznAppsScript = read('scripts/google-apps-script-kzn-sync.gs');
-for (const [label, source] of [
+const regionalAppsScripts = [
   ['Gauteng', appsScript],
   ['Western Cape', wcAppsScript],
   ['KZN', kznAppsScript],
-]) {
+];
+for (const [label, source] of regionalAppsScripts) {
   assert(source.includes('normalizeSheetHeader'), `${label} must keep COORDINATES and KM_MARK headers`);
   assert(source.includes('trainColumnOrder'), `${label} columnOrder must stay train IDs only`);
+  assert(source.includes('return raw;'), `${label} must preserve non-train sheet headers like the original sync`);
+  assert(!source.includes('return normalizeTrainId(raw);'), `${label} must not filter payload headers through train IDs`);
 }
 assert(renderer.includes('manifestOrder: schedule.columnOrder'));
 assert(logic.includes('fetchGridOrderConfig($userRegion.get()'));
@@ -147,6 +150,8 @@ assert(ecAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train
 assert(ecAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
 assert(ecAppsScript.includes('normalizeSheetHeader'), 'Eastern Cape must keep COORDINATES and KM_MARK headers');
 assert(ecAppsScript.includes('trainColumnOrder'), 'Eastern Cape columnOrder must stay train IDs only');
+assert(ecAppsScript.includes('return raw;'), 'Eastern Cape must preserve non-train sheet headers');
+assert(!ecAppsScript.includes('return normalizeTrainId(raw);'), 'Eastern Cape must not filter payload headers through train IDs');
 const wcPubAppsScript = read('scripts/google-apps-script-westerncape-public-holidays-sync.gs');
 assert(wcPubAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(wcPubAppsScript.includes('schedules/westerncape/public_holidays.json'));
@@ -159,5 +164,34 @@ assert(!wcPubAppsScript.includes('schedules/westerncape.json?auth='), 'WC public
 assert(!wcPubAppsScript.includes('schedules.json?auth='), 'WC public holidays must not write the legacy monolithic node');
 assert(wcPubAppsScript.includes('normalizeSheetHeader'), 'WC public holidays must keep COORDINATES and KM_MARK headers');
 assert(wcPubAppsScript.includes('trainColumnOrder'), 'WC public holidays columnOrder must stay train IDs only');
+assert(wcPubAppsScript.includes('return raw;'), 'WC public holidays must preserve non-train sheet headers');
+assert(!wcPubAppsScript.includes('return normalizeTrainId(raw);'), 'WC public holidays must not filter payload headers through train IDs');
+
+function loadAppsScriptFunction(source, name) {
+  const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?^\\}`, 'm'));
+  assert(match, `Apps Script helper ${name} must exist`);
+  return Function(`"use strict"; ${match[0]}; return ${name};`)();
+}
+
+for (const [label, source] of [
+  ...regionalAppsScripts,
+  ['Eastern Cape', ecAppsScript],
+  ['Western Cape public holidays', wcPubAppsScript],
+]) {
+  const normalizeHeader = loadAppsScriptFunction(source, 'normalizeSheetHeader');
+  const columnOrder = loadAppsScriptFunction(source, 'trainColumnOrder');
+  const payloadHeaders = ['STATION', 'COORDINATES', 'KM MARK', 'Notes', '21', '1234A']
+    .map(normalizeHeader);
+  assert.deepEqual(
+    payloadHeaders,
+    ['STATION', 'COORDINATES', 'KM_MARK', 'Notes', '0021', '1234A'],
+    `${label} payload must preserve metadata columns and zero-pad numeric trains`
+  );
+  assert.deepEqual(
+    columnOrder(payloadHeaders.slice(1)),
+    ['0021', '1234A'],
+    `${label} _columnOrder must include train IDs only`
+  );
+}
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

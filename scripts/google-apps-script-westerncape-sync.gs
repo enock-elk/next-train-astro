@@ -174,7 +174,7 @@ function syncToFirebase() {
     console.log("✅ V6 Node Sync Status: " + resNew.getResponseCode());
     console.log("✅ Coordinates included in V6 PUT: " + totalCoordRows + " rows");
 
-    SpreadsheetApp.getActiveSpreadsheet().toast("Synced Securely to V6 WC!", "Guardian Bot");
+    SpreadsheetApp.getActiveSpreadsheet().toast("Synced securely to Western Cape schedules.", "Guardian Bot");
   } catch (e) {
     console.log("❌ Error: " + e.message);
     SpreadsheetApp.getActiveSpreadsheet().toast("Error: Check execution logs.", "Guardian Bot");

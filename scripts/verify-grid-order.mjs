@@ -129,5 +129,13 @@ assert(kznAppsScript.includes('CROSS-to-DURBN_Sat'));
 assert(!kznAppsScript.includes('schedules.json?auth='), 'KZN must not write the legacy monolithic node');
 assert(kznAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(kznAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+const ecAppsScript = read('scripts/google-apps-script-easterncape-sync.gs');
+assert(ecAppsScript.includes('cleanKey + "_columnOrder"'));
+assert(ecAppsScript.includes('schedules/easterncape.json'));
+assert(ecAppsScript.includes('BERLN-to-EASTL_Weekday'));
+assert(ecAppsScript.includes('EASTL-to-BERLN_Sat'));
+assert(!ecAppsScript.includes('schedules.json?auth='), 'Eastern Cape must not write the legacy monolithic node');
+assert(ecAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
+assert(ecAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

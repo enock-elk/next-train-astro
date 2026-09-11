@@ -50,7 +50,7 @@ assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line s
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
 assert(css.includes('#current-day span.text-red-600'), 'No Service targets the red-600 span');
 assert(css.includes('color: #f87171 !important;'), 'No Service uses dark-mode red-400 in light and dark');
-assert(!css.includes('color: #dc2626 !important;'), 'No Service no longer uses red-600 on Classic light');
+assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
 assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
@@ -133,7 +133,7 @@ assert(!css.includes('clamp(0.90, calc(100vw / 390), 1.06)'), 'phone scale no lo
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
 assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
-assert(plannerUi.includes('keepPlannerFieldVisible'), 'planner fields scroll to the top of the visible viewport');
+assert(!plannerUi.includes('keepPlannerFieldVisible') && plannerUi.includes('Do not scroll #app-scroll'), 'planner fields stay put while dropdowns fit the visible viewport');
 assert(plannerUi.includes('vis.height * 0.7'), 'planner list can fill the space above the keyboard');
 assert(!plannerUi.includes('openAbove'), 'planner list opens downward from the field');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');
@@ -226,7 +226,7 @@ assert(ridePings.includes("if (!isAdminAuthed()) return;"), 'nearby click is adm
 assert(ridePings.includes('syncRidePresenceRow'), 'presence row hides when nearby and chip are empty');
 assert(ridePings.includes('canSeeLiveShareChrome'), 'live-share chip is pin/admin gated');
 assert(!ridePings.includes('data-live-share-stop'), 'Next Train board has no legacy sharing stop chip');
-assert(ridePings.includes('You’re already sharing on another device'), 'second-device share is blocked');
+assert(ridePings.includes('findConflictingShare') && ridePings.includes('Already sharing elsewhere'), 'second-device share is blocked');
 assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last station');
 assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'ride ping idle TTL is 30 minutes');
 
@@ -447,7 +447,7 @@ assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train
 const rendererGrid = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(rendererGrid.includes("isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700'"), 'export grid lines are softer; in-app borders stay');
 assert(rendererGrid.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'export times are bold; in-app grid times stay medium');
-assert(rendererGrid.includes('top-[2px]'), 'in-app NO SVC sits above the train number');
+assert(rendererGrid.includes('grid-template-rows:11px 14px') && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
 assert(!rendererGrid.includes('nt-station-col, th:first-child'), 'export snapshot does not restyle the station column beyond the old renderer');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
 assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');

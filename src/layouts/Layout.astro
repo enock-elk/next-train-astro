@@ -987,21 +987,26 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 4.75rem;
         box-sizing: border-box;
       }
-      /* Keyboard: keep Community filling leftover height (no gray slab)
-         without shrinking the room chrome to fit Next Train. The composer
-         docks to --nt-kb-h. Oval stays hidden. #app-scroll stays scrollable
-         so the blue header can leave. */
+      /* Keyboard: lock Community to the visual hole so the wallpaper parent
+         stays one size after the IME settles. Composer docks to --nt-kb-h.
+         Feed scroller keeps bottom padding for the fixed composer. Oval stays
+         hidden. #app-scroll stays scrollable so the blue header can leave. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
-        flex: 1 1 auto;
+        flex: none;
+        height: var(--nt-vv-h, 100dvh);
+        max-height: var(--nt-vv-h, 100dvh);
         min-height: 0;
         overflow: hidden;
-        height: auto;
         padding-bottom: 0;
       }
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane {
         flex: 1 1 auto;
         min-height: 0;
         height: 100%;
+        position: relative;
+      }
+      html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-feed-scroll {
+        padding-bottom: 6.5rem;
       }
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #community-composer-dock {
         position: fixed;

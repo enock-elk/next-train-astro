@@ -236,12 +236,18 @@ assert(presence.includes('countPresencePeople'), 'presence totals unique people'
 assert(presence.includes("host: presenceHostTag()"), 'presence writes the host so lab and production share one room');
 assert(presence.includes('s_${presenceHostTag()}_${base}'), 'presence sessions are host-scoped');
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
+assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
 assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
 assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
+const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
+assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
+assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
 assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');

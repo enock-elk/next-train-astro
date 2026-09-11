@@ -1557,7 +1557,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             btnContainer.appendChild(rightBtn);
         }
     } else {
-        rightBtn.className = 'flex-1 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg border-2 border-blue-600 dark:border-blue-400 shadow-sm transition-colors focus:outline-none flex items-center justify-center';
+        rightBtn.className = 'flex-1 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg border border-blue-500/70 dark:border-blue-400/70 shadow-none transition-colors focus:outline-none flex items-center justify-center';
         const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
         rightBtn.innerHTML = `${replySvg} Reply`;
         rightBtn.onclick = () => {

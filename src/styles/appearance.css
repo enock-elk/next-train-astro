@@ -14,7 +14,8 @@
  *   --nt-chrome-nav       Bottom nav (must differ from header and CTA)
  *   --nt-chrome-nav-border
  *   --nt-text             Primary copy
- *   --nt-text-muted       Secondary copy
+ *   --nt-text-muted       Secondary copy (gray-500 / gray-600)
+ *   --nt-text-faint       Tertiary copy (gray-400 only)
  *   --nt-border           Hairlines / chrome edges
  *   --nt-theme-meta       <meta name="theme-color">
  *
@@ -43,6 +44,7 @@
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
   --nt-text-muted: #475569;
+  --nt-text-faint: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
   --nt-env-bottom: env(safe-area-inset-bottom, 0px);
@@ -85,6 +87,7 @@ html[data-colour-pack="classic"].dark {
   --nt-chrome-muted: #9fb4cc;
   --nt-text: #e8eef6;
   --nt-text-muted: #9fb0c8;
+  --nt-text-faint: #7d8fa6;
   --nt-border: #2a3d5c;
   --nt-theme-meta: #0b1f3a;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
@@ -107,6 +110,7 @@ html[data-colour-pack="classic"]:not(.dark) {
   --nt-chrome-muted: rgba(255, 255, 255, 0.82);
   --nt-text: #1e293b;
   --nt-text-muted: #475569;
+  --nt-text-faint: #64748b;
   --nt-border: #e2e8f0;
   --nt-theme-meta: #1d4ed8;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
@@ -139,6 +143,7 @@ html[data-colour-pack="midnight"] {
   --nt-chrome-muted: #475569;
   --nt-text: #0f172a;
   --nt-text-muted: #475569;
+  --nt-text-faint: #64748b;
   --nt-border: #d5dee8;
   --nt-theme-meta: #155e75;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
@@ -172,6 +177,7 @@ html[data-colour-pack="midnight"].dark {
   --nt-chrome-muted: #94a3b8;
   --nt-text: #e8eef6;
   --nt-text-muted: #94a3b8;
+  --nt-text-faint: #7d8ea3;
   --nt-border: #1e2c42;
   --nt-theme-meta: #0c4a6e;
 }
@@ -193,6 +199,7 @@ html[data-colour-pack="contrast"] {
   --nt-chrome-muted: #262626;
   --nt-text: #0a0a0a;
   --nt-text-muted: #262626;
+  --nt-text-faint: #404040;
   --nt-border: #171717;
   --nt-theme-meta: #1e4fc2;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
@@ -226,6 +233,7 @@ html[data-colour-pack="contrast"].dark {
   --nt-chrome-muted: #e5e5e5;
   --nt-text: #fafafa;
   --nt-text-muted: #e5e5e5;
+  --nt-text-faint: #a3a3a3;
   --nt-border: #e5e5e5;
   --nt-theme-meta: #0a0a0a;
 
@@ -258,6 +266,7 @@ html[data-colour-pack="signal"] {
   --nt-chrome-muted: #3d5248;
   --nt-text: #123024;
   --nt-text-muted: #3d5248;
+  --nt-text-faint: #5a6e64;
   --nt-border: #cfe0d6;
   --nt-theme-meta: #246348;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 18%, var(--nt-chrome-nav));
@@ -291,29 +300,31 @@ html[data-colour-pack="signal"].dark {
   --nt-chrome-muted: #a7f3d0;
   --nt-text: #ecfdf5;
   --nt-text-muted: #a7f3d0;
+  --nt-text-faint: #6ee7b7;
   --nt-border: #164233;
   --nt-theme-meta: #064e3b;
 }
 
 /* Ember — pale clay paper; ink on clay CTAs (not chocolate fills) */
 html[data-colour-pack="ember"] {
-  --nt-primary: #e4c4a4;
-  --nt-primary-hover: #d4b090;
+  --nt-primary: #ecd4bc;
+  --nt-primary-hover: #e0c4a8;
   --nt-primary-fg: #3a2a1c;
   --nt-primary-soft: #f8f1e9;
   --nt-canvas: #f8f2eb;
   --nt-surface: #fcf8f4;
   --nt-surface-muted: #f4ece4;
-  --nt-chrome-header: #f2e8dc;
-  --nt-chrome-header-border: #e4d4c4;
-  --nt-chrome-nav: #eadcc8;
-  --nt-chrome-nav-border: #d8c4b0;
+  --nt-chrome-header: #f6efe6;
+  --nt-chrome-header-border: #eadccc;
+  --nt-chrome-nav: #f2e8da;
+  --nt-chrome-nav-border: #e4d4c0;
   --nt-chrome-fg: #4a3224;
-  --nt-chrome-muted: #5c4a3c;
+  --nt-chrome-muted: #3d2e24;
   --nt-text: #2a2118;
-  --nt-text-muted: #5c4a3c;
+  --nt-text-muted: #3d2e24;
+  --nt-text-faint: #5a4638;
   --nt-border: #eadccc;
-  --nt-theme-meta: #e4c4a4;
+  --nt-theme-meta: #ecd4bc;
   --nt-accent: #b07a50;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
@@ -323,7 +334,7 @@ html[data-colour-pack="ember"] {
   --nt-blue-300: 212 176 144;
   --nt-blue-400: 196 148 104;
   --nt-blue-500: 176 122 80;
-  --nt-blue-600: 228 196 164;
+  --nt-blue-600: 236 214 190;
   --nt-blue-700: 176 122 80;
   --nt-blue-800: 138 96 64;
   --nt-blue-900: 88 52 28;
@@ -346,6 +357,7 @@ html[data-colour-pack="ember"].dark {
   --nt-chrome-muted: #c4a392;
   --nt-text: #f4ebe3;
   --nt-text-muted: #c4a392;
+  --nt-text-faint: #a88874;
   --nt-border: #4a4038;
   --nt-theme-meta: #352e28;
   --nt-accent: #c4926a;
@@ -369,23 +381,24 @@ html[data-colour-pack="ember"].dark {
  * Pale sage fills with ink, not forest-green or kraft-tan chocolate.
  */
 html[data-colour-pack="earthy"] {
-  --nt-primary: #c5cbb8;
-  --nt-primary-hover: #b4bba6;
+  --nt-primary: #d4d8cc;
+  --nt-primary-hover: #c5cbb8;
   --nt-primary-fg: #2a2e24;
   --nt-primary-soft: #F7F4EC;
   --nt-canvas: #f6f3ea;
   --nt-surface: #FCFAF6;
   --nt-surface-muted: #F6F1E8;
-  --nt-chrome-header: #efebe0;
-  --nt-chrome-header-border: #e0d8c8;
-  --nt-chrome-nav: #e4ead8;
-  --nt-chrome-nav-border: #d0d8c4;
+  --nt-chrome-header: #f3f0e6;
+  --nt-chrome-header-border: #e6dfd0;
+  --nt-chrome-nav: #eef0e6;
+  --nt-chrome-nav-border: #d8dcc8;
   --nt-chrome-fg: #353535;
-  --nt-chrome-muted: #534e46;
+  --nt-chrome-muted: #3f3a32;
   --nt-text: #353535;
-  --nt-text-muted: #534e46;
+  --nt-text-muted: #3f3a32;
+  --nt-text-faint: #5c564c;
   --nt-border: #e4ddce;
-  --nt-theme-meta: #efebe0;
+  --nt-theme-meta: #f3f0e6;
   --nt-accent: #8f7d68;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
@@ -395,7 +408,7 @@ html[data-colour-pack="earthy"] {
   --nt-blue-300: 201 193 181;
   --nt-blue-400: 154 150 132;
   --nt-blue-500: 125 128 110;
-  --nt-blue-600: 197 203 184;
+  --nt-blue-600: 214 218 204;
   --nt-blue-700: 107 112 92;
   --nt-blue-800: 62 58 50;
   --nt-blue-900: 53 56 48;
@@ -418,6 +431,7 @@ html[data-colour-pack="earthy"].dark {
   --nt-chrome-muted: #c9c1b5;
   --nt-text: #F5F1E9;
   --nt-text-muted: #C9C1B5;
+  --nt-text-faint: #a89f91;
   --nt-border: #4a4640;
   --nt-theme-meta: #32302b;
   --nt-accent: #C4A990;
@@ -632,6 +646,10 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   width: calc(100% - 0.5rem);
   margin-inline: auto;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
+}
+html[data-colour-pack="earthy"] #view-full-timetable-btn,
+html[data-colour-pack="ember"] #view-full-timetable-btn {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--nt-primary) 16%, transparent);
 }
 #grid-trigger-container {
   padding-bottom: 0.5rem;
@@ -927,9 +945,12 @@ html.dark .dark\:border-gray-800 {
 }
 
 .text-gray-400,
+html.dark .dark\:text-gray-400 {
+  color: var(--nt-text-faint) !important;
+}
+
 .text-gray-500,
 .text-gray-600,
-html.dark .dark\:text-gray-400,
 html.dark .dark\:text-gray-500,
 html.dark .dark\:text-gray-300 {
   color: var(--nt-text-muted) !important;
@@ -1048,13 +1069,16 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   background-color: color-mix(in srgb, #fff 16%, transparent);
 }
 .nt-alert-reply {
-  background-color: color-mix(in srgb, var(--nt-surface) 88%, #fff) !important;
+  background: transparent !important;
   color: var(--nt-primary) !important;
-  border: 1px solid color-mix(in srgb, var(--nt-primary) 38%, transparent) !important;
+  border: none !important;
   box-shadow: none;
+  padding: 0;
 }
 .nt-alert-reply:hover {
-  background-color: color-mix(in srgb, var(--nt-primary) 8%, var(--nt-surface)) !important;
+  background: transparent !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .nt-alert-source {
   display: inline-flex;

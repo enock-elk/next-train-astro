@@ -16,6 +16,7 @@ import {
     tripNeedsHercKoedBridge,
 } from '../src/lib/saturday-service.js';
 import { extractTrainSheetStops } from '../src/lib/planner-core.js';
+import { Renderer } from '../src/lib/renderer.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -178,6 +179,36 @@ const sheet = extractTrainSheetStops('pta-mabopane', '4420', 'weekday');
 if (!sheet || sheet.trainId !== '4420' || sheet.stops.length !== 3 || sheet.origin !== 'PRETORIA STATION' || sheet.terminus !== 'MABOPANE STATION') {
     fail(`extractTrainSheetStops failed: ${JSON.stringify(sheet)}`);
 }
+
+const weekdaySheet = {
+    headers: ['STATION', '0618', '0619'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'HERCULES STATION', '0618': '06:10:00', '0619': '-' },
+        { STATION: 'GHOST STOP', '0618': '-', '0619': '' },
+        { STATION: 'GEZINA', '0618': '06:22:00', '0619': '07:05:00' },
+        { STATION: 'Updated 12 Jan', '0618': '06:00:00', '0619': '07:00:00' },
+    ],
+};
+const noWeekend = Renderer._buildNoSaturdayGridHTML(weekdaySheet, 'Hercules to Koedoespoort', 'herc-koed');
+if (/GHOST STOP/i.test(noWeekend)) fail('no-weekend grid must drop weekday rows with no times');
+if (/Updated 12 Jan/i.test(noWeekend)) fail('no-weekend grid must skip updated rows');
+if (!/Hercules/.test(noWeekend) || !/Gezina/.test(noWeekend)) fail('no-weekend grid must keep active stations');
+if (/Weekend timetable|bg-amber-50|rowspan=|Stations are listed for reference/.test(noWeekend)) {
+    fail('no-weekend grid must not use the amber rowspan card');
+}
+if (!noWeekend.includes('id="grid-switch-weekday-btn"')) fail('no-weekend grid must expose a bound weekday switch');
+if (noWeekend.includes('onclick=')) fail('no-weekend switch must not use inline onclick');
+if (!/Gauteng/i.test(noWeekend) || !/Hercules to Koedoespoort/i.test(noWeekend)) {
+    fail(`no-weekend notice must use saturdayNoServiceCopy: ${noWeekend}`);
+}
+
+const gridJs = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
+if (!gridJs.includes('bindNoWeekendWeekdaySwitch')) fail('timetable-grid must bind Switch to Mon - Fri');
+if (!gridJs.includes('_buildNoSaturdayGridHTML(schedule, route.name, routeId)')) {
+    fail('timetable-grid must pass routeId into the no-weekend builder');
+}
+if (gridJs.includes('onclick="window.renderFullScheduleGrid')) fail('timetable-grid fallback must not use inline onclick');
 
 if (failures.length) {
     console.error(`\n✗ planner-saturday failed (${failures.length}):`);

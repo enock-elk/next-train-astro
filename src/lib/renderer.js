@@ -35,6 +35,7 @@ import {
     fitOnwardRowLabels,
     resolveTransferHubName,
 } from './transfer-card.js';
+import { saturdayNoServiceCopy } from './saturday-service.js';
 import {
     liveBoardJourneyKey,
     liveBoardNextAvailKey,
@@ -1085,52 +1086,63 @@ export const Renderer = {
 
     /**
      * Saturday / holiday grid for routes with no weekend timetable:
-     * station list from weekday sheet + professional no-service notice (no train columns).
+     * active weekday stations only + compact notice above a single-column table.
      */
-    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '') => {
+    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '', routeId = '') => {
         if (!weekdaySchedule?.rows?.length) {
             return `<div class="flex items-center justify-center h-full p-6 text-center text-sm text-gray-500">No station list available.</div>`;
         }
 
+        const skipKeys = new Set(['STATION', weekdaySchedule.stationColumnName, 'stationColumnName'].filter(Boolean));
+        const headerCols = Array.isArray(weekdaySchedule.headers)
+            ? weekdaySchedule.headers.filter((h) => h && !skipKeys.has(h))
+            : [];
+        const rowHasData = (row) => {
+            const cols = headerCols.length
+                ? headerCols
+                : Object.keys(row || {}).filter((k) => !skipKeys.has(k));
+            return cols.some((col) => row[col] && row[col] !== '-' && row[col] !== '');
+        };
+
         const stations = [];
         weekdaySchedule.rows.forEach((row) => {
             if (!row.STATION || String(row.STATION).toLowerCase().includes('updated')) return;
-            const clean = String(row.STATION).replace(/ STATION/gi, '').trim();
+            if (!rowHasData(row)) return;
+            const clean = Renderer._applyUIIntercepts(String(row.STATION).replace(/ STATION/gi, '').trim());
             if (clean && !stations.includes(clean)) stations.push(clean);
         });
 
+        const copy = saturdayNoServiceCopy(routeId || '');
+        const noticeBody = copy?.body
+            || `Metrorail does not run Saturday or public-holiday trains on this route${routeName ? ` (${formatRouteLabelPlain(String(routeName))})` : ''}.`;
+
         const stationRows = stations.map((name, i) => {
-            const zebra = i % 2 === 1 ? 'bg-gray-50 dark:bg-gray-800/40' : '';
-            const stationBg = i % 2 === 1 ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800';
-            return `<tr class="${zebra}">
-                <td class="nt-station-col sticky left-0 z-10 ${stationBg} py-2.5 px-3 border-r border-b border-gray-300 dark:border-gray-700 font-bold text-xs text-gray-900 dark:text-white truncate max-w-[160px] text-left">${escapeHTML(name)}</td>
-                ${i === 0 ? `<td rowspan="${Math.max(stations.length, 1)}" class="align-middle border-b border-gray-300 dark:border-gray-700 p-4 sm:p-6 bg-white dark:bg-gray-900">
-                    <div class="mx-auto max-w-sm rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/90 dark:bg-amber-950/40 px-4 py-5 sm:px-5 sm:py-6 text-center shadow-sm">
-                        <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-                        </div>
-                        <p class="text-sm font-black uppercase tracking-wide text-amber-900 dark:text-amber-200">No weekend service</p>
-                        <p class="mt-2 text-xs leading-relaxed text-amber-800/90 dark:text-amber-200/80">Metrorail does not run Saturday or public-holiday trains on this route${routeName ? ` (${escapeHTML(formatRouteLabelPlain(String(routeName)))})` : ''}.</p>
-                        <p class="mt-3 text-[11px] font-medium text-gray-600 dark:text-gray-400">Stations are listed for reference.</p>
-                        <button type="button" onclick="window.renderFullScheduleGrid&&window.renderFullScheduleGrid(window._gridSwapDir||'A','weekday')" class="mt-4 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm focus:outline-none">
-                            Switch to Mon - Fri
-                        </button>
-                    </div>
-                </td>` : ''}
+            const isZebra = i % 2 === 1;
+            const rowClass = isZebra ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+            const stationBg = isZebra
+                ? 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
+                : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
+            return `<tr class="${rowClass}">
+                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs truncate max-w-[140px] shadow-lg text-left">${escapeHTML(name)}</td>
             </tr>`;
         }).join('');
 
         return `
             <div class="w-full h-full overflow-auto">
-                <table class="w-full border-collapse bg-white dark:bg-gray-900 text-xs">
-                    <thead class="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20">
+                <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-3 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r">
+                    <p class="leading-relaxed">${escapeHTML(noticeBody)}</p>
+                    <button type="button" id="grid-switch-weekday-btn" class="mt-2 inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold shadow-sm focus:outline-none">
+                        Switch to Mon - Fri
+                    </button>
+                </div>
+                <table class="w-full text-xs text-left border-collapse bg-white dark:bg-gray-900">
+                    <thead class="text-[10px] uppercase bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20 shadow-sm">
                         <tr>
-                            <th class="py-2.5 px-3 border-b border-r border-gray-300 dark:border-gray-700 text-left font-bold min-w-[120px] sticky left-0 z-30 bg-gray-100 dark:bg-gray-800">Station</th>
-                            <th class="py-2.5 px-3 border-b border-gray-300 dark:border-gray-700 text-center font-bold">Weekend timetable</th>
+                            <th class="nt-station-col sticky left-0 z-30 bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 py-2.5 px-3 pl-3 border-b border-r font-bold min-w-[140px] shadow-lg text-left">Station</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y border-gray-300 dark:border-gray-700">
-                        ${stationRows || `<tr><td colspan="2" class="p-6 text-center text-gray-500">No stations found.</td></tr>`}
+                    <tbody class="divide-y border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
+                        ${stationRows || `<tr><td class="p-6 text-center text-gray-500">No stations found.</td></tr>`}
                     </tbody>
                 </table>
             </div>`;

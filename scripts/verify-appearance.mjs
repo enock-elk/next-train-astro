@@ -9,6 +9,14 @@ const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 
 const css = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
 assert(css.includes('--nt-chrome-header'), 'appearance defines --nt-chrome-header');
+assert(css.includes('--nt-text-faint'), 'appearance splits faint text from muted');
+assert(css.includes('--nt-text-muted: #3f3a32'), 'Earthy light muted ink is darker than the old sage-brown');
+assert(css.includes('--nt-text-muted: #3d2e24'), 'Ember light muted ink is darker than the old clay-brown');
+assert(css.includes('--nt-text-faint: #5c564c'), 'Earthy light faint stays readable on cream');
+assert(css.includes('--nt-text-faint: #5a4638'), 'Ember light faint stays readable on cream');
+assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
+assert(/html\[data-colour-pack="ember"\] #view-full-timetable-btn/.test(css), 'Ember weakens the timetable CTA halo');
+assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');
 assert(css.includes('--nt-canvas'), 'appearance defines --nt-canvas');
 assert(css.includes('--nt-chrome-header-border'), 'appearance defines --nt-chrome-header-border');
@@ -214,8 +222,8 @@ assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-
 assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav))'), 'Earthy/Ember light tab chip is an ink wash');
-assert(css.includes('--nt-primary: #c5cbb8'), 'Earthy light CTA is pale sage, not chocolate');
-assert(css.includes('--nt-primary: #e4c4a4'), 'Ember light CTA is pale clay, not chocolate');
+assert(css.includes('--nt-primary: #d4d8cc'), 'Earthy light CTA is paler sage, not chocolate');
+assert(css.includes('--nt-primary: #ecd4bc'), 'Ember light CTA is paler clay, not chocolate');
 assert(css.includes('#planner-search-btn'), 'Plan Trip uses pack primary tokens');
 assert(css.includes('#planner-locate-btn'), 'planner locate uses pack primary tokens');
 assert(css.includes('html, body, #nt-shell'), 'shell paints canvas so the Options gap is not raw white');
@@ -399,8 +407,9 @@ assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(/#view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community pane fills leftover height like Feedback Hub');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard keeps leftover fill so the composer has no gray slab');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?height:\s*var\(--nt-vv-h/.test(layout), 'Community keyboard locks the pane to the visual hole');
 assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane does not shrink to fit the Next Train header');
+assert(layout.includes('#view-community .community-feed-scroll'), 'Community keyboard feed keeps composer padding');
 assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
 assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
 assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');

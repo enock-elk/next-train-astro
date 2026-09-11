@@ -529,9 +529,11 @@ function renderPostCard(notice, opts = {}) {
         ${renderReactionsHtml(notice)}
         <p class="flex items-end justify-between gap-2 mt-2">
             ${adminScopeHtml}
-            ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
+            <span class="inline-flex items-center gap-2 shrink-0">
+                ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
+                <button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
+            </span>
         </p>
-        <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold py-2 rounded-lg inline-flex items-center justify-center gap-1.5 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
         </div>
     </article>`;
 }

@@ -250,6 +250,13 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
     assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');
     assert(js.indexOf('nt-alert-time') < js.indexOf('nt-alert-reply'), 'timestamp precedes Reply');
+    assert(js.includes('inline-flex items-center gap-2 shrink-0'), 'timestamp and Reply share the card meta row');
+    assert(!/class="[^"]*nt-alert-reply[^"]*\bw-full\b/.test(js), 'Reply is not a full-width button');
+    assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
+
+    const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?background:\s*transparent/.test(appearance), 'Reply is a ghost/text control');
     assert(js.includes('nt-alert-source'), 'source citation uses the clickable chip class');
     assert(js.includes('0 views'), 'admin impression placeholder is 0 views');
     assert(js.includes('formatAppTime'), 'alert stamps are time-only');

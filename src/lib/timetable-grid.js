@@ -46,9 +46,16 @@ function paintOpenGridBody() {
     } = lastGridBody;
     grid.innerHTML = noServiceSheet
         ? (typeof window.Renderer?._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId)
             : grid.innerHTML)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
+    if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
+}
+
+function bindNoWeekendWeekdaySwitch(direction) {
+    document.getElementById('grid-switch-weekday-btn')?.addEventListener('click', () => {
+        renderFullScheduleGrid(direction, 'weekday');
+    });
 }
 
 function bindGridExclusionRefresh() {
@@ -446,16 +453,18 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         routeName: route.name,
         routeSheetKey,
         routeId,
+        direction,
         targetDayIdx,
         isTodayType,
     };
     const html = noServiceSheet
         ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name)
-            : `<div class="p-6 text-center text-sm text-amber-700 dark:text-amber-300">No weekend service on this route. <button type="button" class="underline font-bold" onclick="window.renderFullScheduleGrid&&window.renderFullScheduleGrid('${direction}','weekday')">Switch to Mon - Fri</button></div>`)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId)
+            : `<div class="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No weekend service on this route. <button type="button" id="grid-switch-weekday-btn" class="underline font-bold">Switch to Mon - Fri</button></div>`)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
+    if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');

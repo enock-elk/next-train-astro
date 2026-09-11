@@ -6,8 +6,9 @@
 ---
 
 <div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
-    <div class="community-pane flex flex-col flex-1 min-h-0 h-full">
-        <div class="shrink-0 pt-2.5 pb-2 space-y-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <div class="community-pane relative flex flex-col flex-1 min-h-0 h-full">
+        <div class="nt-pack-wallpaper" aria-hidden="true"></div>
+        <div class="relative z-[1] shrink-0 pt-2.5 pb-2 space-y-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div class="flex items-center justify-between gap-3 px-4">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
                 <button type="button" id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide text-right truncate max-w-[62%] hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
@@ -39,16 +40,13 @@
             </div>
         </div>
 
-        <!-- Grows into leftover height; wallpaper stays put while the feed scrolls -->
-        <div class="relative flex-1 basis-0 min-h-[8rem] min-h-0">
-            <div class="nt-pack-wallpaper" aria-hidden="true"></div>
-            <div class="relative z-[1] h-full overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent">
-                <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
-                <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
-            </div>
+        <!-- Wallpaper lives on the pane so IME / composer resize does not retile it -->
+        <div class="community-feed-scroll relative z-[1] flex-1 basis-0 min-h-[8rem] min-h-0 overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar bg-transparent">
+            <div id="community-feed-empty" class="hidden py-10 px-2 text-center"></div>
+            <div id="community-feed-list" class="pb-2 space-y-2.5"></div>
         </div>
 
-        <div id="community-composer-dock" class="shrink-0 border-t border-gray-200 dark:border-gray-700 px-3 pt-2 pb-2 bg-white dark:bg-gray-800">
+        <div id="community-composer-dock" class="relative z-[1] shrink-0 border-t border-gray-200 dark:border-gray-700 px-3 pt-2 pb-2 bg-white dark:bg-gray-800">
             <div id="community-reply-bar" class="hidden mx-0 mb-1.5 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-start gap-2">
                 <div class="min-w-0 flex-1 border-l-2 border-blue-500 pl-2">
                     <p id="community-reply-bar-name" class="text-[11px] font-bold text-blue-600 dark:text-blue-400 truncate"></p>

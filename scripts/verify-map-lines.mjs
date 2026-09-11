@@ -104,7 +104,7 @@ assert(mapApp.includes('"AVOCA", "DUFF\'S ROAD"'), 'KZN north line is Avoca then
 assert(!mapApp.includes('"AVOCA", "TEMPLE"'), 'Avoca is not followed by Temple');
 assert(mapApp.includes('applyCanonicalStationOrder(route.id, validStops, routeCoords)'), 'every drawn route is reordered before paint');
 assert(mapApp.includes('railHopSkipsRouteStop(graph, nodePath, stops, i)'), 'OSM hop skip check is wired');
-assert(mapApp.includes('railHopStraysFromChord(graph, nodePath, a, b)'), 'OSM hops cannot stray off the station chord');
+assert(mapApp.includes('railHopStraysFromChord(graph, nodePath, a, b, strayMax)'), 'OSM hops cannot stray off the station chord');
 assert(mapApp.includes('function applySelectedLine'), 'Network Lines rows isolate one corridor');
 assert(mapApp.includes('function setSelectedLine'), 'line filter can reset without toggling');
 assert(mapApp.includes('function fitNetworkView'), 'Show all lines restores the full network bounds');
@@ -118,7 +118,7 @@ assert(mapApp.includes('function stationPopupHtml'), 'station popup lists corrid
 assert(mapApp.includes('map-popup-route'), 'station popup rows use map-popup-route');
 assert(mapApp.includes('pathVisitsStopsInOrder(latlngs, stops)'), 'baked GeoJSON must follow station order');
 assert(mapApp.includes('return chords;'), 'fallback paint is station-to-station chords');
-assert(mapApp.includes('railHops !== stops.length - 1'), 'graph smoothing wins only when every hop succeeds');
+assert(mapApp.includes('railHops === 0'), 'graph smoothing keeps successful rail hops and falls back per failed hop');
 assert(mapApp.includes('bakedLineCoversStops(baked, stops)'), 'baked line must pass every station before it is painted');
 assert(
     mapApp.includes('"CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "KENTEMADE", "CENTURY CITY"'),
@@ -258,7 +258,7 @@ assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planne
 assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked corridor per hop');
 assert(railTracks.includes('STUB_MIN_M'), 'off-track planner stations stub onto the rail');
 assert(!railTracks.includes('railHops !== stops.length - 1'), 'planner keeps rail hops when one station sits off the track');
-assert(mapApp.includes('railHops !== stops.length - 1'), 'network map paint rule is unchanged');
+assert(!mapApp.includes('railHops !== stops.length - 1'), 'network map also keeps valid rail hops when another hop falls back');
 
 {
     const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));

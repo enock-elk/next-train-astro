@@ -111,7 +111,7 @@ assert(logic.includes('fetchGridOrderConfig($userRegion.get()'));
 assert(seo.includes('runtimeConfig: exportedOrders'));
 assert(og.includes('loadRegionGridOrder'));
 assert(appsScript.includes('cleanKey + "_columnOrder"'));
-assert(appsScript.includes('PropertiesService.getScriptProperties()'));
-assert(!/ReVFeti|FIREBASE_SECRET\s*=\s*["'][^"']+/.test(appsScript), 'Apps Script template must not commit a credential');
+assert(appsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
+assert(appsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

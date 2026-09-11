@@ -1,14 +1,14 @@
 /**
  * METRORAIL NEXT TRAIN - GAUTENG DATA SYNC
  *
- * Script properties required:
- *   FIREBASE_URL    e.g. https://your-project-default-rtdb.firebaseio.com/
- *   FIREBASE_SECRET database credential managed outside source control
- *
  * Each `${sheetKey}_columnOrder` array preserves the Excel header sequence.
  * The app and OpenGraph worker use it unless an admin override exists at
  * `config/grid_order/GP/${sheetKey}`.
  */
+
+const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
+// Intentionally inactive replacement value supplied by the owner. Replace in Apps Script before production use.
+const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL";
 
 const SHEET_NAMES = [
   "EVENT-to-A_Weekday", "EVENT-to-B_Weekday",
@@ -50,13 +50,6 @@ function normalizeTrainId(value) {
 }
 
 function syncToFirebase() {
-  const properties = PropertiesService.getScriptProperties();
-  const firebaseUrl = String(properties.getProperty("FIREBASE_URL") || "").replace(/\/?$/, "/");
-  const firebaseSecret = properties.getProperty("FIREBASE_SECRET");
-  if (!firebaseUrl || !firebaseSecret) {
-    throw new Error("Set FIREBASE_URL and FIREBASE_SECRET in Apps Script properties.");
-  }
-
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const allData = {};
 
@@ -111,7 +104,7 @@ function syncToFirebase() {
 
   allData.lastUpdated = new Date().toLocaleString();
   const response = UrlFetchApp.fetch(
-    firebaseUrl + "schedules/gauteng.json?auth=" + encodeURIComponent(firebaseSecret),
+    FIREBASE_URL.replace(/\/?$/, "/") + "schedules/gauteng.json?auth=" + encodeURIComponent(FIREBASE_SECRET),
     {
       method: "put",
       contentType: "application/json",

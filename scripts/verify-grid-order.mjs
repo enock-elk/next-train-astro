@@ -142,6 +142,7 @@ assert(wcAppsScript.includes('CT-to-MALM_Sat'));
 assert(!wcAppsScript.includes('schedules.json?auth='), 'Western Cape must not write the legacy monolithic node');
 assert(wcAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(wcAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+assert(wcAppsScript.includes('Synced Securely to V6 WC!'));
 assert(kznAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(kznAppsScript.includes('schedules/kzn.json'));
 assert(kznAppsScript.includes('DURBN-to-UMLAZ_Weekday'));
@@ -149,6 +150,7 @@ assert(kznAppsScript.includes('CROSS-to-DURBN_Sat'));
 assert(!kznAppsScript.includes('schedules.json?auth='), 'KZN must not write the legacy monolithic node');
 assert(kznAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(kznAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+assert(kznAppsScript.includes('Synced Securely to V6 KZN!'));
 const ecAppsScript = read('scripts/google-apps-script-easterncape-sync.gs');
 assert(ecAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(ecAppsScript.includes('schedules/easterncape.json'));
@@ -162,8 +164,11 @@ assert(ecAppsScript.includes('normalizeSheetHeader'), 'Eastern Cape must keep CO
   assert(ecAppsScript.includes('return raw;'), 'Eastern Cape must preserve non-train sheet headers');
   assert(!ecAppsScript.includes('return normalizeTrainId(raw);'), 'Eastern Cape must not filter payload headers through train IDs');
   assert(ecAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'Eastern Cape must keep the V6 header loop so COORDINATES is written');
+  assert(ecAppsScript.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), 'Eastern Cape must keep the V6 per-sheet execution log');
+  assert(ecAppsScript.includes('✅ V6 Node Sync Status: '), 'Eastern Cape must keep the V6 PUT status log');
   assert(ecAppsScript.includes('Coordinates sent='), 'Eastern Cape must log how many COORDINATES rows will be sent');
   assert(ecAppsScript.includes('Coordinate validation'), 'Eastern Cape must validate COORDINATES before the PUT');
+  assert(ecAppsScript.includes('Synced Securely to V6 EC!'));
 const wcPubAppsScript = read('scripts/google-apps-script-westerncape-public-holidays-sync.gs');
 assert(wcPubAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(wcPubAppsScript.includes('schedules/westerncape/public_holidays.json'));
@@ -179,8 +184,11 @@ assert(wcPubAppsScript.includes('normalizeSheetHeader'), 'WC public holidays mus
   assert(wcPubAppsScript.includes('return raw;'), 'WC public holidays must preserve non-train sheet headers');
   assert(!wcPubAppsScript.includes('return normalizeTrainId(raw);'), 'WC public holidays must not filter payload headers through train IDs');
   assert(wcPubAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'WC public holidays must keep the V6 header loop so COORDINATES is written');
+  assert(wcPubAppsScript.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), 'WC public holidays must keep the V6 per-sheet execution log');
+  assert(wcPubAppsScript.includes('✅ V6 Node Sync Status: '), 'WC public holidays must keep the V6 PUT status log');
   assert(wcPubAppsScript.includes('Coordinates sent='), 'WC public holidays must log how many COORDINATES rows will be sent');
   assert(wcPubAppsScript.includes('Coordinate validation'), 'WC public holidays must validate COORDINATES before the PUT');
+  assert(wcPubAppsScript.includes('Synced Securely to V6 WC Pub!'));
 
 function loadAppsScriptFunction(source, name) {
   const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?^\\}`, 'm'));

@@ -447,7 +447,7 @@ assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train
 const rendererGrid = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(rendererGrid.includes("isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700'"), 'export grid lines are softer; in-app borders stay');
 assert(rendererGrid.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'export times are bold; in-app grid times stay medium');
-assert(rendererGrid.includes('grid-template-rows:11px 14px') && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
+assert(rendererGrid.includes("isExport ? '16px' : '14px'") && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
 assert(!rendererGrid.includes('nt-station-col, th:first-child'), 'export snapshot does not restyle the station column beyond the old renderer');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
 assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');

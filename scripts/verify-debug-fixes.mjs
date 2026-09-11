@@ -155,7 +155,7 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(renderer.includes('data-excl-open="1"'), 'cancelled columns open the exclusion sheet');
     assert(renderer.includes('exclHeadAttrs'), 'NO SVC header cell is the hit target');
     assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');
-    assert(renderer.includes('nt-grid-train-head') && renderer.includes('grid-template-rows:11px 14px'), 'all train headers reserve the same status and number rows');
+    assert(renderer.includes('nt-grid-train-head') && renderer.includes("isExport ? '16px' : '14px'"), 'all train headers reserve the same status and number rows');
     assert(!renderer.includes('top-[2px]') && !renderer.includes('position:absolute; top:2px'), 'NO SVC no longer overlaps an absolutely positioned train number');
     assert(renderer.includes('text-decoration:underline dotted'), 'NO SVC keeps its dotted underline');
     assert(!renderer.includes('nt-excl-col'), 'banned columns do not use extra nt-excl-col padding');
@@ -163,7 +163,8 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(renderer.includes("isExport ? 'export' : 'grid'"), 'grid visibility uses the selected exclusion surface');
     assert(renderer.includes('noticeNode.showInApp !== false'), 'in-app grid banner honours its visibility checkbox');
     assert(renderer.includes('routePrimaryGridDirection(route)') && renderer.includes('primarySection.html'), 'download grid starts with the route-name direction');
-    assert(renderer.includes('nt-export-direction--primary') && renderer.includes('nt-export-direction--return'), 'direction strips use distinct restrained shading');
+    assert(renderer.includes('nt-export-direction--primary') && renderer.includes('nt-export-direction--return'), 'outbound and return direction strips stay labeled');
+    assert(renderer.includes('NOTE:') && !renderer.includes('font-size: 12px;">Service Update</div>'), 'export notice uses NOTE: and does not grow the in-app Service Update banner');
     assert(renderer.includes("isExport ? 'border-gray-200'"), 'PNG export uses softer grid lines');
     assert(renderer.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'PNG export times are bold; in-app times stay medium');
     assert(renderer.includes("td.style.fontWeight = '700'"), 'PNG snapshot paints times at 700');

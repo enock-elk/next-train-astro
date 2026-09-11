@@ -960,9 +960,9 @@ export const Renderer = {
                             
                             let bgClass = '';
                             const trainIdStyle = isExport
-                                ? 'display:block;font-size:11px;font-weight:800;color:#0f172a;line-height:14px;'
+                                ? 'display:block;font-size:13px;font-weight:800;color:#0f172a;line-height:16px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
-                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px 14px;align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '16px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
                             
                             if (paintExclusion && exclusionType === 'special') {
@@ -1339,11 +1339,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
-                <div style="background-color: #eff6ff; border-left: 5px solid ${accentColor}; padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #1e3a8a; border-radius: 0 6px 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: flex-start;">
-                    <span style="margin-right: 10px; font-size: 18px; line-height: 1;">ℹ️</span>
-                    <div>
-                        <div style="font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-size: 12px;">Service Update</div>
-                        <div style="font-weight: 600; line-height: 1.4;">${cleanText}</div>
+                <div style="background-color: #eff6ff; border-left: 5px solid ${accentColor}; padding: 8px 14px; margin-bottom: 16px; font-size: 15px; color: #1e3a8a; border-radius: 0 6px 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center;">
+                    <span style="margin-right: 8px; font-size: 15px; line-height: 1;">ℹ️</span>
+                    <div style="font-weight: 600; line-height: 1.25;">
+                        <span style="font-weight: 900; letter-spacing: 0.04em;">NOTE:</span> ${cleanText}
                     </div>
                 </div>
             `;
@@ -1381,7 +1380,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         ${exportGridNoticeHtml}
 
-        <div class="mb-8">
+        <div class="mb-4">
             <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
                 <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
@@ -1390,14 +1389,14 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             </div>
         </div>
 
-        <div class="flex items-center justify-center my-8 opacity-50">
+        <div class="flex items-center justify-center my-3 opacity-50">
             <div class="h-px w-full" style="background-color: ${borderColor}"></div>
             <span class="px-4 text-xs font-bold uppercase" style="color: ${mutedColor}">Return Service</span>
             <div class="h-px w-full" style="background-color: ${borderColor}"></div>
         </div>
 
         <div class="mb-8">
-            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#f8fafc;border-color:#94a3b8;padding:10px 12px;min-height:42px;display:flex;align-items:center;">
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
                 <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
@@ -1407,8 +1406,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         <div class="mt-8 p-5 rounded-lg flex justify-between items-end" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}">
             <div class="flex flex-col space-y-1.5 text-left">
-                <span class="text-xs font-mono font-bold" style="color: #4b5563">GENERATED: ${dateText}</span>
-                <span class="font-black text-sm" style="color: #374151">Data Source: PRASA / Metrorail Facebook</span>
+                <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px;">GENERATED: ${dateText}</span>
+                <span class="font-black" style="color: #374151; font-size: 15px;">Data Source: PRASA / Metrorail Facebook</span>
             </div>
             <div class="flex flex-col text-right">
                 <span class="font-black text-2xl tracking-tight leading-none mb-1.5" style="color: ${accentColor}">NextTrain.co.za</span>
@@ -1430,7 +1429,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.color = headerTextColor;
             headerCell.style.border = `1px solid ${borderColor}`;
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
-            headerCell.style.fontSize = isCompact ? '12.5px' : '13px';
+            headerCell.style.fontSize = isCompact ? '13.5px' : '14px';
             headerCell.style.fontWeight = '900';
             headerCell.style.textAlign = 'center';
             if (isCompact) headerCell.style.letterSpacing = '-0.5px'; 

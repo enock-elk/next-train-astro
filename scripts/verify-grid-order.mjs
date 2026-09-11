@@ -121,6 +121,12 @@ for (const [label, source] of regionalAppsScripts) {
   assert(source.includes('trainColumnOrder'), `${label} columnOrder must stay train IDs only`);
   assert(source.includes('return raw;'), `${label} must preserve non-train sheet headers like the original sync`);
   assert(!source.includes('return normalizeTrainId(raw);'), `${label} must not filter payload headers through train IDs`);
+  assert(!source.includes('function normalizeTrainId'), `${label} must not expose unused normalizeTrainId in the Run dropdown`);
+  assert(/^function syncToFirebase\(/m.test(source) || /^function syncPublicHolidaysToFirebase\(/m.test(source), `${label} sync function must exist`);
+  assert(
+    source.search(/^function /m) === source.search(/^function sync(?:ToFirebase|PublicHolidaysToFirebase)\(/m),
+    `${label} sync function must be first so Apps Script Run defaults to it`
+  );
   assert(source.includes('if (header && value !== "") { obj[header] = value; }'), `${label} must keep the V6 header loop so COORDINATES is written`);
   assert(source.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), `${label} must keep the V6 per-sheet execution log`);
   assert(source.includes('✅ V6 Node Sync Status: '), `${label} must keep the V6 PUT status log`);
@@ -163,6 +169,8 @@ assert(ecAppsScript.includes('normalizeSheetHeader'), 'Eastern Cape must keep CO
   assert(ecAppsScript.includes('trainColumnOrder'), 'Eastern Cape columnOrder must stay train IDs only');
   assert(ecAppsScript.includes('return raw;'), 'Eastern Cape must preserve non-train sheet headers');
   assert(!ecAppsScript.includes('return normalizeTrainId(raw);'), 'Eastern Cape must not filter payload headers through train IDs');
+  assert(!ecAppsScript.includes('function normalizeTrainId'), 'Eastern Cape must not expose unused normalizeTrainId in the Run dropdown');
+  assert(ecAppsScript.search(/^function /m) === ecAppsScript.search(/^function syncToFirebase\(/m), 'Eastern Cape sync function must be first');
   assert(ecAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'Eastern Cape must keep the V6 header loop so COORDINATES is written');
   assert(ecAppsScript.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), 'Eastern Cape must keep the V6 per-sheet execution log');
   assert(ecAppsScript.includes('✅ V6 Node Sync Status: '), 'Eastern Cape must keep the V6 PUT status log');
@@ -183,6 +191,8 @@ assert(wcPubAppsScript.includes('normalizeSheetHeader'), 'WC public holidays mus
   assert(wcPubAppsScript.includes('trainColumnOrder'), 'WC public holidays columnOrder must stay train IDs only');
   assert(wcPubAppsScript.includes('return raw;'), 'WC public holidays must preserve non-train sheet headers');
   assert(!wcPubAppsScript.includes('return normalizeTrainId(raw);'), 'WC public holidays must not filter payload headers through train IDs');
+  assert(!wcPubAppsScript.includes('function normalizeTrainId'), 'WC public holidays must not expose unused normalizeTrainId in the Run dropdown');
+  assert(wcPubAppsScript.search(/^function /m) === wcPubAppsScript.search(/^function syncPublicHolidaysToFirebase\(/m), 'WC public holidays sync function must be first');
   assert(wcPubAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'WC public holidays must keep the V6 header loop so COORDINATES is written');
   assert(wcPubAppsScript.includes("ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}"), 'WC public holidays must keep the V6 per-sheet execution log');
   assert(wcPubAppsScript.includes('✅ V6 Node Sync Status: '), 'WC public holidays must keep the V6 PUT status log');

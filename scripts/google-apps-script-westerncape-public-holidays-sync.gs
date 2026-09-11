@@ -32,44 +32,6 @@ const SHEET_NAMES = [
   "CT-to-MALM_Pub", "MALM-to-CT_Pub"
 ];
 
-function normalizeTrainId(value) {
-  let id = String(value || "").trim();
-  if (/^\d+$/.test(id)) id = id.padStart(4, "0");
-  return /^\d{4}[a-zA-Z]*$/.test(id) ? id : "";
-}
-
-function normalizeSheetHeader(value, index) {
-  const raw = String(value || "").trim();
-  if (index === 0) return raw || "STATION";
-  const upper = raw.toUpperCase();
-  if (upper === "COORDINATES") return "COORDINATES";
-  if (upper === "KM_MARK" || upper === "KM MARK") return "KM_MARK";
-  if (/^\d+$/.test(raw)) return raw.padStart(4, "0");
-  return raw;
-}
-
-function trainColumnOrder(headers) {
-  return headers.filter(function (header) {
-    return /^\d{4}[a-zA-Z]*$/.test(header);
-  });
-}
-
-function countCoordinateRows(rows) {
-  let count = 0;
-  rows.forEach(function (row) {
-    if (!row || typeof row !== "object") return;
-    const keys = Object.keys(row);
-    for (let i = 0; i < keys.length; i++) {
-      const key = String(keys[i]).toUpperCase().replace(/\s+/g, "");
-      if (key === "COORDINATES" && row[keys[i]] !== "") {
-        count += 1;
-        return;
-      }
-    }
-  });
-  return count;
-}
-
 function syncPublicHolidaysToFirebase() {
   if (!FIREBASE_SECRET) {
     throw new Error("Missing FIREBASE_SECRET in Script properties.");
@@ -191,4 +153,37 @@ function syncPublicHolidaysToFirebase() {
   }
 }
 
+function normalizeSheetHeader(value, index) {
+  const raw = String(value || "").trim();
+  if (index === 0) return raw || "STATION";
+  const upper = raw.toUpperCase();
+  if (upper === "COORDINATES") return "COORDINATES";
+  if (upper === "KM_MARK" || upper === "KM MARK") return "KM_MARK";
+  if (/^\d+$/.test(raw)) return raw.padStart(4, "0");
+  return raw;
+}
+
+function trainColumnOrder(headers) {
+  return headers.filter(function (header) {
+    return /^\d{4}[a-zA-Z]*$/.test(header);
+  });
+}
+
+function countCoordinateRows(rows) {
+  let count = 0;
+  rows.forEach(function (row) {
+    if (!row || typeof row !== "object") return;
+    const keys = Object.keys(row);
+    for (let i = 0; i < keys.length; i++) {
+      const key = String(keys[i]).toUpperCase().replace(/\s+/g, "");
+      if (key === "COORDINATES" && row[keys[i]] !== "") {
+        count += 1;
+        return;
+      }
+    }
+  });
+  return count;
+}
+
 function sanitizeKey(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, "_"); }
+

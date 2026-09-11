@@ -38,12 +38,18 @@ jobs:
           PUBLIC_SITE_URL: https://nexttrain.co.za
           PUBLIC_BASE_PATH: /
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
+          PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev
 
       - name: Verify URL parity with the live SPA
         run: npm run verify:urls
 
       - name: Verify GitHub schedule fallback
         run: npm run verify:schedule
+
+      - name: Verify update recovery and safe cache reset
+        run: |
+          npm run verify:update-fouc
+          npm run verify:safe-nuke
 
       - name: Summarise the built URL surface
         run: |

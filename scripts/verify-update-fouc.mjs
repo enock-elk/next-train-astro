@@ -73,10 +73,19 @@ assert(!hubJs.includes('No new updates; still'), 'Check for Updates does not ski
 assert(!hubJs.includes('peekIncomingVersion'), 'Check for Updates does not peek CDN version before restart');
 
 const deploy = readFileSync(new URL('../.github/workflows/deploy-production.yml', import.meta.url), 'utf8');
+const productionBuild = readFileSync(new URL('../.github/workflows/production-build.yml', import.meta.url), 'utf8');
 assert(deploy.includes('Snapshot current /_astro/ before sweep'), 'production deploy snapshots hashed assets before rsync');
 assert(deploy.includes('retain-previous-astro.mjs'), 'production deploy runs the retain helper');
 assert(deploy.includes('astro-retained-generation.json'), 'production deploy records the retained generation');
 assert(deploy.includes('rsync -a --delete'), 'production deploy still sweeps obsolete host files');
+for (const [name, workflow] of [['production deploy', deploy], ['production build', productionBuild]]) {
+    assert(workflow.includes('npm run verify:update-fouc'), `${name} gates on update recovery`);
+    assert(workflow.includes('npm run verify:safe-nuke'), `${name} gates on safe cache reset`);
+    assert(
+        workflow.includes('PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev'),
+        `${name} wires the deployed community Worker`
+    );
+}
 
 const plan = retainPreviousAstro({
     snapshotFiles: ['old-a.css', 'old-b.js', 'shared.css', 'two-ago.css'],

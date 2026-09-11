@@ -866,8 +866,9 @@ async function ensureReactAuthToken() {
 export async function submitAlertReaction(notice, emoji) {
     if (!notice || !ALERT_REACTION_KEYS.includes(emoji)) return false;
     const storeKey = reactionStorageKey(notice);
-    if (safeStorage.getItem(storeKey)) {
-        showToast('You already reacted to this notice.', 'info');
+    const previous = safeStorage.getItem(storeKey) || '';
+    if (previous === emoji) {
+        showToast('You already reacted with this.', 'info');
         return false;
     }
     const token = await ensureReactAuthToken();
@@ -876,15 +877,22 @@ export async function submitAlertReaction(notice, emoji) {
         return false;
     }
     const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
-    const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
-    try {
+    const bumpReaction = async (key, delta) => {
+        const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(key)}.json?auth=${encodeURIComponent(token)}`;
         const curRes = await fetch(url);
         const cur = curRes.ok ? await curRes.json() : 0;
-        const next = (Number(cur) || 0) + 1;
+        const next = Math.max(0, (Number(cur) || 0) + delta);
         const put = await fetch(url, { method: 'PUT', body: JSON.stringify(next) });
         if (!put.ok) throw new Error(`react ${put.status}`);
-        safeStorage.setItem(storeKey, emoji);
+        return next;
+    };
+    try {
         if (!notice.reactions || typeof notice.reactions !== 'object') notice.reactions = {};
+        if (previous && ALERT_REACTION_KEYS.includes(previous)) {
+            notice.reactions[previous] = await bumpReaction(previous, -1);
+        }
+        const next = await bumpReaction(emoji, 1);
+        safeStorage.setItem(storeKey, emoji);
         notice.reactions[emoji] = next;
         const card = document.querySelector(`[data-alert-post="${CSS.escape ? CSS.escape(String(notice.id)) : notice.id}"]`);
         if (card) {

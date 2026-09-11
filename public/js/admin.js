@@ -6682,9 +6682,7 @@ const Admin = {
                         // ADMIN BUBBLE (Right)
                         // GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
                         let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
-                        if (item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
-                        } else if (item.read) {
+                        if (item.acknowledged || item.read) {
                             receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         } else if (item.delivered) {
                             receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
@@ -6696,6 +6694,22 @@ const Admin = {
                         const signoff = Admin.parseAdminSignoff(parsedAdminText);
                         parsedAdminText = signoff.body;
                         const adminName = Admin.formatAdminBubbleLabel(item.fromName || signoff.name || 'Admin');
+
+                        let adminQuoteHtml = '';
+                        const adminAlert = (typeof parseFeedbackAlertQuote === 'function')
+                            ? parseFeedbackAlertQuote(String(item.text || item.message || ''))
+                            : null;
+                        if (adminAlert) {
+                            parsedAdminText = adminAlert.body || '';
+                            const afterAlert = Admin.parseAdminSignoff(parsedAdminText);
+                            parsedAdminText = afterAlert.body;
+                            const kind = adminAlert.kind || 'notice';
+                            const snippet = String(adminAlert.snippet || 'Quoted advisory').trim().slice(0, 240) || 'Quoted advisory';
+                            adminQuoteHtml = `<button type="button" data-fb-quote-jump="1" data-reply-key="" data-reply-snippet="${secureEscape(snippet)}" data-alert-id="${secureEscape(adminAlert.alertId || '')}" data-alert-fallback="${secureEscape(snippet)}" data-alert-kind="${secureEscape(kind)}" class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 border-blue-500 dark:border-blue-400 py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer">
+                                    <div class="text-[10px] font-bold text-blue-200 leading-tight">${kind === 'disruption' ? 'Incident' : 'Advisory'}</div>
+                                    <div class="text-[11px] text-white/90 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(snippet)}</div>
+                                </button>`;
+                        }
 
                         parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
                         if (typeof window.sanitizeRichHtml === 'function') {
@@ -6723,7 +6737,7 @@ const Admin = {
                                             <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
                                         </div>
                                         <div class="inbox-bubble-body">
-                                            <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                            <div class="inbox-msg-text">${adminQuoteHtml}${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
                                         </div>
                                     </div>
                                 </div>
@@ -7233,6 +7247,7 @@ const Admin = {
                         const deviceMessages = inboxData[deviceId];
                         Object.keys(deviceMessages).forEach(msgKey => {
                             const msg = deviceMessages[msgKey];
+                            if (!msg || msg.from === 'commuter' || String(msgKey).startsWith('cm_')) return;
                             let parentStatus = 'unread';
                             // Inherit the archive status of the parent ticket so threads collapse together
                             if (msg.feedbackId && data && data[msg.feedbackId]) {
@@ -8683,6 +8698,7 @@ const Admin = {
                 { id: 'freeze', label: 'Freeze / unresponsive' },
                 { id: 'fouc', label: 'True FOUC (unstyled)' },
                 { id: 'lost', label: '404 / End of the Line' },
+                { id: 'warn', label: 'Gentle ToS warning' },
             ];
 
         const choice = await new Promise((resolve) => {

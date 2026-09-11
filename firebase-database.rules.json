@@ -63,13 +63,13 @@
       "$target": {
         "reactions": {
           "$emoji": {
-            ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
+            ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1 || newData.val() === data.val() - 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
           }
         },
         "$noticeId": {
           "reactions": {
             "$emoji": {
-              ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
+              ".write": "auth != null && newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000 && (!data.exists() || newData.val() === data.val() + 1 || newData.val() === data.val() - 1) && ($emoji === 'like' || $emoji === 'love' || $emoji === 'laugh' || $emoji === 'wow' || $emoji === 'sad' || $emoji === 'pray')"
             }
           }
         }

@@ -253,6 +253,34 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const rules = readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
     assert(rules.includes('start|stop|session'), 'ride_share_log allows session updates');
     assert(rules.includes('thandeka05nxumalo@gmail.com'), 'Thandeka stays on ride_share_log rules');
+    assert(rules.includes('newData.val() === data.val() + 1 || newData.val() === data.val() - 1'), 'notice reactions allow increment or decrement');
+}
+
+{
+    const { readFileSync } = await import('node:fs');
+    const { inboxReplyStillVisible, isCommuterInboxEntry } = await import('../src/lib/inbox-replies.js');
+    const { parseReplyToAdminQuote, parseFeedbackAlertQuote } = await import('../src/lib/feedback-quote.js');
+    assert(isCommuterInboxEntry({ from: 'commuter' }, 'abc') === true, 'from=commuter is a commuter inbox copy');
+    assert(isCommuterInboxEntry({ from: 'admin' }, 'cm_abc') === true, 'cm_ ids are commuter inbox copies');
+    assert(inboxReplyStillVisible({ from: 'commuter', read: false }, Date.now(), 'cm_1') === false, 'commuter copies never raise the banner');
+    assert(inboxReplyStillVisible({ message: 'hi', read: false }, Date.now(), 'admin1') === true, 'unread admin replies still raise the banner');
+    assert(inboxReplyStillVisible({ message: 'hi', read: true }, Date.now(), 'admin1') === false, 'read admin replies hide the banner');
+    const alertQ = parseFeedbackAlertQuote('[ALERT:1789|notice|+ - Next Train Ops]\nHello');
+    assert(!!alertQ && alertQ.alertId === '1789' && alertQ.body.trim() === 'Hello', 'ALERT quote parses id and body');
+    const replyQ = parseReplyToAdminQuote('[REPLY TO ADMIN: abc123 | Sinkhole update] Thanks');
+    assert(!!replyQ && replyQ.replyKey === 'abc123' && replyQ.body.trim() === 'Thanks', 'REPLY TO ADMIN quote parses key and body');
+    const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(hub.includes('inbox/${encodeURIComponent(deviceId)}/${encodeURIComponent(msgId)}.json?auth='), 'receipt PATCH is per inbox message with auth');
+    assert(!hub.includes("acknowledged: true"), 'opening the hub no longer writes acknowledged');
+    assert(hub.includes('data-inbox-quote="1"') && hub.includes('openQuotedInboxAlert'), 'Feedback Hub quote chips reopen the advisory');
+    const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(!admin.includes('Acknowledged by Commuter'), 'admin receipts dropped the R chip');
+    assert(admin.includes("msg.from === 'commuter' || String(msgKey).startsWith('cm_')"), 'admin inbox skips commuter copies');
+    const alerts = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    assert(alerts.includes('bumpReaction(previous, -1)'), 'alert reactions can be changed');
+    const trust = readFileSync(new URL('../src/lib/trust.js', import.meta.url), 'utf8');
+    assert(trust.includes("id: 'warn'") && trust.includes('applyBanModeWarn'), 'shadow-ban options include a gentle ToS warning');
+    assert(trust.includes("if (mode === 'warn')"), 'warn mode does not apply the cloaked offline path');
 }
 
 if (failed) {

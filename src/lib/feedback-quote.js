@@ -28,10 +28,32 @@ export function parseFeedbackAlertQuote(text) {
     };
 }
 
-/** Commuter Feedback Hub: drop the [ALERT:…] prefix. Admin still parses the raw text. */
+/** `[REPLY TO ADMIN: key | snippet]` or legacy `[REPLY TO ADMIN: key]`. */
+export function parseReplyToAdminQuote(text) {
+    const raw = String(text || '');
+    const withPipe = raw.match(/^\[REPLY TO ADMIN:\s*([^|\]]+?)\s*\|\s*([^\]]*)\]\s*([\s\S]*)$/i);
+    if (withPipe) {
+        return {
+            replyKey: String(withPipe[1] || '').trim(),
+            snippet: String(withPipe[2] || '').trim(),
+            body: String(withPipe[3] || ''),
+        };
+    }
+    const headerOnly = raw.match(/^\[REPLY TO ADMIN:\s*([^\]]+)\]\s*([\s\S]*)$/i);
+    if (!headerOnly) return null;
+    return {
+        replyKey: String(headerOnly[1] || '').trim(),
+        snippet: '',
+        body: String(headerOnly[2] || ''),
+    };
+}
+
+/** Commuter Feedback Hub: drop the [ALERT:…] / reply prefix. Admin still parses the raw text. */
 export function commuterFeedbackText(text) {
     const raw = String(text || '');
     const parsed = parseFeedbackAlertQuote(raw);
     if (parsed) return String(parsed.body || '').trim();
+    const reply = parseReplyToAdminQuote(raw);
+    if (reply) return String(reply.body || '').trim();
     return raw.replace(/^\[ALERT:[^\]]*\]\s*/i, '').trim();
 }

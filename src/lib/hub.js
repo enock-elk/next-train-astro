@@ -14,13 +14,13 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
-import { encodeFeedbackAlertQuote, commuterFeedbackText } from './feedback-quote.js';
+import { encodeFeedbackAlertQuote, commuterFeedbackText, parseFeedbackAlertQuote, parseReplyToAdminQuote } from './feedback-quote.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
     contactHintMessage,
 } from './feedback-contact.js';
-import { inboxReplyStillVisible } from './inbox-replies.js';
+import { inboxReplyStillVisible, isCommuterInboxEntry } from './inbox-replies.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
@@ -29,6 +29,7 @@ import {
 } from './ui.js';
 import {
     fetchUnionNotices,
+    getCachedLiveNotices,
     setCachedLiveNotices,
     applyBellFromNotices,
     openAlertsChannel,
@@ -1057,7 +1058,85 @@ function mergeInboxThread(remote, local) {
 }
 
 function isCommuterInboxMsg(m) {
-    return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
+    return isCommuterInboxEntry(m, m?.id);
+}
+
+async function ensureInboxAuthToken() {
+    try {
+        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+            await window.firebaseSignInAnonymously(window.firebaseAuth);
+        }
+        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
+        }
+    } catch { /* ignore */ }
+    return '';
+}
+
+async function patchInboxReceipt(deviceId, msgId, fields) {
+    const token = await ensureInboxAuthToken();
+    if (!deviceId || !msgId || !token || !fields || typeof fields !== 'object') return false;
+    const res = await fetch(
+        `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${encodeURIComponent(msgId)}.json?auth=${encodeURIComponent(token)}`,
+        {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields),
+        }
+    );
+    return res.ok;
+}
+
+function inboxQuoteChip({ author, snippet, alertId = '', alertKind = '', replyKey = '' }) {
+    const attrs = [
+        'type="button"',
+        'data-inbox-quote="1"',
+        `data-alert-id="${escapeHTML(alertId)}"`,
+        `data-alert-kind="${escapeHTML(alertKind)}"`,
+        `data-alert-snippet="${escapeHTML(snippet)}"`,
+        `data-reply-key="${escapeHTML(replyKey)}"`,
+        'class="inbox-quote-chip text-left w-full rounded-r-md border-l-4 border-blue-500 dark:border-blue-400 bg-black/5 dark:bg-white/10 py-1.5 px-2.5 mb-1.5 focus:outline-none"',
+    ].join(' ');
+    return `<button ${attrs}><div class="text-[10px] font-bold text-blue-600 dark:text-blue-400 leading-tight">${escapeHTML(author)}</div><div class="text-[11px] text-gray-800 dark:text-gray-100 leading-snug line-clamp-3 mt-0.5">${escapeHTML(snippet)}</div></button>`;
+}
+
+function splitInboxQuote(raw, mine) {
+    const text = String(raw || '');
+    const alertQ = parseFeedbackAlertQuote(text);
+    if (alertQ) {
+        const snippet = String(alertQ.snippet || 'Quoted advisory').trim() || 'Quoted advisory';
+        return {
+            chip: inboxQuoteChip({
+                author: alertQ.kind === 'disruption' ? 'Incident' : 'Advisory',
+                snippet,
+                alertId: alertQ.alertId,
+                alertKind: alertQ.kind,
+            }),
+            body: mine
+                ? escapeHTML(String(alertQ.body || '').trim())
+                : sanitizeHTML(stripAdminSignoff(alertQ.body || '')),
+        };
+    }
+    const replyQ = parseReplyToAdminQuote(text);
+    if (replyQ) {
+        const snippet = String(replyQ.snippet || 'Admin message').trim() || 'Admin message';
+        return {
+            chip: inboxQuoteChip({
+                author: 'Admin',
+                snippet,
+                replyKey: replyQ.replyKey,
+            }),
+            body: mine
+                ? escapeHTML(String(replyQ.body || '').trim())
+                : sanitizeHTML(stripAdminSignoff(replyQ.body || '')),
+        };
+    }
+    return {
+        chip: '',
+        body: mine
+            ? escapeHTML(commuterFeedbackText(text))
+            : sanitizeHTML(stripAdminSignoff(text)),
+    };
 }
 
 function stripAdminSignoff(html) {
@@ -1141,20 +1220,19 @@ function renderMessagesThread(list) {
     host.innerHTML = list.map((m) => {
         const mine = isCommuterInboxMsg(m);
         const raw = m.message || m.text || '';
-        const body = mine
-            ? escapeHTML(commuterFeedbackText(raw))
-            : sanitizeHTML(stripAdminSignoff(raw));
+        const { chip, body } = splitInboxQuote(raw, mine);
         const clock = inboxClock(m.timestamp);
         const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
         const avatar = mine
             ? ''
             : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
-        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}">
+        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}">
       ${avatar}
       <div class="inbox-bubble-wrap">
         <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}">
           <div class="inbox-bubble-name-row">${who}</div>
           <div class="inbox-bubble-body">
+            ${chip}
             <div class="inbox-msg-text">${body}<span class="inbox-msg-time">${clock}</span></div>
           </div>
         </div>
@@ -1216,19 +1294,19 @@ export async function openMessagesThread() {
         const list = await fetchInboxThread();
         renderMessagesThread(list);
         const deviceId = getThreadDeviceId();
-        const unread = list.filter((m) => !isCommuterInboxMsg(m) && !m.read && m.id);
+        const unread = list.filter((m) => !isCommuterInboxMsg(m) && !m.read && !m.acknowledged && m.id);
         if (unread.length && deviceId) {
-            const updates = {};
-            unread.forEach((m) => {
-                updates[`${m.id}/read`] = true;
-                updates[`${m.id}/readAt`] = Date.now();
-                updates[`${m.id}/viewedAt`] = Date.now();
-                updates[`${m.id}/acknowledged`] = true;
-            });
-            fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {
-                method: 'PATCH',
-                body: JSON.stringify(updates),
-            }).catch(() => {});
+            const now = Date.now();
+            const wrote = await Promise.all(unread.map((m) => patchInboxReceipt(deviceId, m.id, {
+                read: true,
+                readAt: now,
+                viewedAt: now,
+            })));
+            if (wrote.some(Boolean)) {
+                document.getElementById('developer-reply-banner')?.classList.add('hidden');
+                syncInboxBadges(0);
+            }
+        } else {
             syncInboxBadges(0);
         }
     } catch {
@@ -1516,6 +1594,59 @@ export function renderServiceAlertModal(notice, options = {}) {
     return true;
 }
 
+function openQuotedInboxAlert({ alertId, kind, snippet }) {
+    triggerHaptic();
+    const id = String(alertId || '').trim();
+    const live = getCachedLiveNotices().find((n) => String(n.id) === id);
+    closeSmoothModal('messages-thread-modal');
+    if (live) {
+        renderServiceAlertModal(live, { mode: 'live' });
+        openSmoothModal('notice-modal');
+        return;
+    }
+    if (kind === 'disruption' && id && typeof window.openDisruptionModal === 'function') {
+        window.openDisruptionModal(id);
+        const modal = document.getElementById('disruption-modal');
+        if (modal && !modal.classList.contains('hidden')) return;
+    }
+    renderServiceAlertModal({
+        id: id || 'quoted',
+        reconstructed: true,
+        severity: kind === 'disruption' ? 'warning' : 'info',
+        message: String(snippet || 'Original advisory is no longer available.'),
+        authorName: 'Next Train Ops',
+    }, { mode: 'archive' });
+    openSmoothModal('notice-modal');
+}
+
+function bindInboxQuoteClicks() {
+    const host = document.getElementById('messages-thread-list');
+    if (!host || host.dataset.quoteBound === '1') return;
+    host.dataset.quoteBound = '1';
+    host.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-inbox-quote]');
+        if (!btn || !host.contains(btn)) return;
+        e.preventDefault();
+        const alertId = btn.getAttribute('data-alert-id') || '';
+        const replyKey = btn.getAttribute('data-reply-key') || '';
+        if (alertId) {
+            openQuotedInboxAlert({
+                alertId,
+                kind: btn.getAttribute('data-alert-kind') || 'notice',
+                snippet: btn.getAttribute('data-alert-snippet') || '',
+            });
+            return;
+        }
+        if (!replyKey) return;
+        const safe = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(replyKey) : replyKey;
+        const row = host.querySelector(`[data-inbox-msg-id="${safe}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('ring-2', 'ring-blue-400', 'rounded-xl');
+        setTimeout(() => row.classList.remove('ring-2', 'ring-blue-400', 'rounded-xl'), 1600);
+    });
+}
+
 if (typeof window !== 'undefined') {
     window.renderServiceAlertModal = renderServiceAlertModal;
     window.prepareRichHtml = prepareRichHtml;
@@ -1542,7 +1673,7 @@ export async function checkServiceAlerts() {
                     if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
-                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k]));
+                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k], Date.now(), k));
                         syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
@@ -1550,15 +1681,11 @@ export async function checkServiceAlerts() {
 
                             const undeliveredKeys = unreadKeys.filter((k) => !inboxData[k].delivered);
                             if (undeliveredKeys.length > 0) {
-                                const updates = {};
-                                undeliveredKeys.forEach((k) => {
-                                    updates[`${k}/delivered`] = true;
-                                    updates[`${k}/deliveredAt`] = Date.now();
-                                });
-                                fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json`, {
-                                    method: 'PATCH',
-                                    body: JSON.stringify(updates)
-                                }).catch(() => {});
+                                const deliveredAt = Date.now();
+                                Promise.all(undeliveredKeys.map((k) => patchInboxReceipt(deviceId, k, {
+                                    delivered: true,
+                                    deliveredAt,
+                                }))).catch(() => {});
                             }
                         }
                     }
@@ -2016,6 +2143,7 @@ export function initHub() {
 
     // Feedback (live board CTA + Settings Support row)
     bindFeedbackViewportHandling();
+    bindInboxQuoteClicks();
     const openFeedback = async (e) => {
         e?.preventDefault?.();
         e?.stopPropagation?.();

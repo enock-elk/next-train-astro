@@ -406,12 +406,14 @@ export const SHADOW_BAN_DURATIONS = [
  * - freeze: UI captures input and feels frozen
  * - fouc: strip stylesheets → browser-default “true FOUC”
  * - lost: persistent 404 / End of the Line (Return Home bounces back)
+ * - warn: visible ToS warning; app stays usable
  */
 export const SHADOW_BAN_MODES = [
     { id: 'offline', label: 'Fake offline / lie-fi', hint: 'Offline banner + flaky connection feel' },
     { id: 'freeze', label: 'Freeze / unresponsive', hint: 'App looks loaded but ignores all input' },
     { id: 'fouc', label: 'True FOUC (unstyled)', hint: 'CSS disabled — raw HTML like a failed stylesheet load' },
     { id: 'lost', label: '404 / End of the Line', hint: 'Served the station-not-found page; Home always returns there' },
+    { id: 'warn', label: 'Gentle ToS warning', hint: 'Firm notice that the activity is against the Terms; app still works' },
 ];
 
 const BAN_LOST_KEY = 'nt_shadow_ban_lost';
@@ -611,6 +613,33 @@ function applyBanModeFouc() {
     }
 }
 
+const TOS_WARN_SESSION_KEY = 'nt_tos_warn_shown';
+
+/** Visible ToS warning. The app stays usable. */
+function applyBanModeWarn() {
+    try {
+        if (sessionStorage.getItem(TOS_WARN_SESSION_KEY) === '1') return;
+    } catch { /* ignore */ }
+
+    let modal = document.getElementById('nt-tos-warn-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'nt-tos-warn-modal';
+        modal.className = 'fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-amber-200 dark:border-amber-900/50" role="dialog" aria-labelledby="nt-tos-warn-title">
+                <p id="nt-tos-warn-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight">Please follow the Terms</p>
+                <p class="mt-3 text-sm text-gray-700 dark:text-gray-200 leading-relaxed">We noticed activity on this device that goes against the Next Train Terms and Conditions. Please stop. If it continues, we may restrict this device.</p>
+                <button type="button" id="nt-tos-warn-dismiss" class="mt-5 w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-bold py-2.5 rounded-xl focus:outline-none">I understand</button>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#nt-tos-warn-dismiss')?.addEventListener('click', () => {
+            try { sessionStorage.setItem(TOS_WARN_SESSION_KEY, '1'); } catch { /* ignore */ }
+            modal.remove();
+        });
+    }
+}
+
 /** Persistent 404 — Return Home reloads the app, which cloaks them back here. */
 function applyBanModeLost() {
     setLostBanFlag();
@@ -641,8 +670,15 @@ export async function applyShadowBanCloak() {
 
     const mode = normalizeShadowBanMode(verdict.mode);
     window.__ntBanCloakApplied = true;
-    window.__ntShadowBanCloak = true;
     window.__ntShadowBanMode = mode;
+
+    if (mode === 'warn') {
+        clearLostBanFlag();
+        applyBanModeWarn();
+        return true;
+    }
+
+    window.__ntShadowBanCloak = true;
 
     if (mode === 'freeze') applyBanModeFreeze();
     else if (mode === 'fouc') applyBanModeFouc();

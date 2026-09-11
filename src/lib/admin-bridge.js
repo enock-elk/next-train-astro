@@ -57,6 +57,12 @@ import {
     orderGridTrainIds,
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
+import {
+    inboxReactionActorId,
+    renderInboxReactionChips,
+    renderInboxReactionPickerHtml,
+    submitInboxReaction,
+} from './inbox-reactions.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -119,6 +125,10 @@ export function exposeAdminGlobals() {
     window.normalizeGridOrder = normalizeGridOrder;
     window.orderGridTrainIds = orderGridTrainIds;
     window.setRuntimeGridOrderConfig = setRuntimeGridOrderConfig;
+    window.inboxReactionActorId = inboxReactionActorId;
+    window.renderInboxReactionChips = renderInboxReactionChips;
+    window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;
+    window.submitInboxReaction = submitInboxReaction;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

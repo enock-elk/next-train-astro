@@ -154,6 +154,8 @@ assert(!admin.includes('Show NO SVC / SPL tag on export image'), 'old train-tag 
 assert(admin.includes('Show in app timetable') && admin.includes('Show on downloaded grid'), 'banner surface labels are specific');
 assert(admin.includes('In-app board and planner') && admin.includes('Timetable grid and PNG'), 'train-tag surface labels are specific');
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
+assert(admin.includes('admin_state/alert_sources'), 'saved sources sync to Firebase');
+assert(admin.includes('refreshSavedAlertSources'), 'saved sources refresh from Firebase');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
 assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()'), 'publish still sends sourceUrl');
 assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-panel', 'drill hash maps to the panel id');
@@ -287,7 +289,8 @@ assert(admin.includes('monthly R${Number(d.monthly)}'), 'zone audit direction ro
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
-assert(admin.includes('roadmap-refine-v1'), 'roadmap panel rebuilds after the card redesign');
+assert(admin.includes('roadmap-refine-v2'), 'roadmap panel rebuilds after the wallpaper pass');
+assert(admin.includes('nt-pack-wallpaper'), 'roadmap body uses the operations wallpaper');
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 

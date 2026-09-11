@@ -250,6 +250,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
     assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');
     assert(js.indexOf('nt-alert-time') < js.indexOf('nt-alert-reply'), 'timestamp precedes Reply');
+    assert(js.includes('nt-alert-source'), 'source citation uses the clickable chip class');
+    assert(js.includes('0 views'), 'admin impression placeholder is 0 views');
     assert(js.includes('formatAppTime'), 'alert stamps are time-only');
     assert(js.includes('data-alert-date-chip'), 'alerts feed inserts date chips');
     assert(js.includes('data-alert-delete'), 'admin long-press can delete for everyone');

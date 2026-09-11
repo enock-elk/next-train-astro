@@ -494,10 +494,11 @@ function renderPostCard(notice, opts = {}) {
     if (notice.sourceName) {
         const sName = escapeHTML(notice.sourceName);
         const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
+        const chevron = '<svg class="w-3 h-3 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
         const cite = sUrl
-            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium">${sName}</a>`
-            : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-        extra += `<div class="mt-3 text-[10px] text-gray-500 dark:text-gray-400 italic">Source: ${cite}</div>`;
+            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="nt-alert-source mt-3 text-[11px] font-semibold text-gray-700 dark:text-gray-200"><span class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Source</span><span class="text-blue-700 dark:text-blue-300 truncate">${sName}</span>${chevron}</a>`
+            : `<span class="nt-alert-source mt-3 text-[11px] font-semibold text-gray-700 dark:text-gray-200"><span class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Source</span><span class="truncate">${sName}</span></span>`;
+        extra += cite;
     }
     if (notice.ctaUrl && notice.ctaText) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
@@ -509,7 +510,7 @@ function renderPostCard(notice, opts = {}) {
     const ts = noticeTimestamp(notice);
     const scope = isAdminAuthed() ? noticeScopeLabel(notice._sourceKey) : '';
     const adminScopeHtml = scope
-        ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>-- views</span></span>`
+        ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
         : '<span></span>';
     const cardRing = highlight
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
@@ -530,7 +531,7 @@ function renderPostCard(notice, opts = {}) {
             ${adminScopeHtml}
             ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
         </p>
-        <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold py-2 rounded-lg focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}">Reply</button>
+        <button type="button" class="nt-alert-reply mt-3 w-full text-xs font-bold py-2 rounded-lg inline-flex items-center justify-center gap-1.5 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
         </div>
     </article>`;
 }
@@ -653,15 +654,30 @@ export function observeRenderedAlertImpressions(feed) {
     });
 }
 
+function paintAlertImpressionCount(scope, noticeId, value) {
+    const latest = Math.max(0, Number(value) || 0);
+    feedCardsForNotice(scope, noticeId).forEach((card) => {
+        const count = card.querySelector('[data-alert-impression-count]');
+        if (!count) return;
+        const current = Number(String(count.textContent || '').replace(/[^\d]/g, '')) || 0;
+        count.textContent = `${Math.max(current, latest).toLocaleString('en-US')} views`;
+    });
+}
+
 async function hydrateAdminAlertImpressionCounts(notices) {
     if (!isAdminAuthed() || !Array.isArray(notices) || !notices.length) return;
-    const token = await ensureReactAuthToken();
+    let token = '';
+    try {
+        if (typeof window.Admin?.getAuthKey === 'function') token = await window.Admin.getAuthKey();
+    } catch { /* fall through */ }
+    if (!token) token = await ensureReactAuthToken();
     if (!token) return;
     const query = notices.slice(-50).map((notice) => ({
         scope: String(notice._sourceKey || ''),
         noticeId: String(notice.id || ''),
     })).filter((item) => item.scope && item.noticeId);
     if (!query.length) return;
+    let painted = false;
     try {
         const res = await fetch(`${ALERT_IMPRESSION_WORKER}/admin/alert-impressions`, {
             method: 'POST',
@@ -671,22 +687,29 @@ async function hydrateAdminAlertImpressionCounts(notices) {
             },
             body: JSON.stringify({ notices: query }),
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        (data.notices || []).forEach((row) => {
-            const cards = feedCardsForNotice(row.scope, row.noticeId);
-            cards.forEach((card) => {
-                const count = card.querySelector('[data-alert-impression-count]');
-                if (count) {
-                    const current = Number(String(count.textContent || '').replace(/[^\d]/g, '')) || 0;
-                    const latest = Math.max(current, Math.max(0, Number(row.count) || 0));
-                    count.textContent = `${latest.toLocaleString('en-US')} views`;
-                }
+        if (res.ok) {
+            const data = await res.json();
+            (data.notices || []).forEach((row) => {
+                paintAlertImpressionCount(row.scope, row.noticeId, row.count);
+                painted = true;
             });
-        });
+        }
     } catch {
-        /* admin-only enhancement */
+        /* fall through to RTDB */
     }
+    if (painted) return;
+    await Promise.all(query.map(async (item) => {
+        try {
+            const res = await fetch(
+                `${DYNAMIC_BASE_URL}notice_impressions/${encodeURIComponent(item.scope)}/${encodeURIComponent(item.noticeId)}.json?auth=${encodeURIComponent(token)}`
+            );
+            if (!res.ok) return;
+            const node = await res.json();
+            paintAlertImpressionCount(item.scope, item.noticeId, node?.count);
+        } catch {
+            /* admin-only enhancement */
+        }
+    }));
 }
 
 function feedCardsForNotice(scope, noticeId) {

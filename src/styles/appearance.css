@@ -1048,9 +1048,32 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   background-color: color-mix(in srgb, #fff 16%, transparent);
 }
 .nt-alert-reply {
-  background-color: var(--nt-primary) !important;
-  color: var(--nt-primary-fg) !important;
-  border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
+  background-color: color-mix(in srgb, var(--nt-surface) 88%, #fff) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 38%, transparent) !important;
+  box-shadow: none;
+}
+.nt-alert-reply:hover {
+  background-color: color-mix(in srgb, var(--nt-primary) 8%, var(--nt-surface)) !important;
+}
+.nt-alert-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 22%, #d1d5db);
+  background: color-mix(in srgb, var(--nt-surface) 92%, #fff);
+  color: inherit;
+  font-style: normal;
+  text-decoration: none;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 6%, transparent);
+}
+.nt-alert-source:hover,
+.nt-alert-source:focus-visible {
+  border-color: color-mix(in srgb, var(--nt-primary) 55%, #93c5fd);
+  background: color-mix(in srgb, var(--nt-primary) 7%, #fff);
 }
 
 /* Idle/info bell: a real disc on every pack. Classic dark used

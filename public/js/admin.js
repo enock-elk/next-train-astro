@@ -668,18 +668,59 @@ const Admin = {
     endOfTodayLocalValue: (now) => ntAdminEndOfTodayLocalValue(now),
     toLocalDatetimeValue: (ms) => ntAdminToLocalDatetimeValue(ms),
     ALERT_SOURCES_KEY: 'nt_admin_alert_sources',
+    ALERT_SOURCES_RTDB: 'admin_state/alert_sources',
     loadSavedAlertSources: () => {
+        if (Array.isArray(Admin._alertSourcesCache)) return Admin._alertSourcesCache;
         try {
             const raw = localStorage.getItem(Admin.ALERT_SOURCES_KEY);
-            return ntAdminNormalizeAlertSources(raw ? JSON.parse(raw) : []);
+            Admin._alertSourcesCache = ntAdminNormalizeAlertSources(raw ? JSON.parse(raw) : []);
+            return Admin._alertSourcesCache;
         } catch {
+            Admin._alertSourcesCache = [];
             return [];
         }
     },
     persistSavedAlertSources: (list) => {
         const next = ntAdminNormalizeAlertSources(list);
+        Admin._alertSourcesCache = next;
         try { localStorage.setItem(Admin.ALERT_SOURCES_KEY, JSON.stringify(next)); } catch { /* quota */ }
+        Admin.syncSavedAlertSourcesToFirebase(next);
         return next;
+    },
+    syncSavedAlertSourcesToFirebase: async (list) => {
+        const token = await Admin.getAuthKey();
+        if (!token) return false;
+        const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+        try {
+            const res = await fetch(
+                `${endpoint}${Admin.ALERT_SOURCES_RTDB}.json?auth=${encodeURIComponent(token)}`,
+                { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(list) }
+            );
+            return res.ok;
+        } catch {
+            return false;
+        }
+    },
+    refreshSavedAlertSources: async () => {
+        const token = await Admin.getAuthKey();
+        const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+        if (token && endpoint) {
+            try {
+                const res = await fetch(`${endpoint}${Admin.ALERT_SOURCES_RTDB}.json?auth=${encodeURIComponent(token)}&t=${Date.now()}`);
+                if (res.ok) {
+                    const remote = ntAdminNormalizeAlertSources(await res.json());
+                    if (remote.length || !Admin.loadSavedAlertSources().length) {
+                        Admin._alertSourcesCache = remote;
+                        try { localStorage.setItem(Admin.ALERT_SOURCES_KEY, JSON.stringify(remote)); } catch { /* quota */ }
+                        return remote;
+                    }
+                    if (Admin.loadSavedAlertSources().length) {
+                        await Admin.syncSavedAlertSourcesToFirebase(Admin.loadSavedAlertSources());
+                    }
+                }
+            } catch { /* keep cache */ }
+        }
+        return Admin.loadSavedAlertSources();
     },
     upsertSavedAlertSource: (name, url, existingId) => {
         const result = ntAdminUpsertAlertSource(Admin.loadSavedAlertSources(), name, url, existingId);
@@ -1123,7 +1164,7 @@ const Admin = {
                 return;
             }
             list.innerHTML = items.map((c) => {
-                const when = c.timestamp ? new Date(c.timestamp).toLocaleString() : '-';
+                const when = c.timestamp ? Admin.formatDate(c.timestamp) : '-';
                 const err = String(c.error || 'Unknown').replace(/</g, '&lt;').slice(0, 180);
                 return `<div class="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <div class="flex justify-between text-[9px] text-gray-400 font-mono mb-1"><span>${when}</span><span>${(c.routeId || 'global').toString().replace(/</g, '&lt;')}</span></div>
@@ -1764,13 +1805,131 @@ const Admin = {
         }
         const d = new Date(ts);
         const day = d.getDate();
-        const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+        const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][d.getMonth()];
         const year = d.getFullYear();
         let hours = d.getHours();
         const ampm = hours >= 12 ? 'PM' : 'AM';
         hours = hours % 12 || 12;
         const minutes = String(d.getMinutes()).padStart(2, '0');
         return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+    },
+
+    formatDay: (ts) => {
+        if (!ts) return '';
+        if (typeof formatAppDate === 'function') return formatAppDate(ts) || '';
+        return String(Admin.formatDate(ts)).replace(/,.*$/, '');
+    },
+
+    collapseSystemControlAccordions: () => {
+        const maintModeBody = document.getElementById('maint-mode-body');
+        maintModeBody?.classList.add('hidden');
+        document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+        [
+            'sched-override-body',
+            'auth-providers-body',
+            'exp-features-body',
+            'shadow-ban-default-body',
+            'promo-body',
+            'deploy-live-body',
+            'cf-purge-body',
+            'nuke-body',
+        ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
+        [
+            'sched-override-chevron',
+            'auth-providers-chevron',
+            'exp-features-chevron',
+            'shadow-ban-default-chevron',
+            'promo-chevron',
+            'deploy-live-chevron',
+            'cf-purge-chevron',
+            'nuke-chevron',
+        ].forEach((id) => document.getElementById(id)?.classList.add('-rotate-90'));
+    },
+
+    hideInboxReactionPicker: () => {
+        document.getElementById('inbox-reaction-picker')?.classList.add('hidden');
+    },
+
+    showInboxReactionPicker: (anchor, onPick) => {
+        let picker = document.getElementById('inbox-reaction-picker');
+        if (!picker) {
+            picker = document.createElement('div');
+            picker.id = 'inbox-reaction-picker';
+            picker.className = 'hidden fixed z-[160] px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5';
+            picker.innerHTML = typeof window.renderInboxReactionPickerHtml === 'function'
+                ? window.renderInboxReactionPickerHtml()
+                : '';
+            document.body.appendChild(picker);
+        }
+        picker.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Admin.hideInboxReactionPicker();
+                onPick(btn.getAttribute('data-inbox-react-pick'));
+            };
+        });
+        const rect = anchor.getBoundingClientRect();
+        picker.classList.remove('hidden');
+        picker.style.top = `${Math.max(12, rect.top - 52)}px`;
+        picker.style.left = `${Math.max(12, Math.min(window.innerWidth - picker.offsetWidth - 12, rect.left))}px`;
+    },
+
+    applyFeedbackInboxReaction: async (row, emoji) => {
+        const messageId = row?.getAttribute('data-inbox-msg-id');
+        const deviceId = row?.getAttribute('data-inbox-device-id');
+        if (!messageId || !deviceId || typeof window.submitInboxReaction !== 'function') {
+            if (typeof showToast === 'function') showToast('Could not save reaction.', 'error');
+            return;
+        }
+        const entry = (Admin.cachedFeedbackData || []).find((item) => {
+            const inboxId = item.inboxMsgId || (item.isFromAdmin ? String(item.id || '') : '');
+            const did = item.device_id || item.deviceId;
+            return String(inboxId) === String(messageId) && String(did) === String(deviceId);
+        }) || { id: messageId, reactions: {}, reactedBy: {} };
+        const next = await window.submitInboxReaction({ deviceId, messageId, entry, emoji });
+        if (!next) {
+            if (typeof showToast === 'function') showToast('Could not save reaction.', 'error');
+            return;
+        }
+        Object.assign(entry, next);
+        const wrap = row.querySelector('.inbox-bubble-wrap');
+        const chips = wrap?.querySelector('[data-inbox-react-chips]');
+        const actor = typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(deviceId) : '';
+        if (chips && typeof window.renderInboxReactionChips === 'function') {
+            chips.outerHTML = window.renderInboxReactionChips(entry, actor);
+        }
+    },
+
+    bindFeedbackInboxReactions: (host) => {
+        if (!host || host.dataset.inboxReactBound === '1') return;
+        host.dataset.inboxReactBound = '1';
+        let longTimer = null;
+        const clearLong = () => {
+            if (longTimer) clearTimeout(longTimer);
+            longTimer = null;
+        };
+        host.addEventListener('pointerdown', (e) => {
+            const bubble = e.target.closest?.('[data-inbox-react-host]');
+            if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
+            const row = bubble.closest('[data-inbox-msg-id]');
+            if (!row || !row.getAttribute('data-inbox-msg-id')) return;
+            longTimer = setTimeout(() => {
+                Admin.showInboxReactionPicker(bubble, (emoji) => Admin.applyFeedbackInboxReaction(row, emoji));
+            }, 420);
+        });
+        host.addEventListener('pointerup', clearLong);
+        host.addEventListener('pointercancel', clearLong);
+        host.addEventListener('click', (e) => {
+            const chip = e.target.closest?.('[data-inbox-react]');
+            if (!chip) return;
+            const row = chip.closest('[data-inbox-msg-id]');
+            if (!row) return;
+            Admin.applyFeedbackInboxReaction(row, chip.getAttribute('data-inbox-react'));
+        });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest?.('#inbox-reaction-picker')) Admin.hideInboxReactionPicker();
+        });
     },
 
     /** usr_{rand}_{Date.now()} — trailing epoch is first-install / join time. */
@@ -2646,14 +2805,14 @@ const Admin = {
                             const w = parseInt(lbl.substring(4,6));
                             const d = new Date(y, 0, 1 + (w - 1) * 7);
                             d.setDate(d.getDate() + (1 - d.getDay())); 
-                            return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+                            return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec"][d.getMonth()]}`;
                         }
                         return lbl ? 'W' + lbl.substring(4) : '';
                     });
                 } else if (Admin.telemetryRange === 'ALL') {
                     displayLabels = labelsArray.map(lbl => {
                         if (lbl && lbl.length === 6) {
-                            const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4, 6), 10) - 1];
+                            const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4, 6), 10) - 1];
                             return `${mon} ${lbl.substring(2, 4)}`;
                         }
                         return lbl;
@@ -2661,7 +2820,7 @@ const Admin = {
                 } else {
                     displayLabels = labelsArray.map(lbl => {
                         if (lbl && lbl.length === 6) {
-                            return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4,6))-1];
+                            return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][parseInt(lbl.substring(4,6))-1];
                         }
                         return lbl;
                     });
@@ -2697,15 +2856,15 @@ const Admin = {
                     if (!raw) return '';
                     if (raw.length === 8) { // YYYYMMDD
                         const d = new Date(raw.substring(0,4), parseInt(raw.substring(4,6))-1, raw.substring(6,8));
-                        return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+                        return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec"][d.getMonth()]}`;
                     } else if (raw.length === 6 && Admin.telemetryRange === 'WAU') { // YYYYWW
                         const y = parseInt(raw.substring(0,4));
                         const w = parseInt(raw.substring(4,6));
                         const d = new Date(y, 0, 1 + (w - 1) * 7);
                         d.setDate(d.getDate() + (1 - d.getDay()));
-                        return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+                        return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec"][d.getMonth()]}`;
                     } else if (raw.length === 6 && (Admin.telemetryRange === 'MAU' || Admin.telemetryRange === 'ALL')) { // YYYYMM
-                        return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(raw.substring(4,6))-1]} ${raw.substring(0,4)}`;
+                        return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec"][parseInt(raw.substring(4,6))-1]} ${raw.substring(0,4)}`;
                     }
                     return raw;
                 };
@@ -2722,7 +2881,7 @@ const Admin = {
                     } else {
                         const d = new Date();
                         d.setDate(d.getDate() - Admin.telemetryWeeksAgo);
-                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
                         titleStr = `Intraday activity / 30 min (${d.getDate()} ${monthNames[d.getMonth()]})`;
                     }
                 } else if (Admin.telemetryRange === 'DAU' || !Admin.telemetryRange) {
@@ -2851,9 +3010,7 @@ const Admin = {
         const statAllTime = document.getElementById('stat-alltime')?.textContent || '--';
         
         const now = new Date();
-        const dateStr = now.toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const timeStr = now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-        const fullDateTimeStr = `${dateStr} | ${timeStr}`;
+        const fullDateTimeStr = Admin.formatDate(now);
 
         const exportContainer = document.createElement('div');
         exportContainer.style.position = 'fixed';
@@ -3043,8 +3200,11 @@ const Admin = {
                 <h1 style="font-size: 26px; font-weight: 900; margin: 0; color: #1e3a8a; letter-spacing: -0.5px;">${titleText}</h1>
                 <p style="font-size: 12px; font-weight: 800; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Metrorail Next Train Telemetry</p>
             </div>
-            <div id="export-svg-slot" style="height: 350px; margin-bottom: 20px;"></div>
-            <div style="text-align: right; font-size: 11px; font-weight: 800; color: #94a3b8;">Data via Google Analytics 4 | Snapshot generated: ${new Date().toLocaleString('en-ZA')}</div>
+            <div id="export-svg-slot" style="height: 350px; margin-bottom: 28px;"></div>
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px 2px 0;margin-top:8px;border-top:1px solid #e2e8f0;">
+                <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.04em;text-transform:uppercase;">Data via Google Analytics 4</div>
+                <div style="font-size:13px;font-weight:800;color:#334155;">Snapshot generated: ${Admin.formatDate(Date.now())}</div>
+            </div>
         `;
         
         // Deep clone the SVG into the export container to preserve all exact vector points
@@ -3589,7 +3749,7 @@ const Admin = {
     gsmTabBarHtml: (items) => {
         const counts = Admin.gsmTabCounts(items);
         const active = Admin._gsmTab || 'all';
-        return `<div id="gsm-tabs" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto custom-scrollbar">
+        return `<div id="gsm-tabs" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto custom-scrollbar touch-pan-y">
             ${(Admin._GSM_TABS || []).map((tab) => {
                 const on = active === tab.id;
                 const n = counts[tab.id] || 0;
@@ -3610,6 +3770,25 @@ const Admin = {
                 Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
             };
         });
+        const bindGsmSwipe = (el) => {
+            if (!el || el.dataset.gsmSwipeBound === '1') return;
+            el.dataset.gsmSwipeBound = '1';
+            let startX = 0;
+            const order = (Admin._GSM_TABS || []).map((tab) => tab.id);
+            el.addEventListener('touchstart', (e) => { startX = e.changedTouches?.[0]?.screenX || 0; }, { passive: true });
+            el.addEventListener('touchend', (e) => {
+                const diffX = (e.changedTouches?.[0]?.screenX || 0) - startX;
+                if (Math.abs(diffX) < 48) return;
+                const idx = order.indexOf(Admin._gsmTab || 'all');
+                if (diffX < 0 && idx < order.length - 1) Admin._gsmTab = order[idx + 1];
+                else if (diffX > 0 && idx > 0) Admin._gsmTab = order[idx - 1];
+                else return;
+                Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
+            }, { passive: true });
+        };
+        bindGsmSwipe(document.getElementById('gsm-tabs'));
+        bindGsmSwipe(document.getElementById('gsm-list'));
+        bindGsmSwipe(document.getElementById('action-body'));
     },
 
     renderGlobalStateMonitor: (actionBanner, activeItems, opts = {}) => {
@@ -4246,8 +4425,7 @@ const Admin = {
         if (panelId === 'roadmap-panel' && typeof Admin.fetchRoadmap === 'function') Admin.fetchRoadmap();
         if (panelId === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
         if (panelId === 'maint-panel') {
-            document.getElementById('maint-mode-body')?.classList.add('hidden');
-            document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+            Admin.collapseSystemControlAccordions();
         }
         if (panelId === 'alert-panel') {
             if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
@@ -6015,15 +6193,48 @@ const Admin = {
         Admin.buildTripInsightsHtml = (sorted, rows, esc) => {
             const regionCounts = { GP: 0, WC: 0, KZN: 0, EC: 0 };
             const dayCounts = {};
+            const searchHours = Array.from({ length: 24 }, () => 0);
+            const depHours = Array.from({ length: 24 }, () => 0);
+            const xferCounts = { 0: 0, 1: 0, 2: 0, '3+': 0 };
+            const originHits = {};
+            const destHits = {};
+            const pairHits = {};
             let direct = 0;
             let transfer = 0;
+            const parseHour = (value) => {
+                if (value == null || value === '') return -1;
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    const d = new Date(value);
+                    return Number.isNaN(d.getTime()) ? -1 : d.getHours();
+                }
+                const s = String(value).trim();
+                const m = s.match(/^(\d{1,2})(?::\d{2})/);
+                if (m) return Math.min(23, Math.max(0, Number(m[1])));
+                const d = new Date(s);
+                return Number.isNaN(d.getTime()) ? -1 : d.getHours();
+            };
             (rows || []).forEach((r) => {
                 const rg = String(r.region || '').toUpperCase();
                 if (regionCounts[rg] != null) regionCounts[rg] += 1;
                 const day = String(r.dayType || 'unknown');
                 dayCounts[day] = (dayCounts[day] || 0) + 1;
-                if (Number(r.transfers || 0) > 0) transfer += 1;
+                const xfer = Math.max(0, Number(r.transfers || 0) || 0);
+                if (xfer > 0) transfer += 1;
                 else direct += 1;
+                if (xfer >= 3) xferCounts['3+'] += 1;
+                else xferCounts[xfer] = (xferCounts[xfer] || 0) + 1;
+                const searchH = parseHour(r.timestamp);
+                if (searchH >= 0) searchHours[searchH] += 1;
+                const depH = parseHour(r.depTime);
+                if (depH >= 0) depHours[depH] += 1;
+                const origin = String(r.origin || '').trim();
+                const dest = String(r.destination || r.dest || '').trim();
+                if (origin) originHits[origin] = (originHits[origin] || 0) + 1;
+                if (dest) destHits[dest] = (destHits[dest] || 0) + 1;
+                if (origin && dest) {
+                    const key = `${origin}|${dest}`;
+                    pairHits[key] = (pairHits[key] || 0) + 1;
+                }
             });
             const top = (sorted || []).slice(0, 5);
             const failReasons = {};
@@ -6034,12 +6245,87 @@ const Admin = {
             });
             const failTop = Object.entries(failReasons).sort((a, b) => b[1] - a[1]).slice(0, 4);
             const chip = (label, n) => `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/80 dark:bg-gray-900/60 border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">${esc(label)} <span class="font-mono text-slate-800 dark:text-slate-100">${n}</span></span>`;
+            const barBlock = (id, title, values, labels) => {
+                const max = Math.max(1, ...values);
+                const rowsHtml = values.map((n, i) => {
+                    if (!n && values.length > 12) return '';
+                    const pct = Math.round((n / max) * 100);
+                    return `<div class="flex items-center gap-1.5">
+                        <span class="w-7 shrink-0 text-[8px] font-mono text-slate-500 text-right">${esc(labels[i])}</span>
+                        <div class="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div class="h-full rounded-full bg-sky-500/80" style="width:${pct}%"></div>
+                        </div>
+                        <span class="w-7 text-right text-[8px] font-mono text-slate-500">${n || ''}</span>
+                    </div>`;
+                }).join('');
+                return `<div id="${id}" class="space-y-1">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">${title}</p>
+                    ${rowsHtml || '<p class="text-[9px] text-slate-400">No data yet.</p>'}
+                </div>`;
+            };
+            const hourLabels = searchHours.map((_, h) => `${String(h).padStart(2, '0')}h`);
+            const regionMax = Math.max(1, regionCounts.GP, regionCounts.WC, regionCounts.KZN, regionCounts.EC);
+            const regionShare = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+                const n = regionCounts[code];
+                const pct = Math.round((n / regionMax) * 100);
+                return `<div class="flex items-center gap-1.5">
+                    <span class="w-8 shrink-0 text-[8px] font-black text-slate-500">${code}</span>
+                    <div class="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div class="h-full rounded-full bg-indigo-500/80" style="width:${pct}%"></div>
+                    </div>
+                    <span class="w-8 text-right text-[8px] font-mono text-slate-500">${n}</span>
+                </div>`;
+            }).join('');
+            const xferMax = Math.max(1, xferCounts[0], xferCounts[1], xferCounts[2], xferCounts['3+']);
+            const xferHtml = [0, 1, 2, '3+'].map((key) => {
+                const n = xferCounts[key] || 0;
+                const pct = Math.round((n / xferMax) * 100);
+                return `<div class="flex items-center gap-1.5">
+                    <span class="w-10 shrink-0 text-[8px] font-bold text-slate-500">${key === 0 ? 'Direct' : `${key} hop`}</span>
+                    <div class="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div class="h-full rounded-full bg-amber-500/80" style="width:${pct}%"></div>
+                    </div>
+                    <span class="w-8 text-right text-[8px] font-mono text-slate-500">${n}</span>
+                </div>`;
+            }).join('');
+            const topOrigins = Object.entries(originHits).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
+            const topDests = Object.entries(destHits).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
+            const heatMax = Math.max(1, ...topOrigins.flatMap((o) => topDests.map((d) => pairHits[`${o}|${d}`] || 0)));
+            const heatCell = (n) => {
+                const t = n / heatMax;
+                const bg = t <= 0 ? 'bg-slate-50 dark:bg-slate-900' : (t < 0.25 ? 'bg-sky-100 dark:bg-sky-950' : (t < 0.5 ? 'bg-sky-200 dark:bg-sky-900' : (t < 0.75 ? 'bg-sky-400/80 text-white' : 'bg-sky-600 text-white')));
+                return `<td class="w-8 h-7 text-center text-[8px] font-mono ${bg}">${n || ''}</td>`;
+            };
+            const heatRows = topOrigins.map((origin) => `
+                <tr>
+                    <th class="text-left text-[8px] font-bold text-slate-500 pr-1 truncate max-w-[72px]">${esc(origin)}</th>
+                    ${topDests.map((dest) => heatCell(pairHits[`${origin}|${dest}`] || 0)).join('')}
+                </tr>
+            `).join('');
+            const heatHead = topDests.map((dest) => `<th class="text-[7px] font-bold text-slate-400 w-8 truncate max-w-[32px]" title="${esc(dest)}">${esc(dest.slice(0, 4))}</th>`).join('');
             return `
-                <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-2">
+                <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-3">
                     <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights (all time)</p>
+                    <div id="de-trip-region-share" class="space-y-1">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Region share</p>
+                        ${regionShare}
+                    </div>
                     <div class="flex flex-wrap gap-1">${chip('GP', regionCounts.GP)}${chip('WC', regionCounts.WC)}${chip('KZN', regionCounts.KZN)}${chip('EC', regionCounts.EC)}</div>
                     <div class="flex flex-wrap gap-1">${Object.entries(dayCounts).map(([d, n]) => chip(d, n)).join('') || chip('days', 0)}</div>
                     <p class="text-[10px] text-slate-500">${chip('Direct', direct)}${chip('Transfer', transfer)}</p>
+                    <div id="de-trip-xfer" class="space-y-1">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Transfers</p>
+                        ${xferHtml}
+                    </div>
+                    ${barBlock('de-trip-hour-bars', 'Searches by hour', searchHours, hourLabels)}
+                    ${barBlock('de-trip-dep-bars', 'Chosen departures by hour', depHours, hourLabels)}
+                    <div id="de-trip-od-heat" class="overflow-x-auto">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Origin to destination heatmap</p>
+                        ${topOrigins.length && topDests.length ? `<table class="text-[8px] border-separate border-spacing-0.5">
+                            <thead><tr><th></th>${heatHead}</tr></thead>
+                            <tbody>${heatRows}</tbody>
+                        </table>` : '<p class="text-[9px] text-slate-400">No corridor pairs yet.</p>'}
+                    </div>
                     <table class="w-full text-[10px]">
                         <thead><tr class="text-[9px] uppercase tracking-wider text-slate-400"><th class="text-left font-bold py-0.5">Top corridors</th><th class="text-right font-bold">Users</th><th class="text-right font-bold">Hits</th></tr></thead>
                         <tbody>
@@ -6493,7 +6779,7 @@ const Admin = {
             const formatNiceDateTime = (ts) => {
                 const d = new Date(ts);
                 const day = d.getDate();
-                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][d.getMonth()];
                 const year = d.getFullYear();
                 let hours = d.getHours();
                 const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -6714,10 +7000,14 @@ const Admin = {
                         const adminRoute = secureEscape(item.routeId || '');
                         const adminMeta = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
+                        const inboxReactId = item.inboxMsgId || String(item.id || '');
+                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
+                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
+                            : '';
                         groupHTML += `
-                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
+                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
                                 <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin>
+                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
                                         <div class="inbox-bubble-name-row">
                                             <span>${secureEscape(adminName)}</span>
                                             <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
@@ -6726,6 +7016,7 @@ const Admin = {
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
                                         </div>
                                     </div>
+                                    ${reactChips}
                                 </div>
                             </div>
                         `;
@@ -7018,16 +7309,21 @@ const Admin = {
                             </div>
                         `;
 
+                        const inboxReactId = item.inboxMsgId || '';
+                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
+                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
+                            : '<div class="nt-inbox-react-chips mt-1 min-h-0" data-inbox-react-chips></div>';
                         groupHTML += `
-                            <div class="inbox-row justify-start mb-1.5">
+                            <div class="inbox-row justify-start mb-1.5" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}">
                                 <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-other">
+                                    <div class="inbox-bubble inbox-bubble-other"${inboxReactId ? ' data-inbox-react-host="1"' : ''}>
                                         ${integratedHeaderHtml}
                                         <div class="inbox-bubble-body">
                                             ${quoteBlockHtml}
                                             <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
                                         </div>
                                     </div>
+                                    ${reactChips}
                                 </div>
                             </div>
                         `;
@@ -7055,6 +7351,7 @@ const Admin = {
                 groupCard.innerHTML = groupHTML;
                 listContainer.appendChild(groupCard);
             });
+            Admin.bindFeedbackInboxReactions(listContainer);
             if (Admin._pendingFeedbackOpen) {
                 setTimeout(() => Admin.consumePendingFeedbackOpen(), 40);
             }
@@ -7226,13 +7523,39 @@ const Admin = {
                 Admin.cachedAliases = aliasesRes.ok ? (await aliasesRes.json()) || {} : {};
 
                 let mergedData = (data && typeof data === 'object') ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
+                const usedInboxKeys = new Set();
+                const inboxText = (msg) => String(msg?.message || msg?.text || '').trim();
+                const matchInboxCopy = (deviceId, item) => {
+                    const deviceMessages = inboxData?.[deviceId];
+                    if (!deviceMessages || typeof deviceMessages !== 'object') return null;
+                    const itemText = String(item.text || item.message || '').trim();
+                    for (const [msgKey, msg] of Object.entries(deviceMessages)) {
+                        if (!msg || String(msg.from || '') === 'admin') continue;
+                        if (item.id && String(msg.feedbackId || '') === String(item.id)) return { msgKey, msg };
+                        const closeTs = Math.abs(Number(msg.timestamp || 0) - Number(item.timestamp || 0)) < 20000;
+                        if (closeTs && inboxText(msg) && inboxText(msg) === itemText) return { msgKey, msg };
+                    }
+                    return null;
+                };
+                mergedData.forEach((item) => {
+                    if (item.isFromAdmin) return;
+                    const did = item.device_id || item.deviceId;
+                    const hit = matchInboxCopy(did, item);
+                    if (!hit) return;
+                    item.inboxMsgId = hit.msgKey;
+                    item.reactions = hit.msg.reactions;
+                    item.reactedBy = hit.msg.reactedBy;
+                    usedInboxKeys.add(`${did}/${hit.msgKey}`);
+                });
 
-                // Fold Admin Replies into the Thread Matrix
+                // Fold Admin Replies (and unmatched commuter inbox copies) into the Thread Matrix
                 if (inboxData && typeof inboxData === 'object') {
                     Object.keys(inboxData).forEach(deviceId => {
                         const deviceMessages = inboxData[deviceId];
                         Object.keys(deviceMessages).forEach(msgKey => {
                             const msg = deviceMessages[msgKey];
+                            if (usedInboxKeys.has(`${deviceId}/${msgKey}`)) return;
+                            const fromCommuter = String(msg.from || '') === 'commuter';
                             let parentStatus = 'unread';
                             // Inherit the archive status of the parent ticket so threads collapse together
                             if (msg.feedbackId && data && data[msg.feedbackId]) {
@@ -7240,8 +7563,9 @@ const Admin = {
                             }
                             mergedData.push({
                                 id: msgKey,
+                                inboxMsgId: msgKey,
                                 device_id: deviceId, // For Grouping
-                                isFromAdmin: true,
+                                isFromAdmin: !fromCommuter,
                                 text: msg.message || msg.text,
                                 message: msg.message || msg.text,
                                 timestamp: msg.timestamp,
@@ -7253,7 +7577,9 @@ const Admin = {
                                 appVersion: msg.appVersion,
                                 routeId: msg.routeId,
                                 fromName: msg.fromName,
-                                editedAt: msg.editedAt
+                                editedAt: msg.editedAt,
+                                reactions: msg.reactions,
+                                reactedBy: msg.reactedBy,
                             });
                         });
                     });
@@ -7600,7 +7926,7 @@ const Admin = {
                 };
 
                 list.innerHTML = items.slice(0, 80).map((r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
+                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
                     const sev = (r.severity || 'moderate').toUpperCase();
                     const sevColor = r.severity === 'severe' ? 'text-red-600 dark:text-red-400' : (r.severity === 'minor' ? 'text-yellow-700 dark:text-yellow-400' : 'text-amber-700 dark:text-amber-400');
                     const status = r.status || 'open';
@@ -7793,7 +8119,7 @@ const Admin = {
             } catch (e) {}
             return '';
         };
-        const fmtWhen = (ts) => ts ? new Date(ts).toLocaleString() : '—';
+        const fmtWhen = (ts) => ts ? Admin.formatDate(ts) : '—';
         const fmtAge = (ts, now) => {
             if (!ts) return '';
             const d = Math.max(0, now - ts);
@@ -8317,9 +8643,9 @@ const Admin = {
                 }
 
                 const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
-                const formatWhen = (value) => value ? new Date(Number(value)).toLocaleString() : 'No activity yet';
+                const formatWhen = (value) => value ? Admin.formatDate(Number(value)) : 'No activity yet';
                 const renderHeld = (r) => {
-                    const when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '-';
+                    const when = r.timestamp ? Admin.formatDate(r.timestamp) : '-';
                     const type = (r.type || 'message').toUpperCase();
                     const status = r.status || 'open';
                     const snippet = esc(r.snippet || r.body || r.publish?.payload?.body || '');
@@ -9053,7 +9379,7 @@ const Admin = {
 
                 list.innerHTML = '';
                 bans.forEach((b) => {
-                    const untilStr = b.until > 0 ? new Date(b.until).toLocaleString() : 'Permanent';
+                    const untilStr = b.until > 0 ? Admin.formatDate(b.until) : 'Permanent';
                     const remaining = b.until > 0
                         ? (() => {
                             const ms = b.until - now;
@@ -9174,7 +9500,7 @@ const Admin = {
                 const banned = flags.shadowBanned === true;
                 const until = Number(flags.shadowBannedUntil || 0);
                 const expired = banned && until > 0 && Date.now() > until;
-                const untilStr = until > 0 ? new Date(until).toLocaleString() : (banned ? 'permanent' : '-');
+                const untilStr = until > 0 ? Admin.formatDate(until) : (banned ? 'permanent' : '-');
                 const modeRaw = flags.shadowBanMode || 'offline';
                 const modeStr = banModeLabel(modeRaw);
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
@@ -10949,6 +11275,9 @@ const Admin = {
             delete alertPanel.dataset.adminLoaded;
         }
         if (alertPanel.dataset.adminLoaded === ALERT_PANEL_REV && !alertShellEmpty) {
+            Admin.refreshSavedAlertSources().then(() => {
+                if (typeof Admin._paintSavedAlertSources === 'function') Admin._paintSavedAlertSources();
+            });
             return;
         }
         // Rebuild tile chrome — mark loaded only after HTML lands (prevents permanent blank grid card)
@@ -11436,7 +11765,9 @@ const Admin = {
             renderSavedSourceDropdown(match ? match.id : '');
         };
 
+        Admin._paintSavedAlertSources = renderSavedSourceDropdown;
         renderSavedSourceDropdown('');
+        Admin.refreshSavedAlertSources().then(() => renderSavedSourceDropdown(sourceSavedSelect?.value || ''));
         if (sourceSavedToggle && sourceSavedToggle.dataset.bound !== '1') {
             sourceSavedToggle.dataset.bound = '1';
             sourceSavedToggle.addEventListener('click', (e) => {
@@ -11457,7 +11788,7 @@ const Admin = {
                     return;
                 }
                 renderSavedSourceDropdown(result.source ? result.source.id : '');
-                if (typeof showToast === 'function') showToast('Source saved on this device.', 'success');
+                if (typeof showToast === 'function') showToast('Source saved for both operators.', 'success');
             };
         }
         if (sourceDeleteBtn) {
@@ -13587,8 +13918,8 @@ const Admin = {
             return route.sheetKeys[`${dayEl.value}_to_${dir}`] || '';
         };
 
-        const scheduleRows = (sheetKey) => {
-            const raw = typeof fullDatabase !== 'undefined' ? fullDatabase?.[sheetKey] : null;
+        const scheduleRowsFromDb = (db, sheetKey) => {
+            const raw = db?.[sheetKey];
             if (Array.isArray(raw)) return raw;
             if (Array.isArray(raw?.rows)) return raw.rows;
             if (raw && typeof raw === 'object') {
@@ -13599,6 +13930,43 @@ const Admin = {
             }
             return [];
         };
+
+        const unwrapRegionScheduleDb = (region, raw) => {
+            if (!raw || typeof raw !== 'object') return raw;
+            if (region === 'GP' && raw.gauteng) return raw.gauteng;
+            if (region === 'WC' && raw.westerncape) return raw.westerncape;
+            if (region === 'KZN' && raw.kzn) return raw.kzn;
+            if (region === 'EC' && raw.easterncape) return raw.easterncape;
+            if (region === 'GP' && raw.schedules && !raw.gauteng) return raw.schedules;
+            return raw;
+        };
+
+        const ensureGridOrderDb = async (region, sheetKey) => {
+            const ram = typeof fullDatabase !== 'undefined' ? fullDatabase : null;
+            if (ram && scheduleRowsFromDb(ram, sheetKey).length) return ram;
+            Admin._gridOrderRegionDb = Admin._gridOrderRegionDb || {};
+            const cached = Admin._gridOrderRegionDb[region];
+            if (cached && scheduleRowsFromDb(cached, sheetKey).length) return cached;
+            const paths = {
+                GP: 'schedules/gauteng.json',
+                WC: 'schedules/westerncape.json',
+                KZN: 'schedules/kzn.json',
+                EC: 'schedules/easterncape.json',
+            };
+            const dbPath = paths[region];
+            if (!dbPath || typeof Admin.fetchDiagJson !== 'function') return ram;
+            let rawData;
+            try {
+                rawData = await Admin.fetchDiagJson(`https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`);
+            } catch {
+                rawData = await Admin.fetchDiagJson(`https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`);
+            }
+            const db = unwrapRegionScheduleDb(region, rawData);
+            if (db) Admin._gridOrderRegionDb[region] = db;
+            return db || ram;
+        };
+
+        const scheduleRows = (sheetKey, db) => scheduleRowsFromDb(db || (typeof fullDatabase !== 'undefined' ? fullDatabase : null), sheetKey);
 
         const trainIds = (rows) => {
             const found = new Set();
@@ -13666,7 +14034,21 @@ const Admin = {
             if (Admin.gridOrderDirty && !window.confirm('Discard unsaved grid order changes?')) return;
             currentSheetKey = routeSheetKey();
             const route = ROUTES?.[routeEl.value];
-            const rows = scheduleRows(currentSheetKey);
+            metaEl.classList.remove('hidden');
+            metaEl.textContent = 'Loading schedule columns…';
+            let rows = [];
+            try {
+                const db = await ensureGridOrderDb(route?.region, currentSheetKey);
+                rows = scheduleRows(currentSheetKey, db);
+            } catch (e) {
+                metaEl.textContent = `Could not load ${route?.region || ''} schedule dump.`;
+                currentOrder = [];
+                baseline = [];
+                paintList();
+                actionsEl.classList.add('hidden');
+                Admin.gridOrderDirty = false;
+                return;
+            }
             const ids = trainIds(rows);
             if (!currentSheetKey || !ids.length) {
                 currentOrder = [];
@@ -15919,7 +16301,7 @@ const Admin = {
                 const d = new Date(dateStr.replace(/^last updated[:\s-]*/i, '').trim());
                 if (isNaN(d.getTime())) return dateStr;
                 const day = d.getDate();
-                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+                const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][d.getMonth()];
                 const year = d.getFullYear();
                 let hours = d.getHours();
                 const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -16643,7 +17025,7 @@ const Admin = {
                     iso: `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
                     offset,
                     defaultDayType: defaults[key] || 'public_holiday',
-                    whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                    whenLabel: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : (Admin.formatDay(d) || `${d.getDate()} Sept`),
                 });
             }
             return out;
@@ -16888,10 +17270,7 @@ const Admin = {
             maintPanel.innerHTML = '';
         }
         if (maintPanel.dataset.loaded === "true") {
-            const persistBody = document.getElementById('maint-mode-body');
-            const persistChev = document.getElementById('maint-mode-chevron');
-            persistBody?.classList.add('hidden');
-            persistChev?.classList.add('-rotate-90');
+            Admin.collapseSystemControlAccordions();
             return;
         }
         maintPanel.dataset.loaded = "true";
@@ -18265,8 +18644,8 @@ const Admin = {
             adminContainer.appendChild(roadmapPanel);
         }
 
-        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v1") return;
-        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v1";
+        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v2") return;
+        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v2";
 
         Admin.cachedRoadmapData = [];
 
@@ -18280,7 +18659,7 @@ const Admin = {
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="roadmap-body" class="hidden mt-4 flex flex-col space-y-3 rounded-xl bg-slate-100 dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+            <div id="roadmap-body" class="nt-pack-wallpaper hidden mt-4 flex flex-col space-y-3 rounded-xl p-3 border border-slate-200/70 dark:border-slate-800">
                 <!-- Controls Header -->
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <div class="flex items-center gap-2 w-full sm:w-auto">

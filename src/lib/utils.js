@@ -18,7 +18,7 @@ export function escapeHTML(str) {
     });
 }
 
-const APP_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const APP_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /**
  * App-wide clock: `7:19 AM` (never locale 07:19).
@@ -35,8 +35,8 @@ export function formatAppTime(ts) {
 }
 
 /**
- * App-wide calendar date: `18 Aug 2026` (never locale 18/8/2026).
- * Pass `{ withTime: true }` for `18 Aug 2026, 9:28 PM`.
+ * App-wide calendar date: `12 Sept 2026` (never locale 2026/09/12).
+ * Pass `{ withTime: true }` for `12 Sept 2026, 9:28 PM`.
  */
 export function formatAppDate(ts, opts = {}) {
     const withTime = opts === true || !!(opts && opts.withTime);
@@ -49,7 +49,7 @@ export function formatAppDate(ts, opts = {}) {
 }
 
 /**
- * WhatsApp-style thread/alert date chip: `Today` / `Yesterday` / `25 Aug 2026`.
+ * WhatsApp-style thread/alert date chip: `Today` / `Yesterday` / `12 Sept 2026`.
  */
 export function formatThreadDateLabel(ts, now = Date.now()) {
     if (ts == null || ts === '') return '';

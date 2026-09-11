@@ -21,6 +21,12 @@ import {
     contactHintMessage,
 } from './feedback-contact.js';
 import { inboxReplyStillVisible } from './inbox-replies.js';
+import {
+    inboxReactionActorId,
+    renderInboxReactionChips,
+    renderInboxReactionPickerHtml,
+    submitInboxReaction,
+} from './inbox-reactions.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
@@ -777,7 +783,10 @@ async function submitFeedback() {
         recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
         trackAnalyticsEvent('submit_feedback_success', { type: type || 'general' });
 
-        try { await postCommuterInboxCopy({ text, feedbackType: type }); } catch { /* thread copy is best-effort */ }
+        try {
+            const created = await res.json().catch(() => ({}));
+            await postCommuterInboxCopy({ text, feedbackType: type, feedbackId: created?.name });
+        } catch { /* thread copy is best-effort */ }
 
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
@@ -1149,22 +1158,103 @@ function renderMessagesThread(list) {
         const avatar = mine
             ? ''
             : `<div class="inbox-avatar"><img src="${withBase('icons/icon-192.png')}" alt="" width="32" height="32" class="w-full h-full object-cover"></div>`;
-        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}">
+        const actor = inboxReactionActorId(getThreadDeviceId());
+        return `<div class="inbox-row ${mine ? 'justify-end' : 'justify-start gap-2'}" data-inbox-msg-id="${escapeHTML(String(m.id || ''))}" data-inbox-device-id="${escapeHTML(getThreadDeviceId())}">
       ${avatar}
       <div class="inbox-bubble-wrap">
-        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}">
+        <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}" data-inbox-react-host="1">
           <div class="inbox-bubble-name-row">${who}</div>
           <div class="inbox-bubble-body">
             <div class="inbox-msg-text">${body}<span class="inbox-msg-time">${clock}</span></div>
           </div>
         </div>
+        ${renderInboxReactionChips(m, actor)}
       </div>
     </div>`;
     }).join('');
+    host._ntInboxList = list;
+    bindInboxThreadReactions(host);
     host.scrollTop = host.scrollHeight;
 }
 
-async function postCommuterInboxCopy({ text, feedbackType }) {
+function hideInboxReactionPicker() {
+    document.getElementById('inbox-reaction-picker')?.classList.add('hidden');
+}
+
+function showInboxReactionPicker(anchor, onPick) {
+    let picker = document.getElementById('inbox-reaction-picker');
+    if (!picker) {
+        picker = document.createElement('div');
+        picker.id = 'inbox-reaction-picker';
+        picker.className = 'hidden fixed z-[160] px-2 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl flex items-center gap-0.5';
+        picker.innerHTML = renderInboxReactionPickerHtml();
+        document.body.appendChild(picker);
+    }
+    picker.querySelectorAll('[data-inbox-react-pick]').forEach((btn) => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideInboxReactionPicker();
+            onPick(btn.getAttribute('data-inbox-react-pick'));
+        };
+    });
+    const rect = anchor.getBoundingClientRect();
+    picker.classList.remove('hidden');
+    const top = Math.max(12, rect.top - 52);
+    const left = Math.max(12, Math.min(window.innerWidth - picker.offsetWidth - 12, rect.left));
+    picker.style.top = `${top}px`;
+    picker.style.left = `${left}px`;
+}
+
+function bindInboxThreadReactions(host) {
+    if (!host || host.dataset.inboxReactBound === '1') return;
+    host.dataset.inboxReactBound = '1';
+    let longTimer = null;
+    const clearLong = () => {
+        if (longTimer) clearTimeout(longTimer);
+        longTimer = null;
+    };
+    const listOf = () => host._ntInboxList || [];
+    host.addEventListener('pointerdown', (e) => {
+        const bubble = e.target.closest?.('[data-inbox-react-host]');
+        if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
+        const row = bubble.closest('[data-inbox-msg-id]');
+        if (!row) return;
+        longTimer = setTimeout(() => {
+            showInboxReactionPicker(bubble, (emoji) => applyThreadInboxReaction(row, listOf(), emoji));
+        }, 420);
+    });
+    host.addEventListener('pointerup', clearLong);
+    host.addEventListener('pointercancel', clearLong);
+    host.addEventListener('click', (e) => {
+        const chip = e.target.closest?.('[data-inbox-react]');
+        if (!chip) return;
+        const row = chip.closest('[data-inbox-msg-id]');
+        if (!row) return;
+        applyThreadInboxReaction(row, listOf(), chip.getAttribute('data-inbox-react'));
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest?.('#inbox-reaction-picker')) hideInboxReactionPicker();
+    });
+}
+
+async function applyThreadInboxReaction(row, list, emoji) {
+    const messageId = row.getAttribute('data-inbox-msg-id');
+    const deviceId = row.getAttribute('data-inbox-device-id') || getThreadDeviceId();
+    const entry = (list || []).find((m) => String(m.id) === String(messageId));
+    if (!messageId || !deviceId || !entry) return;
+    const next = await submitInboxReaction({ deviceId, messageId, entry, emoji });
+    if (!next) {
+        if (typeof showToast === 'function') showToast('Could not save reaction.', 'error');
+        return;
+    };
+    Object.assign(entry, next);
+    const wrap = row.querySelector('.inbox-bubble-wrap');
+    const chips = wrap?.querySelector('[data-inbox-react-chips]');
+    if (chips) chips.outerHTML = renderInboxReactionChips(entry, inboxReactionActorId(deviceId));
+}
+
+async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
     const deviceId = getThreadDeviceId();
     if (!deviceId || !text) return false;
     if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
@@ -1183,6 +1273,7 @@ async function postCommuterInboxCopy({ text, feedbackType }) {
         type: feedbackType || 'general',
         read: true,
     };
+    if (feedbackId) payload.feedbackId = String(feedbackId);
     rememberLocalInbox({ id: msgId, ...payload });
     const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const res = await fetch(
@@ -1304,7 +1395,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         const innerCitation = sUrl
             ? `<a href="${sUrl}" target="_blank" rel="noopener" class="hover:underline text-blue-600 dark:text-blue-400 font-medium flex items-center">${sName} <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`
             : `<span class="font-medium text-gray-700 dark:text-gray-300">${sName}</span>`;
-        formattedMsg += `<div class="mt-3 p-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-500 dark:text-gray-400 italic flex items-center shadow-sm w-fit max-w-full"><span class="mr-1.5 not-italic text-sm">📰</span><span class="flex items-center space-x-1"><span>Source:</span> ${innerCitation}</span></div>`;
+        formattedMsg += `<div class="nt-alert-source mt-3 text-[11px] font-semibold text-gray-700 dark:text-gray-200 w-fit max-w-full"><span class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Source</span><span class="flex items-center space-x-1">${innerCitation}</span></div>`;
     }
 
     const posterUrls = layout.imageUrls;
@@ -1466,7 +1557,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             btnContainer.appendChild(rightBtn);
         }
     } else {
-        rightBtn.className = `flex-1 ${baseColorClass} text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center`;
+        rightBtn.className = 'flex-1 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg border-2 border-blue-600 dark:border-blue-400 shadow-sm transition-colors focus:outline-none flex items-center justify-center';
         const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
         rightBtn.innerHTML = `${replySvg} Reply`;
         rightBtn.onclick = () => {
@@ -2146,9 +2237,10 @@ export function initHub() {
                 body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(`Failed (${res.status})`);
+            const created = await res.json().catch(() => ({}));
             recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
             if (!signedInContactEmail()) persistValidContact(email);
-            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply' });
+            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply', feedbackId: created?.name });
             if (input) input.value = '';
             if (threadFile) threadFile.value = '';
             paintThreadFileChip(threadFile);

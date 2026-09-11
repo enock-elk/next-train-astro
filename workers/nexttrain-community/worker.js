@@ -121,7 +121,7 @@ export function isValidImpressionScope(value) {
     if (!isSafeRtdbKey(scope)) return false;
     return scope === 'all'
         || /^all_[A-Z]{2,3}$/.test(scope)
-        || /^[a-z]{2,4}-[a-z0-9][a-z0-9-]{0,70}$/i.test(scope);
+        || /^[a-z][a-z0-9_-]{1,80}$/i.test(scope);
 }
 
 export function isValidImpressionNoticeId(value) {
@@ -798,11 +798,8 @@ async function handleAlertImpressionAdmin(request, env) {
     } catch {
         return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
     }
-    const notices = Array.isArray(body.notices) ? body.notices.slice(0, 50) : [];
-    if (notices.some((item) => !isValidImpressionScope(item?.scope)
-        || !isValidImpressionNoticeId(item?.noticeId))) {
-        return json(env, request, 400, { ok: false, error: 'Invalid notice query' });
-    }
+    const notices = (Array.isArray(body.notices) ? body.notices.slice(0, 50) : [])
+        .filter((item) => isValidImpressionScope(item?.scope) && isValidImpressionNoticeId(item?.noticeId));
     const rtdb = createRtdbClient(env);
     const rows = await Promise.all(notices.map(async (item) => {
         const scope = String(item.scope);

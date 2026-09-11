@@ -960,9 +960,9 @@ export const Renderer = {
                             
                             let bgClass = '';
                             const trainIdStyle = isExport
-                                ? 'display:block;font-size:13px;font-weight:800;color:#0f172a;line-height:16px;'
+                                ? 'display:block;font-size:18px;font-weight:800;color:#0f172a;line-height:21px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
-                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '16px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
                             
                             if (paintExclusion && exclusionType === 'special') {
@@ -1308,7 +1308,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     exportContainer.style.top = '0';
     exportContainer.style.width = 'auto'; 
     exportContainer.style.minWidth = '800px'; 
-    exportContainer.style.padding = '20px';
+    exportContainer.style.padding = '10px 20px 20px';
     exportContainer.style.fontFamily = 'system-ui, sans-serif';
     exportContainer.style.backgroundColor = bgColor;
     exportContainer.style.color = textColor;
@@ -1339,10 +1339,9 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
-                <div style="background-color: #eff6ff; border-left: 5px solid ${accentColor}; padding: 8px 14px; margin-bottom: 16px; font-size: 15px; color: #1e3a8a; border-radius: 0 6px 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center;">
-                    <span style="margin-right: 8px; font-size: 15px; line-height: 1;">ℹ️</span>
-                    <div style="font-weight: 600; line-height: 1.25;">
-                        <span style="font-weight: 900; letter-spacing: 0.04em;">NOTE:</span> ${cleanText}
+                <div class="nt-export-note" style="background-color:#fff7ed;border-left:5px solid #c2410c;padding:8px 14px;margin:12px 0 0;font-size:15px;color:#9a3412;border-radius:0 6px 6px 0;box-shadow:0 1px 2px rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;text-align:center;">
+                    <div style="font-weight:600;line-height:1.25;max-width:52rem;">
+                        <span style="font-weight:900;letter-spacing:0.04em;color:#c2410c;">NOTE:</span> ${cleanText}
                     </div>
                 </div>
             `;
@@ -1365,20 +1364,18 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         : { from: destAName, to: destBName, html: htmlB };
 
     exportContainer.innerHTML = `
-        <div class="mb-6 border-b-4 pb-4" style="border-color: ${accentColor}">
+        <div class="mb-3 border-b-4 pb-2" style="border-color: ${accentColor}">
             <div class="flex justify-between items-end">
                 <div>
-                    <h1 class="text-4xl font-black uppercase tracking-tight mb-1" style="color: ${accentColor}">Commuter Notice</h1>
-                    <h2 class="text-xl font-bold uppercase tracking-widest" style="color: ${mutedColor}">${displayRouteName} Corridor</h2>
+                    <h1 class="text-4xl font-black uppercase tracking-tight leading-none mb-0" style="color: ${accentColor}">Commuter Notice</h1>
+                    <h2 class="text-xl font-bold uppercase tracking-widest leading-tight mt-1" style="color: ${mutedColor}">${displayRouteName} Corridor</h2>
                 </div>
                 <div class="text-right">
-                    <div class="text-2xl font-bold" style="color: ${textColor}">${finalScheduleTypeLabel} TIMETABLE</div>
-                    ${effectiveDateText ? `<div class="text-sm font-bold uppercase mt-1" style="color: ${mutedColor}">EFFECTIVE FROM: ${effectiveDateText}</div>` : ''}
+                    <div class="text-2xl font-bold leading-none" style="color: ${textColor}">${finalScheduleTypeLabel} TIMETABLE</div>
+                    ${effectiveDateText ? `<div class="text-sm font-bold uppercase leading-tight mt-1" style="color: ${mutedColor}">EFFECTIVE FROM: ${effectiveDateText}</div>` : ''}
                 </div>
             </div>
         </div>
-
-        ${exportGridNoticeHtml}
 
         <div class="mb-4">
             <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
@@ -1403,6 +1400,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
                 ${returnSection.html}
             </div>
         </div>
+
+        ${exportGridNoticeHtml}
 
         <div class="mt-8 p-5 rounded-lg flex justify-between items-end" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}">
             <div class="flex flex-col space-y-1.5 text-left">
@@ -1429,7 +1428,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.color = headerTextColor;
             headerCell.style.border = `1px solid ${borderColor}`;
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
-            headerCell.style.fontSize = isCompact ? '13.5px' : '14px';
+            headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = '900';
             headerCell.style.textAlign = 'center';
             if (isCompact) headerCell.style.letterSpacing = '-0.5px'; 

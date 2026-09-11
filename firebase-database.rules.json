@@ -172,7 +172,15 @@
       },
       "aliases": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
+      },
+      "alert_sources": {
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"
       }
+    },
+
+    "notice_impressions": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".write": false
     },
 
     "notices_archive": {

@@ -500,6 +500,7 @@ import { withBase } from '../lib/config.js';
                 <svg id="telemetry-chevron" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="telemetry-body" class="space-y-3">
+                <div id="telemetry-metrics-tray" class="rounded-2xl bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/70 p-3">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800 flex flex-col items-center justify-center">
                         <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Last 5 Mins</span>
@@ -525,6 +526,7 @@ import { withBase } from '../lib/config.js';
                         <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">All-Time</span>
                         <span id="stat-alltime" class="text-2xl font-black text-purple-700 dark:text-purple-300 animate-pulse">--</span>
                     </div>
+                </div>
                 </div>
                 <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 flex items-center justify-between">
                     <span class="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
@@ -828,6 +830,23 @@ import { withBase } from '../lib/config.js';
       radial-gradient(circle at 14% 18%, rgba(255,255,255,0.05) 0 1.5px, transparent 2.2px),
       radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
       linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.22));
+  }
+  #roadmap-body.nt-pack-wallpaper {
+    position: relative;
+    background-color: #5a6b5c;
+    background-image:
+      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.10) 0 1.5px, transparent 2.2px),
+      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.08) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 80% 42%, rgba(255,255,255,0.09) 0 1.4px, transparent 2px),
+      radial-gradient(circle at 28% 72%, rgba(255,255,255,0.07) 0 1.2px, transparent 1.9px),
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.16));
+  }
+  html.dark #roadmap-body.nt-pack-wallpaper {
+    background-color: #0e1510;
+    background-image:
+      radial-gradient(circle at 14% 18%, rgba(255,255,255,0.05) 0 1.5px, transparent 2.2px),
+      radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.26));
   }
 </style>
 

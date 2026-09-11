@@ -447,7 +447,8 @@ assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train
 const rendererGrid = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(rendererGrid.includes("isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700'"), 'export grid lines are softer; in-app borders stay');
 assert(rendererGrid.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'export times are bold; in-app grid times stay medium');
-assert(rendererGrid.includes("isExport ? '16px' : '14px'") && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
+assert(rendererGrid.includes("isExport ? '21px' : '14px'") && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
+assert(rendererGrid.includes('font-size:18px') && rendererGrid.includes('line-height:14px;'), 'export train IDs are larger; in-app IDs stay 14px');
 assert(!rendererGrid.includes('nt-station-col, th:first-child'), 'export snapshot does not restyle the station column beyond the old renderer');
 assert(css.includes('data-pilot-map'), 'bottom nav grows when Map is pin-gated on');
 assert(css.includes('data-pilot-community'), 'bottom nav grows when Community is pin-gated on');
@@ -468,6 +469,9 @@ assert(adminJs.includes('id="exp-map-enabled"') && adminJs.includes('id="exp-com
 assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');
 assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write config/feature_grants');
 assert(adminJs.includes('mapTab:') && adminJs.includes('communityTab:'), 'save merges mapTab and communityTab without wiping other flags');
+assert(css.includes('.nt-alert-reply'), 'alert Reply is styled separately from Close');
+assert(css.includes('.nt-alert-source'), 'alert source chip has clickable chrome');
+assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

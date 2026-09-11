@@ -97,6 +97,9 @@ for (const required of [
   'beforeunload',
   'Discard unsaved grid order changes?',
   'config/grid_order/',
+  'ensureGridOrderDb',
+  'schedules/westerncape.json',
+  'schedules/kzn.json',
 ]) {
   assert(admin.includes(required), `admin editor missing ${required}`);
 }

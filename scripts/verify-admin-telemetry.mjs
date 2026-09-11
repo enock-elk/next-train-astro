@@ -150,6 +150,13 @@ ok(adminJs.includes('100dvh') && adminJs.includes('landscape:'), 'analytics dril
 ok(adminJs.includes('data-gsm-tab'), 'Global State Monitor has feature tabs');
 ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM tabs include grid notices and exclusions');
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
+ok(adminJs.includes('collapseSystemControlAccordions'), 'System Control reopens with every accordion closed');
+ok(adminJs.includes("'exp-features-body'"), 'experimental features accordion is included in the collapse set');
+ok(adminJs.includes('bindGsmSwipe'), 'Global State Monitor binds swipe between tabs');
+ok(adminJs.includes("bindGsmSwipe(document.getElementById('gsm-list'))"), 'GSM swipe works on the item list');
+ok(adminJs.includes('Snapshot generated: ${Admin.formatDate(Date.now())}'), 'DAU export uses 12 Sept dates');
+ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');
+ok(adminJs.includes('de-trip-dep-bars') && adminJs.includes('de-trip-xfer'), 'planner insights include departure-hour and transfer charts');
 ok(!adminJs.includes('if (countLiveMaint() > 0)'), 'live banners no longer auto-expand Maintenance Mode');
 
 ok(adminJs.includes('id="deploy-production-btn"'), 'Dev Hub has Publish live');

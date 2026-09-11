@@ -66,6 +66,7 @@ class FakeRtdb {
 }
 
 ok(isValidImpressionScope('all') && isValidImpressionScope('all_GP'), 'network and region scopes are valid');
+ok(isValidImpressionScope('pta-mabopane') && isValidImpressionScope('bellville-mutual'), 'WC hyphenated scopes are valid');
 ok(isValidImpressionScope('pta-mabopane') && !isValidImpressionScope('../bad'), 'route scope validation blocks unsafe paths');
 ok(isValidImpressionNoticeId('sched_abc_123') && !isValidImpressionNoticeId('bad/id'), 'notice id validation blocks path injection');
 ok(shouldCountAlertIntersection({ isIntersecting: true, intersectionRatio: 0.5, pageVisible: true, channelVisible: true }), '50% visible qualifies');
@@ -127,7 +128,10 @@ ok(channelJs.includes('ALERT_IMPRESSION_DWELL_MS = 900'), 'client requires a sho
 ok(channelJs.includes("threshold: [0, 0.5, 1]"), 'observer uses a 50% threshold');
 ok(channelJs.includes('safeStorage.setItem(alertImpressionStorageKey'), 'client persists per-install notice dedupe');
 ok(channelJs.includes('/admin/alert-impressions'), 'admin cards request authenticated counts');
+ok(channelJs.includes('0 views'), 'admin cards start at 0 views instead of a dash placeholder');
+ok(channelJs.includes('notice_impressions/'), 'admin counts fall back to RTDB when the worker batch fails');
 ok(workerJs.includes("url.pathname === '/alerts/impression'"), 'worker exposes the impression POST endpoint');
+ok(workerJs.includes('.filter((item) => isValidImpressionScope'), 'admin impression lookup skips invalid scopes instead of failing the batch');
 ok(workerJs.includes('cleanupAlertImpressionDedupe(env)'), 'hourly cron includes impression dedupe cleanup');
 
 if (failures.length) {

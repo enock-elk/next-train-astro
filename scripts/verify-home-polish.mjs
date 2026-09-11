@@ -169,6 +169,8 @@ assert(admin.includes('id="alert-source-saved"'), 'saved alert sources dropdown'
 assert(admin.includes('id="alert-source-name"') && admin.includes('id="alert-source-url"'), 'source name and url fields remain');
 assert(admin.includes('id="alert-source-save-btn"'), 'save source control');
 assert(admin.includes('nt_admin_alert_sources'), 'sources persist in localStorage');
+assert(admin.includes('admin_state/alert_sources'), 'saved sources also live on Firebase');
+assert(admin.includes('refreshSavedAlertSources'), 'admin hydrates saved sources from Firebase');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
 assert(admin.includes('alerts-sched-v3'), 'alert panel rebuild key');
 assert(admin.includes('alert-tab-active'), 'Active alerts tab exists');
@@ -188,7 +190,8 @@ assert(
     'banner and train exceptions support in-app, grid-only, or both'
 );
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
-assert(admin.includes('roadmap-refine-v1'), 'roadmap card redesign is loaded');
+assert(admin.includes('roadmap-refine-v2'), 'roadmap card redesign is loaded');
+assert(admin.includes('id="roadmap-body" class="nt-pack-wallpaper'), 'roadmap uses the feedback-style wallpaper');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');

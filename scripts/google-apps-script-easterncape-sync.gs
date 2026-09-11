@@ -1,16 +1,7 @@
-/**
- * METRORAIL NEXT TRAIN - EASTERN CAPE DATA SYNC
- *
- * Each `${sheetKey}_columnOrder` array preserves the Excel header sequence.
- * The app and OpenGraph worker use it unless an admin override exists at
- * `config/grid_order/EC/${sheetKey}`.
- *
- * Writes only to /schedules/easterncape.json. Do not write the legacy
- * monolithic schedules.json node from this workbook.
- */
+// METRORAIL NEXT TRAIN - EASTERN CAPE DATA SYNC (V6.0 + columnOrder)
+// Targets: /schedules/easterncape.json only. Do not write the legacy schedules.json node.
 
 const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
-// Intentionally inactive replacement value supplied by the owner. Replace in Apps Script before production use.
 const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL";
 
 const SHEET_NAMES = [
@@ -41,74 +32,121 @@ function trainColumnOrder(headers) {
   });
 }
 
-function syncToFirebase() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const allData = {};
+function countCoordinateRows(rows) {
+  let count = 0;
+  rows.forEach(function (row) {
+    if (!row || typeof row !== "object") return;
+    const keys = Object.keys(row);
+    for (let i = 0; i < keys.length; i++) {
+      const key = String(keys[i]).toUpperCase().replace(/\s+/g, "");
+      if (key === "COORDINATES" && row[keys[i]] !== "") {
+        count += 1;
+        return;
+      }
+    }
+  });
+  return count;
+}
 
-  SHEET_NAMES.forEach(function (sheetName) {
-    const sheet = spreadsheet.getSheetByName(sheetName);
+function syncToFirebase() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allData = {};
+  let totalCoordRows = 0;
+  let sheetsWithCoords = 0;
+
+  SHEET_NAMES.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      console.log("Warning: Sheet '" + sheetName + "' not found. Skipping.");
+      console.log(`⚠️ Warning: Sheet '${sheetName}' not found. Skipping.`);
       return;
     }
 
     const data = sheet.getDataRange().getDisplayValues();
     if (data.length < 3) {
-      console.log("Skipped '" + sheetName + "': Not enough data.");
+      console.log(`⚠️ Skipped '${sheetName}': Not enough data.`);
       return;
     }
 
-    const manualUpdateDate = data[0][1]
-      || new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
-    const headers = data[1];
-    const stationHeader = headers[0] || "STATION";
-    const normalizedHeaders = headers.map(normalizeSheetHeader);
-    const cleanKey = sanitizeKey(sheetName);
+    let manualUpdateDate = data[0][1];
+    if (!manualUpdateDate) {
+       manualUpdateDate = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
 
-    const formattedRows = data.slice(2).map(function (row) {
-      const output = {};
-      output[stationHeader] = row[0];
-      for (let index = 1; index < normalizedHeaders.length; index += 1) {
-        const header = normalizedHeaders[index];
-        if (header && row[index] !== "") output[header] = row[index];
+    const headers = data[1];
+
+    let zoneCode = null;
+    for(let k=0; k < data[0].length; k++) {
+        const val = data[0][k].toString().trim();
+        if (/^Z\d+$/.test(val)) { zoneCode = val; break; }
+    }
+
+    const rows = data.slice(2);
+
+    console.log(`ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}`);
+
+    const formattedRows = rows.map(row => {
+      let obj = {};
+      obj[headers[0] || "STATION"] = row[0];
+      for (let i = 1; i < headers.length; i++) {
+        let header = headers[i].toString().trim();
+        if (/^\d+$/.test(header)) {
+            header = header.padStart(4, '0');
+        }
+        const value = row[i];
+        if (header && value !== "") { obj[header] = value; }
       }
-      return output;
+      return obj;
     });
 
-    const metadataRow = {};
-    metadataRow[stationHeader] = "Last Updated: " + manualUpdateDate;
-    formattedRows.unshift(metadataRow);
-
-    allData[cleanKey] = formattedRows;
-    allData[cleanKey + "_meta"] = manualUpdateDate;
-    allData[cleanKey + "_columnOrder"] = trainColumnOrder(normalizedHeaders.slice(1));
-
-    for (let index = 0; index < data[0].length; index += 1) {
-      const value = String(data[0][index] || "").trim();
-      if (/^Z\d+$/.test(value)) {
-        allData[cleanKey + "_zone"] = value;
-        break;
-      }
+    const coordCount = countCoordinateRows(formattedRows);
+    totalCoordRows += coordCount;
+    if (coordCount > 0) sheetsWithCoords += 1;
+    console.log(`🛰️ Sheet '${sheetName}': Coordinates sent=${coordCount}/${formattedRows.length}`);
+    if (coordCount === 0) {
+      console.log(`❌ Sheet '${sheetName}': No COORDINATES values found in the payload.`);
     }
+
+    if (manualUpdateDate) {
+        const metadataRow = {};
+        metadataRow[headers[0] || "STATION"] = "Last Updated: " + manualUpdateDate;
+        formattedRows.unshift(metadataRow);
+
+        const key = sanitizeKey(sheetName);
+        allData[key + "_meta"] = manualUpdateDate;
+        if (zoneCode) allData[key + "_zone"] = zoneCode;
+    }
+
+    const cleanKey = sanitizeKey(sheetName);
+    allData[cleanKey] = formattedRows;
+    allData[cleanKey + "_columnOrder"] = trainColumnOrder(headers.map(normalizeSheetHeader).slice(1));
   });
 
-  allData.lastUpdated = new Date().toLocaleString();
-  const response = UrlFetchApp.fetch(
-    FIREBASE_URL.replace(/\/?$/, "/") + "schedules/easterncape.json?auth=" + encodeURIComponent(FIREBASE_SECRET),
-    {
+  allData["lastUpdated"] = new Date().toLocaleString();
+
+  if (totalCoordRows === 0) {
+    console.log("❌ Coordinate validation FAILED: 0 COORDINATES values in this PUT. Station locate will break.");
+  } else {
+    console.log(`✅ Coordinate validation OK: ${totalCoordRows} rows with COORDINATES across ${sheetsWithCoords} sheets will be sent.`);
+  }
+
+  const newUrl = FIREBASE_URL + "schedules/easterncape.json?auth=" + FIREBASE_SECRET;
+
+  try {
+    const newOptions = {
       method: "put",
       contentType: "application/json",
       payload: JSON.stringify(allData),
       muteHttpExceptions: true
-    }
-  );
-  const status = response.getResponseCode();
-  if (status < 200 || status >= 300) {
-    throw new Error("Firebase sync failed with HTTP " + status + ".");
+    };
+    const resNew = UrlFetchApp.fetch(newUrl, newOptions);
+    console.log("✅ V6 Node Sync Status: " + resNew.getResponseCode());
+    console.log("✅ Coordinates included in V6 PUT: " + totalCoordRows + " rows");
+
+    SpreadsheetApp.getActiveSpreadsheet().toast("Synced Securely to V6 EC!", "Guardian Bot");
+  } catch (e) {
+    console.log("❌ Error: " + e.message);
+    SpreadsheetApp.getActiveSpreadsheet().toast("Error: Check execution logs.", "Guardian Bot");
   }
-  spreadsheet.toast("Synced securely to Eastern Cape schedules.", "Guardian Bot");
 }
 
-function sanitizeKey(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "_");
-}
+function sanitizeKey(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, "_"); }

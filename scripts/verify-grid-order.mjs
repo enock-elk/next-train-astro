@@ -118,6 +118,9 @@ for (const [label, source] of regionalAppsScripts) {
   assert(source.includes('trainColumnOrder'), `${label} columnOrder must stay train IDs only`);
   assert(source.includes('return raw;'), `${label} must preserve non-train sheet headers like the original sync`);
   assert(!source.includes('return normalizeTrainId(raw);'), `${label} must not filter payload headers through train IDs`);
+  assert(source.includes('if (header && value !== "") { obj[header] = value; }'), `${label} must keep the V6 header loop so COORDINATES is written`);
+  assert(source.includes('Coordinates sent='), `${label} must log how many COORDINATES rows will be sent`);
+  assert(source.includes('Coordinate validation'), `${label} must validate COORDINATES before the PUT`);
 }
 assert(renderer.includes('manifestOrder: schedule.columnOrder'));
 assert(logic.includes('fetchGridOrderConfig($userRegion.get()'));
@@ -149,9 +152,12 @@ assert(!ecAppsScript.includes('schedules.json?auth='), 'Eastern Cape must not wr
 assert(ecAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(ecAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
 assert(ecAppsScript.includes('normalizeSheetHeader'), 'Eastern Cape must keep COORDINATES and KM_MARK headers');
-assert(ecAppsScript.includes('trainColumnOrder'), 'Eastern Cape columnOrder must stay train IDs only');
-assert(ecAppsScript.includes('return raw;'), 'Eastern Cape must preserve non-train sheet headers');
-assert(!ecAppsScript.includes('return normalizeTrainId(raw);'), 'Eastern Cape must not filter payload headers through train IDs');
+  assert(ecAppsScript.includes('trainColumnOrder'), 'Eastern Cape columnOrder must stay train IDs only');
+  assert(ecAppsScript.includes('return raw;'), 'Eastern Cape must preserve non-train sheet headers');
+  assert(!ecAppsScript.includes('return normalizeTrainId(raw);'), 'Eastern Cape must not filter payload headers through train IDs');
+  assert(ecAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'Eastern Cape must keep the V6 header loop so COORDINATES is written');
+  assert(ecAppsScript.includes('Coordinates sent='), 'Eastern Cape must log how many COORDINATES rows will be sent');
+  assert(ecAppsScript.includes('Coordinate validation'), 'Eastern Cape must validate COORDINATES before the PUT');
 const wcPubAppsScript = read('scripts/google-apps-script-westerncape-public-holidays-sync.gs');
 assert(wcPubAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(wcPubAppsScript.includes('schedules/westerncape/public_holidays.json'));
@@ -163,9 +169,12 @@ assert(wcPubAppsScript.includes('PropertiesService.getScriptProperties()'));
 assert(!wcPubAppsScript.includes('schedules/westerncape.json?auth='), 'WC public holidays must not PUT the weekday/sat root');
 assert(!wcPubAppsScript.includes('schedules.json?auth='), 'WC public holidays must not write the legacy monolithic node');
 assert(wcPubAppsScript.includes('normalizeSheetHeader'), 'WC public holidays must keep COORDINATES and KM_MARK headers');
-assert(wcPubAppsScript.includes('trainColumnOrder'), 'WC public holidays columnOrder must stay train IDs only');
-assert(wcPubAppsScript.includes('return raw;'), 'WC public holidays must preserve non-train sheet headers');
-assert(!wcPubAppsScript.includes('return normalizeTrainId(raw);'), 'WC public holidays must not filter payload headers through train IDs');
+  assert(wcPubAppsScript.includes('trainColumnOrder'), 'WC public holidays columnOrder must stay train IDs only');
+  assert(wcPubAppsScript.includes('return raw;'), 'WC public holidays must preserve non-train sheet headers');
+  assert(!wcPubAppsScript.includes('return normalizeTrainId(raw);'), 'WC public holidays must not filter payload headers through train IDs');
+  assert(wcPubAppsScript.includes('if (header && value !== "") { obj[header] = value; }'), 'WC public holidays must keep the V6 header loop so COORDINATES is written');
+  assert(wcPubAppsScript.includes('Coordinates sent='), 'WC public holidays must log how many COORDINATES rows will be sent');
+  assert(wcPubAppsScript.includes('Coordinate validation'), 'WC public holidays must validate COORDINATES before the PUT');
 
 function loadAppsScriptFunction(source, name) {
   const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?^\\}`, 'm'));
@@ -191,6 +200,15 @@ for (const [label, source] of [
     columnOrder(payloadHeaders.slice(1)),
     ['0021', '1234A'],
     `${label} _columnOrder must include train IDs only`
+  );
+  const countCoords = loadAppsScriptFunction(source, 'countCoordinateRows');
+  assert.equal(
+    countCoords([
+      { STATION: 'PRETORIA ', '1151': '04:30', COORDINATES: '-25.75, 28.18' },
+      { STATION: 'HATFIELD', '1151': '04:40' },
+    ]),
+    1,
+    `${label} coordinate counter must count payload rows that still have COORDINATES`
   );
 }
 

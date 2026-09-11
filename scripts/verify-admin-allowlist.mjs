@@ -38,7 +38,9 @@ ok(kznIds.includes('kzn-umlazi') && kznIds.includes('kzn-pinetown'), 'KZN operat
 ok(kznIds.length >= 6, `KZN should have ≥6 active corridors, got ${kznIds.length}`);
 
 const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
-ok(bridge.includes('isAdminEmail(window.Admin?.currentUser?.email)'), 'bridge skips login only for operators');
+ok(bridge.includes('function currentAllowlistedUser()'), 'bridge has an allowlisted-session gate');
+ok(bridge.includes('if (user.isAnonymous) return null'), 'bridge rejects anonymous Firebase sessions');
+ok(bridge.includes('return isAdminEmail(user.email) ? user : null'), 'bridge skips login only for operators');
 
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/worker.js'), 'utf8');
 ok(worker.includes('thandeka05nxumalo@gmail.com'), 'telemetry worker still allowlists Thandeka');

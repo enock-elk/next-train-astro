@@ -2,9 +2,8 @@
  * Stuck-update FOUC guard: lifeline, inline recover, asset retention, quiet SW.
  * Run: node scripts/verify-update-fouc.mjs
  *
- * FORCE_UPDATE_REQUIRED=false is NOT the FOUC fix. It only skips a second
- * ?v= reload after a new shell is already running. The FOUC is stale HTML
- * pointing at hashed /_astro/ files that rsync --delete already removed.
+ * FORCE_UPDATE_REQUIRED is release-controlled and must still use the guarded
+ * update coordinator. The FOUC fix remains retained hashed /_astro/ assets.
  */
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,10 +14,11 @@ import { applyRetention, retainPreviousAstro } from './retain-previous-astro.mjs
 const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 
-assert(FORCE_UPDATE_REQUIRED === false, 'FORCE_UPDATE_REQUIRED stays false (not the FOUC fix; avoids a second cold boot)');
+assert(FORCE_UPDATE_REQUIRED === true, 'this synchronized build enables the guarded forced-update path');
 
 const config = readFileSync(new URL('../src/lib/config.js', import.meta.url), 'utf8');
-assert(config.includes('it is the flash commuters were reporting') || config.includes('not how FOUC'), 'config comments that false force-update is not the FOUC fix');
+assert(config.includes('reachability preflight succeeds'), 'force update remains gated by a successful reachability preflight');
+assert(config.includes('keeps the current shell offline'), 'force update preserves the current shell while offline');
 
 const lifeline = readFileSync(new URL('../src/components/RecoveryLifeline.astro', import.meta.url), 'utf8');
 assert(lifeline.includes('id="nt-recovery-lifeline"'), 'lifeline has a stable id');

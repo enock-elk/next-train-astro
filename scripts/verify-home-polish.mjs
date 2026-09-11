@@ -18,7 +18,14 @@ function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
 
-assert(APP_VERSION === 'V9_09.10.11', `APP_VERSION ${APP_VERSION}`);
+const appVersionFile = JSON.parse(readFileSync(new URL('../public/app-version.json', import.meta.url), 'utf8'));
+const packageFile = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const versionParts = APP_VERSION.match(/^V(\d+)_(\d+)\.(\d+)\.(\d+)$/);
+const packageVersionFromApp = versionParts
+    ? versionParts.slice(1).map((part) => String(Number(part))).join('.')
+    : '';
+assert(appVersionFile.version === APP_VERSION, `app-version.json ${appVersionFile.version} matches ${APP_VERSION}`);
+assert(packageFile.version === packageVersionFromApp, `package.json ${packageFile.version} matches ${APP_VERSION}`);
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_08.29.2' && CHANGELOG_DATA[0].features.length === 3, 'What’s New latest card is V9_08.29.2');

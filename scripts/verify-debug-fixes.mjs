@@ -2,6 +2,7 @@
  * Runtime checks for leftover 0619 default, sim weekday date, region picker guard.
  * Run: node scripts/verify-debug-fixes.mjs
  */
+import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
 import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
@@ -15,7 +16,14 @@ function assert(cond, msg) {
     }
 }
 
-assert(APP_VERSION === 'V9_09.10.11', `APP_VERSION is ${APP_VERSION}`);
+const appVersionFile = JSON.parse(readFileSync(new URL('../public/app-version.json', import.meta.url), 'utf8'));
+const packageFile = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const versionParts = APP_VERSION.match(/^V(\d+)_(\d+)\.(\d+)\.(\d+)$/);
+const packageVersionFromApp = versionParts
+    ? versionParts.slice(1).map((part) => String(Number(part))).join('.')
+    : '';
+assert(appVersionFile.version === APP_VERSION, `app-version.json ${appVersionFile.version} matches ${APP_VERSION}`);
+assert(packageFile.version === packageVersionFromApp, `package.json ${packageFile.version} matches ${APP_VERSION}`);
 assert(
     !DEFAULT_EXCLUSIONS['pta-kempton']
     && !Object.keys(DEFAULT_EXCLUSIONS).length,

@@ -1595,6 +1595,23 @@ const Admin = {
         return window.confirm('Discard unsaved grid order changes?');
     },
 
+    isAdminGridShell: (el) => !!(el && (el.dataset.adminSubview === 'true' || el.dataset.adminShell === 'empty')),
+
+    restoreGridChildLayout: (child) => {
+        if (Admin.isAdminGridShell(child)) {
+            child.style.display = 'none';
+            return;
+        }
+        child.style.display = '';
+        if (child.dataset.originalClasses) {
+            child.className = child.dataset.originalClasses;
+        }
+        const body = child.querySelector('[id$="-body"]');
+        if (body) body.classList.add('hidden');
+        const header = child.querySelector('[id$="-header-btn"]');
+        if (header) header.style.removeProperty('display');
+    },
+
     /**
      * Leave a drilled admin panel and restore the Dev Mode grid.
      * Uses replaceState(#dev) — never history.back() — so popstate cannot close Dev Mode / jump home.
@@ -1624,16 +1641,7 @@ const Admin = {
         if (container) {
             container.classList.add('admin-grid-view');
             container.style.gridTemplateColumns = `repeat(${Admin.gridCols || 3}, minmax(0, 1fr))`;
-            Array.from(container.children).forEach((child) => {
-                child.style.display = '';
-                if (child.dataset.originalClasses) {
-                    child.className = child.dataset.originalClasses;
-                }
-                const b = child.querySelector('[id$="-body"]');
-                if (b) b.classList.add('hidden');
-                const h = child.querySelector('[id$="-header-btn"]');
-                if (h) h.style.removeProperty('display');
-            });
+            Array.from(container.children).forEach((child) => Admin.restoreGridChildLayout(child));
         }
 
         if (titleH3 && devHeaderRow?.dataset.originalHtml) {
@@ -1681,16 +1689,7 @@ const Admin = {
         container.classList.add('admin-grid-view');
         container.style.gridTemplateColumns = `repeat(${Admin.gridCols || 3}, minmax(0, 1fr))`;
 
-        Array.from(container.children).forEach((child) => {
-            child.style.display = '';
-            if (child.dataset.originalClasses) {
-                child.className = child.dataset.originalClasses;
-            }
-            const body = child.querySelector('[id$="-body"]');
-            if (body) body.classList.add('hidden');
-            const header = child.querySelector('[id$="-header-btn"]');
-            if (header) header.style.removeProperty('display');
-        });
+        Array.from(container.children).forEach((child) => Admin.restoreGridChildLayout(child));
 
         const devHeaderRow = document.querySelector('#dev-modal .border-b.border-gray-200.pb-4.mb-6')
             || document.querySelector('#dev-modal .border-b.border-gray-200.pb-2.mb-3');
@@ -2052,7 +2051,7 @@ const Admin = {
             let chartPanel = document.getElementById('telemetry-chart-panel');
             if (!chartPanel) {
                 const adminContainer = document.getElementById('admin-modules-container');
-                chartPanel = document.createElement('section');
+                chartPanel = document.createElement('div');
                 chartPanel.id = 'telemetry-chart-panel';
                 chartPanel.dataset.adminSubview = 'true';
                 chartPanel.style.display = 'none';
@@ -5124,9 +5123,9 @@ const Admin = {
                     .admin-grid-view > div.hidden,
                     .admin-grid-view > div:empty,
                     .admin-grid-view > div[data-admin-shell="empty"],
-                    .admin-grid-view > div[data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
-                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
-                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
+                    .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
+                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
+                    .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }
                     .admin-grid-view > div [id$="-header-btn"] > span:not(.admin-unread-badge) { flex-direction: column; align-items: center; width: 100%; display: flex; }
@@ -5216,7 +5215,11 @@ const Admin = {
                     .admin-grid-view > div.hidden,
                     .admin-grid-view > div:empty,
                     .admin-grid-view > div[data-admin-shell="empty"],
-                    .admin-grid-view > div[data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
+                    .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
+                }
+                if (!gridStyleEl.textContent.includes('.admin-grid-view > [data-admin-subview="true"]')) {
+                    gridStyleEl.textContent += `
+                    .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
                 }
                 if (!gridStyleEl.textContent.includes('color: #64748b')) {
                     gridStyleEl.textContent += `

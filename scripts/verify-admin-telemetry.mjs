@@ -137,6 +137,10 @@ ok(adminJs.includes('Unique users by last selected region'), 'regional modal say
 ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
 ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
 ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');
+ok(adminJs.includes("chartPanel = document.createElement('div')"), 'analytics subview is a grid-compatible div, not a section');
+ok(!adminJs.includes("document.createElement('section')"), 'admin home no longer creates a section that bypasses tile-hide CSS');
+ok(adminJs.includes('restoreGridChildLayout'), 'packing the tile grid restores layout through one helper');
+ok(adminJs.includes('.admin-grid-view > [data-admin-subview="true"]'), 'hide CSS matches any admin subview child, not only divs');
 ok(!adminJs.includes("chartModal.id = 'telemetry-chart-modal'"), 'telemetry chart overlay modal is removed');
 ok(adminJs.includes('100dvh') && adminJs.includes('landscape:'), 'analytics drill responds to portrait and landscape viewports');
 {

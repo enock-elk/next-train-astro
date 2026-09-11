@@ -137,5 +137,15 @@ assert(ecAppsScript.includes('EASTL-to-BERLN_Sat'));
 assert(!ecAppsScript.includes('schedules.json?auth='), 'Eastern Cape must not write the legacy monolithic node');
 assert(ecAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(ecAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+const wcPubAppsScript = read('scripts/google-apps-script-westerncape-public-holidays-sync.gs');
+assert(wcPubAppsScript.includes('cleanKey + "_columnOrder"'));
+assert(wcPubAppsScript.includes('schedules/westerncape/public_holidays.json'));
+assert(wcPubAppsScript.includes('syncPublicHolidaysToFirebase'));
+assert(wcPubAppsScript.includes('/_Pub$/i'));
+assert(wcPubAppsScript.includes('CT-to-HANI_Pub'));
+assert(wcPubAppsScript.includes('MALM-to-CT_Pub'));
+assert(wcPubAppsScript.includes('PropertiesService.getScriptProperties()'));
+assert(!wcPubAppsScript.includes('schedules/westerncape.json?auth='), 'WC public holidays must not PUT the weekday/sat root');
+assert(!wcPubAppsScript.includes('schedules.json?auth='), 'WC public holidays must not write the legacy monolithic node');
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

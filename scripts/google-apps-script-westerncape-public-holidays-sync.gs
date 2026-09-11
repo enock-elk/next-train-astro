@@ -44,6 +44,21 @@ function normalizeTrainId(value) {
   return /^\d{4}[a-zA-Z]*$/.test(id) ? id : "";
 }
 
+function normalizeSheetHeader(value, index) {
+  const raw = String(value || "").trim();
+  if (index === 0) return raw || "STATION";
+  const upper = raw.toUpperCase();
+  if (upper === "COORDINATES") return "COORDINATES";
+  if (upper === "KM_MARK" || upper === "KM MARK") return "KM_MARK";
+  return normalizeTrainId(raw);
+}
+
+function trainColumnOrder(headers) {
+  return headers.filter(function (header) {
+    return /^\d{4}[a-zA-Z]*$/.test(header);
+  });
+}
+
 function syncPublicHolidaysToFirebase() {
   if (!FIREBASE_SECRET) {
     throw new Error("Missing FIREBASE_SECRET in Script properties.");
@@ -75,9 +90,7 @@ function syncPublicHolidaysToFirebase() {
       || new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
     const headers = data[1];
     const stationHeader = headers[0] || "STATION";
-    const normalizedHeaders = headers.map(function (header, index) {
-      return index === 0 ? stationHeader : normalizeTrainId(header);
-    });
+    const normalizedHeaders = headers.map(normalizeSheetHeader);
     const cleanKey = sanitizeKey(sheetName);
 
     const formattedRows = data.slice(2).map(function (row) {
@@ -96,7 +109,7 @@ function syncPublicHolidaysToFirebase() {
 
     allData[cleanKey] = formattedRows;
     allData[cleanKey + "_meta"] = manualUpdateDate;
-    allData[cleanKey + "_columnOrder"] = normalizedHeaders.slice(1).filter(Boolean);
+    allData[cleanKey + "_columnOrder"] = trainColumnOrder(normalizedHeaders.slice(1));
 
     for (let index = 0; index < data[0].length; index += 1) {
       const value = String(data[0][index] || "").trim();

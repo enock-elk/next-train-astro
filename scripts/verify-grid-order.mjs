@@ -108,6 +108,14 @@ const og = read('workers/nexttrain-og/src/schedule.js');
 const appsScript = read('scripts/google-apps-script-gauteng-sync.gs');
 const wcAppsScript = read('scripts/google-apps-script-westerncape-sync.gs');
 const kznAppsScript = read('scripts/google-apps-script-kzn-sync.gs');
+for (const [label, source] of [
+  ['Gauteng', appsScript],
+  ['Western Cape', wcAppsScript],
+  ['KZN', kznAppsScript],
+]) {
+  assert(source.includes('normalizeSheetHeader'), `${label} must keep COORDINATES and KM_MARK headers`);
+  assert(source.includes('trainColumnOrder'), `${label} columnOrder must stay train IDs only`);
+}
 assert(renderer.includes('manifestOrder: schedule.columnOrder'));
 assert(logic.includes('fetchGridOrderConfig($userRegion.get()'));
 assert(seo.includes('runtimeConfig: exportedOrders'));
@@ -137,6 +145,8 @@ assert(ecAppsScript.includes('EASTL-to-BERLN_Sat'));
 assert(!ecAppsScript.includes('schedules.json?auth='), 'Eastern Cape must not write the legacy monolithic node');
 assert(ecAppsScript.includes('const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"'));
 assert(ecAppsScript.includes('const FIREBASE_SECRET = "ReVFetiSjWyEPDCSsCY8ugtAXsObIXUBEXOYbdbL"'));
+assert(ecAppsScript.includes('normalizeSheetHeader'), 'Eastern Cape must keep COORDINATES and KM_MARK headers');
+assert(ecAppsScript.includes('trainColumnOrder'), 'Eastern Cape columnOrder must stay train IDs only');
 const wcPubAppsScript = read('scripts/google-apps-script-westerncape-public-holidays-sync.gs');
 assert(wcPubAppsScript.includes('cleanKey + "_columnOrder"'));
 assert(wcPubAppsScript.includes('schedules/westerncape/public_holidays.json'));
@@ -147,5 +157,7 @@ assert(wcPubAppsScript.includes('MALM-to-CT_Pub'));
 assert(wcPubAppsScript.includes('PropertiesService.getScriptProperties()'));
 assert(!wcPubAppsScript.includes('schedules/westerncape.json?auth='), 'WC public holidays must not PUT the weekday/sat root');
 assert(!wcPubAppsScript.includes('schedules.json?auth='), 'WC public holidays must not write the legacy monolithic node');
+assert(wcPubAppsScript.includes('normalizeSheetHeader'), 'WC public holidays must keep COORDINATES and KM_MARK headers');
+assert(wcPubAppsScript.includes('trainColumnOrder'), 'WC public holidays columnOrder must stay train IDs only');
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

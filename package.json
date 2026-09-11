@@ -29,6 +29,7 @@
     "verify:planner-saturday": "node scripts/verify-planner-saturday.mjs",
     "verify:map-hops": "node scripts/verify-map-hops.mjs",
     "verify:route-seo": "node scripts/verify-route-seo.mjs",
+    "verify:grid-order": "node scripts/verify-grid-order.mjs",
     "verify:attachments": "node scripts/verify-attachments.mjs",
     "verify:feedback-contact": "node scripts/verify-feedback-contact.mjs",
     "verify:community-safety": "node scripts/verify-community-safety.mjs",
@@ -36,6 +37,7 @@
     "verify:scheduled-alerts": "node scripts/verify-scheduled-alerts.mjs",
     "verify:safe-nuke": "node scripts/verify-safe-nuke.mjs",
     "verify:auth-providers": "node scripts/verify-auth-providers.mjs",
+    "grid-order:seed": "node scripts/export-grid-order-seed.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"

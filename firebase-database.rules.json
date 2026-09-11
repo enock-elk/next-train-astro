@@ -11,6 +11,21 @@
       "schedule_override": { ".read": true },
       "features": { ".read": true },
       "feature_grants": { ".read": true },
+      "grid_order": {
+        ".read": true,
+        ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$region": {
+          ".validate": "$region === 'GP' || $region === 'WC' || $region === 'KZN' || $region === 'EC'",
+          "$sheetKey": {
+            ".validate": "!newData.exists() || (newData.hasChildren(['updatedAt', 'updatedBy', 'source']) && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('source').isString() && ((newData.child('action').val() === 'reset' && !newData.hasChild('order')) || newData.child('order').hasChildren()))",
+            "order": {
+              "$index": {
+                ".validate": "newData.isString() && newData.val().matches(/^\\d{4}[a-zA-Z]*$/)"
+              }
+            }
+          }
+        }
+      },
       "auth_providers": {
         ".read": true,
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')"

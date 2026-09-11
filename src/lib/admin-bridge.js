@@ -50,6 +50,13 @@ import {
     ATTACHMENT_MAX_FILES,
 } from './attachments.js';
 import { prepareRichHtml, sanitizeRichHtml, isSafeHref } from './rich-text.js';
+import {
+    getGridOrderManifest,
+    getRuntimeGridOrderRecord,
+    normalizeGridOrder,
+    orderGridTrainIds,
+    setRuntimeGridOrderConfig,
+} from './grid-order.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -107,6 +114,11 @@ export function exposeAdminGlobals() {
     window.ADMIN_CHANGELOG = ADMIN_CHANGELOG;
     window.lookupAdminChangelog = lookupAdminChangelog;
     window.listAdminChangelogVersions = listAdminChangelogVersions;
+    window.getGridOrderManifest = getGridOrderManifest;
+    window.getRuntimeGridOrderRecord = getRuntimeGridOrderRecord;
+    window.normalizeGridOrder = normalizeGridOrder;
+    window.orderGridTrainIds = orderGridTrainIds;
+    window.setRuntimeGridOrderConfig = setRuntimeGridOrderConfig;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

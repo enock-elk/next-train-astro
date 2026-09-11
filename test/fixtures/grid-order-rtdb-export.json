@@ -1,0 +1,17 @@
+{
+  "config": {
+    "grid_order": {
+      "GP": {
+        "pta_to_pien_weekday": {
+          "order": [
+            "1153",
+            "1151"
+          ],
+          "updatedAt": 1789084800000,
+          "updatedBy": "fixture@nexttrain.co.za",
+          "source": "admin"
+        }
+      }
+    }
+  }
+}

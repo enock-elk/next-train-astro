@@ -13,7 +13,7 @@
 import catalog from './catalog.json';
 import { isSocialCrawler, parseShareIntent, dayLabel, stationLabel, decodeDay } from './parse.js';
 import { buildRouteOgMeta, buildPlannerOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
-import { extractGridPreview, loadRegionDb } from './schedule.js';
+import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
 import { timetablePng, plannerPng, buildTimetableSvg, buildPlannerSvg } from './og-images.js';
 
 function siteBase(env, requestUrl) {
@@ -64,9 +64,12 @@ async function handleOgTimetable(url, env, ctx) {
   let grid = null;
   if (route) {
     try {
-      const db = await loadRegionDb(env, route.region, ctx);
+      const [db, runtimeConfig] = await Promise.all([
+        loadRegionDb(env, route.region, ctx),
+        loadRegionGridOrder(env, route.region, ctx),
+      ]);
       // Full sheet (all trains × stations) for a dense WhatsApp preview.
-      grid = extractGridPreview(db, route, dir, day);
+      grid = extractGridPreview(db, route, dir, day, 0, 0, { runtimeConfig });
     } catch (e) {
       console.warn('OG timetable schedule load failed', e.message || e);
     }
@@ -126,8 +129,11 @@ async function handleBotShare(url, env, ctx) {
     let grid = null;
     if (catalog[intent.routeId]) {
       try {
-        const db = await loadRegionDb(env, route.region, ctx);
-        if (db) grid = extractGridPreview(db, route, intent.dir, intent.day);
+        const [db, runtimeConfig] = await Promise.all([
+          loadRegionDb(env, route.region, ctx),
+          loadRegionGridOrder(env, route.region, ctx),
+        ]);
+        if (db) grid = extractGridPreview(db, route, intent.dir, intent.day, 0, 0, { runtimeConfig });
       } catch (e) {
         console.warn('OG share grid load failed', e.message || e);
       }

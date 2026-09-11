@@ -3,7 +3,7 @@
  * Column order must match the in-app full grid (orderGridTrainIds / MANUAL_GRID_ORDER).
  */
 
-import { orderGridTrainIds } from '../../../src/lib/grid-order.js';
+import { getGridOrderManifest, orderGridTrainIds } from '../../../src/lib/grid-order.js';
 
 const REGION_NODE = {
   GP: 'schedules/gauteng.json',
@@ -58,6 +58,16 @@ function getSheet(db, key) {
   return null;
 }
 
+function manifestForSheet(db, key) {
+  const root = getGridOrderManifest(db, key);
+  if (root) return root;
+  for (const nest of REGION_NESTS) {
+    const nested = getGridOrderManifest(db?.[nest], key);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 /**
  * Train columns the same way as the in-app grid: every 4-digit id present on the sheet.
  * (Do not invent an alternate earliest-time order — orderGridTrainIds owns sequence.)
@@ -87,7 +97,7 @@ function rowHasClock(row, trainIds) {
  * columns in MANUAL_GRID_ORDER (same as #grid).
  * @returns {{ stations: string[], trainIds: string[], cells: string[][], meta: string|null } | null}
  */
-export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStations = 0) {
+export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStations = 0, options = {}) {
   if (!db || !route) return null;
   const flat = flattenPublicHolidays(db);
   const key = sheetKeyFor(route, dir, day);
@@ -98,7 +108,11 @@ export function extractGridPreview(db, route, dir, day, maxTrains = 0, maxStatio
   const dataRows = rows.filter((r) => r && r.STATION && !/^Last Updated/i.test(String(r.STATION)));
   if (!dataRows.length) return null;
 
-  const orderedIds = orderGridTrainIds(key, collectTrainIds(dataRows), dataRows);
+  const orderedIds = orderGridTrainIds(key, collectTrainIds(dataRows), dataRows, {
+    ...options,
+    region: options.region || route.region,
+    manifestOrder: options.manifestOrder || manifestForSheet(db, key),
+  });
   const totalTrains = orderedIds.length;
   const clockRows = dataRows.filter((row) => rowHasClock(row, orderedIds));
   const totalStations = clockRows.length;
@@ -163,6 +177,37 @@ export async function loadRegionDb(env, region, ctx) {
   const data = await res.json();
   const body = JSON.stringify(data);
   const toCache = new Response(body, {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=300' },
+  });
+  if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, toCache.clone()));
+  else await cache.put(cacheKey, toCache.clone());
+  return data;
+}
+
+/** Public RTDB order snapshot; null keeps the shared resolver on its fallback. */
+export async function loadRegionGridOrder(env, region, ctx) {
+  const code = REGION_NODE[region] ? region : 'GP';
+  const base = String(env.SCHEDULE_BASE || 'https://metrorail-next-train-default-rtdb.firebaseio.com/').replace(
+    /\/?$/,
+    '/'
+  );
+  const cache = caches.default;
+  const cacheKey = new Request(`https://nexttrain-og-cache.local/grid-order/${code}`);
+  const hit = await cache.match(cacheKey);
+  if (hit) {
+    try {
+      return await hit.json();
+    } catch {
+      /* refetch */
+    }
+  }
+  const res = await fetch(`${base}config/grid_order/${encodeURIComponent(code)}.json`, {
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const toCache = new Response(JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=300' },
   });
   if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, toCache.clone()));

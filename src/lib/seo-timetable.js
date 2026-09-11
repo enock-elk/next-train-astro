@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
-import { orderGridTrainIds } from './grid-order.js';
+import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, timeToSeconds } from './utils.js';
 import { stationLabel } from './seo-routes.js';
 
@@ -14,6 +14,7 @@ const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
 
 let _dump = null;
+let _gridOrderDump;
 
 function dumpCandidates() {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,15 @@ export function loadScheduleDump() {
     return _dump;
 }
 
+/** Optional checked-in/exported RTDB snapshot for static builds. */
+export function loadGridOrderDump() {
+    if (_gridOrderDump !== undefined) return _gridOrderDump;
+    const paths = dumpCandidates().map((path) => path.replace(/full-database\.json$/, 'grid-order.json'));
+    const path = paths.find((candidate) => existsSync(candidate));
+    _gridOrderDump = path ? JSON.parse(readFileSync(path, 'utf8')) : null;
+    return _gridOrderDump;
+}
+
 /**
  * Same overlay idea as live `unwrapDatabase`: region nest wins over a stale
  * top-level copy of the same sheet key (e.g. June root vs August `gauteng`).
@@ -46,6 +56,16 @@ export function getSheet(db, key) {
         if (Array.isArray(nested) && nested.length) return nested;
     }
     if (Array.isArray(db[key]) && db[key].length) return db[key];
+    return null;
+}
+
+function manifestForSheet(db, key) {
+    const root = getGridOrderManifest(db, key);
+    if (root) return root;
+    for (const nest of REGION_NESTS) {
+        const nested = getGridOrderManifest(db?.[nest], key);
+        if (nested) return nested;
+    }
     return null;
 }
 
@@ -144,12 +164,15 @@ function departuresFromRow(row, trainIds) {
  *   departures: string[],
  * } | null}
  */
-export function extractSeoGrid(db, sheetKey, originName) {
+export function extractSeoGrid(db, sheetKey, originName, options = {}) {
     const rows = getSheet(db, sheetKey);
     const dataRows = dataRowsFromSheet(rows);
     if (!dataRows.length) return null;
 
-    const trainIds = orderGridTrainIds(sheetKey, unionTrainIds(dataRows), dataRows);
+    const trainIds = orderGridTrainIds(sheetKey, unionTrainIds(dataRows), dataRows, {
+        ...options,
+        manifestOrder: options.manifestOrder || manifestForSheet(db, sheetKey),
+    });
     if (!trainIds.length) return null;
 
     const stations = [];
@@ -186,14 +209,19 @@ export function extractSeoGrid(db, sheetKey, originName) {
  */
 export function buildRouteSeoTimetable(route) {
     const db = loadScheduleDump();
+    const exportedOrders = loadGridOrderDump();
     const keys = route?.sheetKeys || {};
     const origin = stationLabel(route.destA);
     const dest = stationLabel(route.destB);
+    const orderOptions = {
+        region: route?.region,
+        runtimeConfig: exportedOrders?.[route?.region] || exportedOrders?.config?.grid_order?.[route?.region],
+    };
 
-    const weekdayA = extractSeoGrid(db, keys.weekday_to_a, dest);
-    const weekdayB = extractSeoGrid(db, keys.weekday_to_b, origin);
-    const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest);
-    const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin);
+    const weekdayA = extractSeoGrid(db, keys.weekday_to_a, dest, orderOptions);
+    const weekdayB = extractSeoGrid(db, keys.weekday_to_b, origin, orderOptions);
+    const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest, orderOptions);
+    const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin, orderOptions);
 
     const labelGrid = (grid, toward) => {
         if (!grid) return null;

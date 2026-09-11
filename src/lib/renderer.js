@@ -857,7 +857,10 @@ export const Renderer = {
 
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false) => {
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
-        const sortedCols = orderGridTrainIds(sheetName, trainCols, schedule.rows);
+        const sortedCols = orderGridTrainIds(sheetName, trainCols, schedule.rows, {
+            region: $userRegion.get(),
+            manifestOrder: schedule.columnOrder,
+        });
 
         let selectedStation = "";
         if (!isExport && typeof document !== 'undefined') {

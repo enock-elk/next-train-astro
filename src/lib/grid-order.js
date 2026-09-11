@@ -3698,36 +3698,147 @@ export const MANUAL_GRID_ORDER = {
 
 const TRAIN_COL_RE = /^\d{4}[a-zA-Z]*$/;
 const CLOCK_RE = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+const RUNTIME_GRID_ORDER = new Map();
+
+// This table is generated from the published timetable source. Runtime changes
+// belong in RTDB; freezing prevents an accidental client-side edit from
+// silently becoming a second operational authority.
+Object.values(MANUAL_GRID_ORDER).forEach((order) => Object.freeze(order));
+Object.freeze(MANUAL_GRID_ORDER);
 
 function cellSeconds(val) {
     const s = String(val ?? '').trim();
-    if (!s || s === '-' || s === '—' || s === '–') return 0;
+    if (!s || s === '-' || s === '—' || s === '–') return null;
     const m = s.match(CLOCK_RE);
-    if (!m) return 0;
+    if (!m) return null;
     return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0);
 }
 
-function orderByEarliestTime(trainIds, rows) {
+function servicePosition(trainId, rows) {
     const list = Array.isArray(rows) ? rows : [];
-    const colStats = trainIds.map((colId) => {
-        let earliestTime = 86400 * 2;
-        let hasData = false;
-        for (const row of list) {
-            const t = cellSeconds(row?.[colId]);
-            if (t > 0) {
-                if (t < earliestTime) earliestTime = t;
-                hasData = true;
+    let earliestTime = Number.POSITIVE_INFINITY;
+    let firstRow = Number.POSITIVE_INFINITY;
+    for (let rowIndex = 0; rowIndex < list.length; rowIndex += 1) {
+        const time = cellSeconds(list[rowIndex]?.[trainId]);
+        if (time == null) continue;
+        if (time < earliestTime || (time === earliestTime && rowIndex < firstRow)) {
+            earliestTime = time;
+            firstRow = rowIndex;
+        }
+    }
+    return { time: earliestTime, row: firstRow };
+}
+
+function compareServicePosition(a, b) {
+    if (!Number.isFinite(a.position.time) && !Number.isFinite(b.position.time)) {
+        return String(a.id).localeCompare(String(b.id));
+    }
+    if (a.position.time !== b.position.time) return a.position.time - b.position.time;
+    if (a.position.row !== b.position.row) return a.position.row - b.position.row;
+    return a.inputIndex - b.inputIndex;
+}
+
+/**
+ * Preserve every configured column relative to the other configured columns,
+ * then place new trains at their earliest valid clock position. Looking across
+ * all rows is important for short workings which begin part-way along a route.
+ */
+function insertUnknownTrains(configured, unknown, rows, inputOrder) {
+    const result = configured.slice();
+    const inputIndex = new Map(inputOrder.map((id, index) => [id, index]));
+    const positioned = unknown.map((id) => ({
+        id,
+        inputIndex: inputIndex.get(id) ?? Number.MAX_SAFE_INTEGER,
+        position: servicePosition(id, rows),
+    })).sort(compareServicePosition);
+
+    for (const candidate of positioned) {
+        if (!Number.isFinite(candidate.position.time)) {
+            result.push(candidate.id);
+            continue;
+        }
+        let insertAt = result.length;
+        for (let i = 0; i < result.length; i += 1) {
+            const existing = {
+                id: result[i],
+                inputIndex: inputIndex.get(result[i]) ?? i,
+                position: servicePosition(result[i], rows),
+            };
+            if (compareServicePosition(candidate, existing) < 0) {
+                insertAt = i;
+                break;
             }
         }
-        return { id: colId, time: earliestTime, hasData };
-    });
-    colStats.sort((a, b) => {
-        if (!a.hasData && !b.hasData) return a.id.localeCompare(b.id);
-        if (!a.hasData) return 1;
-        if (!b.hasData) return -1;
-        return a.time - b.time;
-    });
-    return colStats.map((c) => c.id);
+        result.splice(insertAt, 0, candidate.id);
+    }
+    return result;
+}
+
+/** Accept RTDB records and future schedule manifests without using key order. */
+export function normalizeGridOrder(value) {
+    const candidate = Array.isArray(value)
+        ? value
+        : (value?.order ?? value?.columnOrder ?? value?._columnOrder);
+    if (!Array.isArray(candidate)) return null;
+    const seen = new Set();
+    const order = [];
+    for (const raw of candidate) {
+        const id = String(raw ?? '').trim();
+        if (!TRAIN_COL_RE.test(id) || seen.has(id)) continue;
+        seen.add(id);
+        order.push(id);
+    }
+    return order.length ? order : null;
+}
+
+/** Install one public RTDB `config/grid_order/{region}` snapshot in memory. */
+export function setRuntimeGridOrderConfig(region, records) {
+    const code = String(region || '').trim().toUpperCase();
+    if (!code) return;
+    if (!records || typeof records !== 'object' || Array.isArray(records)) {
+        RUNTIME_GRID_ORDER.delete(code);
+        return;
+    }
+    RUNTIME_GRID_ORDER.set(code, records);
+}
+
+export function clearRuntimeGridOrderConfig(region) {
+    if (region == null) RUNTIME_GRID_ORDER.clear();
+    else RUNTIME_GRID_ORDER.delete(String(region).trim().toUpperCase());
+}
+
+export function getRuntimeGridOrderRecord(region, sheetName, suppliedConfig) {
+    const records = suppliedConfig
+        || RUNTIME_GRID_ORDER.get(String(region || '').trim().toUpperCase());
+    if (!records || typeof records !== 'object') return null;
+    for (const key of gridOrderLookupKeys(sheetName)) {
+        if (Object.prototype.hasOwnProperty.call(records, key)) return records[key];
+    }
+    return null;
+}
+
+/**
+ * Read only named manifest arrays. Supported future forms are:
+ * `{ columnOrder: [...] }` beside `rows`, or top-level
+ * `{ columnOrder: { sheetKey: [...] } }` / `{ _columnOrder: ... }`.
+ */
+export function getGridOrderManifest(database, sheetName) {
+    if (!database || typeof database !== 'object') return null;
+    for (const key of gridOrderLookupKeys(sheetName)) {
+        const companion = normalizeGridOrder(database[`${key}_columnOrder`]);
+        if (companion) return companion;
+        const direct = normalizeGridOrder(database[key]);
+        if (direct) return direct;
+    }
+    for (const manifestKey of ['columnOrder', '_columnOrder']) {
+        const manifest = database[manifestKey];
+        if (!manifest || typeof manifest !== 'object') continue;
+        for (const key of gridOrderLookupKeys(sheetName)) {
+            const order = normalizeGridOrder(manifest[key]);
+            if (order) return order;
+        }
+    }
+    return null;
 }
 
 /** Config_GridOrder uses `durbn-to-cross_weekday`; ROUTES.sheetKeys use `durbn_to_cross_weekday`. */
@@ -3739,8 +3850,12 @@ export function gridOrderLookupKeys(sheetName) {
     return keys;
 }
 
-/** Stable column order: manual list, leftover IDs; no manual list → earliest clock. */
-export function orderGridTrainIds(sheetName, trainIds, rows) {
+/**
+ * Central column resolver.
+ * Precedence: explicit/runtime RTDB record, companion manifest, frozen manual
+ * fallback. New columns are inserted by service position in every case.
+ */
+export function orderGridTrainIds(sheetName, trainIds, rows, options = {}) {
     const trainCols = (trainIds || [])
         .map((id) => String(id).trim())
         .filter((id) => TRAIN_COL_RE.test(id));
@@ -3751,22 +3866,26 @@ export function orderGridTrainIds(sheetName, trainIds, rows) {
         seen.add(id);
         unique.push(id);
     }
-    let manualOrder;
+
+    const runtimeRecord = options.runtimeOrder
+        ?? getRuntimeGridOrderRecord(options.region, sheetName, options.runtimeConfig);
+    let configuredOrder = normalizeGridOrder(runtimeRecord);
+    if (!configuredOrder) configuredOrder = normalizeGridOrder(options.manifestOrder);
     for (const key of gridOrderLookupKeys(sheetName)) {
-        if (MANUAL_GRID_ORDER[key]) {
-            manualOrder = MANUAL_GRID_ORDER[key];
+        if (!configuredOrder && MANUAL_GRID_ORDER[key]) {
+            configuredOrder = MANUAL_GRID_ORDER[key];
             break;
         }
     }
-    if (!manualOrder) {
-        return Array.isArray(rows) && rows.length ? orderByEarliestTime(unique, rows) : unique;
+    if (!configuredOrder) {
+        return insertUnknownTrains([], unique, rows, unique);
     }
-    const sorted = [];
-    const manualSet = new Set(manualOrder);
-    for (const tNum of manualOrder) {
-        if (unique.includes(tNum)) sorted.push(tNum);
+    const available = new Set(unique);
+    const configured = [];
+    const configuredSet = new Set(configuredOrder);
+    for (const id of configuredOrder) {
+        if (available.has(id)) configured.push(id);
     }
-    const remaining = unique.filter((t) => !manualSet.has(t));
-    remaining.sort((a, b) => a.localeCompare(b));
-    return [...sorted, ...remaining];
+    const unknown = unique.filter((id) => !configuredSet.has(id));
+    return insertUnknownTrains(configured, unknown, rows, unique);
 }

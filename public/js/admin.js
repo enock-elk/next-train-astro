@@ -738,6 +738,7 @@ const Admin = {
             file: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
             more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
             pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+            columns: '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/><path d="M6.5 7h0M17.5 7h0"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
         };
         const body = paths[name];
@@ -1587,12 +1588,19 @@ const Admin = {
     gridCols: 3,
     _modulesRendered: false,
     _drillStack: [],
+    gridOrderDirty: false,
+
+    confirmGridOrderLeave: (targetPanelId = null) => {
+        if (!Admin.gridOrderDirty || targetPanelId === 'grid-order-panel') return true;
+        return window.confirm('Discard unsaved grid order changes?');
+    },
 
     /**
      * Leave a drilled admin panel and restore the Dev Mode grid.
      * Uses replaceState(#dev) — never history.back() — so popstate cannot close Dev Mode / jump home.
      */
     exitDrillToGrid: (opts = {}) => {
+        if (!Admin.confirmGridOrderLeave(null)) return false;
         const fromPopState = !!opts.fromPopState;
         if (window._adminLightboxOpen && typeof Admin.closeLightbox === 'function') {
             Admin.closeLightbox();
@@ -1698,6 +1706,7 @@ const Admin = {
 
     /** Close Developer Mode reliably (no history.back() race that can no-op the X button). */
     closeDevModal: (opts = {}) => {
+        if (!Admin.confirmGridOrderLeave(null)) return;
         const force = !!opts.force;
         // Grid X / forced exit: close Dev Mode. Drilled X (no force): step back to grid only.
         if (!force && !Admin.isGridMode && typeof Admin.exitDrillToGrid === 'function') {
@@ -3423,6 +3432,7 @@ const Admin = {
         runAdminSetup('serviceAlerts', () => Admin.setupServiceAlertsManager());
         runAdminSetup('disruptions', () => Admin.setupDisruptionsManager());
         runAdminSetup('exclusions', () => Admin.setupExclusionManager());
+        runAdminSetup('gridOrder', () => Admin.setupGridOrderManager());
         runAdminSetup('holidayApprovals', () => Admin.setupHolidayApprovalsManager());
         runAdminSetup('maintenance', () => Admin.setupMaintenanceManager());
         runAdminSetup('specialEvent', () => Admin.setupSpecialEventManager());
@@ -4148,6 +4158,7 @@ const Admin = {
 
     /** Paint a drilled admin panel and bind ← to one history step (not always the grid). */
     showDrilledPanel: (panelId, opts = {}) => {
+        if (!Admin.confirmGridOrderLeave(panelId)) return false;
         const targetPanel = document.getElementById(panelId);
         const container = document.getElementById('admin-modules-container');
         if (!targetPanel || !container) return false;
@@ -13496,6 +13507,282 @@ const Admin = {
         };
     },
 
+    // --- GRID COLUMN ORDER MANAGER ---
+    setupGridOrderManager: () => {
+        const container = document.getElementById('admin-modules-container');
+        if (!container || document.getElementById('grid-order-panel')) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'grid-order-panel';
+        panel.className = 'bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-md p-4 mb-4 overflow-hidden';
+        panel.innerHTML = `
+            <button id="grid-order-header-btn" class="w-full flex items-center justify-between text-left focus:outline-none">
+                <span class="font-bold text-gray-900 dark:text-white flex items-center">
+                    ${Admin.tileIcon('columns', 'text-indigo-600 dark:text-indigo-400')}
+                    <span>Grid Column Order</span>
+                </span>
+                <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="grid-order-body" class="hidden mt-4 space-y-3">
+                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the accessible move buttons, then save the explicit array to RTDB.</p>
+                <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Route
+                    <select id="grid-order-route" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white"></select>
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Day
+                        <select id="grid-order-day" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white">
+                            <option value="weekday">Weekday</option>
+                            <option value="saturday">Saturday</option>
+                            <option value="public_holiday">Public holiday</option>
+                        </select>
+                    </label>
+                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Direction
+                        <select id="grid-order-direction" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white">
+                            <option value="A">To destination A</option>
+                            <option value="B">To destination B</option>
+                        </select>
+                    </label>
+                </div>
+                <button id="grid-order-load" type="button" class="w-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Load order</button>
+                <div id="grid-order-meta" class="hidden rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-[10px] text-gray-500 dark:text-gray-400" aria-live="polite"></div>
+                <ol id="grid-order-list" class="space-y-1 max-h-[52vh] overflow-y-auto custom-scrollbar" aria-label="Train column order"></ol>
+                <div id="grid-order-actions" class="hidden grid grid-cols-2 gap-2">
+                    <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
+                    <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(panel);
+
+        const routeEl = panel.querySelector('#grid-order-route');
+        const dayEl = panel.querySelector('#grid-order-day');
+        const directionEl = panel.querySelector('#grid-order-direction');
+        const listEl = panel.querySelector('#grid-order-list');
+        const metaEl = panel.querySelector('#grid-order-meta');
+        const actionsEl = panel.querySelector('#grid-order-actions');
+        let currentOrder = [];
+        let baseline = [];
+        let currentSheetKey = '';
+        let currentRecord = null;
+        let draggedIndex = -1;
+
+        const routes = typeof ROUTES === 'undefined' ? [] : Object.values(ROUTES)
+            .filter((route) => route?.isActive !== false && route?.sheetKeys)
+            .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        routeEl.innerHTML = routes.map((route) =>
+            `<option value="${ntAdminSecureEscape(route.id)}">${ntAdminSecureEscape(Admin.formatRouteLabelPlain(route.name))}</option>`
+        ).join('');
+
+        const routeSheetKey = () => {
+            const route = ROUTES?.[routeEl.value];
+            const dir = directionEl.value === 'B' ? 'b' : 'a';
+            if (!route?.sheetKeys) return '';
+            if (dayEl.value === 'public_holiday') {
+                return route.sheetKeys[`pub_to_${dir}`] || route.sheetKeys[`saturday_to_${dir}`] || '';
+            }
+            return route.sheetKeys[`${dayEl.value}_to_${dir}`] || '';
+        };
+
+        const scheduleRows = (sheetKey) => {
+            const raw = typeof fullDatabase !== 'undefined' ? fullDatabase?.[sheetKey] : null;
+            if (Array.isArray(raw)) return raw;
+            if (Array.isArray(raw?.rows)) return raw.rows;
+            if (raw && typeof raw === 'object') {
+                return Object.keys(raw)
+                    .filter((key) => /^\d+$/.test(key))
+                    .sort((a, b) => Number(a) - Number(b))
+                    .map((key) => raw[key]);
+            }
+            return [];
+        };
+
+        const trainIds = (rows) => {
+            const found = new Set();
+            rows.forEach((row) => Object.keys(row || {}).forEach((key) => {
+                if (/^\d{4}[a-zA-Z]*$/.test(key)) found.add(key);
+            }));
+            return [...found];
+        };
+
+        const markDirty = () => {
+            Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline);
+            panel.querySelector('#grid-order-save').disabled = !Admin.gridOrderDirty;
+            panel.querySelector('#grid-order-save').classList.toggle('opacity-50', !Admin.gridOrderDirty);
+        };
+
+        const move = (from, to) => {
+            if (from < 0 || to < 0 || from >= currentOrder.length || to >= currentOrder.length || from === to) return;
+            const [item] = currentOrder.splice(from, 1);
+            currentOrder.splice(to, 0, item);
+            paintList();
+            listEl.querySelector(`[data-grid-order-index="${to}"]`)?.focus();
+            markDirty();
+        };
+
+        const paintList = () => {
+            listEl.innerHTML = currentOrder.map((id, index) => `
+                <li draggable="true" data-grid-order-row="${index}" class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
+                    <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
+                    <button type="button" data-grid-order-up="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
+                    <button type="button" data-grid-order-down="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
+                </li>
+            `).join('');
+            listEl.querySelectorAll('[data-grid-order-up]').forEach((button) => {
+                button.onclick = () => move(Number(button.dataset.gridOrderUp), Number(button.dataset.gridOrderUp) - 1);
+            });
+            listEl.querySelectorAll('[data-grid-order-down]').forEach((button) => {
+                button.onclick = () => move(Number(button.dataset.gridOrderDown), Number(button.dataset.gridOrderDown) + 1);
+            });
+            listEl.querySelectorAll('[data-grid-order-row]').forEach((row) => {
+                row.ondragstart = () => { draggedIndex = Number(row.dataset.gridOrderRow); };
+                row.ondragover = (event) => event.preventDefault();
+                row.ondrop = (event) => {
+                    event.preventDefault();
+                    move(draggedIndex, Number(row.dataset.gridOrderRow));
+                    draggedIndex = -1;
+                };
+            });
+        };
+
+        const describeRecord = (record) => {
+            metaEl.classList.remove('hidden');
+            if (!record) {
+                metaEl.textContent = 'Using frozen MANUAL_GRID_ORDER fallback. No RTDB record is saved.';
+                return;
+            }
+            const at = record.updatedAt ? Admin.formatDate(record.updatedAt) : 'unknown time';
+            const who = record.updatedBy || 'unknown operator';
+            metaEl.textContent = record.action === 'reset'
+                ? `Reset to fallback by ${who}, ${at}.`
+                : `RTDB order saved by ${who}, ${at}. Source: ${record.source || 'admin'}.`;
+        };
+
+        const load = async () => {
+            if (Admin.gridOrderDirty && !window.confirm('Discard unsaved grid order changes?')) return;
+            currentSheetKey = routeSheetKey();
+            const route = ROUTES?.[routeEl.value];
+            const rows = scheduleRows(currentSheetKey);
+            const ids = trainIds(rows);
+            if (!currentSheetKey || !ids.length) {
+                currentOrder = [];
+                baseline = [];
+                paintList();
+                actionsEl.classList.add('hidden');
+                metaEl.classList.remove('hidden');
+                metaEl.textContent = 'No schedule columns found for this selection.';
+                Admin.gridOrderDirty = false;
+                return;
+            }
+            const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+            try {
+                const response = await window.guardianFetch(
+                    `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(currentSheetKey)}.json?t=${Date.now()}`,
+                    { cache: 'no-store' },
+                    6000
+                );
+                currentRecord = response.ok ? await response.json() : null;
+            } catch {
+                currentRecord = null;
+            }
+            const manifestOrder = typeof window.getGridOrderManifest === 'function'
+                ? window.getGridOrderManifest(fullDatabase, currentSheetKey)
+                : null;
+            currentOrder = window.orderGridTrainIds(currentSheetKey, ids, rows, {
+                region: route.region,
+                runtimeOrder: currentRecord,
+                manifestOrder,
+            });
+            baseline = currentOrder.slice();
+            paintList();
+            describeRecord(currentRecord);
+            actionsEl.classList.remove('hidden');
+            Admin.gridOrderDirty = false;
+            markDirty();
+        };
+
+        const writeRecord = async (record) => {
+            const route = ROUTES?.[routeEl.value];
+            const token = await Admin.getAuthKey();
+            if (!token || !route || !currentSheetKey) throw new Error('Authentication required.');
+            const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+            const response = await window.guardianFetch(
+                `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(currentSheetKey)}.json?auth=${encodeURIComponent(token)}`,
+                { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) },
+                10000
+            );
+            if (!response.ok) throw new Error(`RTDB write failed (${response.status})`);
+            currentRecord = record;
+            baseline = currentOrder.slice();
+            Admin.gridOrderDirty = false;
+            markDirty();
+            describeRecord(record);
+            if (typeof window.fetchGridOrderConfig === 'function') {
+                window.fetchGridOrderConfig(route.region).catch(() => {});
+            }
+        };
+
+        panel.querySelector('#grid-order-load').onclick = load;
+        panel.querySelector('#grid-order-save').onclick = async () => {
+            const button = panel.querySelector('#grid-order-save');
+            button.disabled = true;
+            try {
+                await writeRecord({
+                    order: currentOrder.slice(),
+                    updatedAt: Date.now(),
+                    updatedBy: Admin.currentUser?.email || 'unknown',
+                    source: 'admin',
+                });
+                if (typeof showToast === 'function') showToast('Grid order saved.', 'success');
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error.message || 'Grid order save failed.', 'error');
+            } finally {
+                markDirty();
+            }
+        };
+        panel.querySelector('#grid-order-reset').onclick = async () => {
+            if (!window.confirm('Reset this sheet to the frozen fallback order?')) return;
+            const route = ROUTES?.[routeEl.value];
+            const rows = scheduleRows(currentSheetKey);
+            const ids = trainIds(rows);
+            currentOrder = window.orderGridTrainIds(currentSheetKey, ids, rows, {
+                region: route?.region,
+                runtimeOrder: { action: 'reset' },
+                manifestOrder: typeof window.getGridOrderManifest === 'function'
+                    ? window.getGridOrderManifest(fullDatabase, currentSheetKey)
+                    : null,
+            });
+            paintList();
+            try {
+                await writeRecord({
+                    action: 'reset',
+                    updatedAt: Date.now(),
+                    updatedBy: Admin.currentUser?.email || 'unknown',
+                    source: 'admin',
+                });
+                if (typeof showToast === 'function') showToast('Grid order reset to fallback.', 'success');
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error.message || 'Grid order reset failed.', 'error');
+            }
+        };
+        [routeEl, dayEl, directionEl].forEach((el) => {
+            el.addEventListener('change', () => {
+                if (!Admin.gridOrderDirty || window.confirm('Discard unsaved grid order changes?')) {
+                    Admin.gridOrderDirty = false;
+                    load();
+                }
+            });
+        });
+        if (!window._gridOrderBeforeUnloadBound) {
+            window.addEventListener('beforeunload', (event) => {
+                if (!Admin.gridOrderDirty) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
+            window._gridOrderBeforeUnloadBound = true;
+        }
+    },
+
     // --- 5. EXCLUSION MANAGER ---
     setupExclusionManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -13754,19 +14041,27 @@ const Admin = {
             return dir === 'A' ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
         };
 
-        const trainsFromSheet = (sheetKey) => {
+        const trainsFromSheet = (sheetKey, runtimeOrder = null) => {
             if (typeof fullDatabase === 'undefined' || !fullDatabase || !sheetKey) return [];
             const rawData = fullDatabase[sheetKey];
             if (!rawData) return [];
+            const rows = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.rows) ? rawData.rows : []);
             const set = new Set();
             try {
-                rawData.forEach((row) => {
+                rows.forEach((row) => {
                     Object.keys(row).forEach((k) => {
                         if (k.match(/^\d{4}[a-zA-Z]*$/)) set.add(k);
                     });
                 });
             } catch (e) { console.log(e); }
-            return Array.from(set).sort();
+            if (typeof window.orderGridTrainIds !== 'function') return Array.from(set).sort();
+            return window.orderGridTrainIds(sheetKey, Array.from(set), rows, {
+                region: ROUTES?.[routeSelect?.value]?.region,
+                runtimeOrder,
+                manifestOrder: typeof window.getGridOrderManifest === 'function'
+                    ? window.getGridOrderManifest(fullDatabase, sheetKey)
+                    : null,
+            });
         };
 
         const paintExclGrid = (gridEl, trainNumbers, countEl) => {
@@ -14030,7 +14325,7 @@ const Admin = {
         
         function getSelectedDays() { return Array.from(daysContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value)); }
 
-        loadTrainsBtn.onclick = () => {
+        loadTrainsBtn.onclick = async () => {
             harvestCheckedIntoStaging();
 
             const rId = routeSelect.value;
@@ -14045,8 +14340,27 @@ const Admin = {
                 return;
             }
 
-            const trainsA = trainsFromSheet(sheetKeyForDir(route, type, 'A'));
-            const trainsB = trainsFromSheet(sheetKeyForDir(route, type, 'B'));
+            const sheetA = sheetKeyForDir(route, type, 'A');
+            const sheetB = sheetKeyForDir(route, type, 'B');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+            const loadOrder = async (sheetKey) => {
+                if (!sheetKey) return null;
+                try {
+                    const response = await window.guardianFetch(
+                        `${dynamicEndpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(sheetKey)}.json?t=${Date.now()}`,
+                        { cache: 'no-store' },
+                        5000
+                    );
+                    return response.ok ? await response.json() : null;
+                } catch {
+                    return null;
+                }
+            };
+            loadTrainsBtn.disabled = true;
+            const [orderA, orderB] = await Promise.all([loadOrder(sheetA), loadOrder(sheetB)]);
+            loadTrainsBtn.disabled = false;
+            const trainsA = trainsFromSheet(sheetA, orderA);
+            const trainsB = trainsFromSheet(sheetB, orderB);
             if (!trainsA.length && !trainsB.length) {
                 if (typeof showToast === 'function') showToast(`No data found for ${type}`, "error");
                 return;

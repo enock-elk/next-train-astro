@@ -32,6 +32,10 @@ import {
     resolveDayTypeWithOverride,
     maybePromptScheduleOverride,
 } from './schedule-override.js';
+import {
+    getGridOrderManifest,
+    setRuntimeGridOrderConfig,
+} from './grid-order.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -646,6 +650,29 @@ export async function fetchSpecialEventConfig(force = false) {
     }
 }
 
+/** Public operational grid order. Failure deliberately leaves the frozen fallback active. */
+export async function fetchGridOrderConfig(region, signal) {
+    const code = String(region || '').trim().toUpperCase();
+    if (!code) return null;
+    try {
+        const bucket = Math.floor(Date.now() / 300000);
+        const response = await guardianFetch(
+            `${DYNAMIC_BASE_URL}config/grid_order/${encodeURIComponent(code)}.json?t=${bucket}`,
+            { cache: 'no-store', signal },
+            4000
+        );
+        if (!response.ok) return null;
+        const records = await response.json();
+        if (!records || typeof records !== 'object' || Array.isArray(records)) return null;
+        setRuntimeGridOrderConfig(code, records);
+        return records;
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('Grid order config unavailable, using bundled fallback.');
+        return null;
+    }
+}
+
 // --- DATABASE ENGINE (IndexedDB / Async Storage) ---
 const DB_NAME = 'NextTrainDB';
 const STORE_NAME = 'SchedulesStore';
@@ -738,16 +765,19 @@ export async function loadFromLocalCache(key, signal = null) {
 
 // --- PARSERS & HELPERS ---
 
-export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
+export function parseJSONSchedule(jsonRows, externalMetaDate = null, companionOrder = null) {
     try {
         // Firebase / cache may hand back an object map instead of a dense array.
         let rowsIn = jsonRows;
         if (rowsIn && !Array.isArray(rowsIn) && typeof rowsIn === 'object') {
             if (Array.isArray(rowsIn.rows) && Array.isArray(rowsIn.headers)) {
-                return rowsIn;
+                return {
+                    ...rowsIn,
+                    columnOrder: rowsIn.columnOrder || rowsIn._columnOrder || companionOrder || null,
+                };
             }
             rowsIn = Object.keys(rowsIn)
-                .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+                .filter((k) => !['lastUpdated', 'headers', 'rows', 'columnOrder', '_columnOrder'].includes(k))
                 .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
                 .map((k) => rowsIn[k])
                 .filter((r) => r && typeof r === 'object');
@@ -788,7 +818,13 @@ export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
         });
         const trainNumbers = Array.from(allHeaders).sort();
         
-        return { stationColumnName: 'STATION', headers: ['STATION', ...trainNumbers], rows: cleanRows, lastUpdated: extractedLastUpdated };
+        return {
+            stationColumnName: 'STATION',
+            headers: ['STATION', ...trainNumbers],
+            rows: cleanRows,
+            lastUpdated: extractedLastUpdated,
+            columnOrder: companionOrder || null,
+        };
     } catch (e) {
         return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: externalMetaDate };
     }
@@ -797,7 +833,7 @@ export function parseJSONSchedule(jsonRows, externalMetaDate = null) {
 /** Resolve a sheet from the regional fullDatabase (raw array, object map, or pre-parsed). */
 export function getScheduleFromDb(db, key) {
     if (!db || !key) return { headers: [], rows: [], stationColumnName: 'STATION', lastUpdated: null };
-    return parseJSONSchedule(db[key], db[`${key}_meta`] ?? null);
+    return parseJSONSchedule(db[key], db[`${key}_meta`] ?? null, getGridOrderManifest(db, key));
 }
 
 export async function processRouteDataFromDBAsync(route, targetDB) {
@@ -808,7 +844,7 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
         const rows = targetDB[key];
         const metaKey = key + "_meta"; 
         const metaDate = targetDB[metaKey]; 
-        return parseJSONSchedule(rows, metaDate); 
+        return parseJSONSchedule(rows, metaDate, getGridOrderManifest(targetDB, key));
     };
     const hasRows = (sched) => !!(sched && Array.isArray(sched.rows) && sched.rows.length > 0);
 
@@ -1180,6 +1216,9 @@ export async function loadAllSchedules(force = false) {
             return;
         }
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
+
+        await fetchGridOrderConfig($userRegion.get(), fetchSignal);
+        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
         const wasKilled = await checkKillswitch(force);
         if (wasKilled || fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
@@ -1860,6 +1899,7 @@ if (typeof window !== 'undefined') {
     window.checkKillswitch = checkKillswitch;
     window.bindKillswitchWatch = bindKillswitchWatch;
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
+    window.fetchGridOrderConfig = fetchGridOrderConfig;
     window.fetchScheduleOverride = fetchScheduleOverride;
     window.updateTime = updateTime;
     window.probeReachability = probeReachability;

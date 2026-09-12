@@ -74,13 +74,21 @@ assert(isAppVersionNewer('V9_09.13.1', 'V9_09.12.9'), 'later release date is new
 assert(!isAppVersionNewer('V9_09.12.1', 'V9_09.12.1'), 'same release is not newer');
 assert(!isAppVersionNewer('V9_09.11.9', 'V9_09.12.1'), 'older release is not newer');
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubJs.includes("performHardCacheClear('check_updates', {"), 'Check for Updates restarts when online');
-assert(hubJs.includes('Can’t restart yet. Check internet and try later.'), 'offline restart uses a short explanatory toast');
+assert(hubJs.includes('openNetworkSlowConfirm'), 'Check for Updates asks before wiping on a slow probe');
+assert(hubJs.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip the probe');
+assert(hubModals.includes('id="network-slow-confirm-modal"'), 'slow-network confirm lives next to region confirm');
+assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm copy is a question, not a hard stop');
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
-assert(hubJs.includes('latestVersion: !isAppVersionNewer(incomingVersion, APP_VERSION)'), 'Check for Updates always resets and classifies the post-reload toast');
-assert(hubJs.includes("policy.systemKillswitch || source === 'check_updates'"), 'Check for Updates requires the real-network preflight before wiping');
+assert(hubJs.includes('latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION))'), 'Check for Updates always resets and classifies the post-reload toast');
+assert(hubJs.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
 assert(appUpdate.includes("'info', 3000"), 'latest-version toast uses the grey info style');
+assert(appUpdate.includes('lastSavedTimesToastAt'), 'forced-update saved-times toast has a session cooldown');
+assert(appUpdate.includes('You are offline. Using saved times until you reconnect.'), 'offline saved-times copy is unchanged');
+assert(appUpdate.includes('Network is slow. Using saved times until you reconnect.'), 'a slow probe is not called offline');
+assert(appUpdate.includes('return preflight === \'ok\''), 'force update only proceeds when the probe is ok');
 
 const deploy = readFileSync(new URL('../.github/workflows/deploy-production.yml', import.meta.url), 'utf8');
 const productionBuild = readFileSync(new URL('../.github/workflows/production-build.yml', import.meta.url), 'utf8');

@@ -1255,7 +1255,10 @@ export const Renderer = {
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[85vh]">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
-                        <h3 class="font-bold text-lg text-gray-900 dark:text-white">What's New</h3>
+                        <div>
+                            <h3 class="font-bold text-lg text-gray-900 dark:text-white">What's New</h3>
+                            <p class="changelog-app-version mt-0.5 font-mono text-[11px] font-black tracking-widest text-gray-400">${escapeHTML(APP_VERSION)}</p>
+                        </div>
                         <button type="button" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="text-gray-500 hover:text-gray-900 dark:hover:text-white p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
@@ -1267,6 +1270,9 @@ export const Renderer = {
                 </div>`;
             document.body.appendChild(modal);
         }
+
+        const versionEl = modal.querySelector('.changelog-app-version');
+        if (versionEl) versionEl.textContent = APP_VERSION;
 
         const listContainer = document.getElementById('changelog-list');
         if (listContainer) {

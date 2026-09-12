@@ -122,9 +122,7 @@ function showCrucialUpdateToast(incomingVersion) {
 
 async function updateNetworkPreflight() {
     const online = typeof navigator === 'undefined' || navigator.onLine === true;
-    if (!destructiveNetworkIsSafe({ online, lieFi: window.isLieFi === true, preflight: 'ok' })) {
-        return false;
-    }
+    if (!online) return false;
     if (typeof window.probeReachability !== 'function') return false;
     let preflight = 'unavailable';
     try {
@@ -132,11 +130,21 @@ async function updateNetworkPreflight() {
     } catch {
         preflight = 'unavailable';
     }
-    return destructiveNetworkIsSafe({
-        online: typeof navigator === 'undefined' || navigator.onLine === true,
-        lieFi: window.isLieFi === true,
-        preflight,
-    });
+    return preflight === 'ok';
+}
+
+const OFFLINE_SAVED_TIMES_TOAST = 'You are offline. Using saved times until you reconnect.';
+const SLOW_SAVED_TIMES_TOAST = 'Network is slow. Using saved times until you reconnect.';
+let lastSavedTimesToastAt = 0;
+
+function showSavedTimesToast() {
+    const now = Date.now();
+    if (lastSavedTimesToastAt && now - lastSavedTimesToastAt < 60_000) return;
+    lastSavedTimesToastAt = now;
+    const online = typeof navigator === 'undefined' || navigator.onLine === true;
+    try {
+        showToast(online ? SLOW_SAVED_TIMES_TOAST : OFFLINE_SAVED_TIMES_TOAST, 'error', 4000);
+    } catch { /* ignore */ }
 }
 
 async function activateWaitingServiceWorker() {
@@ -173,9 +181,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
     // commuters with no shell if the reload raced a lock-screen or drop.
     // Activate a waiting worker when we can, then cache-bust navigate.
     if (!await updateNetworkPreflight()) {
-        try {
-            showToast('You are offline. Using saved times until you reconnect.', 'error', 4000);
-        } catch { /* ignore */ }
+        showSavedTimesToast();
         return false;
     }
     if (options.announce === true) showCrucialUpdateToast(newVersion || APP_VERSION);

@@ -510,9 +510,9 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
-export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false } = {}) {
+export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false, skipNetworkPreflight = false } = {}) {
     const policy = cacheClearPolicy(source);
-    const requiresNetworkPreflight = policy.systemKillswitch || source === 'check_updates';
+    const requiresNetworkPreflight = policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight);
     if (requiresNetworkPreflight) {
         const online = typeof navigator === 'undefined' || navigator.onLine === true;
         // A manual retry must actively probe again so a stale Lie-Fi flag cannot
@@ -588,24 +588,41 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     return true;
 }
 
-const RESTART_OFFLINE_MESSAGE = 'Can’t restart yet. Check internet and try later.';
+function openNetworkSlowConfirm(onProceed) {
+    const modal = document.getElementById('network-slow-confirm-modal');
+    const cancelBtn = document.getElementById('network-slow-cancel-btn');
+    const proceedBtn = document.getElementById('network-slow-proceed-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('network-slow-confirm-modal');
+        if (proceed) onProceed?.();
+    };
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('network-slow-confirm-modal');
+}
 
 export async function showCacheClearWarning() {
-    if (!navigator.onLine) {
-        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
-        return;
-    }
     triggerHaptic();
-    const incomingVersion = await peekIncomingVersion();
-    if (!incomingVersion) {
-        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
+    const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
+        ? await peekIncomingVersion()
+        : null;
+    const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
+        latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
+        skipNetworkPreflight,
+    });
+    if (!navigator.onLine || !incomingVersion) {
+        openNetworkSlowConfirm(() => runReset(true));
         return;
     }
-    const restarted = await performHardCacheClear('check_updates', {
-        latestVersion: !isAppVersionNewer(incomingVersion, APP_VERSION),
-    });
+    const restarted = await runReset(false);
     if (!restarted) {
-        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
+        openNetworkSlowConfirm(() => runReset(true));
     }
 }
 
@@ -625,11 +642,11 @@ function syncHapticsToggle() {
 function syncChangelogBadge() {
     const badge = document.getElementById('whats-new-badge');
     const verLabel = document.querySelector('#settings-app-version .font-mono');
+    if (verLabel) verLabel.textContent = APP_VERSION;
     const latest = getLatestChangelog();
-    const ver = getChangelogVersionId(latest) || APP_VERSION;
-    if (verLabel) verLabel.textContent = ver;
+    const cardId = getChangelogVersionId(latest);
     const seenNorm = normalizeChangelogId(safeStorage.getItem('seen_changelog_version'));
-    if (badge) badge.classList.toggle('hidden', seenNorm === normalizeChangelogId(ver));
+    if (badge) badge.classList.toggle('hidden', !cardId || seenNorm === normalizeChangelogId(cardId));
 }
 
 /** Opens the public What's New modal. Copy comes from CHANGELOG_DATA (commuter-only). */

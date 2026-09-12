@@ -5,6 +5,14 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.11': [
+        'Welcome fades, then hides. Overlays and the alerts lightbox spring from scale-95. Close fades, then pops history.',
+        'Check for Updates: slow/failed probe opens Your network seems slow. Proceed skips only the check_updates preflight. Killswitch still always probes.',
+        'Forced-update saved-times toast has a 60s cooldown. Timeouts say the network is slow, not that you are offline.',
+        'showToast wraps two lines (no truncate). Account Back closes Account before Options.',
+        'Sidenav and What’s New paint APP_VERSION. Unread badge still uses CHANGELOG_DATA[0].id.',
+        'Admin nearby sheet: weekday train id + free text, Publish as this train → ride_pings with adminOverrideRole train. Empty-day guard bypassed only for that admin override.',
+    ],
     'V9_09.12.10': [
         'Export version is out of flow (top-right overlay). Footer height is the two paired rows only. Type sizes unchanged.',
         'Export NOTE copy is vertically centered (table-cell, html2canvas-safe).',

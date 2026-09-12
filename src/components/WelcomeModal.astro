@@ -121,14 +121,21 @@ import { withBase } from '../lib/config.js';
                     $userRegion.set(region);
                     try { window.syncCrmRegionAnalytics?.(region); } catch (e) {}
 
-                    // 3. Dismount the Welcome overlay, then show the in-app bar
+                    // 3. Fade the Welcome overlay, then show the in-app bar
                     const modal = document.getElementById('welcome-modal');
-                    if (modal) modal.classList.add('hidden');
-
-                    try {
-                        const { syncInAppChrome } = await import('../lib/prefs.js');
-                        syncInAppChrome();
-                    } catch (e) {}
+                    const revealChrome = () => {
+                        import('../lib/prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+                    };
+                    if (modal) {
+                        modal.classList.add('opacity-0');
+                        setTimeout(() => {
+                            modal.classList.add('hidden');
+                            modal.classList.remove('opacity-0');
+                            revealChrome();
+                        }, 300);
+                    } else {
+                        revealChrome();
+                    }
                     
                     // 4. Trigger base schedule fetch
                     console.log(`🛡️ Guardian: Welcome route selected: ${route.id}. Hydrating...`);

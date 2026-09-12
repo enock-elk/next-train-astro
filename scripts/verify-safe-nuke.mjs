@@ -113,9 +113,11 @@ assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.index
 assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check periodically');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still invokes the full reset');
-assert(hub.includes("policy.systemKillswitch || source === 'check_updates'"), 'manual reset requires the same real-network preflight');
+assert(hub.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(hub.includes('policy.systemKillswitch && isLieFi'), 'manual retry probes again instead of trusting a stale Lie-Fi flag');
-assert(hub.includes('Can’t restart yet. Check internet and try later.'), 'manual reset explains why an offline restart is deferred');
+assert(hub.includes('openNetworkSlowConfirm'), 'slow Check for Updates asks before wiping');
+assert(hub.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip only the check_updates probe');
+assert(!hub.includes('skipNetworkPreflight') || hub.includes('policy.systemKillswitch || (source === \'check_updates\' && !skipNetworkPreflight)'), 'killswitch never skips the network preflight');
 assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("hardReloadWithCacheBust('version_enforce')"), 'forced update activates waiting SW before reload');
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');
 assert(update.includes("document.visibilityState === 'visible'"), 'forced update defers until visible');

@@ -124,6 +124,7 @@ const MODAL_HASH = {
     'trip-map-modal': '#trip-map',
     'community-presence-info-modal': '#community-presence',
     'region-confirm-modal': '#regionconfirm',
+    'network-slow-confirm-modal': '#networkslow',
     'blackbox-modal': '#blackbox',
     'bb-pin-modal': '#bb-pin',
     'network-struggle-modal': '#network-struggle',
@@ -196,28 +197,7 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     // Prefer popping history so Back stack stays consistent (popstate closes with fromPopState)
     // Dev Mode: skip history.back() when hash is #dev-* (panel) — that overshot to home
     if (!fromPopState) {
-        const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
         const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
-        if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
-            // Alerts fades out, then pops. Instant hide felt like a hard cut.
-            if (modalId === 'alerts-channel') {
-                /* fall through to the opacity transition, then pop */
-            } else {
-                // Hide first, then pop. Arm a short lock so the following popstate
-                // does not close the next overlay or call history.back() again.
-                armModalPopLock();
-                hideFixedModal(modalId);
-                try {
-                    history.back();
-                    if (modalId === 'feedback-modal') {
-                        setTimeout(() => {
-                            try { window.restoreFeedbackReturnOverlay?.(); } catch { /* ignore */ }
-                        }, 40);
-                    }
-                    return;
-                } catch { /* fall through */ }
-            }
-        }
         // Close Dev Mode visually + normalize hash (no history.back race)
         if (isDevHash) {
             fromPopState = true;
@@ -261,10 +241,16 @@ export function closeSmoothModal(modalId, fromPopState = false) {
                 modal.classList.add('hidden');
                 modal.classList.remove('opacity-0');
             }
-            if (!fromPopState && modalId === 'alerts-channel' && location.hash === '#alerts') {
-                armModalPopLock();
-                try { history.back(); } catch { /* ignore */ }
-                if (typeof window !== 'undefined') window.__ntAlertsParkHome = false;
+            if (!fromPopState) {
+                const shouldPop = (modalId === 'legal-modal' && isLegalHash(location.hash))
+                    || (hash && location.hash === hash && modalId !== 'dev-modal');
+                if (shouldPop) {
+                    armModalPopLock();
+                    try { history.back(); } catch { /* ignore */ }
+                    if (modalId === 'alerts-channel' && typeof window !== 'undefined') {
+                        window.__ntAlertsParkHome = false;
+                    }
+                }
             }
             if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
                 unlockBackgroundScroll();
@@ -310,6 +296,10 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
         }
         
         modal.classList.remove('hidden');
+        if (inner.classList.contains('scale-100') && !inner.classList.contains('scale-95')) {
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-95');
+        }
         // Force reflow, then spring open (scale-95 → scale-100)
         void modal.offsetWidth;
         modal.classList.remove('opacity-0');
@@ -409,12 +399,7 @@ export function bindHistoryBackNavigation() {
 
         if (window._isSidenavClosing) return;
 
-        if (document.body.classList.contains('sidenav-open')) {
-            if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
-            return;
-        }
-
-        // Close the top overlay first (e.g. archived alert preview over Dev Mode).
+        // Close the top overlay first (Account over Options, archived alert over Dev Mode).
         // Never close Dev Mode while a panel is drilled in — that was jumping users to home.
         const openModals = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)'));
         if (openModals.length > 0) {
@@ -440,6 +425,11 @@ export function bindHistoryBackNavigation() {
                 closeSmoothModal(modalToClose, true);
                 return;
             }
+        }
+
+        if (document.body.classList.contains('sidenav-open')) {
+            if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
+            return;
         }
 
         // Drilled admin hash: restore that panel (Roadmap ← Feedback, GSM ← Review)
@@ -760,12 +750,12 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex items-center justify-between gap-2 px-3 py-2 rounded-full shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
+    toastEl.className = `flex items-center justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
 
     toastEl.innerHTML = `
-        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+        <div class="flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center">
             ${iconHTML}
-            <span class="text-xs font-semibold tracking-wide leading-snug truncate">${message}</span>
+            <span class="text-xs font-semibold tracking-wide leading-snug text-center whitespace-normal break-words line-clamp-2">${message}</span>
         </div>
         ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
     `;
@@ -917,14 +907,19 @@ export function openLightbox(url) {
         window._isModalAnimating = true;
         setTimeout(() => { window._isModalAnimating = false; }, 350);
         mapModal.classList.remove('hidden');
-        void mapModal.offsetWidth;
-        mapModal.classList.remove('opacity-0');
         const inner = mapModal.firstElementChild;
         if (inner) {
-            inner.classList.remove('scale-95', 'origin-top-right', 'origin-bottom-left', 'origin-bottom');
-            if (!inner.classList.contains('scale-100')) {
-                inner.classList.add('scale-100', 'origin-center');
-            }
+            inner.classList.remove('origin-top-right', 'origin-bottom-left', 'origin-bottom');
+            inner.classList.add('origin-center', 'scale-95');
+            inner.classList.remove('scale-100');
+        }
+        void mapModal.offsetWidth;
+        mapModal.classList.remove('opacity-0');
+        if (inner) {
+            requestAnimationFrame(() => {
+                inner.classList.remove('scale-95');
+                inner.classList.add('scale-100');
+            });
         }
         lockBackgroundScroll();
         // Ensure pinch/pan/zoom bindings are live for alert images too

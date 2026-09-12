@@ -74,12 +74,28 @@ assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card 
         assert(!emoji.test(blob), `What’s New ${entry.id} has no emoji`);
     }
 }
-assert(readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8').includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
+{
+    const changelogRenderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+    assert(changelogRenderer.includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
+    assert(changelogRenderer.includes('changelog-app-version'), 'What’s New header paints APP_VERSION');
+}
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hub.includes("welcomeSeen") && hub.includes('maybeForceShowChangelog'), 'What’s New auto-open waits until welcome is done');
 assert(hub.includes("if (!latest?.forceShow) return"), 'What’s New auto-open is opt-in via forceShow');
+assert(hub.includes('verLabel.textContent = APP_VERSION'), 'sidenav version always paints APP_VERSION');
+assert(hub.includes('getChangelogVersionId(latest)'), 'unread What’s New badge still uses the latest public card id');
 assert(hub.includes("from './feedback-contact.js'"), 'hub validates optional contact');
 assert(hub.includes('paintContactField'), 'hub paints contact validity on input and submit');
+{
+    const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+    const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
+    assert(welcome.includes("modal.classList.add('opacity-0')"), 'welcome fades before hide');
+    assert(prefs.includes('nt-nav-enter'), 'bottom nav fades in after onboarding');
+    assert(ui.includes('armModalPopLock()'), 'overlays fade then pop history');
+    assert(ui.includes('Close the top overlay first'), 'Account Back closes Account before Options');
+    assert(ui.includes('line-clamp-2'), 'toasts wrap at most two lines');
+}
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');
@@ -316,6 +332,10 @@ assert(delayReports.includes('WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000'), 'wee
 assert(delayReports.includes('isReportStillLive'), 'stale and past-time reports are filtered');
 assert(trainGhosts.includes('TRACKING_WINDOW_SEC = 45 * 60'), 'tracking window is 45 minutes');
 assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty copy matches the 45-minute window');
+assert(hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has a slow-network confirm');
+assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm asks before wiping');
+assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet can publish a test train');
+assert(hubModals.includes('Publish as this train'), 'admin publish button copy is Publish as this train');
 {
     const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
     const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');

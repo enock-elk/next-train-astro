@@ -45,6 +45,9 @@ const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(logic.includes("showToast('Schedule updated', 'success', 3000)"));
 assert(logic.includes('rememberRouteRevision(proposedDB, false)'));
 assert(logic.includes('rememberRouteRevision(downloadedDB, true)'));
-assert(ui.includes('leading-snug truncate'), 'toast copy must remain on one row on narrow screens');
+assert(ui.includes('whitespace-normal break-words'), 'toast copy wraps instead of truncating');
+assert(ui.includes('line-clamp-2'), 'toast copy wraps at most two lines');
+assert(ui.includes('rounded-2xl'), 'two-line toast is not a stadium capsule');
+assert(!ui.includes('leading-snug truncate'), 'toast no longer clips mid-word with truncate');
 
-console.log('✓ route-specific schedule update baseline, dedupe, coalescing, and one-row toast OK');
+console.log('✓ route-specific schedule update baseline, dedupe, coalescing, and two-line toast OK');

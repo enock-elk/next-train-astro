@@ -354,8 +354,15 @@ export function applyNavChrome(style = getNavStyle()) {
     if (bottomNav) {
         const immersive = document.body?.classList.contains('nt-immersive');
         const show = isBottom && inApp && !immersive;
+        const wasHidden = bottomNav.classList.contains('hidden');
         bottomNav.classList.toggle('hidden', !show);
         bottomNav.setAttribute('aria-hidden', show ? 'false' : 'true');
+        if (show && wasHidden) {
+            bottomNav.classList.add('nt-nav-enter');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => bottomNav.classList.remove('nt-nav-enter'));
+            });
+        }
         if (show && typeof window.ntFitAppViewport === 'function') {
             requestAnimationFrame(() => {
                 try { window.ntFitAppViewport(); } catch { /* ignore */ }

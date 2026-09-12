@@ -1090,7 +1090,16 @@ export async function submitRideCheckIn({
         st = nearestStationOnRoute(coarseLat, coarseLng, routeId)?.stationName || '';
     }
     if (!routeId) return { ok: false, message: 'Pick a corridor first.' };
-    if (source !== 'onboard_ping' && source !== 'stop' && source !== 'onboard_off_path' && routeHasNoScheduledTrains()) {
+    const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
+        ? adminOverrideRole
+        : '';
+    if (
+        source !== 'onboard_ping'
+        && source !== 'stop'
+        && source !== 'onboard_off_path'
+        && trustedAdminOverride !== 'train'
+        && routeHasNoScheduledTrains()
+    ) {
         return { ok: false, message: 'There are no trains to share today.' };
     }
     if (!st && relaxLiveShareGuards()) st = 'here';
@@ -1102,9 +1111,6 @@ export async function submitRideCheckIn({
     const acct = $account.get();
     const uid = acct.status === 'signed-in' ? acct.uid : null;
     const email = acct.status === 'signed-in' ? (acct.email || null) : null;
-    const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
-        ? adminOverrideRole
-        : '';
     if (source !== 'onboard_ping' && source !== 'stop' && source !== 'onboard_off_path') {
         const clash = await findConflictingShare({ deviceId, uid, email });
         if (clash) {

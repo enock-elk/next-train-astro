@@ -7,14 +7,14 @@
  */
 import { withBase, APP_VERSION } from './config.js';
 import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
-import { $currentRouteId, $globalStationIndex, $userRegion } from '../store.js';
+import { $currentRouteId, $globalStationIndex, $schedules, $userRegion } from '../store.js';
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
-    normalizeStationName, getDistanceFromLatLonInKm, safeStorage,
+    normalizeStationName, getDistanceFromLatLonInKm, safeStorage, scheduleCacheSlot,
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
-import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable } from './train-ghosts.js';
+import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 
@@ -822,6 +822,63 @@ function hideNearbyTrainsModal() {
     document.getElementById('nt-nearby-trains-modal')?.classList.add('hidden');
 }
 
+function weekdayTrainIdsFromSheet() {
+    const schedules = $schedules.get() || {};
+    const region = $userRegion.get() || 'GP';
+    const ids = new Set();
+    for (const ab of ['a', 'b']) {
+        for (const id of trainIdsInSchedule(schedules[scheduleCacheSlot('weekday', region, ab)])) {
+            ids.add(id);
+        }
+    }
+    return [...ids].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function paintAdminPublishTrain() {
+    const wrap = document.getElementById('nt-admin-publish-train');
+    const select = document.getElementById('nt-admin-train-id');
+    if (!wrap || !select) return;
+    if (!isAdminAuthed()) {
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+    const ids = weekdayTrainIdsFromSheet();
+    const current = select.value;
+    select.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = ids.length ? 'Select a train id' : 'Type a train id below';
+    select.appendChild(blank);
+    ids.forEach((id) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        select.appendChild(opt);
+    });
+    if (current && ids.includes(current)) select.value = current;
+}
+
+async function publishAdminManualTrain() {
+    if (!isAdminAuthed()) return;
+    const custom = document.getElementById('nt-admin-train-id-custom')?.value?.trim();
+    const picked = document.getElementById('nt-admin-train-id')?.value?.trim();
+    const trainId = custom || picked;
+    if (!trainId) {
+        showToast('Pick or type a train id', 'error');
+        return;
+    }
+    hideNearbyTrainsModal();
+    return startOnTrainShare({
+        trainId,
+        station: document.getElementById('station-select')?.value || '',
+        routeId: $currentRouteId.get(),
+        source: 'admin_manual_train',
+        skipVolunteer: true,
+        adminOverrideRole: 'train',
+    });
+}
+
 /**
  * Full-screen list of timetable trains scored against the rider's fix.
  */
@@ -850,6 +907,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         empty?.classList.remove('hidden');
         if (empty) empty.textContent = NO_COORDS_MESSAGE;
         showToast(NO_COORDS_MESSAGE, 'info', 5000);
+        paintAdminPublishTrain();
         return;
     }
 
@@ -871,6 +929,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
             if (empty) empty.textContent = e?.code === 1
                 ? 'Location is off - allow it to see trains near you.'
                 : (e?.message || 'Couldn’t get your location.');
+            paintAdminPublishTrain();
             return;
         }
     }
@@ -953,6 +1012,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     }
     if (!nearby.length && !currentShare?.trainId) {
         empty?.classList.remove('hidden');
+        paintAdminPublishTrain();
         return;
     }
     empty?.classList.add('hidden');
@@ -1000,6 +1060,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         });
         list.appendChild(btn);
     });
+    paintAdminPublishTrain();
 }
 
 function driftLabel(driftMin) {
@@ -1335,8 +1396,9 @@ export async function startOnTrainShare({
     skipVolunteer = false,
     scheduledTime = '',
     intent: forcedIntent = '',
+    adminOverrideRole = '',
 } = {}) {
-    lastShareRequest = { trainId, station, destination, routeId, source, scheduledTime, intent: 'onboard' };
+    lastShareRequest = { trainId, station, destination, routeId, source, scheduledTime, intent: 'onboard', adminOverrideRole };
     triggerHaptic();
     const id = trainId === 'trip' ? null : (trainId || null);
     if (!routeId) {
@@ -1347,8 +1409,11 @@ export async function startOnTrainShare({
         showToast('Pick a train first', 'error');
         return { ok: false };
     }
+    const adminManualTrain = isAdminAuthed() && (
+        source === 'admin_manual_train' || adminOverrideRole === 'train'
+    );
     const { routeHasNoScheduledTrains } = await import('./delay-reports.js');
-    if (routeHasNoScheduledTrains()) {
+    if (!adminManualTrain && routeHasNoScheduledTrains()) {
         showToast('There are no trains to share today.', 'info');
         return { ok: false };
     }
@@ -1395,7 +1460,7 @@ export async function startOnTrainShare({
     setStatus('Checking your location…');
     const vet = await runOnboardToastVet(id);
     const enforce = ENFORCE_LIVE_SHARE_VET;
-    const overrideRole = adminShareRole();
+    const overrideRole = adminManualTrain ? 'train' : adminShareRole();
     if (isAdminAuthed() && overrideRole !== 'auto') {
         addShareCheck('Admin override', `Force this share to appear as a ${overrideRole}.`, 'decision');
     }
@@ -1611,7 +1676,9 @@ export async function startOnTrainShare({
         lng: vet.lng,
         heading: vet.heading,
         speedMps: vet.speedMps,
-        source: overrideRole === 'train' ? 'admin_override_train' : (confirmedCloser ? 'closer_confirm' : source),
+        source: adminManualTrain
+            ? 'admin_manual_train'
+            : (overrideRole === 'train' ? 'admin_override_train' : (confirmedCloser ? 'closer_confirm' : source)),
         adminOverrideRole: overrideRole === 'train' ? 'train' : '',
         overrideProjected: overrideRole === 'train' ? vet.pathPoint : null,
     });
@@ -2133,6 +2200,9 @@ export function bindMapTabUi() {
     document.getElementById('map-contribute-cancel')?.addEventListener('click', hideContributeSheet);
     document.getElementById('nt-nearby-close')?.addEventListener('click', hideNearbyTrainsModal);
     document.getElementById('nt-nearby-dismiss')?.addEventListener('click', hideNearbyTrainsModal);
+    document.getElementById('nt-admin-publish-train-btn')?.addEventListener('click', () => {
+        publishAdminManualTrain();
+    });
     document.getElementById('nt-nearby-trains-modal')?.addEventListener('click', (e) => {
         if (e.target?.id === 'nt-nearby-trains-modal') hideNearbyTrainsModal();
     });

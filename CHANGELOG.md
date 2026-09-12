@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.12 — Admin sources, archive, audit QA (12 Sep 2026)
+
+Alert source list hydrates from Firebase object payloads and writes an id-keyed `admin_state/alert_sources` map so both operators see the same list on any device. Feedback Archive paints headers only (document fragment) and hydrates the full WhatsApp thread on first expand. Zone Distance Audit hops are one segment per line; Zone max km sits in a closed accordion. Schedule QA skips expected empty Saturday placeholder sheets (`herc-koed`, `ec-berlin`) unless those sheets later have trains. DELTA_VARIANCE cards show a short per-train preview and open a train/delta table. Feedback version chips open Build notes (`#admin-build`) even when the chip is on a reaction host.
+
+no release notes.
+
 ## V9_09.12.11 — Motion, toasts, version label, admin test train (12 Sep 2026)
 
 Welcome fades out before the in-app bar appears. Overlays and the alerts lightbox scale from 95 then fade before history pops. Check for Updates asks before wiping when the 3.5s probe is not ok. Forced-update retries no longer spam the saved-times toast (60s cooldown; a timeout is not treated as offline). Toasts wrap two lines. Account Back closes Account first. Sidenav and What’s New paint APP_VERSION; the unread badge still uses the latest public card. Admin map can publish a weekday train id on ride_pings with adminOverrideRole train.

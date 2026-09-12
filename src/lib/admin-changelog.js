@@ -5,6 +5,14 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.12': [
+        'Alert sources save as an id-keyed Firebase map (admin_state/alert_sources). Object payloads from RTDB hydrate on every device.',
+        'Feedback Archive paints headers only and hydrates the full thread on first expand. List insert uses a document fragment.',
+        'Zone hops are one station pair per line. Zone max km (Z1/Z2/Z3) is a closed accordion.',
+        'Schedule QA skips expected empty Saturday placeholders (herc-koed, ec-berlin). Live Saturday trains still scan.',
+        'DELTA_VARIANCE cards preview trains on separate rows and open a Train / From / To / Delta table.',
+        'Feedback version chips (V9_08.29.2 · route) open Build notes. Capture click; hold-to-react ignores the chip.',
+    ],
     'V9_09.12.11': [
         'Welcome fades, then hides. Overlays and the alerts lightbox spring from scale-95. Close fades, then pops history.',
         'Check for Updates: slow/failed probe opens Your network seems slow. Proceed skips only the check_updates preflight. Killswitch still always probes.',

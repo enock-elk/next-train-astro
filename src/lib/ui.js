@@ -120,6 +120,8 @@ const MODAL_HASH = {
     'dev-modal': '#dev',
     'admin-ticket-view-modal': '#roadmap-ticket',
     'changelog-modal': '#changelog',
+    'admin-changelog-modal': '#admin-build',
+    'sched-qa-delta-modal': '#qa-delta',
     'welcome-modal': '#welcome',
     'trip-map-modal': '#trip-map',
     'community-presence-info-modal': '#community-presence',

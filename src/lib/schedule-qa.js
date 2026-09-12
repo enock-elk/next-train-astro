@@ -2,7 +2,7 @@
  * Schedule data quality assurance scanner.
  * Used by the admin Schedule QA panel to flag impossible / suspicious cells.
  */
-import { ROUTES } from './config.js';
+import { ROUTES, SATURDAY_PLACEHOLDER_ROUTES } from './config.js';
 import { isRealTime, timeToSeconds, normalizeStationName } from './utils.js';
 
 /** Issue codes available in the admin filter dropdown. */
@@ -309,6 +309,13 @@ export function runScheduleQaReport(db, region, parseJSONSchedule) {
                 sheetKey,
                 dayDir,
             };
+
+            const isPlaceholderSat = SATURDAY_PLACEHOLDER_ROUTES.includes(route.id)
+                && /sat/i.test(String(dayDir));
+            if (isPlaceholderSat && (!parsed || !parsed.rows?.length || !trainCols(parsed).length)) {
+                sheetsScanned++;
+                return;
+            }
 
             if (!parsed) {
                 findings.push({

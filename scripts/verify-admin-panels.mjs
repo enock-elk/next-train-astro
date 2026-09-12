@@ -3,6 +3,7 @@
  * Run: node scripts/verify-admin-panels.mjs
  */
 import { readFileSync } from 'node:fs';
+import { runScheduleQaReport } from '../src/lib/schedule-qa.js';
 
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 const start = admin.indexOf('function ntAdminEndOfTodayLocalValue');
@@ -17,6 +18,7 @@ new Function(`${admin.slice(start, end)}
 this.ntAdminEndOfTodayLocalValue = ntAdminEndOfTodayLocalValue;
 this.ntAdminToLocalDatetimeValue = ntAdminToLocalDatetimeValue;
 this.ntAdminNormalizeAlertSources = ntAdminNormalizeAlertSources;
+this.ntAdminAlertSourcesToRtdb = ntAdminAlertSourcesToRtdb;
 this.ntAdminUpsertAlertSource = ntAdminUpsertAlertSource;
 this.ntAdminDeleteAlertSource = ntAdminDeleteAlertSource;
 this.ntAdminMatchAlertSource = ntAdminMatchAlertSource;
@@ -71,6 +73,14 @@ const normalized = helpers.ntAdminNormalizeAlertSources([
 ]);
 assert(normalized.length === 1 && normalized[0].name === 'PRASA', 'normalize keeps named sources');
 assert(normalized[0].id === 'src_1', 'unsafe source ids are stripped');
+
+const fromObject = helpers.ntAdminNormalizeAlertSources({
+    0: { id: 'src_a', name: 'PRASA', url: 'https://www.prasa.com' },
+    src_b: { id: 'src_b', name: 'MetroRail WC', url: 'https://www.metrorail.co.za' },
+});
+assert(fromObject.length === 2 && fromObject.some((s) => s.id === 'src_b'), 'Firebase object payloads become a source list');
+const rtdbMap = helpers.ntAdminAlertSourcesToRtdb(fromObject);
+assert(rtdbMap.src_b && rtdbMap.src_b.name === 'MetroRail WC', 'sources persist as an id-keyed Firebase map');
 
 const empty = helpers.ntAdminUpsertAlertSource([], '  ', 'https://x.com');
 assert(empty.ok === false && empty.list.length === 0, 'save without a name is rejected');
@@ -163,6 +173,8 @@ assert(admin.includes('Show in app timetable') && admin.includes('Show on downlo
 assert(admin.includes('In-app board and planner') && admin.includes('Timetable grid and PNG'), 'train-tag surface labels are specific');
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
 assert(admin.includes('admin_state/alert_sources'), 'saved sources sync to Firebase');
+assert(admin.includes('ntAdminAlertSourcesToRtdb'), 'sources write an id-keyed Firebase map');
+assert(admin.includes("parsed && typeof parsed === 'object' ? Object.values(parsed)"), 'source hydrate accepts a Firebase object');
 assert(admin.includes('refreshSavedAlertSources'), 'saved sources refresh from Firebase');
 assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'saved source writes are awaited');
 assert(admin.includes('Source saved online for both operators.'), 'saved source confirms online availability');
@@ -319,6 +331,24 @@ assert(admin.includes('data-ls-session'), 'share sessions are expandable');
 assert(admin.includes('openAdminChangelogLookup'), 'admin can look up operator build notes');
 assert(admin.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
 assert(admin.includes('data-admin-changelog'), 'feedback version opens build notes');
+assert(admin.includes("addEventListener('click', (e) => {") && admin.includes('__ntAdminChangelogBound'), 'build-notes clicks bind in capture');
+assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
+assert(admin.includes("data-fb-lazy=\"1\""), 'archive threads defer chat HTML');
+assert(admin.includes('hydrateFeedbackThreadBody'), 'archive hydrates a thread on first expand');
+assert(admin.includes('buildFeedbackThreadInnerHtml'), 'inbox and archive share the same thread renderer');
+assert(admin.includes('document.createDocumentFragment()'), 'feedback list paints into a fragment');
+assert(admin.includes('id="zone-audit-bands-acc"'), 'zone max km sits in a closed accordion');
+assert(admin.includes(".join('<br>')"), 'zone hops render one segment per line');
+assert(admin.includes('openScheduleQaDeltaModal'), 'delta variance opens a train table');
+assert(admin.includes('id="sched-qa-delta-modal"') || admin.includes("id = 'sched-qa-delta-modal'"), 'delta modal id is stable');
+assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
+
+const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
+assert(qa.includes('SATURDAY_PLACEHOLDER_ROUTES'), 'QA engine imports Saturday placeholders');
+assert(qa.includes('isPlaceholderSat'), 'QA skips expected empty Saturday sheets');
+
+assert(ui.includes("'admin-changelog-modal': '#admin-build'"), 'build notes modal has its own hash');
+assert(ui.includes("'sched-qa-delta-modal': '#qa-delta'"), 'delta table modal has its own hash');
 assert(admin.includes('openFeedbackBetaGrant'), 'feedback Options opens Add to beta');
 assert(admin.includes('openFeedbackTripPlans'), 'feedback Options opens trip plan search');
 assert(admin.includes('config/feature_grants/'), 'beta grants write config/feature_grants');
@@ -347,6 +377,34 @@ assert(admin.includes('config/feature_grants/'), 'beta grants write config/featu
 assert(admin.includes('closedTargetRoutePreviewHtml'), 'Target Route has a name-only closed preview helper');
 assert(admin.includes('closedTargetRoutePreviewFromRow'), 'Target Route closed preview reads the name span');
 assert(admin.includes('disr-route-chevron') && admin.includes('closedTargetRoutePreviewFromRow(li)'), 'Target Route click writes the name-only preview');
+
+const emptySatSheet = { headers: ['STATION'], rows: [{ STATION: 'HERCULES STATION' }] };
+const liveSatSheet = {
+    headers: ['STATION', '1220'],
+    rows: [
+        { STATION: 'HERCULES STATION', '1220': '06:00' },
+        { STATION: 'KOEDOESPOORT STATION', '1220': '06:10' },
+    ],
+};
+const placeholderQa = runScheduleQaReport({
+    koed_to_herc_sat: emptySatSheet,
+    herc_to_koed_sat: emptySatSheet,
+}, 'GP', null);
+const hercSatFindings = (report) => (report.findings || []).filter((f) => (
+    f.routeId === 'herc-koed' && /sat/i.test(String(f.dayDir || f.sheetKey || ''))
+));
+assert(
+    hercSatFindings(placeholderQa).length === 0,
+    'expected empty herc-koed Saturday sheets are not NO_TRAINS errors'
+);
+const liveSatQa = runScheduleQaReport({
+    koed_to_herc_sat: liveSatSheet,
+    herc_to_koed_sat: liveSatSheet,
+}, 'GP', null);
+assert(
+    hercSatFindings(liveSatQa).length > 0 && !hercSatFindings(liveSatQa).some((f) => f.code === 'NO_TRAINS'),
+    'placeholder Saturday sheets with live trains are still scanned'
+);
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

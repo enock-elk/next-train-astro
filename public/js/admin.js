@@ -83,12 +83,22 @@ function ntAdminToLocalDatetimeValue(ms) {
 }
 
 function ntAdminNormalizeAlertSources(parsed) {
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item, i) => ({
+    const list = Array.isArray(parsed)
+        ? parsed
+        : (parsed && typeof parsed === 'object' ? Object.values(parsed) : []);
+    return list.map((item, i) => ({
         id: String(item && item.id ? item.id : `src_${i}`).replace(/[^a-zA-Z0-9_-]/g, '') || `src_${i}`,
         name: String(item && item.name != null ? item.name : '').trim(),
         url: String(item && item.url != null ? item.url : '').trim(),
     })).filter((item) => item.name);
+}
+
+function ntAdminAlertSourcesToRtdb(list) {
+    const out = {};
+    ntAdminNormalizeAlertSources(list).forEach((item) => {
+        out[item.id] = item;
+    });
+    return out;
 }
 
 function ntAdminUpsertAlertSource(list, name, url, existingId) {
@@ -705,7 +715,11 @@ const Admin = {
         try {
             const res = await fetch(
                 `${endpoint}${Admin.ALERT_SOURCES_RTDB}.json?auth=${encodeURIComponent(token)}`,
-                { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(list) }
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ntAdminAlertSourcesToRtdb(list)),
+                }
             );
             return res.ok;
         } catch {
@@ -720,14 +734,18 @@ const Admin = {
                 const res = await fetch(`${endpoint}${Admin.ALERT_SOURCES_RTDB}.json?auth=${encodeURIComponent(token)}&t=${Date.now()}`);
                 if (res.ok) {
                     const remote = ntAdminNormalizeAlertSources(await res.json());
-                    if (remote.length || !Admin.loadSavedAlertSources().length) {
+                    if (remote.length) {
                         Admin._alertSourcesCache = remote;
                         try { localStorage.setItem(Admin.ALERT_SOURCES_KEY, JSON.stringify(remote)); } catch { /* quota */ }
                         return remote;
                     }
-                    if (Admin.loadSavedAlertSources().length) {
-                        await Admin.syncSavedAlertSourcesToFirebase(Admin.loadSavedAlertSources());
+                    const local = Admin.loadSavedAlertSources();
+                    if (local.length) {
+                        await Admin.syncSavedAlertSourcesToFirebase(local);
+                        return local;
                     }
+                    Admin._alertSourcesCache = [];
+                    return [];
                 }
             } catch { /* keep cache */ }
         }
@@ -1921,6 +1939,7 @@ const Admin = {
             longTimer = null;
         };
         host.addEventListener('pointerdown', (e) => {
+            if (e.target.closest?.('[data-admin-changelog]')) return;
             const bubble = e.target.closest?.('[data-inbox-react-host]');
             if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
             const row = bubble.closest('[data-inbox-msg-id]');
@@ -6810,6 +6829,8 @@ const Admin = {
                 return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
             };
 
+            Admin._fbLazyThreads = {};
+            const listFrag = document.createDocumentFragment();
             displayGroups.forEach(group => {
                 const did = group.did;
                 const groupItems = group.items;
@@ -6918,6 +6939,18 @@ const Admin = {
                 }
 
                 // GUARDIAN UX FIX: Removed wrapping <button> to prevent invalid nested buttons
+                if (!Admin._fbLazyThreads) Admin._fbLazyThreads = {};
+                Admin._fbLazyThreads[did] = {
+                    did,
+                    items: groupItems,
+                    feedbackId,
+                    unresolvedIds,
+                    contactHtml,
+                    escalateAttr,
+                    safeDidAttr,
+                    isInbox,
+                };
+
                 let groupHTML = `
                     <div class="feedback-group-header scroll-mt-[110px] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full flex justify-between items-center p-3 bg-white dark:bg-gray-800 border-b border-transparent transition-colors">
                         <div class="flex-grow flex flex-col items-start min-w-0 pr-2">
@@ -6930,449 +6963,18 @@ const Admin = {
                             </button>
                         </div>
                     </div>
-                    <div class="feedback-thread-body hidden relative">
-                        <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
-                            <div class="flex-grow min-w-0">
-                                ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
-                            </div>
-                            <div class="relative shrink-0" data-fb-more-wrap>
-                                <button type="button" data-fb-more-toggle class="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
-                                    Options
-                                    <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </button>
-                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
-                                    <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
-                                    <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
-                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackBetaGrant('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('star', 'w-3.5 h-3.5')} Add to beta</button>` : ''}
-                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackTripPlans('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('search', 'w-3.5 h-3.5')} Trip plans</button>` : ''}
-                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="feedback-thread-chat nt-pack-wallpaper relative space-y-3 p-2 sm:p-3">
                 `;
-
-                let lastRenderedDate = "";
-
-                groupItems.forEach(item => {
-                    const date = new Date(item.timestamp || Date.now());
-                    const dateStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    // DATE GROUPING LOGIC (WhatsApp Style)
-                    const msgDateString = date.toDateString();
-                    if (lastRenderedDate !== msgDateString) {
-                        const today = new Date();
-                        const yesterday = new Date();
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        
-                        let dateDividerText = msgDateString;
-                        if (msgDateString === today.toDateString()) {
-                            dateDividerText = "Today";
-                        } else if (msgDateString === yesterday.toDateString()) {
-                            dateDividerText = "Yesterday";
-                        } else {
-                            dateDividerText = (typeof formatAppDate === 'function')
-                                ? formatAppDate(date)
-                                : date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-                        }
-                        
-                        groupHTML += `
-                            <div class="flex justify-center w-full my-3">
-                                <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/50 dark:bg-gray-800/50 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">
-                                    ${dateDividerText}
-                                </span>
-                            </div>
-                        `;
-                        lastRenderedDate = msgDateString;
-                    }
-                    
-                    if (item.isFromAdmin) {
-                        // ADMIN BUBBLE (Right)
-                        // GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
-                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
-                        if (item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
-                        } else if (item.read) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
-                        } else if (item.delivered) {
-                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
-                        }
-
-                        // REGEX: Extract Admin Signoff Name ("- Enock") including ASCII hyphen
-                        let parsedAdminText = item.text || "";
-                        parsedAdminText = Admin.repairMojibake(parsedAdminText);
-                        const signoff = Admin.parseAdminSignoff(parsedAdminText);
-                        parsedAdminText = signoff.body;
-                        const adminName = Admin.formatAdminBubbleLabel(item.fromName || signoff.name || 'Admin');
-
-                        parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
-                        if (typeof window.sanitizeRichHtml === 'function') {
-                            parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
-                        }
-
-                        parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-                            return Admin.wrapLightboxImgHtml(srcUrl, 'border-slate-600 dark:border-slate-700') || '';
-                        });
-
-                        // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
-                        // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
-                        const rawMsgKey = String(item.id || item.key || '').trim();
-                        const msgAnchor = secureEscape(rawMsgKey);
-                        const adminVer = secureEscape(String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin');
-                        const adminRoute = secureEscape(item.routeId || '');
-                        const adminMeta = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
-                        const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
-                        const inboxReactId = item.inboxMsgId || String(item.id || '');
-                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
-                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
-                            : '';
-                        groupHTML += `
-                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
-                                <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
-                                        <div class="inbox-bubble-name-row">
-                                            <span>${secureEscape(adminName)}</span>
-                                            <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
-                                        </div>
-                                        <div class="inbox-bubble-body">
-                                            <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
-                                        </div>
-                                    </div>
-                                    ${reactChips}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        // COMMUTER BUBBLE (Left) — WhatsApp-style quote chip + reply body
-                        let plainBody = item.text ? String(item.text).trim() : '';
-                        let quoteBlockHtml = '';
-                        let isReply = false;
-
-                        const stripOuterQuotes = (s) => String(s || '').replace(/^["'\u201c\u201d\s]+|["'\u201c\u201d\s]+$/g, '').trim();
-                        const toQuotePlain = (raw) => {
-                            let s = String(raw ?? '');
-                            try {
-                                const d = document.createElement('div');
-                                d.innerHTML = s;
-                                s = d.textContent || d.innerText || '';
-                            } catch {
-                                s = s.replace(/<[^>]*>/g, '');
-                            }
-                            s = s
-                                .replace(/\u00a0/g, ' ')
-                                .replace(/&nbsp;/gi, ' ')
-                                .replace(/&amp;/gi, '&')
-                                .replace(/&lt;/gi, '<')
-                                .replace(/&gt;/gi, '>')
-                                .replace(/&quot;/gi, '"')
-                                .replace(/&#39;/gi, "'");
-                            s = stripOuterQuotes(s);
-                            const wrapped = s.match(/^\[\s*([\s\S]*)\s*\]$/);
-                            if (wrapped) s = stripOuterQuotes(wrapped[1]);
-                            // Drop leftover wrapper crumbs: "] Bathong…" / "Bathong…"]" from broken legacy wraps
-                            s = s.replace(/^[\[\]"'“”\s]+/, '').replace(/[\[\]"'“”]+$/g, '');
-                            return s.replace(/\s+/g, ' ').trim();
-                        };
-                        const isJunkQuoteLine = (line) => {
-                            const t = String(line || '').trim();
-                            if (!t) return true;
-                            // Stray bracket / quote crumbs from broken legacy wrappers
-                            if (/^[\[\]"'“”.…\s]+$/.test(t)) return true;
-                            if (t.length <= 2 && /[\[\]]/.test(t)) return true;
-                            return false;
-                        };
-                        const stripDupQuoteFromBody = (body, snippet) => {
-                            let rest = String(body || '').replace(/^\s+/, '');
-                            const snip = toQuotePlain(snippet);
-                            // Drop junk / duplicate quote lines that leaked below the header
-                            const lines = rest.split(/\r?\n/);
-                            while (lines.length) {
-                                const head = lines[0];
-                                const plainHead = toQuotePlain(head);
-                                if (isJunkQuoteLine(head)) { lines.shift(); continue; }
-                                if (snip && plainHead && (plainHead === snip || snip.startsWith(plainHead) || plainHead.startsWith(snip))) {
-                                    lines.shift();
-                                    continue;
-                                }
-                                // One-line `[quoted text]` / `"quoted text"` duplicate
-                                if (snip && (/^\s*\[/.test(head) || /^\s*["“]/.test(head)) && plainHead && (plainHead === snip || snip.includes(plainHead))) {
-                                    lines.shift();
-                                    continue;
-                                }
-                                break;
-                            }
-                            return lines.join('\n').replace(/^\s+/, '');
-                        };
-                        // data-* only — never embed snippet in onclick (breaks on quotes/apostrophes)
-                        const waQuoteChip = ({ author, snippet, replyKey = '', alertId = '', alertFallback = '', alertKind = '', accent = 'blue' }) => {
-                            const bar = accent === 'blue'
-                                ? 'border-blue-500 dark:border-blue-400'
-                                : 'border-gray-400 dark:border-gray-500';
-                            const nameCls = accent === 'blue'
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-gray-600 dark:text-gray-300';
-                            const cleanAuthor = toQuotePlain(author) || 'Enock';
-                            const cleanSnippet = toQuotePlain(snippet) || 'Message';
-                            const attrs = [
-                                'type="button"',
-                                'data-fb-quote-jump="1"',
-                                `data-reply-key="${secureEscape(replyKey || '')}"`,
-                                `data-reply-snippet="${secureEscape(cleanSnippet)}"`,
-                                `data-alert-id="${secureEscape(alertId || '')}"`,
-                                `data-alert-fallback="${secureEscape(alertFallback || '')}"`,
-                                `data-alert-kind="${secureEscape(alertKind || '')}"`,
-                                `class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer"`,
-                            ].join(' ');
-                            return `<button ${attrs}>
-                                    <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(cleanAuthor)}</div>
-                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(cleanSnippet)}</div>
-                                </button>`;
-                        };
-
-                        // 0) Service-alert / incident quote: [ALERT:id|kind|snippet]
-                        const parsedAlertQuote = (typeof parseFeedbackAlertQuote === 'function')
-                            ? parseFeedbackAlertQuote(plainBody)
-                            : (function () {
-                                const m = String(plainBody || '').match(/^\[ALERT:([^|\]]*)\|([^|\]]*)\|([^\]]*)\]\s*([\s\S]*)$/i);
-                                if (!m) return null;
-                                const k = String(m[2] || 'notice').trim().toLowerCase();
-                                return { alertId: m[1].trim(), kind: k === 'disruption' ? 'disruption' : 'notice', snippet: m[3].trim(), body: m[4] };
-                            })();
-                        const payloadAlertId = String(item.quotedAlertId || '').trim();
-
-                        // 1) Modern: [REPLY TO ADMIN: key | snippet]\nbody  (hub.js) — snippet cannot contain ]
-                        const replyWithPipe = plainBody.match(/^\[REPLY TO ADMIN:\s*([^|\]]+?)\s*\|\s*([^\]]*)\]\s*([\s\S]*)$/i);
-                        // 2) Legacy header only: [REPLY TO ADMIN: key]\n(optional snippet lines)\nbody
-                        const replyHeaderOnly = !replyWithPipe
-                            ? plainBody.match(/^\[REPLY TO ADMIN:\s*([^\]]+)\]\s*([\s\S]*)$/i)
-                            : null;
-
-                        if (parsedAlertQuote || payloadAlertId) {
-                            isReply = true;
-                            const alertId = (parsedAlertQuote && parsedAlertQuote.alertId) || payloadAlertId;
-                            const kind = (parsedAlertQuote && parsedAlertQuote.kind) || item.quotedAlertKind || 'notice';
-                            let snippet = parsedAlertQuote ? toQuotePlain(parsedAlertQuote.snippet) : '';
-                            let bodyRest = parsedAlertQuote ? String(parsedAlertQuote.body || '') : plainBody;
-                            if (!snippet) snippet = toQuotePlain(bodyRest).slice(0, 240) || 'Quoted advisory';
-                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
-                            snippet = (snippet || 'Quoted advisory').slice(0, 240);
-                            quoteBlockHtml = waQuoteChip({
-                                author: kind === 'disruption' ? 'Incident' : 'Advisory',
-                                snippet,
-                                replyKey: '',
-                                alertId,
-                                alertFallback: snippet,
-                                alertKind: kind,
-                                accent: 'blue',
-                            });
-                            plainBody = bodyRest;
-                        } else if (replyWithPipe || replyHeaderOnly) {
-                            isReply = true;
-                            const replyKey = String((replyWithPipe || replyHeaderOnly)[1] || '').trim();
-                            let snippet = '';
-                            let bodyRest = '';
-                            if (replyWithPipe) {
-                                snippet = toQuotePlain(replyWithPipe[2] || '');
-                                bodyRest = String(replyWithPipe[3] || '');
-                            } else {
-                                bodyRest = String(replyHeaderOnly[2] || '');
-                                // Prefer a dedicated quote line; never treat a lone "[" as the quote
-                                const lines = bodyRest.split(/\r?\n/);
-                                let i = 0;
-                                while (i < lines.length && isJunkQuoteLine(lines[i])) i++;
-                                if (i < lines.length) {
-                                    const candidate = toQuotePlain(lines[i]);
-                                    const after = lines.slice(i + 1).join('\n').replace(/^\s+/, '');
-                                    // First real line is the quote only when a reply body remains after it
-                                    if (candidate && after) {
-                                        snippet = candidate;
-                                        bodyRest = after;
-                                    }
-                                    // else: single remaining line is the commuter reply (no separate quote line)
-                                }
-                            }
-                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
-                            snippet = (snippet || 'Admin message').slice(0, 240);
-                            quoteBlockHtml = waQuoteChip({
-                                author: 'Enock',
-                                snippet,
-                                replyKey,
-                                accent: 'blue',
-                            });
-                            plainBody = bodyRest;
-                        } else if (plainBody.startsWith('[')) {
-                            // 3) Legacy bracket quote: find matching ] for the opening [ (not first ] only)
-                            let depth = 0;
-                            let end = -1;
-                            for (let i = 0; i < plainBody.length; i++) {
-                                const ch = plainBody[i];
-                                if (ch === '[') depth++;
-                                else if (ch === ']') {
-                                    depth--;
-                                    if (depth === 0) { end = i; break; }
-                                }
-                            }
-                            if (end > 0) {
-                                const rawQuoteContent = plainBody.slice(1, end);
-                                let bodyRest = plainBody.slice(end + 1).replace(/^\s+/, '');
-                                // Require a separator or end — avoid eating normal sentences
-                                if (bodyRest || rawQuoteContent) {
-                                    isReply = true;
-                                    let quoteAuthor = 'Enock';
-                                    let quoteSnippet = toQuotePlain(
-                                        rawQuoteContent
-                                            .replace(/REPLY TO ADMIN:\s*[^\]|]*/i, '')
-                                            .replace(/Replying to:\s*/i, '')
-                                            .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
-                                    );
-                                    const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
-                                    if (named) {
-                                        quoteAuthor = toQuotePlain(named[1]) || quoteAuthor;
-                                        quoteSnippet = toQuotePlain(named[2]);
-                                    }
-                                    quoteSnippet = (quoteSnippet || 'Quoted message').slice(0, 240);
-                                    bodyRest = stripDupQuoteFromBody(bodyRest, quoteSnippet);
-                                    const alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
-                                    const isAlertQuote = !!(alertIdMatch || item.quotedAlertId
-                                        || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent)
-                                        || item.type === 'thread_reply');
-                                    quoteBlockHtml = waQuoteChip({
-                                        author: quoteAuthor,
-                                        snippet: quoteSnippet,
-                                        replyKey: '',
-                                        alertId: isAlertQuote ? (alertIdMatch ? alertIdMatch[1] : (item.quotedAlertId || '')) : '',
-                                        alertFallback: isAlertQuote ? `${quoteAuthor}: ${quoteSnippet}` : quoteSnippet,
-                                        alertKind: item.quotedAlertKind || '',
-                                        accent: 'blue',
-                                    });
-                                    plainBody = bodyRest;
-                                }
-                            }
-                        }
-
-                        plainBody = String(plainBody || '')
-                            .replace(/&nbsp;/gi, ' ')
-                            .replace(/\u00a0/g, ' ')
-                            .replace(/&amp;/gi, '&')
-                            .replace(/&lt;/gi, '<')
-                            .replace(/&gt;/gi, '>')
-                            .replace(/&quot;/gi, '"')
-                            .replace(/&#39;/gi, "'")
-                            .trim();
-
-                        let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
-
-                        // GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
-                        rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
-
-                        // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
-                        rawText = rawText.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
-                            const fullNum = `27${p1}${p2}${p3}`;
-                            const displayNum = `0${p1} ${p2} ${p3}`;
-                            const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : '';
-                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
-                        });
-
-                        rawText = rawText.replace(/\n/g, '<br>');
-
-                        const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
-                        const safeRouteId = secureEscape(item.routeId || 'None');
-                        const rawAttach = [];
-                        if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
-                        if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
-                            item.attachmentUrls.forEach((u) => { if (u) rawAttach.push(u); });
-                        }
-                        const uniqueAttach = [...new Set(rawAttach)];
-
-                        // Safeguard rawText in case the replace cleared it completely
-                        if (typeof rawText !== 'string') rawText = '';
-                        rawText = rawText.replace(/^(?:<br>|\s)+/, '');
-
-
-                        // GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
-                        let attachmentHtml = '';
-                        if (uniqueAttach.length > 0) {
-                            const gridCols = uniqueAttach.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
-                            attachmentHtml = `<div class="mt-2 grid ${gridCols} gap-2 w-full">`;
-                            uniqueAttach.forEach((rawUrl, idx) => {
-                                const cell = typeof window.attachmentPreviewHtml === 'function'
-                                    ? window.attachmentPreviewHtml(rawUrl, {
-                                        admin: true,
-                                        pdfLabel: `View Doc ${idx + 1}`,
-                                        fileLabel: `View Doc ${idx + 1}`,
-                                        imgClass: 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in',
-                                        buttonClass: 'block focus:outline-none w-full text-left',
-                                        linkClass: 'flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24',
-                                    })
-                                    : '';
-                                if (cell) attachmentHtml += cell;
-                            });
-                            attachmentHtml += `</div>`;
-                        }
-
-                        // METADATA: Integrated Bubble Header
-                        let typeLabel = "General";
-                        let typeIconName = "message";
-                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIconName = "clock"; }
-                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIconName = "bug"; }
-                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIconName = "lightbulb"; }
-
-                        // GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
-                        const headerLabelText = isReply
-                            ? `${Admin.icon('reply', 'w-3 h-3')} Reply:`
-                            : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
-                        let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
-
-                        const verLabel = safeAppVersion.split(' - ')[0];
-                        const integratedHeaderHtml = `
-                            <div class="inbox-bubble-name-row">
-                                <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
-                                <button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}">${verLabel} · ${safeRouteId}</button>
-                            </div>
-                        `;
-
-                        const inboxReactId = item.inboxMsgId || '';
-                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
-                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
-                            : '<div class="nt-inbox-react-chips mt-1 min-h-0" data-inbox-react-chips></div>';
-                        groupHTML += `
-                            <div class="inbox-row justify-start mb-1.5" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}">
-                                <div class="inbox-bubble-wrap">
-                                    <div class="inbox-bubble inbox-bubble-other"${inboxReactId ? ' data-inbox-react-host="1"' : ''}>
-                                        ${integratedHeaderHtml}
-                                        <div class="inbox-bubble-body">
-                                            ${quoteBlockHtml}
-                                            <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
-                                        </div>
-                                    </div>
-                                    ${reactChips}
-                                </div>
-                            </div>
-                        `;
-                } });
-                // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in Options)
-                const actionHtml = isInbox 
-                    ? `<div class="flex space-x-2 mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
-                         <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
-                         ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
-                       </div>`
-                    : `<div class="flex justify-between items-center w-full mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
-                         <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived Thread</span>
-                         <div class="flex space-x-2">
-                             ${did !== 'Anonymous / Legacy' ? `<button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
-                             <button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.restoreFeedback('${feedbackId}')">Restore</button>
-                             <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteFeedback('${feedbackId}', '${did}')">Delete</button>
-                         </div>
-                       </div>`;
-
-                groupHTML += `
-                        </div>
-                        ${actionHtml}
-                    </div>
-                `;
+                if (!isInbox) {
+                    groupHTML += `<div class="feedback-thread-body hidden relative" data-fb-lazy="1"></div>`;
+                    groupCard.innerHTML = groupHTML;
+                    listFrag.appendChild(groupCard);
+                    return;
+                }
+                groupHTML += `<div class="feedback-thread-body hidden relative">${Admin.buildFeedbackThreadInnerHtml(Admin._fbLazyThreads[did])}</div>`;
                 groupCard.innerHTML = groupHTML;
-                listContainer.appendChild(groupCard);
+                listFrag.appendChild(groupCard);
             });
+            listContainer.appendChild(listFrag);
             Admin.bindFeedbackInboxReactions(listContainer);
             if (Admin._pendingFeedbackOpen) {
                 setTimeout(() => Admin.consumePendingFeedbackOpen(), 40);
@@ -7380,6 +6982,14 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
+                const clBtn = e.target.closest('[data-admin-changelog]');
+                if (clBtn && listContainer.contains(clBtn)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    Admin.openAdminChangelogLookup(clBtn.getAttribute('data-admin-changelog'));
+                    return;
+                }
+
                 // Options dropdown
                 const moreToggle = e.target.closest('[data-fb-more-toggle]');
                 if (moreToggle && listContainer.contains(moreToggle)) {
@@ -7433,7 +7043,10 @@ const Admin = {
                 if (!body || !body.classList.contains('feedback-thread-body')) return;
 
                 const isOpening = body.classList.contains('hidden');
-                
+                if (isOpening && body.dataset.fbLazy === '1') {
+                    Admin.hydrateFeedbackThreadBody(body);
+                }
+
                 // Close all other open threads
                 const allHeaders = listContainer.querySelectorAll('.feedback-group-header');
                 const allBodies = listContainer.querySelectorAll('.feedback-thread-body');
@@ -15427,6 +15040,479 @@ const Admin = {
         return res.json();
     },
 
+    hydrateFeedbackThreadBody: (body) => {
+        if (!body || body.dataset.fbLazy !== '1') return;
+        const card = body.closest('[data-fb-device]');
+        const did = card ? card.getAttribute('data-fb-device') : '';
+        const payload = (did && Admin._fbLazyThreads) ? Admin._fbLazyThreads[did] : null;
+        if (!payload) {
+            body.innerHTML = '<div class="p-3 text-[11px] text-gray-500">Thread body unavailable.</div>';
+            delete body.dataset.fbLazy;
+            return;
+        }
+        body.innerHTML = Admin.buildFeedbackThreadInnerHtml(payload);
+        delete body.dataset.fbLazy;
+    },
+
+    buildFeedbackThreadInnerHtml: (payload) => {
+        const did = payload.did;
+        const groupItems = payload.items || [];
+        const feedbackId = payload.feedbackId;
+        const unresolvedIds = payload.unresolvedIds;
+        const contactHtml = payload.contactHtml || '';
+        const escalateAttr = payload.escalateAttr || '';
+        const safeDidAttr = payload.safeDidAttr || '';
+        const isInbox = !!payload.isInbox;
+        const secureEscape = (str) => {
+            if (!str) return '';
+            if (typeof escapeHTML === 'function') return escapeHTML(str);
+            return String(str).replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+            });
+        };
+        let groupHTML = `
+                        <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
+                            <div class="flex-grow min-w-0">
+                                ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
+                            </div>
+                            <div class="relative shrink-0" data-fb-more-wrap>
+                                <button type="button" data-fb-more-toggle class="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
+                                    Options
+                                    <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                    <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
+                                    <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackBetaGrant('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('star', 'w-3.5 h-3.5')} Add to beta</button>` : ''}
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackTripPlans('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('search', 'w-3.5 h-3.5')} Trip plans</button>` : ''}
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.applyShadowBan('${safeDidAttr}', { deviceId: '${safeDidAttr}' })" class="w-full px-3 py-2 text-left text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('ban', 'w-3.5 h-3.5')} Ban</button>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="feedback-thread-chat nt-pack-wallpaper relative space-y-3 p-2 sm:p-3">
+                `;
+
+                let lastRenderedDate = "";
+
+                groupItems.forEach(item => {
+                    const date = new Date(item.timestamp || Date.now());
+                    const dateStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    
+                    // DATE GROUPING LOGIC (WhatsApp Style)
+                    const msgDateString = date.toDateString();
+                    if (lastRenderedDate !== msgDateString) {
+                        const today = new Date();
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        
+                        let dateDividerText = msgDateString;
+                        if (msgDateString === today.toDateString()) {
+                            dateDividerText = "Today";
+                        } else if (msgDateString === yesterday.toDateString()) {
+                            dateDividerText = "Yesterday";
+                        } else {
+                            dateDividerText = (typeof formatAppDate === 'function')
+                                ? formatAppDate(date)
+                                : date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+                        }
+                        
+                        groupHTML += `
+                            <div class="flex justify-center w-full my-3">
+                                <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/50 dark:bg-gray-800/50 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">
+                                    ${dateDividerText}
+                                </span>
+                            </div>
+                        `;
+                        lastRenderedDate = msgDateString;
+                    }
+                    
+                    if (item.isFromAdmin) {
+                        // ADMIN BUBBLE (Right)
+                        // GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
+                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
+                        if (item.acknowledged) {
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
+                        } else if (item.read) {
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                        } else if (item.delivered) {
+                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                        }
+
+                        // REGEX: Extract Admin Signoff Name ("- Enock") including ASCII hyphen
+                        let parsedAdminText = item.text || "";
+                        parsedAdminText = Admin.repairMojibake(parsedAdminText);
+                        const signoff = Admin.parseAdminSignoff(parsedAdminText);
+                        parsedAdminText = signoff.body;
+                        const adminName = Admin.formatAdminBubbleLabel(item.fromName || signoff.name || 'Admin');
+
+                        parsedAdminText = parsedAdminText.replace(/^(?:<br>|\s)+/, '');
+                        if (typeof window.sanitizeRichHtml === 'function') {
+                            parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
+                        }
+
+                        parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
+                            return Admin.wrapLightboxImgHtml(srcUrl, 'border-slate-600 dark:border-slate-700') || '';
+                        });
+
+                        // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
+                        // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
+                        const rawMsgKey = String(item.id || item.key || '').trim();
+                        const msgAnchor = secureEscape(rawMsgKey);
+                        const adminVer = secureEscape(String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin');
+                        const adminRoute = secureEscape(item.routeId || '');
+                        const adminMeta = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
+                        const inboxReactId = item.inboxMsgId || String(item.id || '');
+                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
+                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
+                            : '';
+                        groupHTML += `
+                            <div class="inbox-row justify-end mb-1.5" id="fb-msg-${msgAnchor}" data-fb-msg-id="${msgAnchor}" data-fb-device-id="${safeDidAttr}" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}" data-fb-feedback-id="${secureEscape(String(item.feedbackId || feedbackId || ''))}" data-fb-admin-plain="${secureEscape((item.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280))}">
+                                <div class="inbox-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
+                                        <div class="inbox-bubble-name-row">
+                                            <span>${secureEscape(adminName)}</span>
+                                            <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
+                                        </div>
+                                        <div class="inbox-bubble-body">
+                                            <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                        </div>
+                                    </div>
+                                    ${reactChips}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // COMMUTER BUBBLE (Left) — WhatsApp-style quote chip + reply body
+                        let plainBody = item.text ? String(item.text).trim() : '';
+                        let quoteBlockHtml = '';
+                        let isReply = false;
+
+                        const stripOuterQuotes = (s) => String(s || '').replace(/^["'\u201c\u201d\s]+|["'\u201c\u201d\s]+$/g, '').trim();
+                        const toQuotePlain = (raw) => {
+                            let s = String(raw ?? '');
+                            try {
+                                const d = document.createElement('div');
+                                d.innerHTML = s;
+                                s = d.textContent || d.innerText || '';
+                            } catch {
+                                s = s.replace(/<[^>]*>/g, '');
+                            }
+                            s = s
+                                .replace(/\u00a0/g, ' ')
+                                .replace(/&nbsp;/gi, ' ')
+                                .replace(/&amp;/gi, '&')
+                                .replace(/&lt;/gi, '<')
+                                .replace(/&gt;/gi, '>')
+                                .replace(/&quot;/gi, '"')
+                                .replace(/&#39;/gi, "'");
+                            s = stripOuterQuotes(s);
+                            const wrapped = s.match(/^\[\s*([\s\S]*)\s*\]$/);
+                            if (wrapped) s = stripOuterQuotes(wrapped[1]);
+                            // Drop leftover wrapper crumbs: "] Bathong…" / "Bathong…"]" from broken legacy wraps
+                            s = s.replace(/^[\[\]"'“”\s]+/, '').replace(/[\[\]"'“”]+$/g, '');
+                            return s.replace(/\s+/g, ' ').trim();
+                        };
+                        const isJunkQuoteLine = (line) => {
+                            const t = String(line || '').trim();
+                            if (!t) return true;
+                            // Stray bracket / quote crumbs from broken legacy wrappers
+                            if (/^[\[\]"'“”.…\s]+$/.test(t)) return true;
+                            if (t.length <= 2 && /[\[\]]/.test(t)) return true;
+                            return false;
+                        };
+                        const stripDupQuoteFromBody = (body, snippet) => {
+                            let rest = String(body || '').replace(/^\s+/, '');
+                            const snip = toQuotePlain(snippet);
+                            // Drop junk / duplicate quote lines that leaked below the header
+                            const lines = rest.split(/\r?\n/);
+                            while (lines.length) {
+                                const head = lines[0];
+                                const plainHead = toQuotePlain(head);
+                                if (isJunkQuoteLine(head)) { lines.shift(); continue; }
+                                if (snip && plainHead && (plainHead === snip || snip.startsWith(plainHead) || plainHead.startsWith(snip))) {
+                                    lines.shift();
+                                    continue;
+                                }
+                                // One-line `[quoted text]` / `"quoted text"` duplicate
+                                if (snip && (/^\s*\[/.test(head) || /^\s*["“]/.test(head)) && plainHead && (plainHead === snip || snip.includes(plainHead))) {
+                                    lines.shift();
+                                    continue;
+                                }
+                                break;
+                            }
+                            return lines.join('\n').replace(/^\s+/, '');
+                        };
+                        // data-* only — never embed snippet in onclick (breaks on quotes/apostrophes)
+                        const waQuoteChip = ({ author, snippet, replyKey = '', alertId = '', alertFallback = '', alertKind = '', accent = 'blue' }) => {
+                            const bar = accent === 'blue'
+                                ? 'border-blue-500 dark:border-blue-400'
+                                : 'border-gray-400 dark:border-gray-500';
+                            const nameCls = accent === 'blue'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-600 dark:text-gray-300';
+                            const cleanAuthor = toQuotePlain(author) || 'Enock';
+                            const cleanSnippet = toQuotePlain(snippet) || 'Message';
+                            const attrs = [
+                                'type="button"',
+                                'data-fb-quote-jump="1"',
+                                `data-reply-key="${secureEscape(replyKey || '')}"`,
+                                `data-reply-snippet="${secureEscape(cleanSnippet)}"`,
+                                `data-alert-id="${secureEscape(alertId || '')}"`,
+                                `data-alert-fallback="${secureEscape(alertFallback || '')}"`,
+                                `data-alert-kind="${secureEscape(alertKind || '')}"`,
+                                `class="text-left -mx-1 mb-1.5 mt-1 w-full rounded-r-md bg-black/5 dark:bg-white/10 border-l-4 ${bar} py-1.5 px-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors focus:outline-none shadow-sm cursor-pointer"`,
+                            ].join(' ');
+                            return `<button ${attrs}>
+                                    <div class="text-[10px] font-bold ${nameCls} not-italic leading-tight">${secureEscape(cleanAuthor)}</div>
+                                    <div class="text-[11px] text-gray-800 dark:text-gray-100 not-italic leading-snug line-clamp-3 mt-0.5">${secureEscape(cleanSnippet)}</div>
+                                </button>`;
+                        };
+
+                        // 0) Service-alert / incident quote: [ALERT:id|kind|snippet]
+                        const parsedAlertQuote = (typeof parseFeedbackAlertQuote === 'function')
+                            ? parseFeedbackAlertQuote(plainBody)
+                            : (function () {
+                                const m = String(plainBody || '').match(/^\[ALERT:([^|\]]*)\|([^|\]]*)\|([^\]]*)\]\s*([\s\S]*)$/i);
+                                if (!m) return null;
+                                const k = String(m[2] || 'notice').trim().toLowerCase();
+                                return { alertId: m[1].trim(), kind: k === 'disruption' ? 'disruption' : 'notice', snippet: m[3].trim(), body: m[4] };
+                            })();
+                        const payloadAlertId = String(item.quotedAlertId || '').trim();
+
+                        // 1) Modern: [REPLY TO ADMIN: key | snippet]\nbody  (hub.js) — snippet cannot contain ]
+                        const replyWithPipe = plainBody.match(/^\[REPLY TO ADMIN:\s*([^|\]]+?)\s*\|\s*([^\]]*)\]\s*([\s\S]*)$/i);
+                        // 2) Legacy header only: [REPLY TO ADMIN: key]\n(optional snippet lines)\nbody
+                        const replyHeaderOnly = !replyWithPipe
+                            ? plainBody.match(/^\[REPLY TO ADMIN:\s*([^\]]+)\]\s*([\s\S]*)$/i)
+                            : null;
+
+                        if (parsedAlertQuote || payloadAlertId) {
+                            isReply = true;
+                            const alertId = (parsedAlertQuote && parsedAlertQuote.alertId) || payloadAlertId;
+                            const kind = (parsedAlertQuote && parsedAlertQuote.kind) || item.quotedAlertKind || 'notice';
+                            let snippet = parsedAlertQuote ? toQuotePlain(parsedAlertQuote.snippet) : '';
+                            let bodyRest = parsedAlertQuote ? String(parsedAlertQuote.body || '') : plainBody;
+                            if (!snippet) snippet = toQuotePlain(bodyRest).slice(0, 240) || 'Quoted advisory';
+                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
+                            snippet = (snippet || 'Quoted advisory').slice(0, 240);
+                            quoteBlockHtml = waQuoteChip({
+                                author: kind === 'disruption' ? 'Incident' : 'Advisory',
+                                snippet,
+                                replyKey: '',
+                                alertId,
+                                alertFallback: snippet,
+                                alertKind: kind,
+                                accent: 'blue',
+                            });
+                            plainBody = bodyRest;
+                        } else if (replyWithPipe || replyHeaderOnly) {
+                            isReply = true;
+                            const replyKey = String((replyWithPipe || replyHeaderOnly)[1] || '').trim();
+                            let snippet = '';
+                            let bodyRest = '';
+                            if (replyWithPipe) {
+                                snippet = toQuotePlain(replyWithPipe[2] || '');
+                                bodyRest = String(replyWithPipe[3] || '');
+                            } else {
+                                bodyRest = String(replyHeaderOnly[2] || '');
+                                // Prefer a dedicated quote line; never treat a lone "[" as the quote
+                                const lines = bodyRest.split(/\r?\n/);
+                                let i = 0;
+                                while (i < lines.length && isJunkQuoteLine(lines[i])) i++;
+                                if (i < lines.length) {
+                                    const candidate = toQuotePlain(lines[i]);
+                                    const after = lines.slice(i + 1).join('\n').replace(/^\s+/, '');
+                                    // First real line is the quote only when a reply body remains after it
+                                    if (candidate && after) {
+                                        snippet = candidate;
+                                        bodyRest = after;
+                                    }
+                                    // else: single remaining line is the commuter reply (no separate quote line)
+                                }
+                            }
+                            bodyRest = stripDupQuoteFromBody(bodyRest, snippet);
+                            snippet = (snippet || 'Admin message').slice(0, 240);
+                            quoteBlockHtml = waQuoteChip({
+                                author: 'Enock',
+                                snippet,
+                                replyKey,
+                                accent: 'blue',
+                            });
+                            plainBody = bodyRest;
+                        } else if (plainBody.startsWith('[')) {
+                            // 3) Legacy bracket quote: find matching ] for the opening [ (not first ] only)
+                            let depth = 0;
+                            let end = -1;
+                            for (let i = 0; i < plainBody.length; i++) {
+                                const ch = plainBody[i];
+                                if (ch === '[') depth++;
+                                else if (ch === ']') {
+                                    depth--;
+                                    if (depth === 0) { end = i; break; }
+                                }
+                            }
+                            if (end > 0) {
+                                const rawQuoteContent = plainBody.slice(1, end);
+                                let bodyRest = plainBody.slice(end + 1).replace(/^\s+/, '');
+                                // Require a separator or end — avoid eating normal sentences
+                                if (bodyRest || rawQuoteContent) {
+                                    isReply = true;
+                                    let quoteAuthor = 'Enock';
+                                    let quoteSnippet = toQuotePlain(
+                                        rawQuoteContent
+                                            .replace(/REPLY TO ADMIN:\s*[^\]|]*/i, '')
+                                            .replace(/Replying to:\s*/i, '')
+                                            .replace(/Failed Route Attempt:\s*/i, 'Failed Route: ')
+                                    );
+                                    const named = quoteSnippet.match(/^([A-Za-z][\w.\s]{0,40}?):\s*([\s\S]+)$/);
+                                    if (named) {
+                                        quoteAuthor = toQuotePlain(named[1]) || quoteAuthor;
+                                        quoteSnippet = toQuotePlain(named[2]);
+                                    }
+                                    quoteSnippet = (quoteSnippet || 'Quoted message').slice(0, 240);
+                                    bodyRest = stripDupQuoteFromBody(bodyRest, quoteSnippet);
+                                    const alertIdMatch = rawQuoteContent.match(/Alert ID:\s*(\d+)/i);
+                                    const isAlertQuote = !!(alertIdMatch || item.quotedAlertId
+                                        || /Advisory|Line Severed|Expect Delays/i.test(rawQuoteContent)
+                                        || item.type === 'thread_reply');
+                                    quoteBlockHtml = waQuoteChip({
+                                        author: quoteAuthor,
+                                        snippet: quoteSnippet,
+                                        replyKey: '',
+                                        alertId: isAlertQuote ? (alertIdMatch ? alertIdMatch[1] : (item.quotedAlertId || '')) : '',
+                                        alertFallback: isAlertQuote ? `${quoteAuthor}: ${quoteSnippet}` : quoteSnippet,
+                                        alertKind: item.quotedAlertKind || '',
+                                        accent: 'blue',
+                                    });
+                                    plainBody = bodyRest;
+                                }
+                            }
+                        }
+
+                        plainBody = String(plainBody || '')
+                            .replace(/&nbsp;/gi, ' ')
+                            .replace(/\u00a0/g, ' ')
+                            .replace(/&amp;/gi, '&')
+                            .replace(/&lt;/gi, '<')
+                            .replace(/&gt;/gi, '>')
+                            .replace(/&quot;/gi, '"')
+                            .replace(/&#39;/gi, "'")
+                            .trim();
+
+                        let rawText = plainBody ? secureEscape(plainBody) : (quoteBlockHtml ? '' : 'No content');
+
+                        // GUARDIAN PHASE 6: SMART REGEX (Emails & WhatsApp Auto-Linking)
+                        rawText = rawText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi, '<a href="mailto:$1" class="text-blue-600 dark:text-blue-400 underline font-bold" onclick="event.stopPropagation()">$1</a>');
+
+                        // Captures SA formats: 082 123 4567, +27 82 123 4567, 27821234567
+                        rawText = rawText.replace(/(?:^|\s|\()(?:\+?27|0)[\s-]*([6-8]\d)[\s-]*(\d{3})[\s-]*(\d{4})(?=\s|$|[.,!?\)])/g, (match, p1, p2, p3) => {
+                            const fullNum = `27${p1}${p2}${p3}`;
+                            const displayNum = `0${p1} ${p2} ${p3}`;
+                            const prefix = match.charAt(0).match(/\s|\(/) ? match.charAt(0) : '';
+                            return `${prefix}<a href="https://wa.me/${fullNum}" target="_blank" class="text-green-600 dark:text-green-400 font-bold underline inline-flex items-center gap-1" onclick="event.stopPropagation()">${Admin.icon('message', 'w-3 h-3')} ${displayNum}</a>`;
+                        });
+
+                        rawText = rawText.replace(/\n/g, '<br>');
+
+                        const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
+                        const safeRouteId = secureEscape(item.routeId || 'None');
+                        const rawAttach = [];
+                        if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
+                        if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
+                            item.attachmentUrls.forEach((u) => { if (u) rawAttach.push(u); });
+                        }
+                        const uniqueAttach = [...new Set(rawAttach)];
+
+                        // Safeguard rawText in case the replace cleared it completely
+                        if (typeof rawText !== 'string') rawText = '';
+                        rawText = rawText.replace(/^(?:<br>|\s)+/, '');
+
+
+                        // GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
+                        let attachmentHtml = '';
+                        if (uniqueAttach.length > 0) {
+                            const gridCols = uniqueAttach.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
+                            attachmentHtml = `<div class="mt-2 grid ${gridCols} gap-2 w-full">`;
+                            uniqueAttach.forEach((rawUrl, idx) => {
+                                const cell = typeof window.attachmentPreviewHtml === 'function'
+                                    ? window.attachmentPreviewHtml(rawUrl, {
+                                        admin: true,
+                                        pdfLabel: `View Doc ${idx + 1}`,
+                                        fileLabel: `View Doc ${idx + 1}`,
+                                        imgClass: 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in',
+                                        buttonClass: 'block focus:outline-none w-full text-left',
+                                        linkClass: 'flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24',
+                                    })
+                                    : '';
+                                if (cell) attachmentHtml += cell;
+                            });
+                            attachmentHtml += `</div>`;
+                        }
+
+                        // METADATA: Integrated Bubble Header
+                        let typeLabel = "General";
+                        let typeIconName = "message";
+                        if (item.type === 'schedule_error') { typeLabel = "Schedule Error"; typeIconName = "clock"; }
+                        else if (item.type === 'bug') { typeLabel = "App Bug"; typeIconName = "bug"; }
+                        else if (item.type === 'suggestion') { typeLabel = "Suggestion"; typeIconName = "lightbulb"; }
+
+                        // GUARDIAN UX FIX: Shortened "Commuter Reply" to "Reply:" to fit on 1 row
+                        const headerLabelText = isReply
+                            ? `${Admin.icon('reply', 'w-3 h-3')} Reply:`
+                            : `${Admin.icon(typeIconName, 'w-3 h-3')} ${typeLabel}`;
+                        let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
+
+                        const verLabel = safeAppVersion.split(' - ')[0];
+                        const integratedHeaderHtml = `
+                            <div class="inbox-bubble-name-row">
+                                <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
+                                <button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}">${verLabel} · ${safeRouteId}</button>
+                            </div>
+                        `;
+
+                        const inboxReactId = item.inboxMsgId || '';
+                        const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
+                            ? window.renderInboxReactionChips(item, typeof window.inboxReactionActorId === 'function' ? window.inboxReactionActorId(did) : '')
+                            : '<div class="nt-inbox-react-chips mt-1 min-h-0" data-inbox-react-chips></div>';
+                        groupHTML += `
+                            <div class="inbox-row justify-start mb-1.5" data-inbox-msg-id="${secureEscape(inboxReactId)}" data-inbox-device-id="${safeDidAttr}">
+                                <div class="inbox-bubble-wrap">
+                                    <div class="inbox-bubble inbox-bubble-other"${inboxReactId ? ' data-inbox-react-host="1"' : ''}>
+                                        ${integratedHeaderHtml}
+                                        <div class="inbox-bubble-body">
+                                            ${quoteBlockHtml}
+                                            <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
+                                        </div>
+                                    </div>
+                                    ${reactChips}
+                                </div>
+                            </div>
+                        `;
+                } });
+                // Bottom Action Bar — Resolve // Reply only (Escalate/Ban/Export live in Options)
+                const actionHtml = isInbox 
+                    ? `<div class="flex space-x-2 mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
+                         <button class="flex-1 text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 text-[10px] font-bold bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.resolveFeedback('${unresolvedIds}')">Resolve</button>
+                         ${did !== 'Anonymous / Legacy' ? `<button class="flex-1 text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-lg transition-colors focus:outline-none uppercase tracking-wide shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
+                       </div>`
+                    : `<div class="flex justify-between items-center w-full mt-0 pt-3 px-2 pb-2 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900 rounded-b-lg">
+                         <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded uppercase tracking-wider">Archived Thread</span>
+                         <div class="flex space-x-2">
+                             ${did !== 'Anonymous / Legacy' ? `<button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.openReplyModal('${feedbackId}', '${did}')">Reply</button>` : ''}
+                             <button class="text-blue-600 hover:text-white hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-blue-200 shadow-sm" onclick="Admin.restoreFeedback('${feedbackId}')">Restore</button>
+                             <button class="text-red-600 hover:text-white hover:bg-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors focus:outline-none uppercase tracking-wide border border-red-200 shadow-sm" onclick="Admin.deleteFeedback('${feedbackId}', '${did}')">Delete</button>
+                         </div>
+                       </div>`;
+
+        groupHTML += `
+                        </div>
+                        ${actionHtml}
+        `;
+        return groupHTML;
+
+    },
+
     bindAdminChangelogClicks: () => {
         if (window.__ntAdminChangelogBound) return;
         window.__ntAdminChangelogBound = true;
@@ -15437,7 +15523,7 @@ const Admin = {
             e.preventDefault();
             e.stopPropagation();
             Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
-        });
+        }, true);
     },
 
     grantableFeatures: () => {
@@ -15670,6 +15756,76 @@ const Admin = {
         else modal.classList.remove('hidden');
     },
 
+    openScheduleQaDeltaModal: (finding) => {
+        const samples = Array.isArray(finding?.samples) ? finding.samples.slice() : [];
+        samples.sort((a, b) => String(a.train || '').localeCompare(String(b.train || ''), undefined, { numeric: true }));
+        let modal = document.getElementById('sched-qa-delta-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'sched-qa-delta-modal';
+            modal.className = 'fixed inset-0 bg-black/70 z-[170] hidden flex items-center justify-center p-4 backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[85dvh] flex flex-col border border-gray-200 dark:border-gray-700">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-300">Delta variance</p>
+                        <h3 id="sched-qa-delta-title" class="text-base font-black text-gray-900 dark:text-white mt-0.5"></h3>
+                        <p id="sched-qa-delta-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-1"></p>
+                    </div>
+                    <div class="overflow-y-auto custom-scrollbar px-4 py-3 min-h-0">
+                        <table class="w-full text-left text-[11px]">
+                            <thead class="sticky top-0 bg-white dark:bg-gray-800 text-[9px] uppercase tracking-wider text-gray-500">
+                                <tr>
+                                    <th class="py-1.5 pr-2">Train</th>
+                                    <th class="py-1.5 pr-2">From</th>
+                                    <th class="py-1.5 pr-2">To</th>
+                                    <th class="py-1.5 text-right">Delta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sched-qa-delta-tbody" class="font-mono text-gray-800 dark:text-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
+                        <button type="button" id="sched-qa-delta-close" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl">Close</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.querySelector('#sched-qa-delta-close')?.addEventListener('click', () => {
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('sched-qa-delta-modal');
+                else modal.classList.add('hidden');
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target !== modal) return;
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('sched-qa-delta-modal');
+                else modal.classList.add('hidden');
+            });
+        }
+        const title = modal.querySelector('#sched-qa-delta-title');
+        const sub = modal.querySelector('#sched-qa-delta-sub');
+        const tbody = modal.querySelector('#sched-qa-delta-tbody');
+        const pair = [finding?.from, finding?.to].filter(Boolean).join(' → ');
+        if (title) title.textContent = pair || finding?.routeName || 'Train deltas';
+        if (sub) {
+            const meta = [finding?.routeName, finding?.sheetKey, finding?.dayDir].filter(Boolean).join(' · ');
+            const range = (finding?.lo != null && finding?.hi != null)
+                ? `Vary ${finding.lo}–${finding.hi} min`
+                : '';
+            sub.textContent = [range, meta].filter(Boolean).join(' · ');
+        }
+        if (tbody) {
+            tbody.innerHTML = samples.length
+                ? samples.map((s) => `
+                    <tr class="border-t border-gray-100 dark:border-gray-700">
+                        <td class="py-1.5 pr-2 font-bold">${ntAdminSecureEscape(s.train)}</td>
+                        <td class="py-1.5 pr-2">${ntAdminSecureEscape(s.from)}</td>
+                        <td class="py-1.5 pr-2">${ntAdminSecureEscape(s.to)}</td>
+                        <td class="py-1.5 text-right font-black">${Number(s.deltaMin)}m</td>
+                    </tr>`).join('')
+                : '<tr><td colspan="4" class="py-4 text-center text-gray-400">No train samples.</td></tr>';
+        }
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('sched-qa-delta-modal');
+        else modal.classList.remove('hidden');
+    },
+
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
     setupDiagnosticsManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -15826,15 +15982,20 @@ const Admin = {
                             </select>
                         </div>
 
-                        <div>
-                            <label class="block text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase mb-1">Zone max km (Z1 / Z2 / Z3) - PRASA defaults</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="zone-audit-z1" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z1 max km (official 15)">
-                                <input type="number" id="zone-audit-z2" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z2 max km (official 40)">
-                                <input type="number" id="zone-audit-z3" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z3 max km (official 135)">
+                        <details id="zone-audit-bands-acc" class="rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-white/60 dark:bg-gray-900/30">
+                            <summary class="cursor-pointer list-none px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2">
+                                <span>Zone max km (Z1 / Z2 / Z3) - PRASA defaults</span>
+                                <svg class="w-4 h-4 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </summary>
+                            <div class="px-3 pb-3">
+                                <div class="grid grid-cols-3 gap-2">
+                                    <input type="number" id="zone-audit-z1" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z1 max km (official 15)">
+                                    <input type="number" id="zone-audit-z2" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z2 max km (official 40)">
+                                    <input type="number" id="zone-audit-z3" min="1" step="1" class="w-full h-9 px-2 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50 text-gray-900 dark:text-white text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" title="Z3 max km (official 135)">
+                                </div>
+                                <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1">Defaults 15 / 40 / 135. Above Z3 max ? Z4. Override only for sensitivity checks. Uses Target Region above.</p>
                             </div>
-                            <p class="text-[8px] text-emerald-700/80 dark:text-emerald-500 mt-1">Defaults 15 / 40 / 135. Above Z3 max ? Z4. Override only for sensitivity checks. Uses Target Region above.</p>
-                        </div>
+                        </details>
 
                         <div class="flex gap-2">
                             <button id="zone-audit-run-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors text-[10px] uppercase tracking-wide focus:outline-none flex justify-center items-center gap-1.5">
@@ -16186,12 +16347,10 @@ const Admin = {
                 const dirRows = (r.directions || []).map((d) => {
                     const m = d.measure || {};
                     const monthlyBit = d.monthly != null ? ` monthly R${Number(d.monthly)}` : '';
-                    const segPreview = (m.segments || [])
+                    const segLines = (m.segments || [])
                         .filter((s) => s.km != null)
-                        .slice(0, 8)
                         .map((s) => `${esc(s.from)} -> ${esc(s.to)} ${s.km}km`)
-                        .join(' - ');
-                    const more = (m.segments || []).length > 8 ? ' -' : '';
+                        .join('<br>');
                     return `
                         <div class="border-t border-black/5 dark:border-white/5 pt-1.5 mt-1.5">
                             <div class="flex justify-between gap-2 font-mono text-[9px]">
@@ -16204,7 +16363,7 @@ const Admin = {
                                 - km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '-'}
                                 - coords ${m.withCoords || 0}/${m.stationCount || 0}
                             </div>
-                            ${segPreview ? `<div class="text-[8px] opacity-60 mt-0.5 leading-snug">${segPreview}${more}</div>` : ''}
+                            ${segLines ? `<div class="text-[8px] opacity-80 mt-1 leading-snug font-mono whitespace-normal">${segLines}</div>` : ''}
                         </div>
                     `;
                 }).join('');
@@ -17017,21 +17176,42 @@ const Admin = {
                 return;
             }
 
-            resultsDiv.innerHTML = findings.map((f) => {
+            resultsDiv.innerHTML = findings.map((f, idx) => {
                 const style = severityStyles[f.severity] || severityStyles.info;
                 const routeBit = f.routeName ? Admin.formatRouteLabelHtml(f.routeName) : (f.routeId || '');
                 const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' - ');
+                const isDelta = f.code === 'DELTA_VARIANCE' && Array.isArray(f.samples) && f.samples.length;
+                const pair = (f.from && f.to) ? `${String(f.from).replace(/</g, '&lt;')} → ${String(f.to).replace(/</g, '&lt;')}` : '';
+                const previewRows = isDelta
+                    ? f.samples.slice(0, 6).map((s) => `${String(s.train || '').replace(/</g, '&lt;')}  ${s.deltaMin}m`).join('<br>')
+                    : '';
+                const more = isDelta && f.samples.length > 6 ? `<div class="opacity-70 mt-0.5">+${f.samples.length - 6} more · tap for table</div>` : '';
+                const body = isDelta
+                    ? `<div class="font-semibold">${pair}</div>
+                        <div class="opacity-80">deltas vary ${f.lo}–${f.hi} min across ${f.samples.length} trains</div>
+                        <div class="font-mono text-[9px] leading-snug mt-1 whitespace-normal">${previewRows}</div>${more}`
+                    : `<div>${String(f.message || '').replace(/</g, '&lt;')}</div>`;
+                const clickable = isDelta
+                    ? ` role="button" tabindex="0" data-qa-delta-idx="${idx}"`
+                    : '';
                 return `
-                    <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}">
+                    <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}${isDelta ? ' cursor-pointer hover:brightness-[0.98]' : ''}"${clickable}>
                         <div class="flex items-center justify-between gap-2 mb-1">
                             <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} - ${f.code}</span>
                             <span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>
                         </div>
                         <div class="font-semibold mb-0.5">${routeBit}</div>
-                        <div>${String(f.message || '').replace(/</g, '&lt;')}</div>
+                        ${body}
                     </div>
                 `;
             }).join('');
+            resultsDiv.querySelectorAll('[data-qa-delta-idx]').forEach((el) => {
+                el.addEventListener('click', () => {
+                    const i = Number(el.getAttribute('data-qa-delta-idx'));
+                    const finding = findings[i];
+                    if (finding) Admin.openScheduleQaDeltaModal(finding);
+                });
+            });
         };
 
         if (runBtn) {

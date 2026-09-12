@@ -653,10 +653,25 @@ html[data-colour-pack="ember"] #view-full-timetable-btn {
 }
 
 /* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
-   Departs in) use text-blue-600 and must stay dark ink. */
+   Departs in) use text-blue-600 / text-blue-400 and must stay ink. */
 html[data-colour-pack="earthy"]:not(.dark) .text-blue-600,
 html[data-colour-pack="ember"]:not(.dark) .text-blue-600 {
   color: rgb(var(--nt-blue-800)) !important;
+}
+html[data-colour-pack="earthy"].dark .text-blue-600,
+html[data-colour-pack="earthy"].dark .text-blue-500,
+html[data-colour-pack="earthy"].dark .text-blue-400,
+html[data-colour-pack="earthy"].dark .text-blue-300,
+html[data-colour-pack="ember"].dark .text-blue-600,
+html[data-colour-pack="ember"].dark .text-blue-500,
+html[data-colour-pack="ember"].dark .text-blue-400,
+html[data-colour-pack="ember"].dark .text-blue-300 {
+  color: rgb(var(--nt-blue-800)) !important;
+}
+html[data-colour-pack="earthy"].dark .nt-fare-zone-chip,
+html[data-colour-pack="ember"].dark .nt-fare-zone-chip {
+  background-color: var(--nt-surface) !important;
+  border: 1px solid var(--nt-border);
 }
 #grid-trigger-container {
   padding-bottom: 0.5rem;
@@ -1088,28 +1103,74 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   text-underline-offset: 2px;
 }
 .nt-alert-source {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+  display: inline;
   max-width: 100%;
   padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--nt-text-muted);
-  font-size: 0.625rem;
+  color: var(--nt-text-faint);
+  font-size: 0.6875rem;
   font-weight: 500;
   font-style: normal;
   line-height: 1.3;
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
   box-shadow: none;
 }
-.nt-alert-source:hover,
-.nt-alert-source:focus-visible {
+a.nt-alert-source:hover,
+a.nt-alert-source:focus-visible {
   border: none;
   background: transparent;
+  color: var(--nt-text-muted);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+#alerts-channel .nt-alert-card-footer {
+  margin-top: 10px;
+}
+#alerts-channel .nt-alert-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nt-border) 70%, transparent);
+}
+#alerts-channel .nt-alert-meta-source {
+  min-width: 0;
+}
+#alerts-channel .nt-alert-meta-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
+  gap: 2px;
+}
+#alerts-channel .nt-alert-time {
+  font-size: 11px;
+  color: var(--nt-text-faint);
+}
+#alerts-channel .nt-alert-scope {
+  font-size: 10px;
+  color: var(--nt-text-faint);
+}
+#alerts-channel .nt-alert-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+#alerts-channel .nt-alert-action-row .nt-alert-react-summary {
+  margin-top: 0;
+}
+#alerts-channel .nt-alert-reply {
+  margin-left: auto;
 }
 
 #alerts-channel {
@@ -1178,6 +1239,14 @@ html.dark #planner-back-btn,
 html.dark #planner-header-badge,
 html.dark .planner-share-slot > button {
   color: rgb(var(--nt-blue-300)) !important;
+}
+html[data-colour-pack="earthy"].dark #planner-back-btn,
+html[data-colour-pack="earthy"].dark #planner-header-badge,
+html[data-colour-pack="earthy"].dark .planner-share-slot > button,
+html[data-colour-pack="ember"].dark #planner-back-btn,
+html[data-colour-pack="ember"].dark #planner-header-badge,
+html[data-colour-pack="ember"].dark .planner-share-slot > button {
+  color: rgb(var(--nt-blue-800)) !important;
 }
 
 /* Phone width scale. Design 390. Floor 320 (SE). Do not raise rem on

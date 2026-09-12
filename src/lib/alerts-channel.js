@@ -319,16 +319,17 @@ function mineReactionKey(notice) {
     try { return safeStorage.getItem(reactionStorageKey(notice)) || ''; } catch { return ''; }
 }
 
-function renderReactionsHtml(notice) {
+function renderReactionsHtml(notice, opts = {}) {
     const mine = mineReactionKey(notice);
     const { total, rows } = buildAlertReactionBreakdown(notice, mine);
+    const wrapClass = opts.compact ? 'nt-alert-react-summary' : 'nt-alert-react-summary mt-2';
     if (!total) {
-        return `<div class="nt-alert-react-summary mt-2 min-h-0" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
+        return `<div class="${wrapClass} min-h-[22px]" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
     }
     const faces = rows.map((row) => (
         `<span class="text-sm leading-none" aria-hidden="true">${row.emoji}</span>`
     )).join('');
-    return `<button type="button" class="nt-alert-react-summary mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" aria-label="${total} reactions">
+    return `<button type="button" class="${wrapClass} inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" aria-label="${total} reactions">
         <span class="inline-flex items-center gap-0.5">${faces}</span>
         <span class="text-[11px] font-bold tabular-nums">${total}</span>
     </button>`;
@@ -491,15 +492,6 @@ function renderPostCard(notice, opts = {}) {
         ? `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`
         : '';
     let extra = '';
-    if (notice.sourceName) {
-        const sName = escapeHTML(notice.sourceName);
-        const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
-        const chevron = '<svg class="w-2.5 h-2.5 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
-        const cite = sUrl
-            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="nt-alert-source mt-2"><span class="uppercase tracking-wider">Source</span><span class="truncate">${sName}</span>${chevron}</a>`
-            : `<span class="nt-alert-source mt-2"><span class="uppercase tracking-wider">Source</span><span class="truncate">${sName}</span></span>`;
-        extra += cite;
-    }
     if (notice.ctaUrl && notice.ctaText) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
     }
@@ -509,9 +501,30 @@ function renderPostCard(notice, opts = {}) {
     const when = formatPosted(notice);
     const ts = noticeTimestamp(notice);
     const scope = isAdminAuthed() ? noticeScopeLabel(notice._sourceKey) : '';
-    const adminScopeHtml = scope
-        ? `<span class="nt-alert-scope text-[10px] text-gray-400 dark:text-gray-500">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
-        : '<span></span>';
+    const sourceName = notice.sourceName ? escapeHTML(notice.sourceName) : '';
+    const sourceUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : '';
+    const sourceHtml = sourceName
+        ? (sourceUrl
+            ? `<a href="${sourceUrl}" target="_blank" rel="noopener" class="nt-alert-source">${sourceName}</a>`
+            : `<span class="nt-alert-source">${sourceName}</span>`)
+        : '';
+    const timeHtml = when
+        ? `<time class="nt-alert-time" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>`
+        : '';
+    const adminMetaHtml = scope
+        ? `<span class="nt-alert-scope">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
+        : '';
+    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
+    const footerHtml = `<div class="nt-alert-card-footer">
+            <div class="nt-alert-meta-row">
+                <div class="nt-alert-meta-source">${sourceHtml}</div>
+                <div class="nt-alert-meta-when">${timeHtml}${adminMetaHtml}</div>
+            </div>
+            <div class="nt-alert-action-row">
+                ${renderReactionsHtml(notice, { compact: true })}
+                ${replyBtn}
+            </div>
+        </div>`;
     const cardRing = highlight
         ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
         : 'ring-1 ring-black/5 dark:ring-white/10';
@@ -526,14 +539,7 @@ function renderPostCard(notice, opts = {}) {
         ${bodyHtml}
         ${extra}
         ${renderPollHtml(notice)}
-        ${renderReactionsHtml(notice)}
-        <p class="flex items-center justify-between gap-2 mt-2 w-full">
-            <span class="min-w-0 flex items-center gap-2">
-                ${when ? `<time class="nt-alert-time text-[11px] text-gray-500 dark:text-gray-400 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
-                ${adminScopeHtml}
-            </span>
-            <button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
-        </p>
+        ${footerHtml}
         </div>
     </article>`;
 }

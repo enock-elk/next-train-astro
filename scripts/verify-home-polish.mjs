@@ -99,7 +99,7 @@ assert(renderer.includes('Data Source: PRASA / Metrorail'), 'export cites PRASA 
 assert(!renderer.includes('Metrorail Facebook'), 'export data source is not Facebook');
 assert(!renderer.includes("weekday: 'long'"), 'generated date has no weekday name');
 {
-    const footerAt = renderer.indexOf('GENERATED:');
+    const footerAt = renderer.indexOf('nt-export-footer');
     const versionAt = renderer.indexOf('APP_VERSION', footerAt);
     const wordmarkAt = renderer.indexOf('NextTrain.co.za', footerAt);
     assert(footerAt > -1 && versionAt > footerAt && wordmarkAt > versionAt, 'quiet version sits above NextTrain.co.za');

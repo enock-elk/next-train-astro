@@ -6,6 +6,7 @@
 import '../styles/appearance.css';
 import AppFonts from '../components/AppFonts.astro';
 import RecoveryLifeline from '../components/RecoveryLifeline.astro';
+import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
@@ -81,6 +82,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
     </style>
+    <ShellFallbackStyles surface="content" />
     <StuckUpdateGuard />
     <title>{title}</title>
     <meta name="description" content={description} />

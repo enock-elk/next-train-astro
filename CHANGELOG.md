@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.14 — Hashed asset retention and unstyled-shell fallback (12 Sep 2026)
+
+Production deploy retains 8 previous `/_astro/` generations and 30 stylesheet generations instead of 1 (`retain-previous-astro.mjs --keep / --keep-css`, manifest now records generations and still reads the legacy flat `files` shape). `rsync --delete` had been sweeping hashed CSS/JS that cached HTML, edge objects, open tabs, Googlebot and Clarity replay were still requesting, so those readers 404ed the bundle and painted the raw markup. Clarity re-fetches stylesheets by URL at playback time, which is why CSS is retained far longer than modules.
+
+`#nt-recovery-lifeline` is now hidden by an inline rule in `ShellFallbackStyles.astro` rather than by the hashed bundle, so a missing stylesheet no longer paints “Next Train could not finish updating” above working content. `StuckUpdateGuard` marks `data-nt-style="missing"` and `data-nt-shell="broken"` separately; the inline fallback gives the document readable typography and tables, and covers the unstyled app-shell dump. The lifeline headline is a `<p>`, so indexed route pages carry one `<h1>` again. HTML paths in `public/_headers` are `no-cache`. `verify:update-fouc` covers retention ageing, manifest back-compat, guard marks, layout wiring and cascade weight.
+
+no release notes.
+
 ## V9_09.12.13 — Slow-network Proceed, admin test share, map focus (12 Sep 2026)
 
 Check for Updates Slow network Proceed is orange and warns that a weak connection can affect offline access. The update path installs the incoming service worker first and keeps the cached shell if that download fails. Admin “Share on the map as this train” publishes the operator GPS as that train without rail-path checks or the corridor contribution gate. The Map tab opens on the pinned corridor / selected region. Offline map (tab, sidenav sheet, and static PNG) shows a saved-copy message instead of a broken iframe.

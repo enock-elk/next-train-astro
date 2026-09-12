@@ -10,7 +10,12 @@
  *
  * This has to be an inline script for that reason. It is the only code that
  * still runs, so it re-requests the document under a URL no cache has seen and
- * gets fresh HTML. If that does not help, it reveals the support lifeline.
+ * gets fresh HTML. If that does not help, it marks <html> so the inline
+ * fallback in ShellFallbackStyles can make the page readable and reveal the
+ * support lifeline.
+ *
+ * The two marks are deliberately separate. A dead JS chunk with working CSS is
+ * a broken shell but not a FOUC, and must not trigger the fallback typography.
  */
 ---
 
@@ -19,11 +24,17 @@
   (function () {
     var KEY = 'nt_shell_recover';
     var MAX_ATTEMPTS = 2;
+    var root = document.documentElement;
+
+    function markStyleMissing() {
+      root.setAttribute('data-nt-style', 'missing');
+    }
 
     function reveal() {
+      root.setAttribute('data-nt-shell', 'broken');
       var el = document.getElementById('nt-recovery-lifeline');
-      // The hide rule is !important because it lives in the hashed bundle, so
-      // an override has to be too.
+      // The hide rule is !important because a stale hashed bundle may still be
+      // in play, so an override has to be too.
       if (el) el.style.setProperty('display', 'block', 'important');
     }
 
@@ -74,9 +85,19 @@
       return src.indexOf('/_astro/') !== -1;
     }
 
+    function isStylesheet(node) {
+      return node.tagName.toLowerCase() === 'link'
+        && String(node.getAttribute('rel') || '').toLowerCase().indexOf('stylesheet') !== -1;
+    }
+
     // Resource errors do not bubble; they are only visible in the capture phase.
     window.addEventListener('error', function (event) {
-      if (isAstroAsset(event && event.target)) recover();
+      var node = event && event.target;
+      if (!isAstroAsset(node)) return;
+      // Mark the FOUC before any reload so the readable fallback applies to
+      // this paint too, not only to the one after the last failed attempt.
+      if (isStylesheet(node)) markStyleMissing();
+      recover();
     }, true);
 
     window.addEventListener('load', function () {

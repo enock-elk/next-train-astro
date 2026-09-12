@@ -3,13 +3,21 @@
  * Stuck-update lifeline.
  *
  * Plain markup, first child of <body>, carrying the recovery link and the
- * support number. Hidden by `#nt-recovery-lifeline` in appearance.css, which
- * ships inside the hashed CSS bundle — so it shows only on the render where
- * that bundle failed to load and none of our scripts could run either.
+ * support contacts. Hidden by the inline rule in ShellFallbackStyles, which is
+ * part of the document and therefore cannot 404; StuckUpdateGuard reveals it
+ * when a hashed /_astro/ asset is genuinely gone and re-fetching did not help.
  *
- * Keep it above every other node in the body: during that render the browser
- * lays the document out in source order, so this is what the commuter reads
- * first instead of an unstyled Options drawer.
+ * It used to be hidden by appearance.css instead, inside the hashed bundle. That
+ * made every CSS failure paint this notice above working content — including
+ * SEO route pages a commuter could still read, and Clarity replays where the
+ * only thing missing was a swept stylesheet.
+ *
+ * The headline is a <p>, not an <h1>. It ships on every page, so an <h1> here
+ * would outrank the real page heading in source order on every indexed route.
+ *
+ * Keep it above every other node in the body: on the render it exists for, the
+ * browser lays the document out in source order, so this is what the commuter
+ * reads first instead of an unstyled Options drawer.
  */
 import { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL, withBase } from '../lib/config.js';
 
@@ -18,7 +26,7 @@ const mailHref = `mailto:${SUPPORT_EMAIL}`;
 ---
 
 <div id="nt-recovery-lifeline" role="status" style="box-sizing:border-box;padding:1.25rem 1rem 1.5rem;font-family:system-ui,-apple-system,sans-serif;line-height:1.45;max-width:40rem;">
-  <h1>Next Train could not finish updating</h1>
+  <p style="margin:0 0 0.75rem;font-size:1.375rem;font-weight:700;line-height:1.2;">Next Train could not finish updating</p>
   <p>
     This device is holding an old copy of the app. Open
     <a href={helpHref} rel="nofollow">Reset and Recover</a>

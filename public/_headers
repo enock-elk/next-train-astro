@@ -2,6 +2,11 @@
 # GitHub Pages ignores it — nexttrain-edge Worker sets the same headers on
 # nexttrain.co.za/_astro/* and /icons/*. HTML / sw.js / app-version.json stay
 # short-lived so NUKE + deploys can take effect.
+#
+# Every HTML entry below is no-cache for one reason: a cached page outliving the
+# hashed /_astro/ bundle it links to is what paints the unstyled shell. The host
+# now retains several previous generations, but the shorter the stale-HTML
+# window, the fewer readers need that safety net at all.
 
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
@@ -19,4 +24,16 @@
   Cache-Control: no-cache
 
 /
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache
+
+/routes/*
+  Cache-Control: no-cache
+
+/regions/*
+  Cache-Control: no-cache
+
+/corridors/*
   Cache-Control: no-cache

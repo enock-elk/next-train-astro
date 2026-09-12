@@ -24,6 +24,9 @@ Work from **`main`**. The owner ships by pushing `main` and running the producti
 - **Do not drop** alert expiry, union scoping (route ∪ region ∪ `all`), park-home on Alerts Close (`history.back()` after hide), quiet board paint, hold-to-react, reaction breakdown sheet, or photo hold-to-react.
 - **Do not reserve a blank ad gap.** Ads overlay from the bottom (`#clever-core`). Footer stays `nt-board-footer mt-auto`.
 - **Do not flash WORKING OFFLINE** on screen-lock. Offline chrome only if the app is **visible** and still offline for **4s**.
+- **Do not shrink `/_astro/` retention.** Production deploy runs `retain-previous-astro.mjs --keep 8 --keep-css 30`. `rsync --delete` sweeps the host, so anything still holding older HTML (browser cache, Cloudflare edge object, open tab, warm PWA session, Googlebot, Clarity replay) 404s its hashed CSS/JS and renders the unstyled shell. Retention was 1 generation and the owner ships up to 13 times a day, which is how the whole site went serif in Clarity. Stylesheets are kept far longer than modules because **Clarity re-fetches CSS by URL at playback time** — a swept hash breaks every older recording and heatmap.
+- **Do not make the hashed bundle the only thing hiding `#nt-recovery-lifeline`.** The authoritative hide rule is inline in `ShellFallbackStyles.astro`; `StuckUpdateGuard` reveals the lifeline only after a real `/_astro/` 404. The rule in `appearance.css` is a backstop. When the bundle hid it, every CSS hiccup painted “Next Train could not finish updating” above working content.
+- **Do not put an `<h1>` in `RecoveryLifeline`.** It ships on every indexed page and would outrank the real route heading in source order.
 - **Do not point `PIPELINE_SOURCES.GITHUB` back at `metrorail-app`.** The dump is this repo: `public/data/full-database.json` via jsDelivr `@main/public/data/`.
 - **Do not empty `metrorail-app/data/`.** Deploy overlays `public/data/*.json` only. Never `--delete` host-only files (e.g. `sanitize.py`).
 - **Do not create a new deploy PAT.** Production and schedule-sync both use repo secret `METRORAIL_APP_DEPLOY_TOKEN` (Contents write on `metrorail-app`). Rotate only if a run gets 403 or the token expired.
@@ -85,8 +88,30 @@ git commit -m "Update Firebase schedule dump."
 git push origin main
 ```
 
+## FOUC and unstyled renders
+
+The app is styled entirely by content-hashed `/_astro/` bundles, and `index.html` carries every drawer, modal and toast as markup. If a stylesheet fails, the browser paints all of it. Treat “page renders as raw serif HTML” as an **asset availability** problem first, not a CSS problem.
+
+Before touching anything in this area, read the comment headers in `ShellFallbackStyles.astro`, `StuckUpdateGuard.astro`, `RecoveryLifeline.astro` and `scripts/retain-previous-astro.mjs`. They record failures that already happened.
+
+Anything on this list is a change you must **flag to the owner in your summary**, not slip in quietly:
+
+- lowering `--keep` / `--keep-css`, or removing the retain step from `deploy-production.yml`
+- removing `rsync --delete` exclusions, or letting the sweep run without a retain pass
+- moving `#nt-recovery-lifeline`’s hide rule, changing which layout wires `ShellFallbackStyles`, or reordering it after `StuckUpdateGuard` in `<head>`
+- adding a render-blocking `<link>` or `@import` the page cannot survive losing
+- lengthening HTML cache TTLs in `public/_headers`, or caching HTML at the edge
+- changing `globPatterns` / `globIgnores` / `navigateFallbackDenylist` in `astro.config.mjs`
+- renaming or re-chunking `/_astro/` output (`manualChunks`), which invalidates every retained hash at once
+
+`npm run verify:update-fouc` gates all of this and runs in both production workflows.
+
+Diagnosing an unstyled report: confirm the hashed CSS URL in the affected HTML still returns 200 on the host. If the file is gone, it is retention, not the app. A Clarity replay that renders unstyled while the AI session summary describes the visitor tapping stations, routes and departure times means the **commuter was fine** and only the replay lost the stylesheet — same root cause, still worth fixing, but not an outage.
+
 ## Testing
 
 Run the existing verify scripts that match the change (`npm run verify:alerts`, `verify:schedule`, `verify:urls`, …). Do not add walkthrough videos or screenshot demos unless the owner asks.
+
+When a change touches shell boot, styling or deploy plumbing, also prove the failure mode: serve `dist/` with `/_astro/*.css` returning 404 and confirm the page is still readable and the lifeline behaves.
 
 Production is **not** updated by a `main` push of app code until **Deploy production → metrorail-app** runs. Preview (github.io) deploys from `main` automatically.

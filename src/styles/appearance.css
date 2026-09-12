@@ -1384,21 +1384,22 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
    Stuck-update lifeline
    ---------------------------------------------------------------------------
    #nt-recovery-lifeline is plain markup at the top of <body> carrying the
-   support number and a link to the recovery page. It must stay invisible in the
-   app, and loading this file is what hides it.
+   support contacts and a link to the recovery page.
 
-   That is deliberate. A deploy replaces every /_astro/ hash and the host sweep
-   removes the old ones, so a device that renders the previous index.html from
-   its own HTTP cache (or a stale edge object) requests hashed CSS *and JS* that
-   no longer exist. Every one 404s, so no script of ours runs and the page is
-   inert. The only things left are the raw HTML and whatever is inline, which is
-   exactly what the commuter is looking at. Keeping the rule here, in the hashed
-   bundle rather than in an inline <style>, means the number surfaces on the one
-   render where nothing else can reach them.
+   This file is NOT what hides it. The authoritative rule is the inline one in
+   ShellFallbackStyles.astro, and StuckUpdateGuard reveals the lifeline only
+   after a hashed /_astro/ asset has genuinely 404d.
 
-   Do not move this to an inline style, a `hidden` attribute, or a Tailwind
-   class: all of those survive the failure and would hide the lifeline in the
-   only situation it exists for.
+   It used to be hidden here, on the theory that a missing bundle is exactly
+   when the notice should surface. The cost was far higher than the benefit: any
+   CSS failure at all painted "Next Train could not finish updating" above
+   perfectly readable content. Indexed route pages showed it to commuters and to
+   Googlebot, and every Clarity replay older than the retained /_astro/
+   generations rendered that way too, because Clarity re-fetches the stylesheet
+   by URL at playback time.
+
+   The rule stays here only so the lifeline is still hidden if the inline block
+   is ever dropped by mistake. Do not make this the only copy again.
    --------------------------------------------------------------------------- */
 #nt-recovery-lifeline {
   display: none !important;

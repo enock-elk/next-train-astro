@@ -1,0 +1,95 @@
+---
+/**
+ * Inline shell fallback — the one stylesheet that cannot 404.
+ *
+ * Everything else we style with lives in a content-hashed /_astro/ bundle. When
+ * that bundle is missing the browser still lays the document out, so the page
+ * paints every node the app normally keeps out of view: drawers, modals, the
+ * offline toast, and the recovery lifeline. That unstyled dump is the FOUC.
+ *
+ * Two jobs, both keyed off attributes StuckUpdateGuard sets on <html>:
+ *
+ *   data-nt-style="missing"  a stylesheet under /_astro/ failed to load. Give
+ *                            the document readable typography so a commuter can
+ *                            still read a timetable instead of bouncing.
+ *   data-nt-shell="broken"   a hashed asset 404d and re-fetching did not fix
+ *                            it. Reveal the lifeline.
+ *
+ * Neither attribute is present on a healthy render, so none of this can affect
+ * a normal paint. Element rules are wrapped in :where() so they carry no more
+ * weight than a Tailwind utility — if only part of the bundle is missing, the
+ * real stylesheet still wins because it is later in the cascade.
+ *
+ * Do not move the lifeline's hide rule back out of this file. Living only in
+ * the hashed bundle meant any CSS hiccup — including Microsoft Clarity failing
+ * to re-fetch a swept hash at replay time — painted "Next Train could not
+ * finish updating" above working content.
+ */
+interface Props {
+  /** 'app' hides the unstyled shell behind the lifeline; 'content' keeps the article readable. */
+  surface?: 'app' | 'content';
+}
+const { surface = 'app' } = Astro.props;
+---
+
+<style is:inline>
+  #nt-recovery-lifeline { display: none !important; }
+  html[data-nt-shell="broken"] #nt-recovery-lifeline { display: block !important; }
+
+  html[data-nt-style="missing"] :where(body) {
+    margin: 0;
+    padding: 0 1rem 3rem;
+    background: #ffffff;
+    color: #111827;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    overflow: auto;
+  }
+  html[data-nt-style="missing"] :where(h1) { font-size: 1.5rem; line-height: 1.25; margin: 1.25rem 0 0.5rem; }
+  html[data-nt-style="missing"] :where(h2) { font-size: 1.2rem; line-height: 1.3; margin: 1.25rem 0 0.5rem; }
+  html[data-nt-style="missing"] :where(h3) { font-size: 1.05rem; margin: 1rem 0 0.5rem; }
+  html[data-nt-style="missing"] :where(p, ul, ol) { margin: 0.5rem 0; }
+  html[data-nt-style="missing"] :where(a) { color: #1d4ed8; }
+  html[data-nt-style="missing"] :where(img, svg) { max-width: 100%; height: auto; }
+  html[data-nt-style="missing"] :where(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    margin: 0.5rem 0 1.25rem;
+    display: block;
+    overflow-x: auto;
+  }
+  html[data-nt-style="missing"] :where(th, td) {
+    border: 1px solid #d1d5db;
+    padding: 0.3rem 0.45rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  html[data-nt-style="missing"] :where(th) { background: #f3f4f6; }
+
+  /* A static page is still worth reading, so the notice is a calm strip. */
+  html[data-nt-style="missing"] #nt-recovery-lifeline {
+    border: 1px solid #fcd34d;
+    background: #fffbeb;
+    border-radius: 0.5rem;
+    margin: 0.75rem auto 1rem;
+  }
+</style>
+
+{surface === 'app' && (
+  <style is:inline>
+    /* index.html carries every drawer, modal and toast as markup, so an
+       unstyled app shell dumps the lot on screen. Cover it rather than make
+       the commuter scroll through it hunting for the recovery link. Both
+       attributes are required: a dead JS chunk with working CSS must not
+       blank an app that still looks fine. */
+    html[data-nt-shell="broken"][data-nt-style="missing"] :where(body) > *:not(#nt-recovery-lifeline) {
+      display: none !important;
+    }
+    html[data-nt-shell="broken"][data-nt-style="missing"] #nt-recovery-lifeline {
+      max-width: 34rem;
+      margin: 2rem auto;
+    }
+  </style>
+)}

@@ -236,14 +236,21 @@ jobs:
           # Always pin the production hostname (do not trust whatever was in dist)
           printf 'nexttrain.co.za\n' > site/CNAME
 
-          # Keep the previous /_astro/ generation so a tab still holding the
-          # last index.html can fetch its hashed CSS/JS. One generation only.
+          # Keep previous /_astro/ generations so anything still holding older
+          # HTML can fetch its hashed CSS/JS instead of 404ing into the unstyled
+          # shell. --keep covers in-flight commuters and Googlebot; --keep-css
+          # runs much longer (stylesheets are small) because Clarity re-fetches
+          # our CSS by URL at replay time, so a swept hash breaks every older
+          # recording and heatmap. Releasing several times a day burns through
+          # generations fast — do not lower these back towards 1.
           if [ -d /tmp/prev-astro ]; then
             node astro-src/scripts/retain-previous-astro.mjs \
               --snapshot /tmp/prev-astro \
               --dest site/_astro \
               --manifest /tmp/astro-retained-generation.json \
-              --out-manifest site/astro-retained-generation.json
+              --out-manifest site/astro-retained-generation.json \
+              --keep 8 \
+              --keep-css 30
           fi
 
           # GitHub Pages (branch deploy) runs Jekyll unless this file exists.

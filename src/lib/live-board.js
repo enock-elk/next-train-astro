@@ -27,7 +27,7 @@ import { trackAnalyticsEvent } from './analytics.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
-    firstContactInDangerZone,
+    lastSafeStopBeforeDangerZone,
     collectDisruptionContactTimes,
     disruptionAppliesToDay,
     disruptionAppliesToAnyTime,
@@ -37,6 +37,7 @@ import {
 export { stopsForTrain, expectedPosition, scoreTrainForFix } from './train-ghosts.js';
 export {
     firstContactInDangerZone,
+    lastSafeStopBeforeDangerZone,
     disruptionAppliesToDay,
     disruptionAppliesToAnyTime,
     disruptionAppliesToDayAndTime,
@@ -544,18 +545,18 @@ export function getTripDisruptions(routeId, stopsArray, dayType) {
             // 3. Multi-Station "Danger Zone" — interval overlap (not a single hop
             // that spans the whole zone; real trips stop at every station).
             if (normDisrupted.length >= 2) {
-                const firstContactIdx = firstContactInDangerZone(
+                const triggerStopIndex = lastSafeStopBeforeDangerZone(
                     currentRouteMasterStations,
                     stopsArray,
                     normDisrupted[0],
                     normDisrupted[1]
                 );
 
-                if (firstContactIdx !== -1) {
+                if (triggerStopIndex !== -1) {
                     seenIds.add(d.id);
                     hits.push({
                         ...d,
-                        triggerStopIndex: firstContactIdx,
+                        triggerStopIndex,
                         triggerStationA: d.stations[0],
                         triggerStationB: d.stations[1]
                     });

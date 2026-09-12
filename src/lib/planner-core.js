@@ -1380,7 +1380,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
                 if (!crit) return false;
 
                 if (crit.triggerStopIndex !== undefined) {
-                    // Alighting exactly at the disruption boundary is safe for this leg
+                    // Alighting at the last safe stop (just before the zone) is safe for this leg
                     if (crit.triggerStopIndex === stops.length - 1) return false;
                     if (!capturedTerminus && stops[crit.triggerStopIndex]) {
                         capturedTerminus = normalizeStationName(stops[crit.triggerStopIndex].station);

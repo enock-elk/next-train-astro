@@ -49,6 +49,55 @@ export function firstContactInDangerZone(master, stopsArray, zoneA, zoneB) {
 }
 
 /**
+ * Last timed trip stop before the inclusive danger zone (the train's
+ * last safe station). Zone endpoints count as affected, so Pretoria→
+ * Kempton Park with Olifantsfontein–Kempton Park terminates at Irene
+ * (or Pinedene), not at Olifantsfontein.
+ *
+ * Starts inside the zone → 0. No overlap → -1. An express hop that
+ * jumps into the zone uses the hop start (already the last safe stop).
+ */
+export function lastSafeStopBeforeDangerZone(master, stopsArray, zoneA, zoneB) {
+    if (!Array.isArray(master) || !master.length || !Array.isArray(stopsArray) || !stopsArray.length) {
+        return -1;
+    }
+    const zA = master.indexOf(normalizeStationName(zoneA));
+    const zB = master.indexOf(normalizeStationName(zoneB));
+    if (zA < 0 || zB < 0) return -1;
+    const minZone = Math.min(zA, zB);
+    const maxZone = Math.max(zA, zB);
+
+    const stationOf = (s) => (typeof s === 'string' ? s : (s?.station || s?.name || ''));
+    const indices = stopsArray.map((s) => master.indexOf(normalizeStationName(stationOf(s))));
+    const known = indices.filter((i) => i !== -1);
+    if (!known.length) return -1;
+    const tMin = Math.min(...known);
+    const tMax = Math.max(...known);
+    if (tMax < minZone || tMin > maxZone) return -1;
+
+    let firstIn = -1;
+    for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        if (idx !== -1 && idx >= minZone && idx <= maxZone) {
+            firstIn = i;
+            break;
+        }
+    }
+    if (firstIn > 0) return firstIn - 1;
+    if (firstIn === 0) return 0;
+
+    for (let i = 0; i < indices.length - 1; i++) {
+        const a = indices[i];
+        const b = indices[i + 1];
+        if (a === -1 || b === -1) continue;
+        const hopMin = Math.min(a, b);
+        const hopMax = Math.max(a, b);
+        if (hopMax >= minZone && hopMin <= maxZone) return i;
+    }
+    return -1;
+}
+
+/**
  * Station names on `master` that sit inside a CRITICAL incident zone.
  * Route-wide (empty stations) returns the full master. Caller must
  * restrict that case to the incident's own routeId.

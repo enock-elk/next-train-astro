@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.8 — Last-safe terminus, banner Details, terminates tap (12 Sep 2026)
+
+Two-station danger zones are inclusive of both named stations. Planner trigger is the last timed stop before the first affected station, so Pretoria→Kempton Park with Olifantsfontein–Kempton Park says TRAIN TERMINATES @ IRENE (or Pinedene), not Olifantsfontein. Tapping TRAIN TERMINATES opens the Line Severed modal; the red-rule look is unchanged. Result banners put the SVG higher and to the right; Details sits at the far bottom-right of that column, below the icon. Departed · Show Next Train uses the blue enclosed fill again.
+
+no release notes.
+
 ## V9_09.12.7 — Trip-map zone paint, terminates line, export (12 Sep 2026)
 
 Trip plan maps only paint LINE SEVERED / Expect Delays when getTripDisruptions hits that itinerary, and both zone ends must sit on the trip path (900 m). An empty allow-set no longer projects every global cut onto the polyline, so Pretoria–Rissik no longer inherits Olifantsfontein–Kempton Park. TRAIN TERMINATES at the first contact stop is restored (getInjectionHtml(0) was invoked twice and ate the marker). Live-share glyphs are two merged rail ovals that rotate with bearing, number stays upright. Target Route closed preview is the corridor name only. Export table borders are #e5e7eb; footer carries a quiet APP_VERSION. Departed and Show Next Train are one muted button.

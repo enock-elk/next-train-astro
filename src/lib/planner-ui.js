@@ -81,6 +81,27 @@ function plannerIcon(name, className = 'w-4 h-4') {
     return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
+function openDisruptionOnclick(id) {
+    if (!id) return '';
+    const safe = String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${safe}')"`;
+}
+
+function trainTerminatesRuleHtml(stationName, disruptionId) {
+    const inner = `${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${stationName}`;
+    const click = openDisruptionOnclick(disruptionId);
+    const text = click
+        ? `<button type="button" ${click} class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0 bg-transparent border-0 p-0 appearance-none pointer-events-auto cursor-pointer">${inner}</button>`
+        : `<span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0">${inner}</span>`;
+    return `
+        <div class="relative my-3 z-20 w-full flex items-center gap-2 pointer-events-none select-none" role="status">
+            <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
+            ${text}
+            <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
+        </div>
+    `;
+}
+
 function openPlannerFareModal(routeId) {
     const id = String(routeId || '').trim();
     if (!id) return;
@@ -753,20 +774,20 @@ function buildPlannerNotice({
         ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Icon lives in a dedicated top-right column so it cannot collide with Details.
+    // SVG sits high and right. Details is the far bottom-right of that column, below the icon.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
     const inner = `
         <div class="flex items-stretch">
-            <div class="planner-notice-body relative flex-1 min-w-0 px-3.5 pt-3.5 pb-3 text-left">
+            <div class="planner-notice-body relative flex-1 min-w-0 pl-3.5 pr-2 pt-3 pb-3 text-left">
                 <h4 class="planner-notice-title text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5">${escapeHTML(title)}</h4>
                 <div class="planner-notice-copy text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
-                ${detailsHtml ? `<div class="planner-notice-details-row flex justify-end mt-1.5">${detailsHtml}</div>` : ''}
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
-            <div class="planner-notice-aside shrink-0 w-12 pt-3.5 pr-3 flex flex-col items-center" aria-hidden="true">
+            <div class="planner-notice-aside shrink-0 min-w-[4.5rem] pt-2 pr-1.5 pb-2 pl-1 flex flex-col items-end justify-between"${detailsHtml ? '' : ' aria-hidden="true"'}>
                 <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none">
                     ${iconSvg}
                 </div>
+                ${detailsHtml ? `<div class="planner-notice-details-row mt-auto pt-3">${detailsHtml}</div>` : ''}
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
         </div>
@@ -2392,15 +2413,7 @@ export const PlannerRenderer = {
                         // Compact terminus marker only — LINE SEVERED details live in the top warning.
                         if (!justSevered) return;
                         const termStationName = cleanStr(fullValidStops[idx].station.replace(' STATION', '')).toUpperCase();
-                        inj += `
-                            <div class="relative my-3 z-20 w-full flex items-center gap-2 pointer-events-none select-none" aria-hidden="false" role="status">
-                                <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
-                                <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0">
-                                    ${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}
-                                </span>
-                                <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
-                            </div>
-                        `;
+                        inj += trainTerminatesRuleHtml(termStationName, d.id);
                     } else {
                         const linkSvg = `<svg class="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
                         
@@ -2530,15 +2543,10 @@ export const PlannerRenderer = {
                 const termStationName = String(
                     (currentPlannerErrorPayload && currentPlannerErrorPayload.partialDest) || subTo || ''
                 ).replace(/ STATION/gi, '').replace(/</g, '&lt;').replace(/>/g, '&gt;').toUpperCase();
-                html += `
-                    <div class="relative my-3 z-20 w-full flex items-center gap-2 pointer-events-none select-none" role="status">
-                        <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
-                        <span class="font-black uppercase tracking-widest text-[10px] text-red-700 dark:text-red-400 inline-flex items-center gap-1.5 shrink-0">
-                            ${plannerIcon('stop', 'w-3.5 h-3.5')} TRAIN TERMINATES @ ${termStationName}
-                        </span>
-                        <div class="flex-1 border-t border-red-200 dark:border-red-900/60" aria-hidden="true"></div>
-                    </div>
-                `;
+                html += trainTerminatesRuleHtml(
+                    termStationName,
+                    currentPlannerErrorPayload && currentPlannerErrorPayload.disruptionId
+                );
             }
 
             return { html, isSevered };
@@ -2735,8 +2743,8 @@ export const PlannerRenderer = {
                           </div>`;
         } else if (isDeparted) {
             stateBadge = `
-                <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-700/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 font-bold py-1.5 px-2.5 rounded-lg shadow-sm transition-colors focus:outline-none inline-flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
-                    ${countdown}<span class="mx-1 font-semibold opacity-50" aria-hidden="true">·</span>Show Next Train <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-2.5 rounded-lg shadow-sm transition-colors focus:outline-none inline-flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                    ${countdown}<span class="mx-1 font-semibold opacity-50" aria-hidden="true">·</span>Show Next Train <svg class="w-3 h-3 ml-1 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                 </button>
             `;
         } else {

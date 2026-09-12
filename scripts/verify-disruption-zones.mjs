@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     firstContactInDangerZone,
+    lastSafeStopBeforeDangerZone,
     stationsInCriticalZone,
     disruptedStationMap,
     disruptionAppliesToDay,
@@ -90,6 +91,35 @@ const stops = (...names) => names.map((station) => ({ station }));
 }
 
 {
+    const ptaKempton = stops(
+        'PRETORIA', 'SPORTPARK', 'CENTURION', 'IRENE',
+        'OLIFANTSFONTEIN', 'OAKMOOR', 'KEMPTON PARK'
+    );
+    const first = firstContactInDangerZone(geom, ptaKempton, 'OLIFANTSFONTEIN', 'KEMPTON PARK');
+    const safe = lastSafeStopBeforeDangerZone(geom, ptaKempton, 'OLIFANTSFONTEIN', 'KEMPTON PARK');
+    assert(first === 4, `first affected on PTA–Kempton is Olifantsfontein, got ${first}`);
+    assert(safe === 3, `last safe before Olifantsfontein–Kempton Park is Irene, got ${safe}`);
+    assert(ptaKempton[safe].station === 'IRENE', 'TRAIN TERMINATES names Irene, not Olifantsfontein');
+}
+
+{
+    const withPinedene = stops(
+        'PRETORIA', 'FONTEINE', 'KLOOFSIG', 'SPORTPARK', 'CENTURION', 'IRENE',
+        'PINEDENE', 'OLIFANTSFONTEIN', 'OAKMOOR', 'KEMPTON PARK'
+    );
+    const safe = lastSafeStopBeforeDangerZone(geom, withPinedene, 'OLIFANTSFONTEIN', 'KEMPTON PARK');
+    assert(safe === 6 && withPinedene[safe].station === 'PINEDENE', 'last safe is the timed stop just before the zone');
+}
+
+{
+    const startsInside = stops('KEMPTON PARK', 'OAKMOOR', 'OLIFANTSFONTEIN', 'IRENE', 'PRETORIA');
+    assert(
+        lastSafeStopBeforeDangerZone(geom, startsInside, 'OLIFANTSFONTEIN', 'KEMPTON PARK') === 0,
+        'starting inside the inclusive zone still triggers at 0'
+    );
+}
+
+{
     const zone = stationsInCriticalZone(geom, {
         tier: 'CRITICAL',
         stations: ['OLIFANTSFONTEIN', 'ELANDSFONTEIN'],
@@ -158,7 +188,8 @@ const stops = (...names) => names.map((station) => ({ station }));
 }
 
 const live = readFileSync(join(ROOT, 'src/lib/live-board.js'), 'utf8');
-assert(live.includes('firstContactInDangerZone'), 'getTripDisruptions uses interval-overlap helper');
+assert(live.includes('lastSafeStopBeforeDangerZone'), 'getTripDisruptions terminates at the last safe stop');
+assert(live.includes('firstContactInDangerZone') || live.includes('lastSafeStopBeforeDangerZone'), 'danger-zone helpers stay wired');
 assert(
     !live.includes('stop1Idx <= minZone && stop2Idx >= maxZone'),
     'old whole-zone hop-span test must be gone'
@@ -172,6 +203,8 @@ assert(!plannerUi.includes('allowedDisrIds.size && !allowedDisrIds.has'), 'empty
 assert(plannerUi.includes('!allowedDisrIds.has(d.id)'), 'trip map requires a getTripDisruptions hit');
 assert(plannerUi.includes('stopOnTripPath'), 'trip map snaps only zone ends that sit on this path');
 assert(plannerUi.includes('const injAtOrigin = getInjectionHtml(0)'), 'origin TRAIN TERMINATES is injected once');
+assert(plannerUi.includes('trainTerminatesRuleHtml'), 'TRAIN TERMINATES rule is clickable via helper');
+assert(plannerUi.includes('openDisruptionOnclick'), 'TRAIN TERMINATES opens the Line Severed modal');
 
 if (failures.length) {
     console.error(`verify-disruptions: ${failures.length} failed`);

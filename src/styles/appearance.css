@@ -831,7 +831,7 @@ html.dark .nt-offline-strip {
   background-color: var(--nt-primary);
 }
 
-/* Planner notices: icon column is top-right; Details stays in the copy column. */
+/* Planner notices: icon high-right; Details far bottom-right, below the SVG. */
 .planner-notice-body {
   position: relative;
   display: flex;
@@ -841,7 +841,8 @@ html.dark .nt-offline-strip {
 .planner-notice-aside {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: space-between;
 }
 .planner-notice-icon {
   width: 2.25rem;

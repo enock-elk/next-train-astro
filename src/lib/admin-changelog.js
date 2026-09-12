@@ -5,6 +5,12 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.8': [
+        'Two-station cuts include both named stations. TRAIN TERMINATES is the last safe stop before the first affected station (Pretoria→Kempton Park → Irene, not Olifantsfontein).',
+        'Tap TRAIN TERMINATES to open the Line Severed modal. Marker look is unchanged.',
+        'Result banner SVG is higher-right. Details is far bottom-right, below the icon.',
+        'Departed · Show Next Train is blue again.',
+    ],
     'V9_09.12.7': [
         'Trip map paints LINE SEVERED only when this itinerary contacts the danger zone (Pretoria–Rissik no longer inherits Olifantsfontein–Kempton Park).',
         'TRAIN TERMINATES at first contact is restored (origin injection was double-called).',

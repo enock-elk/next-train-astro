@@ -363,7 +363,7 @@ export function openFareModal(fareDetails, routeIdOverride) {
     const zoneEl = document.getElementById('fare-zone-badge');
     if (zoneEl) {
         zoneEl.innerHTML = `
-            <div class="flex items-center">Ticket Prices <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 ml-2 px-2 py-0.5 rounded-full uppercase tracking-widest">Zone ${String(fareDetails.code || '').replace(/^Z/i, '')}</span></div>
+            <div class="flex items-center">Ticket Prices <span class="nt-fare-zone-chip text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 ml-2 px-2 py-0.5 rounded-full uppercase tracking-widest">Zone ${String(fareDetails.code || '').replace(/^Z/i, '')}</span></div>
             ${routeNameHtml ? `<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">${routeNameHtml}</span>` : ''}`;
     }
 

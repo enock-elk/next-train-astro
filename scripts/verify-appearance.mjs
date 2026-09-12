@@ -16,6 +16,11 @@ assert(css.includes('--nt-text-faint: #3a3530'), 'Earthy light faint stays reada
 assert(css.includes('--nt-text-faint: #3d3228'), 'Ember light faint stays readable on cream');
 assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .text-blue-600'), 'Earthy maps label blue to dark ink');
 assert(css.includes('html[data-colour-pack="ember"]:not(.dark) .text-blue-600'), 'Ember maps label blue to dark ink');
+assert(css.includes('html[data-colour-pack="earthy"].dark .text-blue-400'), 'Earthy dark maps pale blue labels to light ink');
+assert(css.includes('html[data-colour-pack="ember"].dark .text-blue-400'), 'Ember dark maps pale blue labels to light ink');
+assert(css.includes('html[data-colour-pack="earthy"].dark #planner-back-btn'), 'Earthy dark planner toolbar uses light ink');
+assert(css.includes('html[data-colour-pack="ember"].dark #planner-back-btn'), 'Ember dark planner toolbar uses light ink');
+assert(css.includes('.nt-fare-zone-chip'), 'fare Zone chip has a pack-aware class');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
 assert(/html\[data-colour-pack="ember"\] #view-full-timetable-btn/.test(css), 'Ember weakens the timetable CTA halo');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
@@ -484,8 +489,12 @@ assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write c
 assert(adminJs.includes('mapTab:') && adminJs.includes('communityTab:'), 'save merges mapTab and communityTab without wiping other flags');
 assert(css.includes('.nt-alert-reply'), 'alert Reply is styled separately from Close');
 assert(css.includes('.nt-alert-source'), 'alert source has a quiet citation class');
-assert(/\.nt-alert-source\s*\{[\s\S]*?font-size:\s*0\.625rem/.test(css), 'alert source is smaller than body copy');
+assert(/\.nt-alert-source\s*\{[\s\S]*?font-size:\s*0\.6875rem/.test(css), 'alert source is smaller than body copy');
 assert(/\.nt-alert-source\s*\{[\s\S]*?background:\s*transparent/.test(css), 'alert source is not a chip');
+assert(/\.nt-alert-source\s*\{[\s\S]*?text-decoration-style:\s*dotted/.test(css), 'alert source link uses a dotted underline');
+assert(css.includes('.nt-alert-card-footer'), 'alert footer is styled as two rows');
+assert(css.includes('.nt-alert-meta-row'), 'alert source/time row is styled');
+assert(css.includes('.nt-alert-action-row'), 'alert reactions/Reply row is styled');
 assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
 
 if (failures.length) {

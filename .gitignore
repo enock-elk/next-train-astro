@@ -57,3 +57,6 @@ next-train-astro/
 
 # Local parallel lab checkout
 .worktrees/
+
+# Private local docs (product reference, founder brief — do not commit)
+docs/private/

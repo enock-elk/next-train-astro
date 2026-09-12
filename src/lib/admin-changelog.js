@@ -5,6 +5,12 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.9': [
+        'See Next Available Day updates the day dropdown to the presented results (Saturday click → Weekday).',
+        'Export footer: version top-right, GENERATED balances NextTrain.co.za, PRASA / Metrorail balances the unofficial line. Date has no weekday.',
+        'No scheduled trains matches You are here (no card chrome, calendar SVG). Track Occupation sits beside See Monday Schedule.',
+        'Grid Column Order tile title uses the same muted uppercase as other Dev Hub home tiles.',
+    ],
     'V9_09.12.8': [
         'Two-station cuts include both named stations. TRAIN TERMINATES is the last safe stop before the first affected station (Pretoria→Kempton Park → Irene, not Olifantsfontein).',
         'Tap TRAIN TERMINATES to open the Line Severed modal. Marker look is unchanged.',

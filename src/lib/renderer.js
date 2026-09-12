@@ -368,6 +368,21 @@ export const Renderer = {
         stampLiveBoardCard(element, hereKey);
     },
 
+    emptyScheduledBoardHtml: (label = 'No scheduled trains.') => `
+            <div class="h-24 flex flex-col justify-center items-center gap-1.5">
+                <svg class="w-7 h-7 text-blue-500 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12.75 12.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM7.5 15.75a.75.75 0 100-1.5.75.75 0 000 1.5zM8.25 10.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM15.75 10.5a.75.75 0 100-1.5.75.75 0 000 1.5zM16.5 15.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 15.75a.75.75 0 100-1.5.75.75 0 000 1.5zM12 18.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                    <path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3A.75.75 0 0118 3v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zm13.5 9a1.5 1.5 0 00-1.5-1.5H5.25a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5v-7.5z" clip-rule="evenodd" />
+                </svg>
+                <div class="text-sm font-bold text-gray-900 dark:text-white">${escapeHTML(label)}</div>
+            </div>
+        `,
+
+    renderEmptyScheduledBoard: (element, label = 'No scheduled trains.') => {
+        if (!element) return;
+        element.innerHTML = Renderer.emptyScheduledBoardHtml(label);
+    },
+
     renderNoWeekendService: (element, destination, firstNextTrain, dayOffset) => {
         let timeHTML = 'N/A';
         let timeDiffStr = '';
@@ -551,24 +566,26 @@ export const Renderer = {
                 const labelText = routeDisruption.buttonText ? escapeHTML(routeDisruption.buttonText) : (isCritical ? 'Line Severed' : 'Expect Delays');
                 
                 disruptionHtml = `
-                    <div class="mt-1 flex justify-center w-full px-2">
-                        <button type="button" onclick="window.openDisruptionModal('${routeDisruption.id}')" class="${btnClass} px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border transition-colors shadow-sm flex items-center animate-pulse truncate max-w-full focus:outline-none">
-                            ${svgIcon} <span class="truncate">${labelText}</span>
-                        </button>
-                    </div>
+                    <button type="button" onclick="window.openDisruptionModal('${routeDisruption.id}')" class="${btnClass} px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border transition-colors shadow-sm flex items-center animate-pulse truncate max-w-[46%] focus:outline-none">
+                        ${svgIcon} <span class="truncate">${labelText}</span>
+                    </button>
                 `;
             }
         }
 
+        const scheduleBtn = `<button onclick="window.openScheduleModal('${safeDestForClick}', '${dayType}')" class="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors shrink-0">See ${dayName} Schedule</button>`;
+        const actionsRow = disruptionHtml
+            ? `<div class="mt-2 flex items-center justify-center gap-2 w-full px-2">${scheduleBtn}${disruptionHtml}</div>`
+            : `<div class="mt-2">${scheduleBtn}</div>`;
+
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="text-sm font-bold text-gray-600 dark:text-gray-400 text-center px-2 leading-snug">${headline}</div>
-                ${disruptionHtml}
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     <div class="text-xl font-bold text-gray-900 dark:text-white" data-nt-deptime>${departureTime}</div>
                     <div class="text-xs text-gray-700 dark:text-gray-300 font-medium" data-nt-countdown>${timeDiffStr}</div>
                 </div>
-                <button onclick="window.openScheduleModal('${safeDestForClick}', '${dayType}')" class="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide border border-blue-200 dark:border-blue-800 px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">See ${dayName} Schedule</button>
+                ${actionsRow}
             </div>
         `;
         stampLiveBoardCard(element, nextKey);
@@ -1364,7 +1381,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
-    const dateText = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+    const dateText = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
     const scheduleTypeLabel = selectedDay === 'weekday' || selectedDay === 'sunday'
         ? 'WEEKDAY'
         : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
@@ -1450,15 +1467,15 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         ${exportGridNoticeHtml}
 
-        <div class="mt-8 p-5 rounded-lg flex justify-between items-end" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}">
-            <div class="flex flex-col space-y-1.5 text-left">
-                <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px;">GENERATED: ${dateText}</span>
-                <span class="font-black" style="color: #374151; font-size: 15px;">Data Source: PRASA / Metrorail Facebook</span>
-                <span style="color: #9ca3af; font-size: 9px; font-weight: 600; letter-spacing: 0.04em;">${escapeHTML(String(APP_VERSION || '').split(' - ')[0])}</span>
+        <div class="mt-6 px-4 py-3 rounded-lg flex justify-between items-end" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}">
+            <div class="flex flex-col justify-end gap-0.5 text-left">
+                <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px; line-height: 1.2;">GENERATED: ${dateText}</span>
+                <span class="font-black" style="color: #374151; font-size: 15px; line-height: 1.2;">Data Source: PRASA / Metrorail</span>
             </div>
-            <div class="flex flex-col text-right">
-                <span class="font-black text-2xl tracking-tight leading-none mb-1.5" style="color: ${accentColor}">NextTrain.co.za</span>
-                <span class="text-[10px] font-bold uppercase tracking-wider mt-1" style="color: #6b7280">Unofficial Guide • Not affiliated with PRASA</span>
+            <div class="flex flex-col items-end justify-end text-right gap-0.5">
+                <span style="color: #9ca3af; font-size: 8px; font-weight: 600; letter-spacing: 0.05em; line-height: 1;">${escapeHTML(String(APP_VERSION || '').split(' - ')[0])}</span>
+                <span class="font-black text-2xl tracking-tight leading-none" style="color: ${accentColor}">NextTrain.co.za</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider" style="color: #6b7280">Unofficial Guide • Not affiliated with PRASA</span>
             </div>
         </div>
     `;

@@ -95,6 +95,20 @@ const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url)
 assert(renderer.includes("const borderColor = '#e5e7eb'"), 'export table margins stay light grey');
 assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
 assert(renderer.includes('APP_VERSION'), 'export footer includes the app version');
+assert(renderer.includes('Data Source: PRASA / Metrorail'), 'export cites PRASA / Metrorail');
+assert(!renderer.includes('Metrorail Facebook'), 'export data source is not Facebook');
+assert(!renderer.includes("weekday: 'long'"), 'generated date has no weekday name');
+{
+    const footerAt = renderer.indexOf('GENERATED:');
+    const versionAt = renderer.indexOf('APP_VERSION', footerAt);
+    const wordmarkAt = renderer.indexOf('NextTrain.co.za', footerAt);
+    assert(footerAt > -1 && versionAt > footerAt && wordmarkAt > versionAt, 'quiet version sits above NextTrain.co.za');
+}
+assert(renderer.includes('emptyScheduledBoardHtml'), 'empty scheduled board matches You are here chrome');
+assert(renderer.includes("See ${dayName} Schedule</button>`"), 'no-more-today schedule CTA is a sibling of the incident chip');
+assert(renderer.includes('${scheduleBtn}${disruptionHtml}'), 'Track Occupation sits beside See Monday Schedule');
+assert(!board.includes('min-h-[96px]'), 'empty board cards do not use the old bordered min-h box');
+assert(board.includes("renderEmptyScheduledBoard(element, 'No scheduled trains.')"), 'no scheduled trains uses the compact empty state');
 assert(!board.includes('⚠️'), 'upcoming modal has no warning emoji');
 assert(!renderer.includes('⚠️'), 'home board has no warning emoji');
 assert(board.includes('warningTriangleSvg()'), 'upcoming modal uses warning SVG');

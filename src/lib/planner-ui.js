@@ -944,6 +944,46 @@ function buildLineSeveredNoticeHtml(payload, fallbackTo = '') {
     });
 }
 
+function presentedPlannerDayType(trip) {
+    const offset = Number(trip?.dayOffset) || 0;
+    if (offset > 0 && typeof window !== 'undefined' && typeof window.getLookaheadDayInfo === 'function') {
+        const info = window.getLookaheadDayInfo(offset);
+        if (info?.type) return info.type;
+    }
+    const explicit = trip?.dayType;
+    if (explicit === 'weekday' || explicit === 'saturday' || explicit === 'sunday' || explicit === 'public_holiday') {
+        return explicit;
+    }
+    const label = String(trip?.dayLabel || '').toLowerCase();
+    if (label.includes('sunday')) return 'sunday';
+    if (label.includes('public holiday') || label.includes('pub hol')) return 'public_holiday';
+    if (label.includes('saturday')) return 'saturday';
+    if (/(monday|tuesday|wednesday|thursday|friday|weekday)/.test(label)) return 'weekday';
+    return selectedPlannerDay || getCurrentDayType();
+}
+
+/** Keep the search-form and results-header day dropdowns on the day actually shown. */
+function syncPlannerDayControls(dayType) {
+    if (!dayType) return;
+    selectedPlannerDate = null;
+    selectedPlannerDay = dayType;
+    if (typeof window !== 'undefined') {
+        window.selectedPlannerDay = dayType;
+        window.selectedPlannerDate = null;
+    }
+    const display = document.getElementById('main-day-display');
+    if (display) display.textContent = plannerDayDisplayText(dayType);
+    const list = document.getElementById('main-day-list');
+    if (list) {
+        list.querySelectorAll('li[data-day]').forEach((li) => {
+            li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+            if (li.getAttribute('data-day') === dayType) {
+                li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+            }
+        });
+    }
+}
+
 function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
     const satLabel = region === 'WC' ? 'Saturday' : 'Saturday / Public Holiday';
@@ -4598,45 +4638,15 @@ export function executeManualRollover(origin, dest) {
     if (weekendish && typeof window.getLookaheadDayInfo === 'function') {
         // Keep dayType aligned with "today" so planUnifiedTrip does not treat
         // weekday as an explicit override (which freezes the search day).
+        // Dropdowns update after results exist (syncPlannerDayControls).
         selectedPlannerDay = getCurrentDayType();
         if (selectedPlannerDay === 'sunday') selectedPlannerDay = 'weekday';
-        const display = document.getElementById('main-day-display');
-        if (display) display.textContent = 'Weekday (Mon-Fri)';
-        const mList = document.getElementById('main-day-list');
-        if (mList) {
-            mList.querySelectorAll('li').forEach((li) => {
-                li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                if ((li.textContent || '').includes('Weekday')) {
-                    li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                }
-            });
-        }
+        if (typeof window !== 'undefined') window.selectedPlannerDay = selectedPlannerDay;
         for (let i = 1; i <= 7; i++) {
             const info = window.getLookaheadDayInfo(i);
             if (info && info.type === 'weekday') {
                 rolloverOffset = i;
                 break;
-            }
-        }
-    } else if (typeof window.getLookaheadDayInfo === 'function') {
-        // GUARDIAN PHASE 2: Silent DOM Sync for Dropdown (SPA parity)
-        const nextDayInfo = window.getLookaheadDayInfo(1);
-        if (nextDayInfo) {
-            selectedPlannerDay = nextDayInfo.type;
-            const display = document.getElementById('main-day-display');
-            const mainTxt = nextDayInfo.type === 'weekday'
-                ? 'Weekday (Mon-Fri)'
-                : (nextDayInfo.type === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
-            if (display) display.textContent = mainTxt;
-
-            const mList = document.getElementById('main-day-list');
-            if (mList) {
-                mList.querySelectorAll('li').forEach((li) => {
-                    li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                    if (li.textContent === mainTxt) {
-                        li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                    }
-                });
             }
         }
     }
@@ -4993,6 +5003,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
 
@@ -5027,6 +5038,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
 
@@ -5064,6 +5076,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
     

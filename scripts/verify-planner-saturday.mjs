@@ -50,6 +50,9 @@ if (!ui.includes('Showing trains terminating at')) fail('dest-on-stub must keep 
 if (!ui.includes('Cannot depart from')) fail('origin-on-stub must keep boarding-blocked copy');
 if (!ui.includes('Showing trains from')) fail('origin-on-stub must show trains from the junction');
 if (!ui.includes('See Next Available Day')) fail('no-service card must offer weekday rollover');
+if (!ui.includes('syncPlannerDayControls')) fail('next available day must sync the day dropdown');
+if (!ui.includes('presentedPlannerDayType')) fail('dropdown uses the presented result day type');
+if (ui.includes("display.textContent = 'Weekday (Mon-Fri)'")) fail('must not paint Weekday on the dropdown before results exist');
 if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory for admin');
 if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');

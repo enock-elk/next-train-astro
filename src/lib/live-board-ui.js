@@ -202,7 +202,7 @@ export function renderNextAvailableTrain(element, destination) {
     if (!simResult) {
         const emptyKey = liveBoardStaticKey('empty', destination, 'none');
         if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === emptyKey) return;
-        element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No upcoming trains.</div>`;
+        window.Renderer.renderEmptyScheduledBoard(element, 'No upcoming trains.');
         stampLiveBoardCard(element, emptyKey);
         return;
     }
@@ -236,7 +236,8 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
         } else {
             const emptyKey = liveBoardStaticKey('empty', destination, 'nosched');
             if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === emptyKey) return;
-            element.innerHTML = `<div class="min-h-[96px] flex flex-col justify-center items-center text-lg font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800/50 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">No scheduled trains.</div>`;
+            if (!window.Renderer) return;
+            window.Renderer.renderEmptyScheduledBoard(element, 'No scheduled trains.');
             stampLiveBoardCard(element, emptyKey);
         }
     } else {

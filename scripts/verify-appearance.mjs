@@ -146,7 +146,14 @@ assert(css.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 
 assert(css.includes('--nt-ui-scale: clamp(0.82, 100vw / 390px, 1)'), 'phone scale floor is 320/390');
 assert(!css.includes('clamp(0.90, calc(100vw / 390), 1.06)'), 'phone scale no longer floors at 0.90');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');
-assert(plannerUi.includes("input.addEventListener('focus'") && plannerUi.includes('input.select();'), 'station focus selects existing text for immediate replacement');
+assert(
+    /input\.addEventListener\('focus', \(\) => \{\s*try \{ input\.select\(\); \}/.test(plannerUi),
+    'station focus unconditionally selects existing text for immediate replacement'
+);
+assert(
+    !/input\.addEventListener\('focus'[\s\S]{0,220}pointer:\s*coarse/.test(plannerUi),
+    'touch devices keep the one-tap station replacement behavior'
+);
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
 assert(!plannerUi.includes('keepPlannerFieldVisible') && plannerUi.includes('Do not scroll #app-scroll'), 'planner fields stay put while dropdowns fit the visible viewport');
 assert(plannerUi.includes('vis.height * 0.7'), 'planner list can fill the space above the keyboard');

@@ -3596,12 +3596,8 @@ export function setupAutocomplete(inputId, selectId) {
     });
     
     input.addEventListener('focus', () => {
-        let coarse = false;
-        try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch { coarse = false; }
-        if (!coarse) {
-            try { input.select(); } catch { /* ignore */ }
-        }
-        requestAnimationFrame(() => renderList(''));
+        try { input.select(); } catch { /* ignore */ }
+        renderList('');
     });
 
     window.visualViewport?.addEventListener('resize', () => {

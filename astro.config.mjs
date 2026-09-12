@@ -51,6 +51,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: false,
         clientsClaim: true,
+        // map.html?embed=1&v=… must still hit the precached /map.html shell.
+        ignoreURLParametersMatching: [/^v$/, /^embed$/, /^r$/, /^t$/, /^region$/, /^utm_/, /^fbclid$/],
         // Shell only. Including png/svg pulled every network map and icon into the
         // precache — a 5.2 MB atomic install on first visit, which is punishing on
         // the 3G connections most of these commuters use, and one 404 fails the

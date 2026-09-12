@@ -335,7 +335,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
 assert(hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has a slow-network confirm');
 assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm asks before wiping');
 assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet can publish a test train');
-assert(hubModals.includes('Publish as this train'), 'admin publish button copy is Publish as this train');
+    assert(hubModals.includes('Share on the map as this train'), 'admin publish button copy is Share on the map as this train');
 {
     const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
     const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');

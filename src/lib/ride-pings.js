@@ -804,11 +804,11 @@ export async function fetchRouteRidePings(routeId) {
     }
 }
 
-export async function startRidePingsListener(routeId) {
+export async function startRidePingsListener(routeId, { force = false } = {}) {
     if (!routeId) return;
     stopRidePingsListener(routeId);
     await fetchFeatures();
-    if (!isRideCheckInEnabled(routeId)) return;
+    if (!force && !isRideCheckInEnabled(routeId) && !isAdminAuthed()) return;
 
     await bootFirebase();
     if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return;
@@ -1082,7 +1082,10 @@ export async function submitRideCheckIn({
     overrideProjected = null,
 } = {}) {
     await fetchFeatures();
-    if (!isRideCheckInEnabled(routeId)) {
+    const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
+        ? adminOverrideRole
+        : '';
+    if (!isRideCheckInEnabled(routeId) && !trustedAdminOverride) {
         return { ok: false, message: 'Ride sharing isn’t on for this corridor yet.' };
     }
     let st = (station || document.getElementById('station-select')?.value || '').trim();
@@ -1090,9 +1093,7 @@ export async function submitRideCheckIn({
         st = nearestStationOnRoute(coarseLat, coarseLng, routeId)?.stationName || '';
     }
     if (!routeId) return { ok: false, message: 'Pick a corridor first.' };
-    const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
-        ? adminOverrideRole
-        : '';
+    if (!st && trustedAdminOverride) st = 'here';
     if (
         source !== 'onboard_ping'
         && source !== 'stop'
@@ -1601,9 +1602,21 @@ export function renderRideSeenChip(routeId = $currentRouteId.get()) {
 
 export async function refreshRideSeenSurface(routeId = $currentRouteId.get()) {
     await fetchFeatures();
-    if (!isRideCheckInEnabled(routeId)) {
+    const mapOpen = typeof document !== 'undefined'
+        && document.getElementById('view-map')?.classList.contains('active');
+    if (!isRideCheckInEnabled(routeId) && !isAdminAuthed() && !mapOpen) {
         renderRideSeenChip(routeId);
         stopRidePingsListener(routeId);
+        return;
+    }
+    if (!isRideCheckInEnabled(routeId)) {
+        renderRideSeenChip(routeId);
+        if (!routeListeners[routeId]) startRidePingsListener(routeId, { force: true });
+        const fetched = await fetchRouteRidePings(routeId);
+        if (fetched.length || !routeCache[routeId]?.length) {
+            routeCache[routeId] = fetched;
+        }
+        notifyPingsUpdated(routeId);
         return;
     }
     if (!routeListeners[routeId]) startRidePingsListener(routeId);

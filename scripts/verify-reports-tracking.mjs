@@ -231,10 +231,15 @@ assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train shari
 assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
 assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
 assert(!mapTabSource.includes('from Train ${finalId} - sharing as a commuter'), 'share result does not describe distance from a train');
-assert(mapTabSource.includes('Admin map marker override'), 'admin checks expose train/person marker override');
+assert(mapTabSource.includes('Share on the map as this train') || mapTabSource.includes('publishAdminManualTrain'), 'admin nearby sheet publishes a test train onto the map');
+assert(!mapTabSource.includes('Admin map marker override'), 'admin checks no longer expose Auto/Train/Person radios');
 assert(mapTabSource.includes("source: 'admin_manual_train'"), 'admin nearby sheet can publish a weekday train id');
-assert(mapTabSource.includes('publishAdminManualTrain'), 'admin publish uses the existing ride_pings path');
+assert(mapTabSource.includes('shareAdminTrainOnMap'), 'admin publish skips rail-path checks and opens the map');
+assert(mapTabSource.includes('Share on the map as Train'), 'admin checks sheet has a clear share-anyway button');
 assert(ridePingsSource.includes("trustedAdminOverride !== 'train'"), 'admin train override bypasses the empty-day guard');
+assert(ridePingsSource.includes('!isRideCheckInEnabled(routeId) && !trustedAdminOverride'), 'admin test share is allowed when ride check-in is off');
+assert(ridePingsSource.includes('{ force = false }'), 'map tab can listen for ride pings when the corridor flag is off');
+assert(ridePingsSource.includes('!force && !isRideCheckInEnabled(routeId) && !isAdminAuthed()'), 'corridor flag still gates commuter listeners');
 assert(!ridePingsSource.includes('scoreTrainForFix'), 'verified live pings are not measured against a timetable ghost');
 assert(ridePingsSource.includes('Number(p.railDistanceM)'), 'verified live pings use distance to rail');
 assert(pingPublicTrainId({ trainId: '1000', adminOverrideRole: 'train' }) === '1000', 'admin train override paints the train marker');

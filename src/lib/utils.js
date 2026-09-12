@@ -569,14 +569,16 @@ export function isProtectedVolatileKey(key, { preserveSchedules = false } = {}) 
 /** Source-specific cache policy. The remote killswitch keeps the offline lifeline. */
 export function cacheClearPolicy(source = 'modal_confirm') {
     const systemKillswitch = source === 'system_killswitch';
+    const downloadThenSwap = source === 'check_updates';
     return Object.freeze({
         systemKillswitch,
-        unregisterServiceWorkers: !systemKillswitch,
-        preservePrecache: systemKillswitch,
-        preserveScheduleCaches: systemKillswitch,
-        flushLocalStorage: !systemKillswitch,
-        resetLook: !systemKillswitch,
-        deleteScheduleDatabase: !systemKillswitch,
+        downloadThenSwap,
+        unregisterServiceWorkers: !systemKillswitch && !downloadThenSwap,
+        preservePrecache: systemKillswitch || downloadThenSwap,
+        preserveScheduleCaches: systemKillswitch || downloadThenSwap,
+        flushLocalStorage: !systemKillswitch && !downloadThenSwap,
+        resetLook: !systemKillswitch && !downloadThenSwap,
+        deleteScheduleDatabase: !systemKillswitch && !downloadThenSwap,
         showUpdatedToast: !systemKillswitch,
     });
 }

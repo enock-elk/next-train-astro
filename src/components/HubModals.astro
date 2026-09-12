@@ -936,10 +936,11 @@ import { withBase } from '../lib/config.js';
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95">
         <div class="text-center">
             <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Slow network</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Your network seems slow. Are you sure?</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Your network seems slow. Are you sure?</p>
+            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Proceeding on a weak connection can affect offline access until you are on a stronger signal.</p>
             <div class="flex space-x-3">
                 <button type="button" id="network-slow-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors">Cancel</button>
-                <button type="button" id="network-slow-proceed-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Proceed</button>
+                <button type="button" id="network-slow-proceed-btn" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Proceed</button>
             </div>
         </div>
     </div>
@@ -1040,7 +1041,8 @@ import { withBase } from '../lib/config.js';
                     <span class="sr-only">Custom train id</span>
                     <input id="nt-admin-train-id-custom" type="text" maxlength="16" placeholder="Or type a train id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white placeholder:font-semibold placeholder:text-gray-400">
                 </label>
-                <button type="button" id="nt-admin-publish-train-btn" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Publish as this train</button>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Your GPS is published as that train. You do not need to be on the tracks, and others on this corridor can see it.</p>
+                <button type="button" id="nt-admin-publish-train-btn" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
             </div>
             <button type="button" id="nt-nearby-presence" hidden inert aria-hidden="true" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Just show where I am</button>
             <button type="button" id="nt-nearby-dismiss" class="w-full py-2.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Close</button>

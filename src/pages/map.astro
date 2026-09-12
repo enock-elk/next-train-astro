@@ -474,9 +474,8 @@ const regionSeoSlugs = Object.fromEntries(
 
   <div id="map-cold-start" data-nosnippet class="hidden absolute inset-0 z-[60] flex items-center justify-center p-4 bg-gray-100/95 dark:bg-gray-900/95">
     <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center">
-      <span class="text-4xl mb-3 block">📡</span>
-      <h3 class="font-black text-gray-900 dark:text-white text-lg mb-2">Couldn't load map data</h3>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">New here? Pick a region or open the main app to download schedules first. The map works without a prior visit when you're online.</p>
+      <h3 id="map-cold-start-title" class="font-black text-gray-900 dark:text-white text-lg mb-2">Couldn't load map data</h3>
+      <p id="map-cold-start-body" class="text-sm text-gray-500 dark:text-gray-400 mb-4">New here? Pick a region or open the main app to download schedules first. The map works without a prior visit when you are online.</p>
       <div class="grid grid-cols-2 gap-2 mb-4" id="map-region-picker">
         <button type="button" data-region="GP" class="py-2 px-3 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Gauteng</button>
         <button type="button" data-region="WC" class="py-2 px-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600">Western Cape</button>

@@ -53,7 +53,14 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
-import { isAppVersionNewer, markAppUpdatedToast, markLatestVersionToast, peekIncomingVersion } from './app-update.js';
+import {
+    isAppVersionNewer,
+    markAppUpdatedToast,
+    markLatestVersionToast,
+    peekIncomingVersion,
+    installIncomingServiceWorker,
+    activateWaitingServiceWorker,
+} from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -537,7 +544,30 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
 
     if (!policy.systemKillswitch) triggerHaptic();
     trackAnalyticsEvent('execute_hard_cache_clear', { source });
-    if (source === 'modal_confirm' || source === 'check_updates') {
+
+    if (policy.downloadThenSwap) {
+        showToast('Downloading the update…', 'info', 5000);
+        const installed = await installIncomingServiceWorker();
+        if (!installed.ok) {
+            showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
+            return false;
+        }
+        closeAppHub(true);
+        const updateModal = document.getElementById('cache-clear-modal');
+        if (updateModal) closeSmoothModal('cache-clear-modal');
+        try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
+        markPendingReload('cache_sync', 500);
+        if (policy.showUpdatedToast) {
+            if (latestVersion) markLatestVersionToast();
+            else markAppUpdatedToast();
+        }
+        setTimeout(() => {
+            window.location.href = window.location.pathname + '?v=' + Date.now();
+        }, 500);
+        return true;
+    }
+
+    if (source === 'modal_confirm') {
         showToast('Clearing offline data and syncing...', 'info', 5000);
         await new Promise((r) => setTimeout(r, 600));
     }
@@ -2029,6 +2059,66 @@ export function initHub() {
         }, 320);
     };
 
+    const hideSheetFallback = () => {
+        document.getElementById('nt-inapp-sheet-fallback')?.classList.add('hidden');
+    };
+    const showSheetFallback = (kind = 'offline') => {
+        const box = document.getElementById('nt-inapp-sheet-fallback');
+        if (!box) return;
+        box.classList.remove('hidden');
+        const titleEl = box.querySelector('[data-sheet-fallback-title]');
+        const bodyEl = box.querySelector('[data-sheet-fallback-body]');
+        const offline = kind === 'offline' || (typeof navigator !== 'undefined' && navigator.onLine === false);
+        if (titleEl) titleEl.textContent = offline ? 'Map isn’t available offline' : 'Map didn’t load';
+        if (bodyEl) {
+            bodyEl.textContent = offline
+                ? 'This phone does not have a saved copy of this map yet. Open it once while you are online, or stay on the live board until you have a stronger signal.'
+                : 'The map could not be opened. Try again when you have a signal.';
+        }
+    };
+    const armSheetMapFallback = (frame, nextUrl) => {
+        hideSheetFallback();
+        if (!frame) return;
+        if (frame._ntSheetWatch) clearTimeout(frame._ntSheetWatch);
+        const wait = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 2500 : 8000;
+        let loaded = false;
+        const onLoad = () => {
+            let mapReady = false;
+            try {
+                const href = frame.contentWindow?.location?.href || '';
+                const doc = frame.contentDocument;
+                mapReady = !!(href && href !== 'about:blank' && doc && (doc.getElementById('map') || doc.getElementById('map-cold-start')));
+            } catch { /* chrome-error:// */ }
+            if (!mapReady) {
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    showSheetFallback('offline');
+                }
+                return;
+            }
+            loaded = true;
+            if (frame._ntSheetWatch) clearTimeout(frame._ntSheetWatch);
+            hideSheetFallback();
+            frame.removeEventListener('load', onLoad);
+            frame.removeEventListener('error', onError);
+        };
+        const onError = () => {
+            if (!loaded) showSheetFallback(navigator.onLine === false ? 'offline' : 'generic');
+        };
+        frame.addEventListener('load', onLoad);
+        frame.addEventListener('error', onError);
+        frame._ntSheetWatch = setTimeout(() => {
+            if (!loaded) showSheetFallback(navigator.onLine === false ? 'offline' : 'generic');
+        }, wait);
+        const retry = document.getElementById('nt-inapp-sheet-retry');
+        if (retry) {
+            retry.onclick = () => {
+                hideSheetFallback();
+                frame.src = nextUrl || frame.src;
+                armSheetMapFallback(frame, nextUrl);
+            };
+        }
+    };
+
     const openInAppSheet = (url, title) => {
         let overlay = document.getElementById('nt-inapp-sheet');
         if (!overlay) {
@@ -2044,7 +2134,12 @@ export function initHub() {
                     <span id="nt-inapp-sheet-title" class="text-sm font-black text-gray-900 dark:text-white truncate"></span>
                     <span data-nt-sheet-spacer class="w-16" aria-hidden="true"></span>
                 </div>
-                <iframe id="nt-inapp-sheet-frame" title="In-app page" class="relative flex-1 w-full border-0 bg-white dark:bg-gray-900 min-h-0"></iframe>`;
+                <iframe id="nt-inapp-sheet-frame" title="In-app page" class="relative flex-1 w-full border-0 bg-white dark:bg-gray-900 min-h-0"></iframe>
+                <div id="nt-inapp-sheet-fallback" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-6 text-center bg-gray-100 dark:bg-gray-950">
+                    <p data-sheet-fallback-title class="text-sm font-black text-gray-900 dark:text-white">Map isn’t available offline</p>
+                    <p data-sheet-fallback-body class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug max-w-sm">This phone does not have a saved copy of this map yet. Open it once while you are online, or stay on the live board until you have a stronger signal.</p>
+                    <button type="button" id="nt-inapp-sheet-retry" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-bold focus:outline-none">Try again</button>
+                </div>`;
             document.body.appendChild(overlay);
             const closeSheet = () => {
                 if (overlay.classList.contains('hidden')) return;
@@ -2076,6 +2171,7 @@ export function initHub() {
                         : (isDark ? '#111827' : '#ffffff');
                     requestAnimationFrame(() => {
                         if (document.getElementById('nt-inapp-sheet') === overlay && !overlay.classList.contains('hidden')) {
+                            if (mode === 'map') armSheetMapFallback(frame, nextUrl);
                             frame.src = nextUrl;
                         }
                     });
@@ -2109,6 +2205,7 @@ export function initHub() {
             // Defer src one frame so the overlay/iframe background is composited first.
             requestAnimationFrame(() => {
                 if (document.getElementById('nt-inapp-sheet') === overlay && !overlay.classList.contains('hidden')) {
+                    if (mode === 'map') armSheetMapFallback(frame, url);
                     frame.src = url;
                 }
             });

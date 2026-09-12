@@ -5,6 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.13': [
+        'Slow network Proceed is orange. Copy warns that a weak connection can affect offline access until the signal is stronger.',
+        'Check for Updates downloads/installs the incoming SW first. Failed install keeps the cached app. No cache wipe before that install.',
+        'Admin nearby: Share on the map as this train. GPS is published as that train, off-track allowed. Corridor rideCheckIn gate skipped for admin override. Map tab still listens so someone away can see the pin.',
+        'Map tab opens on the pinned corridor / selected region (not the GPS map session). Full GPS network map locate behaviour is unchanged.',
+        'Offline map (tab iframe, sidenav sheet, static PNG, map.html cold-start) shows a saved-copy message instead of a broken page.',
+    ],
     'V9_09.12.12': [
         'Alert sources save as an id-keyed Firebase map (admin_state/alert_sources). Object payloads from RTDB hydrate on every device.',
         'Feedback Archive paints headers only and hydrates the full thread on first expand. List insert uses a document fragment.',

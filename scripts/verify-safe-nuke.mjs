@@ -86,21 +86,23 @@ assert(!destructiveNetworkIsSafe({ online: true, lieFi: false, preflight: 'timeo
 // System and manual sources intentionally have different cleanup behavior.
 const system = cacheClearPolicy('system_killswitch');
 const manual = cacheClearPolicy('check_updates');
+const factory = cacheClearPolicy('modal_confirm');
 assert(!system.unregisterServiceWorkers && system.preservePrecache, 'killswitch preserves active SW and precache shell');
 assert(system.preserveScheduleCaches && !system.deleteScheduleDatabase, 'killswitch preserves last-good schedules');
 assert(!system.flushLocalStorage && !system.resetLook && !system.showUpdatedToast, 'killswitch preserves state and avoids success toast');
-assert(manual.unregisterServiceWorkers && manual.flushLocalStorage, 'manual Check for Updates keeps full reset behavior');
-assert(manual.resetLook && manual.deleteScheduleDatabase && manual.showUpdatedToast, 'manual source keeps existing look/reset/toast behavior');
+assert(manual.downloadThenSwap && manual.preservePrecache, 'Check for Updates keeps the cached shell until the incoming install finishes');
+assert(!manual.unregisterServiceWorkers && !manual.flushLocalStorage, 'Check for Updates does not wipe before the incoming install');
+assert(!manual.resetLook && !manual.deleteScheduleDatabase && manual.showUpdatedToast, 'Check for Updates keeps look/schedules and still toasts');
 assert(!shouldDeleteCacheForPolicy('workbox-precache-v9', system), 'killswitch keeps current precache');
 assert(!shouldDeleteCacheForPolicy('schedule-dump', system), 'killswitch keeps schedule runtime cache');
 assert(shouldDeleteCacheForPolicy('static-runtime', system), 'killswitch removes obsolete static runtime cache');
 assert(shouldDeleteCacheForPolicy('astro-hashed', system), 'killswitch removes obsolete hashed asset cache');
 assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, system), 'killswitch removes cached alert posters');
-assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, manual), 'manual reset removes cached alert posters');
+assert(!shouldDeleteCacheForPolicy('workbox-precache-v9', manual), 'Check for Updates keeps the precache');
+assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, factory), 'factory reset removes cached alert posters');
 assert(!VOLATILE_FLUSH_PROTECTED_KEYS.includes(ALERT_IMAGE_INDEX_KEY), 'alert image index is not a protected localStorage key');
 assert(!VOLATILE_FLUSH_PROTECTED_PREFIXES.some((prefix) => ALERT_IMAGE_INDEX_KEY.startsWith(prefix)), 'alert image index is not under a protected prefix');
 assert(!isProtectedVolatileKey(ALERT_IMAGE_INDEX_KEY), 'alert image index is flushed on nuke');
-assert(shouldDeleteCacheForPolicy('workbox-precache-v9', manual), 'manual reset still clears every cache');
 
 assert(FORCE_UPDATE_REQUIRED === true, 'FORCE_UPDATE_REQUIRED is true for this build');
 
@@ -112,10 +114,12 @@ assert(logic.includes("safeStorage.setItem(KILLSWITCH_PENDING_KEY"), 'killswitch
 assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.indexOf("performHardCacheClear('system_killswitch')"), 'killswitch marks applied only after cleanup');
 assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check periodically');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
-assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still invokes the full reset');
+assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');
 assert(hub.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(hub.includes('policy.systemKillswitch && isLieFi'), 'manual retry probes again instead of trusting a stale Lie-Fi flag');
-assert(hub.includes('openNetworkSlowConfirm'), 'slow Check for Updates asks before wiping');
+assert(hub.includes('openNetworkSlowConfirm'), 'slow Check for Updates asks before swapping');
+assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates downloads the incoming worker before dropping the cached shell');
+assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');
 assert(hub.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip only the check_updates probe');
 assert(!hub.includes('skipNetworkPreflight') || hub.includes('policy.systemKillswitch || (source === \'check_updates\' && !skipNetworkPreflight)'), 'killswitch never skips the network preflight');
 assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("hardReloadWithCacheBust('version_enforce')"), 'forced update activates waiting SW before reload');

@@ -76,7 +76,10 @@ assert(!isAppVersionNewer('V9_09.11.9', 'V9_09.12.1'), 'older release is not new
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubJs.includes("performHardCacheClear('check_updates', {"), 'Check for Updates restarts when online');
-assert(hubJs.includes('openNetworkSlowConfirm'), 'Check for Updates asks before wiping on a slow probe');
+assert(hubJs.includes('openNetworkSlowConfirm'), 'Check for Updates asks before swapping on a slow probe');
+assert(hubJs.includes('installIncomingServiceWorker'), 'Check for Updates installs the incoming worker before reload');
+assert(hubModals.includes('bg-orange-500'), 'slow-network Proceed is orange');
+assert(hubModals.includes('can affect offline access'), 'slow-network confirm warns about offline access');
 assert(hubJs.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip the probe');
 assert(hubModals.includes('id="network-slow-confirm-modal"'), 'slow-network confirm lives next to region confirm');
 assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm copy is a question, not a hard stop');

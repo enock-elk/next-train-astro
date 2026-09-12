@@ -5,7 +5,7 @@
  * Attaching a train still runs the GPS / path / speed / heading checks.
  * `ENFORCE_LIVE_SHARE_VET` blocks a share when those checks fail.
  */
-import { withBase, APP_VERSION } from './config.js';
+import { withBase, APP_VERSION, ROUTES } from './config.js';
 import { showToast, showCheckToast, hideCheckToast, triggerHaptic } from './ui.js';
 import { $currentRouteId, $globalStationIndex, $schedules, $userRegion } from '../store.js';
 import {
@@ -50,19 +50,12 @@ const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
-const ADMIN_SHARE_ROLE_KEY = 'nt_admin_live_share_role';
 let lastShareRequest = null;
 let shareRestartInFlight = false;
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
 let lastCoords = null;
-
-function adminShareRole() {
-    if (!isAdminAuthed()) return 'auto';
-    const role = safeStorage.getItem(ADMIN_SHARE_ROLE_KEY);
-    return role === 'train' || role === 'person' ? role : 'auto';
-}
 
 function ensureShareChecksModal() {
     let modal = document.getElementById('nt-share-checks-modal');
@@ -86,28 +79,17 @@ function ensureShareChecksModal() {
                 </button>
             </div>
             <ol id="nt-share-checks-list" class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-2"></ol>
-            <fieldset id="nt-share-admin-override" class="hidden mx-4 mb-3 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-3">
-                <legend class="px-1 text-[9px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300">Admin map marker override</legend>
-                <div class="mt-1 grid grid-cols-3 gap-2 text-[11px] font-bold">
-                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="auto"> Auto</label>
-                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="train"> Train</label>
-                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="person"> Person</label>
+            <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                <button type="button" id="nt-share-checks-share-anyway" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="nt-share-checks-restart" class="py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
+                    <button type="button" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
                 </div>
-                <p class="mt-2 text-[10px] text-violet-700 dark:text-violet-300">Restart checks after changing this override.</p>
-            </fieldset>
-            <div class="shrink-0 grid grid-cols-2 gap-2 p-4 border-t border-gray-100 dark:border-gray-800">
-                <button type="button" id="nt-share-checks-restart" class="py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
-                <button type="button" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
             </div>
         </div>`;
     document.body.appendChild(modal);
     modal.querySelectorAll('[data-share-checks-close]').forEach((button) => {
         button.addEventListener('click', () => modal.classList.add('hidden'));
-    });
-    modal.querySelectorAll('input[name="nt-admin-share-role"]').forEach((input) => {
-        input.addEventListener('change', () => {
-            if (input.checked) safeStorage.setItem(ADMIN_SHARE_ROLE_KEY, input.value);
-        });
     });
     modal.querySelector('#nt-share-checks-restart')?.addEventListener('click', async () => {
         if (!lastShareRequest || shareRestartInFlight) return;
@@ -117,6 +99,12 @@ function ensureShareChecksModal() {
         } finally {
             shareRestartInFlight = false;
         }
+    });
+    modal.querySelector('#nt-share-checks-share-anyway')?.addEventListener('click', async () => {
+        const trainId = lastShareRequest?.trainId;
+        if (!trainId || !isAdminAuthed()) return;
+        modal.classList.add('hidden');
+        await shareAdminTrainOnMap(String(trainId));
     });
     return modal;
 }
@@ -130,11 +118,18 @@ function openShareChecks(trainId) {
     if (title) title.textContent = `Checking Train ${trainId}`;
     if (status) status.textContent = 'Starting checks…';
     if (list) list.innerHTML = '';
-    const controls = modal.querySelector('#nt-share-admin-override');
-    controls?.classList.toggle('hidden', !isAdminAuthed());
-    const role = adminShareRole();
-    const radio = modal.querySelector(`input[name="nt-admin-share-role"][value="${role}"]`);
-    if (radio) radio.checked = true;
+    const shareAnyway = modal.querySelector('#nt-share-checks-share-anyway');
+    const restart = modal.querySelector('#nt-share-checks-restart');
+    if (shareAnyway) {
+        shareAnyway.classList.toggle('hidden', !isAdminAuthed());
+        if (isAdminAuthed()) {
+            shareAnyway.textContent = `Share on the map as Train ${trainId}`;
+            if (status) {
+                status.textContent = 'Skip the path checks. Your GPS is published as this train, even off the tracks.';
+            }
+        }
+    }
+    if (restart) restart.classList.toggle('hidden', isAdminAuthed());
 }
 
 function addShareCheck(label, detail, state = 'pass') {
@@ -273,22 +268,39 @@ function mapFrameSrc() {
     if (!/[?&]v=/.test(src)) {
         src += (src.includes('?') ? '&' : '?') + `v=${encodeURIComponent(APP_VERSION)}`;
     }
+    const region = $userRegion.get() || 'GP';
+    if (!/[?&]region=/.test(src)) {
+        src += `&region=${encodeURIComponent(region)}`;
+    } else {
+        src = src.replace(/([?&]region=)[^&]*/i, `$1${encodeURIComponent(region)}`);
+    }
     return src;
 }
 
 let frameWatchdog = 0;
 
-function showFrameFallback() {
+function showFrameFallback(kind = 'generic') {
     document.getElementById('map-tab-placeholder')?.classList.add('hidden');
-    document.getElementById('map-tab-fallback')?.classList.remove('hidden');
-    setStatus('Map didn’t load - reload or open full map');
+    const fallback = document.getElementById('map-tab-fallback');
+    fallback?.classList.remove('hidden');
+    const title = fallback?.querySelector('[data-fallback-title]');
+    const body = fallback?.querySelector('[data-fallback-body]');
+    const offline = kind === 'offline' || (typeof navigator !== 'undefined' && navigator.onLine === false);
+    if (title) title.textContent = offline ? 'Map isn’t available offline' : 'Map didn’t load';
+    if (body) {
+        body.textContent = offline
+            ? 'This phone does not have a saved copy of this map yet. Open the map once while you are online, or stay on the live board until you have a stronger signal.'
+            : 'The map could not be opened. Reload it when you have a signal, or open the full map in a new tab.';
+    }
+    setStatus(offline ? 'Map needs a saved copy' : 'Map didn’t load');
 }
 
 function armFrameWatchdog() {
     if (frameWatchdog) clearTimeout(frameWatchdog);
+    const wait = (typeof navigator !== 'undefined' && navigator.onLine === false) ? 2500 : 8000;
     frameWatchdog = setTimeout(() => {
-        if (!frameLoaded) showFrameFallback();
-    }, 8000);
+        if (!frameLoaded) showFrameFallback(navigator.onLine === false ? 'offline' : 'generic');
+    }, wait);
 }
 
 function ensureFrameSrc(force = false) {
@@ -859,24 +871,62 @@ function paintAdminPublishTrain() {
     if (current && ids.includes(current)) select.value = current;
 }
 
+async function shareAdminTrainOnMap(trainId) {
+    if (!isAdminAuthed()) return { ok: false };
+    const id = String(trainId || '').trim();
+    if (!id) {
+        showToast('Pick or type a train id', 'error');
+        return { ok: false };
+    }
+    const routeId = $currentRouteId.get();
+    if (!routeId) {
+        showToast('Pick a corridor first', 'error');
+        return { ok: false };
+    }
+    hideNearbyTrainsModal();
+    document.getElementById('nt-share-checks-modal')?.classList.add('hidden');
+    showToast('Getting your location…', 'info');
+    let lat;
+    let lng;
+    let heading = null;
+    let speedMps = null;
+    let accuracy = null;
+    try {
+        const pos = await getPosition();
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        heading = typeof pos.coords.heading === 'number' ? pos.coords.heading : null;
+        speedMps = typeof pos.coords.speed === 'number' ? pos.coords.speed : null;
+        accuracy = pos.coords.accuracy;
+        lastCoords = { lat, lng, accuracy };
+    } catch (e) {
+        showToast(e?.code === 1 ? 'Location permission denied' : 'Couldn’t get your location.', 'error');
+        return { ok: false };
+    }
+    const { switchTab } = await import('./ui.js');
+    switchTab('map');
+    const shared = await finishRideShare({
+        trainId: id,
+        station: document.getElementById('station-select')?.value || '',
+        routeId,
+        lat,
+        lng,
+        heading,
+        speedMps,
+        accuracy,
+        source: 'admin_manual_train',
+        adminOverrideRole: 'train',
+        overrideProjected: { lat, lon: lng, pathFraction: 0, routeM: 0, distanceM: 0 },
+    });
+    if (shared?.ok) showToast(`Sharing as Train ${id}`, 'success');
+    return shared;
+}
+
 async function publishAdminManualTrain() {
     if (!isAdminAuthed()) return;
     const custom = document.getElementById('nt-admin-train-id-custom')?.value?.trim();
     const picked = document.getElementById('nt-admin-train-id')?.value?.trim();
-    const trainId = custom || picked;
-    if (!trainId) {
-        showToast('Pick or type a train id', 'error');
-        return;
-    }
-    hideNearbyTrainsModal();
-    return startOnTrainShare({
-        trainId,
-        station: document.getElementById('station-select')?.value || '',
-        routeId: $currentRouteId.get(),
-        source: 'admin_manual_train',
-        skipVolunteer: true,
-        adminOverrideRole: 'train',
-    });
+    return shareAdminTrainOnMap(custom || picked);
 }
 
 /**
@@ -1460,10 +1510,7 @@ export async function startOnTrainShare({
     setStatus('Checking your location…');
     const vet = await runOnboardToastVet(id);
     const enforce = ENFORCE_LIVE_SHARE_VET;
-    const overrideRole = adminManualTrain ? 'train' : adminShareRole();
-    if (isAdminAuthed() && overrideRole !== 'auto') {
-        addShareCheck('Admin override', `Force this share to appear as a ${overrideRole}.`, 'decision');
-    }
+    const overrideRole = adminManualTrain ? 'train' : 'auto';
 
     if (!vet.ok) {
         if (enforce && overrideRole === 'auto') {
@@ -1710,7 +1757,10 @@ async function finishRideShare({
         const { submitRideCheckIn, isRideCheckInEnabled } = await import('./ride-pings.js');
         const { fetchFeatures } = await import('./features.js');
         await fetchFeatures();
-        if (!isRideCheckInEnabled(routeId)) {
+        const adminShare = isAdminAuthed() && (
+            adminOverrideRole === 'train' || adminOverrideRole === 'person' || source === 'admin_manual_train'
+        );
+        if (!isRideCheckInEnabled(routeId) && !adminShare) {
             showToast('Ride contribution isn’t on for this corridor yet', 'error');
             setStatus('Contribution not available on this corridor');
             return { ok: false };
@@ -2114,21 +2164,36 @@ async function sharePlannerTrip(c) {
     if (pick === 'primary') openNearbyTrainsModal({ lat: lastCoords.lat, lng: lastCoords.lng });
 }
 
+function pinnedMapFocus() {
+    const region = $userRegion.get() || 'GP';
+    const routeId = $currentRouteId.get() || safeStorage.getItem(`defaultRoute_${region}`) || '';
+    return { region, routeId };
+}
+
+function focusPinnedCorridorOnMap() {
+    const { region, routeId } = pinnedMapFocus();
+    const routeName = ROUTES[routeId]?.name ? String(ROUTES[routeId].name).replace(/<->/g, ' to ') : '';
+    const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+    setStatus(routeName || `${regionNames[region] || region} network`);
+    postToMap({ type: 'nt-map-focus-route', region, routeId });
+}
+
 export function activateMapTab() {
     exposeEmbedBridge();
     ensureFrameSrc();
-    setStatus(lastCoords
-        ? `Located · ±${Math.round(lastCoords.accuracy || 0)} m`
-        : 'Network overview');
+    const { region, routeId } = pinnedMapFocus();
+    const routeName = ROUTES[routeId]?.name ? String(ROUTES[routeId].name).replace(/<->/g, ' to ') : '';
+    const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+    setStatus(routeName || `${regionNames[region] || region} network`);
     if (frameLoaded) {
-        postToMap({ type: 'nt-map-locate' });
+        focusPinnedCorridorOnMap();
         lastMapPingSig = '';
         syncRidePingsToMap();
     }
     import('./ride-pings.js').then((m) => {
         m.stopShareIfIdle?.();
         const id = $currentRouteId.get();
-        if (id && !m.hasRidePingsListener?.(id)) m.startRidePingsListener?.(id);
+        if (id && !m.hasRidePingsListener?.(id)) m.startRidePingsListener?.(id, { force: true });
     }).catch(() => {});
     startPingsPolling();
     syncMapShareChrome();
@@ -2249,12 +2314,28 @@ export function bindMapTabUi() {
                 return;
             }
         } catch { /* cross-origin */ }
+        let mapReady = false;
+        try {
+            const href = frame.contentWindow?.location?.href || '';
+            const doc = frame.contentDocument;
+            mapReady = !!(href && href !== 'about:blank' && doc && (doc.getElementById('map') || doc.getElementById('map-cold-start')));
+        } catch { /* chrome-error:// and other blocked documents */ }
+        if (!mapReady) {
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                showFrameFallback('offline');
+            }
+            return;
+        }
         frameLoaded = true;
         if (frameWatchdog) clearTimeout(frameWatchdog);
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');
         document.getElementById('map-tab-fallback')?.classList.add('hidden');
         lastMapPingSig = '';
+        focusPinnedCorridorOnMap();
         syncRidePingsToMap();
+    });
+    frame?.addEventListener('error', () => {
+        if (!frameLoaded) showFrameFallback(navigator.onLine === false ? 'offline' : 'generic');
     });
 
     window.addEventListener('message', (ev) => {

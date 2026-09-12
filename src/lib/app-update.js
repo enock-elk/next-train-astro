@@ -147,7 +147,68 @@ function showSavedTimesToast() {
     } catch { /* ignore */ }
 }
 
-async function activateWaitingServiceWorker() {
+/**
+ * Precache the incoming worker while the current shell stays in control.
+ * Resolves ok:false on timeout / failed install so callers keep the cached app.
+ */
+export async function installIncomingServiceWorker(timeoutMs = INCOMING_UPDATE_FALLBACK_MS) {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+        return { ok: true, reason: 'no_sw' };
+    }
+    let reg;
+    try {
+        reg = await navigator.serviceWorker.getRegistration();
+    } catch {
+        return { ok: false, reason: 'no_reg' };
+    }
+    if (!reg) return { ok: true, reason: 'no_reg' };
+    if (reg.waiting) return { ok: true, reason: 'waiting' };
+
+    return await new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+        const timer = setTimeout(() => finish({ ok: false, reason: 'timeout' }), timeoutMs);
+
+        const watch = (worker) => {
+            if (!worker) return;
+            if (worker.state === 'installed') {
+                finish({ ok: true, reason: 'installed' });
+                return;
+            }
+            if (worker.state === 'redundant') {
+                finish({ ok: false, reason: 'redundant' });
+                return;
+            }
+            worker.addEventListener('statechange', () => {
+                if (worker.state === 'installed') finish({ ok: true, reason: 'installed' });
+                else if (worker.state === 'redundant') finish({ ok: false, reason: 'redundant' });
+            });
+        };
+
+        if (reg.installing) watch(reg.installing);
+        reg.addEventListener('updatefound', () => watch(reg.installing));
+
+        Promise.resolve()
+            .then(() => reg.update())
+            .then(() => new Promise((r) => setTimeout(r, 50)))
+            .then(() => {
+                if (reg.waiting) finish({ ok: true, reason: 'waiting' });
+                else if (reg.installing) watch(reg.installing);
+                else finish({ ok: true, reason: 'already_current' });
+            })
+            .catch(() => {
+                if (reg.waiting) finish({ ok: true, reason: 'waiting' });
+                else finish({ ok: false, reason: 'update_failed' });
+            });
+    });
+}
+
+export async function activateWaitingServiceWorker() {
     if (!('serviceWorker' in navigator)) return true;
     try {
         const reg = await navigator.serviceWorker.getRegistration();

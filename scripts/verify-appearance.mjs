@@ -286,6 +286,11 @@ assert(liveBoardUi.includes('syncRouteModalCloseBtn'), 'Select Route Close syncs
 
 const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
 assert(!mapTab.includes('window.__ntCloseInAppSheet ='), 'Map tab does not stub in-app sheet Close');
+assert(mapTab.includes("type: 'nt-map-focus-route'"), 'Map tab focuses the pinned corridor, not GPS');
+assert(mapTab.includes('Map isn’t available offline'), 'Map tab has an offline saved-copy fallback');
+assert(mapTab.includes('&region='), 'Map tab iframe boots with the selected region');
+assert(mapApp.includes('if (!isMapTabEmbed())'), 'Map tab ignores the GPS map session region');
+assert(mapApp.includes("data.type === 'nt-map-focus-route'"), 'embedded map accepts a pinned-route focus message');
 
 const mapView = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
 assert(mapView.includes("withBase('/map.html')"), 'Map tab iframe loads map.html not the SPA');
@@ -293,6 +298,7 @@ assert(!mapView.includes("withBase('/map')?embed"), 'Map tab does not use extens
 
 const astroCfg = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
 assert(astroCfg.includes('/\\/map(?:\\.html)?(?:$|[/?#])/'), 'SW navigateFallback denylists /map');
+assert(astroCfg.includes('ignoreURLParametersMatching'), 'SW matches map.html even with embed/v query params');
 
 assert(layout.includes('nt-map-iframe-escape'), 'SPA in a map iframe hides nested chrome');
 

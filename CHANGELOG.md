@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.13 — Slow-network Proceed, admin test share, map focus (12 Sep 2026)
+
+Check for Updates Slow network Proceed is orange and warns that a weak connection can affect offline access. The update path installs the incoming service worker first and keeps the cached shell if that download fails. Admin “Share on the map as this train” publishes the operator GPS as that train without rail-path checks or the corridor contribution gate. The Map tab opens on the pinned corridor / selected region. Offline map (tab, sidenav sheet, and static PNG) shows a saved-copy message instead of a broken iframe.
+
+no release notes.
+
 ## V9_09.12.12 — Admin sources, archive, audit QA (12 Sep 2026)
 
 Alert source list hydrates from Firebase object payloads and writes an id-keyed `admin_state/alert_sources` map so both operators see the same list on any device. Feedback Archive paints headers only (document fragment) and hydrates the full WhatsApp thread on first expand. Zone Distance Audit hops are one segment per line; Zone max km sits in a closed accordion. Schedule QA skips expected empty Saturday placeholder sheets (`herc-koed`, `ec-berlin`) unless those sheets later have trains. DELTA_VARIANCE cards show a short per-train preview and open a train/delta table. Feedback version chips open Build notes (`#admin-build`) even when the chip is on a reaction host.

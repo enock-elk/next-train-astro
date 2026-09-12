@@ -53,8 +53,8 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
             ></iframe>
             <div id="map-tab-placeholder" class="hidden absolute inset-0 pointer-events-none" aria-hidden="true"></div>
             <div id="map-tab-fallback" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-gray-100 dark:bg-gray-950">
-                <p class="text-sm font-black text-gray-900 dark:text-white">Map didn’t load</p>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">An old cached redirect can block the embedded map. Reload it, or open the full map in a new tab.</p>
+                <p data-fallback-title class="text-sm font-black text-gray-900 dark:text-white">Map didn’t load</p>
+                <p data-fallback-body class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">The map could not be opened. Reload it when you have a signal, or open the full map in a new tab.</p>
                 <div class="flex items-center gap-2">
                     <button type="button" id="map-tab-retry" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-bold focus:outline-none">Reload map</button>
                     <a id="map-tab-open-full" href={mapSrc.replace('&embed=1', '').replace('?embed=1&', '?').replace('?embed=1', '')} target="_blank" rel="noopener" class="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-[11px] font-bold text-gray-700 dark:text-gray-200">Open full map</a>

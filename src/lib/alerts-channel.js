@@ -505,8 +505,8 @@ function renderPostCard(notice, opts = {}) {
     const sourceUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : '';
     const sourceHtml = sourceName
         ? (sourceUrl
-            ? `<a href="${sourceUrl}" target="_blank" rel="noopener" class="nt-alert-source">${sourceName}</a>`
-            : `<span class="nt-alert-source">${sourceName}</span>`)
+            ? `<a href="${sourceUrl}" target="_blank" rel="noopener" class="nt-alert-source"><span aria-hidden="true">📰</span>Source: ${sourceName}</a>`
+            : `<span class="nt-alert-source"><span aria-hidden="true">📰</span>Source: ${sourceName}</span>`)
         : '';
     const timeHtml = when
         ? `<time class="nt-alert-time" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>`
@@ -514,15 +514,15 @@ function renderPostCard(notice, opts = {}) {
     const adminMetaHtml = scope
         ? `<span class="nt-alert-scope">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
         : '';
-    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
+    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-2 py-1 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
     const footerHtml = `<div class="nt-alert-card-footer">
             <div class="nt-alert-meta-row">
                 <div class="nt-alert-meta-source">${sourceHtml}</div>
-                <div class="nt-alert-meta-when">${timeHtml}${adminMetaHtml}</div>
+                <div class="nt-alert-meta-when">${timeHtml}</div>
             </div>
             <div class="nt-alert-action-row">
                 ${renderReactionsHtml(notice, { compact: true })}
-                ${replyBtn}
+                <div class="nt-alert-action-meta">${adminMetaHtml}${replyBtn}</div>
             </div>
         </div>`;
     const cardRing = highlight

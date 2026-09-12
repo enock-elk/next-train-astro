@@ -255,6 +255,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-action-row'), 'reactions and Reply share an action row');
     assert(js.indexOf('nt-alert-meta-row') < js.indexOf('nt-alert-action-row'), 'source/time sit above reactions/Reply');
     assert(js.includes("renderReactionsHtml(notice, { compact: true })"), 'footer reactions omit the leftover mt-2 gap');
+    assert(js.includes('📰</span>Source:'), 'source label includes the requested newspaper prefix');
+    assert(js.includes('nt-alert-action-meta'), 'admin route/views share the roomier Reply row');
     const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hub.includes("returnModalId !== 'alerts-channel'"), 'Reply does not park the alerts channel');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
@@ -264,7 +266,8 @@ const now = 1_700_000_000_000;
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
-    assert(/\.nt-alert-reply\s*\{[\s\S]*?background:\s*transparent/.test(appearance), 'Reply is a ghost/text control');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?background:\s*var\(--nt-surface-muted\)/.test(appearance), 'Reply uses a reaction-style surface');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?border:\s*1px solid var\(--nt-border\)/.test(appearance), 'Reply uses a reaction-style border');
     assert(js.includes('nt-alert-source'), 'source citation uses the quiet source class');
     assert(!js.includes('nt-alert-source mt-3 text-[11px] font-semibold'), 'source dropped the chip-sized type');
     assert(js.includes('0 views'), 'admin impression placeholder is 0 views');

@@ -83,6 +83,21 @@ export async function peekIncomingVersion() {
     return null;
 }
 
+/** Compare release ids shaped like V9_09.12.1. Invalid ids are never newer. */
+export function isAppVersionNewer(candidate, current = APP_VERSION) {
+    const tuple = (value) => {
+        const match = String(value || '').split(' - ')[0].trim().match(/^V?(\d+)_(\d{2})\.(\d{2})\.(\d+)$/i);
+        return match ? match.slice(1).map(Number) : null;
+    };
+    const next = tuple(candidate);
+    const active = tuple(current);
+    if (!next || !active) return false;
+    for (let i = 0; i < next.length; i += 1) {
+        if (next[i] !== active[i]) return next[i] > active[i];
+    }
+    return false;
+}
+
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
 function showCrucialUpdateToast(incomingVersion) {
     const label = incomingVersion || 'Latest';

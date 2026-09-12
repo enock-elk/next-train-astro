@@ -47,7 +47,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
-import { markAppUpdatedToast } from './app-update.js';
+import { isAppVersionNewer, markAppUpdatedToast, peekIncomingVersion } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -582,8 +582,17 @@ export async function showCacheClearWarning() {
         return;
     }
     triggerHaptic();
-    // Always restart when online so Check for Updates can drop a stuck SW / cache.
-    // After reload, maybeShowUpdatedVersionToast shows "App updated to version …".
+    const incomingVersion = await peekIncomingVersion();
+    if (!incomingVersion) {
+        showToast('Could not check for updates. Please try again.', 'warning');
+        return;
+    }
+    if (!isAppVersionNewer(incomingVersion, APP_VERSION)) {
+        showToast(`You’re on the latest version, ${APP_VERSION}.`, 'info', 3000);
+        return;
+    }
+    // A newer build exists. Restart so the SW/cache update can install it;
+    // after reload maybeShowUpdatedVersionToast names the installed version.
     await performHardCacheClear('check_updates');
 }
 

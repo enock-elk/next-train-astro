@@ -103,6 +103,14 @@ for (const required of [
 ]) {
   assert(admin.includes(required), `admin editor missing ${required}`);
 }
+assert(
+  admin.includes('id="grid-order-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider'),
+  'Grid Column Order tile title must use the same muted uppercase as other Dev Hub home tiles'
+);
+assert(
+  !/grid-order-header-btn"[^>]*>[\s\S]{0,220}text-gray-900/.test(admin),
+  'Grid Column Order tile title must not use dark black text-gray-900'
+);
 
 const renderer = read('src/lib/renderer.js');
 const logic = read('src/lib/logic.js');

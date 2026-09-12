@@ -14004,8 +14004,8 @@ const Admin = {
         panel.id = 'grid-order-panel';
         panel.className = 'bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-md p-4 mb-4 overflow-hidden';
         panel.innerHTML = `
-            <button id="grid-order-header-btn" class="w-full flex items-center justify-between text-left focus:outline-none">
-                <span class="font-bold text-gray-900 dark:text-white flex items-center">
+            <button id="grid-order-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
                     ${Admin.tileIcon('columns', 'text-indigo-600 dark:text-indigo-400')}
                     <span>Grid Column Order</span>
                 </span>

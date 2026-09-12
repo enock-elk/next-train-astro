@@ -106,6 +106,7 @@ assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"),
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still invokes the full reset');
 assert(hub.includes("policy.systemKillswitch || source === 'check_updates'"), 'manual reset requires the same real-network preflight');
+assert(hub.includes('policy.systemKillswitch && isLieFi'), 'manual retry probes again instead of trusting a stale Lie-Fi flag');
 assert(hub.includes('Can’t restart yet. Check internet and try later.'), 'manual reset explains why an offline restart is deferred');
 assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("hardReloadWithCacheBust('version_enforce')"), 'forced update activates waiting SW before reload');
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');

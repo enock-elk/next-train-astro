@@ -509,7 +509,9 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     const requiresNetworkPreflight = policy.systemKillswitch || source === 'check_updates';
     if (requiresNetworkPreflight) {
         const online = typeof navigator === 'undefined' || navigator.onLine === true;
-        if (!destructiveNetworkIsSafe({ online, lieFi: isLieFi, preflight: 'ok' })) return false;
+        // A manual retry must actively probe again so a stale Lie-Fi flag cannot
+        // keep blocking the reset after the connection has recovered.
+        if (!online || (policy.systemKillswitch && isLieFi)) return false;
         let preflight = 'unavailable';
         try {
             preflight = typeof window.probeReachability === 'function'

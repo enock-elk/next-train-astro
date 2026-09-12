@@ -834,8 +834,11 @@ html.dark .nt-offline-strip {
 /* Planner notices: icon + accent bar + wash all live on the right. */
 .planner-notice-body {
   position: relative;
+  display: flex;
+  flex-direction: column;
   padding-right: 3.25rem;
   text-align: left;
+  min-height: 3.5rem;
 }
 .planner-notice-icon {
   width: 2.25rem;
@@ -845,8 +848,26 @@ html.dark .nt-offline-strip {
   justify-content: center;
   pointer-events: none;
 }
+.planner-notice-copy {
+  font-size: clamp(0.625rem, 2.65vw, 0.875rem);
+  line-height: 1.35;
+}
+.planner-notice-copy p {
+  margin: 0;
+}
+.planner-notice-details-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-right: 0;
+  /* Sit under the SVG: reclaim the icon gutter on this row only. */
+  margin-right: -2.75rem;
+}
 .planner-next-day-cta {
   display: flex;
+}
+.planner-trip-fare {
+  line-height: 1.2;
 }
 
 /* Alert / admin-reply rich text: keep FONT size/face and wrap long URLs */

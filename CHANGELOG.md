@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.5 — Incident windows, planner banners, trip fare line (12 Sep 2026)
+
+Transit incidents can target weekdays / Saturday / Sunday / public holiday and a from-until clock window (default all day). The timetable grid only greys trains inside that window. Cancelled stations stay off the map unless the admin toggle is on. Planner: See Next Available Day sits above All Trains Departed so the three banners stack; Details is bottom-right under the icon; notice body copy shrinks to fit; trip price reads TRIP FARE: R12.00 on one dotted line beside Total Time.
+
+no release notes.
+
 ## V9_09.12.4 — Transit incidents, trip price beta, alert image cache (12 Sep 2026)
 
 `getTripDisruptions()` two-station danger zones now use interval overlap instead of a single hop spanning the whole cut, so planner / board / map overlays attach again. Segment CRITICAL trips stay in planner results and show the Line Severed banner plus TRAIN TERMINATES. Grid shades CRITICAL station rows grey. Map paints WARNING and CRITICAL rail segments when stations snap onto the corridor. Trip price is admin/beta-only (`tripPrice` grant). Alert posters cache in `nt-alert-images-v1` and drop on expiry or NUKE.

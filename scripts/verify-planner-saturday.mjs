@@ -55,6 +55,17 @@ if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feed
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
 if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
 if (!ui.includes('planner-notice-details-row')) fail('Details must sit on its own row');
+if (!ui.includes('planner-notice-details-row flex justify-end')) fail('Details must sit on the bottom right under the banner SVG');
+if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
+if (!ui.includes('TRIP FARE:')) fail('planner fare is a single TRIP FARE line');
+{
+    const departedFn = ui.slice(ui.indexOf('export function renderAllDepartedResult'));
+    const ctaAt = departedFn.indexOf('${nextDayCta}');
+    const cardAt = departedFn.indexOf('PlannerRenderer.buildCard');
+    if (ctaAt < 0 || cardAt < 0 || ctaAt > cardAt) {
+        fail('See Next Available Day must sit above the departed banner stack');
+    }
+}
 if (ui.includes('pr-14')) fail('planner notice must not reserve pr-14 on phones');
 if (!ui.includes('paintSaturdayBetweenLine')) fail('Saturday advisory must paint blue corridor ends');
 if (!sat.includes('buildSaturdayAdvisoryCopy')) fail('saturday-service must build dynamic advisory copy');

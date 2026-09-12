@@ -44,6 +44,8 @@ assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
 
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
+assert(ui.includes('TRIP FARE:'), 'fare label is TRIP FARE on one line');
+assert(ui.includes('border-b border-dotted'), 'TRIP FARE uses a dotted underline');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 

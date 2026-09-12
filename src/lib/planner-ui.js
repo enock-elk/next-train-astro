@@ -751,8 +751,7 @@ function buildPlannerNotice({
         ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon on the right. Details is its own row (no shared
-    // flex with the copy) so phones do not squeeze it into the icon gutter.
+    // Accent bar + icon on the right. Details sits bottom-right under the SVG.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
     const inner = `
         <div class="flex items-stretch">
@@ -763,8 +762,8 @@ function buildPlannerNotice({
                     </div>
                 </div>
                 <h4 class="planner-notice-title text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5">${escapeHTML(title)}</h4>
-                <div class="text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
-                ${detailsHtml ? `<div class="planner-notice-details-row">${detailsHtml}</div>` : ''}
+                <div class="planner-notice-copy text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
+                ${detailsHtml ? `<div class="planner-notice-details-row flex justify-end mt-1.5">${detailsHtml}</div>` : ''}
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
@@ -780,6 +779,47 @@ function buildPlannerNotice({
         `;
     }
     return `<div class="${shellClass}">${inner}</div>`;
+}
+
+/** Shrink notice body lines so they stay on one row when the viewport allows. */
+function fitPlannerNoticeCopy(root) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const nodes = scope.querySelectorAll('.planner-notice-copy p, .planner-notice-copy');
+    nodes.forEach((el) => {
+        if (el.classList?.contains('planner-notice-copy') && el.querySelector('p')) return;
+        el.style.fontSize = '';
+        el.style.whiteSpace = '';
+        const maxPx = 14;
+        const minPx = 10;
+        el.style.whiteSpace = 'nowrap';
+        el.style.fontSize = `${maxPx}px`;
+        const fits = () => el.scrollWidth <= el.clientWidth + 0.5;
+        if (fits()) {
+            el.style.whiteSpace = 'nowrap';
+            return;
+        }
+        let best = minPx;
+        for (let size = maxPx; size >= minPx; size -= 0.25) {
+            el.style.fontSize = `${size}px`;
+            if (fits()) {
+                best = size;
+                break;
+            }
+        }
+        el.style.fontSize = `${best}px`;
+        if (!fits()) el.style.whiteSpace = 'normal';
+    });
+}
+
+function scheduleFitPlannerNotices(root) {
+    const run = () => fitPlannerNoticeCopy(root);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else run();
+}
+
+if (typeof window !== 'undefined' && !window.__ntPlannerNoticeFitBound) {
+    window.__ntPlannerNoticeFitBound = true;
+    window.addEventListener('resize', () => scheduleFitPlannerNotices());
 }
 
 /** Day-bridge line for rollover / sunday-mapped holiday plans. */
@@ -1156,6 +1196,7 @@ export function selectMainDay(e, value, text) {
 
     selectedPlannerDate = null;
     selectedPlannerDay = value;
+    if (typeof window !== 'undefined') window.selectedPlannerDay = value;
 
     const display = document.getElementById('main-day-display');
     if (display) display.textContent = text || plannerDayDisplayText(value);
@@ -1179,6 +1220,7 @@ export function applyPlannerSpecificDate(isoDate) {
     }
     selectedPlannerDate = isoDate;
     selectedPlannerDay = resolved.dayType;
+    if (typeof window !== 'undefined') window.selectedPlannerDay = selectedPlannerDay;
     const display = document.getElementById('main-day-display');
     if (display) display.textContent = plannerDayDisplayText('specific', isoDate);
     const list = document.getElementById('main-day-list');
@@ -2525,7 +2567,8 @@ export const PlannerRenderer = {
 
         if (typeof window !== 'undefined' && typeof window.getTripDisruptions === 'function') {
             const checkStops = (stops, routeId) => {
-                const disr = window.getTripDisruptions(routeId, stops);
+                const day = selectedPlannerDay || getCurrentDayType();
+                const disr = window.getTripDisruptions(routeId, stops, day);
                 if (disr.some(d => d.tier === 'CRITICAL')) activeDisr = disr.find(d => d.tier === 'CRITICAL');
                 else if (disr.some(d => d.tier === 'WARNING') && !activeDisr) activeDisr = disr.find(d => d.tier === 'WARNING');
             };
@@ -2708,21 +2751,19 @@ export const PlannerRenderer = {
                 <div class="flex justify-between items-start mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                      <div class="flex flex-col items-start min-w-0 pr-2">
                         ${stateBadge}
-                        ${canShowTripPrice() ? `<button type="button" data-nt-trip-fare="1" class="mt-1.5 flex flex-col items-start text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
-                            <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"/></svg>
-                                <span data-nt-trip-fare-price>R-</span>
-                            </div>
-                            <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Fare</div>
-                        </button>` : ''}
                      </div>
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
                         <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
                             ${duration}
                         </div>
-                        <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Total Time</div>
                      </div>
+                </div>
+                <div class="flex justify-between items-center mt-0.5">
+                     ${canShowTripPrice() ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
+                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap border-b border-dotted border-gray-400 dark:border-gray-500">TRIP FARE: <span data-nt-trip-fare-price>R-</span></span>
+                     </button>` : '<span></span>'}
+                     <div class="text-[9px] text-gray-400 uppercase tracking-widest shrink-0 pl-2">Total Time</div>
                 </div>
             </div>
         `;
@@ -3965,6 +4006,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     }
 
     if (!selectedPlannerDay) selectedPlannerDay = getCurrentDayType();
+    if (typeof window !== 'undefined') window.selectedPlannerDay = selectedPlannerDay;
 
     setTimeout(async () => {
         let plannerResponse = { status: 'NO_PATH', trips: [] };
@@ -4351,6 +4393,7 @@ export function renderSelectedTrip(container, index) {
         renderTripResult(container, currentTripOptions, index);
     }
     hydratePlannerFareButton(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 export function startPlannerPulse(currentIndex) {
@@ -4838,6 +4881,7 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
     container.innerHTML = PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, leading)
         + '<div id="planner-crowd-delay-slot"></div>';
     injectPlannerCrowdDelay(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
@@ -4870,14 +4914,12 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
     `;
 
     container.innerHTML = `
-        <div class="planner-departed-notice mb-3 [&>.planner-notice]:!mb-0 [&>.planner-notice-stack]:!mb-0">
-            ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), departedNotice)}
-        </div>
         ${nextDayCta}
-        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex)}
+        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, [buildHolidayNoticeHtml(selectedTrip), departedNotice])}
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 /** Next-day trips after rollover — positive bridge, not a second "all departed" notice. */
@@ -4907,6 +4949,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 /** @deprecated Use renderNextDayResult — kept for any external callers. */
@@ -4948,6 +4991,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 export function renderImpossibleTodayResult(container, trips, selectedIndex = 0) {
@@ -4976,6 +5020,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
+    scheduleFitPlannerNotices(container);
 }
 
 export function renderErrorCard(title, message, actionHtml = "", tone = 'warn') {

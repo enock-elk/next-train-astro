@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.10': [
+        'Export version is out of flow (top-right overlay). Footer height is the two paired rows only. Type sizes unchanged.',
+        'Export NOTE copy is vertically centered (table-cell, html2canvas-safe).',
+    ],
     'V9_09.12.9': [
         'See Next Available Day updates the day dropdown to the presented results (Saturday click → Weekday).',
         'Export footer: version top-right, GENERATED balances NextTrain.co.za, PRASA / Metrorail balances the unofficial line. Date has no weekday.',

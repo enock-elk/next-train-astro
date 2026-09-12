@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.10 — Tighter export footer, centered note (12 Sep 2026)
+
+Export version is absolutely positioned in the top-right so it no longer adds a third layout row or a grey void above GENERATED. Footer type sizes are unchanged. The timetable NOTE band uses table-cell vertical-align middle so html2canvas centers the copy.
+
+no release notes.
+
 ## V9_09.12.9 — Next-day dropdown, export footer, empty board, Dev Hub tile (12 Sep 2026)
 
 See Next Available Day syncs the results-header and search day dropdowns to the day type of the trips on screen. Export footer is two paired rows: GENERATED with NextTrain.co.za, data source PRASA / Metrorail with the unofficial line; quiet APP_VERSION sits alone above the wordmark. Generated date drops the weekday name. No-scheduled-trains cards match You're here (no card chrome, calendar SVG). Track Occupation on no-more-trains-today cards sits on the same row as See Monday Schedule. Dev Hub Grid Column Order tile title uses the same muted uppercase as the other home tiles.

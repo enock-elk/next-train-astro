@@ -1403,8 +1403,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
-                <div class="nt-export-note" style="background-color:#fff7ed;border-left:5px solid #c2410c;padding:8px 14px;margin:12px 0 0;font-size:15px;color:#9a3412;border-radius:0 6px 6px 0;box-shadow:0 1px 2px rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;text-align:center;">
-                    <div style="font-weight:600;line-height:1.25;max-width:52rem;">
+                <div class="nt-export-note" style="background-color:#fff7ed;border-left:5px solid #c2410c;margin:12px 0 0;font-size:15px;color:#9a3412;border-radius:0 6px 6px 0;box-shadow:0 1px 2px rgba(0,0,0,0.05);display:table;width:100%;min-height:44px;box-sizing:border-box;">
+                    <div style="display:table-cell;vertical-align:middle;text-align:center;padding:8px 14px;font-weight:600;line-height:1.25;">
                         <span style="font-weight:900;letter-spacing:0.04em;color:#c2410c;">NOTE:</span> ${cleanText}
                     </div>
                 </div>
@@ -1467,15 +1467,17 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         ${exportGridNoticeHtml}
 
-        <div class="mt-6 px-4 py-3 rounded-lg flex justify-between items-end" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}">
-            <div class="flex flex-col justify-end gap-0.5 text-left">
-                <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px; line-height: 1.2;">GENERATED: ${dateText}</span>
-                <span class="font-black" style="color: #374151; font-size: 15px; line-height: 1.2;">Data Source: PRASA / Metrorail</span>
-            </div>
-            <div class="flex flex-col items-end justify-end text-right gap-0.5">
-                <span style="color: #9ca3af; font-size: 8px; font-weight: 600; letter-spacing: 0.05em; line-height: 1;">${escapeHTML(String(APP_VERSION || '').split(' - ')[0])}</span>
-                <span class="font-black text-2xl tracking-tight leading-none" style="color: ${accentColor}">NextTrain.co.za</span>
-                <span class="text-[10px] font-bold uppercase tracking-wider" style="color: #6b7280">Unofficial Guide • Not affiliated with PRASA</span>
+        <div class="nt-export-footer mt-6 rounded-lg relative" style="background-color: ${tableHeaderBg}; border: 1px solid ${borderColor}; padding: 14px 16px 10px;">
+            <span class="nt-export-version" style="position:absolute;top:4px;right:16px;color:#9ca3af;font-size:8px;font-weight:600;letter-spacing:0.05em;line-height:1;">${escapeHTML(String(APP_VERSION || '').split(' - ')[0])}</span>
+            <div class="flex justify-between items-center">
+                <div class="flex flex-col gap-0.5 text-left">
+                    <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px; line-height: 1.2;">GENERATED: ${dateText}</span>
+                    <span class="font-black" style="color: #374151; font-size: 15px; line-height: 1.2;">Data Source: PRASA / Metrorail</span>
+                </div>
+                <div class="flex flex-col items-end text-right gap-0.5">
+                    <span class="font-black text-2xl tracking-tight leading-none" style="color: ${accentColor}">NextTrain.co.za</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider" style="color: #6b7280">Unofficial Guide • Not affiliated with PRASA</span>
+                </div>
             </div>
         </div>
     `;

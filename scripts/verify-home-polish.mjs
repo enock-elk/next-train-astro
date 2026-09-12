@@ -104,6 +104,9 @@ assert(!renderer.includes("weekday: 'long'"), 'generated date has no weekday nam
     const wordmarkAt = renderer.indexOf('NextTrain.co.za', footerAt);
     assert(footerAt > -1 && versionAt > footerAt && wordmarkAt > versionAt, 'quiet version sits above NextTrain.co.za');
 }
+assert(renderer.includes('nt-export-version'), 'export version is a dedicated overlay');
+assert(renderer.includes('position:absolute;top:4px;right:16px'), 'version is out of flow so it does not stretch the footer');
+assert(renderer.includes('vertical-align:middle'), 'export note text is vertically centered');
 assert(renderer.includes('emptyScheduledBoardHtml'), 'empty scheduled board matches You are here chrome');
 assert(renderer.includes("See ${dayName} Schedule</button>`"), 'no-more-today schedule CTA is a sibling of the incident chip');
 assert(renderer.includes('${scheduleBtn}${disruptionHtml}'), 'Track Occupation sits beside See Monday Schedule');

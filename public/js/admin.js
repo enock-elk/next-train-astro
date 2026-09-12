@@ -680,12 +680,11 @@ const Admin = {
             return [];
         }
     },
-    persistSavedAlertSources: (list) => {
+    persistSavedAlertSources: async (list) => {
         const next = ntAdminNormalizeAlertSources(list);
         Admin._alertSourcesCache = next;
         try { localStorage.setItem(Admin.ALERT_SOURCES_KEY, JSON.stringify(next)); } catch { /* quota */ }
-        Admin.syncSavedAlertSourcesToFirebase(next);
-        return next;
+        return Admin.syncSavedAlertSourcesToFirebase(next);
     },
     syncSavedAlertSourcesToFirebase: async (list) => {
         const token = await Admin.getAuthKey();
@@ -722,9 +721,9 @@ const Admin = {
         }
         return Admin.loadSavedAlertSources();
     },
-    upsertSavedAlertSource: (name, url, existingId) => {
+    upsertSavedAlertSource: async (name, url, existingId) => {
         const result = ntAdminUpsertAlertSource(Admin.loadSavedAlertSources(), name, url, existingId);
-        if (result.ok) Admin.persistSavedAlertSources(result.list);
+        if (result.ok) result.online = await Admin.persistSavedAlertSources(result.list);
         return result;
     },
     deleteSavedAlertSource: (id) => Admin.persistSavedAlertSources(ntAdminDeleteAlertSource(Admin.loadSavedAlertSources(), id)),
@@ -11779,8 +11778,8 @@ const Admin = {
             });
         }
         if (sourceSaveBtn) {
-            sourceSaveBtn.onclick = () => {
-                const result = Admin.upsertSavedAlertSource(
+            sourceSaveBtn.onclick = async () => {
+                const result = await Admin.upsertSavedAlertSource(
                     sourceNameInput ? sourceNameInput.value : '',
                     sourceUrlInput ? sourceUrlInput.value : '',
                     sourceSavedSelect ? sourceSavedSelect.value : ''
@@ -11790,19 +11789,29 @@ const Admin = {
                     return;
                 }
                 renderSavedSourceDropdown(result.source ? result.source.id : '');
-                if (typeof showToast === 'function') showToast('Source saved for both operators.', 'success');
+                if (typeof showToast === 'function') {
+                    showToast(
+                        result.online ? 'Source saved online for both operators.' : 'Source saved on this device, but online sync failed.',
+                        result.online ? 'success' : 'error'
+                    );
+                }
             };
         }
         if (sourceDeleteBtn) {
-            sourceDeleteBtn.onclick = () => {
+            sourceDeleteBtn.onclick = async () => {
                 const id = sourceSavedSelect ? sourceSavedSelect.value : '';
                 if (!id) {
                     if (typeof showToast === 'function') showToast('Pick a saved source to remove.', 'info');
                     return;
                 }
-                Admin.deleteSavedAlertSource(id);
+                const removedOnline = await Admin.deleteSavedAlertSource(id);
                 renderSavedSourceDropdown('');
-                if (typeof showToast === 'function') showToast('Removed saved source.', 'info');
+                if (typeof showToast === 'function') {
+                    showToast(
+                        removedOnline ? 'Removed saved source online.' : 'Removed on this device, but online sync failed.',
+                        removedOnline ? 'info' : 'error'
+                    );
+                }
             };
         }
 

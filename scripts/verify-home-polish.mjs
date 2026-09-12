@@ -171,6 +171,9 @@ assert(admin.includes('id="alert-source-save-btn"'), 'save source control');
 assert(admin.includes('nt_admin_alert_sources'), 'sources persist in localStorage');
 assert(admin.includes('admin_state/alert_sources'), 'saved sources also live on Firebase');
 assert(admin.includes('refreshSavedAlertSources'), 'admin hydrates saved sources from Firebase');
+assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'source Save waits for the online write');
+assert(admin.includes('Source saved online for both operators.'), 'source Save confirms shared online persistence');
+assert(admin.includes('online sync failed.'), 'source Save/Delete report online failures');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
 assert(admin.includes('alerts-sched-v3'), 'alert panel rebuild key');
 assert(admin.includes('alert-tab-active'), 'Active alerts tab exists');
@@ -259,6 +262,7 @@ assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
+assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');

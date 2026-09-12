@@ -156,6 +156,8 @@ assert(admin.includes('In-app board and planner') && admin.includes('Timetable g
 assert(admin.includes('nt_admin_alert_sources'), 'saved sources use the localStorage key');
 assert(admin.includes('admin_state/alert_sources'), 'saved sources sync to Firebase');
 assert(admin.includes('refreshSavedAlertSources'), 'saved sources refresh from Firebase');
+assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'saved source writes are awaited');
+assert(admin.includes('Source saved online for both operators.'), 'saved source confirms online availability');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
 assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()'), 'publish still sends sourceUrl');
 assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-panel', 'drill hash maps to the panel id');

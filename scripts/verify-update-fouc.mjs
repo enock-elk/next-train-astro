@@ -67,17 +67,20 @@ assert(!needRefresh.includes('__ntPendingUpdateToken'), 'onNeedRefresh does not 
 assert(appUpdate.includes('it is not how FOUC is fixed'), 'app-update comments that force-update is not the FOUC fix');
 assert(appUpdate.includes('export async function peekIncomingVersion'), 'incoming version peek is shared');
 assert(appUpdate.includes('return null;'), 'failed version peek does not pretend this shell is incoming');
+assert(appUpdate.includes('markLatestVersionToast'), 'current-version reset schedules a distinct post-reload toast');
+assert(appUpdate.includes('maybeShowLatestVersionToast'), 'current-version toast is shown after the reset reload');
 assert(isAppVersionNewer('V9_09.12.2', 'V9_09.12.1'), 'same-day higher release is newer');
 assert(isAppVersionNewer('V9_09.13.1', 'V9_09.12.9'), 'later release date is newer');
 assert(!isAppVersionNewer('V9_09.12.1', 'V9_09.12.1'), 'same release is not newer');
 assert(!isAppVersionNewer('V9_09.11.9', 'V9_09.12.1'), 'older release is not newer');
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
-assert(hubJs.includes('You must be online to check for updates'), 'Check for Updates stays put when offline');
+assert(hubJs.includes('Can’t restart yet. Check internet and try later.'), 'offline restart uses a short explanatory toast');
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
-assert(hubJs.includes('isAppVersionNewer(incomingVersion, APP_VERSION)'), 'Check for Updates only restarts for a newer release');
-assert(hubJs.includes('You’re on the latest version'), 'current release gets a grey informational toast');
-assert(hubJs.includes("'info', 3000"), 'latest-version toast uses the grey info style');
+assert(hubJs.includes('latestVersion: !isAppVersionNewer(incomingVersion, APP_VERSION)'), 'Check for Updates always resets and classifies the post-reload toast');
+assert(hubJs.includes("policy.systemKillswitch || source === 'check_updates'"), 'Check for Updates requires the real-network preflight before wiping');
+assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
+assert(appUpdate.includes("'info', 3000"), 'latest-version toast uses the grey info style');
 
 const deploy = readFileSync(new URL('../.github/workflows/deploy-production.yml', import.meta.url), 'utf8');
 const productionBuild = readFileSync(new URL('../.github/workflows/production-build.yml', import.meta.url), 'utf8');

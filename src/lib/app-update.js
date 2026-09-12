@@ -189,6 +189,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
 }
 
 const UPDATED_TOAST_KEY = 'nt_show_updated_toast';
+const LATEST_TOAST_KEY = 'nt_show_latest_toast';
 let forcedUpdatePromise = null;
 
 function scheduleForcedUpdate(version) {
@@ -220,7 +221,18 @@ function scheduleForcedUpdate(version) {
 
 export function markAppUpdatedToast() {
     if (typeof sessionStorage === 'undefined') return;
-    try { sessionStorage.setItem(UPDATED_TOAST_KEY, APP_VERSION); } catch { /* ignore */ }
+    try {
+        sessionStorage.removeItem(LATEST_TOAST_KEY);
+        sessionStorage.setItem(UPDATED_TOAST_KEY, APP_VERSION);
+    } catch { /* ignore */ }
+}
+
+export function markLatestVersionToast() {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+        sessionStorage.removeItem(UPDATED_TOAST_KEY);
+        sessionStorage.setItem(LATEST_TOAST_KEY, APP_VERSION);
+    } catch { /* ignore */ }
 }
 
 export function maybeShowUpdatedVersionToast() {
@@ -234,11 +246,23 @@ export function maybeShowUpdatedVersionToast() {
     showToast(`App updated to version ${APP_VERSION}`, 'success', 3000);
 }
 
+export function maybeShowLatestVersionToast() {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+        if (!sessionStorage.getItem(LATEST_TOAST_KEY)) return;
+        sessionStorage.removeItem(LATEST_TOAST_KEY);
+    } catch {
+        return;
+    }
+    showToast(`You’re on the latest version, ${APP_VERSION}.`, 'info', 3000);
+}
+
 /** Boot check: stored shell version vs bundled APP_VERSION. */
 export function enforceAppVersion() {
     if (typeof window === 'undefined') return;
 
     maybeShowUpdatedVersionToast();
+    maybeShowLatestVersionToast();
 
     const currentVersion = APP_VERSION || 'unknown';
     const storedVersion = safeStorage.getItem('app_installed_version');

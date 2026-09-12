@@ -47,7 +47,7 @@ import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
-import { isAppVersionNewer, markAppUpdatedToast, peekIncomingVersion } from './app-update.js';
+import { isAppVersionNewer, markAppUpdatedToast, markLatestVersionToast, peekIncomingVersion } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
@@ -504,9 +504,10 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
-export async function performHardCacheClear(source = 'modal_confirm') {
+export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false } = {}) {
     const policy = cacheClearPolicy(source);
-    if (policy.systemKillswitch) {
+    const requiresNetworkPreflight = policy.systemKillswitch || source === 'check_updates';
+    if (requiresNetworkPreflight) {
         const online = typeof navigator === 'undefined' || navigator.onLine === true;
         if (!destructiveNetworkIsSafe({ online, lieFi: isLieFi, preflight: 'ok' })) return false;
         let preflight = 'unavailable';
@@ -569,31 +570,35 @@ export async function performHardCacheClear(source = 'modal_confirm') {
         if (policy.systemKillswitch) return false;
     }
     markPendingReload(policy.systemKillswitch ? 'killswitch' : 'cache_sync', 500);
-    if (policy.showUpdatedToast) markAppUpdatedToast();
+    if (policy.showUpdatedToast) {
+        if (latestVersion) markLatestVersionToast();
+        else markAppUpdatedToast();
+    }
     setTimeout(() => {
         window.location.href = window.location.pathname + '?v=' + Date.now();
     }, 500);
     return true;
 }
 
+const RESTART_OFFLINE_MESSAGE = 'Can’t restart yet. Check internet and try later.';
+
 export async function showCacheClearWarning() {
     if (!navigator.onLine) {
-        showToast('You must be online to check for updates.', 'warning');
+        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
         return;
     }
     triggerHaptic();
     const incomingVersion = await peekIncomingVersion();
     if (!incomingVersion) {
-        showToast('Could not check for updates. Please try again.', 'warning');
+        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
         return;
     }
-    if (!isAppVersionNewer(incomingVersion, APP_VERSION)) {
-        showToast(`You’re on the latest version, ${APP_VERSION}.`, 'info', 3000);
-        return;
+    const restarted = await performHardCacheClear('check_updates', {
+        latestVersion: !isAppVersionNewer(incomingVersion, APP_VERSION),
+    });
+    if (!restarted) {
+        showToast(RESTART_OFFLINE_MESSAGE, 'warning', 4000);
     }
-    // A newer build exists. Restart so the SW/cache update can install it;
-    // after reload maybeShowUpdatedVersionToast names the installed version.
-    await performHardCacheClear('check_updates');
 }
 
 function syncProfileDisplay() {

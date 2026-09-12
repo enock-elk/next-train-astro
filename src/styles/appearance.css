@@ -307,37 +307,37 @@ html[data-colour-pack="signal"].dark {
 
 /* Ember — pale clay paper; ink on clay CTAs (not chocolate fills) */
 html[data-colour-pack="ember"] {
-  --nt-primary: #ecd4bc;
-  --nt-primary-hover: #e0c4a8;
+  --nt-primary: #e8ddd0;
+  --nt-primary-hover: #dccfc0;
   --nt-primary-fg: #3a2a1c;
-  --nt-primary-soft: #f8f1e9;
-  --nt-canvas: #f8f2eb;
-  --nt-surface: #fcf8f4;
-  --nt-surface-muted: #f4ece4;
-  --nt-chrome-header: #f6efe6;
-  --nt-chrome-header-border: #eadccc;
-  --nt-chrome-nav: #f2e8da;
-  --nt-chrome-nav-border: #e4d4c0;
+  --nt-primary-soft: #f4efe9;
+  --nt-canvas: #f5f2ee;
+  --nt-surface: #faf8f5;
+  --nt-surface-muted: #f3efe9;
+  --nt-chrome-header: #f0ebe5;
+  --nt-chrome-header-border: #e2dbd3;
+  --nt-chrome-nav: #ebe6df;
+  --nt-chrome-nav-border: #d8d1c8;
   --nt-chrome-fg: #4a3224;
-  --nt-chrome-muted: #3d2e24;
+  --nt-chrome-muted: #2a2118;
   --nt-text: #2a2118;
-  --nt-text-muted: #3d2e24;
-  --nt-text-faint: #5a4638;
-  --nt-border: #eadccc;
-  --nt-theme-meta: #ecd4bc;
-  --nt-accent: #b07a50;
+  --nt-text-muted: #2a2118;
+  --nt-text-faint: #3d3228;
+  --nt-border: #e2dbd3;
+  --nt-theme-meta: #f0ebe5;
+  --nt-accent: #8a6a4e;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
-  --nt-blue-50: 252 248 244;
-  --nt-blue-100: 242 232 220;
-  --nt-blue-200: 228 204 180;
-  --nt-blue-300: 212 176 144;
-  --nt-blue-400: 196 148 104;
-  --nt-blue-500: 176 122 80;
-  --nt-blue-600: 236 214 190;
-  --nt-blue-700: 176 122 80;
-  --nt-blue-800: 138 96 64;
-  --nt-blue-900: 88 52 28;
+  --nt-blue-50: 248 245 241;
+  --nt-blue-100: 240 235 228;
+  --nt-blue-200: 226 218 206;
+  --nt-blue-300: 196 176 152;
+  --nt-blue-400: 168 140 112;
+  --nt-blue-500: 138 108 80;
+  --nt-blue-600: 232 220 206;
+  --nt-blue-700: 138 108 80;
+  --nt-blue-800: 58 46 36;
+  --nt-blue-900: 42 32 24;
 }
 
 html.dark[data-colour-pack="ember"],
@@ -381,37 +381,37 @@ html[data-colour-pack="ember"].dark {
  * Pale sage fills with ink, not forest-green or kraft-tan chocolate.
  */
 html[data-colour-pack="earthy"] {
-  --nt-primary: #d4d8cc;
-  --nt-primary-hover: #c5cbb8;
+  --nt-primary: #d8d6ce;
+  --nt-primary-hover: #cccabe;
   --nt-primary-fg: #2a2e24;
-  --nt-primary-soft: #F7F4EC;
-  --nt-canvas: #f6f3ea;
-  --nt-surface: #FCFAF6;
-  --nt-surface-muted: #F6F1E8;
-  --nt-chrome-header: #f3f0e6;
-  --nt-chrome-header-border: #e6dfd0;
-  --nt-chrome-nav: #eef0e6;
-  --nt-chrome-nav-border: #d8dcc8;
+  --nt-primary-soft: #f3f2ee;
+  --nt-canvas: #f3f2ee;
+  --nt-surface: #faf9f6;
+  --nt-surface-muted: #f4f3ef;
+  --nt-chrome-header: #efeee9;
+  --nt-chrome-header-border: #e2e0d8;
+  --nt-chrome-nav: #ecebe6;
+  --nt-chrome-nav-border: #d8d6ce;
   --nt-chrome-fg: #353535;
-  --nt-chrome-muted: #3f3a32;
-  --nt-text: #353535;
-  --nt-text-muted: #3f3a32;
-  --nt-text-faint: #5c564c;
-  --nt-border: #e4ddce;
-  --nt-theme-meta: #f3f0e6;
-  --nt-accent: #8f7d68;
+  --nt-chrome-muted: #2c2822;
+  --nt-text: #2c2822;
+  --nt-text-muted: #2c2822;
+  --nt-text-faint: #3a3530;
+  --nt-border: #e2e0d8;
+  --nt-theme-meta: #efeee9;
+  --nt-accent: #6f675c;
   --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
 
-  --nt-blue-50: 250 248 243;
-  --nt-blue-100: 243 240 232;
-  --nt-blue-200: 232 226 214;
-  --nt-blue-300: 201 193 181;
-  --nt-blue-400: 154 150 132;
-  --nt-blue-500: 125 128 110;
-  --nt-blue-600: 214 218 204;
-  --nt-blue-700: 107 112 92;
-  --nt-blue-800: 62 58 50;
-  --nt-blue-900: 53 56 48;
+  --nt-blue-50: 247 246 242;
+  --nt-blue-100: 238 237 232;
+  --nt-blue-200: 226 224 216;
+  --nt-blue-300: 186 182 170;
+  --nt-blue-400: 140 136 124;
+  --nt-blue-500: 107 102 90;
+  --nt-blue-600: 216 214 206;
+  --nt-blue-700: 90 86 76;
+  --nt-blue-800: 44 40 34;
+  --nt-blue-900: 36 34 30;
 }
 
 html.dark[data-colour-pack="earthy"],
@@ -650,6 +650,13 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 html[data-colour-pack="earthy"] #view-full-timetable-btn,
 html[data-colour-pack="ember"] #view-full-timetable-btn {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--nt-primary) 16%, transparent);
+}
+
+/* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
+   Departs in) use text-blue-600 and must stay dark ink. */
+html[data-colour-pack="earthy"]:not(.dark) .text-blue-600,
+html[data-colour-pack="ember"]:not(.dark) .text-blue-600 {
+  color: rgb(var(--nt-blue-800)) !important;
 }
 #grid-trigger-container {
   padding-bottom: 0.5rem;
@@ -1083,21 +1090,33 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 .nt-alert-source {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.25rem;
   max-width: 100%;
-  padding: 0.4rem 0.65rem;
-  border-radius: 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--nt-primary) 22%, #d1d5db);
-  background: color-mix(in srgb, var(--nt-surface) 92%, #fff);
-  color: inherit;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--nt-text-muted);
+  font-size: 0.625rem;
+  font-weight: 500;
   font-style: normal;
+  line-height: 1.3;
   text-decoration: none;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 6%, transparent);
+  box-shadow: none;
 }
 .nt-alert-source:hover,
 .nt-alert-source:focus-visible {
-  border-color: color-mix(in srgb, var(--nt-primary) 55%, #93c5fd);
-  background: color-mix(in srgb, var(--nt-primary) 7%, #fff);
+  border: none;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+#alerts-channel {
+  transition: opacity 0.32s ease;
+}
+#alerts-channel-card {
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Idle/info bell: a real disc on every pack. Classic dark used

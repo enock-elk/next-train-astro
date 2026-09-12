@@ -494,10 +494,10 @@ function renderPostCard(notice, opts = {}) {
     if (notice.sourceName) {
         const sName = escapeHTML(notice.sourceName);
         const sUrl = notice.sourceUrl ? escapeHTML(notice.sourceUrl) : null;
-        const chevron = '<svg class="w-3 h-3 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
+        const chevron = '<svg class="w-2.5 h-2.5 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
         const cite = sUrl
-            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="nt-alert-source mt-3 text-[11px] font-semibold text-gray-700 dark:text-gray-200"><span class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Source</span><span class="text-blue-700 dark:text-blue-300 truncate">${sName}</span>${chevron}</a>`
-            : `<span class="nt-alert-source mt-3 text-[11px] font-semibold text-gray-700 dark:text-gray-200"><span class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Source</span><span class="truncate">${sName}</span></span>`;
+            ? `<a href="${sUrl}" target="_blank" rel="noopener" class="nt-alert-source mt-2"><span class="uppercase tracking-wider">Source</span><span class="truncate">${sName}</span>${chevron}</a>`
+            : `<span class="nt-alert-source mt-2"><span class="uppercase tracking-wider">Source</span><span class="truncate">${sName}</span></span>`;
         extra += cite;
     }
     if (notice.ctaUrl && notice.ctaText) {
@@ -527,12 +527,12 @@ function renderPostCard(notice, opts = {}) {
         ${extra}
         ${renderPollHtml(notice)}
         ${renderReactionsHtml(notice)}
-        <p class="flex items-end justify-between gap-2 mt-2">
-            ${adminScopeHtml}
-            <span class="inline-flex items-center gap-2 shrink-0">
-                ${when ? `<time class="nt-alert-time text-[11px] text-gray-400 dark:text-gray-500 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
-                <button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
+        <p class="flex items-center justify-between gap-2 mt-2 w-full">
+            <span class="min-w-0 flex items-center gap-2">
+                ${when ? `<time class="nt-alert-time text-[11px] text-gray-500 dark:text-gray-400 tabular-nums" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>` : ''}
+                ${adminScopeHtml}
             </span>
+            <button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>
         </p>
         </div>
     </article>`;
@@ -795,12 +795,9 @@ export function closeAlertsChannel() {
         if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
         return;
     }
-    // Park home underneath (same as sidenav map sheet): hide first, then pop hash.
+    // Fade out, then pop #alerts so Close is not an instant hide.
     if (typeof window !== 'undefined') window.__ntAlertsParkHome = true;
-    closeSmoothModal('alerts-channel', true);
-    if (location.hash === '#alerts') {
-        try { history.back(); } catch { /* ignore */ }
-    }
+    closeSmoothModal('alerts-channel');
     if (typeof window !== 'undefined') window.__ntAlertsOpen = false;
 }
 

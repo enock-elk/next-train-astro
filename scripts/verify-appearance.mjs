@@ -10,10 +10,12 @@ const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 const css = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
 assert(css.includes('--nt-chrome-header'), 'appearance defines --nt-chrome-header');
 assert(css.includes('--nt-text-faint'), 'appearance splits faint text from muted');
-assert(css.includes('--nt-text-muted: #3f3a32'), 'Earthy light muted ink is darker than the old sage-brown');
-assert(css.includes('--nt-text-muted: #3d2e24'), 'Ember light muted ink is darker than the old clay-brown');
-assert(css.includes('--nt-text-faint: #5c564c'), 'Earthy light faint stays readable on cream');
-assert(css.includes('--nt-text-faint: #5a4638'), 'Ember light faint stays readable on cream');
+assert(css.includes('--nt-text-muted: #2c2822'), 'Earthy light muted ink matches body text');
+assert(css.includes('--nt-text-muted: #2a2118'), 'Ember light muted ink matches body text');
+assert(css.includes('--nt-text-faint: #3a3530'), 'Earthy light faint stays readable on cream');
+assert(css.includes('--nt-text-faint: #3d3228'), 'Ember light faint stays readable on cream');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .text-blue-600'), 'Earthy maps label blue to dark ink');
+assert(css.includes('html[data-colour-pack="ember"]:not(.dark) .text-blue-600'), 'Ember maps label blue to dark ink');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
 assert(/html\[data-colour-pack="ember"\] #view-full-timetable-btn/.test(css), 'Ember weakens the timetable CTA halo');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
@@ -222,8 +224,10 @@ assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-
 assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav))'), 'Earthy/Ember light tab chip is an ink wash');
-assert(css.includes('--nt-primary: #d4d8cc'), 'Earthy light CTA is paler sage, not chocolate');
-assert(css.includes('--nt-primary: #ecd4bc'), 'Ember light CTA is paler clay, not chocolate');
+assert(css.includes('--nt-primary: #d8d6ce'), 'Earthy light CTA is desaturated paper sage');
+assert(css.includes('--nt-primary: #e8ddd0'), 'Ember light CTA is desaturated paper clay');
+assert(css.includes('--nt-chrome-header: #efeee9'), 'Earthy header is a quiet paper, not a sage wash');
+assert(css.includes('--nt-chrome-header: #f0ebe5'), 'Ember header is a quiet paper, not a peach wash');
 assert(css.includes('#planner-search-btn'), 'Plan Trip uses pack primary tokens');
 assert(css.includes('#planner-locate-btn'), 'planner locate uses pack primary tokens');
 assert(css.includes('html, body, #nt-shell'), 'shell paints canvas so the Options gap is not raw white');
@@ -479,7 +483,9 @@ assert(adminJs.includes('config/features.json'), 'experimental save writes confi
 assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write config/feature_grants');
 assert(adminJs.includes('mapTab:') && adminJs.includes('communityTab:'), 'save merges mapTab and communityTab without wiping other flags');
 assert(css.includes('.nt-alert-reply'), 'alert Reply is styled separately from Close');
-assert(css.includes('.nt-alert-source'), 'alert source chip has clickable chrome');
+assert(css.includes('.nt-alert-source'), 'alert source has a quiet citation class');
+assert(/\.nt-alert-source\s*\{[\s\S]*?font-size:\s*0\.625rem/.test(css), 'alert source is smaller than body copy');
+assert(/\.nt-alert-source\s*\{[\s\S]*?background:\s*transparent/.test(css), 'alert source is not a chip');
 assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
 
 if (failures.length) {

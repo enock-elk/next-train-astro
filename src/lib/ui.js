@@ -198,14 +198,24 @@ export function closeSmoothModal(modalId, fromPopState = false) {
         const shouldPopLegal = modalId === 'legal-modal' && isLegalHash(location.hash);
         const isDevHash = modalId === 'dev-modal' && ((location.hash || '') === '#dev' || (location.hash || '').startsWith('#dev-'));
         if (shouldPopLegal || (hash && location.hash === hash && modalId !== 'dev-modal')) {
-            // Hide first, then pop. Arm a short lock so the following popstate
-            // does not close the next overlay or call history.back() again.
-            armModalPopLock();
-            hideFixedModal(modalId);
-            try {
-                history.back();
-                return;
-            } catch { /* fall through */ }
+            // Alerts fades out, then pops. Instant hide felt like a hard cut.
+            if (modalId === 'alerts-channel') {
+                /* fall through to the opacity transition, then pop */
+            } else {
+                // Hide first, then pop. Arm a short lock so the following popstate
+                // does not close the next overlay or call history.back() again.
+                armModalPopLock();
+                hideFixedModal(modalId);
+                try {
+                    history.back();
+                    if (modalId === 'feedback-modal') {
+                        setTimeout(() => {
+                            try { window.restoreFeedbackReturnOverlay?.(); } catch { /* ignore */ }
+                        }, 40);
+                    }
+                    return;
+                } catch { /* fall through */ }
+            }
         }
         // Close Dev Mode visually + normalize hash (no history.back race)
         if (isDevHash) {
@@ -249,6 +259,11 @@ export function closeSmoothModal(modalId, fromPopState = false) {
             if (modal.classList.contains('opacity-0')) {
                 modal.classList.add('hidden');
                 modal.classList.remove('opacity-0');
+            }
+            if (!fromPopState && modalId === 'alerts-channel' && location.hash === '#alerts') {
+                armModalPopLock();
+                try { history.back(); } catch { /* ignore */ }
+                if (typeof window !== 'undefined') window.__ntAlertsParkHome = false;
             }
             if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
                 unlockBackgroundScroll();

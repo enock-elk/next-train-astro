@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.12.7 — Trip-map zone paint, terminates line, export (12 Sep 2026)
+
+Trip plan maps only paint LINE SEVERED / Expect Delays when getTripDisruptions hits that itinerary, and both zone ends must sit on the trip path (900 m). An empty allow-set no longer projects every global cut onto the polyline, so Pretoria–Rissik no longer inherits Olifantsfontein–Kempton Park. TRAIN TERMINATES at the first contact stop is restored (getInjectionHtml(0) was invoked twice and ate the marker). Live-share glyphs are two merged rail ovals that rotate with bearing, number stays upright. Target Route closed preview is the corridor name only. Export table borders are #e5e7eb; footer carries a quiet APP_VERSION. Departed and Show Next Train are one muted button.
+
+no release notes.
+
 ## V9_09.12.6 — Planner dropdown lag, banner icon, departed row (12 Sep 2026)
 
 Station From / To lists paint a first chunk instead of the whole network on tap, and opening them pins #app-scroll so Select To Station does not jump the page. Planner banner icons sit in a top-right column away from Details. Departed and Show Next Train share one row so the fare line stays put.

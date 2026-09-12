@@ -344,6 +344,10 @@ assert(admin.includes('config/feature_grants/'), 'beta grants write config/featu
     assert(grouped.length === 1 && grouped[0].status === 'stopped' && grouped[0].startedAt === 100 && grouped[0].stoppedAt === 200, 'start and stop pair into one session');
 }
 
+assert(admin.includes('closedTargetRoutePreviewHtml'), 'Target Route has a name-only closed preview helper');
+assert(admin.includes('closedTargetRoutePreviewFromRow'), 'Target Route closed preview reads the name span');
+assert(admin.includes('disr-route-chevron') && admin.includes('closedTargetRoutePreviewFromRow(li)'), 'Target Route click writes the name-only preview');
+
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);
     process.exit(1);

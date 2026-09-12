@@ -214,8 +214,10 @@ const ridePingsSource = readFileSync(new URL('../src/lib/ride-pings.js', import.
 const boardSource = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 const liveBoardSource = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 const timetableSource = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
-assert(mapAppSource.includes('nt-live-train-direction'), 'map marker has a bearing direction indicator');
-assert(mapPageSource.includes('border-radius: 50%'), 'map marker uses a numbered circle');
+assert(mapAppSource.includes('nt-live-train-oval'), 'map marker is two merged rail ovals');
+assert(mapAppSource.includes('style="transform:rotate('), 'map marker rotates with accepted bearing');
+assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
+assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
 assert(!mapAppSource.includes('animateTrainMarker'), 'map marker never extrapolates movement');
 assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
 assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');

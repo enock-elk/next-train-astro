@@ -281,44 +281,52 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph {
         position: relative; z-index: 1;
         display: flex; align-items: center; justify-content: center;
-        width: 38px; height: 38px; padding: 0;
+        width: 54px; height: 24px; padding: 0;
         box-sizing: border-box;
-        border-radius: 50%;
-        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-        border: 2.5px solid #fff;
-        box-shadow: 0 2px 7px rgba(15, 23, 42, 0.4), inset 0 1px 1px rgba(255,255,255,0.28);
+        background: transparent;
+        border: none;
         pointer-events: auto;
       }
-      .nt-live-train-num {
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-        max-width: 32px; overflow: hidden; text-overflow: clip;
-        font-size: 10px; font-weight: 900; font-variant-numeric: tabular-nums;
-        letter-spacing: -0.02em; color: #fff; line-height: 1; white-space: nowrap;
+      .nt-live-train-shell {
+        position: absolute; inset: 0;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 2px 7px rgba(15, 23, 42, 0.4);
       }
-      .nt-live-train-direction {
+      .nt-live-train-oval {
         position: absolute;
-        left: 50%; top: -8px;
-        width: 12px; height: 54px;
-        margin-left: -6px;
-        display: flex; align-items: flex-start; justify-content: center;
-        color: #0f172a; font-size: 14px; font-weight: 1000; line-height: 10px;
-        transform-origin: 50% 27px;
-        text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff;
-        pointer-events: none;
+        top: 2px;
+        width: 32px;
+        height: 20px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,0.28);
       }
-      .nt-live-train-direction > span { display: inline-block; transform: rotate(-90deg); }
-      .nt-live-train-glyph--mine {
+      .nt-live-train-oval--a { left: 2px; }
+      .nt-live-train-oval--b { right: 2px; }
+      .nt-live-train-num {
+        position: relative; z-index: 2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        max-width: 46px; overflow: hidden; text-overflow: clip;
+        font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;
+        letter-spacing: -0.03em; color: #fff; line-height: 1; white-space: nowrap;
+        text-shadow: 0 1px 1px rgba(15, 23, 42, 0.35);
+      }
+      .nt-live-train-glyph--mine .nt-live-train-oval {
         background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
+      }
+      .nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #93c5fd, 0 1px 4px rgba(30, 64, 175, 0.45);
       }
-      .nt-live-train-glyph--paused {
+      .nt-live-train-glyph--paused .nt-live-train-oval {
         background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
       }
-      .nt-live-train-glyph--paused.nt-live-train-glyph--mine {
+      .nt-live-train-glyph--paused.nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
-      .nt-live-train-glyph--compact { width: 32px; height: 32px; }
-      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 9px; }
+      .nt-live-train-glyph--compact { width: 44px; height: 20px; }
+      .nt-live-train-glyph--compact .nt-live-train-oval { width: 26px; height: 16px; }
+      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 9px; max-width: 38px; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }

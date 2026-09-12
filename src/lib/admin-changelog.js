@@ -5,6 +5,14 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.12.7': [
+        'Trip map paints LINE SEVERED only when this itinerary contacts the danger zone (Pretoria–Rissik no longer inherits Olifantsfontein–Kempton Park).',
+        'TRAIN TERMINATES at first contact is restored (origin injection was double-called).',
+        'Live-share marker is two merged ovals that rotate with the rail; number stays upright.',
+        'Target Route closed preview is the name only. Setting chips stay in the open list.',
+        'Export grids use lighter cell borders. Footer left column has a quiet APP_VERSION.',
+        'Departed + Show Next Train is one muted enclosed button.',
+    ],
     'V9_09.10.4': [
         'Commuter reports dock as an accordion under the board.',
         'Account points hydrate from users/{uid}/marks.',

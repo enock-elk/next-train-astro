@@ -92,6 +92,9 @@ assert(!ads.includes('setAdPadding(true)'), 'ad code must not request reserved p
 
 const board = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
 const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+assert(renderer.includes("const borderColor = '#e5e7eb'"), 'export table margins stay light grey');
+assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
+assert(renderer.includes('APP_VERSION'), 'export footer includes the app version');
 assert(!board.includes('⚠️'), 'upcoming modal has no warning emoji');
 assert(!renderer.includes('⚠️'), 'home board has no warning emoji');
 assert(board.includes('warningTriangleSvg()'), 'upcoming modal uses warning SVG');
@@ -310,8 +313,9 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
     assert(mapApp.includes('nt-live-train-glyph--paused'), 'map train glyph has a paused GPS state');
     assert(mapApp.includes('nt-live-train-glyph--compact'), 'map train glyph shrinks when zoomed out');
-    assert(mapApp.includes('nt-live-train-num'), 'map train circle shows the train number');
-    assert(mapApp.includes('nt-live-train-direction'), 'map train circle shows accepted bearing');
+    assert(mapApp.includes('nt-live-train-num'), 'map train capsule shows the train number');
+    assert(mapApp.includes('nt-live-train-oval'), 'map train glyph is two merged ovals');
+    assert(mapApp.includes('style="transform:rotate('), 'map train capsule rotates with bearing');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');

@@ -636,6 +636,18 @@ const Admin = {
         return cues.length ? ` ${cues.join(' ')}` : '';
     },
 
+    /** Closed Target Route label: name only. Setting chips stay in the open list. */
+    closedTargetRoutePreviewHtml: (routeName) => {
+        const html = typeof Admin.formatRouteLabelHtml === 'function'
+            ? Admin.formatRouteLabelHtml(routeName)
+            : String(routeName || '');
+        return `<span class="truncate min-w-0 inline-flex items-center">${html}</span>`;
+    },
+    closedTargetRoutePreviewFromRow: (li) => {
+        const name = li && li.querySelector && li.querySelector('span.truncate');
+        return name ? name.outerHTML : '';
+    },
+
     /** Active corridors for operator dropdowns (alerts, incidents, bans, banners). */
     listOperatorRoutes: (regionCode) => {
         const all = (typeof ROUTES !== 'undefined' && ROUTES) || {};
@@ -4268,12 +4280,23 @@ const Admin = {
                     || (opt.textContent && li.textContent.includes(String(opt.textContent).split(' [')[0].trim()))
                 ));
             if (matchLi) {
-                display.innerHTML = matchLi.innerHTML;
+                if (selectId === 'disr-route') {
+                    const preview = typeof Admin.closedTargetRoutePreviewFromRow === 'function'
+                        ? Admin.closedTargetRoutePreviewFromRow(matchLi)
+                        : '';
+                    display.innerHTML = preview || matchLi.innerHTML;
+                } else {
+                    display.innerHTML = matchLi.innerHTML;
+                }
                 return;
             }
         }
 
         if (typeof ROUTES !== 'undefined' && ROUTES[routeId]) {
+            if (selectId === 'disr-route' && typeof Admin.closedTargetRoutePreviewHtml === 'function') {
+                display.innerHTML = Admin.closedTargetRoutePreviewHtml(ROUTES[routeId].name);
+                return;
+            }
             const cues = typeof Admin.getRouteCues === 'function' ? Admin.getRouteCues(routeId) : '';
             let badgeHtml = '';
             if (cues?.includes('Notice')) badgeHtml += '<span class="ml-1.5 px-1 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] rounded uppercase flex-shrink-0">Note</span>';
@@ -13593,7 +13616,12 @@ const Admin = {
                     li.innerHTML = htmlText;
                     li.onclick = () => {
                         routeSelect.value = value;
-                        if (customDisplay) customDisplay.innerHTML = htmlText;
+                        if (customDisplay) {
+                            const preview = typeof Admin.closedTargetRoutePreviewFromRow === 'function'
+                                ? Admin.closedTargetRoutePreviewFromRow(li)
+                                : '';
+                            customDisplay.innerHTML = preview || htmlText;
+                        }
                         customList.classList.add('hidden');
                         const chevron = document.getElementById('disr-route-chevron');
                         if (chevron) chevron.classList.remove('rotate-180');
@@ -13658,8 +13686,12 @@ const Admin = {
 
                 if (selectedOpt && customDisplay) {
                     const matchLi = Array.from(customList.querySelectorAll('li')).find(li => li.onclick && li.textContent.includes(selectedOpt.textContent.split(' [')[0]));
-                    if (matchLi) customDisplay.innerHTML = matchLi.innerHTML;
-                    else customDisplay.textContent = selectedOpt.textContent;
+                    if (matchLi) {
+                        const preview = typeof Admin.closedTargetRoutePreviewFromRow === 'function'
+                            ? Admin.closedTargetRoutePreviewFromRow(matchLi)
+                            : '';
+                        customDisplay.innerHTML = preview || matchLi.innerHTML;
+                    } else customDisplay.textContent = selectedOpt.textContent;
                 }
             }
         };

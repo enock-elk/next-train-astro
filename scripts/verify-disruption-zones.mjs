@@ -45,6 +45,23 @@ const stops = (...names) => names.map((station) => ({ station }));
 }
 
 {
+    const pien = [
+        'PRETORIA', 'MEARS STREET', 'DEVENISH STREET', 'WALKER STREET',
+        'LOFTUS VERSFELD PARK', 'RISSIK', 'HARTBEESSPRUIT', 'KOEDOESPOORT',
+        'SILVERTON', 'WALTOO', 'DENNEBOOM', 'PIENAARSPOORT',
+    ];
+    const rissik = stops('PRETORIA', 'MEARS STREET', 'DEVENISH STREET', 'WALKER STREET', 'LOFTUS VERSFELD PARK', 'RISSIK');
+    assert(
+        firstContactInDangerZone(pien, rissik, 'OLIFANTSFONTEIN', 'KEMPTON PARK') === -1,
+        'Pretoria–Rissik on the Pienaarspoort corridor does not contact Olifantsfontein–Kempton Park'
+    );
+    assert(
+        firstContactInDangerZone(geom, rissik, 'OLIFANTSFONTEIN', 'KEMPTON PARK') === -1,
+        'Pretoria–Rissik stays outside Olifantsfontein–Kempton Park even on the Kempton master'
+    );
+}
+
+{
     const trip = stops(
         'PRETORIA', 'FONTEINE', 'KLOOFSIG', 'SPORTPARK', 'CENTURION', 'IRENE',
         'PINEDENE', 'OLIFANTSFONTEIN', 'OAKMOOR', 'KAALFONTEIN', 'BIRCHLEIGH',
@@ -149,6 +166,12 @@ assert(
 
 const core = readFileSync(join(ROOT, 'src/lib/planner-core.js'), 'utf8');
 assert(core.includes('route-wide') || core.includes('stations.length === 0') || core.includes('!crit.stations'), 'planner-core must keep segment CRITICAL trips');
+
+const plannerUi = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
+assert(!plannerUi.includes('allowedDisrIds.size && !allowedDisrIds.has'), 'empty allow-set must not paint every incident');
+assert(plannerUi.includes('!allowedDisrIds.has(d.id)'), 'trip map requires a getTripDisruptions hit');
+assert(plannerUi.includes('stopOnTripPath'), 'trip map snaps only zone ends that sit on this path');
+assert(plannerUi.includes('const injAtOrigin = getInjectionHtml(0)'), 'origin TRAIN TERMINATES is injected once');
 
 if (failures.length) {
     console.error(`verify-disruptions: ${failures.length} failed`);

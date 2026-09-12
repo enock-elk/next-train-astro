@@ -2029,9 +2029,11 @@
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
-                    + '<span class="' + cls + '">'
-                    + '<span class="nt-live-train-num">' + id + '</span>'
-                    + '<span class="nt-live-train-direction" style="transform:rotate(' + deg + 'deg)" aria-hidden="true"><span>&gt;</span></span>'
+                    + '<span class="' + cls + '" style="transform:rotate(' + deg + 'deg)">'
+                    + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
+                    + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
+                    + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
+                    + '<span class="nt-live-train-num" style="transform:rotate(' + (-deg) + 'deg)">' + id + '</span>'
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {

@@ -11,7 +11,7 @@ import {
 } from '../store.js';
 
 import { 
-    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel
+    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION
 } from './config.js';
 
 import { orderGridTrainIds } from './grid-order.js';
@@ -1326,7 +1326,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
     const bgColor = '#ffffff'; 
     const textColor = '#111827'; 
-    const borderColor = '#cbd5e1'; 
+    const borderColor = '#e5e7eb'; 
     const accentColor = '#2563eb';
     const mutedColor = '#6b7280';
     const tableHeaderBg = '#f1f5f9'; 
@@ -1454,6 +1454,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             <div class="flex flex-col space-y-1.5 text-left">
                 <span class="font-mono font-bold" style="color: #4b5563; font-size: 13px;">GENERATED: ${dateText}</span>
                 <span class="font-black" style="color: #374151; font-size: 15px;">Data Source: PRASA / Metrorail Facebook</span>
+                <span style="color: #9ca3af; font-size: 9px; font-weight: 600; letter-spacing: 0.04em;">${escapeHTML(String(APP_VERSION || '').split(' - ')[0])}</span>
             </div>
             <div class="flex flex-col text-right">
                 <span class="font-black text-2xl tracking-tight leading-none mb-1.5" style="color: ${accentColor}">NextTrain.co.za</span>

@@ -58,7 +58,13 @@ if (!ui.includes('planner-notice-details-row')) fail('Details must sit on its ow
 if (!ui.includes('planner-notice-details-row flex justify-end')) fail('Details stays right-aligned in the copy column');
 if (!ui.includes('planner-notice-aside')) fail('banner SVG lives in a top-right aside column');
 if (ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed and Show Next Train must share one row');
-if (!ui.includes('flex flex-nowrap items-center gap-2')) fail('Departed and Show Next Train sit on one row');
+if (!ui.includes('planner-departed-next')) fail('Departed merges into the Show Next Train button');
+if (!ui.includes('Show Next Train')) fail('departed card still offers Show Next Train');
+if (ui.includes('getInjectionHtml(0) ?')) fail('must not double-call getInjectionHtml(0)');
+if (!ui.includes('const injAtOrigin = getInjectionHtml(0)')) fail('TRAIN TERMINATES at origin is injected once');
+if (ui.includes('allowedDisrIds.size && !allowedDisrIds.has')) fail('empty allow-set must not paint every incident on the trip map');
+if (!ui.includes('!allowedDisrIds.has(d.id)')) fail('trip map paints only disruptions that hit this trip');
+if (!ui.includes('stopOnTripPath')) fail('trip map requires zone ends on this trip path');
 if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
 if (!ui.includes('TRIP FARE:')) fail('planner fare is a single TRIP FARE line');
 {

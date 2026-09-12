@@ -111,7 +111,9 @@ const resolveTripDisruptions = (routeId, stops) => {
     const fn = (typeof window !== 'undefined' && typeof window.getTripDisruptions === 'function')
         ? window.getTripDisruptions
         : null;
-    return fn ? fn(routeId, stops) : [];
+    if (!fn) return [];
+    const day = (typeof window !== 'undefined' && window.selectedPlannerDay) || getCurrentDayType();
+    return fn(routeId, stops, day) || [];
 };
 const stripStationSuffix = (name) => String(name || '').replace(/ STATION/gi, '').trim();
 const bareStationName = (name) => stripStationSuffix(name);
@@ -1942,9 +1944,17 @@ export async function openTripMapRenderer(routeData) {
                             if (hit?.id) allowedDisrIds.add(hit.id);
                         });
                     }
+                    const stopOnTripPath = (stop) => {
+                        if (!stop || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) return false;
+                        const i = nearestPathIndex(currentPath, stop.lat, stop.lon);
+                        if (i < 0 || !currentPath[i]) return false;
+                        return getDistanceFromLatLonInKm(currentPath[i][0], currentPath[i][1], stop.lat, stop.lon) <= 0.9;
+                    };
                     Object.values(activeDisruptions).flat().forEach((d) => {
                         if (!d || drawnIds.has(d.id) || !d.stations || d.stations.length === 0) return;
-                        if (allowedDisrIds.size && !allowedDisrIds.has(d.id)) return;
+                        // Empty allow-set used to paint every global cut onto this polyline
+                        // (Olifantsfontein–Kempton Park snapping onto Pretoria–Rissik).
+                        if (!allowedDisrIds.has(d.id)) return;
                         const normStations = d.stations.map((s) => normalizeStationName(s));
                         const isCritical = d.tier === 'CRITICAL';
                         const color = isCritical ? '#ef4444' : '#eab308';
@@ -1967,7 +1977,7 @@ export async function openTripMapRenderer(routeData) {
                             };
                             const s1 = resolveStop(normStations[0]);
                             const s2 = resolveStop(normStations[1]);
-                            if (!s1 || !s2) return;
+                            if (!s1 || !s2 || !stopOnTripPath(s1) || !stopOnTripPath(s2)) return;
                             drawnIds.add(d.id);
                             const i1 = nearestPathIndex(currentPath, s1.lat, s1.lon);
                             const i2 = nearestPathIndex(currentPath, s2.lat, s2.lon);
@@ -2436,7 +2446,8 @@ export const PlannerRenderer = {
                 </div>
             `;
                     
-            html += getInjectionHtml(0) ? `<div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2">${getInjectionHtml(0)}</div>` : '';
+            const injAtOrigin = getInjectionHtml(0);
+            html += injAtOrigin ? `<div class="border-l-2 border-gray-300 dark:border-gray-600 ml-2">${injAtOrigin}</div>` : '';
 
             const intermediateStops = fullValidStops.slice(1, -1);
             if (intermediateStops.length > 0) {
@@ -2724,14 +2735,9 @@ export const PlannerRenderer = {
                           </div>`;
         } else if (isDeparted) {
             stateBadge = `
-                <div class="flex flex-nowrap items-center gap-2 min-w-0">
-                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                        ${countdown}
-                    </div>
-                    <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
-                        Show Next Train <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
-                    </button>
-                </div>
+                <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-700/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 font-bold py-1.5 px-2.5 rounded-lg shadow-sm transition-colors focus:outline-none inline-flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                    ${countdown}<span class="mx-1 font-semibold opacity-50" aria-hidden="true">·</span>Show Next Train <svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                </button>
             `;
         } else {
              stateBadge = `<div class="flex items-center text-xs font-bold text-blue-600 dark:text-blue-400">

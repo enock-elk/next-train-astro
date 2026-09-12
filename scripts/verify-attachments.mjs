@@ -121,7 +121,11 @@ function bytes(...vals) {
     assert(planner.includes('openFareModalForRoute'), 'train sheet fare calls openFareModalForRoute');
     assert(planner.includes('lockPlannerInputZoom'), 'planner zoom lock exists');
     assert(planner.includes('bindPlannerInputZoomGuard'), 'planner inputs bind zoom guard');
-    assert(planner.includes("window.matchMedia('(pointer: coarse)')"), 'coarse pointer skips select()');
+    assert(
+        /input\.addEventListener\('focus', \(\) => \{\s*try \{ input\.select\(\); \}/.test(planner)
+            && !/input\.addEventListener\('focus'[\s\S]{0,220}pointer:\s*coarse/.test(planner),
+        'station focus selects existing text on touch and pointer devices'
+    );
     const liveUi = readFileSync(join(ROOT, 'src/lib/live-board-ui.js'), 'utf8');
     assert(liveUi.includes('export function openFareModalForRoute'), 'openFareModalForRoute is exported');
     assert(liveUi.includes('window.openFareModalForRoute = openFareModalForRoute'), 'openFareModalForRoute is on window');

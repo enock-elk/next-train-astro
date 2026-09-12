@@ -156,6 +156,8 @@ assert(
 );
 assert(plannerUi.includes('positionDropdownAroundTrigger'), 'planner dropdowns stay inside the visible viewport');
 assert(!plannerUi.includes('keepPlannerFieldVisible') && plannerUi.includes('Do not scroll #app-scroll'), 'planner fields stay put while dropdowns fit the visible viewport');
+assert(plannerUi.includes('holdPlannerScroll'), 'opening a station list must pin #app-scroll');
+assert(plannerUi.includes('FIRST_PAINT'), 'full station browse paints a first chunk so the tap stays responsive');
 assert(plannerUi.includes('vis.height * 0.7'), 'planner list can fill the space above the keyboard');
 assert(!plannerUi.includes('openAbove'), 'planner list opens downward from the field');
 assert(plannerUi.includes('ntCartoVoyagerUrl'), 'planner map uses ntCartoVoyagerUrl');

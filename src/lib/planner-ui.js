@@ -751,20 +751,20 @@ function buildPlannerNotice({
         ? `<span class="planner-notice-details inline-flex items-center gap-0.5 text-[10px] font-bold ${t.details} whitespace-nowrap">${escapeHTML(detailsLabel)} ${chevronSvg}</span>`
         : '';
 
-    // Accent bar + icon on the right. Details sits bottom-right under the SVG.
+    // Icon lives in a dedicated top-right column so it cannot collide with Details.
     // No enter-animation — planner pulse re-renders and was replaying fade-in (glitch).
     const inner = `
         <div class="flex items-stretch">
             <div class="planner-notice-body relative flex-1 min-w-0 px-3.5 pt-3.5 pb-3 text-left">
-                <div class="absolute top-3.5 right-3.5">
-                    <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none" aria-hidden="true">
-                        ${iconSvg}
-                    </div>
-                </div>
                 <h4 class="planner-notice-title text-[11px] font-black ${t.title} uppercase tracking-[0.14em] leading-tight mb-1.5">${escapeHTML(title)}</h4>
                 <div class="planner-notice-copy text-xs text-gray-600 dark:text-gray-400 leading-snug space-y-1 text-left">${bodyHtml}</div>
                 ${detailsHtml ? `<div class="planner-notice-details-row flex justify-end mt-1.5">${detailsHtml}</div>` : ''}
                 ${footerHtml ? `<div class="mt-3">${footerHtml}</div>` : ''}
+            </div>
+            <div class="planner-notice-aside shrink-0 w-12 pt-3.5 pr-3 flex flex-col items-center" aria-hidden="true">
+                <div class="planner-notice-icon w-9 h-9 rounded-full ${t.iconWrap} border flex items-center justify-center shadow-sm pointer-events-none">
+                    ${iconSvg}
+                </div>
             </div>
             <div class="planner-notice-bar w-1.5 ${t.bar} shrink-0" aria-hidden="true"></div>
         </div>
@@ -951,6 +951,20 @@ function keyboardOpen() {
 }
 
 /**
+ * Undo the browser's focus / IME scroll so opening From / To does not jump
+ * the planner, especially Select To Station at the bottom of the form.
+ */
+function holdPlannerScroll() {
+    const scroller = document.getElementById('app-scroll');
+    if (!scroller) return;
+    const y = scroller.scrollTop;
+    const pin = () => { scroller.scrollTop = y; };
+    pin();
+    requestAnimationFrame(pin);
+    [50, 120, 280].forEach((ms) => setTimeout(pin, ms));
+}
+
+/**
  * Size the open list under the field (legacy SPA behaviour).
  * Do not scroll #app-scroll / the focused input — that jump was confusing on mobile.
  */
@@ -970,7 +984,8 @@ function positionDropdownAroundTrigger(list, trigger, maxHeight = 240) {
     const gap = 8;
     const below = Math.max(0, viewportBottom - triggerRect.bottom - gap);
     const cap = Math.max(maxHeight, Math.round(vis.height * 0.7));
-    list.style.maxHeight = `${Math.max(96, Math.min(cap, below || cap))}px`;
+    const room = below > 0 ? below : cap;
+    list.style.maxHeight = `${Math.max(64, Math.min(cap, room))}px`;
     list.style.bottom = 'auto';
     list.style.marginTop = '0';
 
@@ -2708,10 +2723,9 @@ export const PlannerRenderer = {
                             ${dynamicDayText}
                           </div>`;
         } else if (isDeparted) {
-            // 🛡️ GUARDIAN UX FIX: Removed w-full, shrunk button, and added whitespace-nowrap to stop text squishing
             stateBadge = `
-                <div class="flex flex-col items-start mt-1 sm:mt-0 pr-2 min-w-0">
-                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                <div class="flex flex-nowrap items-center gap-2 min-w-0">
+                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
                         ${countdown}
                     </div>
                     <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
@@ -3658,6 +3672,8 @@ export function setupAutocomplete(inputId, selectId) {
     const list = document.createElement('ul');
     list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
     input.parentNode.appendChild(list);
+    let renderGen = 0;
+    let lastFilter = null;
 
     const pickActiveStation = (station) => {
         input.value = bareStationName(station);
@@ -3673,11 +3689,19 @@ export function setupAutocomplete(inputId, selectId) {
             select.dispatchEvent(new Event('change'));
         }
         list.classList.add('hidden');
+        lastFilter = null;
     };
 
     const renderList = (filterText = '') => {
-        list.innerHTML = '';
         const rawFilter = filterText.trim();
+        if (!list.classList.contains('hidden') && lastFilter === rawFilter && list.childElementCount > 0) {
+            holdPlannerScroll();
+            positionDropdownAroundTrigger(list, input, 240);
+            return;
+        }
+        lastFilter = rawFilter;
+        const gen = ++renderGen;
+        list.innerHTML = '';
         const val = rawFilter.toUpperCase();
         const masterList = getMasterStationList();
         const ghostList = getGhostStationList();
@@ -3737,15 +3761,15 @@ export function setupAutocomplete(inputId, selectId) {
                 .filter((s) => s !== oppositeValue);
         }
 
-        const appendActive = (station) => {
+        const appendActive = (station, parent = list) => {
             const li = document.createElement('li');
             li.className = "p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors";
             li.textContent = bareStationName(station);
             li.onclick = () => pickActiveStation(station);
-            list.appendChild(li);
+            parent.appendChild(li);
         };
 
-        const appendGhost = (station) => {
+        const appendGhost = (station, parent = list) => {
             const li = document.createElement('li');
             li.className = "p-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium text-gray-400 dark:text-gray-500 transition-colors opacity-70";
             li.innerHTML = `<span class="line-through decoration-gray-300 dark:decoration-gray-600">${escapeHTML(bareStationName(station))}</span>
@@ -3754,31 +3778,15 @@ export function setupAutocomplete(inputId, selectId) {
                 notifyGhostStation(station);
                 // Do not resolve ghost as origin/destination
             };
-            list.appendChild(li);
+            parent.appendChild(li);
         };
 
-        if (matches.length) {
-            matches.forEach(appendActive);
-        }
+        const FIRST_PAINT = 40;
+        const head = matches.slice(0, FIRST_PAINT);
+        const tail = matches.slice(FIRST_PAINT);
+        head.forEach((station) => appendActive(station));
 
-        if (didYouMean.length) {
-            const header = document.createElement('li');
-            header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
-            header.textContent = "Did you mean";
-            list.appendChild(header);
-            didYouMean.forEach(appendActive);
-        }
-
-        const allGhosts = [...ghostMatches, ...ghostSuggest];
-        if (allGhosts.length) {
-            const header = document.createElement('li');
-            header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
-            header.textContent = "Inactive stations";
-            list.appendChild(header);
-            allGhosts.forEach(appendGhost);
-        }
-
-        if (!matches.length && !didYouMean.length && !allGhosts.length) {
+        if (!matches.length && !didYouMean.length && !ghostMatches.length && !ghostSuggest.length) {
             const li = document.createElement('li');
             li.className = "p-3 text-sm text-gray-400 italic";
             li.textContent = val.length ? "No stations found" : "No stations loaded";
@@ -3786,32 +3794,75 @@ export function setupAutocomplete(inputId, selectId) {
         }
 
         list.classList.remove('hidden');
-        requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
+        holdPlannerScroll();
+        positionDropdownAroundTrigger(list, input, 240);
+
+        const finishExtras = () => {
+            if (gen !== renderGen) return;
+            if (didYouMean.length) {
+                const header = document.createElement('li');
+                header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
+                header.textContent = "Did you mean";
+                list.appendChild(header);
+                didYouMean.forEach((station) => appendActive(station));
+            }
+            const allGhosts = [...ghostMatches, ...ghostSuggest];
+            if (allGhosts.length) {
+                const header = document.createElement('li');
+                header.className = "px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-400";
+                header.textContent = "Inactive stations";
+                list.appendChild(header);
+                allGhosts.forEach((station) => appendGhost(station));
+            }
+        };
+
+        if (tail.length) {
+            let offset = 0;
+            const CHUNK = 50;
+            const paintTail = () => {
+                if (gen !== renderGen) return;
+                const frag = document.createDocumentFragment();
+                const end = Math.min(offset + CHUNK, tail.length);
+                for (; offset < end; offset++) appendActive(tail[offset], frag);
+                list.appendChild(frag);
+                if (offset < tail.length) requestAnimationFrame(paintTail);
+                else finishExtras();
+            };
+            requestAnimationFrame(paintTail);
+        } else {
+            finishExtras();
+        }
     };
 
     input.addEventListener('input', () => { 
         delete input.dataset.resolvedValue;
         if (select) select.value = ""; 
+        lastFilter = null;
         renderList(input.value); 
     });
     
     input.addEventListener('focus', () => {
         try { input.select(); } catch { /* ignore */ }
+        holdPlannerScroll();
         renderList('');
     });
 
     window.visualViewport?.addEventListener('resize', () => {
         if (list.classList.contains('hidden')) return;
+        holdPlannerScroll();
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     }, { passive: true });
     
     chevron.addEventListener('click', (e) => { 
+        e.preventDefault();
         e.stopPropagation(); 
         if (list.classList.contains('hidden')) {
+            lastFilter = null;
             renderList('');
-            input.focus();
+            holdPlannerScroll();
         } else {
             list.classList.add('hidden');
+            lastFilter = null;
         }
     });
     
@@ -3820,6 +3871,7 @@ export function setupAutocomplete(inputId, selectId) {
             const target = e.target;
             if (target && target instanceof Node && !input.contains(target) && !list.contains(target) && !chevron.contains(target)) {
                 list.classList.add('hidden');
+                lastFilter = null;
             }
         });
     }

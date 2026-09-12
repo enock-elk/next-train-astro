@@ -20,7 +20,13 @@ import {
     looksLikeContactOnlyMessage,
     contactHintMessage,
 } from './feedback-contact.js';
-import { inboxReplyStillVisible } from './inbox-replies.js';
+import {
+    INBOX_REPLY_ACKS_KEY,
+    addInboxReplyAcks,
+    inboxReplyAckToken,
+    inboxReplyStillVisible,
+    parseInboxReplyAcks,
+} from './inbox-replies.js';
 import {
     inboxReactionActorId,
     renderInboxReactionChips,
@@ -1044,6 +1050,18 @@ function getThreadDeviceId() {
 }
 
 const LOCAL_INBOX_KEY = 'ntInboxLocalV1';
+let latestPendingAdminReply = null;
+
+function rememberAcknowledgedInboxReplies(entries, deviceId = getThreadDeviceId()) {
+    const tokens = (entries || [])
+        .filter((entry) => entry && !isCommuterInboxMsg(entry))
+        .map((entry) => inboxReplyAckToken(deviceId, entry, entry._key || entry.id));
+    if (!tokens.some(Boolean)) return parseInboxReplyAcks(safeStorage.getItem(INBOX_REPLY_ACKS_KEY));
+    const packed = addInboxReplyAcks(safeStorage.getItem(INBOX_REPLY_ACKS_KEY), tokens);
+    safeStorage.setItem(INBOX_REPLY_ACKS_KEY, packed);
+    safeStorage.setResilientItem?.(INBOX_REPLY_ACKS_KEY, packed)?.catch?.(() => {});
+    return parseInboxReplyAcks(packed);
+}
 
 function readLocalInbox() {
     try {
@@ -1303,10 +1321,15 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
     return res.ok;
 }
 
-export async function openMessagesThread() {
+export async function openMessagesThread(replyToAcknowledge = latestPendingAdminReply) {
     triggerHaptic();
     closeAppHub(true);
     document.getElementById('developer-reply-banner')?.classList.add('hidden');
+    const openingDeviceId = getThreadDeviceId();
+    if (replyToAcknowledge) {
+        rememberAcknowledgedInboxReplies([replyToAcknowledge], openingDeviceId);
+        syncInboxBadges(0);
+    }
     const host = document.getElementById('messages-thread-list');
     const local = readLocalInbox();
     if (host) {
@@ -1325,6 +1348,7 @@ export async function openMessagesThread() {
         const deviceId = getThreadDeviceId();
         const unread = list.filter((m) => !isCommuterInboxMsg(m) && !m.read && m.id);
         if (unread.length && deviceId) {
+            rememberAcknowledgedInboxReplies(unread, deviceId);
             const updates = {};
             unread.forEach((m) => {
                 updates[`${m.id}/read`] = true;
@@ -1643,13 +1667,21 @@ export async function checkServiceAlerts() {
         let adminReply = null;
         if (deviceId) {
             try {
+                let acknowledgementRaw = safeStorage.getItem(INBOX_REPLY_ACKS_KEY);
+                if (!acknowledgementRaw && safeStorage.getResilientItem) {
+                    acknowledgementRaw = await safeStorage.getResilientItem(INBOX_REPLY_ACKS_KEY);
+                }
+                const localAcknowledgements = parseInboxReplyAcks(acknowledgementRaw);
                 const inboxRes = await fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json?t=${Date.now()}`);
                 if (inboxRes.ok) {
                     const ct = inboxRes.headers.get('content-type') || '';
                     if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
-                        const unreadKeys = Object.keys(inboxData).filter((k) => inboxReplyStillVisible(inboxData[k]));
+                        const unreadKeys = Object.keys(inboxData).filter((k) => {
+                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, inboxData[k], k));
+                            return inboxReplyStillVisible(inboxData[k], Date.now(), locallyAcknowledged);
+                        });
                         syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
@@ -1677,13 +1709,14 @@ export async function checkServiceAlerts() {
 
         const replyBanner = document.getElementById('developer-reply-banner');
         const viewReplyBtn = document.getElementById('view-reply-btn');
+        latestPendingAdminReply = adminReply;
 
         if (adminReply && replyBanner) {
             replyBanner.classList.remove('hidden');
 
             if (viewReplyBtn) {
-                window.__ntOpenAdminReply = () => openMessagesThread();
-                viewReplyBtn.onclick = () => openMessagesThread();
+                window.__ntOpenAdminReply = () => openMessagesThread(adminReply);
+                viewReplyBtn.onclick = () => openMessagesThread(adminReply);
             }
 
             const devReplyCloseTop = document.querySelector('#developer-reply-modal button.text-gray-400');

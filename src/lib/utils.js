@@ -537,6 +537,7 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'nt_alert_impression_installation_v1',
     'seen_changelog_version',
     'ntInboxLocalV1',
+    'ntInboxAcknowledgedV1',
     'defaultRoute_GP',
     'defaultRoute_WC',
     'defaultRoute_KZN',

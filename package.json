@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "9.9.12.3",
+  "version": "9.9.12.4",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -38,6 +38,8 @@
     "verify:community-monitor": "node scripts/verify-community-monitor.mjs",
     "verify:scheduled-alerts": "node scripts/verify-scheduled-alerts.mjs",
     "verify:safe-nuke": "node scripts/verify-safe-nuke.mjs",
+    "verify:disruptions": "node scripts/verify-disruption-zones.mjs",
+    "verify:trip-price": "node scripts/verify-trip-price.mjs",
     "verify:auth-providers": "node scripts/verify-auth-providers.mjs",
     "grid-order:seed": "node scripts/export-grid-order-seed.mjs",
     "tracks:build": "node scripts/build-rail-tracks.mjs",

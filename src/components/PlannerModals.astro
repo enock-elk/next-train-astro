@@ -179,3 +179,21 @@ import { withBase } from '../lib/config.js';
         </div>
     </div>
 </div>
+
+<!-- PLANNER FARE BREAKDOWN (beta / admin) -->
+<div id="planner-fare-breakdown-sheet" class="fixed inset-0 left-0 right-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0 transform transition-transform duration-300 scale-95">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Trip fare</h3>
+            <button type="button" id="planner-fare-breakdown-close" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close fare">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="planner-fare-breakdown-body" class="p-5 overflow-y-auto min-h-0 flex-1"></div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            <button type="button" id="planner-fare-breakdown-done" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">
+                Close
+            </button>
+        </div>
+    </div>
+</div>

@@ -1571,8 +1571,15 @@
                             if (normStations.length >= 2) {
                                 const s1 = resolvePathStop(normStations[0]);
                                 const s2 = resolvePathStop(normStations[1]);
-                                const names = (currentValidStops || []).map((s) => s.name);
-                                if (s1 && s2 && names.includes(normStations[0]) && names.includes(normStations[1])) {
+                                const nearPath = (stop) => {
+                                    if (!stop || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) return false;
+                                    const i = nearestPathIndex(trackPath, stop.lat, stop.lon);
+                                    if (i < 0) return false;
+                                    const dLat = trackPath[i][0] - stop.lat;
+                                    const dLon = trackPath[i][1] - stop.lon;
+                                    return (dLat * dLat + dLon * dLon) <= 0.0004;
+                                };
+                                if (s1 && s2 && nearPath(s1) && nearPath(s2)) {
                                     drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
                                     const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
                                     const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);

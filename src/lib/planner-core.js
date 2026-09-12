@@ -1379,15 +1379,18 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
                 const crit = disrList.find((d) => d.tier === 'CRITICAL');
                 if (!crit) return false;
 
-                // Alighting exactly at the disruption boundary is safe for this leg
                 if (crit.triggerStopIndex !== undefined) {
+                    // Alighting exactly at the disruption boundary is safe for this leg
                     if (crit.triggerStopIndex === stops.length - 1) return false;
                     if (!capturedTerminus && stops[crit.triggerStopIndex]) {
                         capturedTerminus = normalizeStationName(stops[crit.triggerStopIndex].station);
                     }
-                    return true;
                 }
-                return true;
+
+                // Only a route-wide CRITICAL drops the trip. Segment / station
+                // cuts stay so the card can mark TRAIN TERMINATES + grey the tail.
+                const routeWide = !crit.stations || crit.stations.length === 0;
+                return routeWide;
             };
 
             if (trip.type === 'DIRECT') return checkLeg(trip.route.id, trip.stops);

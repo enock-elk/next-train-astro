@@ -25,6 +25,7 @@ export const FEATURE_KEYS = {
     RIDE_CHECKIN: 'rideCheckIn',
     MAP_TAB: 'mapTab',
     COMMUNITY_TAB: 'communityTab',
+    TRIP_PRICE: 'tripPrice',
 };
 
 export { PILOT_ROUTE_IDS };
@@ -36,6 +37,7 @@ export const GRANTABLE_FEATURES = [
     { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
     { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
     { key: FEATURE_KEYS.PUSH_NOTIFY, label: 'Push notifications' },
+    { key: FEATURE_KEYS.TRIP_PRICE, label: 'Trip price' },
 ];
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -55,6 +57,7 @@ const LAB_DEFAULTS = {
     rideCheckIn: { enabled: true, routeIds: ['*'] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: false, routeIds: [] },
 };
 
 /** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
@@ -65,6 +68,7 @@ const PROD_DEFAULTS = {
     rideCheckIn: { enabled: false, routeIds: [] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: false, routeIds: [] },
 };
 
 /** Suggested first production allow-list (paste into RTDB config/features). */
@@ -75,6 +79,7 @@ export const PILOT_FEATURES_SEED = {
     rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: false, routeIds: [] },
 };
 
 /**

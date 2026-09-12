@@ -30,6 +30,8 @@ import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.j
 import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
+import { canAccessPilotSurface } from './admin-chrome.js';
+import { suggestZoneFromKm, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -311,6 +313,127 @@ function computeZoneFare(zoneCode) {
         price: finalPrice,
         priceLabel: finalPrice.toFixed(2),
         isOffPeak: useOffPeak,
+    };
+}
+
+function clockPartsFromDepTime(depTime) {
+    const parts = String(depTime || '').split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return { h, m };
+}
+
+/** Peak / off-peak from the trip's own day type + departure time. */
+export function computeZoneFareForTrip(zoneCode, trip = {}) {
+    if (!zoneCode || !FARE_CONFIG.zones[zoneCode]) return null;
+    const profileName = $userProfile.get() || 'Adult';
+    const profile = FARE_CONFIG.profiles[profileName] || FARE_CONFIG.profiles.Adult;
+    const dayType = trip.dayType || selectedPlannerDay || getCurrentDayType();
+    const dayAllowsOffPeak = FARE_CONFIG.offPeakEveryDay === true || usesWeekdayScheduleSheet(dayType);
+    let useOffPeak = false;
+    if (dayAllowsOffPeak) {
+        const clock = clockPartsFromDepTime(trip.depTime) || plannerFareClockParts();
+        const decimalTime = clock.h + (clock.m / 60);
+        if (decimalTime >= FARE_CONFIG.offPeakStart && decimalTime < FARE_CONFIG.offPeakEnd) {
+            useOffPeak = true;
+        }
+    }
+    const multiplier = useOffPeak ? profile.offPeak : profile.base;
+    let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
+    finalPrice = Math.ceil(finalPrice * 2) / 2;
+    return {
+        zone: zoneCode,
+        price: finalPrice,
+        priceLabel: finalPrice.toFixed(2),
+        isOffPeak: useOffPeak,
+        dayType,
+        depTime: trip.depTime || '',
+        profile: profileName,
+    };
+}
+
+function canShowTripPrice() {
+    try {
+        return canAccessPilotSurface('tripPrice');
+    } catch {
+        return false;
+    }
+}
+
+async function getSmoothTripDistanceKm(trip) {
+    const index = $globalStationIndex.get() || {};
+    const routes = collectTripRoutes(trip);
+    const fallbackRouteId = routes[0]?.id || '';
+    const enriched = collectTripStops(trip).map((s) => {
+        const idx = index[normalizeStationName(s.station)];
+        return {
+            ...s,
+            lat: s.lat ?? idx?.lat ?? null,
+            lon: s.lon ?? idx?.lon ?? null,
+            routeId: s.routeId || fallbackRouteId,
+        };
+    }).filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon));
+    if (enriched.length < 2) return getTripDistanceKm(trip);
+    try {
+        const region = $userRegion.get() || 'GP';
+        const path = await smoothPathFromStops(enriched, region);
+        if (path && path.length > 1) {
+            let km = 0;
+            for (let i = 1; i < path.length; i++) {
+                km += getDistanceFromLatLonInKm(path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]);
+            }
+            if (Number.isFinite(km) && km > 0) return Math.round(km * 10) / 10;
+        }
+    } catch { /* crow-flies fallback */ }
+    return getTripDistanceKm(trip);
+}
+
+function fillPlannerFareBreakdown(trip, { km, zone, fare } = {}) {
+    const body = document.getElementById('planner-fare-breakdown-body');
+    if (!body || !fare) return;
+    const band = ZONE_KM_RANGE_LABELS[zone] || '';
+    const dayLabel = fare.dayType === 'saturday' ? 'Saturday'
+        : fare.dayType === 'sunday' ? 'Sunday'
+        : fare.dayType === 'public_holiday' ? 'Public holiday'
+        : 'Weekday';
+    const depLabel = fare.depTime ? String(fare.depTime).slice(0, 5) : '';
+    const peakLabel = fare.isOffPeak ? 'Off-peak' : 'Peak';
+    const kmLabel = km != null ? `${km} km` : 'Unavailable';
+    body.innerHTML = `
+        <dl class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Peak / off-peak</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd class="font-bold">${escapeHTML(fare.profile || 'Adult')}</dd></div>
+            <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(fare.priceLabel)}</dd></div>
+        </dl>
+    `;
+}
+
+function openPlannerFareBreakdown(trip, detail) {
+    fillPlannerFareBreakdown(trip, detail);
+    openSmoothModal('planner-fare-breakdown-sheet');
+}
+
+async function hydratePlannerFareButton(trip) {
+    if (!canShowTripPrice() || !trip) return;
+    const btn = document.querySelector('[data-nt-trip-fare="1"]');
+    if (!btn) return;
+    const km = await getSmoothTripDistanceKm(trip);
+    const zone = suggestZoneFromKm(km);
+    const fare = computeZoneFareForTrip(zone, trip);
+    if (!fare) {
+        btn.hidden = true;
+        return;
+    }
+    btn.hidden = false;
+    const priceEl = btn.querySelector('[data-nt-trip-fare-price]');
+    if (priceEl) priceEl.textContent = `R${fare.priceLabel}`;
+    btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openPlannerFareBreakdown(trip, { km, zone, fare });
     };
 }
 
@@ -1754,8 +1877,17 @@ export async function openTripMapRenderer(routeData) {
                 const activeDisruptions = routeData.globalDisruptions || {};
                 if (currentValidStops.length > 0) {
                     const drawnIds = new Set();
+                    const tripStopsForDisr = currentValidStops.map((s) => ({ station: s.name }));
+                    const routeIdsForDisr = [...new Set(currentValidStops.map((s) => s.routeId).filter(Boolean))];
+                    const allowedDisrIds = new Set();
+                    for (const rid of routeIdsForDisr) {
+                        resolveTripDisruptions(rid, tripStopsForDisr).forEach((hit) => {
+                            if (hit?.id) allowedDisrIds.add(hit.id);
+                        });
+                    }
                     Object.values(activeDisruptions).flat().forEach((d) => {
                         if (!d || drawnIds.has(d.id) || !d.stations || d.stations.length === 0) return;
+                        if (allowedDisrIds.size && !allowedDisrIds.has(d.id)) return;
                         const normStations = d.stations.map((s) => normalizeStationName(s));
                         const isCritical = d.tier === 'CRITICAL';
                         const color = isCritical ? '#ef4444' : '#eab308';
@@ -2426,18 +2558,33 @@ export const PlannerRenderer = {
         }
 
         let alertBanner = '';
-        if (activeDisr && activeDisr.tier !== 'CRITICAL') {
+        if (activeDisr) {
             const disrId = activeDisr.id || '';
             const onclickAttr = disrId
                 ? `type="button" onclick="if(typeof window.openDisruptionModal === 'function') window.openDisruptionModal('${String(disrId).replace(/'/g, "\\'")}')"`
                 : null;
-            alertBanner = buildPlannerNotice({
-                tone: 'warning',
-                title: 'Expect Delays',
-                bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Minor service delays on this corridor.</p>`,
-                icon: 'alert',
-                interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
-            });
+            const alreadyCovered = currentPlannerStatus === 'PARTIAL_JOURNEY'
+                && currentPlannerErrorPayload
+                && String(currentPlannerErrorPayload.disruptionId || '') === String(disrId);
+            if (activeDisr.tier === 'CRITICAL') {
+                if (!alreadyCovered) {
+                    alertBanner = buildPlannerNotice({
+                        tone: 'critical',
+                        title: 'Line Severed',
+                        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Critical service disruption on this corridor.</p>`,
+                        icon: 'alert',
+                        interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+                    });
+                }
+            } else {
+                alertBanner = buildPlannerNotice({
+                    tone: 'warning',
+                    title: 'Expect Delays',
+                    bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Minor service delays on this corridor.</p>`,
+                    icon: 'alert',
+                    interactive: onclickAttr ? { onclickAttr, detailsLabel: 'Details' } : null,
+                });
+            }
         }
 
         let layoverBanner = '';
@@ -2559,7 +2706,16 @@ export const PlannerRenderer = {
                     </div>
                 </div>
                 <div class="flex justify-between items-start mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                     ${stateBadge}
+                     <div class="flex flex-col items-start min-w-0 pr-2">
+                        ${stateBadge}
+                        ${canShowTripPrice() ? `<button type="button" data-nt-trip-fare="1" class="mt-1.5 flex flex-col items-start text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
+                            <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"/></svg>
+                                <span data-nt-trip-fare-price>R-</span>
+                            </div>
+                            <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Fare</div>
+                        </button>` : ''}
+                     </div>
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
                         <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
@@ -2987,6 +3143,9 @@ export function initPlanner() {
     const resetBtn = document.getElementById('planner-reset-btn');
     const locateBtn = document.getElementById('planner-locate-btn');
     const backBtn = document.getElementById('planner-back-btn');
+    const closeFareSheet = () => closeSmoothModal('planner-fare-breakdown-sheet');
+    document.getElementById('planner-fare-breakdown-close')?.addEventListener('click', closeFareSheet);
+    document.getElementById('planner-fare-breakdown-done')?.addEventListener('click', closeFareSheet);
 
     const inputSection = document.getElementById('planner-input-section');
     if (inputSection && !document.getElementById('planner-day-select-container')) {
@@ -4191,6 +4350,7 @@ export function renderSelectedTrip(container, index) {
     } else {
         renderTripResult(container, currentTripOptions, index);
     }
+    hydratePlannerFareButton(selectedTrip);
 }
 
 export function startPlannerPulse(currentIndex) {

@@ -3,7 +3,7 @@
  */
 import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
-import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $opsOverlaysReady } from '../store.js';
+import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
@@ -70,6 +70,11 @@ function bindGridExclusionRefresh() {
     $opsOverlaysReady.subscribe((ready) => {
         if (!overlayPrimed) { overlayPrimed = true; return; }
         if (ready) paintOpenGridBody();
+    });
+    let disrPrimed = false;
+    $globalDisruptions.subscribe(() => {
+        if (!disrPrimed) { disrPrimed = true; return; }
+        paintOpenGridBody();
     });
 }
 

@@ -7,6 +7,7 @@ import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId } from '../store.js';
+import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
@@ -201,14 +202,16 @@ function severityChrome(severity) {
     };
 }
 
-function renderPosterHtml(urls) {
+function renderPosterHtml(urls, notice = null) {
     if (!urls.length) return '';
     const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+    const noticeId = escapeHTML(String(notice?.id || ''));
+    const expiresAt = escapeHTML(String(notice?.expiresAt || ''));
     const cells = urls.map((path) => {
         const href = resolveAlertImageSrc(path);
         if (!href) return '';
         const src = escapeHTML(href);
-        return `<button type="button" data-alert-lightbox="${src}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
+        return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
             <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
@@ -227,6 +230,14 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.setAttribute('fetchpriority', 'high');
         img.decoding = 'async';
         const host = img.closest('[data-alert-lightbox]');
+        const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
+        resolveCachedAlertImage(originalSrc).then((cached) => {
+            if (!cached || img.dataset.ntPosterRevealed === '1') return;
+            return cached.blob().then((blob) => {
+                if (img.dataset.ntPosterRevealed === '1') return;
+                img.src = URL.createObjectURL(blob);
+            });
+        }).catch(() => {});
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             if (!(img.naturalWidth > 0)) return;
@@ -235,6 +246,13 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             img.classList.add('opacity-100');
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
             host?.setAttribute('data-alert-ready', '1');
+            if (originalSrc) {
+                cacheAlertImages({
+                    id: host?.getAttribute('data-alert-notice-id') || '',
+                    expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
+                    imageUrls: [originalSrc],
+                }, (u) => u);
+            }
         };
         const fail = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
@@ -487,7 +505,7 @@ function renderPostCard(notice, opts = {}) {
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
         : '';
-    const mediaHtml = renderPosterHtml(layout.imageUrls);
+    const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
     const bodyHtml = body
         ? `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`
         : '';
@@ -746,6 +764,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
         feed.innerHTML = '';
         empty?.classList.remove('hidden');
         earlierBtn?.classList.add('hidden');
+        pruneExpiredAlertImages(list);
         return true;
     }
     empty?.classList.add('hidden');
@@ -769,6 +788,8 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
         parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
     });
     feed.innerHTML = parts.join('');
+    pruneExpiredAlertImages(list);
+    list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
     observeRenderedAlertImpressions(feed);
     hydrateAdminAlertImpressionCounts(page.visible);

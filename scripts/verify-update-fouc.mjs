@@ -74,7 +74,7 @@ assert(isAppVersionNewer('V9_09.13.1', 'V9_09.12.9'), 'later release date is new
 assert(!isAppVersionNewer('V9_09.12.1', 'V9_09.12.1'), 'same release is not newer');
 assert(!isAppVersionNewer('V9_09.11.9', 'V9_09.12.1'), 'older release is not newer');
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
-assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
+assert(hubJs.includes("performHardCacheClear('check_updates', {"), 'Check for Updates restarts when online');
 assert(hubJs.includes('Can’t restart yet. Check internet and try later.'), 'offline restart uses a short explanatory toast');
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
 assert(hubJs.includes('latestVersion: !isAppVersionNewer(incomingVersion, APP_VERSION)'), 'Check for Updates always resets and classifies the post-reload toast');

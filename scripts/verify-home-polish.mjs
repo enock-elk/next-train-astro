@@ -349,7 +349,7 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
     assert(ghostsJs.includes('journeyHeadingDeg'), 'vet compares heading to the journey');
     assert(ghostsJs.includes('if (!Number.isFinite(userHeading) || !Number.isFinite(ghostHeading)) return false'), 'missing heading is not a match');
     const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
-    assert(hubJs.includes("performHardCacheClear('check_updates')"), 'Check for Updates restarts when online');
+    assert(hubJs.includes("performHardCacheClear('check_updates', {"), 'Check for Updates restarts when online');
     const liveBoard = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
     assert(!liveBoard.includes('id="nt-timetable-live-dot"'), 'VIEW FULL TIMETABLE has no live dot');
     const marksJs = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');

@@ -27,9 +27,6 @@ import {
     isStationAheadOfGhost,
     lagMinutesFromFix,
     addMinutesToTime,
-    scoreTrainForFix,
-    TRAIN_TRACKER_MAX_M,
-    ghostHeadingDeg,
     headingAgrees,
     findStopsForTrain,
     progressAlongStops,
@@ -37,7 +34,10 @@ import {
     journeyHeadingAtProgress,
     journeyPositionLabel,
     trainGoingLabel,
+    railPathForTrain,
+    scoreFixToRailPath,
 } from './train-ghosts.js';
+import { TRACKER_SNAP_MAX_M } from './rail-tracks.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
 
@@ -487,8 +487,9 @@ function pingTracksTrain(p, trainId, opts = {}) {
     const lng = typeof p.projectedLng === 'number' ? p.projectedLng : null;
     if (lat == null || lng == null) return false;
     if (!Number.isFinite(p.projectedProgress)) return false;
-    const metres = scoreTrainForFix(lat, lng, id, opts);
-    if (!Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M) return false;
+    if (p.adminOverrideRole === 'train') return true;
+    const metres = Number(p.railDistanceM);
+    if (!Number.isFinite(metres) || metres > TRACKER_SNAP_MAX_M) return false;
     if (typeof p.speedMps !== 'number' || p.speedMps < 1.5) return false;
     if (typeof p.heading === 'number') {
         const scheduledHeading = journeyHeadingAtProgress(id, p.projectedProgress, opts);
@@ -508,12 +509,8 @@ export function compareRankedPings(a, b) {
     return (b.at || 0) - (a.at || 0);
 }
 
-function scorePingAgainstGhost(p, trainId, ghost, opts = {}) {
-    const lat = typeof p.projectedLat === 'number' ? p.projectedLat : null;
-    const lng = typeof p.projectedLng === 'number' ? p.projectedLng : null;
-    const metres = (lat != null && lng != null)
-        ? scoreTrainForFix(lat, lng, trainId, opts)
-        : Infinity;
+function scoreTrackedPing(p, trainId, opts = {}) {
+    const metres = Number.isFinite(Number(p.railDistanceM)) ? Number(p.railDistanceM) : Infinity;
     const ghostH = journeyHeadingAtProgress(trainId, p.projectedProgress, opts);
     const headingOk = headingAgrees(
         typeof p.heading === 'number' ? p.heading : NaN,
@@ -535,7 +532,7 @@ function scorePingAgainstGhost(p, trainId, ghost, opts = {}) {
 
 /**
  * Rank verified on-path pings for one train. Do not average GPS — pick a driver.
- * 1) heading agrees with the ghost  2) closer to the ghost
+ * 1) heading agrees with the journey 2) closer to the selected rail path
  * 3) plausible train speed          4) fresher `at`
  */
 export function rankVerifiedPings(pings, trainId, opts = {}) {
@@ -545,9 +542,8 @@ export function rankVerifiedPings(pings, trainId, opts = {}) {
         activePings(pings).filter((p) => pingTracksTrain(p, id, opts))
     );
     if (!live.length) return [];
-    const ghost = expectedPosition(id, opts.now, opts);
     return live
-        .map((p) => scorePingAgainstGhost(p, id, ghost, opts))
+        .map((p) => scoreTrackedPing(p, id, opts))
         .sort(compareRankedPings);
 }
 
@@ -619,6 +615,7 @@ export function liveTrackersByDirection(routeId = $currentRouteId.get(), opts = 
 
 /** Train id others should see — only on-path and moving. Waiting / far = commuter. */
 export function pingPublicTrainId(p) {
+    if (p?.trainId && p?.adminOverrideRole === 'train') return String(p.trainId);
     if (p?.trainId && relaxLiveShareGuards()) return String(p.trainId);
     return pingTracksTrain(p, p?.trainId) ? String(p.trainId) : null;
 }
@@ -1081,6 +1078,8 @@ export async function submitRideCheckIn({
     quiet = false,
     trackingState = null,
     pauseReason = '',
+    adminOverrideRole = '',
+    overrideProjected = null,
 } = {}) {
     await fetchFeatures();
     if (!isRideCheckInEnabled(routeId)) {
@@ -1103,6 +1102,9 @@ export async function submitRideCheckIn({
     const acct = $account.get();
     const uid = acct.status === 'signed-in' ? acct.uid : null;
     const email = acct.status === 'signed-in' ? (acct.email || null) : null;
+    const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
+        ? adminOverrideRole
+        : '';
     if (source !== 'onboard_ping' && source !== 'stop' && source !== 'onboard_off_path') {
         const clash = await findConflictingShare({ deviceId, uid, email });
         if (clash) {
@@ -1125,6 +1127,10 @@ export async function submitRideCheckIn({
     let projection = null;
     let resolvedState = trackingState;
     let resolvedPauseReason = pauseReason;
+    if (trainId && trustedAdminOverride === 'train' && !overrideProjected && Number.isFinite(coarseLat) && Number.isFinite(coarseLng)) {
+        const path = await railPathForTrain(trainId, { routeId, region: ROUTES[routeId]?.region || 'GP' });
+        overrideProjected = scoreFixToRailPath(coarseLat, coarseLng, path);
+    }
     if (trainId && !resolvedState) {
         const previousProgress = previous?.routeId === routeId && String(previous?.trainId || '') === String(trainId)
             ? previous.projectedProgress
@@ -1138,6 +1144,20 @@ export async function submitRideCheckIn({
         });
         resolvedState = projection.ok ? TRACKING_STATE.ACTIVE : TRACKING_STATE.PAUSED;
         resolvedPauseReason = projection.ok ? '' : projection.reason;
+    }
+    if (trainId && trustedAdminOverride === 'train' && overrideProjected) {
+        projection = {
+            ok: true,
+            projectedLat: roundCoord(overrideProjected.lat),
+            projectedLng: roundCoord(overrideProjected.lon),
+            projectedProgress: Number.isFinite(overrideProjected.pathFraction) ? overrideProjected.pathFraction : 0,
+            routeProgressM: Number.isFinite(overrideProjected.routeM) ? overrideProjected.routeM : 0,
+            distanceM: Number.isFinite(overrideProjected.distanceM) ? overrideProjected.distanceM : 0,
+            lastSeenLabel: st,
+            bearing: Number.isFinite(heading) ? heading : null,
+        };
+        resolvedState = TRACKING_STATE.ACTIVE;
+        resolvedPauseReason = '';
     }
     if (!resolvedState) resolvedState = TRACKING_STATE.ACTIVE;
     const payload = {
@@ -1160,6 +1180,7 @@ export async function submitRideCheckIn({
         source: source || 'board_checkin',
         trackingState: resolvedState,
     };
+    if (trustedAdminOverride) payload.adminOverrideRole = trustedAdminOverride;
     if (resolvedPauseReason) payload.pauseReason = resolvedPauseReason;
     if (projection?.ok) {
         payload.projectedLat = projection.projectedLat;
@@ -1198,6 +1219,8 @@ export async function submitRideCheckIn({
             railDistanceM: payload.railDistanceM,
             acceptedAt: payload.acceptedAt, lastSeenLabel: payload.lastSeenLabel, bearing: payload.bearing,
             accuracy: payload.accuracy,
+            adminOverrideRole: payload.adminOverrideRole || '',
+            source: payload.source,
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1329,6 +1352,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
         quiet: true,
         trackingState: TRACKING_STATE.PAUSED,
         pauseReason: reason,
+        adminOverrideRole: active.adminOverrideRole || '',
     });
 }
 
@@ -1360,6 +1384,23 @@ export function startOnboardPingLoop() {
             const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
             if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station)) {
                 await stopRideShare({ reason: 'terminus' });
+                return;
+            }
+            if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
+                await submitRideCheckIn({
+                    routeId: active.routeId,
+                    station: near?.stationName || active.station,
+                    trainId: active.trainId,
+                    destination: active.destination || null,
+                    coarseLat: pos.lat,
+                    coarseLng: pos.lng,
+                    heading: pos.heading,
+                    speedMps: pos.speedMps,
+                    accuracy: pos.accuracy,
+                    source: 'admin_override_train',
+                    quiet: true,
+                    adminOverrideRole: 'train',
+                });
                 return;
             }
             const projection = await projectTrainTrackerFix({

@@ -10,6 +10,7 @@ import {
     scheduleCacheSlot,
     getDistanceFromLatLonInKm,
 } from './utils.js';
+import { closestPointOnPath, smoothPathFromStops } from './rail-tracks.js';
 
 /** Trains stay trackable for 45 minutes either side of timetable time. */
 export const TRACKING_WINDOW_SEC = 45 * 60;
@@ -111,6 +112,27 @@ export function findStopsForTrain(trainId, opts = {}) {
         if (stops.length) return { schedule, stops };
     }
     return { schedule: null, stops: [] };
+}
+
+/** Build the selected service's origin-to-terminus rail path. */
+export async function railPathForTrain(trainId, opts = {}) {
+    const { stops } = findStopsForTrain(trainId, opts);
+    const stationIndex = opts.stationIndex || $globalStationIndex.get() || {};
+    const routeId = String(opts.routeId || '');
+    const points = stops
+        .map((stop) => {
+            const coords = coordsForStation(stop.station, stationIndex);
+            return coords ? { lat: coords.lat, lon: coords.lng, routeId } : null;
+        })
+        .filter(Boolean);
+    if (points.length < 2) return null;
+    const smoothed = await smoothPathFromStops(points, opts.region || $userRegion.get() || 'GP');
+    return smoothed || points.map((point) => [point.lat, point.lon]);
+}
+
+/** Metres from a GPS fix to the closest rail point on this selected service. */
+export function scoreFixToRailPath(lat, lng, path) {
+    return closestPointOnPath(path, lat, lng);
 }
 
 export function coordsForStation(name, stationIndex = $globalStationIndex.get() || {}) {

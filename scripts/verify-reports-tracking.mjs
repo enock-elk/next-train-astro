@@ -10,6 +10,7 @@ import {
     journeyPositionLabel,
 } from '../src/lib/train-ghosts.js';
 import {
+    closestPointOnPath,
     trustedEdgeThresholdM,
     projectToTrustedFeature,
     TRACKER_SNAP_MAX_M,
@@ -17,6 +18,7 @@ import {
 import {
     compactPingsForMap,
     consensusProjectedPings,
+    pingPublicTrainId,
     projectTrainTrackerFix,
     TRACKING_STATE,
 } from '../src/lib/ride-pings.js';
@@ -111,6 +113,20 @@ assert(
     chordMidpoint?.distanceM > TRACKER_SNAP_MAX_M,
     'a point on the long synthetic chord is not accepted as trusted rail'
 );
+const closestRailPoint = closestPointOnPath([[0, 0], [0, 0.01]], 0.001, 0.005);
+assert(
+    Math.abs(closestRailPoint?.lat || 0) < 0.000001
+        && Math.abs((closestRailPoint?.lon || 0) - 0.005) < 0.000001,
+    'selected-path distance projects onto the rail segment, not only its vertices'
+);
+assert(
+    closestRailPoint?.distanceM > 110 && closestRailPoint?.distanceM < 112,
+    'selected-path distance reports metres to the closest rail point'
+);
+assert(
+    closestRailPoint?.pathFraction > 0.49 && closestRailPoint?.pathFraction < 0.51,
+    'selected-path projection records journey progress'
+);
 
 const stops = [
     { station: 'ORIGIN' },
@@ -194,6 +210,7 @@ const mapAppSource = readFileSync(new URL('../public/js/map-app.js', import.meta
 const mapPageSource = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 const mapViewSource = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
 const mapTabSource = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
+const ridePingsSource = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
 const boardSource = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 const liveBoardSource = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 const timetableSource = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
@@ -208,6 +225,21 @@ assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is di
 assert(mapTabSource.includes('Currently tracking'), 'Nearby trains shows the current tracked train status');
 assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current train opens tracking details');
 assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');
+assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
+assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
+assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
+assert(!mapTabSource.includes('from Train ${finalId} - sharing as a commuter'), 'share result does not describe distance from a train');
+assert(mapTabSource.includes('Admin map marker override'), 'admin checks expose train/person marker override');
+assert(!ridePingsSource.includes('scoreTrainForFix'), 'verified live pings are not measured against a timetable ghost');
+assert(ridePingsSource.includes('Number(p.railDistanceM)'), 'verified live pings use distance to rail');
+assert(pingPublicTrainId({ trainId: '1000', adminOverrideRole: 'train' }) === '1000', 'admin train override paints the train marker');
+assert(pingPublicTrainId({ trainId: '1000', adminOverrideRole: 'person' }) === null, 'admin person override does not paint the train marker');
+const databaseRules = readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
+assert(
+    databaseRules.includes("newData.child('adminOverrideRole').val() === 'train'")
+        && databaseRules.includes("auth.token.email === 'thandeka05nxumalo@gmail.com'"),
+    'database rules restrict marker overrides to the operator allowlist'
+);
 assert(!boardSource.includes('nt-live-train-pulse'), 'Next Train cards have no sharing pulse');
 assert(!liveBoardSource.includes('nt-timetable-live-dot'), 'full timetable control has no sharing dot');
 assert(!timetableSource.includes('paintLiveTrainDots'), 'full timetable does not paint sharing dots');

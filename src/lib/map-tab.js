@@ -16,6 +16,7 @@ import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
+import { isAdminAuthed } from './admin-chrome.js';
 
 /**
  * Map / board “Share my location” UI. Off until the feature ships to commuters.
@@ -49,10 +50,120 @@ const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
+const ADMIN_SHARE_ROLE_KEY = 'nt_admin_live_share_role';
+let lastShareRequest = null;
+let shareRestartInFlight = false;
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
 let lastCoords = null;
+
+function adminShareRole() {
+    if (!isAdminAuthed()) return 'auto';
+    const role = safeStorage.getItem(ADMIN_SHARE_ROLE_KEY);
+    return role === 'train' || role === 'person' ? role : 'auto';
+}
+
+function ensureShareChecksModal() {
+    let modal = document.getElementById('nt-share-checks-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'nt-share-checks-modal';
+    modal.className = 'fixed inset-0 z-[148] hidden flex items-end sm:items-center justify-center bg-gray-900/55 backdrop-blur-sm';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'nt-share-checks-title');
+    modal.innerHTML = `
+        <div class="w-full max-w-md max-h-[88dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
+            <div class="shrink-0 flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+                <div class="min-w-0">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Live location checks</p>
+                    <h3 id="nt-share-checks-title" class="text-lg font-black text-gray-900 dark:text-white">Checking your train</h3>
+                    <p id="nt-share-checks-status" class="mt-1 text-[12px] text-gray-500 dark:text-gray-400">Starting checks…</p>
+                </div>
+                <button type="button" data-share-checks-close class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <ol id="nt-share-checks-list" class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-2"></ol>
+            <fieldset id="nt-share-admin-override" class="hidden mx-4 mb-3 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-3">
+                <legend class="px-1 text-[9px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300">Admin map marker override</legend>
+                <div class="mt-1 grid grid-cols-3 gap-2 text-[11px] font-bold">
+                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="auto"> Auto</label>
+                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="train"> Train</label>
+                    <label class="flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2"><input type="radio" name="nt-admin-share-role" value="person"> Person</label>
+                </div>
+                <p class="mt-2 text-[10px] text-violet-700 dark:text-violet-300">Restart checks after changing this override.</p>
+            </fieldset>
+            <div class="shrink-0 grid grid-cols-2 gap-2 p-4 border-t border-gray-100 dark:border-gray-800">
+                <button type="button" id="nt-share-checks-restart" class="py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
+                <button type="button" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-share-checks-close]').forEach((button) => {
+        button.addEventListener('click', () => modal.classList.add('hidden'));
+    });
+    modal.querySelectorAll('input[name="nt-admin-share-role"]').forEach((input) => {
+        input.addEventListener('change', () => {
+            if (input.checked) safeStorage.setItem(ADMIN_SHARE_ROLE_KEY, input.value);
+        });
+    });
+    modal.querySelector('#nt-share-checks-restart')?.addEventListener('click', async () => {
+        if (!lastShareRequest || shareRestartInFlight) return;
+        shareRestartInFlight = true;
+        try {
+            await startOnTrainShare({ ...lastShareRequest, skipVolunteer: true, intent: 'onboard' });
+        } finally {
+            shareRestartInFlight = false;
+        }
+    });
+    return modal;
+}
+
+function openShareChecks(trainId) {
+    const modal = ensureShareChecksModal();
+    modal.classList.remove('hidden');
+    const title = modal.querySelector('#nt-share-checks-title');
+    const status = modal.querySelector('#nt-share-checks-status');
+    const list = modal.querySelector('#nt-share-checks-list');
+    if (title) title.textContent = `Checking Train ${trainId}`;
+    if (status) status.textContent = 'Starting checks…';
+    if (list) list.innerHTML = '';
+    const controls = modal.querySelector('#nt-share-admin-override');
+    controls?.classList.toggle('hidden', !isAdminAuthed());
+    const role = adminShareRole();
+    const radio = modal.querySelector(`input[name="nt-admin-share-role"][value="${role}"]`);
+    if (radio) radio.checked = true;
+}
+
+function addShareCheck(label, detail, state = 'pass') {
+    const modal = ensureShareChecksModal();
+    const list = modal.querySelector('#nt-share-checks-list');
+    if (!list) return;
+    const row = document.createElement('li');
+    const tone = state === 'fail'
+        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+        : state === 'decision'
+            ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'
+            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800';
+    row.className = `rounded-xl border ${tone} px-3 py-2.5`;
+    const heading = document.createElement('p');
+    heading.className = 'text-[11px] font-black text-gray-900 dark:text-white';
+    heading.textContent = label;
+    const body = document.createElement('p');
+    body.className = 'mt-0.5 text-[11px] leading-snug text-gray-600 dark:text-gray-300';
+    body.textContent = detail;
+    row.append(heading, body);
+    list.appendChild(row);
+    row.scrollIntoView({ block: 'nearest' });
+}
+
+function setShareDecision(text, accepted) {
+    const status = ensureShareChecksModal().querySelector('#nt-share-checks-status');
+    if (status) status.textContent = text;
+    addShareCheck('Decision', text, accepted ? 'decision' : 'fail');
+}
 
 function frameEl() {
     return document.getElementById('map-tab-frame');
@@ -412,69 +523,78 @@ const ONBOARD_SAMPLE_MS = 8000;
 export async function runOnboardToastVet(trainId) {
     const {
         routeHasStationCoords,
-        scoreTrainForFix,
         expectedPosition,
         ghostHeadingDeg,
         headingAgrees,
         journeyHeadingDeg,
+        railPathForTrain,
+        scoreFixToRailPath,
         TRAIN_TRACKER_MAX_M,
         NO_COORDS_MESSAGE,
     } = await import('./train-ghosts.js');
     const routeId = $currentRouteId.get();
+    openShareChecks(trainId);
     if (!routeHasStationCoords(routeId)) {
-        showCheckToast(NO_COORDS_MESSAGE);
+        addShareCheck('Rail geometry', NO_COORDS_MESSAGE, 'fail');
+        setShareDecision(NO_COORDS_MESSAGE, false);
         showToast(NO_COORDS_MESSAGE, 'info', 5000);
         return { ok: false, noCoords: true, message: NO_COORDS_MESSAGE };
     }
 
-    showCheckToast('Checking your location…');
+    addShareCheck('Rail geometry', `Station coordinates are available for Train ${trainId}.`);
+    const railPath = await railPathForTrain(trainId, { routeId, region: $userRegion.get() || 'GP' });
+    if (!railPath?.length) {
+        const message = 'Couldn’t build the selected train’s rail path.';
+        addShareCheck('Selected train path', message, 'fail');
+        setShareDecision(message, false);
+        return { ok: false, noCoords: true, message };
+    }
+    addShareCheck('Selected train path', `Built an origin-to-terminus path with ${railPath.length} rail points.`);
     let samples;
     try {
         samples = await sampleGpsFor(ONBOARD_SAMPLE_MS, (list) => {
             const last = list[list.length - 1];
-            if (!last || !trainId) return;
-            const metres = scoreTrainForFix(last.lat, last.lng, trainId);
-            if (Number.isFinite(metres) && metres < 1e7) {
-                showCheckToast(`You’re ${formatDistanceM(metres)} from Train ${trainId}`);
-            }
+            const status = document.getElementById('nt-share-checks-status');
+            if (status && last) status.textContent = `Collecting GPS fixes… ${list.length} received`;
         });
     } catch (e) {
         const msg = e?.code === 1
             ? 'Location permission denied'
             : (e?.message || 'Couldn’t get location');
-        showCheckToast(msg);
+        addShareCheck('GPS samples', msg, 'fail');
+        setShareDecision(msg, false);
         return { ok: false, message: msg };
     }
 
     if (!samples?.length) {
         const msg = 'Couldn’t get a GPS fix. Try again outdoors.';
-        showCheckToast(msg);
+        addShareCheck('GPS samples', msg, 'fail');
+        setShareDecision(msg, false);
         return { ok: false, message: msg };
     }
 
     const first = samples[0];
     const last = samples[samples.length - 1];
-    const metres = scoreTrainForFix(last.lat, last.lng, trainId);
-    if (Number.isFinite(metres)) {
-        showCheckToast(`You’re ${formatDistanceM(metres)} from Train ${trainId}`);
-        await pause(450);
-    }
-
-    const region = $userRegion.get() || 'GP';
-    let snap = null;
-    try {
-        const { snapToRail } = await import('./rail-tracks.js');
-        snap = await snapToRail(last.lat, last.lng, region, TRACK_MAX_M);
-    } catch { /* tracks optional */ }
+    addShareCheck('GPS samples', `${samples.length} fixes received. Accuracy is ${Number.isFinite(last.accuracy) ? `±${Math.round(last.accuracy)} m` : 'unknown'}.`);
+    const pathPoint = scoreFixToRailPath(last.lat, last.lng, railPath);
+    const metres = pathPoint?.distanceM ?? Infinity;
+    addShareCheck(
+        'Distance to selected rail path',
+        Number.isFinite(metres)
+            ? `Closest rail point on Train ${trainId}’s path is ${formatDistanceM(metres)} away.`
+            : 'Couldn’t measure distance to the selected train path.',
+        Number.isFinite(metres) ? 'pass' : 'fail'
+    );
     const nearStation = nearestStationMeters(last.lat, last.lng);
     const atPlatform = nearStation != null && nearStation < STATION_NEAR_M;
-    const onRails = !!(snap?.ok || atPlatform);
-    if (snap && snap.distanceM != null) {
-        showCheckToast(onRails
-            ? `Railway is ${formatDistanceM(snap.distanceM)} away`
-            : `Not on the railway (${formatDistanceM(snap.distanceM)})`);
-        await pause(450);
-    }
+    const onRails = metres <= TRACK_MAX_M || atPlatform;
+    addShareCheck(
+        'Rail proximity',
+        atPlatform
+            ? `Within ${formatDistanceM(nearStation)} of a station platform.`
+            : (onRails ? 'GPS fix is close to the selected train path.' : `GPS fix is ${formatDistanceM(metres)} from the selected train path.`),
+        onRails ? 'pass' : 'fail'
+    );
 
     const displacement = haversineM(first, last);
     const dt = Math.max(1, (last.t - first.t) / 1000);
@@ -484,11 +604,9 @@ export async function runOnboardToastVet(trainId) {
     const speedMps = hasGpsSpeed ? last.speed : (hasDerivedSpeed ? derivedSpeed : null);
     if (speedMps != null) {
         const kmh = Math.max(0, Math.round(speedMps * 3.6));
-        showCheckToast(`You’re moving at about ${kmh} km/h`);
-        await pause(450);
+        addShareCheck('Movement', `GPS reports about ${kmh} km/h over ${Math.round(displacement)} m.`);
     } else {
-        showCheckToast('No speed from GPS yet');
-        await pause(350);
+        addShareCheck('Movement', 'No reliable speed from GPS yet.', 'fail');
     }
 
     let heading = last.heading;
@@ -502,14 +620,17 @@ export async function runOnboardToastVet(trainId) {
     const moving = (speedMps != null && speedMps >= 1.5) || displacement >= MOVE_MIN_M;
     const agrees = headingAgrees(heading, targetH);
     const headingPass = !moving || atPlatform || agrees;
-    showCheckToast(headingPass
-        ? `Heading matches Train ${trainId}`
-        : `Heading doesn’t match Train ${trainId} yet`);
-    await pause(450);
+    addShareCheck(
+        'Direction',
+        !moving
+            ? 'Direction is deferred until movement is detected.'
+            : (headingPass ? `Heading agrees with Train ${trainId}’s journey.` : `Heading does not agree with Train ${trainId}’s journey yet.`),
+        headingPass ? 'pass' : 'fail'
+    );
     const tooFar = !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
     lastCoords = {
-        lat: snap?.ok ? snap.lat : last.lat,
-        lng: snap?.ok ? snap.lon : last.lng,
+        lat: onRails && pathPoint ? pathPoint.lat : last.lat,
+        lng: onRails && pathPoint ? pathPoint.lon : last.lng,
         accuracy: last.accuracy,
     };
 
@@ -519,9 +640,9 @@ export async function runOnboardToastVet(trainId) {
         const msg = !onRails
             ? 'You need to be near the railway to share this train.'
             : tooFar
-                ? `You’re too far from Train ${trainId}`
+                ? `You’re too far from Train ${trainId}’s rail path`
                 : `Heading doesn’t match Train ${trainId}`;
-        showCheckToast(msg);
+        setShareDecision(`${msg}. You will not appear as the train.`, false);
         return {
             ok: false,
             message: msg,
@@ -535,11 +656,17 @@ export async function runOnboardToastVet(trainId) {
             attach: false,
             tooFar,
             onRails,
-            trackM: snap?.distanceM ?? null,
+            trackM: Number.isFinite(metres) ? metres : null,
+            pathPoint,
             atPlatform,
+            actualLat: last.lat,
+            actualLng: last.lng,
         };
     }
 
+    setShareDecision(attach
+        ? `Checks passed. You can appear as Train ${trainId}.`
+        : `Checks passed, but movement is not confirmed; you will appear as a person.`, attach);
     return {
         ok: true,
         lat: lastCoords.lat,
@@ -552,8 +679,11 @@ export async function runOnboardToastVet(trainId) {
         attach,
         tooFar,
         onRails,
-        trackM: snap?.distanceM ?? null,
+        trackM: Number.isFinite(metres) ? metres : null,
+        pathPoint,
         atPlatform,
+        actualLat: last.lat,
+        actualLng: last.lng,
     };
 }
 
@@ -1098,15 +1228,18 @@ async function parkedWatchTick() {
         heading = (Math.atan2(lng - prev.lng, lat - prev.lat) * 180) / Math.PI;
     }
     const {
-        scoreTrainForFix, expectedPosition, ghostHeadingDeg, headingAgrees, TRAIN_TRACKER_MAX_M,
+        railPathForTrain, scoreFixToRailPath, journeyHeadingDeg, headingAgrees,
     } = await import('./train-ghosts.js');
-    const metres = scoreTrainForFix(lat, lng, rec.trainId);
-    const ghost = expectedPosition(rec.trainId);
-    const agrees = headingAgrees(heading, ghostHeadingDeg(ghost));
+    const path = await railPathForTrain(rec.trainId, {
+        routeId: rec.routeId,
+        region: $userRegion.get() || 'GP',
+    });
+    const pathPoint = scoreFixToRailPath(lat, lng, path);
+    const agrees = headingAgrees(heading, journeyHeadingDeg(rec.trainId));
     const moving = speedMps >= 1.5 || displacement >= MOVE_MIN_M;
     writeParkedWatch({ ...rec, lat, lng, at: Date.now() });
     if (!moving || !agrees) return;
-    if (Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M) return;
+    if (!Number.isFinite(pathPoint?.distanceM) || pathPoint.distanceM > TRACK_MAX_M) return;
 
     stopParkedTrainWatch();
     clearParkedWatch();
@@ -1203,6 +1336,7 @@ export async function startOnTrainShare({
     scheduledTime = '',
     intent: forcedIntent = '',
 } = {}) {
+    lastShareRequest = { trainId, station, destination, routeId, source, scheduledTime, intent: 'onboard' };
     triggerHaptic();
     const id = trainId === 'trip' ? null : (trainId || null);
     if (!routeId) {
@@ -1261,9 +1395,13 @@ export async function startOnTrainShare({
     setStatus('Checking your location…');
     const vet = await runOnboardToastVet(id);
     const enforce = ENFORCE_LIVE_SHARE_VET;
+    const overrideRole = adminShareRole();
+    if (isAdminAuthed() && overrideRole !== 'auto') {
+        addShareCheck('Admin override', `Force this share to appear as a ${overrideRole}.`, 'decision');
+    }
 
     if (!vet.ok) {
-        if (enforce) {
+        if (enforce && overrideRole === 'auto') {
             if (!vet.noCoords) hideCheckToast();
             return vet;
         }
@@ -1279,61 +1417,80 @@ export async function startOnTrainShare({
             speedMps = typeof pos.coords.speed === 'number' ? pos.coords.speed : null;
             lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
         } catch { /* still attach so the share is visible */ }
+        if (
+            (overrideRole === 'train' || overrideRole === 'person')
+            && (!Number.isFinite(lat) || !Number.isFinite(lng))
+        ) {
+            setShareDecision(`Admin ${overrideRole} override still needs a GPS fix.`, false);
+            return vet;
+        }
+        if (overrideRole === 'train' || overrideRole === 'person') {
+            vet.ok = true;
+            vet.lat = lat;
+            vet.lng = lng;
+            vet.actualLat = lat;
+            vet.actualLng = lng;
+            vet.heading = heading;
+            vet.speedMps = speedMps;
+            vet.isMoving = false;
+            vet.headingAgrees = false;
+            vet.metres = vet.trackM ?? Infinity;
+        } else {
+            const st = station || document.getElementById('station-select')?.value || 'here';
+            const sharedAnyway = await finishRideShare({
+                trainId: id,
+                station: st,
+                destination,
+                routeId,
+                lat,
+                lng,
+                heading,
+                speedMps,
+                source,
+            });
+            if (sharedAnyway?.ok) {
+                scheduleTripWatch({
+                    trainId: id,
+                    station: st,
+                    scheduledTime: scheduledTime || '',
+                    routeId,
+                    destination,
+                });
+            }
+            return sharedAnyway;
+        }
+    }
+
+    if (overrideRole === 'person') {
         const st = station || document.getElementById('station-select')?.value || 'here';
-        const sharedAnyway = await finishRideShare({
-            trainId: id,
+        const result = await finishRideShare({
+            trainId: null,
+            waitingFor: id,
             station: st,
             destination,
             routeId,
-            lat,
-            lng,
-            heading,
-            speedMps,
-            source,
+            lat: vet.actualLat ?? vet.lat,
+            lng: vet.actualLng ?? vet.lng,
+            heading: vet.heading,
+            speedMps: vet.speedMps,
+            source: 'admin_override_person',
+            adminOverrideRole: 'person',
         });
-        if (sharedAnyway?.ok) {
-            scheduleTripWatch({
-                trainId: id,
-                station: st,
-                scheduledTime: scheduledTime || '',
-                routeId,
-                destination,
-            });
-        }
-        return sharedAnyway;
+        setShareDecision(`Admin override applied. You appear as a person waiting for Train ${id}.`, !!result?.ok);
+        return { ...result, asPerson: true, adminOverride: 'person' };
     }
 
-    const { resolveTrainAttachment, scoreTrainForFix, TRAIN_TRACKER_MAX_M, expectedPosition, ghostHeadingDeg, headingAgrees } = await import('./train-ghosts.js');
-    const decision = resolveTrainAttachment(vet.lat, vet.lng, id);
+    const { TRAIN_TRACKER_MAX_M, expectedPosition, ghostHeadingDeg, headingAgrees } = await import('./train-ghosts.js');
     let finalId = id;
     let confirmedCloser = false;
-    if (enforce && decision.action === 'confirm' && decision.best?.trainId) {
-        const pick = await promptOnTrainSheet({
-            title: 'Different train?',
-            body: `You’re more likely on ${trainGoingLabel(decision.best.trainId)} than ${trainGoingLabel(id, destination)}. Show you as ${trainGoingLabel(decision.best.trainId)}?`,
-            primary: `Yes, ${trainGoingLabel(decision.best.trainId)}`,
-            secondary: `Keep ${trainGoingLabel(id, destination)}`,
-            tertiary: 'Cancel',
-        });
-        if (pick === 'tertiary') {
-            hideCheckToast();
-            return { ok: false, cancelled: true };
-        }
-        if (pick === 'primary') {
-            finalId = decision.best.trainId;
-            confirmedCloser = true;
-        }
-    }
 
-    const metres = Number.isFinite(vet.metres) && finalId === id
-        ? vet.metres
-        : scoreTrainForFix(vet.lat, vet.lng, finalId);
+    const metres = vet.metres;
     const tooFar = Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M;
     const st = station || document.getElementById('station-select')?.value || '';
     let moving = !!(vet.isMoving || (typeof vet.speedMps === 'number' && vet.speedMps >= 1.5));
     let headingOk = vet.headingAgrees !== false;
 
-    if (enforce && !tooFar && !moving) {
+    if (enforce && overrideRole !== 'train' && !tooFar && !moving) {
         hideCheckToast();
         const parked = await promptOnTrainSheet({
             title: 'Is the train moving?',
@@ -1423,7 +1580,7 @@ export async function startOnTrainShare({
         }
     }
 
-    const attach = !enforce || (!tooFar && moving && headingOk);
+    const attach = overrideRole === 'train' || !enforce || (!tooFar && moving && headingOk);
 
     if (!attach) {
         const result = await finishRideShare({
@@ -1440,7 +1597,7 @@ export async function startOnTrainShare({
         });
         hideCheckToast();
         showToast(tooFar
-            ? `You’re about ${formatDistanceM(metres)} from Train ${finalId} - sharing as a commuter`
+            ? `You’re about ${formatDistanceM(metres)} from the selected rail path - sharing as a commuter`
             : 'We’ll show you as a commuter until you’re moving with the train', 'info', 5000);
         return { ...result, asPerson: true, tooFar, waiting: !tooFar };
     }
@@ -1454,11 +1611,17 @@ export async function startOnTrainShare({
         lng: vet.lng,
         heading: vet.heading,
         speedMps: vet.speedMps,
-        source: confirmedCloser ? 'closer_confirm' : source,
+        source: overrideRole === 'train' ? 'admin_override_train' : (confirmedCloser ? 'closer_confirm' : source),
+        adminOverrideRole: overrideRole === 'train' ? 'train' : '',
+        overrideProjected: overrideRole === 'train' ? vet.pathPoint : null,
     });
     if (shared?.ok) {
-        showCheckToast(`Sharing Train ${finalId} with other riders`);
-        setTimeout(() => hideCheckToast(), 4000);
+        setShareDecision(
+            overrideRole === 'train'
+                ? `Admin override applied. You appear as Train ${finalId}.`
+                : `Sharing accepted. You appear as Train ${finalId}.`,
+            true
+        );
         scheduleTripWatch({
             trainId: finalId,
             station: st,
@@ -1473,7 +1636,8 @@ export async function startOnTrainShare({
 }
 
 async function finishRideShare({
-    trainId, station, destination, routeId, lat, lng, heading, speedMps, accuracy, source, waitingFor, quiet = false,
+    trainId, station, destination, routeId, lat, lng, heading, speedMps, accuracy, source, waitingFor,
+    quiet = false, adminOverrideRole = '', overrideProjected = null,
 }) {
     try {
         const { submitRideCheckIn, isRideCheckInEnabled } = await import('./ride-pings.js');
@@ -1498,6 +1662,8 @@ async function finishRideShare({
             source: source || 'board_on_train',
             waitingFor: waitingFor || null,
             quiet,
+            adminOverrideRole,
+            overrideProjected,
         });
 
         if (!result.ok) {
@@ -1721,12 +1887,6 @@ async function runTripWatch(watch) {
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
     lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
-
-    const { scoreTrainForFix, TRAIN_TRACKER_MAX_M } = await import('./train-ghosts.js');
-    const ghostM = scoreTrainForFix(lat, lng, watch.trainId);
-    if (Number.isFinite(ghostM) && ghostM <= TRAIN_TRACKER_MAX_M) {
-        return;
-    }
 
     const st = stationCoords(watch.station);
     const stationM = st

@@ -506,3 +506,51 @@ export function nearestPathIndex(path, lat, lon) {
     }
     return best;
 }
+
+/**
+ * Exact nearest point on a dense [lat, lon][] rail path.
+ * Returns distance to the path itself, not to a timetable ghost or vertex.
+ */
+export function closestPointOnPath(path, lat, lon) {
+    if (!Array.isArray(path) || path.length < 2 || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    let best = null;
+    let travelledM = 0;
+    for (let i = 1; i < path.length; i += 1) {
+        const a = path[i - 1];
+        const b = path[i];
+        if (!a || !b || !Number.isFinite(a[0]) || !Number.isFinite(a[1]) || !Number.isFinite(b[0]) || !Number.isFinite(b[1])) continue;
+        const lat0 = ((a[0] + b[0]) / 2) * Math.PI / 180;
+        const scaleX = Math.PI / 180 * 6371000 * Math.cos(lat0);
+        const scaleY = Math.PI / 180 * 6371000;
+        const px = lat * scaleY;
+        const py = lon * scaleX;
+        const ax = a[0] * scaleY;
+        const ay = a[1] * scaleX;
+        const bx = b[0] * scaleY;
+        const by = b[1] * scaleX;
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len2 = dx * dx + dy * dy;
+        const fraction = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+        const projectedLat = a[0] + (b[0] - a[0]) * fraction;
+        const projectedLon = a[1] + (b[1] - a[1]) * fraction;
+        const distanceM = haversineM(lat, lon, projectedLat, projectedLon);
+        const segmentM = haversineM(a[0], a[1], b[0], b[1]);
+        if (!best || distanceM < best.distanceM) {
+            best = {
+                lat: projectedLat,
+                lon: projectedLon,
+                distanceM,
+                segmentIndex: i - 1,
+                fraction,
+                routeM: travelledM + segmentM * fraction,
+            };
+        }
+        travelledM += segmentM;
+    }
+    if (best) {
+        best.totalM = travelledM;
+        best.pathFraction = travelledM > 0 ? best.routeM / travelledM : 0;
+    }
+    return best;
+}

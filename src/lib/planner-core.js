@@ -1375,7 +1375,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
 
             const checkLeg = (routeId, stops) => {
                 if (!stops || stops.length === 0) return false;
-                const disrList = getDisr(routeId, stops);
+                const disrList = getDisr(routeId, stops, targetDayType);
                 const crit = disrList.find((d) => d.tier === 'CRITICAL');
                 if (!crit) return false;
 

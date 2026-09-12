@@ -136,6 +136,11 @@ const requiredIds = [
     'excl-train-grid-a',
     'excl-train-grid-b',
     'disr-expiry',
+    'disr-day-weekday',
+    'disr-day-saturday',
+    'disr-from',
+    'disr-until',
+    'disr-show-map',
     'maint-expires',
     'exp-features-header',
     'exp-map-enabled',
@@ -146,6 +151,9 @@ for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
 
+assert(admin.includes('showCancelledOnMap'), 'incidents persist the map cancelled-station toggle');
+assert(!/id="disr-show-map"[^>]*checked/.test(admin), 'show cancelled station on map defaults off');
+assert(admin.includes('applyDays'), 'incidents persist cancellation days');
 assert(admin.includes('Admin.endOfTodayLocalValue()'), 'alert/exclusion/disruption defaults call the helper');
 assert(!admin.includes('now.getHours() + 48'), 'disruption no longer defaults to +48 hours');
 assert(!admin.includes('defaultExpiry.setHours(defaultExpiry.getHours() + 24)'), 'grid notice no longer defaults to +24 hours');

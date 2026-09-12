@@ -1499,8 +1499,18 @@
                 drawnRoutes.forEach((routeObj) => {
                     Object.values(disruptions || {}).flat().forEach((d) => {
                         if (!d || drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
-
+                        const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+                        const mapTime = (typeof window !== 'undefined' && window.currentTime) || '';
+                        if (typeof window.disruptionAppliesToDayAndTime === 'function'
+                            && !window.disruptionAppliesToDayAndTime(d, mapDay, mapTime)) {
+                            return;
+                        }
                         const isCritical = d.tier === 'CRITICAL';
+                        if (isCritical && !(typeof window.disruptionShowsCancelledOnMap === 'function'
+                            ? window.disruptionShowsCancelledOnMap(d)
+                            : d.showCancelledOnMap === true)) {
+                            return;
+                        }
                         const color = isCritical ? '#ef4444' : '#eab308';
                         const currentValidStops = routeObj.validStops;
                         const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
@@ -1804,6 +1814,17 @@
                     let isWarning = false;
 
                     Object.values(globalDisruptions).flat().forEach(d => {
+                        const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+                        const mapTime = (typeof window !== 'undefined' && window.currentTime) || '';
+                        if (typeof window.disruptionAppliesToDayAndTime === 'function'
+                            && !window.disruptionAppliesToDayAndTime(d, mapDay, mapTime)) {
+                            return;
+                        }
+                        if (d.tier === 'CRITICAL' && !(typeof window.disruptionShowsCancelledOnMap === 'function'
+                            ? window.disruptionShowsCancelledOnMap(d)
+                            : d.showCancelledOnMap === true)) {
+                            return;
+                        }
                         if (!d.stations || d.stations.length === 0) {
                             if (d.routeId === item.routeId) {
                                 if (d.tier === 'CRITICAL') isCritical = true;

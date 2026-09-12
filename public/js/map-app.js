@@ -1499,8 +1499,18 @@
                 drawnRoutes.forEach((routeObj) => {
                     Object.values(disruptions || {}).flat().forEach((d) => {
                         if (!d || drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
-
+                        const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+                        const mapTime = (typeof window !== 'undefined' && window.currentTime) || '';
+                        if (typeof window.disruptionAppliesToDayAndTime === 'function'
+                            && !window.disruptionAppliesToDayAndTime(d, mapDay, mapTime)) {
+                            return;
+                        }
                         const isCritical = d.tier === 'CRITICAL';
+                        if (isCritical && !(typeof window.disruptionShowsCancelledOnMap === 'function'
+                            ? window.disruptionShowsCancelledOnMap(d)
+                            : d.showCancelledOnMap === true)) {
+                            return;
+                        }
                         const color = isCritical ? '#ef4444' : '#eab308';
                         const currentValidStops = routeObj.validStops;
                         const trackPath = (routeObj.trackCoords && routeObj.trackCoords.length > 1)
@@ -1571,8 +1581,15 @@
                             if (normStations.length >= 2) {
                                 const s1 = resolvePathStop(normStations[0]);
                                 const s2 = resolvePathStop(normStations[1]);
-                                const names = (currentValidStops || []).map((s) => s.name);
-                                if (s1 && s2 && names.includes(normStations[0]) && names.includes(normStations[1])) {
+                                const nearPath = (stop) => {
+                                    if (!stop || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) return false;
+                                    const i = nearestPathIndex(trackPath, stop.lat, stop.lon);
+                                    if (i < 0) return false;
+                                    const dLat = trackPath[i][0] - stop.lat;
+                                    const dLon = trackPath[i][1] - stop.lon;
+                                    return (dLat * dLat + dLon * dLon) <= 0.0004;
+                                };
+                                if (s1 && s2 && nearPath(s1) && nearPath(s2)) {
                                     drawnIncidentIds.add(d.id + '_' + routeObj.routeId);
                                     const i1 = nearestPathIndex(trackPath, s1.lat, s1.lon);
                                     const i2 = nearestPathIndex(trackPath, s2.lat, s2.lon);
@@ -1797,6 +1814,17 @@
                     let isWarning = false;
 
                     Object.values(globalDisruptions).flat().forEach(d => {
+                        const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+                        const mapTime = (typeof window !== 'undefined' && window.currentTime) || '';
+                        if (typeof window.disruptionAppliesToDayAndTime === 'function'
+                            && !window.disruptionAppliesToDayAndTime(d, mapDay, mapTime)) {
+                            return;
+                        }
+                        if (d.tier === 'CRITICAL' && !(typeof window.disruptionShowsCancelledOnMap === 'function'
+                            ? window.disruptionShowsCancelledOnMap(d)
+                            : d.showCancelledOnMap === true)) {
+                            return;
+                        }
                         if (!d.stations || d.stations.length === 0) {
                             if (d.routeId === item.routeId) {
                                 if (d.tier === 'CRITICAL') isCritical = true;

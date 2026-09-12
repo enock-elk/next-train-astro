@@ -12,7 +12,10 @@ import {
     isProtectedVolatileKey,
     newestUnappliedKillswitchTimestamp,
     shouldDeleteCacheForPolicy,
+    VOLATILE_FLUSH_PROTECTED_KEYS,
+    VOLATILE_FLUSH_PROTECTED_PREFIXES,
 } from '../src/lib/utils.js';
+import { ALERT_IMAGE_CACHE, ALERT_IMAGE_INDEX_KEY } from '../src/lib/alert-image-cache.js';
 import { FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
 
 const failures = [];
@@ -92,6 +95,11 @@ assert(!shouldDeleteCacheForPolicy('workbox-precache-v9', system), 'killswitch k
 assert(!shouldDeleteCacheForPolicy('schedule-dump', system), 'killswitch keeps schedule runtime cache');
 assert(shouldDeleteCacheForPolicy('static-runtime', system), 'killswitch removes obsolete static runtime cache');
 assert(shouldDeleteCacheForPolicy('astro-hashed', system), 'killswitch removes obsolete hashed asset cache');
+assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, system), 'killswitch removes cached alert posters');
+assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, manual), 'manual reset removes cached alert posters');
+assert(!VOLATILE_FLUSH_PROTECTED_KEYS.includes(ALERT_IMAGE_INDEX_KEY), 'alert image index is not a protected localStorage key');
+assert(!VOLATILE_FLUSH_PROTECTED_PREFIXES.some((prefix) => ALERT_IMAGE_INDEX_KEY.startsWith(prefix)), 'alert image index is not under a protected prefix');
+assert(!isProtectedVolatileKey(ALERT_IMAGE_INDEX_KEY), 'alert image index is flushed on nuke');
 assert(shouldDeleteCacheForPolicy('workbox-precache-v9', manual), 'manual reset still clears every cache');
 
 assert(FORCE_UPDATE_REQUIRED === true, 'FORCE_UPDATE_REQUIRED is true for this build');

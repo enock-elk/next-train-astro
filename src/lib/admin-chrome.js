@@ -50,6 +50,7 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    if (surface === 'tripPrice' && isFeatureGranted(FEATURE_KEYS.TRIP_PRICE)) return true;
     if (surface === 'account' && (
         isFeatureGranted(FEATURE_KEYS.MAP_TAB)
         || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)

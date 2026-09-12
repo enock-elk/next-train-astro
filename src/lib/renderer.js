@@ -7,7 +7,7 @@
 
 import { 
     $userRegion, $currentRouteId, $userProfile, $fullDatabase, $schedules, 
-    $globalStationIndex, $globalExclusions 
+    $globalStationIndex, $globalExclusions, $globalDisruptions 
 } from '../store.js';
 
 import { 
@@ -45,6 +45,7 @@ import {
     stampLiveBoardCard,
     isQuietBoardPaint,
 } from './live-board-paint.js';
+import { disruptedStationMap, disruptionAppliesToTime, disruptionIsAllDay } from './disruption-zones.js';
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -856,8 +857,15 @@ export const Renderer = {
 
     // --- 3. TIMETABLE DAILY MATRIX COMPILER ---
 
-    _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false) => {
+    _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false, dayType = null) => {
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
+        const masterStations = (typeof window !== 'undefined' && typeof window.routeGeometryStations === 'function')
+            ? (window.routeGeometryStations(routeId) || [])
+            : [];
+        const gridDayType = dayType
+            || (typeof window !== 'undefined' && window._gridSelectedDay)
+            || (dayIdx === 0 ? 'sunday' : dayIdx === 6 ? 'saturday' : getCurrentDayType());
+        const disruptedRows = disruptedStationMap(routeId, masterStations, $globalDisruptions.get() || {}, gridDayType);
         const sortedCols = orderGridTrainIds(sheetName, trainCols, schedule.rows, {
             region: $userRegion.get(),
             manifestOrder: schedule.columnOrder,
@@ -1010,19 +1018,40 @@ export const Renderer = {
 
             const isSelectedRow = (!isExport && row.STATION === selectedStation);
             const isZebra = (validRowIndex % 2 === 1);
+            const rowDisr = disruptedRows.get(normalizeStationName(row.STATION));
+            const cancelledCols = new Set();
+            if (rowDisr) {
+                if (disruptionIsAllDay(rowDisr)) {
+                    sortedCols.forEach((col) => cancelledCols.add(col));
+                } else {
+                    sortedCols.forEach((col) => {
+                        if (disruptionAppliesToTime(rowDisr, row[col])) cancelledCols.add(col);
+                    });
+                }
+            }
+            const isDisruptedRow = cancelledCols.size > 0;
+            const shadeWholeRow = !!(rowDisr && disruptionIsAllDay(rowDisr) && isDisruptedRow);
             let currentStickyCellClass = stickyCellClass;
             
-            if (isSelectedRow) {
+            if (isDisruptedRow && !isExport) {
+                currentStickyCellClass = 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400';
+            } else if (isSelectedRow) {
                 currentStickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-blue-100 dark:bg-blue-800 border-gray-300 dark:border-gray-700 text-blue-900 dark:text-blue-100';
             } else if (isZebra && !isExport) {
                 currentStickyCellClass = 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white';
             }
 
-            let rowClass = isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : '');
+            let rowClass = shadeWholeRow && !isExport
+                ? 'bg-gray-100 dark:bg-gray-800'
+                : (isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : ''));
             if (isZebra && isExport) rowClass += ' export-zebra';
+            if (shadeWholeRow && isExport) rowClass += ' export-disrupted-row';
+            const disrRowAttrs = (!isExport && isDisruptedRow)
+                ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(cleanStation)}"`
+                : '';
 
             html += `
-                <tr class="${rowClass.trim()}">
+                <tr class="${rowClass.trim()}"${disrRowAttrs}>
                     <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold truncate max-w-[140px] shadow-lg border-b text-left pl-3">${cleanStation}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
@@ -1048,6 +1077,9 @@ export const Renderer = {
                             } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
                                 else cellClass += " text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 opacity-50 font-normal";
+                            } else if (cancelledCols.has(col)) {
+                                if (isExport) cellClass += " export-disrupted-cell";
+                                else cellClass += " text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 opacity-50 line-through font-normal";
                             } else {
                                 if (!isExport) {
                                     cellClass += " text-gray-900 dark:text-gray-200";
@@ -1061,6 +1093,9 @@ export const Renderer = {
                             } else if (paintExclusion) {
                                 if (isExport) cellClass += " export-banned-cell";
                                 else cellClass += " bg-red-50 dark:bg-red-900/10";
+                            } else if (cancelledCols.has(col)) {
+                                if (isExport) cellClass += " export-disrupted-cell";
+                                else cellClass += " text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 opacity-50";
                             } else if (!isExport) {
                                 cellClass += " text-gray-300 dark:text-gray-700"; 
                             }
@@ -1361,11 +1396,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     }
 
     const htmlA = schedA 
-        ? Renderer._buildGridHTML(schedA, firebaseKeyA || keyA, activeRouteId, dummyDayIdx, false, true) 
+        ? Renderer._buildGridHTML(schedA, firebaseKeyA || keyA, activeRouteId, dummyDayIdx, false, true, selectedDay) 
         : `<div class="p-8 text-center italic border rounded" style="color:${mutedColor}; border-color:${borderColor}">No service scheduled for this direction.</div>`;
         
     const htmlB = schedB 
-        ? Renderer._buildGridHTML(schedB, firebaseKeyB || keyB, activeRouteId, dummyDayIdx, false, true) 
+        ? Renderer._buildGridHTML(schedB, firebaseKeyB || keyB, activeRouteId, dummyDayIdx, false, true, selectedDay) 
         : `<div class="p-8 text-center italic border rounded" style="color:${mutedColor}; border-color:${borderColor}">No service scheduled for this direction.</div>`;
     const primaryDirection = routePrimaryGridDirection(route);
     const primarySection = primaryDirection === 'B'
@@ -1476,8 +1511,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.color = '#ef4444'; 
             td.style.opacity = '0.5'; 
         });
+        t.querySelectorAll('tr.export-disrupted-row td, td.export-disrupted-cell').forEach(td => {
+            td.style.backgroundColor = '#f3f4f6';
+            td.style.color = '#9ca3af';
+            td.style.opacity = '0.7';
+        });
 
-        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell)').forEach(td => {
+        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell):not(.export-disrupted-cell)').forEach(td => {
             td.style.backgroundColor = zebraBg;
         });
 

@@ -1,15 +1,9 @@
-/**
- * METRORAIL NEXT TRAIN - WESTERN CAPE PUBLIC HOLIDAY SYNC
- *
- * Each `${sheetKey}_columnOrder` array preserves the Excel header sequence.
- * The app and OpenGraph worker use it unless an admin override exists at
- * `config/grid_order/WC/${sheetKey}`.
- *
- * Writes only to /schedules/westerncape/public_holidays.json.
- * Never PUT the weekday/sat westerncape root from this workbook.
- */
+// METRORAIL NEXT TRAIN - WESTERN CAPE PUBLIC HOLIDAY SYNC (V6.0 - Region Split)
+// Targets: /schedules/westerncape/public_holidays.json only.
+// Never PUT the weekday/sat westerncape root from this workbook.
+// Surgical adds only: `${sheetKey}_columnOrder` and coordinate count logs.
 
-const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/";
+const FIREBASE_URL = "https://metrorail-next-train-default-rtdb.firebaseio.com/"; 
 // Prefer: File → Project settings → Script properties → FIREBASE_SECRET
 const FIREBASE_SECRET = PropertiesService.getScriptProperties().getProperty("FIREBASE_SECRET");
 
@@ -38,10 +32,125 @@ const SHEET_NAMES = [
   "CT-to-MALM_Pub", "MALM-to-CT_Pub"
 ];
 
-function normalizeTrainId(value) {
-  let id = String(value || "").trim();
-  if (/^\d+$/.test(id)) id = id.padStart(4, "0");
-  return /^\d{4}[a-zA-Z]*$/.test(id) ? id : "";
+function syncPublicHolidaysToFirebase() {
+  if (!FIREBASE_SECRET) {
+    throw new Error("Missing FIREBASE_SECRET in Script properties.");
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allData = {};
+  let synced = 0;
+  let totalCoordRows = 0;
+
+  SHEET_NAMES.forEach(sheetName => {
+    if (!/_Pub$/i.test(sheetName)) {
+      console.log(`⚠️ Warning: Blocked non-Pub sheet '${sheetName}'.`);
+      return;
+    }
+
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      console.log(`⚠️ Warning: Sheet '${sheetName}' not found. Skipping.`);
+      return;
+    }
+
+    const data = sheet.getDataRange().getDisplayValues();
+    if (data.length < 3) {
+      console.log(`⚠️ Skipped '${sheetName}': Not enough data.`);
+      return;
+    }
+
+    let manualUpdateDate = data[0][1]; 
+    if (!manualUpdateDate) {
+       manualUpdateDate = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    const headers = data[1];
+
+    let zoneCode = null;
+    for(let k=0; k < data[0].length; k++) {
+        const val = data[0][k].toString().trim();
+        if (/^Z\d+$/.test(val)) { zoneCode = val; break; }
+    }
+
+    const rows = data.slice(2);
+    
+    console.log(`ℹ️ Sheet '${sheetName}': Date=${manualUpdateDate}, Headers=${headers.length}`);
+
+    const formattedRows = rows.map(row => {
+      let obj = {};
+      obj[headers[0] || "STATION"] = row[0];
+      for (let i = 1; i < headers.length; i++) {
+        let header = headers[i].toString().trim();
+        
+        // 🛡️ GUARDIAN PATCH: Train ID Zero-Padding 
+        // Ensures any purely numeric header is padded to exactly 4 digits
+        if (/^\d+$/.test(header)) {
+            header = header.padStart(4, '0');
+        }
+
+        const value = row[i];
+        if (header && value !== "") { obj[header] = value; }
+      }
+      return obj;
+    });
+
+    const coordCount = countCoordinateRows(formattedRows);
+    totalCoordRows += coordCount;
+    console.log(`🛰️ Sheet '${sheetName}': Coordinates sent=${coordCount}`);
+
+    if (manualUpdateDate) {
+        const metadataRow = {};
+        metadataRow[headers[0] || "STATION"] = "Last Updated: " + manualUpdateDate; 
+        formattedRows.unshift(metadataRow);
+        
+        const key = sanitizeKey(sheetName);
+        allData[key + "_meta"] = manualUpdateDate;
+        if (zoneCode) allData[key + "_zone"] = zoneCode; 
+    }
+
+    const cleanKey = sanitizeKey(sheetName);
+    allData[cleanKey] = formattedRows;
+    allData[cleanKey + "_columnOrder"] = trainColumnOrder(headers.map(normalizeSheetHeader).slice(1));
+    synced += 1;
+  });
+
+  allData["lastUpdated"] = new Date().toLocaleString();
+  allData.dayType = "public_holiday";
+
+  if (totalCoordRows === 0) {
+    console.log("❌ Coordinate validation FAILED: 0 COORDINATES values in this PUT.");
+  } else {
+    console.log("✅ Coordinate validation OK: " + totalCoordRows + " rows with COORDINATES will be sent.");
+  }
+  
+  const newUrl = FIREBASE_URL + "schedules/westerncape/public_holidays.json?auth=" + FIREBASE_SECRET;
+  
+  try {
+    // 1. Write to the NEW V6.0 Regional Node (PUT creates the folder/replaces its contents safely)
+    const newOptions = { 
+      method: "put", 
+      contentType: "application/json", 
+      payload: JSON.stringify(allData),
+      muteHttpExceptions: true
+    };
+    const resNew = UrlFetchApp.fetch(newUrl, newOptions);
+    console.log("✅ V6 Node Sync Status: " + resNew.getResponseCode());
+    console.log("✅ Coordinates included in V6 PUT: " + totalCoordRows + " rows");
+
+    try {
+      SpreadsheetApp.getActiveSpreadsheet().toast("Synced Securely to V6 WC Pub! (" + synced + " sheets)", "Guardian Bot");
+    } catch (toastErr) {
+      console.log("Toast notification skipped (running in background).");
+    }
+  } catch (e) {
+    console.log("❌ Error: " + e.message);
+    try {
+      SpreadsheetApp.getActiveSpreadsheet().toast("Error: Check execution logs.", "Guardian Bot");
+    } catch (toastErr) {
+      console.log("Toast notification skipped (running in background).");
+    }
+  }
 }
 
 function normalizeSheetHeader(value, index) {
@@ -60,92 +169,21 @@ function trainColumnOrder(headers) {
   });
 }
 
-function syncPublicHolidaysToFirebase() {
-  if (!FIREBASE_SECRET) {
-    throw new Error("Missing FIREBASE_SECRET in Script properties.");
-  }
-
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const allData = {};
-  let synced = 0;
-
-  SHEET_NAMES.forEach(function (sheetName) {
-    if (!/_Pub$/i.test(sheetName)) {
-      console.log("Blocked non-Pub sheet '" + sheetName + "'.");
-      return;
-    }
-
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) {
-      console.log("Warning: Sheet '" + sheetName + "' not found. Skipping.");
-      return;
-    }
-
-    const data = sheet.getDataRange().getDisplayValues();
-    if (data.length < 3) {
-      console.log("Skipped '" + sheetName + "': not enough data.");
-      return;
-    }
-
-    const manualUpdateDate = data[0][1]
-      || new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
-    const headers = data[1];
-    const stationHeader = headers[0] || "STATION";
-    const normalizedHeaders = headers.map(normalizeSheetHeader);
-    const cleanKey = sanitizeKey(sheetName);
-
-    const formattedRows = data.slice(2).map(function (row) {
-      const output = {};
-      output[stationHeader] = row[0];
-      for (let index = 1; index < normalizedHeaders.length; index += 1) {
-        const header = normalizedHeaders[index];
-        if (header && row[index] !== "") output[header] = row[index];
-      }
-      return output;
-    });
-
-    const metadataRow = {};
-    metadataRow[stationHeader] = "Last Updated: " + manualUpdateDate;
-    formattedRows.unshift(metadataRow);
-
-    allData[cleanKey] = formattedRows;
-    allData[cleanKey + "_meta"] = manualUpdateDate;
-    allData[cleanKey + "_columnOrder"] = trainColumnOrder(normalizedHeaders.slice(1));
-
-    for (let index = 0; index < data[0].length; index += 1) {
-      const value = String(data[0][index] || "").trim();
-      if (/^Z\d+$/.test(value)) {
-        allData[cleanKey + "_zone"] = value;
-        break;
+function countCoordinateRows(rows) {
+  let count = 0;
+  rows.forEach(function (row) {
+    if (!row || typeof row !== "object") return;
+    const keys = Object.keys(row);
+    for (let i = 0; i < keys.length; i++) {
+      const key = String(keys[i]).toUpperCase().replace(/\s+/g, "");
+      if (key === "COORDINATES" && row[keys[i]] !== "") {
+        count += 1;
+        return;
       }
     }
-    synced += 1;
   });
-
-  allData.lastUpdated = new Date().toLocaleString();
-  allData.dayType = "public_holiday";
-
-  const response = UrlFetchApp.fetch(
-    FIREBASE_URL.replace(/\/?$/, "/") + "schedules/westerncape/public_holidays.json?auth=" + encodeURIComponent(FIREBASE_SECRET),
-    {
-      method: "put",
-      contentType: "application/json",
-      payload: JSON.stringify(allData),
-      muteHttpExceptions: true
-    }
-  );
-  const status = response.getResponseCode();
-  if (status < 200 || status >= 300) {
-    throw new Error("Firebase sync failed with HTTP " + status + ".");
-  }
-
-  try {
-    spreadsheet.toast("Synced " + synced + " Pub sheets to Western Cape public holidays.", "Guardian Bot");
-  } catch (toastErr) {
-    console.log("Toast notification skipped (running in background).");
-  }
+  return count;
 }
 
-function sanitizeKey(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "_");
-}
+function sanitizeKey(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, "_"); }
+

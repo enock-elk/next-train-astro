@@ -13255,8 +13255,8 @@ const Admin = {
             alertPanel.parentNode.insertBefore(disrPanel, alertPanel.nextSibling);
         }
 
-        if (disrPanel.dataset.adminLoaded === "disr-stations-v2") return;
-        disrPanel.dataset.adminLoaded = "disr-stations-v2";
+        if (disrPanel.dataset.adminLoaded === "disr-window-v1") return;
+        disrPanel.dataset.adminLoaded = "disr-window-v1";
 
         disrPanel.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300";
 
@@ -13351,6 +13351,48 @@ const Admin = {
                     <input type="datetime-local" id="disr-expiry" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                 </div>
 
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Cancellation days</label>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <input type="checkbox" id="disr-day-weekday" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked> Weekdays
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <input type="checkbox" id="disr-day-saturday" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked> Saturday
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <input type="checkbox" id="disr-day-sunday" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked> Sunday
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <input type="checkbox" id="disr-day-holiday" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked> Public holiday
+                        </label>
+                    </div>
+                    <p class="text-[9px] text-gray-400 leading-snug mt-1">Default: every operating day. The grid only greys trains on the days you tick.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">From</label>
+                        <input type="time" id="disr-from" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Until</label>
+                        <input type="time" id="disr-until" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
+                    </div>
+                </div>
+                <p class="text-[9px] text-gray-400 leading-snug -mt-1">Leave both empty for all day. The grid only cancels trains whose time sits in this window.</p>
+
+                <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2">
+                    <div class="min-w-0 pr-2">
+                        <span class="block text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Show cancelled station on map</span>
+                        <p class="text-[9px] text-gray-400 leading-snug mt-0.5">Off by default. Delay warnings still paint.</p>
+                    </div>
+                    <div class="relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in shrink-0">
+                        <input type="checkbox" id="disr-show-map" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                        <label for="disr-show-map" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                    </div>
+                </div>
+
                 <button id="disr-save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
                     Deploy Incident
                 </button>
@@ -13374,6 +13416,51 @@ const Admin = {
         const expiryInput = document.getElementById('disr-expiry');
         const saveBtn = document.getElementById('disr-save-btn');
         const listDiv = document.getElementById('disr-list');
+        const ALL_DISR_DAYS = ['weekday', 'saturday', 'sunday', 'public_holiday'];
+        const disrDayBoxes = () => ({
+            weekday: document.getElementById('disr-day-weekday'),
+            saturday: document.getElementById('disr-day-saturday'),
+            sunday: document.getElementById('disr-day-sunday'),
+            public_holiday: document.getElementById('disr-day-holiday'),
+        });
+        const collectDisrApplyDays = () => {
+            const boxes = disrDayBoxes();
+            const days = ALL_DISR_DAYS.filter((day) => boxes[day]?.checked);
+            return days.length ? days : ALL_DISR_DAYS.slice();
+        };
+        const setDisrApplyDays = (days) => {
+            const wanted = new Set(
+                Array.isArray(days) && days.length ? days : ALL_DISR_DAYS
+            );
+            const boxes = disrDayBoxes();
+            ALL_DISR_DAYS.forEach((day) => {
+                if (boxes[day]) boxes[day].checked = wanted.has(day);
+            });
+        };
+        const resetDisrWindowFields = () => {
+            setDisrApplyDays(ALL_DISR_DAYS);
+            const fromEl = document.getElementById('disr-from');
+            const untilEl = document.getElementById('disr-until');
+            const mapEl = document.getElementById('disr-show-map');
+            if (fromEl) fromEl.value = '';
+            if (untilEl) untilEl.value = '';
+            if (mapEl) mapEl.checked = false;
+        };
+        const formatDisrWindowLabel = (item) => {
+            const days = Array.isArray(item.applyDays) && item.applyDays.length
+                ? item.applyDays.map((d) => (
+                    d === 'public_holiday' ? 'Hol'
+                    : d === 'weekday' ? 'Wk'
+                    : d === 'saturday' ? 'Sat'
+                    : 'Sun'
+                )).join('/')
+                : 'All days';
+            const time = (item.startTime || item.endTime)
+                ? `${item.startTime || '00:00'}-${item.endTime || '23:59'}`
+                : 'All day';
+            const mapBit = item.showCancelledOnMap ? ' · Map on' : '';
+            return `${days} · ${time}${mapBit}`;
+        };
 
         const disrUploadFile = document.getElementById('disr-upload-file');
         if (disrUploadFile) {
@@ -13697,6 +13784,7 @@ const Admin = {
                             </div>
                         </div>
                         <div class="text-[10px] text-gray-500 dark:text-gray-400 truncate mb-1">"${item.message || item.longExplanation || ''}"</div>
+                        <div class="text-[8px] text-gray-400 font-mono uppercase tracking-widest">${formatDisrWindowLabel(item)}</div>
                         <div class="text-[8px] ${expColor} font-mono uppercase tracking-widest">Expires: ${expStr}</div>
                     `;
                     listDiv.appendChild(row);
@@ -13714,9 +13802,20 @@ const Admin = {
             const btnText = btnTextInput.value.trim() || (tier === 'CRITICAL' ? 'Severance Advisory' : 'Delay Advisory');
             const msg = (msgInput?.innerHTML || '').trim();
             const expiryTs = expiryInput.value ? new Date(expiryInput.value).getTime() : Date.now() + (48 * 3600 * 1000);
+            const applyDays = collectDisrApplyDays();
+            const startTime = (document.getElementById('disr-from')?.value || '').trim();
+            const endTime = (document.getElementById('disr-until')?.value || '').trim();
+            const showCancelledOnMap = !!document.getElementById('disr-show-map')?.checked;
 
             if (!rId) { if (typeof showToast === 'function') showToast("Select a route.", "error"); return; }
             if (!msg || msg === '<br>') { if (typeof showToast === 'function') showToast("Explanation required.", "error"); return; }
+            if (!document.getElementById('disr-day-weekday')?.checked
+                && !document.getElementById('disr-day-saturday')?.checked
+                && !document.getElementById('disr-day-sunday')?.checked
+                && !document.getElementById('disr-day-holiday')?.checked) {
+                if (typeof showToast === 'function') showToast("Pick at least one day.", "error");
+                return;
+            }
             
             const secret = await Admin.getAuthKey(); 
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required.", "error"); return; }
@@ -13731,7 +13830,11 @@ const Admin = {
                 buttonText: btnText,
                 message: /<[a-z][\s\S]*>/i.test(msg) ? msg : msg.replace(/\n/g, "<br>"),
                 postedAt: Date.now(),
-                expiresAt: expiryTs
+                expiresAt: expiryTs,
+                applyDays,
+                startTime,
+                endTime,
+                showCancelledOnMap
             };
 
             try {
@@ -13749,6 +13852,7 @@ const Admin = {
                     btnTextInput.value = '';
                     statASelect.value = '';
                     statBSelect.value = '';
+                    resetDisrWindowFields();
                     Admin.fetchDisruptions(rId);
                 } else {
                     if (typeof showToast === 'function') showToast("Deployment failed. Check Session.", "error");
@@ -13793,6 +13897,13 @@ const Admin = {
                             document.getElementById('disr-btn-text').value = data.buttonText || '';
                             const reviveEditor = document.getElementById('disr-msg');
                             if (reviveEditor) reviveEditor.innerHTML = data.message || data.longExplanation || '';
+                            setDisrApplyDays(data.applyDays);
+                            const fromEl = document.getElementById('disr-from');
+                            const untilEl = document.getElementById('disr-until');
+                            const mapEl = document.getElementById('disr-show-map');
+                            if (fromEl) fromEl.value = data.startTime || '';
+                            if (untilEl) untilEl.value = data.endTime || '';
+                            if (mapEl) mapEl.checked = data.showCancelledOnMap === true;
                             
                             document.getElementById('disr-expiry').value = Admin.endOfTodayLocalValue();
                             

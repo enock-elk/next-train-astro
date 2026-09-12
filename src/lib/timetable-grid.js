@@ -3,7 +3,7 @@
  */
 import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
-import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $opsOverlaysReady } from '../store.js';
+import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
@@ -48,7 +48,7 @@ function paintOpenGridBody() {
         ? (typeof window.Renderer?._buildNoSaturdayGridHTML === 'function'
             ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId)
             : grid.innerHTML)
-        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
+        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
 }
 
@@ -70,6 +70,11 @@ function bindGridExclusionRefresh() {
     $opsOverlaysReady.subscribe((ready) => {
         if (!overlayPrimed) { overlayPrimed = true; return; }
         if (ready) paintOpenGridBody();
+    });
+    let disrPrimed = false;
+    $globalDisruptions.subscribe(() => {
+        if (!disrPrimed) { disrPrimed = true; return; }
+        paintOpenGridBody();
     });
 }
 
@@ -456,12 +461,14 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         direction,
         targetDayIdx,
         isTodayType,
+        selectedDay,
     };
+    if (typeof window !== 'undefined') window._gridSelectedDay = selectedDay;
     const html = noServiceSheet
         ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
             ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId)
             : `<div class="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No weekend service on this route. <button type="button" id="grid-switch-weekday-btn" class="underline font-bold">Switch to Mon - Fri</button></div>`)
-        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false);
+        : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, selectedDay);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);

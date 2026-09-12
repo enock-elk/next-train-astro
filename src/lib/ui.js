@@ -113,6 +113,7 @@ const MODAL_HASH = {
     'reports-feed-modal': '#commuter-reports',
     'disruption-modal': '#disruption',
     'planner-train-sheet-modal': '#train-sheet',
+    'planner-fare-breakdown-sheet': '#trip-fare',
     'cache-clear-modal': '#cacheclear',
     'account-modal': '#account',
     'login-modal': '#login',

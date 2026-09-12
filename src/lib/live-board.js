@@ -26,7 +26,22 @@ import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import {
+    firstContactInDangerZone,
+    collectDisruptionContactTimes,
+    disruptionAppliesToDay,
+    disruptionAppliesToAnyTime,
+    disruptionAppliesToDayAndTime,
+    disruptionShowsCancelledOnMap,
+} from './disruption-zones.js';
 export { stopsForTrain, expectedPosition, scoreTrainForFix } from './train-ghosts.js';
+export {
+    firstContactInDangerZone,
+    disruptionAppliesToDay,
+    disruptionAppliesToAnyTime,
+    disruptionAppliesToDayAndTime,
+    disruptionShowsCancelledOnMap,
+} from './disruption-zones.js';
 
 // --- Store-backed globals (SPA parity shims) ---
 let allStations = [];
@@ -432,6 +447,10 @@ export function checkDisruption(routeId, stationA, stationB) {
         const activeDisruptions = getGlobalDisruptions()[dRouteId];
         
         for (const d of activeDisruptions) {
+            const dayType = (typeof window !== 'undefined' && window.currentDayType) || currentDayType || 'weekday';
+            const nowStr = (typeof window !== 'undefined' && window.currentTime) || currentTime || '';
+            if (!disruptionAppliesToDayAndTime(d, dayType, nowStr)) continue;
+
             // If no specific stations are defined, it's a route-wide suspension.
             // This MUST strictly apply only to its parent route to avoid shutting down the whole app.
             if (!d.stations || d.stations.length === 0) {
@@ -464,11 +483,16 @@ export function checkDisruption(routeId, stationA, stationB) {
 };
 
 // GUARDIAN PHASE 3 (ZONE ENGINE): Cross-Corridor "First Point of Contact" Calculation
-export function getTripDisruptions(routeId, stopsArray) {
+export function getTripDisruptions(routeId, stopsArray, dayType) {
     if (!getGlobalDisruptions() || !stopsArray || stopsArray.length === 0) return [];
     
     const hits = [];
     const seenIds = new Set();
+    const resolvedDay = dayType
+        || (typeof window !== 'undefined' && window.selectedPlannerDay)
+        || (typeof window !== 'undefined' && window.currentDayType)
+        || currentDayType
+        || 'weekday';
 
     // Master geography includes inactive / ghost rows so shared-corridor cuts
     // (Pretoria–Sportpark on Irene) also hit Kempton Park.
@@ -480,6 +504,8 @@ export function getTripDisruptions(routeId, stopsArray) {
         
         for (const d of activeDisruptions) {
             if (seenIds.has(d.id)) continue;
+            if (!disruptionAppliesToDay(d, resolvedDay)) continue;
+            if (!disruptionAppliesToAnyTime(d, collectDisruptionContactTimes(stopsArray, d, currentRouteMasterStations))) continue;
 
             // 1. Route-Wide Advisory (0 Stations)
             // Strict limitation: Only applies if the commuter is actually ON the severed route
@@ -515,49 +541,24 @@ export function getTripDisruptions(routeId, stopsArray) {
                 continue;
             }
 
-            // 3. Multi-Station / Non-Adjacent "Danger Zone" Incident (Cross-Corridor Match)
+            // 3. Multi-Station "Danger Zone" — interval overlap (not a single hop
+            // that spans the whole zone; real trips stop at every station).
             if (normDisrupted.length >= 2) {
-                // We check the disruption geometry against the CURRENT ROUTE's master list
-                const idxA = currentRouteMasterStations.indexOf(normDisrupted[0]);
-                const idxB = currentRouteMasterStations.indexOf(normDisrupted[1]);
+                const firstContactIdx = firstContactInDangerZone(
+                    currentRouteMasterStations,
+                    stopsArray,
+                    normDisrupted[0],
+                    normDisrupted[1]
+                );
 
-                // If BOTH stations exist on the current route, the Danger Zone intersects!
-                if (idxA !== -1 && idxB !== -1) {
-                    const minZone = Math.min(idxA, idxB);
-                    const maxZone = Math.max(idxA, idxB);
-
-                    let firstContactIdx = -1;
-                    
-                    // 🛡️ GUARDIAN PHASE 1 (VECTOR MATH): Trace the commuter's physical trip 
-                    // to see if the directional vector CROSSES the Danger Zone, granting 
-                    // immunity to trains moving away from the segment.
-                    for (let i = 0; i < stopsArray.length - 1; i++) {
-                        const stop1Idx = currentRouteMasterStations.indexOf(normalizeStationName(stopsArray[i].station));
-                        const stop2Idx = currentRouteMasterStations.indexOf(normalizeStationName(stopsArray[i+1].station));
-                        
-                        if (stop1Idx !== -1 && stop2Idx !== -1) {
-                            // Forward Traversal Check
-                            if (stop1Idx <= minZone && stop2Idx >= maxZone) {
-                                firstContactIdx = i;
-                                break;
-                            }
-                            // Backward Traversal Check
-                            if (stop1Idx >= maxZone && stop2Idx <= minZone) {
-                                firstContactIdx = i;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (firstContactIdx !== -1) {
-                        seenIds.add(d.id);
-                        hits.push({
-                            ...d,
-                            triggerStopIndex: firstContactIdx,
-                            triggerStationA: d.stations[0], 
-                            triggerStationB: d.stations[1]  
-                        });
-                    }
+                if (firstContactIdx !== -1) {
+                    seenIds.add(d.id);
+                    hits.push({
+                        ...d,
+                        triggerStopIndex: firstContactIdx,
+                        triggerStationA: d.stations[0],
+                        triggerStationB: d.stations[1]
+                    });
                 }
             }
         }
@@ -1468,6 +1469,8 @@ export function attachLiveBoardGlobals() {
     window.simulateNextActiveService = simulateNextActiveService;
     window.checkDisruption = checkDisruption;
     window.getTripDisruptions = getTripDisruptions;
+    window.disruptionAppliesToDayAndTime = disruptionAppliesToDayAndTime;
+    window.disruptionShowsCancelledOnMap = disruptionShowsCancelledOnMap;
     window.routeGeometryStations = routeGeometryStations;
     window.isTrainExcluded = isTrainExcluded;
     window.getTrainExclusionRule = getTrainExclusionRule;
@@ -1490,6 +1493,27 @@ export function attachLiveBoardGlobals() {
             if (!hit || !hit.closest('#grid-container')) return;
             e.preventDefault();
             openFromGrid(hit);
+        });
+    }
+    if (!window.__ntDisrGridBound) {
+        window.__ntDisrGridBound = true;
+        const openDisrFromGrid = (el) => {
+            const id = el?.getAttribute?.('data-disr-id');
+            if (!id || typeof window.openDisruptionModal !== 'function') return;
+            window.openDisruptionModal(id);
+        };
+        document.addEventListener('click', (e) => {
+            const hit = e.target?.closest?.('[data-disr-open="1"]');
+            if (!hit || !hit.closest('#grid-container')) return;
+            e.preventDefault();
+            openDisrFromGrid(hit);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const hit = e.target?.closest?.('[data-disr-open="1"]');
+            if (!hit || !hit.closest('#grid-container')) return;
+            e.preventDefault();
+            openDisrFromGrid(hit);
         });
     }
     window.findNextTrains = findNextTrains;

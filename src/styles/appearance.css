@@ -1015,11 +1015,23 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   overflow: hidden;
   background-color: color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas));
 }
+.nt-pack-surface {
+  position: relative;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas));
+}
+.nt-pack-surface > * {
+  position: relative;
+  z-index: 1;
+}
 #alerts-channel-wallpaper::before,
-.nt-pack-wallpaper::before {
+.nt-pack-wallpaper::before,
+.nt-pack-surface::before {
   content: "";
   position: absolute;
   inset: -28%;
+  z-index: 0;
+  pointer-events: none;
   opacity: 0.14;
   background-color: color-mix(in srgb, var(--nt-primary) 62%, var(--nt-text));
   transform: rotate(-9deg);

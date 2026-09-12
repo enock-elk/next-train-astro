@@ -194,7 +194,7 @@ assert(
 );
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
 assert(admin.includes('roadmap-refine-v2'), 'roadmap card redesign is loaded');
-assert(admin.includes('id="roadmap-body" class="nt-pack-wallpaper'), 'roadmap uses the feedback-style wallpaper');
+assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap uses the interactive feedback-style wallpaper surface');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');

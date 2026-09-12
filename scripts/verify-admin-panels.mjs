@@ -292,7 +292,7 @@ assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original ite
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
 assert(admin.includes('roadmap-refine-v2'), 'roadmap panel rebuilds after the wallpaper pass');
-assert(admin.includes('nt-pack-wallpaper'), 'roadmap body uses the operations wallpaper');
+assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap body uses the interactive operations wallpaper surface');
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 

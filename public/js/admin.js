@@ -18670,7 +18670,7 @@ const Admin = {
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="roadmap-body" class="nt-pack-wallpaper hidden mt-4 flex flex-col space-y-3 rounded-xl p-3 border border-slate-200/70 dark:border-slate-800">
+            <div id="roadmap-body" class="nt-pack-surface hidden mt-4 flex flex-col space-y-3 rounded-xl p-3 border border-slate-200/70 dark:border-slate-800">
                 <!-- Controls Header -->
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <div class="flex items-center gap-2 w-full sm:w-auto">

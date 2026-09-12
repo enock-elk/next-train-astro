@@ -214,6 +214,22 @@ assert(!/html\.dark \.dark\\:bg-gray-800,[\s\S]{0,80}html\.dark \.dark\\:bg-gray
 assert(css.includes('#alerts-channel-card'), 'alerts sheet card uses canvas');
 assert(css.includes('#alerts-channel-wallpaper'), 'alerts wallpaper uses the colour pack');
 assert(css.includes('.nt-pack-wallpaper'), 'Alerts, Community, and Feedback Hub share .nt-pack-wallpaper');
+assert(
+    /\.nt-pack-surface\s*\{[^}]*position:\s*relative;[^}]*overflow:\s*hidden;/.test(css),
+    'interactive wallpaper surfaces establish a clipped positioning context'
+);
+assert(
+    /\.nt-pack-surface\s*>\s*\*\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;/.test(css),
+    'interactive wallpaper surfaces keep their controls above the decoration'
+);
+assert(
+    /\.nt-pack-surface::before\s*\{[^}]*pointer-events:\s*none;/.test(css),
+    'interactive wallpaper decoration cannot intercept control input'
+);
+assert(
+    !/\.nt-pack-surface\s*\{[^}]*pointer-events:\s*none;/.test(css),
+    'interactive wallpaper surface remains a hit-test target'
+);
 assert(css.includes('mask-image'), 'alerts wallpaper tiles via mask-image so pack tokens colour it');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas))'), 'alerts wallpaper wash follows chrome + canvas');
 assert(/nt-alert-strip-info \{\s*background-color: color-mix\(in srgb, var\(--nt-primary\)/.test(css), 'info strip is a quiet primary wash');
@@ -305,6 +321,8 @@ assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox sha
 assert(hubModals.includes('#feedback-panel .inbox-bubble-other'), 'admin inbox shares WhatsApp other-bubble tokens');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat'), 'admin thread wallpaper selector');
 assert(hubModals.includes('nt-pack-wallpaper'), 'Feedback Hub uses the shared pack wallpaper');
+assert(hubModals.includes('#roadmap-body.nt-pack-surface'), 'Roadmap wallpaper styling follows the interactive surface class');
+assert(!hubModals.includes('#roadmap-body.nt-pack-wallpaper'), 'Roadmap has no stale decorative-only wallpaper selector');
 assert(!hubModals.includes('background: #efeae2'), 'Feedback Hub dropped the #efeae2 wallpaper wash');
 assert(hubModals.includes('#d9fdd3'), 'own bubble is WhatsApp green');
 assert(hubModals.includes('#005c4b'), 'dark own bubble is WhatsApp teal');

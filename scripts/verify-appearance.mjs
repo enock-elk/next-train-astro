@@ -416,9 +416,10 @@ assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(/#view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community pane fills leftover height like Feedback Hub');
-assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?height:\s*var\(--nt-vv-h/.test(layout), 'Community keyboard locks the pane to the visual hole');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?height:\s*auto;/.test(layout), 'Community keyboard keeps the stable lab flex-height logic');
+assert(!/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?height:\s*var\(--nt-vv-h/.test(layout), 'Community view is not double-positioned by visualViewport height');
 assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane does not shrink to fit the Next Train header');
-assert(layout.includes('#view-community .community-feed-scroll'), 'Community keyboard feed keeps composer padding');
+assert(!/#view-community \.community-feed-scroll \{\s*padding-bottom:\s*6\.5rem/.test(layout), 'Community feed does not reserve a second composer gap');
 assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
 assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
 assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');

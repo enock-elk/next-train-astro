@@ -906,7 +906,8 @@ function applyFeedFilter(routeId) {
         listEl.innerHTML = '';
         if (emptyEl) {
             emptyEl.classList.remove('hidden');
-            emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>`;
+            emptyEl.innerHTML = `<p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">No posts on this line yet</p>
+                   <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed">Be the first to share a heads-up for fellow passengers.</p>`;
         }
         return;
     }

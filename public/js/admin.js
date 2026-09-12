@@ -7530,7 +7530,7 @@ const Admin = {
                     if (!deviceMessages || typeof deviceMessages !== 'object') return null;
                     const itemText = String(item.text || item.message || '').trim();
                     for (const [msgKey, msg] of Object.entries(deviceMessages)) {
-                        if (!msg || String(msg.from || '') === 'admin') continue;
+                        if (!msg || String(msg.from || '') !== 'commuter') continue;
                         if (item.id && String(msg.feedbackId || '') === String(item.id)) return { msgKey, msg };
                         const closeTs = Math.abs(Number(msg.timestamp || 0) - Number(item.timestamp || 0)) < 20000;
                         if (closeTs && inboxText(msg) && inboxText(msg) === itemText) return { msgKey, msg };
@@ -7552,6 +7552,7 @@ const Admin = {
                 if (inboxData && typeof inboxData === 'object') {
                     Object.keys(inboxData).forEach(deviceId => {
                         const deviceMessages = inboxData[deviceId];
+                        if (!deviceMessages || typeof deviceMessages !== 'object') return;
                         Object.keys(deviceMessages).forEach(msgKey => {
                             const msg = deviceMessages[msgKey];
                             if (usedInboxKeys.has(`${deviceId}/${msgKey}`)) return;
@@ -9933,6 +9934,7 @@ const Admin = {
                 // Push to inbox array via POST
                 const url = `${dynamicEndpoint}inbox/${replyDeviceId}.json?auth=${secret}`;
                 const payload = {
+                    from: 'admin',
                     message: text,
                     timestamp: Date.now(),
                     feedbackId: replyFeedbackId,

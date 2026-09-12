@@ -226,6 +226,19 @@ assert(/Archived Thread[\s\S]{0,800}openReplyModal/.test(admin), 'archived feedb
 assert(admin.includes('openAdminReplyEditor'), 'admin replies open the editor');
 assert(admin.includes('editedAt: Date.now()'), 'edit writes editedAt');
 assert(admin.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json'), 'edit PATCHes inbox/{deviceId}/{msgKey}');
+assert(admin.includes("from: 'admin'"), 'admin replies tag from admin');
+assert(admin.includes("String(msg.from || '') !== 'commuter'"), 'inbox copies only match commuter rows');
+{
+    const inboxDevice = {
+        commuter1: { from: 'commuter', feedbackId: 'fb1', message: 'help' },
+        admin1: { from: 'admin', feedbackId: 'fb1', message: 'on it' },
+        legacyAdmin: { feedbackId: 'fb1', message: 'old reply' },
+    };
+    const matched = Object.entries(inboxDevice)
+        .filter(([, msg]) => msg && String(msg.from || '') === 'commuter')
+        .map(([key]) => key);
+    assert(matched.join(',') === 'commuter1', 'untagged and admin inbox rows are not treated as commuter copies');
+}
 assert(admin.includes("Does not post a new message or archive the thread."), 'edit path does not POST or archive');
 
 const presence = readFileSync(new URL('../src/lib/community-presence.js', import.meta.url), 'utf8');

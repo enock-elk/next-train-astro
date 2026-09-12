@@ -210,6 +210,8 @@ ok(!/usersEver:\s*ever\.usersEver\s*\|\|\s*uniqueUsers/.test(adminJs), 'Users ev
 ok(adminJs.includes('openAliasModal'), 'commuter alias opens a modal');
 ok(adminJs.includes('editedAt: Date.now()'), 'admin reply edit writes editedAt');
 ok(adminJs.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURIComponent(editingKey)}.json'), 'edit PATCHes inbox/{deviceId}/{msgKey}');
+ok(adminJs.includes("from: 'admin'"), 'admin send tags from admin');
+ok(adminJs.includes("String(msg.from || '') !== 'commuter'"), 'inbox fold does not swallow untagged admin replies');
 ok(!adminJs.includes("icon('more'"), 'feedback Options dropped the more icon');
 
 if (failures.length) {

@@ -98,6 +98,8 @@ assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), '
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
 assert(!/id="settings-account-btn"[^>]*data-admin-authed-only/.test(sidenav), 'Account row is not admin-only; signed-in commuters keep it');
+assert(sidenav.includes('id="sidenav-legacy-settings"'), 'Passenger Type can stay in Options for guests');
+assert(sidenav.includes('id="sidenav-prefs-block"'), 'Theme block can move into Account');
 
 const chrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
 assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper exists');
@@ -403,7 +405,8 @@ assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer gro
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
 assert(hubJs.includes("modal.style.top = `${top}px`"), 'feedback overlay is pinned to visualViewport.top');
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
-assert(hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Feedback Hub and Account cards stretch to 100%');
+assert(hubJs.includes("id === 'messages-thread-modal'"), 'Feedback Hub card stretches to the keyboard');
+assert(!hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Account is not keyboard-shrunk with Feedback Hub');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('editing && vv?.height'), 'Feedback Hub uses live visualViewport height while typing');
 assert(hubJs.includes('modal.style.maxHeight'), 'Feedback Hub maxHeight follows the keyboard');
@@ -436,7 +439,7 @@ assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
-assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account sheet uses the keyboard-safe overlay height');
+assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');
 assert(layout.includes('var(--nt-feedback-vv-height, var(--nt-vv-h'), 'Feedback Hub height prefers the JS keyboard height');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
@@ -513,6 +516,7 @@ assert(adminChrome.includes('FEATURE_KEYS.MAP_TAB'), 'Map tab is a pin-gated fea
 assert(adminChrome.includes('FEATURE_KEYS.COMMUNITY_TAB'), 'Community tab is a pin-gated feature');
 assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
 assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
+assert(adminChrome.includes('placeAccountSettings'), 'Passenger Type and Theme move into Account when that row is visible');
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('isAdminAuthed() && rule && rule.expiresAt'), 'exclusion Until line is admin-only');

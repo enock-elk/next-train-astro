@@ -126,6 +126,47 @@ The button stays off in code until you tick that box, so a missing setup cannot 
 
 ---
 
+## Step H — Submit for Login Review (email)
+
+You already added **email**. Facebook shows **Submit for Login Review** until that permission is approved for Live. In Development, you (the Administrator) can still tap **Continue as Enock**. Random commuters cannot, until the app is **Live** and **email** is approved.
+
+You do **not** need another tester. Skip Thandeka unless she will use a different Facebook account.
+
+### Before you submit
+
+1. Production is deployed. Open these yourself and confirm they are articles, not the train board:
+   - `https://nexttrain.co.za/privacy.html`
+   - `https://nexttrain.co.za/account-delete.html`
+2. **App settings → Basic** still has those two URLs
+3. Permissions list has only **public_profile** and **email**. Do not add friends, birthday, or age
+
+### How to submit
+
+1. Open [https://developers.facebook.com](https://developers.facebook.com) on a laptop
+2. Open the **Metrorail Next Train** app
+3. Left: **Use cases** → **Customize** → **Facebook Login** → **Permissions and features**
+4. Find **email**. Click **Add** if it is not already added
+5. Open **email**. Click **Request advanced access** or **Submit for review** (the label varies)
+6. Facebook asks why you need email. Paste:
+
+   Next Train is a commuter timetable app. Email is used only to create the optional account, show the signed-in name, and process a delete request. We do not post on the person’s Facebook, and we do not ask for friends or birthday.
+
+7. If it asks for a screen recording: record Options → Account → Continue with Facebook → Continue as Enock. Keep it under one minute
+8. If it asks for a test user / instructions: “Sign in as the app administrator. Open nexttrain.co.za, Options, Account, Continue with Facebook.”
+9. Submit. Wait for Facebook’s email. Do not switch the app to **Live** until email is approved, or commuters will see “app not set up” / a review wall
+
+### After approval
+
+1. Facebook dashboard → switch the app to **Live**
+2. Confirm **Continue with Facebook** on a phone that is **not** listed under App roles
+3. Only then leave Facebook ticked in Dev Hub
+
+The grey banner on the Facebook consent screen is normal until this review finishes. You can still finish a tester/admin login with **Continue as Enock**.
+
+If Account still says **Not available yet**, Facebook is off in Dev Hub (Step G) or the phone is on an old cached build. Pull to refresh after you save sign-in options.
+
+---
+
 ## If something fails
 
 | What you see | What to do |
@@ -137,6 +178,8 @@ The button stays off in code until you tick that box, so a missing setup cannot 
 | “App not set up” | App is still Development and the person is not a tester, or it is not Live |
 | Account row missing for a signed-in commuter | Fixed in this release. Signed-in people keep Account even if Map/Community are hidden. |
 | You only see Sign out, no Delete | You are on an operator email (`enockelk@gmail.com`). Operator logins cannot self-delete. Commuters see **Delete account**. Everyone can open `https://nexttrain.co.za/account-delete.html`. |
+| Submit for Login Review banner | Expected until **email** is approved (Step H). Admins can still continue. |
+| Continue with Facebook works, then Account says Not available yet | You signed out. Tick Facebook in Dev Hub again (Step G), or the phone cached an old page. |
 
 ---
 

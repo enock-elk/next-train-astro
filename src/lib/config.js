@@ -13,7 +13,7 @@
  * Keep APP_VERSION, package.json, and public/app-version.json in sync.
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  */
-export const APP_VERSION = "V9_09.13.2";
+export const APP_VERSION = "V9_09.13.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -249,7 +249,7 @@ export const LEGAL_TEXTS = {
 
         <h4 class="font-bold text-lg mb-2 mt-4">4. Your POPIA Rights (South Africa)</h4>
         <p class="mb-3">Under the Protection of Personal Information Act (POPIA), you have the right to request access to, correction of, or deletion of any personal data you have voluntarily provided to us (such as an account or a feedback email).</p>
-        <p class="mb-3">To delete a commuter account: open Next Train → Options → Account → Delete account. You can also follow the steps at <a href="account-delete.html" class="text-blue-600 dark:text-blue-400 underline font-semibold">nexttrain.co.za/account-delete.html</a> or email <a href="mailto:admin@nexttrain.co.za" class="text-blue-600 dark:text-blue-400 underline font-semibold">admin@nexttrain.co.za</a> from the address on the account.</p>
+        <p class="mb-3">To delete a commuter account: open Next Train → Options → Account → Delete account. You can also follow the steps at <a href="account-delete.html?from=account" class="text-blue-600 dark:text-blue-400 underline font-semibold">nexttrain.co.za/account-delete.html</a> or email <a href="mailto:admin@nexttrain.co.za" class="text-blue-600 dark:text-blue-400 underline font-semibold">admin@nexttrain.co.za</a> from the address on the account.</p>
     `
 };
 

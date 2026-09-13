@@ -47,6 +47,35 @@ export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
 export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
 /** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
 export const RIDE_GPS_STALE_MS = 90 * 1000;
+/** Pause, then drop the train share if the rider stays off the rails this long. */
+export const RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000;
+/** Drop immediately if GPS is this far from the selected rail, even inside the grace window. */
+export const RIDE_OFFTRACK_HARD_M = 400;
+const SESSION_POINTS_KEY = 'nt_ride_share_session_points';
+
+/** Pause vs drop while a regular rider is sharing as a train. */
+export function offTrackShareDecision({ offTrackSince = 0, distanceM = null, now = Date.now() } = {}) {
+    if (Number.isFinite(distanceM) && distanceM >= RIDE_OFFTRACK_HARD_M) return 'drop_far';
+    if (offTrackSince && (now - Number(offTrackSince) >= RIDE_OFFTRACK_GRACE_MS)) return 'drop_grace';
+    return 'pause';
+}
+
+function readSessionPoints() {
+    const n = Number(safeStorage.getItem(SESSION_POINTS_KEY) || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function addSessionPoints(added) {
+    const n = Number(added) || 0;
+    if (n <= 0) return readSessionPoints();
+    const next = readSessionPoints() + n;
+    safeStorage.setItem(SESSION_POINTS_KEY, String(next));
+    return next;
+}
+
+function clearSessionPoints() {
+    safeStorage.removeItem(SESSION_POINTS_KEY);
+}
 export const TRACKING_STATE = Object.freeze({
     ACTIVE: 'active',
     PAUSED: 'paused',
@@ -1131,6 +1160,9 @@ export async function submitRideCheckIn({
         }
     }
     const previous = peekStoredShare();
+    if (!String(source || '').startsWith('onboard_') && source !== 'stop') {
+        clearSessionPoints();
+    }
     let projection = null;
     let resolvedState = trackingState;
     let resolvedPauseReason = pauseReason;
@@ -1228,6 +1260,7 @@ export async function submitRideCheckIn({
             accuracy: payload.accuracy,
             adminOverrideRole: payload.adminOverrideRole || '',
             source: payload.source,
+            offTrackSince: projection?.ok ? 0 : (previous?.offTrackSince || 0),
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1251,11 +1284,12 @@ export async function submitRideCheckIn({
                 : `You’re visible at ${stationShort(st)}`;
         const others = activePings(getCachedRidePings(routeId))
             .filter((p) => String(p.trainId || '') === String(trainId || '') && p.deviceId !== deviceId);
-        awardShareMarks({
+        const marks = awardShareMarks({
             joinedLive: !!(trainId && others.length > 0),
             confirmedCloser: source === 'closer_confirm',
             trainId: trainId || '',
         });
+        if (marks?.added) addSessionPoints(marks.added);
         if (!quiet) showToast(toastMsg, 'success');
         notifyPingsUpdated(routeId);
         return { ok: true, ping: payload };
@@ -1297,7 +1331,9 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
             }
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
+        const sessionPoints = readSessionPoints();
         safeStorage.removeItem(ACTIVE_KEY);
+        clearSessionPoints();
         stopOnboardPingLoop();
         stopShareIdleWatch();
         appendRideShareLog({
@@ -1312,7 +1348,14 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         });
         notifyPingsUpdated(routeId);
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
-        if (!quiet) {
+        if (reason === 'off_track_far' || reason === 'off_track_grace') {
+            import('./rider-marks.js').then((m) => {
+                m.showShareThanksOverlay({ points: sessionPoints });
+            }).catch(() => {});
+            if (!quiet) {
+                showToast('Thanks for contributing. Sharing stopped because you left the tracks.', 'info', 4000);
+            }
+        } else if (!quiet) {
             const msg = reason === 'terminus'
                 ? 'Sharing ended at the last station'
                 : reason === 'idle'
@@ -1327,7 +1370,6 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
 }
 
 let onboardPingTimer = 0;
-let onboardPromptInFlight = false;
 
 export function stopOnboardPingLoop() {
     if (onboardPingTimer) {
@@ -1342,6 +1384,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
         trackingState: TRACKING_STATE.PAUSED,
         pauseReason: reason,
         at: Date.now(),
+        offTrackSince: active.offTrackSince || Date.now(),
     };
     safeStorage.setItem(ACTIVE_KEY, JSON.stringify(paused));
     if (!navigator.onLine) return { ok: false, offline: true };
@@ -1419,34 +1462,18 @@ export function startOnboardPingLoop() {
             });
             const offPath = !projection.ok;
             if (offPath) {
-                if (onboardPromptInFlight) return;
-                onboardPromptInFlight = true;
-                stopOnboardPingLoop();
-                try {
-                    await pauseActiveTracker(active, projection.reason, pos);
-                    const { promptOnTrainSheet, startOnTrainShare } = await import('./map-tab.js');
-                    const choice = await promptOnTrainSheet({
-                        title: 'Still on this train?',
-                        body: `You’re no longer on the path for Train ${active.trainId}. Are you still on it?`,
-                        primary: 'Yes, still on it',
-                        secondary: 'Just show me as a person',
-                        tertiary: 'Stop sharing',
+                const offTrackSince = active.offTrackSince || Date.now();
+                const decision = offTrackShareDecision({
+                    offTrackSince,
+                    distanceM: projection.distanceM,
+                });
+                if (decision === 'drop_far' || decision === 'drop_grace') {
+                    await stopRideShare({
+                        reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
                     });
-                    if (choice === 'primary') {
-                        await startOnTrainShare({
-                            trainId: active.trainId,
-                            station: near?.stationName || active.station,
-                            destination: active.destination || '',
-                            routeId: active.routeId,
-                            source: 'onboard_revet',
-                            skipVolunteer: true,
-                        });
-                    } else if (choice === 'tertiary') {
-                        await stopRideShare({ reason: 'off_path' });
-                    }
-                } finally {
-                    onboardPromptInFlight = false;
+                    return;
                 }
+                await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
                 return;
             }
             await submitRideCheckIn({
@@ -1459,7 +1486,7 @@ export function startOnboardPingLoop() {
                 heading: pos.heading,
                 speedMps: pos.speedMps,
                 accuracy: pos.accuracy,
-                source: 'onboard_ping',
+                source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
                 quiet: true,
             });
         } catch {

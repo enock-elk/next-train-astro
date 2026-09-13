@@ -398,11 +398,47 @@ export function awardShareMarks({ joinedLive = false, confirmedCloser = false, t
     const state = join.state || share.state;
     return {
         awarded: share.awarded || join.awarded,
+        added: (share.added || 0) + (join.added || 0),
         label: marksLabel(state),
         total: state.points,
         tier: tierForPoints(state.points),
         state,
     };
+}
+
+/** Thank-you card after an auto-stopped train share. */
+export function showShareThanksOverlay({ points = 0 } = {}) {
+    if (typeof document === 'undefined') return;
+    let el = document.getElementById('nt-share-thanks');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'nt-share-thanks';
+        el.className = 'fixed inset-x-4 z-[140] hidden pointer-events-none';
+        el.style.bottom = 'calc(5.5rem + env(safe-area-inset-bottom, 0px))';
+        document.body.appendChild(el);
+    }
+    const pts = Math.max(0, Number(points) || 0);
+    const pointsHtml = pts > 0
+        ? `<p class="nt-share-thanks-points mt-1 text-[22px] font-black text-amber-600 dark:text-amber-300">+${pts} points</p>`
+        : '';
+    el.innerHTML = `
+        <div class="rounded-2xl bg-white/95 dark:bg-gray-900/95 border border-gray-200 dark:border-gray-700 shadow-xl px-4 py-3 text-center">
+            <p class="text-[15px] font-bold text-gray-900 dark:text-white">Thanks for contributing</p>
+            ${pointsHtml}
+        </div>`;
+    el.classList.remove('hidden');
+    const pointsEl = el.querySelector('.nt-share-thanks-points');
+    if (pointsEl) {
+        pointsEl.style.transform = 'translateY(10px)';
+        pointsEl.style.opacity = '0';
+        requestAnimationFrame(() => {
+            pointsEl.style.transition = 'transform 420ms ease, opacity 420ms ease';
+            pointsEl.style.transform = 'translateY(0)';
+            pointsEl.style.opacity = '1';
+        });
+    }
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => el.classList.add('hidden'), 4500);
 }
 
 export function listContributions(state = readMarks()) {

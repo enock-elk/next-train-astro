@@ -2057,6 +2057,9 @@
                 }
                 var deg = spec && Number.isFinite(spec.bearing) ? spec.bearing : 0;
                 var id = escapePing(String(trainId || ''));
+                var norm = ((deg % 360) + 360) % 360;
+                var flip = (norm > 90 && norm < 270) ? ' rotate(180deg)' : '';
+                var numSize = id.length >= 6 ? '8px' : (id.length >= 5 ? '9px' : '10px');
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
@@ -2064,7 +2067,7 @@
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
-                    + '<span class="nt-live-train-num" style="transform:rotate(' + (-deg) + 'deg)">' + id + '</span>'
+                    + '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:' + (flip ? 'rotate(180deg)' : 'none') + '">' + id + '</span>'
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {

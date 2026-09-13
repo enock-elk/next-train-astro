@@ -106,6 +106,14 @@ ok(ui.includes("location.hash === '#terms'"), 'home tab paint keeps #terms');
 const privacyPage = readFileSync(join(ROOT, 'src/pages/privacy.astro'), 'utf8');
 ok(privacyPage.includes('LEGAL_TEXTS.privacy'), 'privacy.html is the public policy, not a hash');
 ok(privacyPage.includes('canonicalPath="/privacy.html"'), 'privacy.html has a stable canonical');
+ok(privacyPage.includes('LegalArticle'), 'privacy.html uses the Account-styled legal shell');
+
+const legalShell = readFileSync(join(ROOT, 'src/components/LegalArticle.astro'), 'utf8');
+ok(legalShell.includes('#account'), 'legal pages can return to Account');
+ok(legalShell.includes("get('from') === 'account'"), 'legal pages detect an Account return');
+
+const deeplink = readFileSync(join(ROOT, 'src/lib/deeplink.js'), 'utf8');
+ok(deeplink.includes("hash === '#account'"), ' /#account opens Account');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');

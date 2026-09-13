@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.3 — Account full screen, legal return, track-only train share (13 Sep 2026)
+
+Account is a full-screen page. Signed-out Account no longer shows device points. Privacy, terms, and account-delete use the Account grey/white layout and `?from=account` returns to `/#account`. When Account is visible, Passenger Type and Theme & Preferences move there; guests without Account keep them in Options. Train ovals keep the number along the long axis. Regular train shares pause grey off-track, drop after 3 minutes or 400 m, and thank the rider.
+
+no release notes.
+
 ## V9_09.13.2 — Public privacy and account-delete pages (13 Sep 2026)
 
 Real HTML pages at `/privacy.html`, `/terms.html`, and `/account-delete.html` so Facebook and Google can fetch the policy without JavaScript. `#privacy` no longer gets replaced with `#home` on boot. Signed-in commuters keep Account in Options when extra features are off. Operator emails still cannot self-delete in the app; they see a note plus the public deletion page.

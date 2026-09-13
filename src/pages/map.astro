@@ -306,11 +306,15 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-oval--b { right: 2px; }
       .nt-live-train-num {
         position: relative; z-index: 2;
+        display: block;
+        width: calc(100% - 8px);
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-        max-width: 46px; overflow: hidden; text-overflow: clip;
-        font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;
-        letter-spacing: -0.03em; color: #fff; line-height: 1; white-space: nowrap;
+        overflow: hidden; text-overflow: clip;
+        font-size: 10px; font-weight: 900; font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em; color: #fff; line-height: 1; white-space: nowrap;
+        text-align: center;
         text-shadow: 0 1px 1px rgba(15, 23, 42, 0.35);
+        transform-origin: center;
       }
       .nt-live-train-glyph--mine .nt-live-train-oval {
         background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
@@ -326,7 +330,7 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .nt-live-train-glyph--compact { width: 44px; height: 20px; }
       .nt-live-train-glyph--compact .nt-live-train-oval { width: 26px; height: 16px; }
-      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 9px; max-width: 38px; }
+      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 8px; letter-spacing: 0.02em; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }

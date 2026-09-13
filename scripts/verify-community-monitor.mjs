@@ -77,8 +77,11 @@ assert.doesNotMatch(admin, /status !== 'closed' && i\.status !== 'resolved'/, 'l
 const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert.match(communityView, /class="community-chrome relative z-20/, 'route chrome sits above the feed stacking context');
 assert.match(communityView, /#view-community \.community-chrome \{\s*z-index: 20;/, 'chrome z-index is pinned in CSS, not only Tailwind');
+assert.match(communityView, /#view-community \.community-route-row \{\s*z-index: 10;/, 'picker row sits above the guest hint');
+assert.match(communityView, /#community-route-dropdown\.is-open \{\s*z-index: 40;/, 'open picker sits above later chrome siblings');
 assert.match(communityView, /community-feed-scroll relative z-\[1\]/, 'feed stays below the route list');
 assert.match(community, /wrap\?\.classList\.toggle\('is-open', open\)/, 'open list marks the dropdown wrapper');
+assert.match(community, /hint\.style\.visibility = open \? 'hidden' : ''/, 'open list hides the guest hint so its dismiss X cannot steal taps');
 assert.match(community, /e\.key === 'Escape'/, 'Escape closes the route list');
 
 assert.match(community, /community_activity\/\$\{encodeURIComponent\(routeId\)\}\/\$\{encodeURIComponent\(messageId\)\}/);

@@ -1267,6 +1267,11 @@ function setCommunityRouteListOpen(open) {
     if (!list) return;
     list.classList.toggle('hidden', !open);
     wrap?.classList.toggle('is-open', open);
+    document.querySelector('.community-route-row')?.classList.toggle('is-open', open);
+    const hint = document.getElementById('community-guest-hint');
+    if (hint && !hint.classList.contains('hidden')) {
+        hint.style.visibility = open ? 'hidden' : '';
+    }
     if (chevron) chevron.classList.toggle('rotate-180', open);
     if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
 }

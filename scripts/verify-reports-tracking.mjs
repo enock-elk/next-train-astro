@@ -8,11 +8,13 @@ import {
     isGhostTrackable,
     progressAlongStopsDetailed,
     journeyPositionLabel,
+    alignBearingToJourney,
 } from '../src/lib/train-ghosts.js';
 import {
     closestPointOnPath,
     trustedEdgeThresholdM,
     projectToTrustedFeature,
+    trackBearingDeg,
     TRACKER_SNAP_MAX_M,
 } from '../src/lib/rail-tracks.js';
 import {
@@ -127,6 +129,16 @@ assert(
     closestRailPoint?.pathFraction > 0.49 && closestRailPoint?.pathFraction < 0.51,
     'selected-path projection records journey progress'
 );
+assert(
+    Number.isFinite(closestRailPoint?.trackBearing)
+        && Math.abs((((closestRailPoint.trackBearing % 360) + 360) % 360) - 90) < 1,
+    'east-west rail segment reports a local eastward track bearing'
+);
+assert(Math.abs(trackBearingDeg(0, 0, 0.01, 0)) < 1, 'northbound segment bearing is ~0');
+assert(Math.abs(trackBearingDeg(0, 0, 0, 0.01) - 90) < 1, 'eastbound segment bearing is ~90');
+assert(alignBearingToJourney(90, 270) === 270, 'undirected east tangent flips to match westbound travel');
+assert(alignBearingToJourney(15, 10) === 15, 'track tangent close to travel is kept');
+assert(alignBearingToJourney(null, 42) === 42, 'missing track tangent falls back to journey heading');
 
 const stops = [
     { station: 'ORIGIN' },
@@ -211,11 +223,26 @@ const mapPageSource = readFileSync(new URL('../src/pages/map.astro', import.meta
 const mapViewSource = readFileSync(new URL('../src/components/MapView.astro', import.meta.url), 'utf8');
 const mapTabSource = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
 const ridePingsSource = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
+const geoWatchSource = readFileSync(new URL('../src/lib/geo-watch.js', import.meta.url), 'utf8');
 const boardSource = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 const liveBoardSource = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 const timetableSource = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
 assert(mapAppSource.includes('nt-live-train-oval'), 'map marker is two merged rail ovals');
 assert(mapAppSource.includes('style="transform:rotate('), 'map marker rotates with accepted bearing');
+assert(mapAppSource.includes('function railOvalYawDeg'), 'map marker yaws the long axis onto the rail');
+assert(mapAppSource.includes('bearing - 90'), 'horizontal oval yaw is geographic bearing minus 90');
+assert(mapAppSource.includes('nt-map-user-location'), 'embed map paints parent watch fixes without recentering');
+assert(mapAppSource.includes('nt-map-request-locate'), 'locate button asks the parent to recenter');
+assert(mapAppSource.includes('enableHighAccuracy: false'), 'standalone map watch is fused, not GPS-only');
+assert(!mapAppSource.includes('enableHighAccuracy: true});'), 'map no longer starts a Leaflet high-accuracy watch');
+assert(mapTabSource.includes('acquireGeoWatch'), 'map tab holds the fused geo watch while visible');
+assert(mapTabSource.includes('releaseGeoWatch'), 'leaving the map tab drops the map geo-watch holder');
+assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the fused geo watch');
+assert(ridePingsSource.includes('alignBearingToJourney'), 'projected pings use rail tangent aligned to travel');
+assert(geoWatchSource.includes('watchPosition'), 'geo watch uses a single watchPosition');
+assert(geoWatchSource.includes('enableHighAccuracy: false'), 'seek watch is fused / low power');
+assert(geoWatchSource.includes('document.hidden'), 'geo watch pauses when the document is hidden');
+assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
 assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
 assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
 assert(!mapAppSource.includes('animateTrainMarker'), 'map marker never extrapolates movement');

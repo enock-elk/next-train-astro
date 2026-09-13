@@ -39,6 +39,15 @@ function haversineM(lat1, lon1, lat2, lon2) {
     return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+/** Geographic bearing, degrees clockwise from north. */
+export function trackBearingDeg(lat1, lon1, lat2, lon2) {
+    if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) {
+        return null;
+    }
+    if (Math.abs(lat1 - lat2) < 1e-9 && Math.abs(lon1 - lon2) < 1e-9) return null;
+    return (Math.atan2(lon2 - lon1, lat2 - lat1) * 180) / Math.PI;
+}
+
 function quantizeKey(lat, lon) {
     // ~15 m grid — merges overlapping route LineStrings into one graph
     return `${Math.round(lat / 0.00015)},${Math.round(lon / 0.00015)}`;
@@ -165,7 +174,11 @@ export function projectToTrustedFeature(feature, lat, lon) {
             if (edgeM <= thresholdM) {
                 const projected = projectToSegment(lat, lon, a, b);
                 if (!best || projected.distanceM < best.distanceM) {
-                    best = { ...projected, routeM: totalM + edgeM * projected.t };
+                    best = {
+                        ...projected,
+                        routeM: totalM + edgeM * projected.t,
+                        trackBearing: trackBearingDeg(a[1], a[0], b[1], b[0]),
+                    };
                 }
             }
             totalM += edgeM;
@@ -218,6 +231,7 @@ export async function snapToRail(lat, lon, region = 'GP', maxM = TRACKER_SNAP_MA
             routeM: projected.routeM,
             routeFraction: projected.totalM > 0 ? projected.routeM / projected.totalM : 0,
             trustedEdgeThresholdM: projected.thresholdM,
+            trackBearing: projected.trackBearing,
         };
     }
     const id = nearestNode(bundle.graph, lat, lon, Math.max(maxM, SNAP_MAX_M));
@@ -230,7 +244,26 @@ export async function snapToRail(lat, lon, region = 'GP', maxM = TRACKER_SNAP_MA
         lat: n.lat,
         lon: n.lon,
         distanceM,
+        trackBearing: nodeEdgeBearing(bundle.graph, id),
     };
+}
+
+function nodeEdgeBearing(graph, id) {
+    const n = graph?.nodes?.[id];
+    const edges = graph?.adj?.get(id) || [];
+    if (!n || !edges.length) return null;
+    let best = null;
+    let bestW = -1;
+    for (const e of edges) {
+        const o = graph.nodes[e.to];
+        if (!o) continue;
+        const w = Number(e.w) || 0;
+        if (w > bestW) {
+            bestW = w;
+            best = trackBearingDeg(n.lat, n.lon, o.lat, o.lon);
+        }
+    }
+    return best;
 }
 
 function shortestPath(graph, startId, endId) {
@@ -544,6 +577,7 @@ export function closestPointOnPath(path, lat, lon) {
                 segmentIndex: i - 1,
                 fraction,
                 routeM: travelledM + segmentM * fraction,
+                trackBearing: trackBearingDeg(a[0], a[1], b[0], b[1]),
             };
         }
         travelledM += segmentM;

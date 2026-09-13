@@ -1940,7 +1940,7 @@
             const locateBtn = document.getElementById('custom-locate-btn');
             const locateIcon = locateBtn ? locateBtn.querySelector('svg') : null;
 
-            function applyUserLocation(latlng, accuracy) {
+            function applyUserLocation(latlng, accuracy, fromParent) {
                 lastKnownLatLng = latlng;
                 const radius = (accuracy || 40) / 2;
                 if (!userMarker) {
@@ -1959,6 +1959,7 @@
                     locateIcon.classList.remove('animate-spin', 'text-gray-400');
                     locateIcon.classList.add('text-blue-600', 'dark:text-blue-400');
                 }
+                if (fromParent) return;
                 try {
                     if (window.parent && window.parent !== window) {
                         window.parent.postMessage({
@@ -1971,31 +1972,71 @@
                 } catch (_) {}
             }
 
-            map.on('locationfound', function(e) {
-                applyUserLocation(e.latlng, e.accuracy);
-            });
-
-            map.on('locationerror', function(e) {
-                if (locateIcon) {
-                    locateIcon.classList.remove('animate-spin', 'text-blue-600', 'dark:text-blue-400');
-                    locateIcon.classList.add('text-gray-400');
+            var geoWatchId = null;
+            function stopBatterySafeWatch() {
+                if (geoWatchId != null && navigator.geolocation) {
+                    navigator.geolocation.clearWatch(geoWatchId);
                 }
-                if (e.code !== 1) console.warn("Location error:", e.message);
-            });
-
-            // Start passive tracking silently without yanking the camera (setView: false)
-            map.locate({setView: false, watch: true, enableHighAccuracy: true});
+                geoWatchId = null;
+            }
+            function startBatterySafeWatch() {
+                if (!navigator.geolocation || geoWatchId != null) return;
+                geoWatchId = navigator.geolocation.watchPosition(
+                    function (pos) {
+                        applyUserLocation(
+                            L.latLng(pos.coords.latitude, pos.coords.longitude),
+                            pos.coords.accuracy
+                        );
+                    },
+                    function (e) {
+                        if (locateIcon) {
+                            locateIcon.classList.remove('animate-spin', 'text-blue-600', 'dark:text-blue-400');
+                            locateIcon.classList.add('text-gray-400');
+                        }
+                        if (e.code !== 1) console.warn("Location error:", e.message);
+                    },
+                    { enableHighAccuracy: false, maximumAge: 2500, timeout: 15000 }
+                );
+            }
+            function syncStandaloneGeoWatch() {
+                if (isMapTabEmbed()) return;
+                if (document.hidden) stopBatterySafeWatch();
+                else startBatterySafeWatch();
+            }
+            // Embed: parent map-tab.js owns the single watch. Standalone /map keeps one fused watch.
+            if (!isMapTabEmbed()) {
+                syncStandaloneGeoWatch();
+                document.addEventListener('visibilitychange', syncStandaloneGeoWatch);
+                window.addEventListener('pagehide', stopBatterySafeWatch);
+                window.addEventListener('pageshow', syncStandaloneGeoWatch);
+            }
 
             if (locateBtn) {
                 locateBtn.onclick = (e) => {
                     e.stopPropagation();
                     if (lastKnownLatLng) {
-                        // Flawless single-camera movement. No rubberbanding!
                         map.flyTo(lastKnownLatLng, 15, { duration: 1.5 });
-                    } else {
-                        if (locateIcon) locateIcon.classList.add('animate-spin');
-                        // Map is already watching, we just wait for locationfound to fire
+                    } else if (locateIcon) {
+                        locateIcon.classList.add('animate-spin');
                     }
+                    if (isMapTabEmbed()) {
+                        try {
+                            (window.parent || window).postMessage({ type: 'nt-map-request-locate' }, '*');
+                        } catch (_) {}
+                        return;
+                    }
+                    if (!navigator.geolocation) return;
+                    navigator.geolocation.getCurrentPosition(
+                        function (pos) {
+                            applyUserLocation(
+                                L.latLng(pos.coords.latitude, pos.coords.longitude),
+                                pos.coords.accuracy
+                            );
+                            map.flyTo(lastKnownLatLng, 15, { duration: 1.2 });
+                        },
+                        function () {},
+                        { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 }
+                    );
                 };
             }
 
@@ -2022,6 +2063,10 @@
                         fillOpacity: hide ? 0 : 0.15
                     });
                 }
+            }
+            function railOvalYawDeg(bearing) {
+                if (!Number.isFinite(bearing)) return 0;
+                return bearing - 90;
             }
             function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
@@ -2058,12 +2103,14 @@
                 var deg = spec && Number.isFinite(spec.bearing) ? spec.bearing : 0;
                 var id = escapePing(String(trainId || ''));
                 var norm = ((deg % 360) + 360) % 360;
+                // Glyph is drawn east-west (long axis = CSS X). Geographic 0 is north.
+                var yaw = railOvalYawDeg(deg);
                 var flip = (norm > 90 && norm < 270) ? ' rotate(180deg)' : '';
                 var numSize = id.length >= 6 ? '8px' : (id.length >= 5 ? '9px' : '10px');
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
-                    + '<span class="' + cls + '" style="transform:rotate(' + deg + 'deg)">'
+                    + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
@@ -2275,7 +2322,7 @@
                 }
                 if (data.type === 'nt-map-contribute' && Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                     const ll = L.latLng(data.lat, data.lng);
-                    applyUserLocation(ll, 40);
+                    applyUserLocation(ll, 40, true);
                     renderRidePingMarkers([{
                         lat: data.lat, lng: data.lng,
                         trainId: data.trainId, station: data.station
@@ -2283,10 +2330,14 @@
                     map.flyTo(ll, 14, { duration: 1.0 });
                     return;
                 }
+                if (data.type === 'nt-map-user-location' && Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
+                    applyUserLocation(L.latLng(data.lat, data.lng), data.accuracy, true);
+                    return;
+                }
                 if (data.type !== 'nt-map-locate') return;
                 if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                     const ll = L.latLng(data.lat, data.lng);
-                    applyUserLocation(ll, data.accuracy);
+                    applyUserLocation(ll, data.accuracy, true);
                     map.flyTo(ll, 15, { duration: 1.2 });
                     return;
                 }

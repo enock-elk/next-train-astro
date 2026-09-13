@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.6 — Rail oval yaw and fused map GPS (13 Sep 2026)
+
+Live-share train ovals were rotating by geographic bearing while the glyph is drawn east-west, so the long axis sat across the rail (upright on east-west curves). Yaw is now bearing minus 90. Snap and path projection pass a local track tangent (`trackBearing`) and align it to scheduled travel.
+
+The map blue-dot used Leaflet `locate({ watch: true, enableHighAccuracy: true })`, which on phones often jumped every ~20s. The Map tab (and an active share) now hold a single fused `watchPosition` (`enableHighAccuracy: false`). Locate recenters the last fix and may request one short high-accuracy sample. The watch pauses when the document is hidden or no map/share holder remains.
+
+no release notes.
+
 ## V9_09.13.5 — Admin Community Monitor, composer, scheduled and archive (13 Sep 2026)
 
 Operator-only: Community Monitor Delete, live-share Stop share, alert composer size 4 / wrap, shared source copy, scheduled list without worker, archive load-first, planner straight-line km, Community error above the input, admin post cooldown skip.

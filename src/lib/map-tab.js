@@ -17,6 +17,13 @@ import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import {
+    acquireGeoWatch,
+    releaseGeoWatch,
+    peekLastGeoFix,
+    subscribeGeoFix,
+    requestGeoLocateFix,
+} from './geo-watch.js';
 
 /**
  * Map / board “Share my location” UI. Off until the feature ships to commuters.
@@ -1123,39 +1130,80 @@ async function showContributeSheet() {
     return openNearbyTrainsModal();
 }
 
+function applyGeoFix(fix) {
+    if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return;
+    lastCoords = {
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracy: fix.accuracy,
+    };
+}
+
 function getPosition() {
     return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject(new Error('Location isn’t available on this device.'));
+        const last = peekLastGeoFix();
+        if (last && Date.now() - last.t <= 8000) {
+            resolve({
+                coords: {
+                    latitude: last.lat,
+                    longitude: last.lng,
+                    accuracy: last.accuracy,
+                    heading: last.heading,
+                    speed: last.speedMps,
+                },
+            });
             return;
         }
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 20000,
-        });
+        requestGeoLocateFix()
+            .then((fix) => {
+                resolve({
+                    coords: {
+                        latitude: fix.lat,
+                        longitude: fix.lng,
+                        accuracy: fix.accuracy,
+                        heading: fix.heading,
+                        speed: fix.speedMps,
+                    },
+                });
+            })
+            .catch((err) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Location isn’t available on this device.'));
+                    return;
+                }
+                reject(err);
+            });
+    });
+}
+
+function postFixToMap(type, fix) {
+    if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return;
+    postToMap({
+        type,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracy: fix.accuracy,
     });
 }
 
 export async function locateOnMapTab() {
     triggerHaptic();
-    setStatus('Getting your location…');
-    try {
-        const pos = await getPosition();
-        lastCoords = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-        };
+    const last = peekLastGeoFix() || lastCoords;
+    if (last && Number.isFinite(last.lat) && Number.isFinite(last.lng)) {
+        applyGeoFix(last);
         setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
-        postToMap({
-            type: 'nt-map-locate',
-            lat: lastCoords.lat,
-            lng: lastCoords.lng,
-            accuracy: lastCoords.accuracy,
-        });
+        postFixToMap('nt-map-locate', lastCoords);
+    } else {
+        setStatus('Getting your location…');
+    }
+    try {
+        const fix = await requestGeoLocateFix();
+        applyGeoFix(fix);
+        setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
+        postFixToMap('nt-map-locate', lastCoords);
         return { ok: true, coords: lastCoords };
     } catch (e) {
+        if (lastCoords) return { ok: true, coords: lastCoords };
         const msg = e?.code === 1
             ? 'Location permission denied'
             : (e?.message || 'Couldn’t get location');
@@ -2181,6 +2229,7 @@ function focusPinnedCorridorOnMap() {
 export function activateMapTab() {
     exposeEmbedBridge();
     ensureFrameSrc();
+    acquireGeoWatch('map');
     const { region, routeId } = pinnedMapFocus();
     const routeName = ROUTES[routeId]?.name ? String(ROUTES[routeId].name).replace(/<->/g, ' to ') : '';
     const regionNames = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
@@ -2202,12 +2251,24 @@ export function activateMapTab() {
 export function deactivateMapTab() {
     hideContributeSheet();
     stopPingsPolling();
+    releaseGeoWatch('map');
 }
 
 export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
     exposeEmbedBridge();
+    subscribeGeoFix((fix) => {
+        applyGeoFix(fix);
+        postFixToMap('nt-map-user-location', fix);
+        const mapOn = document.getElementById('view-map')?.classList.contains('active');
+        if (mapOn && lastCoords) {
+            setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
+        }
+    });
+    if (document.getElementById('view-map')?.classList.contains('active')) {
+        acquireGeoWatch('map');
+    }
 
     // Hide share controls until LIVE_LOCATION_SHARE_UI_ENABLED ships.
     if (!LIVE_LOCATION_SHARE_UI_ENABLED) {
@@ -2349,6 +2410,9 @@ export function bindMapTabUi() {
             };
             setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
         }
+        if (data.type === 'nt-map-request-locate') {
+            locateOnMapTab();
+        }
         if (data.type === 'nt-map-join-train' && data.trainId) {
             const routeId = $currentRouteId.get();
             const station = document.getElementById('station-select')?.value || data.station || '';
@@ -2407,6 +2471,7 @@ if (typeof window !== 'undefined') {
     window.openNearbyTrainsModal = openNearbyTrainsModal;
     window.clearTripWatch = clearTripWatch;
     window.bindMapTabUi = bindMapTabUi;
+    window.locateOnMapTab = locateOnMapTab;
     window.syncMapShareChrome = syncMapShareChrome;
     window.showTrackingStatusCard = showTrackingStatusCard;
     // Legacy name used by map-app share FAB — route to contribute picker

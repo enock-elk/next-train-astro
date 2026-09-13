@@ -357,6 +357,10 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapApp.includes('nt-live-train-num'), 'map train capsule shows the train number');
     assert(mapApp.includes('nt-live-train-oval'), 'map train glyph is two merged ovals');
     assert(mapApp.includes('style="transform:rotate('), 'map train capsule rotates with bearing');
+    assert(mapApp.includes('railOvalYawDeg'), 'map train capsule yaws long-axis along the rail');
+    assert(mapApp.includes('watchPosition'), 'map location uses watchPosition');
+    assert(mapTab.includes('acquireGeoWatch'), 'map tab acquires the fused geo watch');
+    assert(ridePings.includes('alignBearingToJourney'), 'share projection aligns oval to the rail tangent');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');

@@ -108,7 +108,7 @@ ok(privacyPage.includes('LEGAL_TEXTS.privacy'), 'privacy.html is the public poli
 ok(privacyPage.includes('canonicalPath="/privacy.html"'), 'privacy.html has a stable canonical');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
-ok(deletePage.includes('admin@nexttrain.co.za'), 'deletion page names the support email');
+ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');
 ok(deletePage.includes('Delete account'), 'deletion page tells commuters to use Account');
 
 if (failures.length) {

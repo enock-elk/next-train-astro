@@ -394,9 +394,6 @@ assert(sidenavShare.includes('setPrefsOpen(false, false)'), 'Theme accordion sta
 const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(uiJs.includes('safeCur === lastTab'), 'last content tab swipe-left opens Options');
 assert(uiJs.includes('canAccessPilotSurface'), 'swipe and hash restore respect pin-gated Map/Community');
-const adminChrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
-assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
-assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
 assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 
@@ -514,6 +511,8 @@ assert(adminChrome.includes('getPinnedRouteIds'), 'pilot chrome reads pinned rou
 assert(adminChrome.includes("safeStorage.getItem('defaultRoute_' + region)"), 'pilot access uses pin keys, not the viewed corridor');
 assert(adminChrome.includes('FEATURE_KEYS.MAP_TAB'), 'Map tab is a pin-gated feature');
 assert(adminChrome.includes('FEATURE_KEYS.COMMUNITY_TAB'), 'Community tab is a pin-gated feature');
+assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
+assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('isAdminAuthed() && rule && rule.expiresAt'), 'exclusion Until line is admin-only');

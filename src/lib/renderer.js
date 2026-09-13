@@ -986,7 +986,7 @@ export const Renderer = {
                             
                             let bgClass = '';
                             const trainIdStyle = isExport
-                                ? 'display:block;font-size:18px;font-weight:800;color:#0f172a;line-height:21px;'
+                                ? 'display:block;font-size:18px;font-weight:400;color:#0f172a;line-height:21px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
                             const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
@@ -1502,7 +1502,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.border = `1px solid ${borderColor}`;
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
-            headerCell.style.fontWeight = '900';
+            headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
             headerCell.style.textAlign = 'center';
             if (isCompact) headerCell.style.letterSpacing = '-0.5px'; 
         });

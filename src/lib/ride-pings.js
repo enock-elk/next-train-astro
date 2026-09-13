@@ -1463,6 +1463,9 @@ let onboardPingTimer = 0;
 let onboardGeoUnsub = null;
 let onboardProjectionChain = Promise.resolve();
 let onboardLatestFix = null;
+let onboardPendingFix = null;
+let onboardPendingOptions = null;
+let onboardDrainRunning = false;
 let onboardLastBroadcastAt = 0;
 let onboardWatchStartedAt = 0;
 let onboardGeneration = 0;
@@ -1478,6 +1481,8 @@ export function stopOnboardPingLoop() {
         onboardGeoUnsub = null;
     }
     onboardLatestFix = null;
+    onboardPendingFix = null;
+    onboardPendingOptions = null;
     onboardLastBroadcastAt = 0;
     onboardWatchStartedAt = 0;
 }
@@ -1662,10 +1667,45 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
 function queueOnboardFix(pos, options) {
     if (!pos) return;
     onboardLatestFix = pos;
+    onboardPendingFix = pos;
+    onboardPendingOptions = {
+        forceBroadcast: !!(onboardPendingOptions?.forceBroadcast || options?.forceBroadcast),
+    };
+    if (onboardDrainRunning) return;
+    const generation = onboardGeneration;
+    onboardDrainRunning = true;
+    onboardProjectionChain = onboardProjectionChain
+        .catch(() => {})
+        .then(async () => {
+            try {
+                while (generation === onboardGeneration && onboardPendingFix) {
+                    const latest = onboardPendingFix;
+                    const pendingOptions = onboardPendingOptions || {};
+                    onboardPendingFix = null;
+                    onboardPendingOptions = null;
+                    await processOnboardFix(latest, { ...pendingOptions, generation });
+                }
+            } finally {
+                onboardDrainRunning = false;
+                if (onboardPendingFix && onboardGeoUnsub) {
+                    queueOnboardFix(onboardPendingFix, onboardPendingOptions || {});
+                }
+            }
+        });
+}
+
+function queueOnboardPause(reason, pos = null) {
     const generation = onboardGeneration;
     onboardProjectionChain = onboardProjectionChain
         .catch(() => {})
-        .then(() => processOnboardFix(pos, { ...options, generation }));
+        .then(async () => {
+            if (generation !== onboardGeneration) return;
+            const current = getActiveShare();
+            if (!current?.trainId) return;
+            if (current.trackingState === TRACKING_STATE.PAUSED && current.pauseReason === reason) return;
+            await pauseActiveTracker(current, reason, pos);
+        });
+    return onboardProjectionChain;
 }
 
 /** Every accepted fix moves the local pill; Firebase receives adaptive coalesced pings. */
@@ -1688,25 +1728,16 @@ export function startOnboardPingLoop() {
             return;
         }
         if (typeof document !== 'undefined' && document.hidden) {
-            await onboardProjectionChain.catch(() => {});
-            if (current.trackingState !== TRACKING_STATE.PAUSED || current.pauseReason !== 'staleGps') {
-                await pauseActiveTracker(current, 'staleGps');
-            }
+            await queueOnboardPause('staleGps');
             return;
         }
         if (!navigator.onLine) {
-            await onboardProjectionChain.catch(() => {});
-            if (current.trackingState !== TRACKING_STATE.PAUSED || current.pauseReason !== 'offline') {
-                await pauseActiveTracker(current, 'offline');
-            }
+            await queueOnboardPause('offline');
             return;
         }
         const lastFixAt = Number(onboardLatestFix?.t || onboardWatchStartedAt || 0);
         if (lastFixAt && Date.now() - lastFixAt >= RIDE_GPS_STALE_MS) {
-            await onboardProjectionChain.catch(() => {});
-            if (current.trackingState !== TRACKING_STATE.PAUSED || current.pauseReason !== 'staleGps') {
-                await pauseActiveTracker(current, 'staleGps', onboardLatestFix);
-            }
+            await queueOnboardPause('staleGps', onboardLatestFix);
             return;
         }
         const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps);

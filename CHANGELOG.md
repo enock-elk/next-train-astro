@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.5 — Admin Community Monitor, composer, scheduled and archive (13 Sep 2026)
+
+Operator-only: Community Monitor Delete, live-share Stop share, alert composer size 4 / wrap, shared source copy, scheduled list without worker, archive load-first, planner straight-line km, Community error above the input, admin post cooldown skip.
+
+no release notes.
+
 ## V9_09.13.4 — Unbold Commuter Notice train numbers (13 Sep 2026)
 
 Export grid train IDs stay 18px at regular weight so adjacent 4-digit numbers no longer mash. Station and STN headers stay heavy.

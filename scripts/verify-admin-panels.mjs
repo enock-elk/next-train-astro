@@ -176,6 +176,18 @@ assert(admin.includes('admin_state/alert_sources'), 'saved sources sync to Fireb
 assert(admin.includes('ntAdminAlertSourcesToRtdb'), 'sources write an id-keyed Firebase map');
 assert(admin.includes("parsed && typeof parsed === 'object' ? Object.values(parsed)"), 'source hydrate accepts a Firebase object');
 assert(admin.includes('refreshSavedAlertSources'), 'saved sources refresh from Firebase');
+assert(!admin.includes('Saved on this device only.'), 'source helper copy is no longer device-only');
+assert(admin.includes('Sources are shared for both operators on Firebase.'), 'source helper copy is shared for operators');
+assert(admin.includes('ls-stop-share') && admin.includes('Stop share'), 'live cards have Stop share');
+assert(admin.includes("source: 'admin_stop'"), 'admin stop writes source admin_stop');
+assert(admin.includes('trackingState: \'stopped\''), 'admin stop expires the ping as stopped');
+assert(admin.includes('cm-delete-message'), 'Community Monitor has Delete');
+assert(admin.includes('deletePublishedCommunityMessage'), 'Delete removes the RTDB node and activity key');
+assert(admin.includes('publishDueScheduledAlerts optional'), 'scheduled worker publish is optional');
+assert(admin.includes('publish skipped'), 'scheduled publish failure is a note, not a blank Failed pane');
+assert(admin.includes('_archiveFetchGen'), 'archive load uses a generation so sweep cannot leave Loading forever');
+assert(admin.indexOf('const items = await Admin.loadUnifiedAlertArchive(secret);', admin.indexOf('fetchAlertArchive: async'))
+    < admin.indexOf('Admin.sweepExpiredAlertsToArchive(secret)', admin.indexOf('fetchAlertArchive: async')), 'archive paints before the background sweep');
 assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'saved source writes are awaited');
 assert(admin.includes('Source saved online for both operators.'), 'saved source confirms online availability');
 assert(admin.includes('sourceName: sourceNameInput ? sourceNameInput.value.trim()'), 'publish still sends sourceName');
@@ -216,7 +228,7 @@ assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not al
 
 assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
 assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
-assert(admin.includes('alerts-sched-v3'), 'alert panel rebuilds after schedule UX');
+assert(admin.includes('alerts-sched-v4'), 'alert panel rebuilds after composer and schedule UX');
 assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
 assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
 

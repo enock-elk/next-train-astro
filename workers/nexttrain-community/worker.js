@@ -856,7 +856,8 @@ async function handlePost(request, env) {
     const windowMs = Number(env.RATE_WINDOW_MS || 60_000);
     const max = Number(env.RATE_MAX || 4);
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, max * 2)) {
+    const isAdminPoster = ADMIN_EMAILS.has(String(user.email || '').trim().toLowerCase());
+    if (!isAdminPoster && (!checkRate(`uid:${user.uid}`, windowMs, max) || !checkRate(`ip:${ip}`, windowMs, max * 2))) {
         return json(env, request, 429, {
             ok: false,
             error: `Please wait ${Math.ceil(windowMs / 1000)} seconds before you can send another message.`,

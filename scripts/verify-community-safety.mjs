@@ -100,4 +100,14 @@ assert.match(workerHoldBranch, /moderation_queue\/\$\{reportId\}/);
 assert.match(workerHoldBranch, /publish:\s*\{\s*kind:\s*'community_post',\s*routeId,\s*payload\s*\}/);
 assert.match(workerHoldBranch, /held:\s*true/);
 
+const handlePostSrc = workerSource.slice(
+    workerSource.indexOf('async function handlePost'),
+    workerSource.indexOf('async function wipeStalePosts')
+);
+assert.match(handlePostSrc, /ADMIN_EMAILS\.has\(String\(user\.email/, 'worker post cooldown checks ADMIN_EMAILS');
+assert.match(handlePostSrc, /isAdminPoster/, 'admins skip the community post cooldown');
+assert.match(workerSource, /thandeka05nxumalo@gmail\.com/, 'Thandeka stays on the worker admin allowlist');
+assert.match(workerSource, /enockelk@gmail\.com/, 'Enock stays on the worker admin allowlist');
+assert.match(community, /if \(!isAdminAuthed\(\)\) \{\s*const limit = checkCommunityRateLimit\(\);/, 'client cooldown skips signed-in operators');
+
 console.log(`Community safety verified: ${cases.length} language cases, client/worker parity, held publishing paths.`);

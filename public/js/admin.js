@@ -7742,6 +7742,67 @@ const Admin = {
         };
         refreshBtn.onclick = () => Admin.fetchRideShareLog();
 
+        Admin.stopLiveRideShare = async (ping) => {
+            if (!ping?.routeId || !ping?.deviceId) throw new Error('Missing share');
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const now = Date.now();
+            const payload = {
+                routeId: ping.routeId,
+                deviceId: ping.deviceId,
+                station: ping.station || 'here',
+                at: now,
+                expiresAt: now,
+                source: 'admin_stop',
+                trackingState: 'stopped',
+            };
+            if (ping.trainId) payload.trainId = ping.trainId;
+            if (ping.uid) payload.uid = ping.uid;
+            if (ping.email) payload.email = ping.email;
+            if (ping.waitingFor) payload.waitingFor = ping.waitingFor;
+            if (ping.destination) payload.destination = ping.destination;
+            if (Number.isFinite(ping.coarseLat)) payload.coarseLat = ping.coarseLat;
+            if (Number.isFinite(ping.coarseLng)) payload.coarseLng = ping.coarseLng;
+            const appVer = typeof APP_VERSION !== 'undefined' ? String(APP_VERSION).split(' - ')[0] : '';
+            if (appVer) payload.appVersion = appVer;
+            const put = await fetch(`${dynamicEndpoint}ride_pings/${encodeURIComponent(ping.routeId)}/${encodeURIComponent(ping.deviceId)}.json?auth=${secret}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!put.ok) throw new Error(`Stop share failed (${put.status})`);
+            let region = '';
+            try {
+                region = (typeof ROUTES !== 'undefined' && ROUTES[ping.routeId]?.region) || '';
+            } catch (e) { /* ignore */ }
+            region = region || 'GP';
+            const logUid = ping.uid || Admin.currentUser?.uid;
+            if (!logUid) return;
+            const entryId = `ls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+            const logPayload = {
+                region,
+                routeId: ping.routeId,
+                deviceId: ping.deviceId,
+                uid: logUid,
+                action: 'stop',
+                source: 'admin_stop',
+                at: now,
+            };
+            if (ping.trainId) logPayload.trainId = String(ping.trainId);
+            if (ping.email) logPayload.email = String(ping.email);
+            if (appVer) logPayload.appVersion = appVer;
+            try {
+                await fetch(`${dynamicEndpoint}ride_share_log/${encodeURIComponent(region)}/${encodeURIComponent(entryId)}.json?auth=${secret}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(logPayload),
+                });
+            } catch (e) {
+                console.warn('ride_share_log admin_stop write failed', e);
+            }
+        };
+
         const esc = (t) => String(t || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
         const routeName = (id) => {
             try {
@@ -7903,6 +7964,7 @@ const Admin = {
                     }
                 }
                 liveRows.sort((a, b) => (b.at || 0) - (a.at || 0));
+                Admin._lsLiveRows = liveRows;
                 if (countEl) {
                     if (liveRows.length) {
                         countEl.textContent = String(liveRows.length);
@@ -7929,9 +7991,31 @@ const Admin = {
                             </div>
                             <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
                             <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">${esc(bits)}</p>
+                            <button type="button" class="ls-stop-share mt-2 text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(p.routeId)}" data-device="${esc(p.deviceId)}">Stop share</button>
                         </div>`;
                     }).join('')
                     : '<p class="text-xs text-gray-400 text-center py-4">No live shares in this region.</p>';
+                liveEl.querySelectorAll('.ls-stop-share').forEach((btn) => {
+                    btn.onclick = async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const routeId = btn.getAttribute('data-route');
+                        const deviceId = btn.getAttribute('data-device');
+                        const ping = (Admin._lsLiveRows || []).find((p) => p.routeId === routeId && p.deviceId === deviceId);
+                        if (!ping) return;
+                        const ok = await Admin.secureConfirm('Stop share', 'End this live share now?');
+                        if (!ok) return;
+                        btn.disabled = true;
+                        try {
+                            await Admin.stopLiveRideShare(ping);
+                            if (typeof showToast === 'function') showToast('Share stopped', 'success');
+                            Admin.fetchRideShareLog();
+                        } catch (err) {
+                            if (typeof showToast === 'function') showToast(err?.message || 'Could not stop share', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
 
                 const logItems = [];
                 if (logRes.ok) {
@@ -8366,7 +8450,7 @@ const Admin = {
                         ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b><br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
-                    return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message>
+                    return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         <div class="flex items-center justify-between gap-2 mb-1">
                             <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${category}</span>
                             <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
@@ -8374,6 +8458,7 @@ const Admin = {
                         ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
                         <div class="flex flex-wrap gap-2 mt-2">
                             <button type="button" class="cm-hide-message text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
+                            <button type="button" class="cm-delete-message text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
                             ${message.uid ? `<button type="button" class="cm-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
                         </div>
                     </div>`;
@@ -8477,6 +8562,33 @@ const Admin = {
                     };
                 }
 
+                Admin.deletePublishedCommunityMessage = async (routeId, postId, replyId) => {
+                    if (!routeId || !postId) throw new Error('Missing route/post id');
+                    const updates = {};
+                    if (replyId) {
+                        updates[`route_community/${routeId}/posts/${postId}/replies/${replyId}`] = null;
+                        updates[`community_activity/${routeId}/${replyId}`] = null;
+                    } else {
+                        updates[`route_community/${routeId}/posts/${postId}`] = null;
+                        updates[`community_activity/${routeId}/${postId}`] = null;
+                        try {
+                            const postRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}.json${authQ}`, {}, 6000);
+                            const post = postRes.ok ? await postRes.json() : null;
+                            Object.keys(post?.replies || {}).forEach((id) => {
+                                updates[`community_activity/${routeId}/${id}`] = null;
+                            });
+                        } catch (e) {
+                            console.warn('Community delete reply-index read failed', e);
+                        }
+                    }
+                    const del = await fetch(`${dynamicEndpoint}.json${authQ}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updates),
+                    });
+                    if (!del.ok) throw new Error(`Delete failed (${del.status})`);
+                };
+
                 list.addEventListener('click', async (event) => {
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
@@ -8489,6 +8601,32 @@ const Admin = {
                         if (put.ok) {
                             hide.closest('[data-community-message]')?.classList.add('opacity-50', 'ring-1', 'ring-red-400');
                             if (typeof showToast === 'function') showToast('Message hidden', 'success');
+                        }
+                        return;
+                    }
+                    const delBtn = event.target.closest?.('.cm-delete-message');
+                    if (delBtn) {
+                        event.preventDefault();
+                        const routeId = delBtn.dataset.route;
+                        const postId = delBtn.dataset.post;
+                        const replyId = delBtn.dataset.reply;
+                        const ok = await Admin.secureConfirm('Delete message', replyId
+                            ? 'Remove this reply from the route feed? This cannot be undone.'
+                            : 'Remove this post and its replies from the route feed? This cannot be undone.');
+                        if (!ok) return;
+                        delBtn.disabled = true;
+                        try {
+                            await Admin.deletePublishedCommunityMessage(routeId, postId, replyId);
+                            const card = delBtn.closest('[data-community-message]');
+                            if (replyId) {
+                                card?.remove();
+                            } else {
+                                list.querySelectorAll(`[data-community-post="${CSS.escape(String(postId || ''))}"]`).forEach((el) => el.remove());
+                            }
+                            if (typeof showToast === 'function') showToast('Message deleted', 'success');
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast(e?.message || 'Delete failed', 'error');
+                            delBtn.disabled = false;
                         }
                         return;
                     }
@@ -9794,7 +9932,7 @@ const Admin = {
                                 <li onmousedown="event.preventDefault();" onclick="Admin.pickWysiwygFont(this, '${id}')" data-font="fontTimes" class="px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer" style="font-family:'Times New Roman',Times,serif">Times</li>
                             </ul>
                         </div>`;
-        return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700">
+        return `<div class="flex flex-col w-full bg-gray-100 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600">
                         <div class="flex items-center w-full p-0.5 gap-1">
                             <div class="flex flex-1 items-center justify-evenly min-w-0">
                             ${btn('bold', 'Bold', 'B')}
@@ -9929,7 +10067,8 @@ const Admin = {
             const style = document.createElement('style');
             style.id = 'wysiwyg-extended-sizes';
             style.innerHTML = `
-                font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
+                font[size="5"] { font-size: 1.15rem !important; font-weight: inherit !important; line-height: 1.4; }
+                font[size="4"] { font-size: 1.05rem !important; font-weight: 500; line-height: 1.35; }
                 font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
                 font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
                 .nt-font-verdana, font.nt-font-verdana, span.nt-font-verdana,
@@ -9946,7 +10085,8 @@ const Admin = {
                 .nt-font-default, font.nt-font-default, font[face="sans-serif" i] {
                     font-family: ui-sans-serif, system-ui, sans-serif !important;
                 }
-                #alert-msg, #admin-reply-text, #disr-msg { overflow-wrap: anywhere; word-break: break-word; }
+                #alert-msg, #admin-reply-text, #disr-msg { max-width: 100%; overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; }
+                #alert-msg { white-space: pre-wrap; }
             `;
             document.head.appendChild(style);
         }
@@ -10003,18 +10143,21 @@ const Admin = {
                 }
             }
 
-            // Map any chaotic legacy sizes strictly into our 3-Tier baseline
-            if (currentSize < 3) currentSize = 2; // Small
-            else if (currentSize > 3) currentSize = 5; // Large
-            else currentSize = 3; // Normal
+            // Map any chaotic legacy sizes into 2 → 3 → 4 → 5
+            if (currentSize <= 2) currentSize = 2;
+            else if (currentSize === 3) currentSize = 3;
+            else if (currentSize === 4) currentSize = 4;
+            else currentSize = 5;
 
             let newSize = 3;
             if (tag === 'larger') {
-                if (currentSize === 2) newSize = 3; // Small -> Normal
-                else if (currentSize >= 3) newSize = 5; // Normal/Large -> Large
+                if (currentSize === 2) newSize = 3;
+                else if (currentSize === 3) newSize = 4;
+                else newSize = 5;
             } else if (tag === 'smaller') {
-                if (currentSize === 5) newSize = 3; // Large -> Normal
-                else if (currentSize <= 3) newSize = 2; // Normal/Small -> Small
+                if (currentSize === 5) newSize = 4;
+                else if (currentSize === 4) newSize = 3;
+                else newSize = 2;
             }
 
             document.execCommand('fontSize', false, newSize.toString());
@@ -10624,7 +10767,7 @@ const Admin = {
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const items = [];
 
-        const nRes = await fetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`);
+        const nRes = await window.guardianFetch(`${dynamicEndpoint}notices_archive.json?auth=${secret}`, {}, 12000);
         const nData = nRes.ok ? await nRes.json() : null;
         if (nData && typeof nData === 'object') {
             Object.entries(nData).forEach(([archKey, alert]) => {
@@ -10650,7 +10793,7 @@ const Admin = {
             });
         }
 
-        const dRes = await fetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`);
+        const dRes = await window.guardianFetch(`${dynamicEndpoint}disruptions_archive.json?auth=${secret}`, {}, 12000);
         const dData = dRes.ok ? await dRes.json() : null;
         if (dData && typeof dData === 'object') {
             Object.entries(dData).forEach(([rId, routeNode]) => {
@@ -10739,12 +10882,15 @@ const Admin = {
 
     fetchScheduledAlerts: async () => {
         const secret = await Admin.getAuthKey();
-        if (!secret) return [];
+        if (!secret) throw new Error('Authentication required');
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        const res = await fetch(`${dynamicEndpoint}notices_scheduled.json?auth=${secret}`);
-        if (!res.ok) return [];
+        const res = await window.guardianFetch(`${dynamicEndpoint}notices_scheduled.json?auth=${secret}`, {}, 8000);
+        if (!res.ok) throw new Error(`Scheduled list failed (${res.status})`);
         const data = await res.json();
-        if (!data || typeof data !== 'object') return [];
+        if (!data || typeof data !== 'object') {
+            Admin._cachedScheduledAlerts = [];
+            return [];
+        }
         const items = Object.entries(data).map(([id, job]) => ({ id, ...job })).sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0));
         Admin._cachedScheduledAlerts = items;
         return items;
@@ -10854,19 +11000,31 @@ const Admin = {
 
     refreshScheduledAlerts: async () => {
         const statusEl = document.getElementById('alert-schedule-status');
-        if (statusEl) statusEl.textContent = 'Checking due...';
+        if (statusEl) statusEl.textContent = 'Loading...';
+        let publishNote = '';
         try {
             const secret = await Admin.getAuthKey();
-            const due = await Admin.publishDueScheduledAlerts(secret);
+            try {
+                const due = await Admin.publishDueScheduledAlerts(secret);
+                if (due && due.published) publishNote = ` - posted ${due.published}`;
+            } catch (pubErr) {
+                console.warn('publishDueScheduledAlerts optional', pubErr);
+                const reason = String(pubErr?.message || 'publish skipped');
+                publishNote = reason.includes('not configured')
+                    ? ' - publish skipped (worker not configured)'
+                    : ` - publish skipped`;
+            }
             const items = await Admin.fetchScheduledAlerts();
             Admin.renderScheduledAlertsList(items);
-            if (statusEl) {
-                statusEl.textContent = due.published
-                    ? `${items.length} scheduled - posted ${due.published}`
-                    : `${items.length} scheduled`;
-            }
+            if (statusEl) statusEl.textContent = `${items.length} scheduled${publishNote}`;
         } catch (e) {
-            console.warn('refreshScheduledAlerts failed', e);
+            console.warn('refreshScheduledAlerts list failed', e);
+            const cached = Admin._cachedScheduledAlerts;
+            if (Array.isArray(cached) && cached.length) {
+                Admin.renderScheduledAlertsList(cached);
+                if (statusEl) statusEl.textContent = `${cached.length} scheduled - could not refresh`;
+                return;
+            }
             if (statusEl) statusEl.textContent = 'Failed';
         }
     },
@@ -10904,7 +11062,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-sched-v3';
+        const ALERT_PANEL_REV = 'alerts-sched-v4';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -10985,9 +11143,9 @@ const Admin = {
                     <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">2. Message</p>
                 <div>
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
-                    <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                    <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden min-w-0 max-w-full focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
-                        <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                        <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full max-w-full min-w-0 overflow-x-hidden min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none whitespace-pre-wrap empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
                     </div>
                 </div>
 
@@ -11073,7 +11231,7 @@ const Admin = {
                         <svg id="alert-source-chevron" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="alert-source-body" class="space-y-3">
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Pick a saved name and link, or type a new one and tap Save source. Saved on this device only.</p>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">Pick a saved name and link, or type a new one and tap Save source. Sources are shared for both operators on Firebase.</p>
                         <div>
                             <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Saved sources</label>
                             <div class="relative" id="alert-source-saved-container">
@@ -11308,6 +11466,7 @@ const Admin = {
         alertPanel.removeAttribute('aria-hidden');
         alertPanel.classList.remove('hidden');
         alertPanel.dataset.adminLoaded = ALERT_PANEL_REV;
+        if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -11941,6 +12100,10 @@ const Admin = {
             } else {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
+                if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
+                Admin.refreshSavedAlertSources().then(() => {
+                    if (typeof Admin._paintSavedAlertSources === 'function') Admin._paintSavedAlertSources();
+                });
                 Admin.publishDueScheduledAlerts().catch(() => {});
             }
         };
@@ -12490,24 +12653,55 @@ const Admin = {
             return;
         }
 
-        if (statusEl) statusEl.textContent = 'Sweeping expired...';
-        listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive...</div>`;
+        Admin._archiveFetchGen = (Admin._archiveFetchGen || 0) + 1;
+        const gen = Admin._archiveFetchGen;
+        if (statusEl) statusEl.textContent = 'Loading archive...';
+        if (!Admin._cachedAlertArchive) {
+            listEl.innerHTML = `<div class="text-center py-6 text-xs text-gray-400 animate-pulse">Loading archive...</div>`;
+        }
 
-        try {
-            const swept = await Admin.sweepExpiredAlertsToArchive(secret);
-            if (statusEl) statusEl.textContent = 'Loading...';
-            const items = await Admin.loadUnifiedAlertArchive(secret);
+        const paintArchiveStatus = (items, sweepNote = '') => {
             const filtered = Admin.filterAlertArchiveItems(items);
-            Admin.renderAlertArchiveList(items);
             const noticeN = filtered.filter((i) => (i.kind || 'notice') !== 'disruption').length;
             const disrN = filtered.filter((i) => i.kind === 'disruption').length;
-            const sweepNote = (swept.notices || swept.disruptions)
-                ? ` - moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
-                : '';
             const filterNote = filtered.length !== items.length ? ` - showing ${filtered.length}/${items.length}` : '';
             if (statusEl) statusEl.textContent = `${noticeN} alerts - ${disrN} incidents${filterNote}${sweepNote}`;
+        };
+
+        try {
+            const items = await Admin.loadUnifiedAlertArchive(secret);
+            if (Admin._archiveFetchGen !== gen) return;
+            Admin.renderAlertArchiveList(items);
+            paintArchiveStatus(items);
+            Admin.sweepExpiredAlertsToArchive(secret).then(async (swept) => {
+                if (Admin._archiveFetchGen !== gen) return;
+                const sweepNote = (swept.notices || swept.disruptions)
+                    ? ` - moved ${swept.notices} alert(s), ${swept.disruptions} incident(s)`
+                    : '';
+                if (swept.notices || swept.disruptions) {
+                    try {
+                        const refreshed = await Admin.loadUnifiedAlertArchive(secret);
+                        if (Admin._archiveFetchGen !== gen) return;
+                        Admin.renderAlertArchiveList(refreshed);
+                        paintArchiveStatus(refreshed, sweepNote);
+                        return;
+                    } catch (e) {
+                        console.warn('Archive refresh after sweep failed', e);
+                    }
+                }
+                if (Admin._archiveFetchGen !== gen) return;
+                paintArchiveStatus(Admin._cachedAlertArchive || items, sweepNote);
+            }).catch((e) => {
+                console.warn('Background archive sweep failed', e);
+            });
         } catch (e) {
             console.warn('fetchAlertArchive failed', e);
+            const cached = Admin._cachedAlertArchive;
+            if (Array.isArray(cached) && cached.length) {
+                Admin.renderAlertArchiveList(cached);
+                paintArchiveStatus(cached, ' - could not refresh');
+                return;
+            }
             if (statusEl) statusEl.textContent = 'Failed';
             listEl.innerHTML = `<div class="text-center py-6 text-xs text-red-500">Could not load archive.</div>`;
         }

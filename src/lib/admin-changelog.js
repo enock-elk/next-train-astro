@@ -5,6 +5,16 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.13.5': [
+        'Community Monitor Delete removes the RTDB post/reply and its community_activity key. Hide stays.',
+        'Live sharing cards have Stop share: expire ride_pings and write ride_share_log stop (source admin_stop).',
+        'Alert composer: size 4 in between, A+ is 2-3-4-5, size 5 is not auto-bold. Title stays h3 heavy. Toolbar has a gap above the editor. Editor wraps.',
+        'Saved sources copy says shared for both operators. Panel open refreshes from Firebase. Online/fail toasts unchanged.',
+        'Scheduled tab always lists notices_scheduled. Worker publish is optional and no longer blanks the list as Failed.',
+        'Archive loads and paints first with a timeout, then sweeps in the background.',
+        'Planner fare sheet adds straight-line km first to last station. Track km stays.',
+        'Community error sits above the composer. Worker post cooldown skips Enock and Thandeka.',
+    ],
     'V9_09.12.13': [
         'Slow network Proceed is orange. Copy warns that a weak connection can affect offline access until the signal is stronger.',
         'Check for Updates downloads/installs the incoming SW first. Failed install keeps the cached app. No cache wipe before that install.',

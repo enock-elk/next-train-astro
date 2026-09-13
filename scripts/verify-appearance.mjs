@@ -537,6 +537,18 @@ assert(css.includes('.nt-alert-card-footer'), 'alert footer is styled as two row
 assert(css.includes('.nt-alert-meta-row'), 'alert source/time row is styled');
 assert(css.includes('.nt-alert-action-row'), 'alert reactions/Reply row is styled');
 assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
+assert(/font\[size="4"\][^{]*\{[^}]*1\.05rem/.test(css), 'composer size 4 is the in-between tier');
+assert(/font\[size="5"\][^{]*\{[^}]*font-weight:\s*inherit/.test(css), 'size 5 is not auto-bold');
+assert(!/font\[size="5"\][^{]*\{[^}]*font-weight:\s*700/.test(css), 'size 5 dropped automatic 700 weight');
+assert(/#alert-msg h3[\s\S]{0,80}font-weight:\s*800/.test(css), 'Title heading stays heavy');
+assert(/#alert-msg \{\s*white-space:\s*pre-wrap;/.test(css), 'alert editor wraps with pre-wrap');
+assert(css.includes('overflow-x: hidden'), 'rich text blocks hide horizontal overflow');
+assert(adminJs.includes("currentSize === 4") && adminJs.includes('newSize = 4'), 'A+ cycles through size 4');
+assert(adminJs.includes('border-b border-gray-300 dark:border-gray-600'), 'toolbar has a gap/border above the editor');
+
+const richText = readFileSync(new URL('../src/lib/rich-text.js', import.meta.url), 'utf8');
+assert(richText.includes('font[size="4"]'), 'shared rich-text CSS includes size 4');
+assert(/font\[size="5"\][^{]*\{[^}]*font-weight: inherit/.test(richText), 'shared rich-text size 5 is not auto-bold');
 
 if (failures.length) {
     console.error('verify-appearance failed:');

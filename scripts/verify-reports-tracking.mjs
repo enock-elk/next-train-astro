@@ -161,6 +161,15 @@ assert(refineMotionFix(
     { lat: -25, lng: 28.1, accuracy: 5, heading: 90, speedMps: 5, t: 2000 },
     { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 5, t: 1000 }
 ) === null, 'implausible GPS jump is rejected');
+const poorAccuracyFix = refineMotionFix(
+    { lat: -25, lng: 28.0006, accuracy: 200, heading: 90, speedMps: 12, t: 6000 },
+    { lat: -25, lng: 28, accuracy: 200, heading: null, speedMps: 0, t: 1000 }
+);
+assert(poorAccuracyFix?.speedMps === 0 && poorAccuracyFix.stationary, 'poor-accuracy displacement cannot impersonate train speed');
+assert(refineMotionFix(
+    { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
+    { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }
+) === null, 'non-newer GPS timestamp is ignored');
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
 assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 25 seconds');
@@ -310,6 +319,11 @@ assert(ridePingsSource.includes('subscribeGeoFix') && ridePingsSource.includes('
 assert(ridePingsSource.includes('cacheLocalProjectedFix'), 'owner pill updates locally before Firebase');
 assert(ridePingsSource.includes("source: 'onboard_local'"), 'local projected position is distinct from broadcast telemetry');
 assert(ridePingsSource.includes('{ silent: true }'), 'open timetable tracker refreshes without repeated haptics');
+assert(ridePingsSource.includes('onboardGeneration'), 'stale queued writes are invalidated when sharing stops');
+assert(ridePingsSource.includes('await onboardProjectionChain'), 'stop waits behind any in-flight location write');
+assert(ridePingsSource.includes('onboardWatchStartedAt'), 'share can become stale before its first GPS callback');
+assert(ridePingsSource.includes('Math.min(350'), 'interchange GPS leniency has a bounded radius');
+assert(ridePingsSource.includes('firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh)'), 'adaptive pings reuse cached auth tokens');
 assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
 assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
 assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
@@ -393,7 +407,7 @@ const interchangeReverseFix = await projectTrainTrackerFix({
     lng: 28.002,
     trainId: '1000',
     routeId: 'pta-pien',
-    previousProgress: 1,
+    previousProgress: 0.4,
     allowReverse: true,
     stationIndex,
     schedules: [trackerSchedule],

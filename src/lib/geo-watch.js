@@ -47,7 +47,16 @@ function bearingDeg(a, b) {
  */
 export function refineMotionFix(raw, previous = null) {
     if (!raw || !Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
-    if (!previous || !Number.isFinite(previous.t) || raw.t <= previous.t) return { ...raw };
+    if (Number.isFinite(raw.accuracy) && raw.accuracy > 250) return null;
+    if (!previous || !Number.isFinite(previous.t)) {
+        return {
+            ...raw,
+            speedMps: Number.isFinite(raw.speedMps) && raw.speedMps < STATIONARY_SPEED_MPS
+                ? 0
+                : raw.speedMps,
+        };
+    }
+    if (raw.t <= previous.t) return null;
     const dt = Math.max(0.25, (raw.t - previous.t) / 1000);
     const movedM = distanceM(previous, raw);
     const derivedSpeed = movedM / dt;
@@ -55,10 +64,18 @@ export function refineMotionFix(raw, previous = null) {
 
     const accuracy = Number.isFinite(raw.accuracy) ? raw.accuracy : 25;
     const previousAccuracy = Number.isFinite(previous.accuracy) ? previous.accuracy : accuracy;
-    const uncertaintyM = Math.max(6, Math.min(35, (accuracy + previousAccuracy) * 0.6));
+    const uncertaintyM = Math.max(
+        6,
+        Math.min(200, Math.hypot(accuracy, previousAccuracy) * 0.75)
+    );
     const reportedSpeed = Number.isFinite(raw.speedMps) ? raw.speedMps : null;
     const stationary = movedM <= uncertaintyM
-        && (reportedSpeed == null || reportedSpeed < STATIONARY_SPEED_MPS);
+        && (
+            accuracy > 50
+            || previousAccuracy > 50
+            || reportedSpeed == null
+            || reportedSpeed < STATIONARY_SPEED_MPS
+        );
     if (stationary) {
         return {
             ...raw,

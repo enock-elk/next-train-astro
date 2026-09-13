@@ -6,7 +6,12 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0f172a" />
   <title>App Help &amp; Recovery | Next Train</title>
-  <!-- Fully self-contained: no app JS, no Tailwind, no Firebase SDK. Must paint when the SPA shell is broken. -->
+  <!--
+    Fully self-contained. No hashed app stylesheet, no Tailwind, no Firebase SDK.
+    Every rule lives in this file so the page still paints when the app
+    stylesheet 404s. If CSS is disabled entirely, the headings, lists,
+    buttons and mailto/Facebook links still work. The reset button needs JS.
+  -->
   <style>
     :root {
       --bg: #0f172a;
@@ -121,6 +126,14 @@
   </style>
 </head>
 <body>
+  <noscript>
+    <p style="max-width:42rem;margin:0 auto 1rem;padding:0.75rem 1rem;font-family:system-ui,sans-serif;line-height:1.45">
+      JavaScript is off, so Reset saved app data will not run. Message us on
+      <a href="https://www.facebook.com/enock.kazembe">Facebook</a>
+      or email <a href="mailto:admin@nexttrain.co.za">admin@nexttrain.co.za</a>,
+      then open <a href="./">Next Train</a> again.
+    </p>
+  </noscript>
   <div class="wrap">
     <div class="brand">Next Train · Recovery</div>
     <h1 id="title">Having trouble opening the app?</h1>
@@ -171,8 +184,8 @@
           <option value="other">Something else</option>
         </select>
 
-        <!-- Honeypot -->
-        <div class="hp" aria-hidden="true">
+        <!-- Honeypot. hidden= keeps it out of the page when CSS is off. -->
+        <div class="hp" hidden aria-hidden="true">
           <label for="company">Company</label>
           <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
         </div>

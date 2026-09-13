@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.1 — Community route picker stacking, Reset and Recover fallback (13 Sep 2026)
+
+Community route list sat in a `z-[1]` header next to a `z-[1]` feed, so the empty-state copy painted through the menu and ate the taps. Chrome is now `z-20` (pinned in CSS). Reset and Recover (`help.html`) stays free of hashed `/_astro/` CSS, hides the honeypot with `hidden`, and keeps Facebook/email in a `<noscript>` block. Facebook login setup for operators is in `docs/facebook-login-setup.md`. The in-app Facebook button stays off until Meta + Firebase are live.
+
+no release notes.
+
 ## V9_09.12.14 — Hashed asset retention and unstyled-shell fallback (12 Sep 2026)
 
 Production deploy retains 8 previous `/_astro/` generations and 30 stylesheet generations instead of 1 (`retain-previous-astro.mjs --keep / --keep-css`, manifest now records generations and still reads the legacy flat `files` shape). `rsync --delete` had been sweeping hashed CSS/JS that cached HTML, edge objects, open tabs, Googlebot and Clarity replay were still requesting, so those readers 404ed the bundle and painted the raw markup. Clarity re-fetches stylesheets by URL at playback time, which is why CSS is retained far longer than modules.

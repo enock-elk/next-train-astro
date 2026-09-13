@@ -1263,8 +1263,10 @@ function setCommunityRouteListOpen(open) {
     const list = document.getElementById('community-route-list');
     const chevron = document.getElementById('community-route-chevron');
     const trigger = document.getElementById('community-route-trigger');
+    const wrap = document.getElementById('community-route-dropdown');
     if (!list) return;
     list.classList.toggle('hidden', !open);
+    wrap?.classList.toggle('is-open', open);
     if (chevron) chevron.classList.toggle('rotate-180', open);
     if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
@@ -1498,10 +1500,13 @@ export function bindCommunityUi() {
         setCommunityRouteListOpen(false);
         syncCommunityRoutePicker(rid);
     });
-    document.addEventListener('click', (e) => {
+    document.addEventListener('pointerdown', (e) => {
         if (!e.target.closest?.('#community-route-dropdown')) {
             setCommunityRouteListOpen(false);
         }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') setCommunityRouteListOpen(false);
     });
     document.getElementById('community-refresh-btn')?.addEventListener('click', () => {
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();

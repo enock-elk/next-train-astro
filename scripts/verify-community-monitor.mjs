@@ -74,6 +74,13 @@ assert.match(admin, /Activity backfill failed/, 'backfill is best effort and doe
 assert.doesNotMatch(admin, /route_community\.json[^]*onValue/, 'monitor does not attach a root route listener');
 assert.doesNotMatch(admin, /status !== 'closed' && i\.status !== 'resolved'/, 'legacy approved-status overcount is gone');
 
+const communityView = await readFile(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
+assert.match(communityView, /class="community-chrome relative z-20/, 'route chrome sits above the feed stacking context');
+assert.match(communityView, /#view-community \.community-chrome \{\s*z-index: 20;/, 'chrome z-index is pinned in CSS, not only Tailwind');
+assert.match(communityView, /community-feed-scroll relative z-\[1\]/, 'feed stays below the route list');
+assert.match(community, /wrap\?\.classList\.toggle\('is-open', open\)/, 'open list marks the dropdown wrapper');
+assert.match(community, /e\.key === 'Escape'/, 'Escape closes the route list');
+
 assert.match(community, /community_activity\/\$\{encodeURIComponent\(routeId\)\}\/\$\{encodeURIComponent\(messageId\)\}/);
 assert.match(community, /writeCommunityActivity\(routeId, postId, payload, 'post'/);
 assert.match(community, /writeCommunityActivity\(routeId, replyId, payload, 'reply'/);

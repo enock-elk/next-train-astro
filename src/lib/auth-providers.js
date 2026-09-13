@@ -1,6 +1,8 @@
 import { bootFirebase } from './firebase-boot.js';
 import { safeStorage } from './utils.js';
 
+// facebook stays false until Meta + Firebase Auth are live. The Account button
+// and Dev Hub flag already exist. Operator steps: docs/facebook-login-setup.md
 export const DEFAULT_AUTH_PROVIDERS = Object.freeze({
     google: true,
     email: true,

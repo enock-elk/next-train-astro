@@ -8,7 +8,14 @@
 <div id="view-community" class="view-section bg-gray-50 dark:bg-gray-900/50 p-0">
     <div class="community-pane relative flex flex-col flex-1 min-h-0 h-full">
         <div class="nt-pack-wallpaper" aria-hidden="true"></div>
-        <div class="relative z-[1] shrink-0 pt-2.5 pb-2 space-y-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <!--
+          z-20, not z-[1]. The feed and composer also create stacking contexts.
+          The route list is position:absolute and drops into the feed's box, so
+          a matching z-index lets the later sibling (empty-state copy + wallpaper)
+          paint on top. Taps then hit the feed, the list looks see-through, and
+          the room never changes. Do not drop this chrome below the feed again.
+        -->
+        <div class="community-chrome relative z-20 shrink-0 pt-2.5 pb-2 space-y-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div class="flex items-center justify-between gap-3 px-4">
                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
                 <button type="button" id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide text-right truncate max-w-[62%] hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
@@ -22,7 +29,7 @@
                             <span id="community-route-display" class="text-sm sm:text-base font-black text-gray-900 dark:text-white tracking-tight truncate leading-tight">Select route</span>
                             <svg id="community-route-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
-                        <ul id="community-route-list" role="listbox" class="absolute z-[200] left-0 right-0 mt-1.5 max-h-[min(50vh,20rem)] overflow-y-auto custom-scrollbar bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl hidden flex-col text-left"></ul>
+                        <ul id="community-route-list" role="listbox" class="absolute z-30 left-0 right-0 mt-1.5 max-h-[min(50vh,20rem)] overflow-y-auto custom-scrollbar isolate bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl hidden flex-col text-left"></ul>
                     </div>
                 </div>
                 <button type="button" id="community-refresh-btn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none shrink-0" aria-label="Refresh" title="Refresh">
@@ -66,6 +73,17 @@
 </div>
 
 <style is:global>
+  /* Route list is absolute and hangs into the feed. Chrome must stay above
+     that stacking context or the empty-state copy eats the taps. */
+  #view-community .community-chrome {
+    z-index: 20;
+  }
+  #community-route-list:not(.hidden) {
+    background-color: #ffffff;
+  }
+  html.dark #community-route-list:not(.hidden) {
+    background-color: #1f2937;
+  }
   .community-post-row {
     display: flex;
     align-items: flex-start;

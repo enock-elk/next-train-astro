@@ -115,6 +115,15 @@ for (const [name, source] of [['app', layout], ['content', content]]) {
 assert(/<body[^>]*>\s*<RecoveryLifeline \/>/.test(layout), 'lifeline is the first node in the app body');
 assert(/<body[^>]*>\s*<RecoveryLifeline \/>/.test(content), 'lifeline is the first node in the map body');
 
+const help = readFileSync(new URL('../public/help.html', import.meta.url), 'utf8');
+assert(!/href=["'][^"']*_astro/.test(help) && !/<link[^>]+rel=["']stylesheet["']/.test(help), 'Reset and Recover does not load a hashed stylesheet');
+assert(help.includes('<style>'), 'Reset and Recover carries its own CSS in the document');
+assert(help.includes('<noscript>'), 'Reset and Recover still offers Facebook and email when JS is off');
+assert(/<div class="hp"[^>]*\bhidden\b/.test(help), 'honeypot stays hidden when CSS is off');
+assert(help.includes('id="btn-reset"'), 'Reset saved app data is a real button');
+assert(help.includes('admin@nexttrain.co.za'), 'Reset and Recover keeps the support email as a mailto');
+assert(help.includes('facebook.com/enock.kazembe'), 'Reset and Recover keeps the Facebook support link');
+
 const appUpdate = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
 assert(appUpdate.includes('Incoming update waiting (quiet)'), 'onNeedRefresh is quiet');
 assert(appUpdate.includes('armQuietSkipWaiting'), 'idle skipWaiting is armed');

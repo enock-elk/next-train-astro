@@ -78,6 +78,8 @@ export async function bootFirebase() {
         window.firebaseSignInAnonymously = signInAnonymously;
         window.firebaseSignInWithPopup = signInWithPopup;
         window.firebaseGoogleProvider = GoogleAuthProvider;
+        // Facebook stays wired here; the Account button stays off until
+        // docs/facebook-login-setup.md is finished and Dev Hub enables it.
         window.firebaseFacebookProvider = FacebookAuthProvider;
         window.firebaseUpdateProfile = updateProfile;
 

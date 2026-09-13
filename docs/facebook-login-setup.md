@@ -5,6 +5,8 @@ Google login already works. This only adds Facebook.
 
 Do this on a laptop, signed into facebook.com as yourself.
 
+**Paused 13 Sep 2026 at Login Review.** Resume at [Step H](#step-h--submit-for-login-review-email). You were on **App Review submissions**, **Not submitted**, with **email** and **public_profile** listed. Click **Next** when you come back. Do not switch to Live yet.
+
 ---
 
 ## The three addresses (copy exactly)
@@ -128,11 +130,31 @@ The button stays off in code until you tick that box, so a missing setup cannot 
 
 ## Step H — Submit for Login Review (email)
 
-You already added **email**. Facebook shows **Submit for Login Review** until that permission is approved for Live. In Development, you (the Administrator) can still tap **Continue as Enock**. Random commuters cannot, until the app is **Live** and **email** is approved.
+Paused here on 13 Sep 2026. App code is already on `main` (`V9_09.13.3`). Come back to this section. You do not need to redo Steps A–G unless something is missing.
 
-You do **not** need another tester. Skip Thandeka unless she will use a different Facebook account.
+### Where you left off
 
-### Before you submit
+You already:
+
+- Created **Metrorail Next Train**
+- Added **email** (status was **Ready for testing**)
+- Left **public_profile** on (default)
+- Did **not** add age, birthday, or friends
+- Opened **email → Actions → Go to App Review**
+- Landed on **App Review** → **App Review submissions**
+- Status was **Not submitted**
+- New requests listed: **email** and **public_profile**
+- The next button on that page is **Next** (bottom right)
+
+You have **not** finished the wizard. You have **not** switched the app to **Live**. Leave it **Unpublished**.
+
+### What “open email” means
+
+It is **not** Gmail. It is the **email** row on Meta’s **Permissions and features** page (Use cases → Facebook Login).
+
+On that row, **Actions** can show **Go to App Review** or **Remove**. You already used **Go to App Review**. When you return, skip that click if you are already on **App Review submissions**.
+
+### Before you click Next again
 
 1. Production is deployed. Open these yourself and confirm they are articles, not the train board:
    - `https://nexttrain.co.za/privacy.html`
@@ -140,20 +162,25 @@ You do **not** need another tester. Skip Thandeka unless she will use a differen
 2. **App settings → Basic** still has those two URLs
 3. Permissions list has only **public_profile** and **email**. Do not add friends, birthday, or age
 
-### How to submit
+### How to finish the submit (when you resume)
 
 1. Open [https://developers.facebook.com](https://developers.facebook.com) on a laptop
-2. Open the **Metrorail Next Train** app
-3. Left: **Use cases** → **Customize** → **Facebook Login** → **Permissions and features**
-4. Find **email**. Click **Add** if it is not already added
-5. Open **email**. Click **Request advanced access** or **Submit for review** (the label varies)
-6. Facebook asks why you need email. Paste:
+2. Open **Metrorail Next Train**
+3. Left: **App Review** → **App Review submissions**  
+   or **Use cases** → **Facebook Login** → **Permissions and features** → **email** → **Actions** → **Go to App Review**
+4. Keep **email**. **public_profile** can stay. Do not add anything else
+5. Click **Next**
+6. When it asks why you need email, paste:
 
-   Next Train is a commuter timetable app. Email is used only to create the optional account, show the signed-in name, and process a delete request. We do not post on the person’s Facebook, and we do not ask for friends or birthday.
+   Next Train is a commuter timetable app. Email is only used to create the optional account and to process a delete request. We do not post on Facebook.
 
-7. If it asks for a screen recording: record Options → Account → Continue with Facebook → Continue as Enock. Keep it under one minute
+7. If it asks for a screen recording: Options → Account → Continue with Facebook → Continue as Enock. Keep it under one minute
 8. If it asks for a test user / instructions: “Sign in as the app administrator. Open nexttrain.co.za, Options, Account, Continue with Facebook.”
-9. Submit. Wait for Facebook’s email. Do not switch the app to **Live** until email is approved, or commuters will see “app not set up” / a review wall
+9. Submit. Wait for Facebook’s email. Do **not** switch the app to **Live** until email is approved
+
+You do **not** need another tester. Skip Thandeka unless she will use a different Facebook account.
+
+In Development, you (the Administrator) can still tap **Continue as Enock**. Random commuters cannot, until the app is **Live** and **email** is approved.
 
 ### After approval
 

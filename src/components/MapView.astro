@@ -87,6 +87,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         <div><dt class="text-[9px] font-bold uppercase text-gray-400">Accuracy</dt><dd id="map-tracking-accuracy" class="text-xs font-black text-gray-800 dark:text-gray-100">-</dd></div>
                         <div><dt class="text-[9px] font-bold uppercase text-gray-400">Riders</dt><dd id="map-tracking-count" class="text-xs font-black text-gray-800 dark:text-gray-100">-</dd></div>
                     </dl>
+                    <p id="map-tracking-warning" class="hidden mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2 text-[10px] font-bold text-amber-800 dark:text-amber-200" role="status">Your movement does not match this train’s scheduled direction yet. Check the train number if this continues.</p>
                     <button type="button" id="map-tracking-stop" class="mt-2.5 w-full py-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-[11px] font-black border border-red-200 dark:border-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Stop sharing</button>
                 </div>
             </section>

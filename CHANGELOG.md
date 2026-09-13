@@ -2,6 +2,16 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.7 — Smooth live train tracking (13 Sep 2026)
+
+An active share now consumes each accepted fused-location fix locally and coalesces ordered Firebase updates to 5-10 seconds while moving or a 25-second stationary heartbeat. Accuracy-aware motion filtering suppresses low-speed GPS drift, rejects implausible jumps, and derives heading only from meaningful displacement.
+
+The owner’s rail-projected pill and tracking card update before the network round trip. Remote Leaflet markers are retained and interpolate bounded corrections instead of being destroyed and recreated. The pill carries an aft wake for direction, pauses that wake when tracking pauses, and keeps its number within -90 to 90 degrees, including westbound horizontal tracks.
+
+Direction mismatch warnings require sustained, reliable moving samples. Configured and multi-route interchange stations suspend that evidence and reverse-progress enforcement nearby, including Koedoespoort. The map tracking card and open timetable tracker refresh while visible.
+
+no release notes.
+
 ## V9_09.13.6 — Rail oval yaw and fused map GPS (13 Sep 2026)
 
 Live-share train ovals were rotating by geographic bearing while the glyph is drawn east-west, so the long axis sat across the rail (upright on east-west curves). Yaw is now bearing minus 90. Snap and path projection pass a local track tangent (`trackBearing`) and align it to scheduled travel.

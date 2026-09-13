@@ -17,8 +17,74 @@ let mode = 'off';
 
 const SEEK_OPTS = { enableHighAccuracy: false, maximumAge: 2500, timeout: 15000 };
 const LOCATE_OPTS = { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 };
+const STATIONARY_SPEED_MPS = 1.5;
+const MAX_PLAUSIBLE_SPEED_MPS = 70;
 
-function fromCoords(coords) {
+function distanceM(a, b) {
+    if (!a || !b) return 0;
+    const rad = Math.PI / 180;
+    const p1 = a.lat * rad;
+    const p2 = b.lat * rad;
+    const dp = (b.lat - a.lat) * rad;
+    const dl = (b.lng - a.lng) * rad;
+    const h = Math.sin(dp / 2) ** 2
+        + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function bearingDeg(a, b) {
+    const rad = Math.PI / 180;
+    const y = Math.sin((b.lng - a.lng) * rad) * Math.cos(b.lat * rad);
+    const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad)
+        - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lng - a.lng) * rad);
+    return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
+/**
+ * Accuracy-aware motion sample. Low-speed OS readings inside the combined GPS
+ * uncertainty are stationary, while meaningful displacement can supply a
+ * speed / heading when Android leaves those fields null.
+ */
+export function refineMotionFix(raw, previous = null) {
+    if (!raw || !Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
+    if (!previous || !Number.isFinite(previous.t) || raw.t <= previous.t) return { ...raw };
+    const dt = Math.max(0.25, (raw.t - previous.t) / 1000);
+    const movedM = distanceM(previous, raw);
+    const derivedSpeed = movedM / dt;
+    if (derivedSpeed > MAX_PLAUSIBLE_SPEED_MPS) return null;
+
+    const accuracy = Number.isFinite(raw.accuracy) ? raw.accuracy : 25;
+    const previousAccuracy = Number.isFinite(previous.accuracy) ? previous.accuracy : accuracy;
+    const uncertaintyM = Math.max(6, Math.min(35, (accuracy + previousAccuracy) * 0.6));
+    const reportedSpeed = Number.isFinite(raw.speedMps) ? raw.speedMps : null;
+    const stationary = movedM <= uncertaintyM
+        && (reportedSpeed == null || reportedSpeed < STATIONARY_SPEED_MPS);
+    if (stationary) {
+        return {
+            ...raw,
+            speedMps: 0,
+            heading: Number.isFinite(previous.heading) ? previous.heading : raw.heading,
+            movedM,
+            stationary: true,
+        };
+    }
+
+    const measuredSpeed = reportedSpeed != null && reportedSpeed >= STATIONARY_SPEED_MPS
+        ? reportedSpeed
+        : derivedSpeed;
+    const previousSpeed = Number.isFinite(previous.speedMps) ? previous.speedMps : measuredSpeed;
+    return {
+        ...raw,
+        speedMps: Math.max(0, previousSpeed * 0.35 + measuredSpeed * 0.65),
+        heading: movedM > uncertaintyM
+            ? bearingDeg(previous, raw)
+            : (Number.isFinite(raw.heading) ? raw.heading : previous.heading),
+        movedM,
+        stationary: false,
+    };
+}
+
+function fromCoords(coords, timestamp = Date.now()) {
     return {
         lat: coords.latitude,
         lng: coords.longitude,
@@ -29,7 +95,7 @@ function fromCoords(coords) {
         speedMps: typeof coords.speed === 'number' && coords.speed >= 0
             ? coords.speed
             : null,
-        t: Date.now(),
+        t: Number.isFinite(timestamp) ? timestamp : Date.now(),
     };
 }
 
@@ -54,7 +120,9 @@ function startSeekWatch() {
     clearWatch();
     watchId = navigator.geolocation.watchPosition(
         (pos) => {
-            if (pos?.coords) emit(fromCoords(pos.coords));
+            if (!pos?.coords) return;
+            const fix = refineMotionFix(fromCoords(pos.coords, pos.timestamp), lastFix);
+            if (fix) emit(fix);
         },
         () => { /* keep last fix; next tick may recover */ },
         SEEK_OPTS
@@ -120,7 +188,11 @@ export function requestGeoLocateFix() {
         }
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                const fix = fromCoords(pos.coords);
+                const fix = refineMotionFix(fromCoords(pos.coords, pos.timestamp), lastFix);
+                if (!fix) {
+                    reject(Object.assign(new Error('Location jumped too far to trust.'), { code: 2 }));
+                    return;
+                }
                 emit(fix);
                 resolve(fix);
             },

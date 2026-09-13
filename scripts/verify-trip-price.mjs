@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
-import { computeZoneFareForTrip } from '../src/lib/planner-ui.js';
+import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -47,7 +47,25 @@ assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
 assert(ui.includes('TRIP FARE:'), 'fare label is TRIP FARE on one line');
 assert(ui.includes('border-b border-dotted'), 'TRIP FARE uses a dotted underline');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
+assert(ui.includes('getCrowFliesTripKm'), 'fare also computes first-to-last straight-line km');
+assert(ui.includes('Straight-line'), 'fare sheet shows the crow-flies line');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
+{
+    const crow = getCrowFliesTripKm({
+        stops: [
+            { station: 'A', lat: 0, lon: 0 },
+            { station: 'B', lat: 0, lon: 1 },
+            { station: 'C', lat: 0, lon: 0.1 },
+        ],
+    });
+    const hops = getCrowFliesTripKm({
+        stops: [
+            { station: 'A', lat: 0, lon: 0 },
+            { station: 'C', lat: 0, lon: 0.1 },
+        ],
+    });
+    assert(crow != null && hops != null && crow === hops, `crow-flies ignores intermediate hops, got ${crow} vs ${hops}`);
+}
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');
 assert(modal.includes('id="planner-fare-breakdown-sheet"'), 'fare bottom sheet markup exists');

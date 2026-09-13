@@ -63,6 +63,8 @@ assert.match(admin, /mq-reject-community/);
 assert.match(admin, /mq-hide-post/);
 assert.match(admin, /mq-shadow-ban/);
 assert.match(admin, /cm-hide-message/);
+assert.match(admin, /cm-delete-message/);
+assert.match(admin, /deletePublishedCommunityMessage/);
 assert.match(admin, /cm-shadow-ban/);
 assert.match(admin, /community_activity\.json/);
 assert.match(admin, /moderation_queue\.json/);
@@ -80,6 +82,10 @@ assert.match(communityView, /#view-community \.community-chrome \{\s*z-index: 20
 assert.match(communityView, /#view-community \.community-route-row \{\s*z-index: 10;/, 'picker row sits above the guest hint');
 assert.match(communityView, /#community-route-dropdown\.is-open \{\s*z-index: 40;/, 'open picker sits above later chrome siblings');
 assert.match(communityView, /community-feed-scroll relative z-\[1\]/, 'feed stays below the route list');
+assert.ok(
+    communityView.indexOf('id="community-error"') < communityView.indexOf('id="community-composer"'),
+    'community error sits above the composer input'
+);
 assert.match(community, /wrap\?\.classList\.toggle\('is-open', open\)/, 'open list marks the dropdown wrapper');
 assert.match(community, /hint\.style\.visibility = open \? 'hidden' : ''/, 'open list hides the guest hint so its dismiss X cannot steal taps');
 assert.match(community, /e\.key === 'Escape'/, 'Escape closes the route list');

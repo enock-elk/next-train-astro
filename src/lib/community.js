@@ -393,8 +393,10 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         return { ok: false, message: 'Action not permitted.' };
     }
 
-    const limit = checkCommunityRateLimit();
-    if (!limit.ok) return limit;
+    if (!isAdminAuthed()) {
+        const limit = checkCommunityRateLimit();
+        if (!limit.ok) return limit;
+    }
 
     const replyToPayload = replyDraft?.postId ? {
         replyTo: {
@@ -566,8 +568,10 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     if (isBlockedLocally(acct.uid)) {
         return { ok: false, message: 'Action not permitted.' };
     }
-    const limit = checkCommunityRateLimit();
-    if (!limit.ok) return limit;
+    if (!isAdminAuthed()) {
+        const limit = checkCommunityRateLimit();
+        if (!limit.ok) return limit;
+    }
 
     const safety = checkContentSafety(text);
     if (safety.verdict === 'block') return { ok: false, message: safety.message, reason: safety.reason };

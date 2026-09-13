@@ -9,17 +9,23 @@ import { sanitizeAttachmentDisplayUrl, isSafeLightboxOnclick } from './attachmen
 
 export const RICH_TEXT_STYLE_ID = 'nt-rich-text-styles';
 
-/** Same 3-tier sizes the admin editor uses (Tailwind text-sm otherwise wins). */
+/** Same 4-tier sizes the admin editor uses (Tailwind text-sm otherwise wins). */
 export const RICH_TEXT_CSS = `
 .nt-rich-body, #notice-content, #developer-reply-content, #alert-msg, #admin-reply-text, #disr-msg, #disruption-modal-body {
+  max-width: 100%;
+  overflow-x: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+#alert-msg {
+  white-space: pre-wrap;
 }
 .nt-rich-body a, #notice-content a, #developer-reply-content a, #alert-msg a, #admin-reply-text a, #disr-msg a, #disruption-modal-body a {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-font[size="5"], .nt-rich-body font[size="5"] { font-size: 1.15rem !important; font-weight: 700; line-height: 1.4; }
+font[size="5"], .nt-rich-body font[size="5"] { font-size: 1.15rem !important; font-weight: inherit !important; line-height: 1.4; }
+font[size="4"], .nt-rich-body font[size="4"] { font-size: 1.05rem !important; font-weight: 500; line-height: 1.35; }
 font[size="3"], .nt-rich-body font[size="3"] { font-size: inherit !important; font-weight: inherit !important; opacity: 1 !important; line-height: inherit; }
 font[size="2"], .nt-rich-body font[size="2"] { font-size: 10px !important; opacity: 0.85; line-height: 1.2; }
 font[face="Verdana"], font[face="verdana"],

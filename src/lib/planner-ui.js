@@ -412,7 +412,7 @@ async function getSmoothTripDistanceKm(trip) {
     return getTripDistanceKm(trip);
 }
 
-function fillPlannerFareBreakdown(trip, { km, zone, fare } = {}) {
+function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
     const band = ZONE_KM_RANGE_LABELS[zone] || '';
@@ -423,9 +423,11 @@ function fillPlannerFareBreakdown(trip, { km, zone, fare } = {}) {
     const depLabel = fare.depTime ? String(fare.depTime).slice(0, 5) : '';
     const peakLabel = fare.isOffPeak ? 'Off-peak' : 'Peak';
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
+    const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
     body.innerHTML = `
         <dl class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Peak / off-peak</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd class="font-bold">${escapeHTML(fare.profile || 'Adult')}</dd></div>
@@ -444,6 +446,7 @@ async function hydratePlannerFareButton(trip) {
     const btn = document.querySelector('[data-nt-trip-fare="1"]');
     if (!btn) return;
     const km = await getSmoothTripDistanceKm(trip);
+    const crowKm = getCrowFliesTripKm(trip);
     const zone = suggestZoneFromKm(km);
     const fare = computeZoneFareForTrip(zone, trip);
     if (!fare) {
@@ -456,7 +459,7 @@ async function hydratePlannerFareButton(trip) {
     btn.onclick = (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        openPlannerFareBreakdown(trip, { km, zone, fare });
+        openPlannerFareBreakdown(trip, { km, crowKm, zone, fare });
     };
 }
 
@@ -525,6 +528,30 @@ function getTripDistanceKm(trip) {
         hops++;
     }
     if (!hops || !Number.isFinite(km) || km <= 0) return null;
+    return Math.round(km * 10) / 10;
+}
+
+/** Straight-line km between the first and last trip stations only. */
+export function getCrowFliesTripKm(trip) {
+    const index = $globalStationIndex.get() || {};
+    const stops = collectTripStops(trip);
+    if (stops.length < 2) return null;
+    const resolve = (s) => {
+        if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) return s;
+        const idx = index[normalizeStationName(s.station)];
+        if (idx && Number.isFinite(idx.lat) && Number.isFinite(idx.lon)) {
+            return { ...s, lat: idx.lat, lon: idx.lon };
+        }
+        return s;
+    };
+    const first = resolve(stops[0]);
+    const last = resolve(stops[stops.length - 1]);
+    if (!Number.isFinite(first.lat) || !Number.isFinite(first.lon)
+        || !Number.isFinite(last.lat) || !Number.isFinite(last.lon)) {
+        return null;
+    }
+    const km = getDistanceFromLatLonInKm(first.lat, first.lon, last.lat, last.lon);
+    if (!Number.isFinite(km) || km <= 0) return null;
     return Math.round(km * 10) / 10;
 }
 

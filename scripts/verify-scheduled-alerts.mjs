@@ -182,6 +182,19 @@ const browserRunner = adminSource.slice(
 assert.match(browserRunner, /\/admin\/scheduled-alerts/);
 assert.match(browserRunner, /Authorization:\s*`Bearer \$\{secret\}`/);
 assert.doesNotMatch(browserRunner, /notices_scheduled\.json/);
+const refreshRunner = adminSource.slice(
+    adminSource.indexOf('refreshScheduledAlerts: async'),
+    adminSource.indexOf('setupServiceAlertsManager:')
+);
+assert.match(refreshRunner, /fetchScheduledAlerts/);
+assert.match(refreshRunner, /publishDueScheduledAlerts optional/);
+assert.match(refreshRunner, /publish skipped/);
+assert.match(refreshRunner, /_cachedScheduledAlerts/);
+assert.doesNotMatch(
+    refreshRunner.slice(0, refreshRunner.indexOf('fetchScheduledAlerts')),
+    /statusEl\.textContent = 'Failed'/,
+    'publish errors do not set Failed before the list loads'
+);
 assert.match(workerSource, /enockelk@gmail\.com/);
 assert.match(workerSource, /thandeka05nxumalo@gmail\.com/);
 assert.match(wranglerSource, /"\*\/5 \* \* \* \*"/);
